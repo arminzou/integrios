@@ -1,0 +1,6 @@
+@Integrios.MockSink_HostAddress = http://localhost:5054
+
+GET {{Integrios.MockSink_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
