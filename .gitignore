@@ -13,3 +13,4 @@ obj/
 Thumbs.db
 
 docs/dev
+*.local.md
