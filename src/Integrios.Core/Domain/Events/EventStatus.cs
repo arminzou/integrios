@@ -1,0 +1,9 @@
+namespace Integrios.Core.Domain.Events;
+
+public enum EventStatus
+{
+    Accepted = 0,
+    Processing = 1,
+    Completed = 2,
+    Failed = 3
+}
