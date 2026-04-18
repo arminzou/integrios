@@ -1,0 +1,5 @@
+[flyway]                                                        
+locations = ["filesystem:/flyway/sql"]
+
+[environments.default]                                                         
+url = "jdbc:postgresql://localhost:5432/integrios"

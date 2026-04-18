@@ -14,3 +14,4 @@ Thumbs.db
 
 docs/dev
 *.local.md
+.env
