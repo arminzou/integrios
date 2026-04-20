@@ -9,16 +9,35 @@ using Integrios.Core.Contracts;
 using Integrios.Core.Domain.Common;
 using Integrios.Core.Domain.Events;
 using Integrios.Core.Domain.Tenants;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Api.Tests.Auth;
 
-public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
+    : IClassFixture<ApiTestAppFixture>, IAsyncLifetime
 {
-    // Header parsing: malformed or missing → 401
+    private HttpClient client = null!;
+
+    public Task InitializeAsync()
+    {
+        fixture.Reset();
+        client = fixture.Factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        return Task.CompletedTask;
+    }
+
+    public Task DisposeAsync()
+    {
+        client.Dispose();
+        return Task.CompletedTask;
+    }
+
+    // Header parsing: malformed or missing -> 401
 
     [Theory]
     [InlineData(null)]                  // no header
@@ -28,41 +47,39 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     [InlineData("ApiKey keyid:")]       // empty secret
     public async Task BadHeader_Returns401(string? authHeader)
     {
-        var client = BuildClient(repositoryResult: null, authHeader);
-        var response = await PostEventsAsync(client);
+        var response = await PostEventsAsync(authHeader);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // Repository filtering: unknown key → 401
+    // Repository filtering: unknown key -> 401
 
     [Fact]
     public async Task UnknownKeyId_Returns401()
     {
-        var client = BuildClient(repositoryResult: null, "ApiKey unknown:secret");
-        var response = await PostEventsAsync(client);
+        var response = await PostEventsAsync("ApiKey unknown:secret");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // Repository filtering: expired/inactive credentials returned as null by repo → 401
+    // Repository filtering: expired/inactive credentials returned as null by repo -> 401
     // (The repository enforces this via the SQL WHERE clause; the filter sees null.)
 
     [Fact]
     public async Task InactiveOrExpiredCredential_Returns401()
     {
         // Repository returns null, simulating active/expiry filtering in SQL.
-        var client = BuildClient(repositoryResult: null, "ApiKey key_test:any-secret");
-        var response = await PostEventsAsync(client);
+        var response = await PostEventsAsync("ApiKey key_test:any-secret");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // Hash verification: valid key_id but wrong secret → 401
+    // Hash verification: valid key_id but wrong secret -> 401
 
     [Fact]
     public async Task WrongSecret_Returns401()
     {
         var (credential, tenant) = BuildValidCredential("correct-secret");
-        var client = BuildClient((credential, tenant), $"ApiKey {credential.KeyId}:wrong-secret");
-        var response = await PostEventsAsync(client);
+        fixture.CredentialRepository.Result = (credential, tenant);
+
+        var response = await PostEventsAsync($"ApiKey {credential.KeyId}:wrong-secret");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -73,8 +90,9 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     {
         const string secret = "correct-secret";
         var (credential, tenant) = BuildValidCredential(secret);
-        var client = BuildClient((credential, tenant), $"ApiKey {credential.KeyId}:{secret}");
-        var response = await PostEventsAsync(client);
+        fixture.CredentialRepository.Result = (credential, tenant);
+
+        var response = await PostEventsAsync($"ApiKey {credential.KeyId}:{secret}");
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
@@ -83,42 +101,63 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     [Fact]
     public async Task Rejected_Response_HasWwwAuthenticateHeader()
     {
-        var client = BuildClient(repositoryResult: null, null);
-        var response = await PostEventsAsync(client);
+        var response = await PostEventsAsync(authHeader: null);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.True(response.Headers.Contains("WWW-Authenticate"));
     }
 
-    // Helpers
-
-    private HttpClient BuildClient(
-        (ApiCredential Credential, Tenant Tenant)? repositoryResult,
-        string? authHeader)
+    [Fact]
+    public async Task GetEvent_MissingAuth_Returns401()
     {
-        var client = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Postgres"] =
-                        "Host=localhost;Database=test;Username=test;Password=test"
-                }));
-
-            builder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IApiCredentialRepository>(
-                    new StubCredentialRepository(repositoryResult));
-                services.AddSingleton<IEventRepository>(new StubEventRepository());
-            });
-        }).CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-
-        if (authHeader is not null)
-            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", authHeader);
-
-        return client;
+        var response = await GetEventAsync(Guid.NewGuid(), authHeader: null);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    private static Task<HttpResponseMessage> PostEventsAsync(HttpClient client)
+    [Fact]
+    public async Task GetEvent_ValidAuthAndUnknownEvent_Returns404()
+    {
+        const string secret = "correct-secret";
+        var (credential, tenant) = BuildValidCredential(secret);
+        fixture.CredentialRepository.Result = (credential, tenant);
+        fixture.EventRepository.GetEventResult = null;
+
+        var response = await GetEventAsync(Guid.NewGuid(), $"ApiKey {credential.KeyId}:{secret}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetEvent_ValidAuthAndKnownEvent_Returns200()
+    {
+        const string secret = "correct-secret";
+        var (credential, tenant) = BuildValidCredential(secret);
+        fixture.CredentialRepository.Result = (credential, tenant);
+
+        var eventId = Guid.NewGuid();
+        var expected = new GetEventResponse
+        {
+            EventId = eventId,
+            Status = EventStatus.Accepted,
+            AcceptedAt = DateTimeOffset.UtcNow,
+            ProcessedAt = null,
+            FailedAt = null
+        };
+        fixture.EventRepository.GetEventResult = expected;
+
+        var response = await GetEventAsync(eventId, $"ApiKey {credential.KeyId}:{secret}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<GetEventResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(expected.EventId, body.EventId);
+        Assert.Equal(expected.Status, body.Status);
+        Assert.Equal(expected.AcceptedAt, body.AcceptedAt);
+        Assert.Equal(expected.ProcessedAt, body.ProcessedAt);
+        Assert.Equal(expected.FailedAt, body.FailedAt);
+    }
+
+    // Helpers
+
+    private Task<HttpResponseMessage> PostEventsAsync(string? authHeader)
     {
         var request = new IngestEventRequest
         {
@@ -129,7 +168,27 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
             IdempotencyKey = "idem-test"
         };
 
-        return client.PostAsJsonAsync("/events", request);
+        var message = new HttpRequestMessage(HttpMethod.Post, "/events")
+        {
+            Content = JsonContent.Create(request)
+        };
+        if (authHeader is not null)
+        {
+            message.Headers.TryAddWithoutValidation("Authorization", authHeader);
+        }
+
+        return client.SendAsync(message);
+    }
+
+    private Task<HttpResponseMessage> GetEventAsync(Guid eventId, string? authHeader)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Get, $"/events/{eventId}");
+        if (authHeader is not null)
+        {
+            message.Headers.TryAddWithoutValidation("Authorization", authHeader);
+        }
+
+        return client.SendAsync(message);
     }
 
     private static (ApiCredential Credential, Tenant Tenant) BuildValidCredential(string secret)
@@ -160,44 +219,85 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
                 UpdatedAt = DateTimeOffset.UtcNow,
             });
     }
+}
 
-    private sealed class StubCredentialRepository(
-        (ApiCredential Credential, Tenant Tenant)? result) : IApiCredentialRepository
+public sealed class ApiTestAppFixture : IDisposable
+{
+    public StubCredentialRepository CredentialRepository { get; } = new();
+    public StubEventRepository EventRepository { get; } = new();
+    public WebApplicationFactory<Program> Factory { get; }
+
+    public ApiTestAppFixture()
     {
-        public Task<(ApiCredential Credential, Tenant Tenant)?> FindActiveByKeyIdAsync(
-            string keyId, CancellationToken cancellationToken = default)
-            => Task.FromResult(result);
+        Factory = new CustomApiFactory(CredentialRepository, EventRepository);
     }
 
-    private sealed class StubEventRepository : IEventRepository
+    public void Reset()
     {
-        public Task<IngestEventResponse> IngestAsync(
-            Guid tenantId,
-            IngestEventRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new IngestEventResponse
-            {
-                EventId = Guid.NewGuid(),
-                Status = EventStatus.Accepted,
-                AcceptedAt = DateTimeOffset.UtcNow,
-                IsDuplicate = false
-            });
-        }
+        CredentialRepository.Result = null;
+        EventRepository.GetEventResult = null;
+    }
 
-        public Task<GetEventResponse?> GetEventByIdAsync(
-            Guid tenantId,
-            Guid eventId,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<GetEventResponse?>(new GetEventResponse
+    public void Dispose()
+    {
+        Factory.Dispose();
+    }
+}
+
+internal sealed class CustomApiFactory(
+    StubCredentialRepository credentialRepository,
+    StubEventRepository eventRepository) : WebApplicationFactory<Program>
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                EventId = eventId,
-                Status = EventStatus.Accepted,
-                AcceptedAt = DateTimeOffset.UtcNow,
-                ProcessedAt = null,
-                FailedAt = null
-            });
-        }
+                ["ConnectionStrings:Postgres"] =
+                    "Host=localhost;Database=test;Username=test;Password=test"
+            }));
+
+        builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<IApiCredentialRepository>(credentialRepository);
+            services.AddSingleton<IEventRepository>(eventRepository);
+        });
+    }
+}
+
+public sealed class StubCredentialRepository : IApiCredentialRepository
+{
+    public (ApiCredential Credential, Tenant Tenant)? Result { get; set; }
+
+    public Task<(ApiCredential Credential, Tenant Tenant)?> FindActiveByKeyIdAsync(
+        string keyId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(Result);
+}
+
+public sealed class StubEventRepository : IEventRepository
+{
+    public GetEventResponse? GetEventResult { get; set; }
+
+    public Task<IngestEventResponse> IngestAsync(
+        Guid tenantId,
+        IngestEventRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new IngestEventResponse
+        {
+            EventId = Guid.NewGuid(),
+            Status = EventStatus.Accepted,
+            AcceptedAt = DateTimeOffset.UtcNow,
+            IsDuplicate = false
+        });
+    }
+
+    public Task<GetEventResponse?> GetEventByIdAsync(
+        Guid tenantId,
+        Guid eventId,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(GetEventResult);
     }
 }

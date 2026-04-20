@@ -19,13 +19,15 @@ namespace Integrios.IntegrationTests;
 public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFixture>, IAsyncLifetime
 {
     private readonly PostgresApiFixture fixture;
-    private readonly string authHeaderValue;
+    private readonly string tenantAAuthHeaderValue;
+    private readonly string tenantBAuthHeaderValue;
     private HttpClient client = null!;
 
     public EventsAcceptanceBoundaryTests(PostgresApiFixture fixture)
     {
         this.fixture = fixture;
-        authHeaderValue = $"ApiKey {PostgresApiFixture.ApiKeyId}:{PostgresApiFixture.ApiSecret}";
+        tenantAAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantAApiKeyId}:{PostgresApiFixture.TenantAApiSecret}";
+        tenantBAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantBApiKeyId}:{PostgresApiFixture.TenantBApiSecret}";
     }
 
     public async Task InitializeAsync()
@@ -97,6 +99,20 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
+    public async Task GetEventsById_OtherTenant_Returns404()
+    {
+        var request = BuildRequest(idempotencyKey: "idem-evt-tenant-isolation");
+        var postResponse = await PostEventAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
+
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        Assert.NotNull(postBody);
+
+        var getResponseForTenantB = await GetEventAsync(postBody.EventId, tenantBAuthHeaderValue);
+        Assert.Equal(HttpStatusCode.NotFound, getResponseForTenantB.StatusCode);
+    }
+
+    [Fact]
     public async Task PostEvents_DuplicateIdempotencyKey_IsSuppressed()
     {
         var request = BuildRequest(idempotencyKey: "idem-evt-dup");
@@ -144,22 +160,26 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         {
             Content = JsonContent.Create(request)
         };
-        message.Headers.TryAddWithoutValidation("Authorization", authHeaderValue);
+        message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
         return client.SendAsync(message);
     }
 
-    private Task<HttpResponseMessage> GetEventAsync(Guid eventId)
+    private Task<HttpResponseMessage> GetEventAsync(Guid eventId, string? authHeader = null)
     {
         var message = new HttpRequestMessage(HttpMethod.Get, $"/events/{eventId}");
-        message.Headers.TryAddWithoutValidation("Authorization", authHeaderValue);
+        message.Headers.TryAddWithoutValidation(
+            "Authorization",
+            authHeader ?? tenantAAuthHeaderValue);
         return client.SendAsync(message);
     }
 }
 
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
-    public const string ApiKeyId = "key_test_ingest";
-    public const string ApiSecret = "super-secret";
+    public const string TenantAApiKeyId = "key_test_ingest_a";
+    public const string TenantAApiSecret = "super-secret-a";
+    public const string TenantBApiKeyId = "key_test_ingest_b";
+    public const string TenantBApiSecret = "super-secret-b";
 
     private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("integrios")
@@ -196,14 +216,20 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             await resetCommand.ExecuteNonQueryAsync();
         }
 
-        var tenantId = Guid.NewGuid();
-        var credentialId = Guid.NewGuid();
-        var secretHash = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(ApiSecret))).ToLowerInvariant();
+        var tenantAId = Guid.NewGuid();
+        var tenantBId = Guid.NewGuid();
+        var credentialAId = Guid.NewGuid();
+        var credentialBId = Guid.NewGuid();
+        var secretHashA = "sha256:" + Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(TenantAApiSecret))).ToLowerInvariant();
+        var secretHashB = "sha256:" + Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(TenantBApiSecret))).ToLowerInvariant();
 
         const string seedSql = """
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
-            VALUES (@TenantId, 'test-tenant', 'Test Tenant', 'active', now(), now());
+            VALUES
+                (@TenantAId, 'test-tenant-a', 'Test Tenant A', 'active', now(), now()),
+                (@TenantBId, 'test-tenant-b', 'Test Tenant B', 'active', now(), now());
 
             INSERT INTO api_credentials (
                 id,
@@ -216,11 +242,21 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 created_at
             )
             VALUES (
-                @CredentialId,
-                @TenantId,
-                'test-ingest-key',
-                @KeyId,
-                @SecretHash,
+                @CredentialAId,
+                @TenantAId,
+                'test-ingest-key-a',
+                @KeyIdA,
+                @SecretHashA,
+                ARRAY['events.write'],
+                'active',
+                now()
+            ),
+            (
+                @CredentialBId,
+                @TenantBId,
+                'test-ingest-key-b',
+                @KeyIdB,
+                @SecretHashB,
                 ARRAY['events.write'],
                 'active',
                 now()
@@ -228,10 +264,14 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             """;
 
         await using var seedCommand = new NpgsqlCommand(seedSql, connection);
-        seedCommand.Parameters.AddWithValue("TenantId", tenantId);
-        seedCommand.Parameters.AddWithValue("CredentialId", credentialId);
-        seedCommand.Parameters.AddWithValue("KeyId", ApiKeyId);
-        seedCommand.Parameters.AddWithValue("SecretHash", secretHash);
+        seedCommand.Parameters.AddWithValue("TenantAId", tenantAId);
+        seedCommand.Parameters.AddWithValue("TenantBId", tenantBId);
+        seedCommand.Parameters.AddWithValue("CredentialAId", credentialAId);
+        seedCommand.Parameters.AddWithValue("CredentialBId", credentialBId);
+        seedCommand.Parameters.AddWithValue("KeyIdA", TenantAApiKeyId);
+        seedCommand.Parameters.AddWithValue("KeyIdB", TenantBApiKeyId);
+        seedCommand.Parameters.AddWithValue("SecretHashA", secretHashA);
+        seedCommand.Parameters.AddWithValue("SecretHashB", secretHashB);
         await seedCommand.ExecuteNonQueryAsync();
     }
 
