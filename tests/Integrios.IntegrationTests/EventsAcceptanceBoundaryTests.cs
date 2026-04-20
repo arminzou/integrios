@@ -50,6 +50,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         var response = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.NotNull(response.Headers.Location);
 
         var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
         Assert.NotNull(body);
@@ -66,6 +67,33 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         await using var outboxCountCommand = new NpgsqlCommand("SELECT COUNT(*) FROM outbox;", connection);
         var outboxCount = (long)(await outboxCountCommand.ExecuteScalarAsync() ?? 0L);
         Assert.Equal(1, outboxCount);
+    }
+
+    [Fact]
+    public async Task GetEventsById_ReturnsEvent_WhenEventExists()
+    {
+        var request = BuildRequest(idempotencyKey: "idem-evt-read-1");
+        var postResponse = await PostEventAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
+
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        Assert.NotNull(postBody);
+
+        var getResponse = await GetEventAsync(postBody.EventId);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var getBody = await getResponse.Content.ReadFromJsonAsync<GetEventResponse>();
+        Assert.NotNull(getBody);
+        Assert.Equal(postBody.EventId, getBody.EventId);
+        Assert.Equal(EventStatus.Accepted, getBody.Status);
+        Assert.NotEqual(default, getBody.AcceptedAt);
+    }
+
+    [Fact]
+    public async Task GetEventsById_Returns404_WhenEventDoesNotExist()
+    {
+        var getResponse = await GetEventAsync(Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
     }
 
     [Fact]
@@ -116,6 +144,13 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         {
             Content = JsonContent.Create(request)
         };
+        message.Headers.TryAddWithoutValidation("Authorization", authHeaderValue);
+        return client.SendAsync(message);
+    }
+
+    private Task<HttpResponseMessage> GetEventAsync(Guid eventId)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Get, $"/events/{eventId}");
         message.Headers.TryAddWithoutValidation("Authorization", authHeaderValue);
         return client.SendAsync(message);
     }

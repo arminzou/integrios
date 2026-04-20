@@ -6,7 +6,7 @@ using Npgsql;
 
 namespace Integrios.Api.Infrastructure.Data.Events;
 
-public sealed class EventIngestionRepository(IDbConnectionFactory connectionFactory) : IEventIngestionRepository
+public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IEventRepository
 {
     public async Task<IngestEventResponse> IngestAsync(
         Guid tenantId,
@@ -155,5 +155,51 @@ public sealed class EventIngestionRepository(IDbConnectionFactory connectionFact
         public Guid Id { get; init; }
         public string Status { get; init; } = "";
         public DateTimeOffset AcceptedAt { get; init; }
+    }
+
+    public async Task<GetEventResponse?> GetEventByIdAsync(
+        Guid tenantId,
+        Guid eventId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        var row = await connection.QuerySingleOrDefaultAsync<EventByIdRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    id          AS Id,
+                    status      AS Status,
+                    accepted_at AS AcceptedAt,
+                    processed_at AS ProcessedAt,
+                    failed_at   AS FailedAt
+                FROM events
+                WHERE tenant_id = @TenantId
+                  AND id = @EventId
+                LIMIT 1;
+                """,
+                new { TenantId = tenantId, EventId = eventId },
+                cancellationToken: cancellationToken));
+
+        if (row is null)
+            return null;
+
+        return new GetEventResponse
+        {
+            EventId = row.Id,
+            Status = ParseStatus(row.Status),
+            AcceptedAt = row.AcceptedAt,
+            ProcessedAt = row.ProcessedAt,
+            FailedAt = row.FailedAt
+        };
+    }
+
+    private sealed record EventByIdRow
+    {
+        public Guid Id { get; init; }
+        public string Status { get; init; } = "";
+        public DateTimeOffset AcceptedAt { get; init; }
+        public DateTimeOffset? ProcessedAt { get; init; }
+        public DateTimeOffset? FailedAt { get; init; }
     }
 }

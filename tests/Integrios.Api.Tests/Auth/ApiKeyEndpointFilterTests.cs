@@ -108,7 +108,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
             {
                 services.AddSingleton<IApiCredentialRepository>(
                     new StubCredentialRepository(repositoryResult));
-                services.AddSingleton<IEventIngestionRepository>(new StubEventIngestionRepository());
+                services.AddSingleton<IEventRepository>(new StubEventRepository());
             });
         }).CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
@@ -169,7 +169,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
             => Task.FromResult(result);
     }
 
-    private sealed class StubEventIngestionRepository : IEventIngestionRepository
+    private sealed class StubEventRepository : IEventRepository
     {
         public Task<IngestEventResponse> IngestAsync(
             Guid tenantId,
@@ -182,6 +182,21 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
                 Status = EventStatus.Accepted,
                 AcceptedAt = DateTimeOffset.UtcNow,
                 IsDuplicate = false
+            });
+        }
+
+        public Task<GetEventResponse?> GetEventByIdAsync(
+            Guid tenantId,
+            Guid eventId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<GetEventResponse?>(new GetEventResponse
+            {
+                EventId = eventId,
+                Status = EventStatus.Accepted,
+                AcceptedAt = DateTimeOffset.UtcNow,
+                ProcessedAt = null,
+                FailedAt = null
             });
         }
     }

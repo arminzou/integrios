@@ -20,7 +20,7 @@ builder.Services.AddSingleton(_ =>
 });
 builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 builder.Services.AddSingleton<IApiCredentialRepository, ApiCredentialRepository>();
-builder.Services.AddSingleton<IEventIngestionRepository, EventIngestionRepository>();
+builder.Services.AddSingleton<IEventRepository, EventRepository>();
 
 var app = builder.Build();
 
@@ -34,16 +34,30 @@ events.AddEndpointFilter<ApiKeyEndpointFilter>();
 events.MapPost("", async (
     IngestEventRequest request,
     HttpContext httpContext,
-    IEventIngestionRepository ingestionRepository,
+    IEventRepository eventRepository,
     CancellationToken cancellationToken) =>
 {
     var tenantContext = httpContext.GetTenantContext();
-    var response = await ingestionRepository.IngestAsync(
+    var response = await eventRepository.IngestAsync(
         tenantContext.Tenant.Id,
         request,
         cancellationToken);
 
-    return Results.Accepted(value: response);
+    return Results.Accepted($"/events/{response.EventId}", response);
+});
+events.MapGet("/{id:guid}", async (
+    Guid id,
+    HttpContext httpContext,
+    IEventRepository eventRepository,
+    CancellationToken cancellationToken) =>
+{
+    var tenantContext = httpContext.GetTenantContext();
+    var response = await eventRepository.GetEventByIdAsync(
+        tenantContext.Tenant.Id,
+        id,
+        cancellationToken);
+
+    return response is null ? Results.NotFound() : Results.Ok(response);
 });
 
 app.Run();
