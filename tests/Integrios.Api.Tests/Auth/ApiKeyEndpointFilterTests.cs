@@ -1,8 +1,13 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Integrios.Api.Infrastructure.Data.Events;
 using Integrios.Api.Infrastructure.Data.Tenants;
+using Integrios.Core.Contracts;
 using Integrios.Core.Domain.Common;
+using Integrios.Core.Domain.Events;
 using Integrios.Core.Domain.Tenants;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -24,7 +29,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     public async Task BadHeader_Returns401(string? authHeader)
     {
         var client = BuildClient(repositoryResult: null, authHeader);
-        var response = await client.PostAsync("/events", null);
+        var response = await PostEventsAsync(client);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -34,7 +39,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     public async Task UnknownKeyId_Returns401()
     {
         var client = BuildClient(repositoryResult: null, "ApiKey unknown:secret");
-        var response = await client.PostAsync("/events", null);
+        var response = await PostEventsAsync(client);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -46,7 +51,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     {
         // Repository returns null, simulating active/expiry filtering in SQL.
         var client = BuildClient(repositoryResult: null, "ApiKey key_test:any-secret");
-        var response = await client.PostAsync("/events", null);
+        var response = await PostEventsAsync(client);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -57,7 +62,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     {
         var (credential, tenant) = BuildValidCredential("correct-secret");
         var client = BuildClient((credential, tenant), $"ApiKey {credential.KeyId}:wrong-secret");
-        var response = await client.PostAsync("/events", null);
+        var response = await PostEventsAsync(client);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -69,7 +74,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
         const string secret = "correct-secret";
         var (credential, tenant) = BuildValidCredential(secret);
         var client = BuildClient((credential, tenant), $"ApiKey {credential.KeyId}:{secret}");
-        var response = await client.PostAsync("/events", null);
+        var response = await PostEventsAsync(client);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
@@ -79,7 +84,7 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
     public async Task Rejected_Response_HasWwwAuthenticateHeader()
     {
         var client = BuildClient(repositoryResult: null, null);
-        var response = await client.PostAsync("/events", null);
+        var response = await PostEventsAsync(client);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.True(response.Headers.Contains("WWW-Authenticate"));
     }
@@ -100,14 +105,31 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
                 }));
 
             builder.ConfigureServices(services =>
+            {
                 services.AddSingleton<IApiCredentialRepository>(
-                    new StubRepository(repositoryResult)));
+                    new StubCredentialRepository(repositoryResult));
+                services.AddSingleton<IEventIngestionRepository>(new StubEventIngestionRepository());
+            });
         }).CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         if (authHeader is not null)
             client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", authHeader);
 
         return client;
+    }
+
+    private static Task<HttpResponseMessage> PostEventsAsync(HttpClient client)
+    {
+        var request = new IngestEventRequest
+        {
+            SourceEventId = "evt_test_1",
+            EventType = "payment.created",
+            Payload = JsonDocument.Parse("""{"paymentId":"pay_1","amount":1200}""").RootElement.Clone(),
+            Metadata = JsonDocument.Parse("""{"source":"tests"}""").RootElement.Clone(),
+            IdempotencyKey = "idem-test"
+        };
+
+        return client.PostAsJsonAsync("/events", request);
     }
 
     private static (ApiCredential Credential, Tenant Tenant) BuildValidCredential(string secret)
@@ -139,11 +161,28 @@ public sealed class ApiKeyEndpointFilterTests(WebApplicationFactory<Program> fac
             });
     }
 
-    private sealed class StubRepository(
+    private sealed class StubCredentialRepository(
         (ApiCredential Credential, Tenant Tenant)? result) : IApiCredentialRepository
     {
         public Task<(ApiCredential Credential, Tenant Tenant)?> FindActiveByKeyIdAsync(
             string keyId, CancellationToken cancellationToken = default)
             => Task.FromResult(result);
+    }
+
+    private sealed class StubEventIngestionRepository : IEventIngestionRepository
+    {
+        public Task<IngestEventResponse> IngestAsync(
+            Guid tenantId,
+            IngestEventRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new IngestEventResponse
+            {
+                EventId = Guid.NewGuid(),
+                Status = EventStatus.Accepted,
+                AcceptedAt = DateTimeOffset.UtcNow,
+                IsDuplicate = false
+            });
+        }
     }
 }

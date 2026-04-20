@@ -1,6 +1,8 @@
 using Integrios.Api.Auth;
 using Integrios.Api.Infrastructure.Data;
+using Integrios.Api.Infrastructure.Data.Events;
 using Integrios.Api.Infrastructure.Data.Tenants;
+using Integrios.Core.Contracts;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +20,7 @@ builder.Services.AddSingleton(_ =>
 });
 builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 builder.Services.AddSingleton<IApiCredentialRepository, ApiCredentialRepository>();
+builder.Services.AddSingleton<IEventIngestionRepository, EventIngestionRepository>();
 
 var app = builder.Build();
 
@@ -28,6 +31,19 @@ app.UseHttpsRedirection();
 
 var events = app.MapGroup("/events");
 events.AddEndpointFilter<ApiKeyEndpointFilter>();
-events.MapPost("", () => Results.Accepted()); // placeholder — replaced when intake handler is wired
+events.MapPost("", async (
+    IngestEventRequest request,
+    HttpContext httpContext,
+    IEventIngestionRepository ingestionRepository,
+    CancellationToken cancellationToken) =>
+{
+    var tenantContext = httpContext.GetTenantContext();
+    var response = await ingestionRepository.IngestAsync(
+        tenantContext.Tenant.Id,
+        request,
+        cancellationToken);
+
+    return Results.Accepted(value: response);
+});
 
 app.Run();
