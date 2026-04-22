@@ -32,10 +32,11 @@ It receives events, applies tenant-aware routing and transformation rules, and d
 ### Core domain model
 
 - `Tenant` is the top-level isolation boundary.
-- `ApiCredential` represents machine credentials used to call Integrios APIs.
-- `Connector` represents a tenant-scoped configured connection.
-- `IntegrationFlow` represents a tenant-owned pipeline.
-- `FlowRoute` represents a route within a flow that matches events and delivers to a destination connector.
+- `ApiKey` represents machine credentials used to call Integrios APIs.
+- `Integration` represents a reusable platform-level definition of how to talk to a system.
+- `Connection` represents a tenant-scoped configured connection.
+- `Pipeline` represents a tenant-owned pipeline.
+- `Route` represents a route within a pipeline that matches events and delivers to a destination connection.
 - `Event` represents an accepted, normalized inbound unit of work.
 - `DeliveryAttempt` tracks each delivery attempt for an event.
 
@@ -92,10 +93,10 @@ Naming:
 - PascalCase for types, methods, and properties
 - camelCase for locals and parameters
 - database columns use `snake_case`
-- `ConnectorType.key` values use `snake_case`
+- `Integration.key` values use `snake_case`
 
 Domain naming:
-- keep domain entity names aligned with the model: `Tenant`, `ApiCredential`, `ConnectorType`, `Connector`, `IntegrationFlow`, `FlowRoute`, `Event`, `DeliveryAttempt`
+- keep domain entity names aligned with the model: `Tenant`, `ApiKey`, `Integration`, `Connection`, `Pipeline`, `Route`, `Event`, `DeliveryAttempt`
 
 Style:
 - prefer early returns over deep nesting

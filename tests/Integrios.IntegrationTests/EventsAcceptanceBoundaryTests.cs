@@ -26,8 +26,8 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public EventsAcceptanceBoundaryTests(PostgresApiFixture fixture)
     {
         this.fixture = fixture;
-        tenantAAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantAApiKeyId}:{PostgresApiFixture.TenantAApiSecret}";
-        tenantBAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantBApiKeyId}:{PostgresApiFixture.TenantBApiSecret}";
+        tenantAAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantAPublicKey}:{PostgresApiFixture.TenantAApiSecret}";
+        tenantBAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantBPublicKey}:{PostgresApiFixture.TenantBApiSecret}";
     }
 
     public async Task InitializeAsync()
@@ -176,9 +176,9 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
-    public const string TenantAApiKeyId = "key_test_ingest_a";
+    public const string TenantAPublicKey = "key_test_ingest_a";
     public const string TenantAApiSecret = "super-secret-a";
-    public const string TenantBApiKeyId = "key_test_ingest_b";
+    public const string TenantBPublicKey = "key_test_ingest_b";
     public const string TenantBApiSecret = "super-secret-b";
 
     private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
@@ -209,7 +209,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         await connection.OpenAsync();
 
         const string resetSql = """
-            TRUNCATE TABLE outbox, events, api_credentials, tenants RESTART IDENTITY CASCADE;
+            TRUNCATE TABLE outbox, events, api_keys, tenants RESTART IDENTITY CASCADE;
             """;
         await using (var resetCommand = new NpgsqlCommand(resetSql, connection))
         {
@@ -231,7 +231,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 (@TenantAId, 'test-tenant-a', 'Test Tenant A', 'active', now(), now()),
                 (@TenantBId, 'test-tenant-b', 'Test Tenant B', 'active', now(), now());
 
-            INSERT INTO api_credentials (
+            INSERT INTO api_keys (
                 id,
                 tenant_id,
                 name,
@@ -245,7 +245,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 @CredentialAId,
                 @TenantAId,
                 'test-ingest-key-a',
-                @KeyIdA,
+                @PublicKeyA,
                 @SecretHashA,
                 ARRAY['events.write'],
                 'active',
@@ -255,7 +255,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 @CredentialBId,
                 @TenantBId,
                 'test-ingest-key-b',
-                @KeyIdB,
+                @PublicKeyB,
                 @SecretHashB,
                 ARRAY['events.write'],
                 'active',
@@ -268,8 +268,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         seedCommand.Parameters.AddWithValue("TenantBId", tenantBId);
         seedCommand.Parameters.AddWithValue("CredentialAId", credentialAId);
         seedCommand.Parameters.AddWithValue("CredentialBId", credentialBId);
-        seedCommand.Parameters.AddWithValue("KeyIdA", TenantAApiKeyId);
-        seedCommand.Parameters.AddWithValue("KeyIdB", TenantBApiKeyId);
+        seedCommand.Parameters.AddWithValue("PublicKeyA", TenantAPublicKey);
+        seedCommand.Parameters.AddWithValue("PublicKeyB", TenantBPublicKey);
         seedCommand.Parameters.AddWithValue("SecretHashA", secretHashA);
         seedCommand.Parameters.AddWithValue("SecretHashB", secretHashB);
         await seedCommand.ExecuteNonQueryAsync();
@@ -280,11 +280,12 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
 
-        var migrationPath = ResolveMigrationPath();
-        var migrationSql = await File.ReadAllTextAsync(migrationPath);
-
-        await using var migrationCommand = new NpgsqlCommand(migrationSql, connection);
-        await migrationCommand.ExecuteNonQueryAsync();
+        foreach (var migrationPath in ResolveMigrationPaths())
+        {
+            var migrationSql = await File.ReadAllTextAsync(migrationPath);
+            await using var migrationCommand = new NpgsqlCommand(migrationSql, connection);
+            await migrationCommand.ExecuteNonQueryAsync();
+        }
     }
 
     private WebApplicationFactory<Program> BuildWebFactory()
@@ -314,14 +315,16 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         });
     }
 
-    private static string ResolveMigrationPath()
+    private static IReadOnlyList<string> ResolveMigrationPaths()
     {
         var repoRoot = Environment.GetEnvironmentVariable("INTEGRIOS_REPO_ROOT");
         if (!string.IsNullOrWhiteSpace(repoRoot))
         {
-            var envPath = Path.Combine(repoRoot, "db", "migrations", "V1__create_initial_schema.sql");
-            if (File.Exists(envPath))
-                return envPath;
+            var envMigrationDirectory = Path.Combine(repoRoot, "db", "migrations");
+            if (Directory.Exists(envMigrationDirectory))
+                return Directory.GetFiles(envMigrationDirectory, "*.sql")
+                    .OrderBy(Path.GetFileName, StringComparer.Ordinal)
+                    .ToArray();
         }
 
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -330,7 +333,10 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             var solutionPath = Path.Combine(directory.FullName, "Integrios.slnx");
             if (File.Exists(solutionPath))
             {
-                return Path.Combine(directory.FullName, "db", "migrations", "V1__create_initial_schema.sql");
+                var migrationDirectory = Path.Combine(directory.FullName, "db", "migrations");
+                return Directory.GetFiles(migrationDirectory, "*.sql")
+                    .OrderBy(Path.GetFileName, StringComparer.Ordinal)
+                    .ToArray();
             }
 
             directory = directory.Parent;

@@ -54,7 +54,7 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
     // Repository filtering: unknown key -> 401
 
     [Fact]
-    public async Task UnknownKeyId_Returns401()
+    public async Task UnknownPublicKey_Returns401()
     {
         var response = await PostEventsAsync("ApiKey unknown:secret");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -76,10 +76,10 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task WrongSecret_Returns401()
     {
-        var (credential, tenant) = BuildValidCredential("correct-secret");
-        fixture.CredentialRepository.Result = (credential, tenant);
+        var (apiKey, tenant) = BuildValidApiKey("correct-secret");
+        fixture.ApiKeyRepository.Result = (apiKey, tenant);
 
-        var response = await PostEventsAsync($"ApiKey {credential.KeyId}:wrong-secret");
+        var response = await PostEventsAsync($"ApiKey {apiKey.PublicKey}:wrong-secret");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -89,10 +89,10 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
     public async Task ValidCredential_PassesFilter()
     {
         const string secret = "correct-secret";
-        var (credential, tenant) = BuildValidCredential(secret);
-        fixture.CredentialRepository.Result = (credential, tenant);
+        var (apiKey, tenant) = BuildValidApiKey(secret);
+        fixture.ApiKeyRepository.Result = (apiKey, tenant);
 
-        var response = await PostEventsAsync($"ApiKey {credential.KeyId}:{secret}");
+        var response = await PostEventsAsync($"ApiKey {apiKey.PublicKey}:{secret}");
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
@@ -117,11 +117,11 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
     public async Task GetEvent_ValidAuthAndUnknownEvent_Returns404()
     {
         const string secret = "correct-secret";
-        var (credential, tenant) = BuildValidCredential(secret);
-        fixture.CredentialRepository.Result = (credential, tenant);
+        var (apiKey, tenant) = BuildValidApiKey(secret);
+        fixture.ApiKeyRepository.Result = (apiKey, tenant);
         fixture.EventRepository.GetEventResult = null;
 
-        var response = await GetEventAsync(Guid.NewGuid(), $"ApiKey {credential.KeyId}:{secret}");
+        var response = await GetEventAsync(Guid.NewGuid(), $"ApiKey {apiKey.PublicKey}:{secret}");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -129,8 +129,8 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
     public async Task GetEvent_ValidAuthAndKnownEvent_Returns200()
     {
         const string secret = "correct-secret";
-        var (credential, tenant) = BuildValidCredential(secret);
-        fixture.CredentialRepository.Result = (credential, tenant);
+        var (apiKey, tenant) = BuildValidApiKey(secret);
+        fixture.ApiKeyRepository.Result = (apiKey, tenant);
 
         var eventId = Guid.NewGuid();
         var expected = new GetEventResponse
@@ -143,7 +143,7 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
         };
         fixture.EventRepository.GetEventResult = expected;
 
-        var response = await GetEventAsync(eventId, $"ApiKey {credential.KeyId}:{secret}");
+        var response = await GetEventAsync(eventId, $"ApiKey {apiKey.PublicKey}:{secret}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<GetEventResponse>();
@@ -191,19 +191,19 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
         return client.SendAsync(message);
     }
 
-    private static (ApiCredential Credential, Tenant Tenant) BuildValidCredential(string secret)
+    private static (ApiKey ApiKey, Tenant Tenant) BuildValidApiKey(string secret)
     {
         var hash = "sha256:" + Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(secret))).ToLowerInvariant();
 
         var tenantId = Guid.NewGuid();
         return (
-            new ApiCredential
+            new ApiKey
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
                 Name = "test-key",
-                KeyId = "key_test",
+                PublicKey = "key_test",
                 SecretHash = hash,
                 Scopes = ["events.write"],
                 Status = OperationalStatus.Active,
@@ -223,18 +223,18 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
 
 public sealed class ApiTestAppFixture : IDisposable
 {
-    public StubCredentialRepository CredentialRepository { get; } = new();
+    public StubApiKeyRepository ApiKeyRepository { get; } = new();
     public StubEventRepository EventRepository { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
     public ApiTestAppFixture()
     {
-        Factory = new CustomApiFactory(CredentialRepository, EventRepository);
+        Factory = new CustomApiFactory(ApiKeyRepository, EventRepository);
     }
 
     public void Reset()
     {
-        CredentialRepository.Result = null;
+        ApiKeyRepository.Result = null;
         EventRepository.GetEventResult = null;
     }
 
@@ -245,7 +245,7 @@ public sealed class ApiTestAppFixture : IDisposable
 }
 
 internal sealed class CustomApiFactory(
-    StubCredentialRepository credentialRepository,
+    StubApiKeyRepository apiKeyRepository,
     StubEventRepository eventRepository) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -259,18 +259,18 @@ internal sealed class CustomApiFactory(
 
         builder.ConfigureServices(services =>
         {
-            services.AddSingleton<IApiCredentialRepository>(credentialRepository);
+            services.AddSingleton<IApiKeyRepository>(apiKeyRepository);
             services.AddSingleton<IEventRepository>(eventRepository);
         });
     }
 }
 
-public sealed class StubCredentialRepository : IApiCredentialRepository
+public sealed class StubApiKeyRepository : IApiKeyRepository
 {
-    public (ApiCredential Credential, Tenant Tenant)? Result { get; set; }
+    public (ApiKey ApiKey, Tenant Tenant)? Result { get; set; }
 
-    public Task<(ApiCredential Credential, Tenant Tenant)?> FindActiveByKeyIdAsync(
-        string keyId,
+    public Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByPublicKeyAsync(
+        string publicKey,
         CancellationToken cancellationToken = default)
         => Task.FromResult(Result);
 }

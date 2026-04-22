@@ -79,12 +79,12 @@ public sealed class InitialDomainModelTests
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
-        var credential = new ApiCredential
+        var apiKey = new ApiKey
         {
             Id = Guid.NewGuid(),
             TenantId = tenant.Id,
             Name = "default-ingest-key",
-            KeyId = "key_123",
+            PublicKey = "key_123",
             SecretHash = "hash",
             Scopes = ["events.write"],
             Status = OperationalStatus.Active,
@@ -92,7 +92,7 @@ public sealed class InitialDomainModelTests
         };
 
         Assert.Equal(OperationalStatus.Active, tenant.Status);
-        Assert.Equal(OperationalStatus.Active, credential.Status);
-        Assert.Contains("events.write", credential.Scopes);
+        Assert.Equal(OperationalStatus.Active, apiKey.Status);
+        Assert.Contains("events.write", apiKey.Scopes);
     }
 }

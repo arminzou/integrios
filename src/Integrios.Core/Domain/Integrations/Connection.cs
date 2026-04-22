@@ -1,13 +1,13 @@
 using System.Text.Json;
 using Integrios.Core.Domain.Common;
 
-namespace Integrios.Core.Domain.Connectors;
+namespace Integrios.Core.Domain.Integrations;
 
-public sealed record Connector
+public sealed record Connection
 {
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
-    public required Guid ConnectorTypeId { get; init; }
+    public required Guid IntegrationId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
     public required JsonElement SecretReferences { get; init; }

@@ -5,7 +5,7 @@ namespace Integrios.Api.Auth;
 public sealed record TenantContext
 {
     public required Tenant Tenant { get; init; }
-    public required ApiCredential Credential { get; init; }
+    public required ApiKey ApiKey { get; init; }
 }
 
 public static class HttpContextTenantExtensions

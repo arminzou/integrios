@@ -2,12 +2,12 @@ using Integrios.Core.Domain.Common;
 
 namespace Integrios.Core.Domain.Tenants;
 
-public sealed record ApiCredential
+public sealed record ApiKey
 {
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
     public required string Name { get; init; }
-    public required string KeyId { get; init; }
+    public required string PublicKey { get; init; }
     public required string SecretHash { get; init; }
     public required IReadOnlyList<string> Scopes { get; init; }
     public required OperationalStatus Status { get; init; }

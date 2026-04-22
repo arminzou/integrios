@@ -19,7 +19,7 @@ builder.Services.AddSingleton(_ =>
     return dataSourceBuilder.Build();
 });
 builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
-builder.Services.AddSingleton<IApiCredentialRepository, ApiCredentialRepository>();
+builder.Services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
 builder.Services.AddSingleton<IEventRepository, EventRepository>();
 
 var app = builder.Build();

@@ -1,16 +1,16 @@
 using System.Text.Json;
 using Integrios.Core.Domain.Common;
 
-namespace Integrios.Core.Domain.Flows;
+namespace Integrios.Core.Domain.Pipelines;
 
-public sealed record FlowRoute
+public sealed record Route
 {
     public required Guid Id { get; init; }
-    public required Guid IntegrationFlowId { get; init; }
+    public required Guid PipelineId { get; init; }
     public required Guid TenantId { get; init; }
     public required string Name { get; init; }
     public required JsonElement MatchRules { get; init; }
-    public required Guid DestinationConnectorId { get; init; }
+    public required Guid DestinationConnectionId { get; init; }
     public JsonElement? TransformConfig { get; init; }
     public JsonElement? DeliveryPolicy { get; init; }
     public required OperationalStatus Status { get; init; }

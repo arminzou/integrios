@@ -4,7 +4,7 @@ using Integrios.Api.Infrastructure.Data.Tenants;
 
 namespace Integrios.Api.Auth;
 
-public sealed class ApiKeyEndpointFilter(IApiCredentialRepository repository) : IEndpointFilter
+public sealed class ApiKeyEndpointFilter(IApiKeyRepository repository) : IEndpointFilter
 {
     private const string Scheme = "ApiKey";
     private const string SchemePrefix = Scheme + " ";
@@ -13,17 +13,17 @@ public sealed class ApiKeyEndpointFilter(IApiCredentialRepository repository) : 
     {
         var http = context.HttpContext;
 
-        if (!TryParseHeader(http, out var keyId, out var secret))
+        if (!TryParseHeader(http, out var publicKey, out var secret))
             return Reject(http);
 
-        var result = await repository.FindActiveByKeyIdAsync(keyId, http.RequestAborted);
-        if (result is null || !VerifySecret(secret, result.Value.Credential.SecretHash))
+        var result = await repository.FindActiveByPublicKeyAsync(publicKey, http.RequestAborted);
+        if (result is null || !VerifySecret(secret, result.Value.ApiKey.SecretHash))
             return Reject(http);
 
         http.SetTenantContext(new TenantContext
         {
             Tenant = result.Value.Tenant,
-            Credential = result.Value.Credential,
+            ApiKey = result.Value.ApiKey,
         });
 
         return await next(context);
@@ -35,9 +35,9 @@ public sealed class ApiKeyEndpointFilter(IApiCredentialRepository repository) : 
         return Results.Unauthorized();
     }
 
-    private static bool TryParseHeader(HttpContext context, out string keyId, out string secret)
+    private static bool TryParseHeader(HttpContext context, out string publicKey, out string secret)
     {
-        keyId = secret = "";
+        publicKey = secret = "";
         var header = context.Request.Headers.Authorization.ToString();
         if (!header.StartsWith(SchemePrefix, StringComparison.OrdinalIgnoreCase))
             return false;
@@ -47,7 +47,7 @@ public sealed class ApiKeyEndpointFilter(IApiCredentialRepository repository) : 
         if (colon <= 0 || colon == token.Length - 1)
             return false;
 
-        keyId = token[..colon];
+        publicKey = token[..colon];
         secret = token[(colon + 1)..];
         return true;
     }

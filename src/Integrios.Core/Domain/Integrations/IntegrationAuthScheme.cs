@@ -1,6 +1,6 @@
-namespace Integrios.Core.Domain.Connectors;
+namespace Integrios.Core.Domain.Integrations;
 
-public enum ConnectorAuthScheme
+public enum IntegrationAuthScheme
 {
     None = 0,
     ApiKeyHeader = 1,
