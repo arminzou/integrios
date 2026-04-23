@@ -1,0 +1,79 @@
+using Dapper;
+
+namespace Integrios.Worker.Infrastructure.Data;
+
+public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : IOutboxRepository
+{
+    public async Task<IReadOnlyList<OutboxRow>> ClaimBatchAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        var rows = await connection.QueryAsync<OutboxRow>(
+            new CommandDefinition(
+                """
+                SELECT id AS Id, event_id AS EventId
+                FROM outbox
+                WHERE processed_at IS NULL
+                ORDER BY created_at ASC
+                LIMIT @Limit
+                FOR UPDATE SKIP LOCKED
+                """,
+                new { Limit = limit },
+                cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
+
+    public async Task MarkProcessedAsync(Guid outboxId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                "UPDATE outbox SET processed_at = now() WHERE id = @Id",
+                new { Id = outboxId },
+                cancellationToken: cancellationToken));
+    }
+
+    public async Task<EventDetails?> GetEventAsync(Guid eventId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        return await connection.QuerySingleOrDefaultAsync<EventDetails>(
+            new CommandDefinition(
+                """
+                SELECT
+                    id          AS Id,
+                    tenant_id   AS TenantId,
+                    event_type  AS EventType,
+                    payload::text AS PayloadJson
+                FROM events
+                WHERE id = @EventId
+                """,
+                new { EventId = eventId },
+                cancellationToken: cancellationToken));
+    }
+
+    public async Task UpdateEventStatusAsync(
+        Guid eventId,
+        string status,
+        Guid? pipelineId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE events
+                SET
+                    status       = @Status,
+                    pipeline_id  = COALESCE(@PipelineId, pipeline_id),
+                    processed_at = CASE WHEN @Status = 'completed' THEN now() ELSE processed_at END,
+                    failed_at    = CASE WHEN @Status = 'failed'    THEN now() ELSE failed_at    END
+                WHERE id = @EventId
+                """,
+                new { EventId = eventId, Status = status, PipelineId = pipelineId },
+                cancellationToken: cancellationToken));
+    }
+}

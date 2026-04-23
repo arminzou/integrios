@@ -1,41 +1,60 @@
-var builder = WebApplication.CreateBuilder(args);
+using System.Collections.Concurrent;
+using System.Text.Json;
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
-{
     app.MapOpenApi();
-}
 
-app.UseHttpsRedirection();
+// Per-sink behavior configuration. Default: succeed.
+// PUT /control/{name}  body: {"mode":"succeed"|"fail"|"slow","delayMs":2000}
+var sinkModes = new ConcurrentDictionary<string, SinkMode>(StringComparer.OrdinalIgnoreCase);
 
-var summaries = new[]
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+// Delivery endpoint — Worker posts events here.
+app.MapPost("/sink/{name}", async (string name, HttpRequest request, ILogger<Program> logger) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    var body = await new StreamReader(request.Body).ReadToEndAsync();
+    var mode = sinkModes.GetValueOrDefault(name, SinkMode.Default);
 
-app.MapGet("/weatherforecast", () =>
+    logger.LogInformation("[MockSink] {Name} received event (mode={Mode}): {Body}", name, mode.Behavior, body);
+
+    if (mode.Behavior == "slow")
+        await Task.Delay(mode.DelayMs);
+
+    if (mode.Behavior == "fail")
+    {
+        logger.LogWarning("[MockSink] {Name} returning 500 (configured to fail)", name);
+        return Results.StatusCode(500);
+    }
+
+    return Results.Ok(new { sink = name, received = true });
+});
+
+// Control endpoint — sets delivery behavior for a named sink.
+app.MapPut("/control/{name}", (string name, SinkModeRequest req) =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+    var mode = new SinkMode(req.Mode ?? "succeed", req.DelayMs ?? 2000);
+    sinkModes[name] = mode;
+    return Results.Ok(new { sink = name, mode = mode.Behavior, delayMs = mode.DelayMs });
+});
+
+// Reset a sink back to default success behavior.
+app.MapDelete("/control/{name}", (string name) =>
+{
+    sinkModes.TryRemove(name, out _);
+    return Results.Ok(new { sink = name, mode = "succeed" });
+});
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+record SinkMode(string Behavior, int DelayMs)
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    public static SinkMode Default => new("succeed", 0);
 }
+
+record SinkModeRequest(string? Mode, int? DelayMs);
