@@ -38,7 +38,7 @@ public sealed class OutboxWorker(
         logger.LogInformation("OutboxWorker stopped.");
     }
 
-    private async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
+    internal async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
     {
         var rows = await outboxRepository.ClaimBatchAsync(BatchSize, cancellationToken);
 

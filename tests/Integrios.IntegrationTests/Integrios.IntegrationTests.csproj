@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Integrios.Api\Integrios.Api.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Core\Integrios.Core.csproj" />
+    <ProjectReference Include="..\..\src\Integrios.Worker\Integrios.Worker.csproj" />
   </ItemGroup>
 
 </Project>

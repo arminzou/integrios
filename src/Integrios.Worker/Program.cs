@@ -3,28 +3,36 @@ using Integrios.Worker.Infrastructure.Data;
 using Integrios.Worker.Infrastructure.Http;
 using Npgsql;
 
-var builder = Host.CreateApplicationBuilder(args);
+namespace Integrios.Worker;
 
-var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres");
-if (string.IsNullOrWhiteSpace(postgresConnectionString))
-    throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
-
-builder.Services.AddSingleton(_ =>
+public class Program
 {
-    var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
-    return dataSourceBuilder.Build();
-});
+    public static void Main(string[] args)
+    {
+        var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
-builder.Services.AddSingleton<IOutboxRepository, OutboxRepository>();
-builder.Services.AddSingleton<IRoutingRepository, RoutingRepository>();
+        var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres");
+        if (string.IsNullOrWhiteSpace(postgresConnectionString))
+            throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
 
-builder.Services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
+        builder.Services.AddSingleton(_ =>
+        {
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
+            return dataSourceBuilder.Build();
+        });
 
-builder.Services.AddHostedService<OutboxWorker>();
+        builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
+        builder.Services.AddSingleton<IOutboxRepository, OutboxRepository>();
+        builder.Services.AddSingleton<IRoutingRepository, RoutingRepository>();
 
-var host = builder.Build();
-host.Run();
+        builder.Services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        builder.Services.AddHostedService<OutboxWorker>();
+
+        var host = builder.Build();
+        host.Run();
+    }
+}
