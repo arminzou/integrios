@@ -168,11 +168,11 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
             new CommandDefinition(
                 """
                 SELECT
-                    id          AS Id,
-                    status      AS Status,
-                    accepted_at AS AcceptedAt,
+                    id           AS Id,
+                    status       AS Status,
+                    accepted_at  AS AcceptedAt,
                     processed_at AS ProcessedAt,
-                    failed_at   AS FailedAt
+                    failed_at    AS FailedAt
                 FROM events
                 WHERE tenant_id = @TenantId
                   AND id = @EventId
@@ -184,13 +184,43 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
         if (row is null)
             return null;
 
+        var attempts = await connection.QueryAsync<DeliveryAttemptRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    route_id                  AS RouteId,
+                    destination_connection_id AS DestinationConnectionId,
+                    attempt_number            AS AttemptNumber,
+                    status                    AS Status,
+                    response_status_code      AS ResponseStatusCode,
+                    error_message             AS ErrorMessage,
+                    started_at                AS StartedAt,
+                    completed_at              AS CompletedAt
+                FROM delivery_attempts
+                WHERE event_id = @EventId
+                ORDER BY attempt_number, started_at;
+                """,
+                new { EventId = eventId },
+                cancellationToken: cancellationToken));
+
         return new GetEventResponse
         {
             EventId = row.Id,
             Status = ParseStatus(row.Status),
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
-            FailedAt = row.FailedAt
+            FailedAt = row.FailedAt,
+            DeliveryAttempts = attempts.Select(a => new DeliveryAttemptSummary
+            {
+                RouteId = a.RouteId,
+                DestinationConnectionId = a.DestinationConnectionId,
+                AttemptNumber = a.AttemptNumber,
+                Status = a.Status,
+                ResponseStatusCode = a.ResponseStatusCode,
+                ErrorMessage = a.ErrorMessage,
+                StartedAt = a.StartedAt,
+                CompletedAt = a.CompletedAt
+            }).ToList()
         };
     }
 
@@ -201,5 +231,17 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
         public DateTimeOffset AcceptedAt { get; init; }
         public DateTimeOffset? ProcessedAt { get; init; }
         public DateTimeOffset? FailedAt { get; init; }
+    }
+
+    private sealed record DeliveryAttemptRow
+    {
+        public Guid RouteId { get; init; }
+        public Guid DestinationConnectionId { get; init; }
+        public int AttemptNumber { get; init; }
+        public string Status { get; init; } = "";
+        public int? ResponseStatusCode { get; init; }
+        public string? ErrorMessage { get; init; }
+        public DateTimeOffset StartedAt { get; init; }
+        public DateTimeOffset? CompletedAt { get; init; }
     }
 }

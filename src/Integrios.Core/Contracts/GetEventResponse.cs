@@ -9,4 +9,5 @@ public sealed record GetEventResponse
     public required DateTimeOffset AcceptedAt { get; init; }
     public DateTimeOffset? ProcessedAt { get; init; }
     public DateTimeOffset? FailedAt { get; init; }
+    public IReadOnlyList<DeliveryAttemptSummary> DeliveryAttempts { get; init; } = [];
 }
