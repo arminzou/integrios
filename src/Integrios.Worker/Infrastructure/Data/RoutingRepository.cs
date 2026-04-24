@@ -36,10 +36,11 @@ public sealed class RoutingRepository(IDbConnectionFactory connectionFactory) : 
             new CommandDefinition(
                 """
                 SELECT
-                    r.id                     AS Id,
-                    r.name                   AS Name,
-                    r.match_rules::text      AS MatchRulesJson,
-                    c.config->>'url'         AS DestinationUrl
+                    r.id                          AS Id,
+                    r.name                        AS Name,
+                    r.match_rules::text           AS MatchRulesJson,
+                    r.destination_connection_id   AS DestinationConnectionId,
+                    c.config->>'url'              AS DestinationUrl
                 FROM routes r
                 JOIN connections c ON c.id = r.destination_connection_id
                 WHERE r.pipeline_id = @PipelineId
@@ -53,6 +54,7 @@ public sealed class RoutingRepository(IDbConnectionFactory connectionFactory) : 
             r.Id,
             r.Name,
             ParseMatchEventTypes(r.MatchRulesJson),
+            r.DestinationConnectionId,
             r.DestinationUrl ?? "")).ToList();
     }
 
@@ -80,6 +82,7 @@ public sealed class RoutingRepository(IDbConnectionFactory connectionFactory) : 
         public Guid Id { get; init; }
         public string Name { get; init; } = "";
         public string? MatchRulesJson { get; init; }
+        public Guid DestinationConnectionId { get; init; }
         public string? DestinationUrl { get; init; }
     }
 }

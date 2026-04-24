@@ -6,4 +6,4 @@ public interface IRoutingRepository
     Task<IReadOnlyList<RouteTarget>> GetActiveRoutesAsync(Guid pipelineId, CancellationToken cancellationToken = default);
 }
 
-public record RouteTarget(Guid Id, string Name, string[] MatchEventTypes, string DestinationUrl);
+public record RouteTarget(Guid Id, string Name, string[] MatchEventTypes, Guid DestinationConnectionId, string DestinationUrl);

@@ -132,6 +132,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private IDbConnectionFactory connectionFactory = null!;
     private IOutboxRepository outboxRepository = null!;
     private IRoutingRepository routingRepository = null!;
+    private IDeliveryAttemptRepository deliveryAttemptRepository = null!;
 
     public async Task InitializeAsync()
     {
@@ -142,6 +143,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
         outboxRepository = new OutboxRepository(connectionFactory);
         routingRepository = new RoutingRepository(connectionFactory);
+        deliveryAttemptRepository = new DeliveryAttemptRepository(connectionFactory);
     }
 
     public async Task DisposeAsync() => await container.DisposeAsync();
@@ -154,7 +156,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await connection.OpenAsync();
 
         await using (var truncateCmd = new NpgsqlCommand(
-            "TRUNCATE TABLE outbox, events, routes, pipelines, connections, api_keys, tenants, integrations RESTART IDENTITY CASCADE;",
+            "TRUNCATE TABLE delivery_attempts, outbox, events, routes, pipelines, connections, api_keys, tenants, integrations RESTART IDENTITY CASCADE;",
             connection))
         {
             await truncateCmd.ExecuteNonQueryAsync();
@@ -168,6 +170,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var worker = new OutboxWorker(
             outboxRepository,
             routingRepository,
+            deliveryAttemptRepository,
             DeliveryClient,
             NullLogger<OutboxWorker>.Instance);
 

@@ -6,6 +6,7 @@ namespace Integrios.Worker;
 public sealed class OutboxWorker(
     IOutboxRepository outboxRepository,
     IRoutingRepository routingRepository,
+    IDeliveryAttemptRepository deliveryAttemptRepository,
     IDeliveryClient deliveryClient,
     ILogger<OutboxWorker> logger) : BackgroundService
 {
@@ -61,19 +62,20 @@ public sealed class OutboxWorker(
         var pipelineId = await routingRepository.FindPipelineIdAsync(ev.TenantId, ev.EventType, cancellationToken);
         if (pipelineId is null)
         {
-            logger.LogWarning("No active pipeline found for tenant {TenantId} and event type {EventType}. Skipping event {EventId}.",
+            logger.LogWarning("No active pipeline for tenant {TenantId} / event type {EventType}. Skipping event {EventId}.",
                 ev.TenantId, ev.EventType, ev.Id);
             await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
 
         var routes = await routingRepository.GetActiveRoutesAsync(pipelineId.Value, cancellationToken);
-        var matchingRoutes = routes.Where(r => r.MatchEventTypes.Contains(ev.EventType, StringComparer.OrdinalIgnoreCase)).ToList();
+        var matchingRoutes = routes
+            .Where(r => r.MatchEventTypes.Contains(ev.EventType, StringComparer.OrdinalIgnoreCase))
+            .ToList();
 
         if (matchingRoutes.Count == 0)
         {
-            logger.LogInformation("Event {EventId} (type={EventType}) matched pipeline {PipelineId} but no routes. Marking completed.",
-                ev.Id, ev.EventType, pipelineId.Value);
+            logger.LogInformation("Event {EventId} matched pipeline {PipelineId} but no routes. Marking completed.", ev.Id, pipelineId.Value);
             await outboxRepository.UpdateEventStatusAsync(ev.Id, "completed", pipelineId.Value, cancellationToken);
             await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
             return;
@@ -84,14 +86,32 @@ public sealed class OutboxWorker(
         {
             if (string.IsNullOrWhiteSpace(route.DestinationUrl))
             {
-                logger.LogWarning("Route {RouteId} ({RouteName}) has no destination URL. Skipping.", route.Id, route.Name);
+                logger.LogWarning("Route {RouteId} has no destination URL. Skipping.", route.Id);
                 continue;
             }
 
-            logger.LogInformation("Delivering event {EventId} via route {RouteName} to {Url}",
-                ev.Id, route.Name, route.DestinationUrl);
+            var startedAt = DateTimeOffset.UtcNow;
+            var attemptNumber = await deliveryAttemptRepository.GetAttemptCountAsync(ev.Id, route.Id, cancellationToken) + 1;
+
+            logger.LogInformation("Delivering event {EventId} via route {RouteName} to {Url} (attempt {N})",
+                ev.Id, route.Name, route.DestinationUrl, attemptNumber);
 
             var result = await deliveryClient.DeliverAsync(route.DestinationUrl, ev.PayloadJson, cancellationToken);
+            var completedAt = DateTimeOffset.UtcNow;
+
+            await deliveryAttemptRepository.RecordAsync(
+                eventId: ev.Id,
+                routeId: route.Id,
+                destinationConnectionId: route.DestinationConnectionId,
+                attemptNumber: attemptNumber,
+                status: result.Succeeded ? "succeeded" : "failed",
+                requestPayloadJson: ev.PayloadJson,
+                responseStatusCode: result.StatusCode > 0 ? result.StatusCode : null,
+                responseBody: null,
+                errorMessage: result.Error,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                cancellationToken: cancellationToken);
 
             if (result.Succeeded)
             {

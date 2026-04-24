@@ -24,6 +24,7 @@ public class Program
         builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
         builder.Services.AddSingleton<IOutboxRepository, OutboxRepository>();
         builder.Services.AddSingleton<IRoutingRepository, RoutingRepository>();
+        builder.Services.AddSingleton<IDeliveryAttemptRepository, DeliveryAttemptRepository>();
 
         builder.Services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
