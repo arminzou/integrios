@@ -12,6 +12,7 @@ public sealed class OutboxWorker(
 {
     private const int BatchSize = 10;
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
+    internal static readonly TimeSpan RetryBaseDelay = TimeSpan.FromSeconds(30);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -126,10 +127,25 @@ public sealed class OutboxWorker(
             }
         }
 
-        var finalStatus = allSucceeded ? "completed" : "failed";
-        await outboxRepository.UpdateEventStatusAsync(ev.Id, finalStatus, pipelineId.Value, cancellationToken);
-        await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
+        if (allSucceeded)
+        {
+            await outboxRepository.UpdateEventStatusAsync(ev.Id, "completed", pipelineId.Value, cancellationToken);
+            await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
+            logger.LogInformation("Event {EventId} processing complete — status=completed", ev.Id);
+        }
+        else
+        {
+            var newAttemptCount = row.AttemptCount + 1;
+            var deliverAfter = DateTimeOffset.UtcNow + CalculateBackoff(newAttemptCount);
+            await outboxRepository.ScheduleRetryAsync(row.Id, newAttemptCount, deliverAfter, cancellationToken);
+            logger.LogWarning("Event {EventId} delivery failed. Scheduled retry {AttemptCount} at {DeliverAfter}.",
+                ev.Id, newAttemptCount, deliverAfter);
+        }
+    }
 
-        logger.LogInformation("Event {EventId} processing complete — status={Status}", ev.Id, finalStatus);
+    internal static TimeSpan CalculateBackoff(int attemptCount)
+    {
+        var exponent = Math.Min(attemptCount - 1, 10);
+        return RetryBaseDelay * Math.Pow(2, exponent);
     }
 }

@@ -71,7 +71,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
     }
 
     [Fact]
-    public async Task Worker_DeliveryFailure_MarksEventFailedAndOutboxProcessed()
+    public async Task Worker_DeliveryFailure_SchedulesRetryAndDoesNotMarkProcessed()
     {
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
@@ -80,11 +80,63 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         Assert.Single(fixture.DeliveryClient.Calls);
 
+        // Event status stays accepted — not failed until dead-lettered
         var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.Equal("failed", status);
+        Assert.Equal("accepted", status);
+
+        // Outbox row is NOT marked processed — it will be retried
+        var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
+        Assert.False(outboxProcessed);
+
+        var (attemptCount, deliverAfter) = await fixture.GetOutboxRetryStateAsync(eventId);
+        Assert.Equal(1, attemptCount);
+        Assert.NotNull(deliverAfter);
+        Assert.True(deliverAfter > DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
+    public async Task Worker_RetryAfterBackoff_DeliversOnSecondAttempt()
+    {
+        fixture.DeliveryClient.ShouldSucceed = false;
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        // First attempt — fails, schedules retry
+        await fixture.RunWorkerBatchAsync();
+        Assert.Single(fixture.DeliveryClient.Calls);
+
+        // Force deliver_after to the past so the row is immediately eligible
+        await fixture.ForceRetryNowAsync(eventId);
+        fixture.DeliveryClient.ShouldSucceed = true;
+
+        // Second attempt — should succeed
+        var processed = await fixture.RunWorkerBatchAsync();
+        Assert.Equal(1, processed);
+        Assert.Equal(2, fixture.DeliveryClient.Calls.Count);
+
+        var status = await fixture.GetEventStatusAsync(eventId);
+        Assert.Equal("completed", status);
 
         var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
         Assert.True(outboxProcessed);
+    }
+
+    [Fact]
+    public async Task Worker_RetryBeforeBackoffExpiry_DoesNotRedeliver()
+    {
+        fixture.DeliveryClient.ShouldSucceed = false;
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        // First attempt — fails, schedules retry in the future
+        await fixture.RunWorkerBatchAsync();
+        Assert.Single(fixture.DeliveryClient.Calls);
+
+        // Do NOT advance deliver_after — row is still in the future
+        fixture.DeliveryClient.ShouldSucceed = true;
+
+        // Second poll — row is not yet due, so no delivery
+        var processed = await fixture.RunWorkerBatchAsync();
+        Assert.Equal(0, processed);
+        Assert.Single(fixture.DeliveryClient.Calls); // no new calls
     }
 
     [Fact]
@@ -212,6 +264,31 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             "SELECT processed_at IS NOT NULL FROM outbox WHERE event_id = @EventId", connection);
         cmd.Parameters.AddWithValue("EventId", eventId);
         return (bool?)await cmd.ExecuteScalarAsync() ?? false;
+    }
+
+    public async Task<(int AttemptCount, DateTimeOffset? DeliverAfter)> GetOutboxRetryStateAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "SELECT attempt_count, deliver_after FROM outbox WHERE event_id = @EventId", connection);
+        cmd.Parameters.AddWithValue("EventId", eventId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            throw new InvalidOperationException($"No outbox row for event {eventId}");
+        var count = reader.GetInt32(0);
+        var after = reader.IsDBNull(1) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(1);
+        return (count, after);
+    }
+
+    public async Task ForceRetryNowAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "UPDATE outbox SET deliver_after = now() - interval '1 second' WHERE event_id = @EventId", connection);
+        cmd.Parameters.AddWithValue("EventId", eventId);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static async Task InsertEventRowAsync(NpgsqlConnection connection, Guid eventId, Guid tenantId, string eventType)

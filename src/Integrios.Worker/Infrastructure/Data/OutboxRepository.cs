@@ -11,10 +11,11 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
         var rows = await connection.QueryAsync<OutboxRow>(
             new CommandDefinition(
                 """
-                SELECT id AS Id, event_id AS EventId
+                SELECT id AS Id, event_id AS EventId, attempt_count AS AttemptCount
                 FROM outbox
                 WHERE processed_at IS NULL
-                ORDER BY created_at ASC
+                  AND (deliver_after IS NULL OR deliver_after <= now())
+                ORDER BY deliver_after NULLS FIRST, created_at ASC
                 LIMIT @Limit
                 FOR UPDATE SKIP LOCKED
                 """,
@@ -51,6 +52,26 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
                 WHERE id = @EventId
                 """,
                 new { EventId = eventId },
+                cancellationToken: cancellationToken));
+    }
+
+    public async Task ScheduleRetryAsync(
+        Guid outboxId,
+        int newAttemptCount,
+        DateTimeOffset deliverAfter,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE outbox
+                SET attempt_count = @NewAttemptCount,
+                    deliver_after  = @DeliverAfter
+                WHERE id = @Id
+                """,
+                new { Id = outboxId, NewAttemptCount = newAttemptCount, DeliverAfter = deliverAfter },
                 cancellationToken: cancellationToken));
     }
 
