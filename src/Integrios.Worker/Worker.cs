@@ -11,6 +11,7 @@ public sealed class OutboxWorker(
     ILogger<OutboxWorker> logger) : BackgroundService
 {
     private const int BatchSize = 10;
+    internal const int MaxAttempts = 3;
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
     internal static readonly TimeSpan RetryBaseDelay = TimeSpan.FromSeconds(30);
 
@@ -136,10 +137,19 @@ public sealed class OutboxWorker(
         else
         {
             var newAttemptCount = row.AttemptCount + 1;
-            var deliverAfter = DateTimeOffset.UtcNow + CalculateBackoff(newAttemptCount);
-            await outboxRepository.ScheduleRetryAsync(row.Id, newAttemptCount, deliverAfter, cancellationToken);
-            logger.LogWarning("Event {EventId} delivery failed. Scheduled retry {AttemptCount} at {DeliverAfter}.",
-                ev.Id, newAttemptCount, deliverAfter);
+            if (newAttemptCount >= MaxAttempts)
+            {
+                await outboxRepository.UpdateEventStatusAsync(ev.Id, "dead_lettered", pipelineId.Value, cancellationToken);
+                await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
+                logger.LogError("Event {EventId} dead-lettered after {AttemptCount} attempts.", ev.Id, newAttemptCount);
+            }
+            else
+            {
+                var deliverAfter = DateTimeOffset.UtcNow + CalculateBackoff(newAttemptCount);
+                await outboxRepository.ScheduleRetryAsync(row.Id, newAttemptCount, deliverAfter, cancellationToken);
+                logger.LogWarning("Event {EventId} delivery failed. Scheduled retry {AttemptCount} at {DeliverAfter}.",
+                    ev.Id, newAttemptCount, deliverAfter);
+            }
         }
     }
 

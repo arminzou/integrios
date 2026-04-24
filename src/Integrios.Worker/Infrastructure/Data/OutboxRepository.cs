@@ -90,8 +90,8 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
                 SET
                     status       = @Status,
                     pipeline_id  = COALESCE(@PipelineId, pipeline_id),
-                    processed_at = CASE WHEN @Status = 'completed' THEN now() ELSE processed_at END,
-                    failed_at    = CASE WHEN @Status = 'failed'    THEN now() ELSE failed_at    END
+                    processed_at = CASE WHEN @Status = 'completed'     THEN now() ELSE processed_at END,
+                    failed_at    = CASE WHEN @Status IN ('failed', 'dead_lettered') THEN now() ELSE failed_at END
                 WHERE id = @EventId
                 """,
                 new { EventId = eventId, Status = status, PipelineId = pipelineId },

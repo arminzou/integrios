@@ -140,6 +140,50 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
     }
 
     [Fact]
+    public async Task Worker_ExhaustsRetries_DeadLettersEventAndStopsRetrying()
+    {
+        fixture.DeliveryClient.ShouldSucceed = false;
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        // Fail attempts up to MaxAttempts - 1, each time forcing deliver_after into the past
+        for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
+        {
+            await fixture.RunWorkerBatchAsync();
+            await fixture.ForceRetryNowAsync(eventId);
+        }
+
+        // Final attempt — should dead-letter
+        await fixture.RunWorkerBatchAsync();
+
+        var status = await fixture.GetEventStatusAsync(eventId);
+        Assert.Equal("dead_lettered", status);
+
+        var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
+        Assert.True(outboxProcessed);
+    }
+
+    [Fact]
+    public async Task Worker_DeadLetteredEvent_IsNotPickedUpAgain()
+    {
+        fixture.DeliveryClient.ShouldSucceed = false;
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
+        {
+            await fixture.RunWorkerBatchAsync();
+            await fixture.ForceRetryNowAsync(eventId);
+        }
+        await fixture.RunWorkerBatchAsync(); // dead-letters
+
+        fixture.DeliveryClient.Reset();
+        fixture.DeliveryClient.ShouldSucceed = true;
+
+        var processed = await fixture.RunWorkerBatchAsync();
+        Assert.Equal(0, processed);
+        Assert.Empty(fixture.DeliveryClient.Calls);
+    }
+
+    [Fact]
     public async Task Worker_TenantIsolation_OnlyRoutesWithinTenant()
     {
         // Insert events for both test tenant and a different tenant; only test tenant has routing config.
