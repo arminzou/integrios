@@ -300,4 +300,12 @@ public sealed class StubEventRepository : IEventRepository
     {
         return Task.FromResult(GetEventResult);
     }
+
+    public Task<bool> ReplayEventAsync(
+        Guid tenantId,
+        Guid eventId,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(false);
+    }
 }

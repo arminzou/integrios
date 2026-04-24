@@ -59,5 +59,19 @@ events.MapGet("/{id:guid}", async (
 
     return response is null ? Results.NotFound() : Results.Ok(response);
 });
+events.MapPost("/{id:guid}/replay", async (
+    Guid id,
+    HttpContext httpContext,
+    IEventRepository eventRepository,
+    CancellationToken cancellationToken) =>
+{
+    var tenantContext = httpContext.GetTenantContext();
+    var replayed = await eventRepository.ReplayEventAsync(
+        tenantContext.Tenant.Id,
+        id,
+        cancellationToken);
+
+    return replayed ? Results.Accepted($"/events/{id}") : Results.NotFound();
+});
 
 app.Run();

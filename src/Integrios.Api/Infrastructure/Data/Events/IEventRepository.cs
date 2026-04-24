@@ -13,4 +13,9 @@ public interface IEventRepository
         Guid tenantId,
         Guid eventId,
         CancellationToken cancellationToken = default);
+
+    Task<bool> ReplayEventAsync(
+        Guid tenantId,
+        Guid eventId,
+        CancellationToken cancellationToken = default);
 }

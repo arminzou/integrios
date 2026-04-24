@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DotNet.Testcontainers.Builders;
+using Integrios.Api.Infrastructure.Data.Events;
 using Integrios.Core.Contracts;
 using Integrios.Worker;
 using Integrios.Worker.Infrastructure.Data;
@@ -229,6 +230,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private IOutboxRepository outboxRepository = null!;
     private IRoutingRepository routingRepository = null!;
     private IDeliveryAttemptRepository deliveryAttemptRepository = null!;
+    private IEventRepository eventRepository = null!;
 
     public async Task InitializeAsync()
     {
@@ -240,6 +242,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         outboxRepository = new OutboxRepository(connectionFactory);
         routingRepository = new RoutingRepository(connectionFactory);
         deliveryAttemptRepository = new DeliveryAttemptRepository(connectionFactory);
+        eventRepository = new EventRepository(
+            new Integrios.Api.Infrastructure.Data.NpgsqlConnectionFactory(dataSource));
     }
 
     public async Task DisposeAsync() => await container.DisposeAsync();
@@ -334,6 +338,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("EventId", eventId);
         await cmd.ExecuteNonQueryAsync();
     }
+
+    public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default)
+        => eventRepository.ReplayEventAsync(TenantId, eventId, cancellationToken);
 
     private static async Task InsertEventRowAsync(NpgsqlConnection connection, Guid eventId, Guid tenantId, string eventType)
     {
