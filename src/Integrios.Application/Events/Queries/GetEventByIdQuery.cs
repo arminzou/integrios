@@ -1,5 +1,4 @@
 using Integrios.Application.Abstractions;
-using Integrios.Domain.Contracts;
 using MediatR;
 
 namespace Integrios.Application.Events;

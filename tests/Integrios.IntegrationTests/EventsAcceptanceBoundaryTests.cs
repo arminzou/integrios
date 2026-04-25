@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DotNet.Testcontainers.Builders;
-using Integrios.Domain.Contracts;
+using Integrios.Application.Events;
 using Integrios.Domain.Events;
 using Integrios.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc.Testing;

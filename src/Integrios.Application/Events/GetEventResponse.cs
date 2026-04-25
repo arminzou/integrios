@@ -1,4 +1,16 @@
-namespace Integrios.Domain.Contracts;
+using Integrios.Domain.Events;
+
+namespace Integrios.Application.Events;
+
+public sealed record GetEventResponse
+{
+    public required Guid EventId { get; init; }
+    public required EventStatus Status { get; init; }
+    public required DateTimeOffset AcceptedAt { get; init; }
+    public DateTimeOffset? ProcessedAt { get; init; }
+    public DateTimeOffset? FailedAt { get; init; }
+    public IReadOnlyList<DeliveryAttemptSummary> DeliveryAttempts { get; init; } = [];
+}
 
 public sealed record DeliveryAttemptSummary
 {

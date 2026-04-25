@@ -1,4 +1,4 @@
-using Integrios.Domain.Contracts;
+using Integrios.Application.Events;
 
 namespace Integrios.Application.Abstractions;
 
