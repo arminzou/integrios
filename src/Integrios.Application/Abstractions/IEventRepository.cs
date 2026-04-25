@@ -1,6 +1,6 @@
 using Integrios.Domain.Contracts;
 
-namespace Integrios.Domain.Abstractions.Events;
+namespace Integrios.Application.Abstractions;
 
 public interface IEventRepository
 {

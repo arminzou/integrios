@@ -1,6 +1,6 @@
 using Integrios.Domain.Tenants;
 
-namespace Integrios.Domain.Abstractions.Tenants;
+namespace Integrios.Application.Abstractions;
 
 public interface IApiKeyRepository
 {

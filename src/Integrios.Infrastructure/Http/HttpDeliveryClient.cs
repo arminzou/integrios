@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
-using Integrios.Domain.Abstractions.Http;
+using Integrios.Application.Abstractions;
 
 namespace Integrios.Infrastructure.Http;
 

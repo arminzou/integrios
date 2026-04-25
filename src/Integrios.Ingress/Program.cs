@@ -1,11 +1,13 @@
 using Integrios.Ingress.Auth;
-using Integrios.Domain.Abstractions.Events;
+using Integrios.Application;
+using Integrios.Application.Abstractions;
 using Integrios.Domain.Contracts;
 using Integrios.Infrastructure.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddIntegriosApplication();
 builder.Services.AddIntegriosInfrastructure(builder.Configuration);
 
 var app = builder.Build();

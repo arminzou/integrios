@@ -1,10 +1,9 @@
 using Dapper;
-using Integrios.Domain.Abstractions.Data;
-using Integrios.Domain.Abstractions.Tenants;
+using Integrios.Application.Abstractions;
 using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 
-namespace Integrios.Infrastructure.Data.Tenants;
+namespace Integrios.Infrastructure.Data;
 
 public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : IApiKeyRepository
 {

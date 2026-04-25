@@ -1,4 +1,4 @@
-namespace Integrios.Domain.Abstractions.Http;
+namespace Integrios.Application.Abstractions;
 
 public interface IDeliveryClient
 {

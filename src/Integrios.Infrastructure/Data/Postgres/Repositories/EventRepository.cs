@@ -1,12 +1,11 @@
 using System.Text.Json;
 using Dapper;
-using Integrios.Domain.Abstractions.Data;
-using Integrios.Domain.Abstractions.Events;
+using Integrios.Application.Abstractions;
 using Integrios.Domain.Contracts;
 using Integrios.Domain.Events;
 using Npgsql;
 
-namespace Integrios.Infrastructure.Data.Events;
+namespace Integrios.Infrastructure.Data;
 
 public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IEventRepository
 {

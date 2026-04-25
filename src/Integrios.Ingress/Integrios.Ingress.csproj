@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
   </ItemGroup>

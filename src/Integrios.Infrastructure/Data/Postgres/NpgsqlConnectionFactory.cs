@@ -1,5 +1,4 @@
 using System.Data.Common;
-using Integrios.Domain.Abstractions.Data;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Data;

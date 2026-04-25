@@ -1,6 +1,6 @@
 using System.Data.Common;
 
-namespace Integrios.Domain.Abstractions.Data;
+namespace Integrios.Infrastructure.Data;
 
 public interface IDbConnectionFactory
 {

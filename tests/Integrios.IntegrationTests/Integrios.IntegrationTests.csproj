@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Integrios.Ingress\Integrios.Ingress.csproj" />
+    <ProjectReference Include="..\..\src\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Worker\Integrios.Worker.csproj" />

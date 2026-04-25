@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DotNet.Testcontainers.Builders;
-using Integrios.Domain.Abstractions.Data;
 using Integrios.Infrastructure.Data;
 using Integrios.Domain.Contracts;
 using Integrios.Domain.Events;

@@ -1,8 +1,7 @@
 using Dapper;
-using Integrios.Domain.Abstractions.Data;
-using Integrios.Domain.Abstractions.Worker;
+using Integrios.Application.Abstractions;
 
-namespace Integrios.Infrastructure.Data.Worker;
+namespace Integrios.Infrastructure.Data;
 
 public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : IOutboxRepository
 {

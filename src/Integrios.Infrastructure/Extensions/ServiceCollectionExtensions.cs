@@ -1,12 +1,5 @@
-using Integrios.Domain.Abstractions.Data;
-using Integrios.Domain.Abstractions.Events;
-using Integrios.Domain.Abstractions.Http;
-using Integrios.Domain.Abstractions.Tenants;
-using Integrios.Domain.Abstractions.Worker;
+using Integrios.Application.Abstractions;
 using Integrios.Infrastructure.Data;
-using Integrios.Infrastructure.Data.Events;
-using Integrios.Infrastructure.Data.Tenants;
-using Integrios.Infrastructure.Data.Worker;
 using Integrios.Infrastructure.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using Integrios.Domain.Abstractions.Tenants;
+using Integrios.Application.Abstractions;
 
 namespace Integrios.Ingress.Auth;
 

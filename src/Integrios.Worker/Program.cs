@@ -1,4 +1,5 @@
 using Integrios.Worker;
+using Integrios.Application;
 using Integrios.Infrastructure.Extensions;
 
 namespace Integrios.Worker;
@@ -9,6 +10,7 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
 
+        builder.Services.AddIntegriosApplication();
         builder.Services.AddIntegriosInfrastructure(builder.Configuration);
 
         builder.Services.AddHostedService<OutboxWorker>();

@@ -1,4 +1,4 @@
-namespace Integrios.Domain.Abstractions.Worker;
+namespace Integrios.Application.Abstractions;
 
 public interface IRoutingRepository
 {
