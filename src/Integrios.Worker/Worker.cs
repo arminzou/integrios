@@ -1,5 +1,5 @@
-using Integrios.Worker.Infrastructure.Data;
-using Integrios.Worker.Infrastructure.Http;
+using Integrios.Domain.Abstractions.Worker;
+using Integrios.Domain.Abstractions.Http;
 
 namespace Integrios.Worker;
 

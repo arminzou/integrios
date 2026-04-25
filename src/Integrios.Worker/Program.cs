@@ -1,7 +1,5 @@
 using Integrios.Worker;
-using Integrios.Worker.Infrastructure.Data;
-using Integrios.Worker.Infrastructure.Http;
-using Npgsql;
+using Integrios.Infrastructure.Extensions;
 
 namespace Integrios.Worker;
 
@@ -11,25 +9,7 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
 
-        var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres");
-        if (string.IsNullOrWhiteSpace(postgresConnectionString))
-            throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
-
-        builder.Services.AddSingleton(_ =>
-        {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
-            return dataSourceBuilder.Build();
-        });
-
-        builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
-        builder.Services.AddSingleton<IOutboxRepository, OutboxRepository>();
-        builder.Services.AddSingleton<IRoutingRepository, RoutingRepository>();
-        builder.Services.AddSingleton<IDeliveryAttemptRepository, DeliveryAttemptRepository>();
-
-        builder.Services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
+        builder.Services.AddIntegriosInfrastructure(builder.Configuration);
 
         builder.Services.AddHostedService<OutboxWorker>();
 

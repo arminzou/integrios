@@ -14,11 +14,11 @@ It receives events, applies tenant-aware routing and transformation rules, and d
 
 - `Integrios.slnx` is the solution entrypoint.
 - `src/` contains the main application projects.
-- `src/Integrios.Api` owns HTTP intake, tenant auth, and the durable acceptance boundary. Data plane.
+- `src/Integrios.Ingress` owns HTTP intake, tenant auth, and the durable acceptance boundary. Data plane.
 - `src/Integrios.Admin` owns tenant management, connection configuration, pipeline and route management. Control plane.
 - `src/Integrios.Worker` owns outbox polling, routing, delivery, and retry/DLQ behavior.
 - `src/Integrios.MockSink` provides a controllable local sink for testing and demos. Not part of the deployable product.
-- `src/Integrios.Core` holds core domain types and shared contracts.
+- `src/Integrios.Domain` holds core domain types and shared contracts.
 - `tests/` contains unit and integration test projects.
 - `db/migrations/` contains Flyway SQL migrations.
 - `docs/` is for public documentation only.
@@ -30,7 +30,7 @@ It receives events, applies tenant-aware routing and transformation rules, and d
 The platform is divided into two planes, each a separate ASP.NET service with its own `Program.cs` and port.
 
 - **Control plane** (`Integrios.Admin`, port 5150): tenant lifecycle, connection configuration, pipeline and route management, policy. Auth will diverge from the data plane (admin tokens, human sessions) as the platform grows.
-- **Data plane** (`Integrios.Api`, port 5231): webhook intake, tenant/auth resolution, durable acceptance boundary, outbox writes.
+- **Data plane** (`Integrios.Ingress`, port 5231): webhook intake, tenant/auth resolution, durable acceptance boundary, outbox writes.
 - **Worker** (`Integrios.Worker`): outbox polling, pipeline and route resolution, event delivery, retry/DLQ/replay.
 
 `Integrios.Worker` reads pipeline and route config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are no service-to-service config calls in v1. See `dev/decisions.md` for the rationale and migration path.
@@ -48,11 +48,11 @@ The platform is divided into two planes, each a separate ASP.NET service with it
 
 ### Module boundaries
 
-- `Integrios.Api` owns the HTTP surface, tenant resolution, and acceptance-boundary writes. It does not own routing, delivery, or retry behavior.
+- `Integrios.Ingress` owns the HTTP surface, tenant resolution, and acceptance-boundary writes. It does not own routing, delivery, or retry behavior.
 - `Integrios.Admin` owns control plane configuration. It does not own event processing. No endpoints exist yet; Phase 4 builds them.
 - `Integrios.Worker` owns outbox polling, route resolution, delivery, and retry/DLQ/replay. It does not own HTTP intake or config writes.
 - `Integrios.MockSink` owns controllable success, failure, and slow-path responses for local testing. It is never a dependency of production services.
-- `Integrios.Core` owns domain entities, enums, and API contracts. It does not own implementation logic.
+- `Integrios.Domain` owns domain entities, enums, and API contracts. It does not own implementation logic.
 
 ### Version 1 constraints
 
@@ -73,10 +73,10 @@ dotnet build Integrios.slnx
 dotnet test Integrios.slnx
 
 # Run one test project
-dotnet test tests/Integrios.Api.Tests/Integrios.Api.Tests.csproj
+dotnet test tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj
 
 # Run one service
-dotnet run --project src/Integrios.Api
+dotnet run --project src/Integrios.Ingress
 dotnet run --project src/Integrios.Admin
 dotnet run --project src/Integrios.Worker
 dotnet run --project src/Integrios.MockSink
@@ -93,22 +93,26 @@ make db-migrate
 ## Code Style Guidelines
 
 Language and platform:
+
 - C# / .NET
 - nullable enabled
 - implicit usings enabled
 
 Naming:
+
 - PascalCase for types, methods, and properties
 - camelCase for locals and parameters
 - database columns use `snake_case`
 - `Integration.key` values use `snake_case`
 
 Domain naming:
+
 - keep domain entity names aligned with the model: `Tenant`, `ApiKey`, `Integration`, `Connection`, `Pipeline`, `Route`, `Event`, `DeliveryAttempt`
 
 Style:
+
 - prefer early returns over deep nesting
-- keep `Integrios.Core` focused on domain entities and contracts
+- keep `Integrios.Domain` focused on domain entities and contracts
 - do not hide architectural decisions in code without updating the right docs
 - do not mistake scaffold/template code for intended final architecture
 
@@ -120,6 +124,7 @@ Style:
 - if you skip verification, say so explicitly
 
 Default verification:
+
 - docs-only change: verify referenced files and paths exist
 - code change: run the most relevant build/test commands for the touched area
 - schema or architecture change: verify migrations, tests, and docs stay aligned
@@ -133,6 +138,7 @@ Use Conventional Commits:
 ```
 
 Common types:
+
 - `feat`
 - `fix`
 - `refactor`
@@ -142,6 +148,7 @@ Common types:
 - `perf`
 
 Suggested scopes:
+
 - `api`
 - `admin`
 - `worker`

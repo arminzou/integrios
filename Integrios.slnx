@@ -1,13 +1,13 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/Integrios.Api/Integrios.Api.csproj" />
+    <Project Path="src/Integrios.Ingress/Integrios.Ingress.csproj" />
     <Project Path="src/Integrios.Admin/Integrios.Admin.csproj" />
     <Project Path="src/Integrios.MockSink/Integrios.MockSink.csproj" />
-    <Project Path="src/Integrios.Core/Integrios.Core.csproj" />
+    <Project Path="src/Integrios.Domain/Integrios.Domain.csproj" />
     <Project Path="src/Integrios.Worker/Integrios.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Integrios.Api.Tests/Integrios.Api.Tests.csproj" />
+    <Project Path="tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj" />
     <Project Path="tests/Integrios.IntegrationTests/Integrios.IntegrationTests.csproj" />
     <Project Path="tests/Integrios.Worker.Tests/Integrios.Worker.Tests.csproj" />
   </Folder>

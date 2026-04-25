@@ -1,0 +1,6 @@
+@Integrios.Ingress_HostAddress = http://localhost:5231
+
+GET {{Integrios.Ingress_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

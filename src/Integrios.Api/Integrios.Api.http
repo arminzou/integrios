@@ -1,6 +1,0 @@
-@Integrios.Api_HostAddress = http://localhost:5231
-
-GET {{Integrios.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

@@ -2,11 +2,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DotNet.Testcontainers.Builders;
-using Integrios.Api.Infrastructure.Data.Events;
-using Integrios.Core.Contracts;
+using Integrios.Domain.Abstractions.Data;
+using Integrios.Domain.Abstractions.Events;
+using Integrios.Infrastructure.Data.Events;
+using Integrios.Infrastructure.Data;
+using Integrios.Infrastructure.Data.Worker;
+using Integrios.Domain.Contracts;
 using Integrios.Worker;
-using Integrios.Worker.Infrastructure.Data;
-using Integrios.Worker.Infrastructure.Http;
+using Integrios.Domain.Abstractions.Worker;
+using Integrios.Domain.Abstractions.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -242,8 +246,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         outboxRepository = new OutboxRepository(connectionFactory);
         routingRepository = new RoutingRepository(connectionFactory);
         deliveryAttemptRepository = new DeliveryAttemptRepository(connectionFactory);
-        eventRepository = new EventRepository(
-            new Integrios.Api.Infrastructure.Data.NpgsqlConnectionFactory(dataSource));
+        eventRepository = new EventRepository(connectionFactory);
     }
 
     public async Task DisposeAsync() => await container.DisposeAsync();

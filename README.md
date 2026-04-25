@@ -66,7 +66,7 @@ This separation keeps runtime processing paths focused, while allowing control l
 
 ### Durable Acceptance Boundary
 
-`Integrios.Api` accepts events and persists them durably before acknowledging the caller.
+`Integrios.Ingress` accepts events and persists them durably before acknowledging the caller.
 
 The acceptance boundary is modeled as a single transaction that writes:
 
