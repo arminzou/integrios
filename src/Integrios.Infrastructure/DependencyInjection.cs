@@ -5,9 +5,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
-namespace Integrios.Infrastructure.Extensions;
+namespace Integrios.Infrastructure;
 
-public static class ServiceCollectionExtensions
+public static class DependencyInjection
 {
     public static IServiceCollection AddIntegriosInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {

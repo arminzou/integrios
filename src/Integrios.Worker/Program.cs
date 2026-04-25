@@ -1,5 +1,5 @@
 using Integrios.Application;
-using Integrios.Infrastructure.Extensions;
+using Integrios.Infrastructure;
 using Integrios.Worker;
 
 namespace Integrios.Worker;

@@ -1,7 +1,7 @@
 using Integrios.Application;
 using Integrios.Application.Events;
 using Integrios.Domain.Contracts;
-using Integrios.Infrastructure.Extensions;
+using Integrios.Infrastructure;
 using Integrios.Ingress.Auth;
 using MediatR;
 
