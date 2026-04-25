@@ -142,6 +142,50 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.Equal(1, outboxCount);
     }
 
+    [Fact]
+    public async Task PostEvents_AttributesEventToAuthenticatedTenant()
+    {
+        var request = BuildRequest(idempotencyKey: "idem-evt-tenant-write");
+
+        var response = await PostEventAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
+        Assert.NotNull(body);
+
+        var writtenTenantId = await fixture.GetEventTenantIdAsync(body.EventId);
+        Assert.Equal(fixture.TenantAId, writtenTenantId);
+    }
+
+    [Fact]
+    public async Task Replay_DeadLetteredEvent_ViaHttp_Returns202AndResetsStatus()
+    {
+        var request = BuildRequest(idempotencyKey: "idem-evt-replay-http");
+        var postResponse = await PostEventAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
+
+        var body = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        Assert.NotNull(body);
+
+        await fixture.ForceEventStatusAsync(body.EventId, "dead_lettered");
+
+        var replayResponse = await client.SendAsync(new HttpRequestMessage(
+            HttpMethod.Post, $"/events/{body.EventId}/replay")
+        {
+            Headers = { { "Authorization", tenantAAuthHeaderValue } }
+        });
+        Assert.Equal(HttpStatusCode.Accepted, replayResponse.StatusCode);
+
+        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+        await using var statusCmd = new NpgsqlCommand(
+            "SELECT status FROM events WHERE id = @Id", connection);
+        statusCmd.Parameters.AddWithValue("Id", body.EventId);
+        Assert.Equal("accepted", await statusCmd.ExecuteScalarAsync());
+
+        Assert.Equal(2, await fixture.GetOutboxRowCountAsync(body.EventId));
+    }
+
     private static IngestEventRequest BuildRequest(string idempotencyKey)
     {
         return new IngestEventRequest
@@ -189,6 +233,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
 
     public WebApplicationFactory<Program> WebFactory { get; private set; } = null!;
     public string ConnectionString => container.GetConnectionString();
+    public Guid TenantAId { get; private set; }
 
     public async Task InitializeAsync()
     {
@@ -216,7 +261,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             await resetCommand.ExecuteNonQueryAsync();
         }
 
-        var tenantAId = Guid.NewGuid();
+        TenantAId = Guid.NewGuid();
+        var tenantAId = TenantAId;
         var tenantBId = Guid.NewGuid();
         var credentialAId = Guid.NewGuid();
         var credentialBId = Guid.NewGuid();
@@ -273,6 +319,37 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         seedCommand.Parameters.AddWithValue("SecretHashA", secretHashA);
         seedCommand.Parameters.AddWithValue("SecretHashB", secretHashB);
         await seedCommand.ExecuteNonQueryAsync();
+    }
+
+    public async Task<Guid?> GetEventTenantIdAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand("SELECT tenant_id FROM events WHERE id = @Id", connection);
+        cmd.Parameters.AddWithValue("Id", eventId);
+        var result = await cmd.ExecuteScalarAsync();
+        return result is Guid g ? g : null;
+    }
+
+    public async Task ForceEventStatusAsync(Guid eventId, string status)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "UPDATE events SET status = @Status WHERE id = @Id", connection);
+        cmd.Parameters.AddWithValue("Status", status);
+        cmd.Parameters.AddWithValue("Id", eventId);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<int> GetOutboxRowCountAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "SELECT COUNT(*) FROM outbox WHERE event_id = @Id", connection);
+        cmd.Parameters.AddWithValue("Id", eventId);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync());
     }
 
     private async Task InitializeSchemaAsync()

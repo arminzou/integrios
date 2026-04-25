@@ -387,15 +387,15 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
             INSERT INTO pipelines (id, tenant_id, name, source_connection_id, event_types, status)
             VALUES (@PipelineId, @TenantId, 'test-pipeline', @SourceConnectionId,
-                    ARRAY['payment.created', 'payment.settled', 'payment.authorized'], 'active');
+                    ARRAY['payment.created', 'payment.settled', 'payment.authorized', 'payment.multi'], 'active');
 
             INSERT INTO routes (id, pipeline_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES
                 (@LedgerRouteId, @PipelineId, 'to-ledger',
-                 '{"event_types":["payment.created","payment.settled"]}'::jsonb,
+                 '{"event_types":["payment.created","payment.settled","payment.multi"]}'::jsonb,
                  @LedgerConnectionId, 0, 'active'),
                 (@RiskRouteId, @PipelineId, 'to-risk',
-                 '{"event_types":["payment.authorized"]}'::jsonb,
+                 '{"event_types":["payment.authorized","payment.multi"]}'::jsonb,
                  @RiskConnectionId, 1, 'active');
             """, connection);
 
