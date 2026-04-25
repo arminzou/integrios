@@ -191,6 +191,8 @@ public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
         return client.SendAsync(message);
     }
 
+    public static (ApiKey ApiKey, Tenant Tenant) BuildValidApiKeyPublic(string secret) => BuildValidApiKey(secret);
+
     private static (ApiKey ApiKey, Tenant Tenant) BuildValidApiKey(string secret)
     {
         var hash = "sha256:" + Convert.ToHexString(
@@ -236,6 +238,7 @@ public sealed class ApiTestAppFixture : IDisposable
     {
         ApiKeyRepository.Result = null;
         EventRepository.GetEventResult = null;
+        EventRepository.ReplayResult = false;
     }
 
     public void Dispose()
@@ -278,6 +281,7 @@ public sealed class StubApiKeyRepository : IApiKeyRepository
 public sealed class StubEventRepository : IEventRepository
 {
     public GetEventResponse? GetEventResult { get; set; }
+    public bool ReplayResult { get; set; } = false;
 
     public Task<IngestEventResponse> IngestAsync(
         Guid tenantId,
@@ -306,6 +310,6 @@ public sealed class StubEventRepository : IEventRepository
         Guid eventId,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(false);
+        return Task.FromResult(ReplayResult);
     }
 }

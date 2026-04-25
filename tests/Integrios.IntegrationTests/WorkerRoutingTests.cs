@@ -343,6 +343,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default)
         => eventRepository.ReplayEventAsync(TenantId, eventId, cancellationToken);
 
+    public Task<GetEventResponse?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default)
+        => eventRepository.GetEventByIdAsync(TenantId, eventId, cancellationToken);
+
     private static async Task InsertEventRowAsync(NpgsqlConnection connection, Guid eventId, Guid tenantId, string eventType)
     {
         var payload = JsonSerializer.Serialize(new { test = true });
