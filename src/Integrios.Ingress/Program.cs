@@ -1,8 +1,9 @@
 using Integrios.Application;
-using Integrios.Application.Abstractions;
+using Integrios.Application.Events;
 using Integrios.Domain.Contracts;
 using Integrios.Infrastructure.Extensions;
 using Integrios.Ingress.Auth;
+using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,13 +23,12 @@ events.AddEndpointFilter<ApiKeyEndpointFilter>();
 events.MapPost("", async (
     IngestEventRequest request,
     HttpContext httpContext,
-    IEventRepository eventRepository,
+    IMediator mediator,
     CancellationToken cancellationToken) =>
 {
     var tenantContext = httpContext.GetTenantContext();
-    var response = await eventRepository.IngestAsync(
-        tenantContext.Tenant.Id,
-        request,
+    var response = await mediator.Send(
+        new IngestEventCommand(tenantContext.Tenant.Id, request),
         cancellationToken);
 
     return Results.Accepted($"/events/{response.EventId}", response);
@@ -36,13 +36,12 @@ events.MapPost("", async (
 events.MapGet("/{id:guid}", async (
     Guid id,
     HttpContext httpContext,
-    IEventRepository eventRepository,
+    IMediator mediator,
     CancellationToken cancellationToken) =>
 {
     var tenantContext = httpContext.GetTenantContext();
-    var response = await eventRepository.GetEventByIdAsync(
-        tenantContext.Tenant.Id,
-        id,
+    var response = await mediator.Send(
+        new GetEventByIdQuery(tenantContext.Tenant.Id, id),
         cancellationToken);
 
     return response is null ? Results.NotFound() : Results.Ok(response);
@@ -50,13 +49,12 @@ events.MapGet("/{id:guid}", async (
 events.MapPost("/{id:guid}/replay", async (
     Guid id,
     HttpContext httpContext,
-    IEventRepository eventRepository,
+    IMediator mediator,
     CancellationToken cancellationToken) =>
 {
     var tenantContext = httpContext.GetTenantContext();
-    var replayed = await eventRepository.ReplayEventAsync(
-        tenantContext.Tenant.Id,
-        id,
+    var replayed = await mediator.Send(
+        new ReplayEventCommand(tenantContext.Tenant.Id, id),
         cancellationToken);
 
     return replayed ? Results.Accepted($"/events/{id}") : Results.NotFound();
