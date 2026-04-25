@@ -1,12 +1,14 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using DotNet.Testcontainers.Builders;
+using Integrios.Application;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Outbox;
 using Integrios.Domain.Contracts;
 using Integrios.Infrastructure.Data;
 using Integrios.Worker;
-using Microsoft.Extensions.Logging.Abstractions;
+using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -230,6 +232,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private IRoutingRepository routingRepository = null!;
     private IDeliveryAttemptRepository deliveryAttemptRepository = null!;
     private IEventRepository eventRepository = null!;
+    private IMediator mediator = null!;
 
     public async Task InitializeAsync()
     {
@@ -242,6 +245,15 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         routingRepository = new RoutingRepository(connectionFactory);
         deliveryAttemptRepository = new DeliveryAttemptRepository(connectionFactory);
         eventRepository = new EventRepository(connectionFactory);
+
+        var services = new ServiceCollection();
+        services.AddIntegriosApplication();
+        services.AddSingleton<IOutboxRepository>(outboxRepository);
+        services.AddSingleton<IRoutingRepository>(routingRepository);
+        services.AddSingleton<IDeliveryAttemptRepository>(deliveryAttemptRepository);
+        services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
+        services.AddLogging();
+        mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
     public async Task DisposeAsync() => await container.DisposeAsync();
@@ -263,17 +275,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await SeedRoutingDataAsync(connection);
     }
 
-    public async Task<int> RunWorkerBatchAsync()
-    {
-        var worker = new OutboxWorker(
-            outboxRepository,
-            routingRepository,
-            deliveryAttemptRepository,
-            DeliveryClient,
-            NullLogger<OutboxWorker>.Instance);
-
-        return await worker.ProcessBatchAsync(CancellationToken.None);
-    }
+    public Task<int> RunWorkerBatchAsync() =>
+        mediator.Send(new ProcessOutboxBatchCommand(10, OutboxWorker.MaxAttempts));
 
     public async Task<Guid> InsertEventAndOutboxAsync(string eventType)
     {
