@@ -1,8 +1,8 @@
-using Integrios.Ingress.Auth;
 using Integrios.Application;
 using Integrios.Application.Abstractions;
 using Integrios.Domain.Contracts;
 using Integrios.Infrastructure.Extensions;
+using Integrios.Ingress.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 

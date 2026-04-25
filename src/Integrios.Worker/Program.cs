@@ -1,6 +1,6 @@
-using Integrios.Worker;
 using Integrios.Application;
 using Integrios.Infrastructure.Extensions;
+using Integrios.Worker;
 
 namespace Integrios.Worker;
 

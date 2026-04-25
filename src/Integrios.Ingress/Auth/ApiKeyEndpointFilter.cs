@@ -59,7 +59,8 @@ public sealed class ApiKeyEndpointFilter(IApiKeyRepository repository) : IEndpoi
             return false;
 
         byte[] expected;
-        try { expected = Convert.FromHexString(secretHash["sha256:".Length..]); }
+        try
+        { expected = Convert.FromHexString(secretHash["sha256:".Length..]); }
         catch (FormatException) { return false; }
 
         var actual = SHA256.HashData(Encoding.UTF8.GetBytes(secret));

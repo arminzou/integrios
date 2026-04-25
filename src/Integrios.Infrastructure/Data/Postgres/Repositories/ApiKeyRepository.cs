@@ -41,7 +41,8 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         var row = await connection.QuerySingleOrDefaultAsync<ApiKeyRow>(sql, new { PublicKey = publicKey });
-        if (row is null) return null;
+        if (row is null)
+            return null;
 
         return (row.ToApiKey(), row.ToTenant());
     }
