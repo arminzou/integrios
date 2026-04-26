@@ -191,7 +191,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
             new CommandDefinition(
                 """
                 SELECT
-                    route_id                  AS RouteId,
+                    subscription_id           AS SubscriptionId,
                     destination_connection_id AS DestinationConnectionId,
                     attempt_number            AS AttemptNumber,
                     status                    AS Status,
@@ -215,7 +215,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
             FailedAt = row.FailedAt,
             DeliveryAttempts = attempts.Select(a => new DeliveryAttemptSummary
             {
-                RouteId = a.RouteId,
+                SubscriptionId = a.SubscriptionId,
                 DestinationConnectionId = a.DestinationConnectionId,
                 AttemptNumber = a.AttemptNumber,
                 Status = a.Status,
@@ -242,64 +242,26 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
         CancellationToken cancellationToken = default)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        try
-        {
-            var row = await connection.QuerySingleOrDefaultAsync<ReplayableEventRow>(
-                new CommandDefinition(
-                    """
-                    SELECT e.id AS Id, e.status AS Status, o.payload::text AS OutboxPayloadJson
-                    FROM events e
-                    JOIN outbox o ON o.event_id = e.id
-                    WHERE e.tenant_id = @TenantId
-                      AND e.id = @EventId
-                      AND e.status IN ('failed', 'dead_lettered')
-                    ORDER BY o.created_at DESC
-                    LIMIT 1
-                    FOR UPDATE OF e
-                    """,
-                    new { TenantId = tenantId, EventId = eventId },
-                    transaction,
-                    cancellationToken: cancellationToken));
+        var resetCount = await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE subscription_deliveries sd
+                SET status        = 'pending',
+                    attempt_count = 0,
+                    deliver_after = NULL,
+                    failed_at     = NULL,
+                    updated_at    = now()
+                FROM events e
+                WHERE sd.event_id = e.id
+                  AND e.tenant_id = @TenantId
+                  AND e.id        = @EventId
+                  AND sd.status IN ('failed', 'dead_lettered')
+                """,
+                new { TenantId = tenantId, EventId = eventId },
+                cancellationToken: cancellationToken));
 
-            if (row is null)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                return false;
-            }
-
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    """
-                    UPDATE events
-                    SET status       = 'accepted',
-                        processed_at = NULL,
-                        failed_at    = NULL
-                    WHERE id = @EventId
-                    """,
-                    new { EventId = eventId },
-                    transaction,
-                    cancellationToken: cancellationToken));
-
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    """
-                    INSERT INTO outbox (event_id, payload)
-                    VALUES (@EventId, @OutboxPayloadJson::jsonb)
-                    """,
-                    new { EventId = eventId, row.OutboxPayloadJson },
-                    transaction,
-                    cancellationToken: cancellationToken));
-
-            await transaction.CommitAsync(cancellationToken);
-            return true;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
+        return resetCount > 0;
     }
 
     private sealed record ReplayableEventRow
@@ -311,7 +273,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
 
     private sealed record DeliveryAttemptRow
     {
-        public Guid RouteId { get; init; }
+        public Guid SubscriptionId { get; init; }
         public Guid DestinationConnectionId { get; init; }
         public int AttemptNumber { get; init; }
         public string Status { get; init; } = "";

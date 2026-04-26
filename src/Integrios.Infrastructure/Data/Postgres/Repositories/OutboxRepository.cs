@@ -79,7 +79,7 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
     public async Task UpdateEventStatusAsync(
         Guid eventId,
         string status,
-        Guid? pipelineId,
+        Guid? topicId,
         CancellationToken cancellationToken = default)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -90,12 +90,12 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
                 UPDATE events
                 SET
                     status       = @Status,
-                    pipeline_id  = COALESCE(@PipelineId, pipeline_id),
+                    topic_id     = COALESCE(@TopicId, topic_id),
                     processed_at = CASE WHEN @Status = 'completed'     THEN now() ELSE processed_at END,
                     failed_at    = CASE WHEN @Status IN ('failed', 'dead_lettered') THEN now() ELSE failed_at END
                 WHERE id = @EventId
                 """,
-                new { EventId = eventId, Status = status, PipelineId = pipelineId },
+                new { EventId = eventId, Status = status, TopicId = topicId },
                 cancellationToken: cancellationToken));
     }
 }

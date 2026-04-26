@@ -4,7 +4,7 @@ public sealed record DeliveryAttempt
 {
     public required Guid Id { get; init; }
     public required Guid EventId { get; init; }
-    public required Guid RouteId { get; init; }
+    public required Guid SubscriptionId { get; init; }
     public required Guid DestinationConnectionId { get; init; }
     public required int AttemptNumber { get; init; }
     public required DeliveryAttemptStatus Status { get; init; }
