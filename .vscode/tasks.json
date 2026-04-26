@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/Integrios.slnx"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build-ingress",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Integrios.Ingress/Integrios.Ingress.csproj"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-admin",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Integrios.Admin/Integrios.Admin.csproj"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-worker",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Integrios.Worker/Integrios.Worker.csproj"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-mocksink",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Integrios.MockSink/Integrios.MockSink.csproj"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "test",
+        "${workspaceFolder}/Integrios.slnx",
+        "--logger",
+        "console;verbosity=normal"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    }
+  ]
+}

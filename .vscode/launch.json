@@ -1,0 +1,79 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Ingress",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-ingress",
+      "program": "${workspaceFolder}/src/Integrios.Ingress/bin/Debug/net10.0/Integrios.Ingress.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Integrios.Ingress",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5231"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Admin",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-admin",
+      "program": "${workspaceFolder}/src/Integrios.Admin/bin/Debug/net10.0/Integrios.Admin.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Integrios.Admin",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5150"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Worker",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-worker",
+      "program": "${workspaceFolder}/src/Integrios.Worker/bin/Debug/net10.0/Integrios.Worker.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Integrios.Worker",
+      "env": {
+        "DOTNET_ENVIRONMENT": "Development"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "MockSink",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-mocksink",
+      "program": "${workspaceFolder}/src/Integrios.MockSink/bin/Debug/net10.0/Integrios.MockSink.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Integrios.MockSink",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5054"
+      },
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack",
+      "configurations": [
+        "Ingress",
+        "Admin",
+        "Worker",
+        "MockSink"
+      ]
+    },
+    {
+      "name": "Data Plane",
+      "configurations": [
+        "Ingress",
+        "Worker",
+        "MockSink"
+      ]
+    }
+  ]
+}
