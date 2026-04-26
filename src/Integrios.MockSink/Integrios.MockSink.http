@@ -1,6 +1,30 @@
-@Integrios.MockSink_HostAddress = http://localhost:5054
-
-GET {{Integrios.MockSink_HostAddress}}/weatherforecast/
-Accept: application/json
+@baseUrl = http://localhost:5054
 
 ###
+# Health check
+GET {{baseUrl}}/health
+
+###
+# Force a sink to fail
+PUT {{baseUrl}}/control/swiftpay-ledger
+Content-Type: application/json
+
+{ "mode": "fail" }
+
+###
+# Force a sink to respond slowly (2s delay)
+PUT {{baseUrl}}/control/swiftpay-ledger
+Content-Type: application/json
+
+{ "mode": "slow", "delayMs": 2000 }
+
+###
+# Reset a sink back to default (succeed)
+DELETE {{baseUrl}}/control/swiftpay-ledger
+
+###
+# Post a delivery manually (normally done by Worker)
+POST {{baseUrl}}/sink/swiftpay-ledger
+Content-Type: application/json
+
+{ "test": "manual delivery" }

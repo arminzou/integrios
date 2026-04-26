@@ -1,6 +1,30 @@
-@Integrios.Ingress_HostAddress = http://localhost:5231
-
-GET {{Integrios.Ingress_HostAddress}}/weatherforecast/
-Accept: application/json
+@baseUrl        = http://localhost:5231
+@authSwiftPay   = ApiKey swiftpay_pub_key:swiftpay_secret
+@authTradeFront = ApiKey tradefront_pub_key:tradefront_secret
 
 ###
+# Ingest event (SwiftPay)
+# @name ingest
+POST {{baseUrl}}/events
+Authorization: {{authSwiftPay}}
+Content-Type: application/json
+
+{
+  "sourceEventId": "event_src_001",
+  "eventType": "payment.created",
+  "payload": { "paymentId": "pay_001", "amount": 1200 },
+  "metadata": { "source": "manual-test" },
+  "idempotencyKey": "manual-001"
+}
+
+###
+# Get event by ID (requires ingest to have run first)
+@eventId = {{ingest.response.body.$.eventId}}
+
+GET {{baseUrl}}/events/{{eventId}}
+Authorization: {{authSwiftPay}}
+
+###
+# Replay a dead-lettered event
+POST {{baseUrl}}/events/{{eventId}}/replay
+Authorization: {{authSwiftPay}}
