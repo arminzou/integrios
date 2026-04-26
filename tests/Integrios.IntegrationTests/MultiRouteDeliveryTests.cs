@@ -13,27 +13,27 @@ public sealed class MultiRouteDeliveryTests : IClassFixture<WorkerRoutingFixture
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Worker_MultipleMatchingRoutes_DeliversToAllSinks()
+    public async Task Worker_MultipleMatchingSubscriptions_DeliversToAllSinks()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.multi");
 
-        var processed = await fixture.RunWorkerBatchAsync();
+        var dispatched = await fixture.RunWorkerBatchAsync();
 
-        Assert.Equal(1, processed);
+        Assert.Equal(2, dispatched);
         Assert.Equal(2, fixture.DeliveryClient.Calls.Count);
         Assert.Contains(fixture.DeliveryClient.Calls, c => c.Url == WorkerRoutingFixture.LedgerSinkUrl);
         Assert.Contains(fixture.DeliveryClient.Calls, c => c.Url == WorkerRoutingFixture.RiskSinkUrl);
 
-        var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.Equal("completed", status);
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Equal(2, deliveries.Count);
+        Assert.All(deliveries, d => Assert.Equal("succeeded", d.Status));
 
         Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
     }
 
     [Fact]
-    public async Task Worker_MultipleMatchingRoutes_PartialFailure_DoesNotMarkCompleted()
+    public async Task Worker_MultipleMatchingSubscriptions_AllFail_EachRetriesIndependently()
     {
-        // First delivery succeeds, second fails — event should not be marked completed
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.multi");
 
@@ -41,9 +41,17 @@ public sealed class MultiRouteDeliveryTests : IClassFixture<WorkerRoutingFixture
 
         Assert.Equal(2, fixture.DeliveryClient.Calls.Count);
 
-        var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.NotEqual("completed", status);
+        // Outbox is processed after Stage 1 regardless of per-subscription outcomes
+        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
 
-        Assert.False(await fixture.IsOutboxRowProcessedAsync(eventId));
+        // Each subscription_delivery has its own retry state — independent failure isolation
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Equal(2, deliveries.Count);
+        Assert.All(deliveries, d =>
+        {
+            Assert.Equal("pending", d.Status);
+            Assert.Equal(1, d.AttemptCount);
+            Assert.NotNull(d.DeliverAfter);
+        });
     }
 }

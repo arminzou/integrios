@@ -58,7 +58,7 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         await fixture.RunWorkerBatchAsync();
 
         // Force retry and succeed on second attempt
-        await fixture.ForceRetryNowAsync(eventId);
+        await fixture.ForceDeliveryRetryNowAsync(eventId);
         fixture.DeliveryClient.ShouldSucceed = true;
         await fixture.RunWorkerBatchAsync();
 
@@ -81,9 +81,9 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
         await fixture.RunWorkerBatchAsync();
-        await fixture.ForceRetryNowAsync(eventId);
+        await fixture.ForceDeliveryRetryNowAsync(eventId);
         await fixture.RunWorkerBatchAsync();
-        await fixture.ForceRetryNowAsync(eventId);
+        await fixture.ForceDeliveryRetryNowAsync(eventId);
         await fixture.RunWorkerBatchAsync();
 
         var details = await fixture.GetEventDetailsAsync(eventId);

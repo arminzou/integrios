@@ -158,7 +158,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task Replay_DeadLetteredEvent_ViaHttp_Returns202AndResetsStatus()
+    public async Task Replay_DeadLetteredDelivery_ViaHttp_Returns202AndResetsDeliveryToPending()
     {
         var request = BuildRequest(idempotencyKey: "idem-evt-replay-http");
         var postResponse = await PostEventAsync(request);
@@ -167,7 +167,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var body = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
         Assert.NotNull(body);
 
-        await fixture.ForceEventStatusAsync(body.EventId, "dead_lettered");
+        await fixture.ForceDeadLetteredDeliveryAsync(body.EventId);
 
         var replayResponse = await client.SendAsync(new HttpRequestMessage(
             HttpMethod.Post, $"/events/{body.EventId}/replay")
@@ -179,11 +179,9 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
         await connection.OpenAsync();
         await using var statusCmd = new NpgsqlCommand(
-            "SELECT status FROM events WHERE id = @Id", connection);
+            "SELECT status FROM subscription_deliveries WHERE event_id = @Id", connection);
         statusCmd.Parameters.AddWithValue("Id", body.EventId);
-        Assert.Equal("accepted", await statusCmd.ExecuteScalarAsync());
-
-        Assert.Equal(2, await fixture.GetOutboxRowCountAsync(body.EventId));
+        Assert.Equal("pending", await statusCmd.ExecuteScalarAsync());
     }
 
     private static IngestEventRequest BuildRequest(string idempotencyKey)
@@ -254,7 +252,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         await connection.OpenAsync();
 
         const string resetSql = """
-            TRUNCATE TABLE outbox, events, api_keys, tenants RESTART IDENTITY CASCADE;
+            TRUNCATE TABLE subscription_deliveries, delivery_attempts, outbox, events, subscriptions, topics, connections, api_keys, tenants, integrations RESTART IDENTITY CASCADE;
             """;
         await using (var resetCommand = new NpgsqlCommand(resetSql, connection))
         {
@@ -339,6 +337,50 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             "UPDATE events SET status = @Status WHERE id = @Id", connection);
         cmd.Parameters.AddWithValue("Status", status);
         cmd.Parameters.AddWithValue("Id", eventId);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task ForceDeadLetteredDeliveryAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+
+        // Self-contained: seed a minimal connection + topic + subscription, then a dead_lettered delivery.
+        await using var cmd = new NpgsqlCommand(
+            """
+            INSERT INTO integrations (id, key, name, direction, status)
+            VALUES ('00000000-0000-0000-0000-000000000001', 'webhook', 'Webhook', 'both', 'active')
+            ON CONFLICT (id) DO NOTHING;
+
+            WITH ev AS (SELECT tenant_id FROM events WHERE id = @EventId),
+            conn_insert AS (
+                INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+                SELECT gen_random_uuid(), ev.tenant_id, '00000000-0000-0000-0000-000000000001',
+                       'replay-test-sink', '{"url":"http://test/sink"}'::jsonb, 'active'
+                FROM ev
+                RETURNING id, tenant_id
+            ),
+            topic_insert AS (
+                INSERT INTO topics (id, tenant_id, name, source_connection_id, event_types, status)
+                SELECT gen_random_uuid(), ci.tenant_id, 'replay-test-topic',
+                       ci.id, ARRAY['payment.created'], 'active'
+                FROM conn_insert ci
+                RETURNING id
+            ),
+            sub_insert AS (
+                INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, order_index, status)
+                SELECT gen_random_uuid(), ti.id, 'replay-test-sub',
+                       '{"event_types":["payment.created"]}'::jsonb,
+                       ci.id, 0, 'active'
+                FROM topic_insert ti, conn_insert ci
+                RETURNING id, destination_connection_id
+            )
+            INSERT INTO subscription_deliveries
+                (event_id, subscription_id, destination_connection_id, status, attempt_count, failed_at)
+            SELECT @EventId, si.id, si.destination_connection_id, 'dead_lettered', 3, now()
+            FROM sub_insert si;
+            """, connection);
+        cmd.Parameters.AddWithValue("EventId", eventId);
         await cmd.ExecuteNonQueryAsync();
     }
 

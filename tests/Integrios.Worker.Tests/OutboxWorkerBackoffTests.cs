@@ -1,3 +1,5 @@
+using Integrios.Application.Delivery;
+
 namespace Integrios.Worker.Tests;
 
 public sealed class OutboxWorkerBackoffTests
@@ -10,15 +12,15 @@ public sealed class OutboxWorkerBackoffTests
     [InlineData(10, 30 * 512)]
     public void CalculateBackoff_ReturnsExponentialDelay(int attemptCount, int expectedSeconds)
     {
-        var backoff = OutboxWorker.CalculateBackoff(attemptCount);
+        var backoff = DispatchSubscriptionDeliveriesCommandHandler.CalculateBackoff(attemptCount);
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), backoff);
     }
 
     [Fact]
     public void CalculateBackoff_CapsExponentAt10()
     {
-        var backoff11 = OutboxWorker.CalculateBackoff(11);
-        var backoff12 = OutboxWorker.CalculateBackoff(12);
+        var backoff11 = DispatchSubscriptionDeliveriesCommandHandler.CalculateBackoff(11);
+        var backoff12 = DispatchSubscriptionDeliveriesCommandHandler.CalculateBackoff(12);
         Assert.Equal(backoff11, backoff12);
     }
 }

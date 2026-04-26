@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Delivery;
 using Integrios.Application.Events;
 using Integrios.Application.Outbox;
 using Integrios.Infrastructure.Data;
@@ -27,25 +28,26 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Worker_MatchingRoute_DeliversEventAndMarksCompleted()
+    public async Task Worker_MatchingSubscription_DeliversEventAndMarksDeliverySucceeded()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        var processed = await fixture.RunWorkerBatchAsync();
+        var dispatched = await fixture.RunWorkerBatchAsync();
 
-        Assert.Equal(1, processed);
+        Assert.Equal(1, dispatched);
         Assert.Single(fixture.DeliveryClient.Calls);
         Assert.Equal(WorkerRoutingFixture.LedgerSinkUrl, fixture.DeliveryClient.Calls[0].Url);
 
-        var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.Equal("completed", status);
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deliveries);
+        Assert.Equal("succeeded", deliveries[0].Status);
 
-        var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
-        Assert.True(outboxProcessed);
+        // Outbox row is always processed after Stage 1 fanout
+        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
     }
 
     [Fact]
-    public async Task Worker_RouteMatchingSelectsByEventType_CorrectSinkReceivesDelivery()
+    public async Task Worker_SubscriptionMatchingSelectsByEventType_CorrectSinkReceivesDelivery()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.authorized");
 
@@ -54,26 +56,30 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         Assert.Single(fixture.DeliveryClient.Calls);
         Assert.Equal(WorkerRoutingFixture.RiskSinkUrl, fixture.DeliveryClient.Calls[0].Url);
 
-        var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.Equal("completed", status);
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deliveries);
+        Assert.Equal("succeeded", deliveries[0].Status);
     }
 
     [Fact]
-    public async Task Worker_NoMatchingPipeline_SkipsGracefullyAndMarksOutboxProcessed()
+    public async Task Worker_NoMatchingTopic_SkipsGracefullyAndMarksOutboxProcessed()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("unknown.event.type");
 
-        var processed = await fixture.RunWorkerBatchAsync();
+        var dispatched = await fixture.RunWorkerBatchAsync();
 
-        Assert.Equal(1, processed);
+        // Stage 1 ran and skipped the event (no topic), Stage 2 had nothing to dispatch
+        Assert.Equal(0, dispatched);
         Assert.Empty(fixture.DeliveryClient.Calls);
 
-        var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
-        Assert.True(outboxProcessed);
+        // No subscription_deliveries should have been created
+        Assert.Empty(await fixture.GetSubscriptionDeliveriesAsync(eventId));
+
+        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
     }
 
     [Fact]
-    public async Task Worker_DeliveryFailure_SchedulesRetryAndDoesNotMarkProcessed()
+    public async Task Worker_DeliveryFailure_SchedulesRetryOnSubscriptionDelivery()
     {
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
@@ -82,18 +88,16 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         Assert.Single(fixture.DeliveryClient.Calls);
 
-        // Event status stays accepted — not failed until dead-lettered
-        var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.Equal("accepted", status);
+        // Outbox is processed after Stage 1 regardless of dispatch outcome
+        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
 
-        // Outbox row is NOT marked processed — it will be retried
-        var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
-        Assert.False(outboxProcessed);
-
-        var (attemptCount, deliverAfter) = await fixture.GetOutboxRetryStateAsync(eventId);
-        Assert.Equal(1, attemptCount);
-        Assert.NotNull(deliverAfter);
-        Assert.True(deliverAfter > DateTimeOffset.UtcNow);
+        // Retry state lives on subscription_deliveries, scoped per-subscription
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deliveries);
+        Assert.Equal("pending", deliveries[0].Status);
+        Assert.Equal(1, deliveries[0].AttemptCount);
+        Assert.NotNull(deliveries[0].DeliverAfter);
+        Assert.True(deliveries[0].DeliverAfter > DateTimeOffset.UtcNow);
     }
 
     [Fact]
@@ -102,24 +106,22 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        // First attempt — fails, schedules retry
+        // First attempt — fails, schedules retry on subscription_delivery
         await fixture.RunWorkerBatchAsync();
         Assert.Single(fixture.DeliveryClient.Calls);
 
-        // Force deliver_after to the past so the row is immediately eligible
-        await fixture.ForceRetryNowAsync(eventId);
+        // Force the subscription_delivery's deliver_after to the past
+        await fixture.ForceDeliveryRetryNowAsync(eventId);
         fixture.DeliveryClient.ShouldSucceed = true;
 
         // Second attempt — should succeed
-        var processed = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(1, processed);
+        var dispatched = await fixture.RunWorkerBatchAsync();
+        Assert.Equal(1, dispatched);
         Assert.Equal(2, fixture.DeliveryClient.Calls.Count);
 
-        var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.Equal("completed", status);
-
-        var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
-        Assert.True(outboxProcessed);
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deliveries);
+        Assert.Equal("succeeded", deliveries[0].Status);
     }
 
     [Fact]
@@ -132,17 +134,16 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         await fixture.RunWorkerBatchAsync();
         Assert.Single(fixture.DeliveryClient.Calls);
 
-        // Do NOT advance deliver_after — row is still in the future
         fixture.DeliveryClient.ShouldSucceed = true;
 
-        // Second poll — row is not yet due, so no delivery
-        var processed = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(0, processed);
-        Assert.Single(fixture.DeliveryClient.Calls); // no new calls
+        // Second poll — subscription_delivery is not yet due, so no dispatch
+        var dispatched = await fixture.RunWorkerBatchAsync();
+        Assert.Equal(0, dispatched);
+        Assert.Single(fixture.DeliveryClient.Calls);
     }
 
     [Fact]
-    public async Task Worker_ExhaustsRetries_DeadLettersEventAndStopsRetrying()
+    public async Task Worker_ExhaustsRetries_DeadLettersDeliveryAndStopsRetrying()
     {
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
@@ -151,21 +152,19 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
-            await fixture.ForceRetryNowAsync(eventId);
+            await fixture.ForceDeliveryRetryNowAsync(eventId);
         }
 
-        // Final attempt — should dead-letter
+        // Final attempt — should dead-letter the subscription_delivery
         await fixture.RunWorkerBatchAsync();
 
-        var status = await fixture.GetEventStatusAsync(eventId);
-        Assert.Equal("dead_lettered", status);
-
-        var outboxProcessed = await fixture.IsOutboxRowProcessedAsync(eventId);
-        Assert.True(outboxProcessed);
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deliveries);
+        Assert.Equal("dead_lettered", deliveries[0].Status);
     }
 
     [Fact]
-    public async Task Worker_DeadLetteredEvent_IsNotPickedUpAgain()
+    public async Task Worker_DeadLetteredDelivery_IsNotPickedUpAgain()
     {
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
@@ -173,32 +172,36 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
-            await fixture.ForceRetryNowAsync(eventId);
+            await fixture.ForceDeliveryRetryNowAsync(eventId);
         }
         await fixture.RunWorkerBatchAsync(); // dead-letters
 
         fixture.DeliveryClient.Reset();
         fixture.DeliveryClient.ShouldSucceed = true;
 
-        var processed = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(0, processed);
+        var dispatched = await fixture.RunWorkerBatchAsync();
+        Assert.Equal(0, dispatched);
         Assert.Empty(fixture.DeliveryClient.Calls);
     }
 
     [Fact]
     public async Task Worker_TenantIsolation_OnlyRoutesWithinTenant()
     {
-        // Insert events for both test tenant and a different tenant; only test tenant has routing config.
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
         var orphanEventId = await fixture.InsertOrphanEventAndOutboxAsync("payment.created");
 
         await fixture.RunWorkerBatchAsync();
 
-        // Only one delivery — the orphan tenant has no pipeline
+        // Only one delivery — the orphan tenant has no topic
         Assert.Single(fixture.DeliveryClient.Calls);
 
-        Assert.Equal("completed", await fixture.GetEventStatusAsync(eventId));
-        // Orphan outbox row is still marked processed (skipped gracefully)
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deliveries);
+        Assert.Equal("succeeded", deliveries[0].Status);
+
+        // Orphan event got no subscription_deliveries (no topic match)
+        Assert.Empty(await fixture.GetSubscriptionDeliveriesAsync(orphanEventId));
+        // Orphan outbox is processed (Stage 1 marks it processed even with no topic)
         Assert.True(await fixture.IsOutboxRowProcessedAsync(orphanEventId));
     }
 }
@@ -216,7 +219,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private static readonly Guid SourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
     private static readonly Guid LedgerConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000003");
     private static readonly Guid RiskConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000004");
-    private static readonly Guid PipelineId = Guid.Parse("cccccccc-0000-0000-0000-000000000005");
+    private static readonly Guid TopicId = Guid.Parse("cccccccc-0000-0000-0000-000000000005");
 
     private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("integrios")
@@ -229,7 +232,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
     private IDbConnectionFactory connectionFactory = null!;
     private IOutboxRepository outboxRepository = null!;
-    private IRoutingRepository routingRepository = null!;
+    private ISubscriptionRepository subscriptionRepository = null!;
+    private ISubscriptionDeliveryRepository subscriptionDeliveryRepository = null!;
     private IDeliveryAttemptRepository deliveryAttemptRepository = null!;
     private IEventRepository eventRepository = null!;
     private IMediator mediator = null!;
@@ -242,14 +246,16 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var dataSource = new NpgsqlDataSourceBuilder(ConnectionString).Build();
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
         outboxRepository = new OutboxRepository(connectionFactory);
-        routingRepository = new RoutingRepository(connectionFactory);
+        subscriptionRepository = new SubscriptionRepository(connectionFactory);
+        subscriptionDeliveryRepository = new SubscriptionDeliveryRepository(connectionFactory);
         deliveryAttemptRepository = new DeliveryAttemptRepository(connectionFactory);
         eventRepository = new EventRepository(connectionFactory);
 
         var services = new ServiceCollection();
         services.AddIntegriosApplication();
         services.AddSingleton<IOutboxRepository>(outboxRepository);
-        services.AddSingleton<IRoutingRepository>(routingRepository);
+        services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
+        services.AddSingleton<ISubscriptionDeliveryRepository>(subscriptionDeliveryRepository);
         services.AddSingleton<IDeliveryAttemptRepository>(deliveryAttemptRepository);
         services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
         services.AddLogging();
@@ -266,7 +272,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await connection.OpenAsync();
 
         await using (var truncateCmd = new NpgsqlCommand(
-            "TRUNCATE TABLE delivery_attempts, outbox, events, routes, pipelines, connections, api_keys, tenants, integrations RESTART IDENTITY CASCADE;",
+            "TRUNCATE TABLE subscription_deliveries, delivery_attempts, outbox, events, subscriptions, topics, connections, api_keys, tenants, integrations RESTART IDENTITY CASCADE;",
             connection))
         {
             await truncateCmd.ExecuteNonQueryAsync();
@@ -275,8 +281,47 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await SeedRoutingDataAsync(connection);
     }
 
-    public Task<int> RunWorkerBatchAsync() =>
-        mediator.Send(new ProcessOutboxBatchCommand(10, OutboxWorker.MaxAttempts));
+    public async Task<int> RunWorkerBatchAsync()
+    {
+        await mediator.Send(new ProcessOutboxBatchCommand(10));
+        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, OutboxWorker.MaxAttempts));
+    }
+
+    public async Task<IReadOnlyList<SubscriptionDeliveryState>> GetSubscriptionDeliveriesAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            """
+            SELECT subscription_id, status, attempt_count, deliver_after
+            FROM subscription_deliveries
+            WHERE event_id = @EventId
+            ORDER BY created_at
+            """, connection);
+        cmd.Parameters.AddWithValue("EventId", eventId);
+        var rows = new List<SubscriptionDeliveryState>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            rows.Add(new SubscriptionDeliveryState(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3)));
+        }
+        return rows;
+    }
+
+    public async Task ForceDeliveryRetryNowAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "UPDATE subscription_deliveries SET deliver_after = now() - interval '1 second' WHERE event_id = @EventId AND status = 'pending'",
+            connection);
+        cmd.Parameters.AddWithValue("EventId", eventId);
+        await cmd.ExecuteNonQueryAsync();
+    }
 
     public async Task<Guid> InsertEventAndOutboxAsync(string eventType)
     {
@@ -385,16 +430,16 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@LedgerConnectionId, @TenantId, @IntegrationId, 'ledger-sink',   @LedgerConfig::jsonb,              'active'),
                 (@RiskConnectionId,   @TenantId, @IntegrationId, 'risk-sink',     @RiskConfig::jsonb,                'active');
 
-            INSERT INTO pipelines (id, tenant_id, name, source_connection_id, event_types, status)
-            VALUES (@PipelineId, @TenantId, 'test-pipeline', @SourceConnectionId,
+            INSERT INTO topics (id, tenant_id, name, source_connection_id, event_types, status)
+            VALUES (@TopicId, @TenantId, 'test-topic', @SourceConnectionId,
                     ARRAY['payment.created', 'payment.settled', 'payment.authorized', 'payment.multi'], 'active');
 
-            INSERT INTO routes (id, pipeline_id, name, match_rules, destination_connection_id, order_index, status)
+            INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES
-                (@LedgerRouteId, @PipelineId, 'to-ledger',
+                (@LedgerSubscriptionId, @TopicId, 'to-ledger',
                  '{"event_types":["payment.created","payment.settled","payment.multi"]}'::jsonb,
                  @LedgerConnectionId, 0, 'active'),
-                (@RiskRouteId, @PipelineId, 'to-risk',
+                (@RiskSubscriptionId, @TopicId, 'to-risk',
                  '{"event_types":["payment.authorized","payment.multi"]}'::jsonb,
                  @RiskConnectionId, 1, 'active');
             """, connection);
@@ -410,9 +455,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("RiskConnectionId", RiskConnectionId);
         cmd.Parameters.AddWithValue("LedgerConfig", $"{{\"url\":\"{LedgerSinkUrl}\"}}");
         cmd.Parameters.AddWithValue("RiskConfig", $"{{\"url\":\"{RiskSinkUrl}\"}}");
-        cmd.Parameters.AddWithValue("PipelineId", PipelineId);
-        cmd.Parameters.AddWithValue("LedgerRouteId", Guid.NewGuid());
-        cmd.Parameters.AddWithValue("RiskRouteId", Guid.NewGuid());
+        cmd.Parameters.AddWithValue("TopicId", TopicId);
+        cmd.Parameters.AddWithValue("LedgerSubscriptionId", Guid.NewGuid());
+        cmd.Parameters.AddWithValue("RiskSubscriptionId", Guid.NewGuid());
 
         await cmd.ExecuteNonQueryAsync();
     }
@@ -443,6 +488,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         throw new InvalidOperationException("Could not locate repository root.");
     }
 }
+
+public sealed record SubscriptionDeliveryState(Guid SubscriptionId, string Status, int AttemptCount, DateTimeOffset? DeliverAfter);
 
 public sealed class FakeDeliveryClient : IDeliveryClient
 {

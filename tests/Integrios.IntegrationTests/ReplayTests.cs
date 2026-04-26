@@ -1,5 +1,4 @@
 using Integrios.Worker;
-using Npgsql;
 
 namespace Integrios.IntegrationTests;
 
@@ -16,7 +15,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Replay_DeadLetteredEvent_ResetsStatusAndEnqueuesNewOutboxRow()
+    public async Task Replay_DeadLetteredDelivery_ResetsSubscriptionDeliveryToPending()
     {
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
@@ -24,22 +23,29 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
-            await fixture.ForceRetryNowAsync(eventId);
+            await fixture.ForceDeliveryRetryNowAsync(eventId);
         }
         await fixture.RunWorkerBatchAsync();
-        Assert.Equal("dead_lettered", await fixture.GetEventStatusAsync(eventId));
+
+        var deadDeliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deadDeliveries);
+        Assert.Equal("dead_lettered", deadDeliveries[0].Status);
 
         var replayed = await fixture.ReplayAsync(eventId);
 
         Assert.True(replayed);
-        Assert.Equal("accepted", await fixture.GetEventStatusAsync(eventId));
-        Assert.Equal(2, await GetOutboxRowCountAsync(eventId));
+        var resetDeliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(resetDeliveries);
+        Assert.Equal("pending", resetDeliveries[0].Status);
+        Assert.Equal(0, resetDeliveries[0].AttemptCount);
+        Assert.Null(resetDeliveries[0].DeliverAfter);
     }
 
     [Fact]
-    public async Task Replay_AcceptedEvent_ReturnsFalse()
+    public async Task Replay_NoDeadLetteredDeliveries_ReturnsFalse()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        await fixture.RunWorkerBatchAsync(); // succeeds — no failures to replay
 
         var replayed = await fixture.ReplayAsync(eventId);
 
@@ -47,7 +53,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
     }
 
     [Fact]
-    public async Task Replay_ReplayedEventIsPickedUpByWorker()
+    public async Task Replay_DeadLetteredDelivery_IsRedispatchedOnNextWorkerTick()
     {
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
@@ -55,28 +61,21 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
-            await fixture.ForceRetryNowAsync(eventId);
+            await fixture.ForceDeliveryRetryNowAsync(eventId);
         }
         await fixture.RunWorkerBatchAsync();
 
         await fixture.ReplayAsync(eventId);
 
-        fixture.DeliveryClient.ShouldSucceed = true;
         fixture.DeliveryClient.Reset();
+        fixture.DeliveryClient.ShouldSucceed = true;
 
-        var processed = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(1, processed);
+        var dispatched = await fixture.RunWorkerBatchAsync();
+        Assert.Equal(1, dispatched);
         Assert.Single(fixture.DeliveryClient.Calls);
-        Assert.Equal("completed", await fixture.GetEventStatusAsync(eventId));
-    }
 
-    private async Task<int> GetOutboxRowCountAsync(Guid eventId)
-    {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-        await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(
-            "SELECT COUNT(*) FROM outbox WHERE event_id = @EventId", connection);
-        cmd.Parameters.AddWithValue("EventId", eventId);
-        return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.Single(deliveries);
+        Assert.Equal("succeeded", deliveries[0].Status);
     }
 }

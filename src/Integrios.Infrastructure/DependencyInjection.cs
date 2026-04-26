@@ -25,7 +25,8 @@ public static class DependencyInjection
         services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
         services.AddSingleton<IEventRepository, EventRepository>();
         services.AddSingleton<IOutboxRepository, OutboxRepository>();
-        services.AddSingleton<IRoutingRepository, RoutingRepository>();
+        services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
+        services.AddSingleton<ISubscriptionDeliveryRepository, SubscriptionDeliveryRepository>();
         services.AddSingleton<IDeliveryAttemptRepository, DeliveryAttemptRepository>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
