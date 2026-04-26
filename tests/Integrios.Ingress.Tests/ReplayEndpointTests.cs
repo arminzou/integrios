@@ -35,7 +35,7 @@ public sealed class ReplayEndpointTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task Replay_ValidAuth_ReplayableEvent_Returns202WithLocation()
     {
-        var (apiKey, tenant) = ApiKeyEndpointFilterTests.BuildValidApiKeyPublic("secret");
+        var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic("secret");
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
         fixture.EventRepository.ReplayResult = true;
 
@@ -49,7 +49,7 @@ public sealed class ReplayEndpointTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task Replay_ValidAuth_NonReplayableEvent_Returns404()
     {
-        var (apiKey, tenant) = ApiKeyEndpointFilterTests.BuildValidApiKeyPublic("secret");
+        var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic("secret");
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
         fixture.EventRepository.ReplayResult = false;
 

@@ -1,16 +1,22 @@
 using Integrios.Admin.Auth;
+using Integrios.Admin.OpenApi;
 using Integrios.Application;
 using Integrios.Infrastructure;
+using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<AdminKeySchemeTransformer>();
+});
 builder.Services.AddProblemDetails();
-builder.Services.Configure<AdminAuthOptions>(
-    builder.Configuration.GetSection(AdminAuthOptions.SectionName));
-builder.Services.AddSingleton<AdminTokenEndpointFilter>();
 builder.Services.AddIntegriosApplication();
 builder.Services.AddIntegriosInfrastructure(builder.Configuration);
+
+builder.Services.AddAuthentication(AdminKeyAuthHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, AdminKeyAuthHandler>(AdminKeyAuthHandler.SchemeName, _ => { });
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -21,10 +27,12 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
-var admin = app.MapGroup("/admin");
-admin.AddEndpointFilter<AdminTokenEndpointFilter>();
+app.MapGroup("/admin")
+    .RequireAuthorization();
 
 app.Run();

@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Ingress.Tests.Auth;
 
-public sealed class ApiKeyEndpointFilterTests(ApiTestAppFixture fixture)
+public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     : IClassFixture<ApiTestAppFixture>, IAsyncLifetime
 {
     private HttpClient client = null!;

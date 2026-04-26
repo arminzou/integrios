@@ -1,11 +1,15 @@
+using Integrios.Application.Auth;
 using Integrios.Domain.Tenants;
 
 namespace Integrios.Ingress.Auth;
 
-public sealed record TenantContext
+public sealed record TenantContext : IPrincipalContext
 {
     public required Tenant Tenant { get; init; }
     public required ApiKey ApiKey { get; init; }
+
+    Guid? IPrincipalContext.TenantId => Tenant.Id;
+    bool IPrincipalContext.IsGlobal => false;
 }
 
 public static class HttpContextTenantExtensions
@@ -16,7 +20,7 @@ public static class HttpContextTenantExtensions
         => context.Items.TryGetValue(Key, out var value) && value is TenantContext tc
             ? tc
             : throw new InvalidOperationException(
-                "TenantContext is not available. Endpoint must be behind the API key filter.");
+                "TenantContext is not available. Endpoint must be behind the API key scheme.");
 
     internal static void SetTenantContext(this HttpContext context, TenantContext tenantContext)
         => context.Items[Key] = tenantContext;
