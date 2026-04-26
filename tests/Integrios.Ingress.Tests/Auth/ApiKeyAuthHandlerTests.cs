@@ -276,6 +276,19 @@ public sealed class StubApiKeyRepository : IApiKeyRepository
         string publicKey,
         CancellationToken cancellationToken = default)
         => Task.FromResult(Result);
+
+    public Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException();
+
+    public Task<ApiKey?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException();
+
+    public Task<(IReadOnlyList<ApiKey> Items, string? NextCursor)> ListByTenantAsync(
+        Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException();
+
+    public Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException();
 }
 
 public sealed class StubEventRepository : IEventRepository

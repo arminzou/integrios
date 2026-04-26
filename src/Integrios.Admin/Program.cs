@@ -1,6 +1,9 @@
 using Integrios.Admin.Auth;
 using Integrios.Admin.OpenApi;
 using Integrios.Application;
+using Integrios.Application.ApiKeys;
+using Integrios.Application.ApiKeys.Commands;
+using Integrios.Application.ApiKeys.Queries;
 using Integrios.Application.Tenants;
 using Integrios.Application.Tenants.Commands;
 using Integrios.Application.Tenants.Queries;
@@ -120,9 +123,78 @@ admin.MapPost("/tenants/{id:guid}/deactivate", async (
     return deactivated ? Results.Ok() : Results.NotFound();
 });
 
+// ApiKeys — global or tenant-scoped admin key (scoped to owning tenant only)
+
+admin.MapPost("/tenants/{tenantId:guid}/api-keys", async (
+    Guid tenantId,
+    CreateApiKeyRequest request,
+    HttpContext httpContext,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    CreateApiKeyResponse response = await mediator.Send(
+        new CreateApiKeyCommand(tenantId, request.Name, request.Scopes, request.Description, request.ExpiresAt),
+        cancellationToken);
+
+    return Results.Created($"/admin/tenants/{tenantId}/api-keys/{response.Key.Id}", response);
+});
+
+admin.MapGet("/tenants/{tenantId:guid}/api-keys", async (
+    Guid tenantId,
+    HttpContext httpContext,
+    IMediator mediator,
+    string? after,
+    int limit,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
+    ApiKeyListResponse response = await mediator.Send(
+        new ListApiKeysByTenantQuery(tenantId, after, limit), cancellationToken);
+    return Results.Ok(response);
+});
+
+admin.MapGet("/tenants/{tenantId:guid}/api-keys/{id:guid}", async (
+    Guid tenantId,
+    Guid id,
+    HttpContext httpContext,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    ApiKeyResponse? response = await mediator.Send(new GetApiKeyByIdQuery(tenantId, id), cancellationToken);
+    return response is null ? Results.NotFound() : Results.Ok(response);
+});
+
+admin.MapPost("/tenants/{tenantId:guid}/api-keys/{id:guid}/revoke", async (
+    Guid tenantId,
+    Guid id,
+    HttpContext httpContext,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    bool revoked = await mediator.Send(new RevokeApiKeyCommand(tenantId, id), cancellationToken);
+    return revoked ? Results.Ok() : Results.NotFound();
+});
+
 app.Run();
 
 // Request contracts (Admin-layer only; not shared with Application)
 
 record CreateTenantRequest(string Slug, string Name, string? Environment, string? Description);
 record UpdateTenantRequest(string Name, string? Description, string? Environment);
+record CreateApiKeyRequest(string Name, IReadOnlyList<string>? Scopes, string? Description, DateTimeOffset? ExpiresAt);
