@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
         services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
         services.AddSingleton<IAdminKeyRepository, AdminKeyRepository>();
+        services.AddSingleton<ITenantRepository, TenantRepository>();
         services.AddSingleton<IEventRepository, EventRepository>();
         services.AddSingleton<IOutboxRepository, OutboxRepository>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
