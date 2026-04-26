@@ -15,8 +15,8 @@ It receives events, applies tenant-aware routing and transformation rules, and d
 - `Integrios.slnx` is the solution entrypoint.
 - `src/` contains the main application projects.
 - `src/Integrios.Ingress` owns HTTP intake, tenant auth, and the durable acceptance boundary. Data plane.
-- `src/Integrios.Admin` owns tenant management, connection configuration, pipeline and route management. Control plane.
-- `src/Integrios.Worker` owns outbox polling, routing, delivery, and retry/DLQ behavior.
+- `src/Integrios.Admin` owns tenant management, connection configuration, topic and subscription management. Control plane.
+- `src/Integrios.Worker` owns outbox polling, fanout to subscriptions, delivery, and retry/DLQ behavior.
 - `src/Integrios.MockSink` provides a controllable local sink for testing and demos. Not part of the deployable product.
 - `src/Integrios.Domain` holds core domain types and shared contracts.
 - `tests/` contains unit and integration test projects.
@@ -29,11 +29,11 @@ It receives events, applies tenant-aware routing and transformation rules, and d
 
 The platform is divided into two planes, each a separate ASP.NET service with its own `Program.cs` and port.
 
-- **Control plane** (`Integrios.Admin`, port 5150): tenant lifecycle, connection configuration, pipeline and route management, policy. Auth will diverge from the data plane (admin tokens, human sessions) as the platform grows.
-- **Data plane** (`Integrios.Ingress`, port 5231): webhook intake, tenant/auth resolution, durable acceptance boundary, outbox writes.
-- **Worker** (`Integrios.Worker`): outbox polling, pipeline and route resolution, event delivery, retry/DLQ/replay.
+- **Control plane** (`Integrios.Admin`, port 5150): tenant lifecycle, connection configuration, topic and subscription management, policy. Auth will diverge from the data plane (admin tokens, human sessions) as the platform grows.
+- **Data plane** (`Integrios.Ingress`, port 5231): webhook intake, tenant/auth resolution, durable acceptance boundary, outbox writes (publishes accepted events to a topic in the same transaction).
+- **Worker** (`Integrios.Worker`): outbox polling, fanout to subscriptions, per-subscription delivery, retry/DLQ/replay.
 
-`Integrios.Worker` reads pipeline and route config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are no service-to-service config calls in v1. See `dev/decisions.md` for the rationale and migration path.
+`Integrios.Worker` reads topic and subscription config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are no service-to-service config calls in v1. See `dev/decisions.md` for the rationale and migration path.
 
 ### Core domain model
 
@@ -41,16 +41,17 @@ The platform is divided into two planes, each a separate ASP.NET service with it
 - `ApiKey` represents machine credentials used to call Integrios APIs.
 - `Integration` represents a reusable platform-level definition of how to talk to a system.
 - `Connection` represents a tenant-scoped configured connection.
-- `Pipeline` represents a tenant-owned pipeline scoped to a source connection.
-- `Route` represents a branch within a pipeline that matches events and delivers to a destination connection.
-- `Event` represents an accepted, normalized inbound unit of work.
-- `DeliveryAttempt` tracks each delivery attempt for an event.
+- `Topic` represents a tenant-owned named stream of events; source connections publish to it.
+- `Subscription` represents an independent consumer of a topic with its own filter, destination connection, retry policy, and DLQ scope.
+- `Event` represents an accepted, normalized inbound unit of work, tagged with the topic it was published to.
+- `SubscriptionDelivery` tracks the per-(event, subscription) delivery state produced by fanout.
+- `DeliveryAttempt` records each concrete outbound execution against a subscription delivery.
 
 ### Module boundaries
 
-- `Integrios.Ingress` owns the HTTP surface, tenant resolution, and acceptance-boundary writes. It does not own routing, delivery, or retry behavior.
-- `Integrios.Admin` owns control plane configuration. It does not own event processing. No endpoints exist yet; Phase 4 builds them.
-- `Integrios.Worker` owns outbox polling, route resolution, delivery, and retry/DLQ/replay. It does not own HTTP intake or config writes.
+- `Integrios.Ingress` owns the HTTP surface, tenant resolution, and acceptance-boundary writes. It does not own fanout, delivery, or retry behavior.
+- `Integrios.Admin` owns control plane configuration. It does not own event processing.
+- `Integrios.Worker` owns outbox polling, fanout to subscriptions, per-subscription delivery, and retry/DLQ/replay. It does not own HTTP intake or config writes.
 - `Integrios.MockSink` owns controllable success, failure, and slow-path responses for local testing. It is never a dependency of production services.
 - `Integrios.Domain` owns domain entities, enums, and API contracts. It does not own implementation logic.
 
@@ -107,7 +108,7 @@ Naming:
 
 Domain naming:
 
-- keep domain entity names aligned with the model: `Tenant`, `ApiKey`, `Integration`, `Connection`, `Pipeline`, `Route`, `Event`, `DeliveryAttempt`
+- keep domain entity names aligned with the model: `Tenant`, `ApiKey`, `Integration`, `Connection`, `Topic`, `Subscription`, `Event`, `SubscriptionDelivery`, `DeliveryAttempt`
 
 Style:
 
