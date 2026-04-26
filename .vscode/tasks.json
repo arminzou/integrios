@@ -70,6 +70,13 @@
         "kind": "test",
         "isDefault": true
       }
+    },
+    {
+      "label": "build & test",
+      "dependsOn": ["build", "test"],
+      "dependsOrder": "sequence",
+      "problemMatcher": "$msCompile",
+      "group": "test"
     }
   ]
 }
