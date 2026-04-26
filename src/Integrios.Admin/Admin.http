@@ -1,0 +1,15 @@
+@baseUrl    = http://localhost:5150
+@adminToken = Bearer dev_admin_token_change_me
+
+###
+# Health (no auth required)
+GET {{baseUrl}}/health
+
+###
+# Auth probe — should 401 without token
+GET {{baseUrl}}/admin/tenants
+
+###
+# Auth probe — should 404 (route not yet defined) with valid token
+GET {{baseUrl}}/admin/tenants
+Authorization: {{adminToken}}
