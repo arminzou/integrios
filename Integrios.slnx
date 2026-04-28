@@ -11,5 +11,6 @@
     <Project Path="tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj" />
     <Project Path="tests/Integrios.IntegrationTests/Integrios.IntegrationTests.csproj" />
     <Project Path="tests/Integrios.Worker.Tests/Integrios.Worker.Tests.csproj" />
+    <Project Path="tests/Integrios.Admin.Tests/Integrios.Admin.Tests.csproj" />
   </Folder>
 </Solution>

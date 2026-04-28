@@ -184,6 +184,48 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.Equal("pending", await statusCmd.ExecuteScalarAsync());
     }
 
+    [Fact]
+    public async Task PostEvents_WithTopicName_StoresTopicIdOnEvent()
+    {
+        var topicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
+
+        var request = new IngestEventRequest
+        {
+            EventType = "payment.created",
+            Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
+            TopicName = "payments"
+        };
+
+        var response = await PostEventAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
+        Assert.NotNull(body);
+
+        var storedTopicId = await fixture.GetEventTopicIdAsync(body.EventId);
+        Assert.Equal(topicId, storedTopicId);
+    }
+
+    [Fact]
+    public async Task PostEvents_WithUnknownTopicName_StoresNullTopicId()
+    {
+        var request = new IngestEventRequest
+        {
+            EventType = "payment.created",
+            Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
+            TopicName = "nonexistent-topic"
+        };
+
+        var response = await PostEventAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
+        Assert.NotNull(body);
+
+        var storedTopicId = await fixture.GetEventTopicIdAsync(body.EventId);
+        Assert.Null(storedTopicId);
+    }
+
     private static IngestEventRequest BuildRequest(string idempotencyKey)
     {
         return new IngestEventRequest
@@ -327,6 +369,31 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("Id", eventId);
         var result = await cmd.ExecuteScalarAsync();
         return result is Guid g ? g : null;
+    }
+
+    public async Task<Guid?> GetEventTopicIdAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand("SELECT topic_id FROM events WHERE id = @Id", connection);
+        cmd.Parameters.AddWithValue("Id", eventId);
+        var result = await cmd.ExecuteScalarAsync();
+        return result is Guid g ? g : null;
+    }
+
+    public async Task<Guid> SeedTopicAsync(Guid tenantId, string name)
+    {
+        var topicId = Guid.NewGuid();
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at) VALUES (@Id, @TenantId, @Name, 'active', now(), now())",
+            connection);
+        cmd.Parameters.AddWithValue("Id", topicId);
+        cmd.Parameters.AddWithValue("TenantId", tenantId);
+        cmd.Parameters.AddWithValue("Name", name);
+        await cmd.ExecuteNonQueryAsync();
+        return topicId;
     }
 
     public async Task ForceEventStatusAsync(Guid eventId, string status)

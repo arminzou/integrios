@@ -6,7 +6,7 @@ public static class PageCursor
 {
     public static string Encode(DateTimeOffset createdAt, Guid id)
     {
-        var raw = $"{createdAt.ToUnixTimeMilliseconds()}:{id}";
+        var raw = $"{createdAt.UtcTicks}:{id}";
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
     }
 
@@ -19,9 +19,9 @@ public static class PageCursor
             var raw = Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
             var colon = raw.IndexOf(':');
             if (colon <= 0) return false;
-            if (!long.TryParse(raw[..colon], out var ms)) return false;
+            if (!long.TryParse(raw[..colon], out var ticks)) return false;
             if (!Guid.TryParse(raw[(colon + 1)..], out id)) return false;
-            createdAt = DateTimeOffset.FromUnixTimeMilliseconds(ms);
+            createdAt = new DateTimeOffset(ticks, TimeSpan.Zero);
             return true;
         }
         catch { return false; }

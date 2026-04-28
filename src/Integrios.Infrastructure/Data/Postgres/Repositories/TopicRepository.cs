@@ -9,7 +9,8 @@ namespace Integrios.Infrastructure.Data;
 
 public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : ITopicRepository
 {
-    private const string SelectColumns = "id, tenant_id, name, status, description, created_at, updated_at";
+    private const string SelectColumns =
+        "id AS Id, tenant_id AS TenantId, name AS Name, status AS Status, description AS Description, created_at AS CreatedAt, updated_at AS UpdatedAt";
 
     public async Task<Topic> CreateAsync(
         Guid tenantId,
@@ -118,7 +119,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                 $"""
                 UPDATE topics
                 SET name = @Name, description = @Description, updated_at = now()
-                WHERE tenant_id = @TenantId AND id = @Id AND status != 'inactive'
+                WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
                 RETURNING {SelectColumns}
                 """,
                 new { TenantId = tenantId, Id = id, Name = name, Description = description },
@@ -138,8 +139,8 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
             new CommandDefinition(
                 """
                 UPDATE topics
-                SET status = 'inactive', updated_at = now()
-                WHERE tenant_id = @TenantId AND id = @Id AND status != 'inactive'
+                SET status = 'disabled', updated_at = now()
+                WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
                 """,
                 new { TenantId = tenantId, Id = id },
                 cancellationToken: ct));
