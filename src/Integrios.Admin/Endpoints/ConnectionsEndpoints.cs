@@ -1,8 +1,6 @@
 using System.Text.Json;
 using Integrios.Admin.Auth;
 using Integrios.Application.Connections;
-using Integrios.Application.Connections.Commands;
-using Integrios.Application.Connections.Queries;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;

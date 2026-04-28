@@ -5,7 +5,7 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using MediatR;
 
-namespace Integrios.Application.ApiKeys.Commands;
+namespace Integrios.Application.ApiKeys;
 
 public sealed record CreateApiKeyCommand(
     Guid TenantId,

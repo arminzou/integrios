@@ -1,7 +1,7 @@
 using Integrios.Application.Abstractions;
 using MediatR;
 
-namespace Integrios.Application.ApiKeys.Commands;
+namespace Integrios.Application.ApiKeys;
 
 public sealed record RevokeApiKeyCommand(Guid TenantId, Guid Id) : IRequest<bool>;
 

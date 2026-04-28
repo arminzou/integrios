@@ -2,7 +2,7 @@ using Integrios.Application.Abstractions;
 using Integrios.Domain.Integrations;
 using MediatR;
 
-namespace Integrios.Application.Integrations.Queries;
+namespace Integrios.Application.Integrations;
 
 public sealed record GetIntegrationByIdQuery(Guid Id) : IRequest<IntegrationResponse?>;
 

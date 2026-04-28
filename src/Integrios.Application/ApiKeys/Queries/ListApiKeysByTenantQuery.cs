@@ -2,7 +2,7 @@ using Integrios.Application.Abstractions;
 using Integrios.Domain.Tenants;
 using MediatR;
 
-namespace Integrios.Application.ApiKeys.Queries;
+namespace Integrios.Application.ApiKeys;
 
 public sealed record ListApiKeysByTenantQuery(Guid TenantId, string? AfterCursor, int Limit) : IRequest<ApiKeyListResponse>;
 

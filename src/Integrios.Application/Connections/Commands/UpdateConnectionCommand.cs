@@ -3,7 +3,7 @@ using Integrios.Application.Abstractions;
 using Integrios.Domain.Integrations;
 using MediatR;
 
-namespace Integrios.Application.Connections.Commands;
+namespace Integrios.Application.Connections;
 
 public sealed record UpdateConnectionCommand(
     Guid TenantId,

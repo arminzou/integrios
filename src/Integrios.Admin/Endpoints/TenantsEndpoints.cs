@@ -1,6 +1,5 @@
 using Integrios.Admin.Auth;
-using Integrios.Application.Tenants.Commands;
-using Integrios.Application.Tenants.Queries;
+using Integrios.Application.Tenants;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;

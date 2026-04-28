@@ -1,7 +1,7 @@
 using Integrios.Application.Abstractions;
 using MediatR;
 
-namespace Integrios.Application.Tenants.Queries;
+namespace Integrios.Application.Tenants;
 
 public sealed record GetTenantByIdQuery(Guid Id) : IRequest<TenantResponse?>;
 

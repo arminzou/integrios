@@ -1,7 +1,7 @@
 using Integrios.Application.Abstractions;
 using MediatR;
 
-namespace Integrios.Application.Tenants.Commands;
+namespace Integrios.Application.Tenants;
 
 public sealed record DeactivateTenantCommand(Guid Id) : IRequest<bool>;
 

@@ -2,7 +2,7 @@ using Integrios.Application.Abstractions;
 using Integrios.Domain.Integrations;
 using MediatR;
 
-namespace Integrios.Application.Connections.Queries;
+namespace Integrios.Application.Connections;
 
 public sealed record GetConnectionByIdQuery(Guid TenantId, Guid Id) : IRequest<ConnectionResponse?>;
 

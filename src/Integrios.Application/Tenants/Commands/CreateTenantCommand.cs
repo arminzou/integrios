@@ -3,7 +3,7 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using MediatR;
 
-namespace Integrios.Application.Tenants.Commands;
+namespace Integrios.Application.Tenants;
 
 public sealed record CreateTenantCommand(
     string Slug,

@@ -1,7 +1,7 @@
 using Integrios.Application.Abstractions;
 using MediatR;
 
-namespace Integrios.Application.Connections.Commands;
+namespace Integrios.Application.Connections;
 
 public sealed record DeactivateConnectionCommand(Guid TenantId, Guid Id) : IRequest<bool>;
 

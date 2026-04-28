@@ -1,5 +1,4 @@
 using Integrios.Application.Integrations;
-using Integrios.Application.Integrations.Queries;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;

@@ -1,7 +1,5 @@
 using Integrios.Admin.Auth;
 using Integrios.Application.ApiKeys;
-using Integrios.Application.ApiKeys.Commands;
-using Integrios.Application.ApiKeys.Queries;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
