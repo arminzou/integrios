@@ -12,6 +12,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
     public async Task<IngestEventResponse> IngestAsync(
         Guid tenantId,
         IngestEventRequest request,
+        Guid? topicId,
         CancellationToken cancellationToken = default)
     {
         var eventId = Guid.NewGuid();
@@ -39,6 +40,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
                 INSERT INTO events (
                     id,
                     tenant_id,
+                    topic_id,
                     source_event_id,
                     event_type,
                     payload,
@@ -50,6 +52,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
                 VALUES (
                     @EventId,
                     @TenantId,
+                    @TopicId,
                     @SourceEventId,
                     @EventType,
                     CAST(@PayloadJson AS jsonb),
@@ -67,6 +70,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
                     {
                         EventId = eventId,
                         TenantId = tenantId,
+                        TopicId = topicId,
                         request.SourceEventId,
                         request.EventType,
                         PayloadJson = payloadJson,

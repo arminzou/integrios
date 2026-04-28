@@ -6,27 +6,6 @@ namespace Integrios.Infrastructure.Data;
 
 public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactory) : ISubscriptionRepository
 {
-    public async Task<Guid?> FindTopicIdAsync(
-        Guid tenantId,
-        string eventType,
-        CancellationToken cancellationToken = default)
-    {
-        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-
-        return await connection.QuerySingleOrDefaultAsync<Guid?>(
-            new CommandDefinition(
-                """
-                SELECT id
-                FROM topics
-                WHERE tenant_id = @TenantId
-                  AND status    = 'active'
-                  AND @EventType = ANY(event_types)
-                LIMIT 1
-                """,
-                new { TenantId = tenantId, EventType = eventType },
-                cancellationToken: cancellationToken));
-    }
-
     public async Task<IReadOnlyList<SubscriptionTarget>> GetActiveSubscriptionsAsync(
         Guid topicId,
         CancellationToken cancellationToken = default)

@@ -11,4 +11,4 @@ public interface IOutboxRepository
 
 public record OutboxRow(Guid Id, Guid EventId, int AttemptCount);
 
-public record EventDetails(Guid Id, Guid TenantId, string EventType, string PayloadJson);
+public record EventDetails(Guid Id, Guid TenantId, string EventType, string PayloadJson, Guid? TopicId);

@@ -45,10 +45,11 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
             new CommandDefinition(
                 """
                 SELECT
-                    id          AS Id,
-                    tenant_id   AS TenantId,
-                    event_type  AS EventType,
-                    payload::text AS PayloadJson
+                    id            AS Id,
+                    tenant_id     AS TenantId,
+                    event_type    AS EventType,
+                    payload::text AS PayloadJson,
+                    topic_id      AS TopicId
                 FROM events
                 WHERE id = @EventId
                 """,

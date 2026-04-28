@@ -328,7 +328,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var eventId = Guid.NewGuid();
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
-        await InsertEventRowAsync(connection, eventId, TenantId, eventType);
+        await InsertEventRowAsync(connection, eventId, TenantId, eventType, TopicId);
         return eventId;
     }
 
@@ -337,7 +337,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var eventId = Guid.NewGuid();
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
-        await InsertEventRowAsync(connection, eventId, OrphanTenantId, eventType);
+        await InsertEventRowAsync(connection, eventId, OrphanTenantId, eventType, topicId: null);
         return eventId;
     }
 
@@ -391,17 +391,18 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public Task<GetEventResponse?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default)
         => eventRepository.GetEventByIdAsync(TenantId, eventId, cancellationToken);
 
-    private static async Task InsertEventRowAsync(NpgsqlConnection connection, Guid eventId, Guid tenantId, string eventType)
+    private static async Task InsertEventRowAsync(NpgsqlConnection connection, Guid eventId, Guid tenantId, string eventType, Guid? topicId = null)
     {
         var payload = JsonSerializer.Serialize(new { test = true });
         await using var cmd = new NpgsqlCommand("""
-            INSERT INTO events (id, tenant_id, event_type, payload, status, accepted_at)
-            VALUES (@Id, @TenantId, @EventType, @Payload::jsonb, 'accepted', now());
+            INSERT INTO events (id, tenant_id, topic_id, event_type, payload, status, accepted_at)
+            VALUES (@Id, @TenantId, @TopicId, @EventType, @Payload::jsonb, 'accepted', now());
             INSERT INTO outbox (event_id, payload)
             VALUES (@Id, @Payload::jsonb);
             """, connection);
         cmd.Parameters.AddWithValue("Id", eventId);
         cmd.Parameters.AddWithValue("TenantId", tenantId);
+        cmd.Parameters.AddWithValue("TopicId", topicId.HasValue ? (object)topicId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("EventType", eventType);
         cmd.Parameters.AddWithValue("Payload", payload);
         await cmd.ExecuteNonQueryAsync();
@@ -430,9 +431,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@LedgerConnectionId, @TenantId, @IntegrationId, 'ledger-sink',   @LedgerConfig::jsonb,              'active'),
                 (@RiskConnectionId,   @TenantId, @IntegrationId, 'risk-sink',     @RiskConfig::jsonb,                'active');
 
-            INSERT INTO topics (id, tenant_id, name, source_connection_id, event_types, status)
-            VALUES (@TopicId, @TenantId, 'test-topic', @SourceConnectionId,
-                    ARRAY['payment.created', 'payment.settled', 'payment.authorized', 'payment.multi'], 'active');
+            INSERT INTO topics (id, tenant_id, name, status)
+            VALUES (@TopicId, @TenantId, 'test-topic', 'active');
+
+            INSERT INTO topic_sources (topic_id, connection_id)
+            VALUES (@TopicId, @SourceConnectionId);
 
             INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES

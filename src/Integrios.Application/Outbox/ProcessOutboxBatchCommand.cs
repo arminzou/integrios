@@ -32,24 +32,22 @@ internal sealed class ProcessOutboxBatchCommandHandler(
             return;
         }
 
-        var topicId = await subscriptionRepository.FindTopicIdAsync(ev.TenantId, ev.EventType, cancellationToken);
-        if (topicId is null)
+        if (ev.TopicId is null)
         {
-            logger.LogWarning("No active topic for tenant {TenantId} / event type {EventType}. Skipping event {EventId}.",
-                ev.TenantId, ev.EventType, ev.Id);
+            logger.LogInformation("Event {EventId} has no topic. Marking processed without fanout.", ev.Id);
             await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
 
-        var subscriptions = await subscriptionRepository.GetActiveSubscriptionsAsync(topicId.Value, cancellationToken);
+        var subscriptions = await subscriptionRepository.GetActiveSubscriptionsAsync(ev.TopicId.Value, cancellationToken);
         var matching = subscriptions
             .Where(s => s.MatchEventTypes.Contains(ev.EventType, StringComparer.OrdinalIgnoreCase))
             .ToList();
 
         if (matching.Count == 0)
         {
-            logger.LogInformation("Event {EventId} matched topic {TopicId} but no subscriptions. Marking completed.", ev.Id, topicId.Value);
-            await outboxRepository.UpdateEventStatusAsync(ev.Id, "completed", topicId.Value, cancellationToken);
+            logger.LogInformation("Event {EventId} matched topic {TopicId} but no subscriptions. Marking completed.", ev.Id, ev.TopicId.Value);
+            await outboxRepository.UpdateEventStatusAsync(ev.Id, "completed", ev.TopicId, cancellationToken);
             await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
@@ -60,7 +58,7 @@ internal sealed class ProcessOutboxBatchCommandHandler(
 
         var inserted = await subscriptionDeliveryRepository.FanoutAsync(ev.Id, targets, cancellationToken);
 
-        await outboxRepository.UpdateEventStatusAsync(ev.Id, "fanned_out", topicId.Value, cancellationToken);
+        await outboxRepository.UpdateEventStatusAsync(ev.Id, "fanned_out", ev.TopicId, cancellationToken);
         await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
 
         logger.LogInformation(

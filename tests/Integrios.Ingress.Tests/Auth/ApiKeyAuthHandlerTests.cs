@@ -299,6 +299,7 @@ public sealed class StubEventRepository : IEventRepository
     public Task<IngestEventResponse> IngestAsync(
         Guid tenantId,
         IngestEventRequest request,
+        Guid? topicId,
         CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new IngestEventResponse

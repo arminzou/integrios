@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddSingleton<ITenantRepository, TenantRepository>();
         services.AddSingleton<IIntegrationRepository, IntegrationRepository>();
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
+        services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<IEventRepository, EventRepository>();
         services.AddSingleton<IOutboxRepository, OutboxRepository>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();

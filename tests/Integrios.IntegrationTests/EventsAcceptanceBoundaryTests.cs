@@ -361,9 +361,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 RETURNING id, tenant_id
             ),
             topic_insert AS (
-                INSERT INTO topics (id, tenant_id, name, source_connection_id, event_types, status)
-                SELECT gen_random_uuid(), ci.tenant_id, 'replay-test-topic',
-                       ci.id, ARRAY['payment.created'], 'active'
+                INSERT INTO topics (id, tenant_id, name, status)
+                SELECT gen_random_uuid(), ci.tenant_id, 'replay-test-topic', 'active'
                 FROM conn_insert ci
                 RETURNING id
             ),
