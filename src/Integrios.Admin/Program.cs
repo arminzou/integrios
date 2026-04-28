@@ -4,6 +4,11 @@ using Integrios.Application;
 using Integrios.Application.ApiKeys;
 using Integrios.Application.ApiKeys.Commands;
 using Integrios.Application.ApiKeys.Queries;
+using Integrios.Application.Connections;
+using Integrios.Application.Connections.Commands;
+using Integrios.Application.Connections.Queries;
+using Integrios.Application.Integrations;
+using Integrios.Application.Integrations.Queries;
 using Integrios.Application.Tenants;
 using Integrios.Application.Tenants.Commands;
 using Integrios.Application.Tenants.Queries;
@@ -191,6 +196,119 @@ admin.MapPost("/tenants/{tenantId:guid}/api-keys/{id:guid}/revoke", async (
     return revoked ? Results.Ok() : Results.NotFound();
 });
 
+// Integrations — read-only catalog; accessible to all authenticated admins
+
+admin.MapGet("/integrations", async (
+    IMediator mediator,
+    string? after,
+    int limit,
+    CancellationToken cancellationToken) =>
+{
+    limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
+    IntegrationListResponse response = await mediator.Send(new ListIntegrationsQuery(after, limit), cancellationToken);
+    return Results.Ok(response);
+});
+
+admin.MapGet("/integrations/{id:guid}", async (
+    Guid id,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    IntegrationResponse? response = await mediator.Send(new GetIntegrationByIdQuery(id), cancellationToken);
+    return response is null ? Results.NotFound() : Results.Ok(response);
+});
+
+// Connections — per-tenant; global or tenant-scoped admin key (scoped to owning tenant only)
+
+admin.MapPost("/tenants/{tenantId:guid}/connections", async (
+    Guid tenantId,
+    CreateConnectionRequest request,
+    HttpContext httpContext,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    try
+    {
+        ConnectionResponse response = await mediator.Send(
+            new CreateConnectionCommand(tenantId, request.IntegrationId, request.Name, request.Config, request.Environment, request.Description),
+            cancellationToken);
+        return Results.Created($"/admin/tenants/{tenantId}/connections/{response.Id}", response);
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("integration does not exist"))
+    {
+        return Results.UnprocessableEntity(new { error = ex.Message });
+    }
+});
+
+admin.MapGet("/tenants/{tenantId:guid}/connections", async (
+    Guid tenantId,
+    HttpContext httpContext,
+    IMediator mediator,
+    string? after,
+    int limit,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
+    ConnectionListResponse response = await mediator.Send(new ListConnectionsByTenantQuery(tenantId, after, limit), cancellationToken);
+    return Results.Ok(response);
+});
+
+admin.MapGet("/tenants/{tenantId:guid}/connections/{id:guid}", async (
+    Guid tenantId,
+    Guid id,
+    HttpContext httpContext,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    ConnectionResponse? response = await mediator.Send(new GetConnectionByIdQuery(tenantId, id), cancellationToken);
+    return response is null ? Results.NotFound() : Results.Ok(response);
+});
+
+admin.MapPatch("/tenants/{tenantId:guid}/connections/{id:guid}", async (
+    Guid tenantId,
+    Guid id,
+    UpdateConnectionRequest request,
+    HttpContext httpContext,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    ConnectionResponse? response = await mediator.Send(
+        new UpdateConnectionCommand(tenantId, id, request.Name, request.Config, request.Environment, request.Description),
+        cancellationToken);
+    return response is null ? Results.NotFound() : Results.Ok(response);
+});
+
+admin.MapPost("/tenants/{tenantId:guid}/connections/{id:guid}/deactivate", async (
+    Guid tenantId,
+    Guid id,
+    HttpContext httpContext,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    AdminPrincipal principal = httpContext.GetAdminPrincipal();
+    if (!principal.IsGlobal && principal.TenantId != tenantId)
+        return Results.Forbid();
+
+    bool deactivated = await mediator.Send(new DeactivateConnectionCommand(tenantId, id), cancellationToken);
+    return deactivated ? Results.Ok() : Results.NotFound();
+});
+
 app.Run();
 
 // Request contracts (Admin-layer only; not shared with Application)
@@ -198,3 +316,5 @@ app.Run();
 record CreateTenantRequest(string Slug, string Name, string? Environment, string? Description);
 record UpdateTenantRequest(string Name, string? Description, string? Environment);
 record CreateApiKeyRequest(string Name, IReadOnlyList<string>? Scopes, string? Description, DateTimeOffset? ExpiresAt);
+record CreateConnectionRequest(Guid IntegrationId, string Name, System.Text.Json.JsonElement Config, string? Environment, string? Description);
+record UpdateConnectionRequest(string Name, System.Text.Json.JsonElement Config, string? Environment, string? Description);
