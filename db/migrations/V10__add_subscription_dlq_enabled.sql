@@ -1,0 +1,2 @@
+ALTER TABLE subscriptions
+    ADD COLUMN dlq_enabled BOOLEAN NOT NULL DEFAULT FALSE;

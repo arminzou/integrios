@@ -508,7 +508,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             var envMigrationDirectory = Path.Combine(repoRoot, "db", "migrations");
             if (Directory.Exists(envMigrationDirectory))
                 return Directory.GetFiles(envMigrationDirectory, "*.sql")
-                    .OrderBy(Path.GetFileName, StringComparer.Ordinal)
+                    .OrderBy(GetMigrationVersion)
+                    .ThenBy(Path.GetFileName, StringComparer.Ordinal)
                     .ToArray();
         }
 
@@ -520,7 +521,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             {
                 var migrationDirectory = Path.Combine(directory.FullName, "db", "migrations");
                 return Directory.GetFiles(migrationDirectory, "*.sql")
-                    .OrderBy(Path.GetFileName, StringComparer.Ordinal)
+                    .OrderBy(GetMigrationVersion)
+                    .ThenBy(Path.GetFileName, StringComparer.Ordinal)
                     .ToArray();
             }
 
@@ -528,5 +530,17 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         }
 
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
+    }
+
+    private static int GetMigrationVersion(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        var separator = fileName.IndexOf("__", StringComparison.Ordinal);
+        if (separator <= 1)
+            return int.MaxValue;
+
+        return int.TryParse(fileName[1..separator], out var version)
+            ? version
+            : int.MaxValue;
     }
 }

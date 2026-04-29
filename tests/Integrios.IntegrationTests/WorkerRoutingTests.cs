@@ -477,7 +477,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             {
                 foreach (var path in Directory.GetFiles(Path.Combine(directory.FullName, "db", "migrations"), "*.sql")
                              .Where(p => !Path.GetFileName(p).StartsWith("V4__"))
-                             .OrderBy(Path.GetFileName, StringComparer.Ordinal))
+                             .OrderBy(GetMigrationVersion)
+                             .ThenBy(Path.GetFileName, StringComparer.Ordinal))
                 {
                     var sql = await File.ReadAllTextAsync(path);
                     await using var cmd = new NpgsqlCommand(sql, connection);
@@ -489,6 +490,18 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         }
 
         throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    private static int GetMigrationVersion(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        var separator = fileName.IndexOf("__", StringComparison.Ordinal);
+        if (separator <= 1)
+            return int.MaxValue;
+
+        return int.TryParse(fileName[1..separator], out var version)
+            ? version
+            : int.MaxValue;
     }
 }
 
