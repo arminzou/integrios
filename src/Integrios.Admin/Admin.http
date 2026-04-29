@@ -1,7 +1,6 @@
-@baseUrl      = http://localhost:5150
-@globalKey    = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
-@swiftpayId   = aaaaaaaa-0000-0000-0000-000000000001
-@webhookIntId = 00000000-0000-0000-0000-000000000001
+@baseUrl       = http://localhost:5150
+@globalKey     = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
+@webhookIntId  = 00000000-0000-0000-0000-000000000001
 
 ###
 # Health (no auth required)
@@ -10,9 +9,6 @@ GET {{baseUrl}}/health
 ###
 # Auth probe — should 401 without key
 GET {{baseUrl}}/admin/tenants
-
-###
-# ── Integrations ────────────────────────────────────────────────────────────
 
 ###
 # List available integrations
@@ -25,10 +21,10 @@ GET {{baseUrl}}/admin/integrations/{{webhookIntId}}
 {{globalKey}}
 
 ###
-# ── Tenants ─────────────────────────────────────────────────────────────────
+# ── Happy-path tenant onboarding ─────────────────────────────────────────────
 
 ###
-# Create a tenant
+# @name createTenant
 POST {{baseUrl}}/admin/tenants
 {{globalKey}}
 Content-Type: application/json
@@ -37,59 +33,130 @@ Content-Type: application/json
   "slug": "acme-corp",
   "name": "Acme Corp",
   "environment": "production",
-  "description": "Acme Corporation tenant"
+  "description": "Customer tenant created through the control plane"
 }
 
 ###
+@tenantId = {{createTenant.response.body.$.id}}
+
 # List tenants
 GET {{baseUrl}}/admin/tenants
 {{globalKey}}
 
 ###
-# Get demo-swiftpay tenant
-GET {{baseUrl}}/admin/tenants/{{swiftpayId}}
+# Get the new tenant
+GET {{baseUrl}}/admin/tenants/{{tenantId}}
 {{globalKey}}
 
 ###
-# ── Connections ──────────────────────────────────────────────────────────────
-
-###
-# List connections for demo-swiftpay
-GET {{baseUrl}}/admin/tenants/{{swiftpayId}}/connections
-{{globalKey}}
-
-###
-# Get a seeded connection (swiftpay-webhook-source)
-GET {{baseUrl}}/admin/tenants/{{swiftpayId}}/connections/aaaaaaaa-0000-0000-0000-000000000003
-{{globalKey}}
-
-###
-# Create a new connection for demo-swiftpay
-POST {{baseUrl}}/admin/tenants/{{swiftpayId}}/connections
+# @name createApiKey
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
 {{globalKey}}
 Content-Type: application/json
 
 {
-  "integrationId": "00000000-0000-0000-0000-000000000001",
-  "name": "swiftpay-notifications-sink",
-  "config": { "url": "http://localhost:5054/sink/swiftpay-notifications" },
-  "environment": "demo",
-  "description": "Notifications sink for SwiftPay"
+  "name": "acme-ingress",
+  "scopes": ["events:write"],
+  "description": "Ingress automation key"
 }
 
 ###
-# Update a connection (replace name + config)
-PATCH {{baseUrl}}/admin/tenants/{{swiftpayId}}/connections/aaaaaaaa-0000-0000-0000-000000000004
+@apiKeyId = {{createApiKey.response.body.$.key.id}}
+@apiKeyPublic = {{createApiKey.response.body.$.key.publicKey}}
+@apiKeySecret = {{createApiKey.response.body.$.secret}}
+
+# List data-plane API keys
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
+{{globalKey}}
+
+###
+# Get the created data-plane API key
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}
+{{globalKey}}
+
+###
+# @name createSourceConnection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 {{globalKey}}
 Content-Type: application/json
 
 {
-  "name": "swiftpay-ledger-sink",
-  "config": { "url": "http://localhost:5054/sink/swiftpay-ledger-v2" },
-  "description": "Updated ledger sink"
+  "integrationId": "{{webhookIntId}}",
+  "name": "acme-source",
+  "config": { "url": "http://localhost:5054/sink/acme-source" },
+  "environment": "production",
+  "description": "Inbound source connection"
 }
 
 ###
-# Deactivate a connection
-POST {{baseUrl}}/admin/tenants/{{swiftpayId}}/connections/aaaaaaaa-0000-0000-0000-000000000005/deactivate
+# @name createDestinationConnection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "integrationId": "{{webhookIntId}}",
+  "name": "acme-erp",
+  "config": { "url": "http://localhost:5054/sink/acme-erp" },
+  "environment": "production",
+  "description": "ERP destination connection"
+}
+
+###
+@sourceConnectionId = {{createSourceConnection.response.body.$.id}}
+@destinationConnectionId = {{createDestinationConnection.response.body.$.id}}
+
+# List tenant connections
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/connections
+{{globalKey}}
+
+###
+# @name createTopic
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "name": "payments",
+  "description": "Payment events stream",
+  "sourceConnectionIds": ["{{sourceConnectionId}}"]
+}
+
+###
+@topicId = {{createTopic.response.body.$.id}}
+
+# Get the created topic
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}
+{{globalKey}}
+
+###
+# @name createSubscription
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "name": "acme-erp-subscription",
+  "matchRules": { "event_type": "payment.created" },
+  "destinationConnectionId": "{{destinationConnectionId}}",
+  "dlqEnabled": true,
+  "orderIndex": 10,
+  "description": "ERP sink for created payments"
+}
+
+###
+@subscriptionId = {{createSubscription.response.body.$.id}}
+
+# List subscriptions for the topic
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
+{{globalKey}}
+
+###
+# Get the created subscription
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
+{{globalKey}}
+
+###
+# Revoke the API key when done testing
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}/revoke
 {{globalKey}}

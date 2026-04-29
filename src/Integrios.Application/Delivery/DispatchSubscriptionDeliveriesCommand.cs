@@ -7,7 +7,7 @@ namespace Integrios.Application.Delivery;
 public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize, int MaxAttempts) : IRequest<int>;
 
 internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
-    ISubscriptionDeliveryRepository deliveryRepository,
+    ISubscriptionDeliveryQueue deliveryQueue,
     IDeliveryAttemptRepository attemptRepository,
     IDeliveryClient deliveryClient,
     ILogger<DispatchSubscriptionDeliveriesCommandHandler> logger) : IRequestHandler<DispatchSubscriptionDeliveriesCommand, int>
@@ -16,7 +16,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
     public async Task<int> Handle(DispatchSubscriptionDeliveriesCommand command, CancellationToken cancellationToken)
     {
-        var rows = await deliveryRepository.ClaimBatchAsync(command.BatchSize, cancellationToken);
+        var rows = await deliveryQueue.ClaimBatchAsync(command.BatchSize, cancellationToken);
 
         foreach (var row in rows)
             await DispatchAsync(row, command.MaxAttempts, cancellationToken);
@@ -30,7 +30,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         {
             logger.LogWarning("Subscription {SubscriptionId} has no destination URL. Dead-lettering delivery {DeliveryId}.",
                 row.SubscriptionId, row.Id);
-            await deliveryRepository.MarkDeadLetteredAsync(row.Id, cancellationToken);
+            await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
             return;
         }
 
@@ -59,21 +59,21 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
         if (result.Succeeded)
         {
-            await deliveryRepository.MarkSucceededAsync(row.Id, cancellationToken);
+            await deliveryQueue.MarkSucceededAsync(row.Id, cancellationToken);
             logger.LogInformation("Delivery {DeliveryId} succeeded — HTTP {StatusCode}", row.Id, result.StatusCode);
             return;
         }
 
         if (attemptNumber >= maxAttempts)
         {
-            await deliveryRepository.MarkDeadLetteredAsync(row.Id, cancellationToken);
+            await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
             logger.LogError("Delivery {DeliveryId} dead-lettered after {AttemptCount} attempt(s). Last error: {Error}",
                 row.Id, attemptNumber, result.Error);
             return;
         }
 
         var deliverAfter = DateTimeOffset.UtcNow + CalculateBackoff(attemptNumber);
-        await deliveryRepository.ScheduleRetryAsync(row.Id, attemptNumber, deliverAfter, cancellationToken);
+        await deliveryQueue.ScheduleRetryAsync(row.Id, attemptNumber, deliverAfter, cancellationToken);
         logger.LogWarning("Delivery {DeliveryId} failed. Scheduled retry {AttemptCount} at {DeliverAfter}. Error: {Error}",
             row.Id, attemptNumber, deliverAfter, result.Error);
     }

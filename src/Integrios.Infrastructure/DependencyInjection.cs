@@ -1,6 +1,7 @@
 using Integrios.Application.Abstractions;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http;
+using Integrios.Infrastructure.Transport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -30,8 +31,10 @@ public static class DependencyInjection
         services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<IEventRepository, EventRepository>();
         services.AddSingleton<IOutboxRepository, OutboxRepository>();
+        services.AddSingleton<IEventBus, PostgresEventBus>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
         services.AddSingleton<ISubscriptionDeliveryRepository, SubscriptionDeliveryRepository>();
+        services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
         services.AddSingleton<IDeliveryAttemptRepository, DeliveryAttemptRepository>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {

@@ -7,14 +7,14 @@ namespace Integrios.Application.Outbox;
 public sealed record ProcessOutboxBatchCommand(int BatchSize) : IRequest<int>;
 
 internal sealed class ProcessOutboxBatchCommandHandler(
-    IOutboxRepository outboxRepository,
+    IEventBus eventBus,
     ISubscriptionRepository subscriptionRepository,
-    ISubscriptionDeliveryRepository subscriptionDeliveryRepository,
+    ISubscriptionDeliveryQueue subscriptionDeliveryQueue,
     ILogger<ProcessOutboxBatchCommandHandler> logger) : IRequestHandler<ProcessOutboxBatchCommand, int>
 {
     public async Task<int> Handle(ProcessOutboxBatchCommand command, CancellationToken cancellationToken)
     {
-        var rows = await outboxRepository.ClaimBatchAsync(command.BatchSize, cancellationToken);
+        var rows = await eventBus.ClaimBatchAsync(command.BatchSize, cancellationToken);
 
         foreach (var row in rows)
             await FanoutRowAsync(row, cancellationToken);
@@ -22,20 +22,20 @@ internal sealed class ProcessOutboxBatchCommandHandler(
         return rows.Count;
     }
 
-    private async Task FanoutRowAsync(OutboxRow row, CancellationToken cancellationToken)
+    private async Task FanoutRowAsync(EventBusMessage row, CancellationToken cancellationToken)
     {
-        var ev = await outboxRepository.GetEventAsync(row.EventId, cancellationToken);
+        var ev = await eventBus.GetEventAsync(row.EventId, cancellationToken);
         if (ev is null)
         {
             logger.LogWarning("Outbox row {OutboxId} references missing event {EventId}. Marking processed.", row.Id, row.EventId);
-            await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
+            await eventBus.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
 
         if (ev.TopicId is null)
         {
             logger.LogInformation("Event {EventId} has no topic. Marking processed without fanout.", ev.Id);
-            await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
+            await eventBus.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
 
@@ -47,8 +47,8 @@ internal sealed class ProcessOutboxBatchCommandHandler(
         if (matching.Count == 0)
         {
             logger.LogInformation("Event {EventId} matched topic {TopicId} but no subscriptions. Marking completed.", ev.Id, ev.TopicId.Value);
-            await outboxRepository.UpdateEventStatusAsync(ev.Id, "completed", ev.TopicId, cancellationToken);
-            await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
+            await eventBus.UpdateEventStatusAsync(ev.Id, "completed", ev.TopicId, cancellationToken);
+            await eventBus.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
 
@@ -56,10 +56,10 @@ internal sealed class ProcessOutboxBatchCommandHandler(
             .Select(s => new SubscriptionFanoutTarget(s.Id, s.DestinationConnectionId))
             .ToList();
 
-        var inserted = await subscriptionDeliveryRepository.FanoutAsync(ev.Id, targets, cancellationToken);
+        var inserted = await subscriptionDeliveryQueue.FanoutAsync(ev.Id, targets, cancellationToken);
 
-        await outboxRepository.UpdateEventStatusAsync(ev.Id, "fanned_out", ev.TopicId, cancellationToken);
-        await outboxRepository.MarkProcessedAsync(row.Id, cancellationToken);
+        await eventBus.UpdateEventStatusAsync(ev.Id, "fanned_out", ev.TopicId, cancellationToken);
+        await eventBus.MarkProcessedAsync(row.Id, cancellationToken);
 
         logger.LogInformation(
             "Fanned out event {EventId} to {MatchedCount} subscription(s) ({InsertedCount} new delivery rows).",
