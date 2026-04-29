@@ -3,7 +3,8 @@
 Repository guidelines for AI agents working in this repo.
 
 Read this file first.
-If `AGENTS.local.md` exists, read it next for deeper local or private project context.
+
+For this repository, private context and deeper guidance live in `dev/AGENTS.md`.
 
 ## Project Overview
 
