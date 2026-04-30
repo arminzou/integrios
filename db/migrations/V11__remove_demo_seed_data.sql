@@ -1,101 +1,90 @@
--- Remove legacy demo bootstrap data from the shared migration path.
--- Operational setup now happens through the Admin API; demo data belongs in tests.
+-- Remove the legacy fixed demo bootstrap data from the shared migration path.
+--
+-- Safety rule: only delete the exact rows inserted by V4's deterministic demo seed.
+-- Do not delete operator-created tenants just because they reused a demo slug.
 
-WITH demo_tenants AS (
+DELETE FROM delivery_attempts
+WHERE event_id IN (
     SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
-)
-DELETE FROM delivery_attempts da
-USING demo_tenants dt
-WHERE da.event_id IN (
-    SELECT e.id
-    FROM events e
-    WHERE e.tenant_id = dt.id
+    FROM events
+    WHERE tenant_id IN (
+        'aaaaaaaa-0000-0000-0000-000000000001',
+        'bbbbbbbb-0000-0000-0000-000000000001'
+    )
 );
 
-WITH demo_tenants AS (
+DELETE FROM subscription_deliveries
+WHERE event_id IN (
     SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
-)
-DELETE FROM subscription_deliveries sd
-USING demo_tenants dt
-WHERE sd.event_id IN (
-    SELECT e.id
-    FROM events e
-    WHERE e.tenant_id = dt.id
+    FROM events
+    WHERE tenant_id IN (
+        'aaaaaaaa-0000-0000-0000-000000000001',
+        'bbbbbbbb-0000-0000-0000-000000000001'
+    )
 );
 
-WITH demo_tenants AS (
+DELETE FROM outbox
+WHERE event_id IN (
     SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
-)
-DELETE FROM outbox o
-USING demo_tenants dt
-WHERE o.event_id IN (
-    SELECT e.id
-    FROM events e
-    WHERE e.tenant_id = dt.id
+    FROM events
+    WHERE tenant_id IN (
+        'aaaaaaaa-0000-0000-0000-000000000001',
+        'bbbbbbbb-0000-0000-0000-000000000001'
+    )
 );
 
 DELETE FROM events
 WHERE tenant_id IN (
-    SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'bbbbbbbb-0000-0000-0000-000000000001'
 );
 
 DELETE FROM subscriptions
-WHERE topic_id IN (
-    SELECT id
-    FROM topics
-    WHERE tenant_id IN (
-        SELECT id
-        FROM tenants
-        WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
-    )
+WHERE id IN (
+    'aaaaaaaa-0000-0000-0000-000000000007',
+    'aaaaaaaa-0000-0000-0000-000000000008',
+    'bbbbbbbb-0000-0000-0000-000000000007',
+    'bbbbbbbb-0000-0000-0000-000000000008'
 );
 
 DELETE FROM topic_sources
 WHERE topic_id IN (
-    SELECT id
-    FROM topics
-    WHERE tenant_id IN (
-        SELECT id
-        FROM tenants
-        WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
-    )
+    'aaaaaaaa-0000-0000-0000-000000000006',
+    'bbbbbbbb-0000-0000-0000-000000000006'
 );
 
 DELETE FROM topics
-WHERE tenant_id IN (
-    SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
+WHERE id IN (
+    'aaaaaaaa-0000-0000-0000-000000000006',
+    'bbbbbbbb-0000-0000-0000-000000000006'
 );
 
 DELETE FROM api_keys
-WHERE tenant_id IN (
-    SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
+WHERE id IN (
+    'aaaaaaaa-0000-0000-0000-000000000002',
+    'bbbbbbbb-0000-0000-0000-000000000002'
 );
 
 DELETE FROM admin_keys
 WHERE tenant_id IN (
-    SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'bbbbbbbb-0000-0000-0000-000000000001'
 );
 
 DELETE FROM connections
-WHERE tenant_id IN (
-    SELECT id
-    FROM tenants
-    WHERE slug IN ('demo-swiftpay', 'demo-tradefront')
+WHERE id IN (
+    'aaaaaaaa-0000-0000-0000-000000000003',
+    'aaaaaaaa-0000-0000-0000-000000000004',
+    'aaaaaaaa-0000-0000-0000-000000000005',
+    'bbbbbbbb-0000-0000-0000-000000000003',
+    'bbbbbbbb-0000-0000-0000-000000000004',
+    'bbbbbbbb-0000-0000-0000-000000000005'
 );
 
 DELETE FROM tenants
-WHERE slug IN ('demo-swiftpay', 'demo-tradefront');
+WHERE id IN (
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'bbbbbbbb-0000-0000-0000-000000000001'
+)
+AND slug IN ('demo-swiftpay', 'demo-tradefront')
+AND environment = 'demo';

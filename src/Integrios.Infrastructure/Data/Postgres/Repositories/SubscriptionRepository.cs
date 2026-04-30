@@ -294,6 +294,9 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                 return string.IsNullOrWhiteSpace(value) ? [] : [value];
             }
 
+            // Admin writes the narrowed { "event_type": "..." } shape.
+            // Keep reading the older event_types[] array during the migration window so
+            // pre-v2.1 rows already stored in Postgres still route correctly.
             if (doc.RootElement.TryGetProperty("event_types", out var arr) && arr.ValueKind == JsonValueKind.Array)
                 return arr.EnumerateArray()
                     .Select(e => e.GetString() ?? string.Empty)

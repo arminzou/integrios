@@ -172,6 +172,5 @@ chore(db): add initial migration for tenant and connector tables
 ## Agent Notes
 
 - read the minimum code and docs needed to avoid guessing
-- use `AGENTS.local.md` for deeper local context when present
 - if docs and code disagree, report it plainly instead of guessing
 - keep public docs public and private planning private

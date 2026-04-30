@@ -112,6 +112,63 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         Assert.Null(body2.NextCursor);
     }
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"event_types\":[\"payment.created\"]}")]
+    [InlineData("{\"event_type\":123}")]
+    [InlineData("{\"event_type\":\"\"}")]
+    [InlineData("{\"event_type\":\"payment.created\",\"foo\":\"bar\"}")]
+    public async Task CreateSubscription_WithInvalidMatchRules_ReturnsBadRequest(string matchRulesJson)
+    {
+        var topic = await CreateTopicAsync("payments");
+
+        using var request = AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = JsonDocument.Parse(matchRulesJson).RootElement,
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = true,
+                orderIndex = 10,
+                description = "Primary ERP delivery"
+            });
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"event_types\":[\"payment.updated\"]}")]
+    [InlineData("{\"event_type\":null}")]
+    [InlineData("{\"event_type\":\"   \"}")]
+    [InlineData("{\"event_type\":\"payment.updated\",\"foo\":true}")]
+    public async Task UpdateSubscription_WithInvalidMatchRules_ReturnsBadRequest(string matchRulesJson)
+    {
+        var topic = await CreateTopicAsync("payments");
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
+
+        using var request = AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
+            new
+            {
+                name = "erp-sink-v2",
+                matchRules = JsonDocument.Parse(matchRulesJson).RootElement,
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 25,
+                description = "Updated ERP delivery"
+            });
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task UpdateSubscription_UpdatesEditableFields()
     {
