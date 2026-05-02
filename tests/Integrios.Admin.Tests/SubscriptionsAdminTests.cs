@@ -237,7 +237,8 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         string eventType,
         bool dlqEnabled = true,
         int orderIndex = 10,
-        string? description = null)
+        string? description = null,
+        JsonElement? transform = null)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -249,7 +250,8 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 destinationConnectionId = fixture.SourceConnectionId,
                 dlqEnabled,
                 orderIndex,
-                description
+                description,
+                transform
             }));
 
         response.EnsureSuccessStatusCode();
@@ -266,6 +268,272 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         return msg;
     }
 
+    [Fact]
+    public async Task CreateSubscription_WithValidTransform_ReturnsTransformInResponse()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var transformJson = """{"engine":"jsonata","version":"1","expression":"$.amount"}""";
+        var transformElement = JsonDocument.Parse(transformJson).RootElement;
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 1,
+                transform = transformElement
+            }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.NotNull(body.TransformConfig);
+        Assert.Equal("jsonata", body.TransformConfig.Value.GetProperty("engine").GetString());
+        Assert.Equal("1", body.TransformConfig.Value.GetProperty("version").GetString());
+        Assert.Equal("$.amount", body.TransformConfig.Value.GetProperty("expression").GetString());
+    }
+
+    [Fact]
+    public async Task CreateSubscription_WithNullTransform_Succeeds()
+    {
+        var topic = await CreateTopicAsync("payments");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 1,
+                transform = (object?)null
+            }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Null(body.TransformConfig);
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_AddsTransform_ReturnsUpdatedTransform()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
+
+        var transformJson = """{"engine":"jsonata","version":"1","expression":"$.amount * 2"}""";
+        var transformElement = JsonDocument.Parse(transformJson).RootElement;
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 10,
+                transform = transformElement
+            }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.NotNull(body.TransformConfig);
+        Assert.Equal("$.amount * 2", body.TransformConfig.Value.GetProperty("expression").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_RemovesTransform_TransformBecomesNull()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var transformJson = """{"engine":"jsonata","version":"1","expression":"$.amount"}""";
+        var transformElement = JsonDocument.Parse(transformJson).RootElement;
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created", transform: transformElement);
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 10,
+                transform = (object?)null
+            }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Null(body.TransformConfig);
+    }
+
+    [Theory]
+    [InlineData("""{"engine":"unknown","version":"1","expression":"$.amount"}""")]
+    public async Task CreateSubscription_WithTransform_InvalidEngine_ReturnsBadRequest(string transformJson)
+    {
+        var topic = await CreateTopicAsync("payments");
+        var transformElement = JsonDocument.Parse(transformJson).RootElement;
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 1,
+                transform = transformElement
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("""{"engine":"jsonata","version":"99","expression":"$.amount"}""")]
+    public async Task CreateSubscription_WithTransform_InvalidVersion_ReturnsBadRequest(string transformJson)
+    {
+        var topic = await CreateTopicAsync("payments");
+        var transformElement = JsonDocument.Parse(transformJson).RootElement;
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 1,
+                transform = transformElement
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("""{"engine":"jsonata","version":"1","expression":"$.[invalid"}""")]
+    public async Task CreateSubscription_WithTransform_InvalidJsonataExpression_ReturnsBadRequest(string transformJson)
+    {
+        var topic = await CreateTopicAsync("payments");
+        var transformElement = JsonDocument.Parse(transformJson).RootElement;
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 1,
+                transform = transformElement
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateSubscription_WithTransform_MissingExpression_ReturnsBadRequest()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var transformElement = JsonDocument.Parse("""{"engine":"jsonata","version":"1"}""").RootElement;
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 1,
+                transform = transformElement
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_WhenDisabled_ReturnsNotFound()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
+
+        await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 10
+            }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeactivateSubscription_AlreadyDisabled_ReturnsNotFound()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
+
+        await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateSubscription_ForTopicOwnedByAnotherTenant_ReturnsNotFound()
+    {
+        var topic = await CreateTopicAsync("payments");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Guid.NewGuid()}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "erp-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                dlqEnabled = false,
+                orderIndex = 1
+            }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private sealed record SubscriptionResponse(
         Guid Id,
         Guid TopicId,
@@ -273,10 +541,13 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         string Name,
         JsonElement MatchRules,
         Guid DestinationConnectionId,
+        JsonElement? TransformConfig,
         bool DlqEnabled,
         string Status,
         int OrderIndex,
-        string? Description);
+        string? Description,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset UpdatedAt);
 
     private sealed record SubscriptionListResponse(
         IReadOnlyList<SubscriptionResponse> Items,

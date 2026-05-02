@@ -53,7 +53,9 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 request.Description),
             cancellationToken);
 
-        return Results.Created($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{response.Id}", response);
+        return response is null
+            ? Results.NotFound()
+            : Results.Created($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{response.Id}", response);
     }
 
     private static async Task<IResult> ListSubscriptions(

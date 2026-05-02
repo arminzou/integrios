@@ -13,12 +13,12 @@ public sealed record CreateSubscriptionCommand(
     JsonElement? TransformConfig,
     bool DlqEnabled,
     int OrderIndex,
-    string? Description) : IRequest<SubscriptionResponse>;
+    string? Description) : IRequest<SubscriptionResponse?>;
 
 internal sealed class CreateSubscriptionCommandHandler(ISubscriptionRepository subscriptionRepository)
-    : IRequestHandler<CreateSubscriptionCommand, SubscriptionResponse>
+    : IRequestHandler<CreateSubscriptionCommand, SubscriptionResponse?>
 {
-    public async Task<SubscriptionResponse> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
+    public async Task<SubscriptionResponse?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
     {
         var subscription = await subscriptionRepository.CreateAsync(
             command.TenantId,
@@ -32,6 +32,6 @@ internal sealed class CreateSubscriptionCommandHandler(ISubscriptionRepository s
             command.Description,
             cancellationToken);
 
-        return SubscriptionResponse.From(subscription);
+        return subscription is null ? null : SubscriptionResponse.From(subscription);
     }
 }

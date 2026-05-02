@@ -5,7 +5,7 @@ namespace Integrios.Application.Abstractions;
 
 public interface ISubscriptionRepository
 {
-    Task<Subscription> CreateAsync(
+    Task<Subscription?> CreateAsync(
         Guid tenantId,
         Guid topicId,
         string name,

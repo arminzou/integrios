@@ -390,6 +390,18 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public async Task SetSubscriptionTransformByNameAsync(string subscriptionName, string? transformConfigJson)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "UPDATE subscriptions SET transform_config = @Config::jsonb WHERE name = @Name",
+            connection);
+        cmd.Parameters.AddWithValue("Config", transformConfigJson ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("Name", subscriptionName);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default)
         => eventRepository.ReplayEventAsync(TenantId, eventId, cancellationToken);
 

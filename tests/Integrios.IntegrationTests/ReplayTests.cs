@@ -53,6 +53,24 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
     }
 
     [Fact]
+    public async Task Replay_NonExistentEvent_ReturnsFalse()
+    {
+        var nonExistentEventId = Guid.NewGuid();
+        var replayed = await fixture.ReplayAsync(nonExistentEventId);
+        Assert.False(replayed);
+    }
+
+    [Fact]
+    public async Task Replay_EventOwnedByOtherTenant_ReturnsFalse()
+    {
+        var eventId = await fixture.InsertOrphanEventAndOutboxAsync("payment.created");
+        // Orphan tenant's event dead-letters without deliveries, but even so,
+        // replaying as the main tenant must return false (tenant isolation)
+        var replayed = await fixture.ReplayAsync(eventId);
+        Assert.False(replayed);
+    }
+
+    [Fact]
     public async Task Replay_DeadLetteredDelivery_IsRedispatchedOnNextWorkerTick()
     {
         fixture.DeliveryClient.ShouldSucceed = false;

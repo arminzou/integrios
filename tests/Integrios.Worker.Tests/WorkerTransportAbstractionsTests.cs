@@ -249,7 +249,7 @@ public sealed class WorkerTransportAbstractionsTests
         public Task<IReadOnlyList<SubscriptionTarget>> GetActiveSubscriptionsAsync(Guid topicId, CancellationToken cancellationToken = default)
             => Task.FromResult(activeSubscriptions);
 
-        public Task<Integrios.Domain.Topics.Subscription> CreateAsync(Guid tenantId, Guid topicId, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, bool dlqEnabled, int orderIndex, string? description, CancellationToken cancellationToken = default)
+        public Task<Integrios.Domain.Topics.Subscription?> CreateAsync(Guid tenantId, Guid topicId, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, bool dlqEnabled, int orderIndex, string? description, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default)

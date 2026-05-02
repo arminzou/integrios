@@ -27,7 +27,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         s.updated_at AS UpdatedAt
         """;
 
-    public async Task<Subscription> CreateAsync(
+    public async Task<Subscription?> CreateAsync(
         Guid tenantId,
         Guid topicId,
         string name,
@@ -41,7 +41,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 
-        var row = await connection.QuerySingleAsync<SubscriptionAdminRow>(
+        var row = await connection.QuerySingleOrDefaultAsync<SubscriptionAdminRow>(
             new CommandDefinition(
                 $"""
                 WITH inserted AS (
@@ -98,7 +98,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                 },
                 cancellationToken: cancellationToken));
 
-        return row.ToSubscription();
+        return row?.ToSubscription();
     }
 
     public async Task<Subscription?> GetByIdAsync(
