@@ -11,6 +11,7 @@ public interface ISubscriptionRepository
         string name,
         JsonElement matchRules,
         Guid destinationConnectionId,
+        JsonElement? transformConfig,
         bool dlqEnabled,
         int orderIndex,
         string? description,
@@ -32,6 +33,7 @@ public interface ISubscriptionRepository
         string name,
         JsonElement matchRules,
         Guid destinationConnectionId,
+        JsonElement? transformConfig,
         bool dlqEnabled,
         int orderIndex,
         string? description,
@@ -42,4 +44,4 @@ public interface ISubscriptionRepository
     Task<IReadOnlyList<SubscriptionTarget>> GetActiveSubscriptionsAsync(Guid topicId, CancellationToken cancellationToken = default);
 }
 
-public record SubscriptionTarget(Guid Id, string Name, string[] MatchEventTypes, Guid DestinationConnectionId, string DestinationUrl);
+public record SubscriptionTarget(Guid Id, string Name, string[] MatchEventTypes, Guid DestinationConnectionId, string DestinationUrl, string? TransformConfigJson);

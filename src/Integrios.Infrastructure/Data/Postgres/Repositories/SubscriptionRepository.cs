@@ -33,6 +33,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         string name,
         JsonElement matchRules,
         Guid destinationConnectionId,
+        JsonElement? transformConfig,
         bool dlqEnabled,
         int orderIndex,
         string? description,
@@ -50,6 +51,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                         name,
                         match_rules,
                         destination_connection_id,
+                        transform_config,
                         dlq_enabled,
                         status,
                         order_index,
@@ -62,6 +64,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                         @Name,
                         CAST(@MatchRulesJson AS jsonb),
                         c.id,
+                        CAST(@TransformConfigJson AS jsonb),
                         @DlqEnabled,
                         'active',
                         @OrderIndex,
@@ -85,6 +88,9 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                     Name = name,
                     MatchRulesJson = matchRules.GetRawText(),
                     DestinationConnectionId = destinationConnectionId,
+                    TransformConfigJson = transformConfig.HasValue && transformConfig.Value.ValueKind != JsonValueKind.Null
+                        ? transformConfig.Value.GetRawText()
+                        : null,
                     DlqEnabled = dlqEnabled,
                     OrderIndex = orderIndex,
                     Description = description,
@@ -177,6 +183,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         string name,
         JsonElement matchRules,
         Guid destinationConnectionId,
+        JsonElement? transformConfig,
         bool dlqEnabled,
         int orderIndex,
         string? description,
@@ -192,6 +199,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                     SET name = @Name,
                         match_rules = CAST(@MatchRulesJson AS jsonb),
                         destination_connection_id = c.id,
+                        transform_config = CAST(@TransformConfigJson AS jsonb),
                         dlq_enabled = @DlqEnabled,
                         order_index = @OrderIndex,
                         description = @Description,
@@ -217,6 +225,9 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                     Name = name,
                     MatchRulesJson = matchRules.GetRawText(),
                     DestinationConnectionId = destinationConnectionId,
+                    TransformConfigJson = transformConfig.HasValue && transformConfig.Value.ValueKind != JsonValueKind.Null
+                        ? transformConfig.Value.GetRawText()
+                        : null,
                     DlqEnabled = dlqEnabled,
                     OrderIndex = orderIndex,
                     Description = description,
@@ -257,11 +268,12 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
             new CommandDefinition(
                 """
                 SELECT
-                    s.id                        AS Id,
-                    s.name                      AS Name,
-                    s.match_rules::text         AS MatchRulesJson,
-                    s.destination_connection_id AS DestinationConnectionId,
-                    c.config->>'url'            AS DestinationUrl
+                    s.id                          AS Id,
+                    s.name                        AS Name,
+                    s.match_rules::text           AS MatchRulesJson,
+                    s.destination_connection_id   AS DestinationConnectionId,
+                    c.config->>'url'              AS DestinationUrl,
+                    s.transform_config::text      AS TransformConfigJson
                 FROM subscriptions s
                 JOIN connections c ON c.id = s.destination_connection_id
                 WHERE s.topic_id = @TopicId
@@ -276,7 +288,8 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
             s.Name,
             ParseMatchEventTypes(s.MatchRulesJson),
             s.DestinationConnectionId,
-            s.DestinationUrl ?? "")).ToList();
+            s.DestinationUrl ?? "",
+            s.TransformConfigJson)).ToList();
     }
 
     private static string[] ParseMatchEventTypes(string? matchRulesJson)
@@ -317,6 +330,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         public string? MatchRulesJson { get; init; }
         public Guid DestinationConnectionId { get; init; }
         public string? DestinationUrl { get; init; }
+        public string? TransformConfigJson { get; init; }
     }
 
     private sealed record SubscriptionAdminRow

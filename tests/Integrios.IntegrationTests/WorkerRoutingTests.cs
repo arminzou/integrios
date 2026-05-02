@@ -262,6 +262,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton<ISubscriptionDeliveryQueue>(_ => new PostgresSubscriptionDeliveryQueue(subscriptionDeliveryRepository));
         services.AddSingleton<IDeliveryAttemptRepository>(deliveryAttemptRepository);
         services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
+        services.AddSingleton<ITransformEvaluator, Integrios.Infrastructure.Transform.JsonataTransformEvaluator>();
         services.AddLogging();
         mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
     }

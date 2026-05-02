@@ -1,6 +1,7 @@
 using Integrios.Application.Abstractions;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http;
+using Integrios.Infrastructure.Transform;
 using Integrios.Infrastructure.Transport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddSingleton<ISubscriptionDeliveryRepository, SubscriptionDeliveryRepository>();
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
         services.AddSingleton<IDeliveryAttemptRepository, DeliveryAttemptRepository>();
+        services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);

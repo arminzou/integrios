@@ -53,7 +53,7 @@ internal sealed class ProcessOutboxBatchCommandHandler(
         }
 
         var targets = matching
-            .Select(s => new SubscriptionFanoutTarget(s.Id, s.DestinationConnectionId))
+            .Select(s => new SubscriptionFanoutTarget(s.Id, s.DestinationConnectionId, s.TransformConfigJson))
             .ToList();
 
         var inserted = await subscriptionDeliveryQueue.FanoutAsync(ev.Id, targets, cancellationToken);

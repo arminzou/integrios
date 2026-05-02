@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Admin.Auth;
+using Integrios.Application.Abstractions;
 using Integrios.Application.Subscriptions;
 using MediatR;
 
@@ -24,6 +25,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         CreateSubscriptionRequest request,
         HttpContext httpContext,
         IMediator mediator,
+        ITransformEvaluator transformEvaluator,
         CancellationToken cancellationToken)
     {
         var principal = httpContext.GetAdminPrincipal();
@@ -34,6 +36,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         if (validationError is not null)
             return validationError;
 
+        var transformError = ValidateTransformConfig(request.Transform, transformEvaluator);
+        if (transformError is not null)
+            return transformError;
+
         var response = await mediator.Send(
             new CreateSubscriptionCommand(
                 tenantId,
@@ -41,6 +47,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 request.Name,
                 request.MatchRules,
                 request.DestinationConnectionId,
+                request.Transform,
                 request.DlqEnabled,
                 request.OrderIndex,
                 request.Description),
@@ -90,6 +97,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         UpdateSubscriptionRequest request,
         HttpContext httpContext,
         IMediator mediator,
+        ITransformEvaluator transformEvaluator,
         CancellationToken cancellationToken)
     {
         var principal = httpContext.GetAdminPrincipal();
@@ -100,6 +108,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         if (validationError is not null)
             return validationError;
 
+        var transformError = ValidateTransformConfig(request.Transform, transformEvaluator);
+        if (transformError is not null)
+            return transformError;
+
         var response = await mediator.Send(
             new UpdateSubscriptionCommand(
                 tenantId,
@@ -108,6 +120,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 request.Name,
                 request.MatchRules,
                 request.DestinationConnectionId,
+                request.Transform,
                 request.DlqEnabled,
                 request.OrderIndex,
                 request.Description),
@@ -154,16 +167,48 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         return string.IsNullOrWhiteSpace(property.Value.GetString()) ? InvalidMatchRules() : null;
     }
 
+    private static IResult? ValidateTransformConfig(JsonElement? transform, ITransformEvaluator evaluator)
+    {
+        if (transform is null || transform.Value.ValueKind == JsonValueKind.Null)
+            return null;
+
+        var root = transform.Value;
+        if (root.ValueKind != JsonValueKind.Object)
+            return InvalidTransform("transform must be an object.");
+
+        if (!root.TryGetProperty("engine", out var engineEl) || engineEl.ValueKind != JsonValueKind.String)
+            return InvalidTransform("transform.engine is required and must be a string.");
+
+        if (!root.TryGetProperty("version", out var versionEl) || versionEl.ValueKind != JsonValueKind.String)
+            return InvalidTransform("transform.version is required and must be a string.");
+
+        if (!root.TryGetProperty("expression", out var expressionEl) || expressionEl.ValueKind != JsonValueKind.String)
+            return InvalidTransform("transform.expression is required and must be a string.");
+
+        var engine = engineEl.GetString()!;
+        var version = versionEl.GetString()!;
+        var expression = expressionEl.GetString()!;
+
+        if (string.IsNullOrWhiteSpace(expression))
+            return InvalidTransform("transform.expression must not be empty.");
+
+        var error = evaluator.ValidateExpression(engine, version, expression);
+        return error is not null ? InvalidTransform(error) : null;
+    }
+
     private static IResult InvalidMatchRules() => Results.BadRequest(new
     {
         error = "matchRules must be an object with exactly one non-empty string property: event_type"
     });
+
+    private static IResult InvalidTransform(string reason) => Results.BadRequest(new { error = reason });
 }
 
 internal sealed record CreateSubscriptionRequest(
     string Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
+    JsonElement? Transform,
     bool DlqEnabled,
     int OrderIndex,
     string? Description);
@@ -172,6 +217,7 @@ internal sealed record UpdateSubscriptionRequest(
     string Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
+    JsonElement? Transform,
     bool DlqEnabled,
     int OrderIndex,
     string? Description);

@@ -11,6 +11,7 @@ public sealed record UpdateSubscriptionCommand(
     string Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
+    JsonElement? TransformConfig,
     bool DlqEnabled,
     int OrderIndex,
     string? Description) : IRequest<SubscriptionResponse?>;
@@ -27,6 +28,7 @@ internal sealed class UpdateSubscriptionCommandHandler(ISubscriptionRepository s
             command.Name,
             command.MatchRules,
             command.DestinationConnectionId,
+            command.TransformConfig,
             command.DlqEnabled,
             command.OrderIndex,
             command.Description,

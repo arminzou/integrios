@@ -9,7 +9,7 @@ public interface ISubscriptionDeliveryRepository
     Task MarkDeadLetteredAsync(Guid deliveryId, CancellationToken cancellationToken = default);
 }
 
-public record SubscriptionFanoutTarget(Guid SubscriptionId, Guid DestinationConnectionId);
+public record SubscriptionFanoutTarget(Guid SubscriptionId, Guid DestinationConnectionId, string? TransformConfigJson);
 
 public record SubscriptionDeliveryWorkItem(
     Guid Id,
@@ -18,4 +18,8 @@ public record SubscriptionDeliveryWorkItem(
     Guid DestinationConnectionId,
     int AttemptCount,
     string DestinationUrl,
-    string PayloadJson);
+    string PayloadJson,
+    string EventType,
+    string? TopicName,
+    DateTimeOffset AcceptedAt,
+    string? TransformConfigSnapshot);
