@@ -5,26 +5,26 @@
 GET {{baseUrl}}/health
 
 ###
-# Force a sink to fail
-PUT {{baseUrl}}/control/swiftpay-ledger
+# Force acme-erp sink to fail (Worker deliveries will retry)
+PUT {{baseUrl}}/control/acme-erp
 Content-Type: application/json
 
 { "mode": "fail" }
 
 ###
-# Force a sink to respond slowly (2s delay)
-PUT {{baseUrl}}/control/swiftpay-ledger
+# Force acme-erp sink to respond slowly (2 s delay)
+PUT {{baseUrl}}/control/acme-erp
 Content-Type: application/json
 
 { "mode": "slow", "delayMs": 2000 }
 
 ###
-# Reset a sink back to default (succeed)
-DELETE {{baseUrl}}/control/swiftpay-ledger
+# Reset acme-erp sink back to default (succeed)
+DELETE {{baseUrl}}/control/acme-erp
 
 ###
 # Post a delivery manually (normally done by Worker)
-POST {{baseUrl}}/sink/swiftpay-ledger
+POST {{baseUrl}}/sink/acme-erp
 Content-Type: application/json
 
 { "test": "manual delivery" }

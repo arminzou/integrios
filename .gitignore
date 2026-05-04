@@ -15,5 +15,6 @@ Thumbs.db
 /dev
 *.local.md
 .env
+.env.http
 *.lscache
 archive

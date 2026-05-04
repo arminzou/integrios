@@ -1,12 +1,17 @@
-@baseUrl        = http://localhost:5231
-@authSwiftPay   = ApiKey swiftpay_pub_key:swiftpay_secret
-@authTradeFront = ApiKey tradefront_pub_key:tradefront_secret
+@baseUrl = http://localhost:5231
+
+# Run the Admin.http onboarding flow first to create a tenant and API key.
+# Then set these to match the created key's publicKey and secret.
+@apiKeyPublic  = {{$dotenv INGRESS_PUBLIC_KEY}}
+@apiKeySecret  = {{$dotenv INGRESS_SECRET}}
 
 ###
-# Ingest event (SwiftPay)
+# ── Event intake ──────────────────────────────────────────────────────────────
+
+###
 # @name ingest
 POST {{baseUrl}}/events
-Authorization: {{authSwiftPay}}
+Authorization: ApiKey {{apiKeyPublic}}:{{apiKeySecret}}
 Content-Type: application/json
 
 {
@@ -18,13 +23,13 @@ Content-Type: application/json
 }
 
 ###
-# Get event by ID (requires ingest to have run first)
+# Get the accepted event by ID
 @eventId = {{ingest.response.body.$.eventId}}
 
 GET {{baseUrl}}/events/{{eventId}}
-Authorization: {{authSwiftPay}}
+Authorization: ApiKey {{apiKeyPublic}}:{{apiKeySecret}}
 
 ###
 # Replay a dead-lettered event
 POST {{baseUrl}}/events/{{eventId}}/replay
-Authorization: {{authSwiftPay}}
+Authorization: ApiKey {{apiKeyPublic}}:{{apiKeySecret}}
