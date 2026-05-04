@@ -38,7 +38,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("integration does not exist"))
         {
-            return Results.UnprocessableEntity(new { error = ex.Message });
+            return Results.UnprocessableEntity(new { error = "The specified integration does not exist." });
         }
     }
 

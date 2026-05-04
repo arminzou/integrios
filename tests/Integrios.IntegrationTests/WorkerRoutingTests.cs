@@ -206,6 +206,26 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         // Orphan outbox is processed (Stage 1 marks it processed even with no topic)
         Assert.True(await fixture.IsOutboxRowProcessedAsync(orphanEventId));
     }
+
+    // ADR-0015: the worker reads both the current { "event_type": "..." } shape and the
+    // pre-v2.1 { "event_types": [...] } array shape during the migration compatibility window.
+    // The fixture seeds subscriptions using the old array shape, so the tests above already
+    // exercise the compat path. This test makes the intent explicit and documents the exit
+    // condition: once all rows have been migrated to the new shape, remove the array branch
+    // from SubscriptionRepository and delete this test.
+    [Fact]
+    public async Task Worker_LegacyEventTypesArrayShape_RoutesCorrectly()
+    {
+        // The seeded subscriptions intentionally use the pre-v2.1 event_types[] array shape.
+        // Routing a known event type verifies the compat read path still works.
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        await fixture.RunWorkerBatchAsync();
+
+        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        Assert.NotEmpty(deliveries);
+        Assert.All(deliveries, d => Assert.Equal("succeeded", d.Status));
+    }
 }
 
 public sealed class WorkerRoutingFixture : IAsyncLifetime
@@ -454,6 +474,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             INSERT INTO topic_sources (topic_id, connection_id)
             VALUES (@TopicId, @SourceConnectionId);
 
+            -- Intentionally uses the pre-v2.1 event_types[] array shape to cover the
+            -- compat read path in SubscriptionRepository (see ADR-0015).
             INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES
                 (@LedgerSubscriptionId, @TopicId, 'to-ledger',

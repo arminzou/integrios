@@ -35,7 +35,7 @@ public sealed class TenantsEndpoints : IEndpointGroup
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
         {
-            return Results.Conflict(new { error = ex.Message });
+            return Results.Conflict(new { error = "A tenant with that slug already exists." });
         }
     }
 
