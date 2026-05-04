@@ -1,5 +1,18 @@
 include .env
 
+# --- Docker Compose stack ---
+
+up:
+	docker compose up --build -d
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f
+
+# --- Standalone Flyway targets (local Postgres, no compose) ---
+
 db-migrate:
 	docker run --rm \
 		--network host \

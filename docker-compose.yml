@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: integrios
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d integrios"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: flyway/flyway:10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./db/migrations:/flyway/sql
+      - ./db/flyway.toml:/flyway/conf/flyway.toml
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/integrios
+      FLYWAY_USER: ${POSTGRES_USER}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+    command: migrate
+
+  ingress:
+    build:
+      context: .
+      dockerfile: docker/Ingress.Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    ports:
+      - "5231:8080"
+
+  admin:
+    build:
+      context: .
+      dockerfile: docker/Admin.Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    ports:
+      - "5150:8080"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Worker.Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+
+  mocksink:
+    build:
+      context: .
+      dockerfile: docker/MockSink.Dockerfile
+    ports:
+      - "5054:8080"
+
+volumes:
+  postgres_data:
