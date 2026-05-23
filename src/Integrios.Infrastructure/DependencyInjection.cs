@@ -13,6 +13,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddIntegriosInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
         var postgresConnectionString = configuration.GetConnectionString("Postgres");
         if (string.IsNullOrWhiteSpace(postgresConnectionString))
             throw new InvalidOperationException("ConnectionStrings:Postgres is required.");

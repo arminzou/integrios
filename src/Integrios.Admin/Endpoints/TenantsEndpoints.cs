@@ -43,8 +43,8 @@ public sealed class TenantsEndpoints : IEndpointGroup
         HttpContext httpContext,
         IMediator mediator,
         string? after,
-        int limit,
-        CancellationToken cancellationToken)
+        int limit = 0,
+        CancellationToken cancellationToken = default)
     {
         if (!httpContext.GetAdminPrincipal().IsGlobal)
             return Results.Forbid();

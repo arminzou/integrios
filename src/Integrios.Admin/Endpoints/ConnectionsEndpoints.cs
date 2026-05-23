@@ -47,8 +47,8 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         HttpContext httpContext,
         IMediator mediator,
         string? after,
-        int limit,
-        CancellationToken cancellationToken)
+        int limit = 0,
+        CancellationToken cancellationToken = default)
     {
         AdminPrincipal principal = httpContext.GetAdminPrincipal();
         if (!principal.IsGlobal && principal.TenantId != tenantId)

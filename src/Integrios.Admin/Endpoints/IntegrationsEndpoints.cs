@@ -16,8 +16,8 @@ public sealed class IntegrationsEndpoints : IEndpointGroup
     private static async Task<IResult> ListIntegrations(
         IMediator mediator,
         string? after,
-        int limit,
-        CancellationToken cancellationToken)
+        int limit = 0,
+        CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         IntegrationListResponse response = await mediator.Send(new ListIntegrationsQuery(after, limit), cancellationToken);
