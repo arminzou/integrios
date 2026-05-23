@@ -193,6 +193,14 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
+    public async Task CreateTopic_DuplicateName_ReturnsConflict()
+    {
+        await PostTopicAsync(new { name = "payments" });
+        var response = await PostTopicAsync(new { name = "payments" });
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateTopic_WrongTenantKey_Returns403()
     {
         var response = await client.SendAsync(TenantRequest(

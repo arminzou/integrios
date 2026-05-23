@@ -40,6 +40,10 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         {
             return Results.UnprocessableEntity(new { error = "The specified integration does not exist." });
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists for this tenant"))
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
     }
 
     private static async Task<IResult> ListConnections(

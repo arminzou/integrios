@@ -41,9 +41,10 @@ Content-Type: application/json
 }
 
 ###
-@tenantId = {{createTenant.response.body.$.id}}
+@tenantId = dfc60b3b-7234-48d1-a119-96acb4179e02
 
-# List tenants
+# If createTenant returned 409, run this to find the existing tenant ID, then set @tenantId manually above.
+# @name findTenant
 GET {{baseUrl}}/admin/tenants
 {{globalKey}}
 

@@ -4,11 +4,14 @@ using Integrios.Application.Abstractions;
 using Integrios.Application.Pagination;
 using Integrios.Domain.Common;
 using Integrios.Domain.Topics;
+using Npgsql;
 
 namespace Integrios.Infrastructure.Data;
 
 public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : ITopicRepository
 {
+    private const string UniqueViolation = "23505";
+
     private const string SelectColumns =
         "id AS Id, tenant_id AS TenantId, name AS Name, status AS Status, description AS Description, created_at AS CreatedAt, updated_at AS UpdatedAt";
 
@@ -25,21 +28,28 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         await using var db = await connectionFactory.OpenConnectionAsync(ct);
         await using var tx = await db.BeginTransactionAsync(ct);
 
-        var row = await db.QuerySingleAsync<TopicRow>(
-            new CommandDefinition(
-                $"""
-                INSERT INTO topics (id, tenant_id, name, status, description, created_at, updated_at)
-                VALUES (@Id, @TenantId, @Name, 'active', @Description, @Now, @Now)
-                RETURNING {SelectColumns}
-                """,
-                new { Id = id, TenantId = tenantId, Name = name, Description = description, Now = now },
-                tx,
-                cancellationToken: ct));
+        try
+        {
+            var row = await db.QuerySingleAsync<TopicRow>(
+                new CommandDefinition(
+                    $"""
+                    INSERT INTO topics (id, tenant_id, name, status, description, created_at, updated_at)
+                    VALUES (@Id, @TenantId, @Name, 'active', @Description, @Now, @Now)
+                    RETURNING {SelectColumns}
+                    """,
+                    new { Id = id, TenantId = tenantId, Name = name, Description = description, Now = now },
+                    tx,
+                    cancellationToken: ct));
 
-        await InsertSourcesAsync(db, id, sourceConnectionIds, tx, ct);
-        await tx.CommitAsync(ct);
+            await InsertSourcesAsync(db, id, sourceConnectionIds, tx, ct);
+            await tx.CommitAsync(ct);
 
-        return row.ToTopic(sourceConnectionIds);
+            return row.ToTopic(sourceConnectionIds);
+        }
+        catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
+        {
+            throw new InvalidOperationException($"A topic named '{name}' already exists for this tenant.", ex);
+        }
     }
 
     public async Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default)

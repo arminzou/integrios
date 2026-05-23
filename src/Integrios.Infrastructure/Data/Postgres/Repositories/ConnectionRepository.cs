@@ -11,6 +11,7 @@ namespace Integrios.Infrastructure.Data;
 public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory) : IConnectionRepository
 {
     private const string ForeignKeyViolation = "23503";
+    private const string UniqueViolation = "23505";
 
     private const string SelectColumns = """
         id, tenant_id, integration_id, name,
@@ -48,6 +49,10 @@ public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory)
         catch (NpgsqlException ex) when (ex.SqlState == ForeignKeyViolation)
         {
             throw new InvalidOperationException("The specified integration does not exist.", ex);
+        }
+        catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
+        {
+            throw new InvalidOperationException($"A connection named '{connection.Name}' already exists for this tenant.", ex);
         }
     }
 
