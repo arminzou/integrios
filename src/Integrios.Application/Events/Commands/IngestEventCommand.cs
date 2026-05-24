@@ -13,9 +13,8 @@ internal sealed class IngestEventCommandHandler(
 {
     public async Task<IngestEventResponse> Handle(IngestEventCommand command, CancellationToken cancellationToken)
     {
-        Guid? topicId = null;
-        if (!string.IsNullOrWhiteSpace(command.Request.TopicName))
-            topicId = await topicRepository.FindByNameAsync(command.TenantId, command.Request.TopicName, cancellationToken);
+        var topicId = await topicRepository.FindByNameAsync(command.TenantId, command.Request.TopicName, cancellationToken)
+            ?? throw new InvalidOperationException($"topic '{command.Request.TopicName}' does not exist for this tenant");
 
         return await eventRepository.IngestAsync(command.TenantId, command.Request, topicId, cancellationToken);
     }

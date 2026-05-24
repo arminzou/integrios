@@ -12,6 +12,5 @@ public sealed record IngestEventRequest
     public JsonElement? Metadata { get; init; }
     // Tenant-scoped deduplication key for acceptance-boundary idempotency.
     public string? IdempotencyKey { get; init; }
-    // Named topic this event targets. If provided and resolved, topic_id is stored on the event.
-    public string? TopicName { get; init; }
+    public required string TopicName { get; init; }
 }

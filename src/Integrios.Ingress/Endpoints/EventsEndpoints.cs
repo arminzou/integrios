@@ -23,10 +23,17 @@ public sealed class EventsEndpoints : IEndpointGroup
         CancellationToken cancellationToken)
     {
         var tenantContext = httpContext.GetTenantContext();
-        var response = await mediator.Send(
-            new IngestEventCommand(tenantContext.Tenant.Id, request),
-            cancellationToken);
-        return Results.Accepted($"/events/{response.EventId}", response);
+        try
+        {
+            var response = await mediator.Send(
+                new IngestEventCommand(tenantContext.Tenant.Id, request),
+                cancellationToken);
+            return Results.Accepted($"/events/{response.EventId}", response);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist for this tenant"))
+        {
+            return Results.UnprocessableEntity(new { error = ex.Message });
+        }
     }
 
     private static async Task<IResult> GetEventById(
