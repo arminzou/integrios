@@ -14,6 +14,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     private readonly string tenantAAuthHeaderValue;
     private readonly string tenantBAuthHeaderValue;
     private HttpClient client = null!;
+    private Guid defaultTopicId;
 
     public EventsAcceptanceBoundaryTests(PostgresApiFixture fixture)
     {
@@ -25,6 +26,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task InitializeAsync()
     {
         await fixture.ResetDataAsync();
+        defaultTopicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
         client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -179,13 +181,11 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task PostEvents_WithTopicName_StoresTopicIdOnEvent()
     {
-        var topicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
-
         var request = new IngestEventRequest
         {
+            TopicName = "payments",
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
-            TopicName = "payments"
         };
 
         var response = await PostEventAsync(request);
@@ -195,27 +195,21 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.NotNull(body);
 
         var storedTopicId = await fixture.GetEventTopicIdAsync(body.EventId);
-        Assert.Equal(topicId, storedTopicId);
+        Assert.Equal(defaultTopicId, storedTopicId);
     }
 
     [Fact]
-    public async Task PostEvents_WithUnknownTopicName_StoresNullTopicId()
+    public async Task PostEvents_WithUnknownTopicName_Returns422()
     {
         var request = new IngestEventRequest
         {
+            TopicName = "nonexistent-topic",
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
-            TopicName = "nonexistent-topic"
         };
 
         var response = await PostEventAsync(request);
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
-        Assert.NotNull(body);
-
-        var storedTopicId = await fixture.GetEventTopicIdAsync(body.EventId);
-        Assert.Null(storedTopicId);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     private static IngestEventRequest BuildRequest(string idempotencyKey)
@@ -223,6 +217,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         return new IngestEventRequest
         {
             SourceEventId = "evt_src_123",
+            TopicName = "payments",
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"paymentId":"pay_123","amount":1200}""").RootElement.Clone(),
             Metadata = JsonDocument.Parse("""{"source":"integration-tests"}""").RootElement.Clone(),

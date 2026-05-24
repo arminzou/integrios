@@ -6,7 +6,7 @@ using Integrios.Domain.Tenants;
 
 namespace Integrios.Ingress.Tests;
 
-public sealed class InitialDomainModelTests
+public sealed class DomainModelTests
 {
     [Fact]
     public void IngestEventRequest_RoundTrips_WithPayloadMetadataAndIdempotency()
@@ -15,6 +15,7 @@ public sealed class InitialDomainModelTests
         var json = """
             {
               "sourceEventId": "evt_123",
+              "topicName": "payments",
               "eventType": "payment.created",
               "payload": {
                 "paymentId": "pay_456",

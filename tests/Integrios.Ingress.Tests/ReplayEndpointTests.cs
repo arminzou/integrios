@@ -1,5 +1,4 @@
 using System.Net;
-using Integrios.Ingress.Tests.Auth;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.Ingress.Tests;
