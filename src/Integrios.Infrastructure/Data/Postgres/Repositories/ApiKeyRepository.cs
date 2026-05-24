@@ -9,21 +9,22 @@ namespace Integrios.Infrastructure.Data;
 public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : IApiKeyRepository
 {
     // Data plane: resolve tenant context from an incoming ApiKey credential
-    public async Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByPublicKeyAsync(
-        string publicKey, CancellationToken cancellationToken = default)
+    public async Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(
+        string keyHash, CancellationToken cancellationToken = default)
     {
         const string sql = """
             SELECT
                 c.id           AS ApiKeyId,
                 c.tenant_id    AS ApiKeyTenantId,
                 c.name         AS ApiKeyName,
-                c.key_id       AS ApiKeyPublicKey,
-                c.secret_hash  AS ApiKeySecretHash,
+                c.key_prefix   AS ApiKeyKeyPrefix,
+                c.key_hash     AS ApiKeyKeyHash,
                 c.scopes       AS ApiKeyScopes,
                 c.status       AS ApiKeyStatus,
                 c.created_at   AS ApiKeyCreatedAt,
                 c.expires_at   AS ApiKeyExpiresAt,
                 c.last_used_at AS ApiKeyLastUsedAt,
+                c.revoked_at   AS ApiKeyRevokedAt,
                 c.description  AS ApiKeyDescription,
                 t.id           AS TenantId,
                 t.slug         AS TenantSlug,
@@ -35,14 +36,14 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
                 t.description  AS TenantDescription
             FROM api_keys c
             JOIN tenants t ON t.id = c.tenant_id
-            WHERE c.key_id = @PublicKey
+            WHERE c.key_hash = @KeyHash
               AND c.status = 'active'
               AND t.status = 'active'
               AND (c.expires_at IS NULL OR c.expires_at > now())
             """;
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        var row = await connection.QuerySingleOrDefaultAsync<JoinRow>(sql, new { PublicKey = publicKey });
+        var row = await connection.QuerySingleOrDefaultAsync<JoinRow>(sql, new { KeyHash = keyHash });
         if (row is null)
             return null;
 
@@ -53,9 +54,9 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
     public async Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            INSERT INTO api_keys (id, tenant_id, name, key_id, secret_hash, scopes, status, description, created_at, expires_at)
-            VALUES (@Id, @TenantId, @Name, @PublicKey, @SecretHash, @Scopes, @Status, @Description, @CreatedAt, @ExpiresAt)
-            RETURNING id, tenant_id, name, key_id, secret_hash, scopes, status, description, created_at, expires_at, last_used_at
+            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at)
+            VALUES (@Id, @TenantId, @Name, @KeyPrefix, @KeyHash, @Scopes, @Status, @Description, @CreatedAt, @ExpiresAt)
+            RETURNING id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at, last_used_at, revoked_at
             """;
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -64,8 +65,8 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
             apiKey.Id,
             apiKey.TenantId,
             apiKey.Name,
-            PublicKey = apiKey.PublicKey,
-            apiKey.SecretHash,
+            KeyPrefix = apiKey.KeyPrefix,
+            KeyHash = apiKey.KeyHash,
             Scopes = apiKey.Scopes.ToArray(),
             Status = apiKey.Status.ToString().ToLowerInvariant(),
             apiKey.Description,
@@ -79,7 +80,7 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
     public async Task<ApiKey?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            SELECT id, tenant_id, name, key_id, secret_hash, scopes, status, description, created_at, expires_at, last_used_at
+            SELECT id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at, last_used_at, revoked_at
             FROM api_keys
             WHERE tenant_id = @TenantId AND id = @Id
             """;
@@ -98,7 +99,7 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
         bool hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
 
         const string sql = """
-            SELECT id, tenant_id, name, key_id, secret_hash, scopes, status, description, created_at, expires_at, last_used_at
+            SELECT id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at, last_used_at, revoked_at
             FROM api_keys
             WHERE tenant_id = @TenantId
               AND (NOT @HasCursor
@@ -134,7 +135,7 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
     {
         const string sql = """
             UPDATE api_keys
-            SET status = 'disabled'
+            SET status = 'disabled', revoked_at = now()
             WHERE tenant_id = @TenantId AND id = @Id AND status = 'active'
             """;
 
@@ -149,27 +150,29 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
         public Guid Id { get; init; }
         public Guid TenantId { get; init; }
         public string Name { get; init; } = "";
-        public string KeyId { get; init; } = "";
-        public string SecretHash { get; init; } = "";
+        public string KeyPrefix { get; init; } = "";
+        public string KeyHash { get; init; } = "";
         public string[] Scopes { get; init; } = [];
         public string Status { get; init; } = "";
         public string? Description { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
         public DateTimeOffset? ExpiresAt { get; init; }
         public DateTimeOffset? LastUsedAt { get; init; }
+        public DateTimeOffset? RevokedAt { get; init; }
 
         public ApiKey ToApiKey() => new()
         {
             Id = Id,
             TenantId = TenantId,
             Name = Name,
-            PublicKey = KeyId,
-            SecretHash = SecretHash,
+            KeyPrefix = KeyPrefix,
+            KeyHash = KeyHash,
             Scopes = Scopes,
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             CreatedAt = CreatedAt,
             ExpiresAt = ExpiresAt,
             LastUsedAt = LastUsedAt,
+            RevokedAt = RevokedAt,
             Description = Description,
         };
     }
@@ -180,13 +183,14 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
         public Guid ApiKeyId { get; init; }
         public Guid ApiKeyTenantId { get; init; }
         public string ApiKeyName { get; init; } = "";
-        public string ApiKeyPublicKey { get; init; } = "";
-        public string ApiKeySecretHash { get; init; } = "";
+        public string ApiKeyKeyPrefix { get; init; } = "";
+        public string ApiKeyKeyHash { get; init; } = "";
         public string[] ApiKeyScopes { get; init; } = [];
         public string ApiKeyStatus { get; init; } = "";
         public DateTimeOffset ApiKeyCreatedAt { get; init; }
         public DateTimeOffset? ApiKeyExpiresAt { get; init; }
         public DateTimeOffset? ApiKeyLastUsedAt { get; init; }
+        public DateTimeOffset? ApiKeyRevokedAt { get; init; }
         public string? ApiKeyDescription { get; init; }
         public Guid TenantId { get; init; }
         public string TenantSlug { get; init; } = "";
@@ -202,13 +206,14 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
             Id = ApiKeyId,
             TenantId = ApiKeyTenantId,
             Name = ApiKeyName,
-            PublicKey = ApiKeyPublicKey,
-            SecretHash = ApiKeySecretHash,
+            KeyPrefix = ApiKeyKeyPrefix,
+            KeyHash = ApiKeyKeyHash,
             Scopes = ApiKeyScopes,
             Status = Enum.Parse<OperationalStatus>(ApiKeyStatus, ignoreCase: true),
             CreatedAt = ApiKeyCreatedAt,
             ExpiresAt = ApiKeyExpiresAt,
             LastUsedAt = ApiKeyLastUsedAt,
+            RevokedAt = ApiKeyRevokedAt,
             Description = ApiKeyDescription,
         };
 

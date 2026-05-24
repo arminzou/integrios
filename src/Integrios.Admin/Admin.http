@@ -66,9 +66,7 @@ Content-Type: application/json
 }
 
 ###
-@apiKeyId     = {{createApiKey.response.body.$.key.id}}
-@apiKeyPublic = {{createApiKey.response.body.$.key.publicKey}}
-@apiKeySecret = {{createApiKey.response.body.$.secret}}
+@apiKeyId = {{createApiKey.response.body.$.apiKey.id}}
 
 # List data-plane API keys
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys

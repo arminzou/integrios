@@ -5,7 +5,7 @@ namespace Integrios.Application.Abstractions;
 public interface IApiKeyRepository
 {
     // Data plane
-    Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByPublicKeyAsync(string publicKey, CancellationToken cancellationToken = default);
+    Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(string keyHash, CancellationToken cancellationToken = default);
 
     // Admin plane
     Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken = default);

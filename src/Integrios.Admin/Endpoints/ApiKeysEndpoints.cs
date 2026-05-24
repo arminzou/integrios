@@ -30,7 +30,7 @@ public sealed class ApiKeysEndpoints : IEndpointGroup
         CreateApiKeyResponse response = await mediator.Send(
             new CreateApiKeyCommand(tenantId, request.Name, request.Scopes, request.Description, request.ExpiresAt),
             cancellationToken);
-        return Results.Created($"/admin/tenants/{tenantId}/api-keys/{response.Key.Id}", response);
+        return Results.Created($"/admin/tenants/{tenantId}/api-keys/{response.ApiKey.Id}", response);
     }
 
     private static async Task<IResult> ListApiKeys(

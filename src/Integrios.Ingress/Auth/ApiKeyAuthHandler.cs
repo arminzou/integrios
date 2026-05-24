@@ -19,12 +19,15 @@ public sealed class ApiKeyAuthHandler(
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!TryParseHeader(Context, out var publicKey, out var secret))
+        if (!TryParseHeader(Context, out var rawKey))
             return AuthenticateResult.NoResult();
 
-        var result = await repository.FindActiveByPublicKeyAsync(publicKey, Context.RequestAborted);
-        if (result is null || !VerifySecret(secret, result.Value.ApiKey.SecretHash))
-            return AuthenticateResult.Fail("Invalid API key or secret.");
+        var keyHash = "sha256:" + Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
+
+        var result = await repository.FindActiveByKeyHashAsync(keyHash, Context.RequestAborted);
+        if (result is null)
+            return AuthenticateResult.Fail("Invalid API key.");
 
         Context.SetTenantContext(new TenantContext
         {
@@ -45,35 +48,15 @@ public sealed class ApiKeyAuthHandler(
         return Task.CompletedTask;
     }
 
-    private static bool TryParseHeader(HttpContext context, out string publicKey, out string secret)
+    // rawKey format: intg_<64hex>
+    private static bool TryParseHeader(HttpContext context, out string rawKey)
     {
-        publicKey = secret = "";
+        rawKey = "";
         var header = context.Request.Headers.Authorization.ToString();
         if (!header.StartsWith(SchemeName + " ", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        var token = header[(SchemeName.Length + 1)..];
-        var colon = token.IndexOf(':');
-        if (colon <= 0 || colon == token.Length - 1)
-            return false;
-
-        publicKey = token[..colon];
-        secret = token[(colon + 1)..];
-        return true;
-    }
-
-    // secretHash format: sha256:<lowercase-hex>
-    private static bool VerifySecret(string secret, string secretHash)
-    {
-        if (!secretHash.StartsWith("sha256:", StringComparison.Ordinal))
-            return false;
-
-        byte[] expected;
-        try
-        { expected = Convert.FromHexString(secretHash["sha256:".Length..]); }
-        catch (FormatException) { return false; }
-
-        var actual = SHA256.HashData(Encoding.UTF8.GetBytes(secret));
-        return CryptographicOperations.FixedTimeEquals(expected, actual);
+        rawKey = header[(SchemeName.Length + 1)..];
+        return rawKey.StartsWith("intg_", StringComparison.Ordinal) && rawKey.Length > "intg_".Length;
     }
 }

@@ -1,9 +1,8 @@
 @baseUrl = http://localhost:5231
 
 # Run the Admin.http onboarding flow first to create a tenant and API key.
-# Then set these to match the created key's publicKey and secret.
-@apiKeyPublic  = {{$dotenv INGRESS_PUBLIC_KEY}}
-@apiKeySecret  = {{$dotenv INGRESS_SECRET}}
+# Then set this to the token returned by the create API key response.
+@apiKeyToken = {{$dotenv INGRESS_API_KEY}}
 
 ###
 # ── Event intake ──────────────────────────────────────────────────────────────
@@ -11,7 +10,7 @@
 ###
 # @name ingest
 POST {{baseUrl}}/events
-Authorization: ApiKey {{apiKeyPublic}}:{{apiKeySecret}}
+Authorization: ApiKey {{apiKeyToken}}
 Content-Type: application/json
 
 {
@@ -27,9 +26,9 @@ Content-Type: application/json
 @eventId = {{ingest.response.body.$.eventId}}
 
 GET {{baseUrl}}/events/{{eventId}}
-Authorization: ApiKey {{apiKeyPublic}}:{{apiKeySecret}}
+Authorization: ApiKey {{apiKeyToken}}
 
 ###
 # Replay a dead-lettered event
 POST {{baseUrl}}/events/{{eventId}}/replay
-Authorization: ApiKey {{apiKeyPublic}}:{{apiKeySecret}}
+Authorization: ApiKey {{apiKeyToken}}

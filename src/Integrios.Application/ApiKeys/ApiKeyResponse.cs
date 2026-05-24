@@ -7,7 +7,7 @@ public sealed record ApiKeyResponse
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
     public required string Name { get; init; }
-    public required string PublicKey { get; init; }
+    public required string KeyPrefix { get; init; }
     public required string Status { get; init; }
     public required IReadOnlyList<string> Scopes { get; init; }
     public string? Description { get; init; }
@@ -20,7 +20,7 @@ public sealed record ApiKeyResponse
         Id = key.Id,
         TenantId = key.TenantId,
         Name = key.Name,
-        PublicKey = key.PublicKey,
+        KeyPrefix = key.KeyPrefix,
         Status = key.Status.ToString().ToLowerInvariant(),
         Scopes = key.Scopes,
         Description = key.Description,
@@ -30,11 +30,11 @@ public sealed record ApiKeyResponse
     };
 }
 
-// Returned only on create — carries the plaintext secret once.
+// Returned only on create — carries the plaintext token once.
 public sealed record CreateApiKeyResponse
 {
-    public required ApiKeyResponse Key { get; init; }
-    public required string Secret { get; init; }
+    public required ApiKeyResponse ApiKey { get; init; }
+    public required string Token { get; init; }
 }
 
 public sealed record ApiKeyListResponse

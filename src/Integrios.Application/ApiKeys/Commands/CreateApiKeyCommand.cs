@@ -20,19 +20,18 @@ public sealed class CreateApiKeyCommandHandler(IApiKeyRepository repository)
 {
     public async Task<CreateApiKeyResponse> Handle(CreateApiKeyCommand command, CancellationToken cancellationToken)
     {
-        var publicKey = "pk_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-        var secretRaw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        var secret = "sk_" + secretRaw;
-        var secretHash = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(secret))).ToLowerInvariant();
+        var rawKey = "intg_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        var keyPrefix = rawKey[..12]; // display hint: "intg_3f8a2c1d" (non-secret, first 12 chars)
+        var keyHash = "sha256:" + Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
 
         var apiKey = new ApiKey
         {
             Id = Guid.NewGuid(),
             TenantId = command.TenantId,
             Name = command.Name,
-            PublicKey = publicKey,
-            SecretHash = secretHash,
+            KeyPrefix = keyPrefix,
+            KeyHash = keyHash,
             Scopes = command.Scopes ?? ["events.write"],
             Status = OperationalStatus.Active,
             Description = command.Description,
@@ -43,8 +42,8 @@ public sealed class CreateApiKeyCommandHandler(IApiKeyRepository repository)
         ApiKey created = await repository.CreateAsync(apiKey, cancellationToken);
         return new CreateApiKeyResponse
         {
-            Key = ApiKeyResponse.From(created),
-            Secret = secret,
+            ApiKey = ApiKeyResponse.From(created),
+            Token = rawKey,
         };
     }
 }
