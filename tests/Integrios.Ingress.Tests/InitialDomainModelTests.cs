@@ -84,8 +84,8 @@ public sealed class InitialDomainModelTests
             Id = Guid.NewGuid(),
             TenantId = tenant.Id,
             Name = "default-ingest-key",
-            PublicKey = "key_123",
-            SecretHash = "hash",
+            KeyPrefix = "intg_3f8a2c1",
+            KeyHash = "hash",
             Scopes = ["events.write"],
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow

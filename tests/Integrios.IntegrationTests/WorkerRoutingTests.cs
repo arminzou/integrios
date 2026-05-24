@@ -230,8 +230,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
 public sealed class WorkerRoutingFixture : IAsyncLifetime
 {
-    public const string TenantPublicKey = "routing_test_key";
-    public const string TenantSecret = "routing_test_secret";
+    public const string TenantToken = "intg_f0f0e1e1d2d2c3c3aabbccddeeff00112233445566778899aabbccddeeff0011";
     public const string LedgerSinkUrl = "http://test-sink/ledger";
     public const string RiskSinkUrl = "http://test-sink/risk";
 
@@ -448,7 +447,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private async Task SeedRoutingDataAsync(NpgsqlConnection connection)
     {
         var secretHash = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(TenantSecret))).ToLowerInvariant();
+            SHA256.HashData(Encoding.UTF8.GetBytes(TenantToken))).ToLowerInvariant();
 
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO integrations (id, key, name, direction, status)
@@ -459,8 +458,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@TenantId,       'test-routing-tenant', 'Test Routing Tenant', 'active', now(), now()),
                 (@OrphanTenantId, 'test-orphan-tenant',  'Test Orphan Tenant',  'active', now(), now());
 
-            INSERT INTO api_keys (id, tenant_id, name, key_id, secret_hash, scopes, status, created_at)
-            VALUES (@ApiKeyId, @TenantId, 'test-key', @PublicKey, @SecretHash, '{}', 'active', now());
+            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, scopes, status, created_at)
+            VALUES (@ApiKeyId, @TenantId, 'test-key', @KeyPrefix, @KeyHash, '{}', 'active', now());
 
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
             VALUES
@@ -490,8 +489,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("TenantId", TenantId);
         cmd.Parameters.AddWithValue("OrphanTenantId", OrphanTenantId);
         cmd.Parameters.AddWithValue("ApiKeyId", Guid.NewGuid());
-        cmd.Parameters.AddWithValue("PublicKey", TenantPublicKey);
-        cmd.Parameters.AddWithValue("SecretHash", secretHash);
+        cmd.Parameters.AddWithValue("KeyPrefix", TenantToken[..12]);
+        cmd.Parameters.AddWithValue("KeyHash", secretHash);
         cmd.Parameters.AddWithValue("SourceConnectionId", SourceConnectionId);
         cmd.Parameters.AddWithValue("LedgerConnectionId", LedgerConnectionId);
         cmd.Parameters.AddWithValue("RiskConnectionId", RiskConnectionId);

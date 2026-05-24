@@ -26,8 +26,8 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public EventsAcceptanceBoundaryTests(PostgresApiFixture fixture)
     {
         this.fixture = fixture;
-        tenantAAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantAPublicKey}:{PostgresApiFixture.TenantAApiSecret}";
-        tenantBAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantBPublicKey}:{PostgresApiFixture.TenantBApiSecret}";
+        tenantAAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantAToken}";
+        tenantBAuthHeaderValue = $"ApiKey {PostgresApiFixture.TenantBToken}";
     }
 
     public async Task InitializeAsync()
@@ -260,10 +260,8 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
-    public const string TenantAPublicKey = "key_test_ingest_a";
-    public const string TenantAApiSecret = "super-secret-a";
-    public const string TenantBPublicKey = "key_test_ingest_b";
-    public const string TenantBApiSecret = "super-secret-b";
+    public const string TenantAToken = "intg_aa11bb22cc33dd440011223344556677001122334455667700112233445566";
+    public const string TenantBToken = "intg_ee55ff66aa77bb888877665544332211887766554433221188776655443322";
 
     private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("integrios")
@@ -307,9 +305,9 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         var credentialAId = Guid.NewGuid();
         var credentialBId = Guid.NewGuid();
         var secretHashA = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(TenantAApiSecret))).ToLowerInvariant();
+            SHA256.HashData(Encoding.UTF8.GetBytes(TenantAToken))).ToLowerInvariant();
         var secretHashB = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(TenantBApiSecret))).ToLowerInvariant();
+            SHA256.HashData(Encoding.UTF8.GetBytes(TenantBToken))).ToLowerInvariant();
 
         const string seedSql = """
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
@@ -321,8 +319,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 id,
                 tenant_id,
                 name,
-                key_id,
-                secret_hash,
+                key_prefix,
+                key_hash,
                 scopes,
                 status,
                 created_at
@@ -331,8 +329,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 @CredentialAId,
                 @TenantAId,
                 'test-ingest-key-a',
-                @PublicKeyA,
-                @SecretHashA,
+                @KeyPrefixA,
+                @KeyHashA,
                 ARRAY['events.write'],
                 'active',
                 now()
@@ -341,8 +339,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 @CredentialBId,
                 @TenantBId,
                 'test-ingest-key-b',
-                @PublicKeyB,
-                @SecretHashB,
+                @KeyPrefixB,
+                @KeyHashB,
                 ARRAY['events.write'],
                 'active',
                 now()
@@ -354,10 +352,10 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         seedCommand.Parameters.AddWithValue("TenantBId", tenantBId);
         seedCommand.Parameters.AddWithValue("CredentialAId", credentialAId);
         seedCommand.Parameters.AddWithValue("CredentialBId", credentialBId);
-        seedCommand.Parameters.AddWithValue("PublicKeyA", TenantAPublicKey);
-        seedCommand.Parameters.AddWithValue("PublicKeyB", TenantBPublicKey);
-        seedCommand.Parameters.AddWithValue("SecretHashA", secretHashA);
-        seedCommand.Parameters.AddWithValue("SecretHashB", secretHashB);
+        seedCommand.Parameters.AddWithValue("KeyPrefixA", TenantAToken[..12]);
+        seedCommand.Parameters.AddWithValue("KeyPrefixB", TenantBToken[..12]);
+        seedCommand.Parameters.AddWithValue("KeyHashA", secretHashA);
+        seedCommand.Parameters.AddWithValue("KeyHashB", secretHashB);
         await seedCommand.ExecuteNonQueryAsync();
     }
 

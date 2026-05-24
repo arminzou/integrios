@@ -68,8 +68,8 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
 
         var apiKey = await apiKeyResponse.Content.ReadFromJsonAsync<CreateApiKeyResponse>(WebJson);
         Assert.NotNull(apiKey);
-        Assert.False(string.IsNullOrWhiteSpace(apiKey.Secret));
-        Assert.Equal("acme-ingress", apiKey.Key.Name);
+        Assert.False(string.IsNullOrWhiteSpace(apiKey.Token));
+        Assert.Equal("acme-ingress", apiKey.ApiKey.Name);
 
         var sourceConnection = await CreateConnectionAsync(
             tenant.Id,

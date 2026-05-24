@@ -35,12 +35,12 @@ public sealed class ReplayEndpointTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task Replay_ValidAuth_ReplayableEvent_Returns202WithLocation()
     {
-        var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic("secret");
+        var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic(ApiKeyAuthHandlerTests.TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
         fixture.EventRepository.ReplayResult = true;
 
         var eventId = Guid.NewGuid();
-        var response = await ReplayAsync(eventId, $"ApiKey {apiKey.PublicKey}:secret");
+        var response = await ReplayAsync(eventId, $"ApiKey {ApiKeyAuthHandlerTests.TestToken}");
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal($"/events/{eventId}", response.Headers.Location?.ToString());
@@ -49,11 +49,11 @@ public sealed class ReplayEndpointTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task Replay_ValidAuth_NonReplayableEvent_Returns404()
     {
-        var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic("secret");
+        var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic(ApiKeyAuthHandlerTests.TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
         fixture.EventRepository.ReplayResult = false;
 
-        var response = await ReplayAsync(Guid.NewGuid(), $"ApiKey {apiKey.PublicKey}:secret");
+        var response = await ReplayAsync(Guid.NewGuid(), $"ApiKey {ApiKeyAuthHandlerTests.TestToken}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

@@ -37,14 +37,17 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
         return Task.CompletedTask;
     }
 
+    public const string TestToken = "intg_deadbeefcafebabe00112233445566778899aabbccddeeff00112233445566";
+    private const string WrongToken = "intg_deaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeadde";
+
     // Header parsing: malformed or missing -> 401
 
     [Theory]
-    [InlineData(null)]                  // no header
-    [InlineData("Bearer token")]        // wrong scheme
-    [InlineData("ApiKey nocolon")]      // no colon separator
-    [InlineData("ApiKey :secret")]      // empty key_id
-    [InlineData("ApiKey keyid:")]       // empty secret
+    [InlineData(null)]                              // no header
+    [InlineData("Bearer intg_abc123")]              // wrong scheme
+    [InlineData("ApiKey ")]                         // empty value
+    [InlineData("ApiKey wrong_prefix_secret")]      // doesn't start with intg_
+    [InlineData("ApiKey intg_")]                    // nothing after intg_
     public async Task BadHeader_Returns401(string? authHeader)
     {
         var response = await PostEventsAsync(authHeader);
@@ -54,9 +57,9 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     // Repository filtering: unknown key -> 401
 
     [Fact]
-    public async Task UnknownPublicKey_Returns401()
+    public async Task UnknownKeyId_Returns401()
     {
-        var response = await PostEventsAsync("ApiKey unknown:secret");
+        var response = await PostEventsAsync($"ApiKey {TestToken}");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -67,19 +70,19 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     public async Task InactiveOrExpiredCredential_Returns401()
     {
         // Repository returns null, simulating active/expiry filtering in SQL.
-        var response = await PostEventsAsync("ApiKey key_test:any-secret");
+        var response = await PostEventsAsync($"ApiKey {TestToken}");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // Hash verification: valid key_id but wrong secret -> 401
+    // Hash verification: valid keyId but wrong token -> 401
 
     [Fact]
-    public async Task WrongSecret_Returns401()
+    public async Task WrongToken_Returns401()
     {
-        var (apiKey, tenant) = BuildValidApiKey("correct-secret");
+        var (apiKey, tenant) = BuildValidApiKey(TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
 
-        var response = await PostEventsAsync($"ApiKey {apiKey.PublicKey}:wrong-secret");
+        var response = await PostEventsAsync($"ApiKey {WrongToken}");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -88,11 +91,10 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task ValidCredential_PassesFilter()
     {
-        const string secret = "correct-secret";
-        var (apiKey, tenant) = BuildValidApiKey(secret);
+        var (apiKey, tenant) = BuildValidApiKey(TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
 
-        var response = await PostEventsAsync($"ApiKey {apiKey.PublicKey}:{secret}");
+        var response = await PostEventsAsync($"ApiKey {TestToken}");
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
@@ -116,20 +118,18 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task GetEvent_ValidAuthAndUnknownEvent_Returns404()
     {
-        const string secret = "correct-secret";
-        var (apiKey, tenant) = BuildValidApiKey(secret);
+        var (apiKey, tenant) = BuildValidApiKey(TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
         fixture.EventRepository.GetEventResult = null;
 
-        var response = await GetEventAsync(Guid.NewGuid(), $"ApiKey {apiKey.PublicKey}:{secret}");
+        var response = await GetEventAsync(Guid.NewGuid(), $"ApiKey {TestToken}");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
     public async Task GetEvent_ValidAuthAndKnownEvent_Returns200()
     {
-        const string secret = "correct-secret";
-        var (apiKey, tenant) = BuildValidApiKey(secret);
+        var (apiKey, tenant) = BuildValidApiKey(TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
 
         var eventId = Guid.NewGuid();
@@ -143,7 +143,7 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
         };
         fixture.EventRepository.GetEventResult = expected;
 
-        var response = await GetEventAsync(eventId, $"ApiKey {apiKey.PublicKey}:{secret}");
+        var response = await GetEventAsync(eventId, $"ApiKey {TestToken}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<GetEventResponse>();
@@ -191,12 +191,13 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
         return client.SendAsync(message);
     }
 
-    public static (ApiKey ApiKey, Tenant Tenant) BuildValidApiKeyPublic(string secret) => BuildValidApiKey(secret);
+    public static (ApiKey ApiKey, Tenant Tenant) BuildValidApiKeyPublic(string token) => BuildValidApiKey(token);
 
-    private static (ApiKey ApiKey, Tenant Tenant) BuildValidApiKey(string secret)
+    private static (ApiKey ApiKey, Tenant Tenant) BuildValidApiKey(string token)
     {
+        // token format: intg_<64hex>; key_prefix stores first 12 chars as display hint
         var hash = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(secret))).ToLowerInvariant();
+            SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
 
         var tenantId = Guid.NewGuid();
         return (
@@ -205,8 +206,8 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
                 Name = "test-key",
-                PublicKey = "key_test",
-                SecretHash = hash,
+                KeyPrefix = token[..12],
+                KeyHash = hash,
                 Scopes = ["events.write"],
                 Status = OperationalStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -272,10 +273,14 @@ public sealed class StubApiKeyRepository : IApiKeyRepository
 {
     public (ApiKey ApiKey, Tenant Tenant)? Result { get; set; }
 
-    public Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByPublicKeyAsync(
-        string publicKey,
+    public Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(
+        string keyHash,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(Result);
+    {
+        if (Result is null || Result.Value.ApiKey.KeyHash != keyHash)
+            return Task.FromResult<(ApiKey ApiKey, Tenant Tenant)?>(null);
+        return Task.FromResult(Result);
+    }
 
     public Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken = default)
         => throw new NotImplementedException();
