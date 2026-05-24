@@ -1,10 +1,10 @@
-@baseUrl       = http://localhost:5150
+@baseUrl       = {{ADMIN_BASE_URL}}
 @globalKey     = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
 @webhookIntId  = 00000000-0000-0000-0000-000000000001
 
 # Sink base URL — use mocksink:8080 when running via docker compose,
 # localhost:5054 when running services locally outside Docker.
-@sinkBase = http://mocksink:8080
+@sinkBase = {{SINK_BASE}}
 
 ###
 # Health (no auth required)
@@ -115,6 +115,32 @@ Content-Type: application/json
 # List tenant connections
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 {{globalKey}}
+
+###
+# Update source connection config — e.g. point to a different sink URL
+PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "name": "acme-source",
+  "config": { "url": "{{sinkBase}}/sink/acme-source" },
+  "environment": "production",
+  "description": "Inbound source connection (updated)"
+}
+
+###
+# Update destination connection config
+PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "name": "acme-erp",
+  "config": { "url": "{{sinkBase}}/sink/acme-erp" },
+  "environment": "production",
+  "description": "ERP destination connection (updated)"
+}
 
 ###
 # ── Topic ─────────────────────────────────────────────────────────────────────

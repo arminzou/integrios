@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:5231
+@baseUrl = {{INGRESS_BASE_URL}}
 
 # Run the Admin.http onboarding flow first to create a tenant and API key.
 # Then set this to the token returned by the create API key response.

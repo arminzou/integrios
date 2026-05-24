@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:5054
+@baseUrl = {{SINK_BASE}}
 
 ###
 # Health check
