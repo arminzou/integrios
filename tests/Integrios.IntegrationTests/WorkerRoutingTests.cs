@@ -1,6 +1,5 @@
 using Integrios.Application.Delivery;
 using Integrios.Application.Outbox;
-using Integrios.Worker;
 
 namespace Integrios.IntegrationTests;
 
@@ -138,7 +137,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
         // Fail attempts up to MaxAttempts - 1, each time forcing deliver_after into the past
-        for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
+        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);
@@ -158,7 +157,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
+        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);

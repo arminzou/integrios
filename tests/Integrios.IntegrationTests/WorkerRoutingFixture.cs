@@ -9,7 +9,6 @@ using Integrios.Application.Outbox;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http;
 using Integrios.Infrastructure.Transport;
-using Integrios.Worker;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -97,7 +96,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task<int> RunWorkerBatchAsync()
     {
         await mediator.Send(new ProcessOutboxBatchCommand(10));
-        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, OutboxWorker.MaxAttempts));
+        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts));
     }
 
     public async Task<IReadOnlyList<SubscriptionDeliveryState>> GetSubscriptionDeliveriesAsync(Guid eventId)

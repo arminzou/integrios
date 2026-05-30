@@ -8,7 +8,6 @@ public sealed class OutboxWorker(IMediator mediator, ILogger<OutboxWorker> logge
 {
     private const int FanoutBatchSize = 10;
     private const int DispatchBatchSize = 25;
-    public const int MaxAttempts = 3;
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -20,7 +19,7 @@ public sealed class OutboxWorker(IMediator mediator, ILogger<OutboxWorker> logge
             try
             {
                 var fannedOut = await mediator.Send(new ProcessOutboxBatchCommand(FanoutBatchSize), stoppingToken);
-                var dispatched = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(DispatchBatchSize, MaxAttempts), stoppingToken);
+                var dispatched = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(DispatchBatchSize, DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts), stoppingToken);
 
                 if (fannedOut == 0 && dispatched == 0)
                     await Task.Delay(IdleDelay, stoppingToken);

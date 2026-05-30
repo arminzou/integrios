@@ -1,4 +1,4 @@
-using Integrios.Worker;
+using Integrios.Application.Delivery;
 
 namespace Integrios.IntegrationTests;
 
@@ -20,7 +20,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
+        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);
@@ -76,7 +76,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        for (var i = 1; i < OutboxWorker.MaxAttempts; i++)
+        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);

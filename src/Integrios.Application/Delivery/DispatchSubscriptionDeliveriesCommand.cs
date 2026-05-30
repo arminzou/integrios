@@ -5,7 +5,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Delivery;
 
-public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize, int MaxAttempts) : IRequest<int>;
+public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize, int MaxAttempts) : IRequest<int>
+{
+    // Delivery retry/DLQ policy: an attempt count beyond this dead-letters the delivery.
+    public const int DefaultMaxAttempts = 3;
+}
 
 internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     ISubscriptionDeliveryQueue deliveryQueue,
