@@ -3,6 +3,7 @@ using Integrios.Admin.Endpoints;
 using Integrios.Admin.OpenApi;
 using Integrios.Application;
 using Integrios.Infrastructure;
+using Integrios.Infrastructure.Telemetry;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,7 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddIntegriosApplication();
 builder.Services.AddIntegriosInfrastructure(builder.Configuration);
+builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-admin");
 
 builder.Services.AddAuthentication(AdminKeyAuthHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, AdminKeyAuthHandler>(AdminKeyAuthHandler.SchemeName, _ => { });
@@ -35,5 +37,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
 var admin = app.MapGroup("/admin").RequireAuthorization();
 admin.MapEndpoints(typeof(Program).Assembly);
+
+app.MapPrometheusScrapingEndpoint();
 
 app.Run();
