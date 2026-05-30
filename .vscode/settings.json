@@ -9,6 +9,18 @@
       "ADMIN_BASE_URL": "http://localhost:5150",
       "SINK_BASE": "http://mocksink:8080",
       "INGRESS_BASE_URL": "http://localhost:5231"
-    }
+    },
+  },
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/.vs": true,
+    "**/*.csproj.lscache": true
+  },
+  "search.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/.vs": true,
+    "**/*.csproj.lscache": true
   }
 }
