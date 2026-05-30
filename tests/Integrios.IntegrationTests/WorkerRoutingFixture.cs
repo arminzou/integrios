@@ -96,7 +96,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task<int> RunWorkerBatchAsync()
     {
         await mediator.Send(new ProcessOutboxBatchCommand(10));
-        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts));
+        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, RetryPolicy.DefaultMaxAttempts));
     }
 
     public async Task<IReadOnlyList<SubscriptionDeliveryState>> GetSubscriptionDeliveriesAsync(Guid eventId)

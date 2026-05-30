@@ -5,21 +5,16 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Delivery;
 
-public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize, int MaxAttempts) : IRequest<int>
-{
-    // Delivery retry/DLQ policy: an attempt count beyond this dead-letters the delivery.
-    public const int DefaultMaxAttempts = 3;
-}
+public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize, int MaxAttempts) : IRequest<int>;
 
 internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     ISubscriptionDeliveryQueue deliveryQueue,
     IDeliveryAttemptRepository attemptRepository,
     IDeliveryClient deliveryClient,
     ITransformEvaluator transformEvaluator,
+    RetryPolicy retryPolicy,
     ILogger<DispatchSubscriptionDeliveriesCommandHandler> logger) : IRequestHandler<DispatchSubscriptionDeliveriesCommand, int>
 {
-    private static readonly TimeSpan RetryBaseDelay = TimeSpan.FromSeconds(30);
-
     public async Task<int> Handle(DispatchSubscriptionDeliveriesCommand command, CancellationToken cancellationToken)
     {
         var rows = await deliveryQueue.ClaimBatchAsync(command.BatchSize, cancellationToken);
@@ -90,7 +85,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             return;
         }
 
-        var deliverAfter = DateTimeOffset.UtcNow + CalculateBackoff(attemptNumber);
+        var deliverAfter = DateTimeOffset.UtcNow + retryPolicy.CalculateBackoff(attemptNumber);
         await deliveryQueue.ScheduleRetryAsync(row.Id, attemptNumber, deliverAfter, cancellationToken);
         logger.LogWarning("Delivery {DeliveryId} failed. Scheduled retry {AttemptCount} at {DeliverAfter}. Error: {Error}",
             row.Id, attemptNumber, deliverAfter, result.Error);
@@ -127,11 +122,5 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         {
             return (null, $"Unexpected transform error: {ex.Message}");
         }
-    }
-
-    internal static TimeSpan CalculateBackoff(int attemptCount)
-    {
-        var exponent = Math.Min(attemptCount - 1, 10);
-        return RetryBaseDelay * Math.Pow(2, exponent);
     }
 }

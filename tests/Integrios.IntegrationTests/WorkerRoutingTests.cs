@@ -137,7 +137,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
         // Fail attempts up to MaxAttempts - 1, each time forcing deliver_after into the past
-        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
+        for (var i = 1; i < RetryPolicy.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);
@@ -157,7 +157,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
+        for (var i = 1; i < RetryPolicy.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);

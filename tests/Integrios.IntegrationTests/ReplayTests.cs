@@ -20,7 +20,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
+        for (var i = 1; i < RetryPolicy.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);
@@ -76,7 +76,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         fixture.DeliveryClient.ShouldSucceed = false;
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        for (var i = 1; i < DispatchSubscriptionDeliveriesCommand.DefaultMaxAttempts; i++)
+        for (var i = 1; i < RetryPolicy.DefaultMaxAttempts; i++)
         {
             await fixture.RunWorkerBatchAsync();
             await fixture.ForceDeliveryRetryNowAsync(eventId);
