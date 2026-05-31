@@ -7,10 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.15.3-beta.1" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
