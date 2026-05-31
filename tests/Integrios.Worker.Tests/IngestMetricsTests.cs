@@ -7,6 +7,7 @@ using Integrios.Domain.Events;
 using Integrios.Domain.Topics;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Integrios.Worker.Tests;
 
@@ -33,6 +34,22 @@ public sealed class IngestMetricsTests
         await mediator.Send(new IngestEventCommand(Guid.NewGuid(), MakeRequest()));
 
         Assert.Empty(metrics.ForInstrument("integrios_events_ingested"));
+    }
+
+    [Fact]
+    public async Task IngestEventCommand_LogEntries_CarryAcceptanceScopeKeys()
+    {
+        var capturing = new CapturingLoggerProvider();
+        var services = new ServiceCollection();
+        services.AddLogging(builder => builder.AddProvider(capturing));
+        services.AddIntegriosApplication();
+        services.AddSingleton<ITopicRepository>(new FakeTopicRepository());
+        services.AddSingleton<IEventRepository>(new FakeEventRepository(isDuplicate: false));
+        var mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
+
+        await mediator.Send(new IngestEventCommand(Guid.NewGuid(), MakeRequest()));
+
+        Assert.True(capturing.AnyEntryHasScopeKeys("event_id", "tenant_id", "topic_id"));
     }
 
     private static IngestEventRequest MakeRequest() => new()

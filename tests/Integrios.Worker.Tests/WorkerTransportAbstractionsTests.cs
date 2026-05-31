@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Abstractions;
@@ -5,6 +6,7 @@ using Integrios.Application.Delivery;
 using Integrios.Application.Outbox;
 using Integrios.Application.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MediatR;
 
 namespace Integrios.Worker.Tests;
@@ -303,6 +305,112 @@ public sealed class WorkerTransportAbstractionsTests
         Assert.DoesNotContain(metrics.AllTagKeys, key => forbidden.Contains(key));
     }
 
+    [Fact]
+    public async Task ProcessOutboxBatch_RestoresOutboxTraceparent_AsFanoutParent_AndPropagatesToDeliveries()
+    {
+        using var collector = new ActivityCollector(ActivitySources.ApplicationName);
+
+        string outboxTraceparent;
+        ActivityTraceId expectedTraceId;
+        using (var acceptance = ActivitySources.Application.StartActivity("test.accept")!)
+        {
+            outboxTraceparent = acceptance.Id!;
+            expectedTraceId = acceptance.TraceId;
+        }
+
+        var eventId = Guid.NewGuid();
+        var topicId = Guid.NewGuid();
+        var eventBus = new FakeEventBus(
+            [new EventBusMessage(Guid.NewGuid(), eventId, 0, outboxTraceparent)],
+            new Dictionary<Guid, EventDetails>
+            {
+                [eventId] = new(eventId, Guid.NewGuid(), "payment.created", "{\"amount\":42}", topicId)
+            });
+        var subscriptions = new FakeSubscriptionRepository(
+            [new SubscriptionTarget(Guid.NewGuid(), "erp", ["payment.created"], Guid.NewGuid(), "https://erp.example/webhook", null)]);
+        var queue = new FakeSubscriptionDeliveryQueue();
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<IEventBus>(eventBus);
+            services.AddSingleton<ISubscriptionRepository>(subscriptions);
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+        });
+
+        await mediator.Send(new ProcessOutboxBatchCommand(10));
+
+        var fanoutSpan = collector.Single("outbox.fanout");
+        Assert.Equal(expectedTraceId, fanoutSpan.TraceId);
+
+        // The fanout span's context is stamped onto the delivery rows it writes.
+        var deliveryTraceparent = Assert.Single(queue.FanoutTraceparents);
+        Assert.True(ActivityContext.TryParse(deliveryTraceparent, null, out var deliveryContext));
+        Assert.Equal(expectedTraceId, deliveryContext.TraceId);
+    }
+
+    [Fact]
+    public async Task DispatchSubscriptionDeliveries_KeepsSameTrace_AcrossDeliverAfterRetry()
+    {
+        using var collector = new ActivityCollector(ActivitySources.ApplicationName);
+
+        string deliveryTraceparent;
+        ActivityTraceId expectedTraceId;
+        using (var fanout = ActivitySources.Application.StartActivity("test.fanout")!)
+        {
+            deliveryTraceparent = fanout.Id!;
+            expectedTraceId = fanout.TraceId;
+        }
+
+        var deliveryId = Guid.NewGuid();
+
+        // First attempt fails and schedules a retry.
+        await SendDispatch(new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(deliveryId, attemptCount: 0, traceparent: deliveryTraceparent)]
+        }, new DeliveryResult(false, 500, "boom"));
+
+        // A later tick re-claims the row with the same stored traceparent.
+        await SendDispatch(new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(deliveryId, attemptCount: 1, traceparent: deliveryTraceparent)]
+        }, new DeliveryResult(true, 200, null));
+
+        var deliverSpans = collector.Activities.Where(a => a.OperationName == "subscription.deliver").ToList();
+        Assert.Equal(2, deliverSpans.Count);
+        Assert.All(deliverSpans, span => Assert.Equal(expectedTraceId, span.TraceId));
+    }
+
+    [Fact]
+    public async Task DispatchSubscriptionDeliveries_LogEntries_CarryDeliveryScopeKeys()
+    {
+        var capturing = new CapturingLoggerProvider();
+        var queue = new FakeSubscriptionDeliveryQueue { ClaimedItems = [MakeWorkItem()] };
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryAttemptRepository>(new FakeDeliveryAttemptRepository());
+            services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(true, 200, null)));
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ILoggerProvider>(capturing);
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+
+        Assert.True(capturing.AnyEntryHasScopeKeys("event_id", "delivery_id", "subscription_id"));
+    }
+
+    private static async Task SendDispatch(FakeSubscriptionDeliveryQueue queue, DeliveryResult result)
+    {
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryAttemptRepository>(new FakeDeliveryAttemptRepository());
+            services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(result));
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+    }
+
     private static SubscriptionDeliveryWorkItem MakeWorkItem(
         Guid? id = null,
         Guid? eventId = null,
@@ -312,7 +420,8 @@ public sealed class WorkerTransportAbstractionsTests
         string url = "https://erp.example/webhook",
         string payload = "{\"amount\":42}",
         string? transform = null,
-        string integrationKey = "erp_system") =>
+        string integrationKey = "erp_system",
+        string? traceparent = null) =>
         new(
             id ?? Guid.NewGuid(),
             eventId ?? Guid.NewGuid(),
@@ -325,7 +434,8 @@ public sealed class WorkerTransportAbstractionsTests
             "payments",
             DateTimeOffset.UtcNow,
             transform,
-            integrationKey);
+            integrationKey,
+            traceparent);
 
     private static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
     {
@@ -386,6 +496,7 @@ public sealed class WorkerTransportAbstractionsTests
     private sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
     {
         public List<(Guid EventId, IReadOnlyList<SubscriptionFanoutTarget> Targets)> FanoutCalls { get; } = [];
+        public List<string?> FanoutTraceparents { get; } = [];
         public IReadOnlyList<SubscriptionDeliveryWorkItem> ClaimedItems { get; init; } = [];
         public List<Guid> SucceededIds { get; } = [];
         public List<(Guid DeliveryId, int AttemptCount, DateTimeOffset DeliverAfter)> ScheduledRetries { get; } = [];
@@ -394,6 +505,7 @@ public sealed class WorkerTransportAbstractionsTests
         public Task<int> FanoutAsync(Guid eventId, IReadOnlyList<SubscriptionFanoutTarget> targets, string? traceparent = null, CancellationToken cancellationToken = default)
         {
             FanoutCalls.Add((eventId, targets));
+            FanoutTraceparents.Add(traceparent);
             return Task.FromResult(targets.Count);
         }
 
