@@ -121,5 +121,5 @@ percentiles. Configuration lives under `infra/` and is version-controlled, so th
 is reproducible.
 
 > [!TIP]
-> If host port `3000` is already in use, remap Grafana with a `docker-compose.override.yml`
+> If host port `3000` is already in use, remap Grafana with a `compose.override.yml`
 > (gitignored), for example `ports: ["3001:3000"]`.
