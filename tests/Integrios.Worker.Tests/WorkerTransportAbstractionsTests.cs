@@ -3,6 +3,7 @@ using Integrios.Application;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Delivery;
 using Integrios.Application.Outbox;
+using Integrios.Application.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using MediatR;
 
@@ -187,6 +188,121 @@ public sealed class WorkerTransportAbstractionsTests
         Assert.Empty(deliveryClient.DeliveredUrls);
     }
 
+    [Fact]
+    public async Task DispatchSubscriptionDeliveriesCommand_OnSuccess_EmitsSucceededCounterAndDuration_WithIntegrationKey()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(integrationKey: "erp_system")]
+        };
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryAttemptRepository>(new FakeDeliveryAttemptRepository());
+            services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(true, 200, null)));
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+
+        var succeeded = Assert.Single(metrics.ForInstrument("integrios_deliveries_succeeded"));
+        Assert.Equal(1, succeeded.Value);
+        Assert.Equal("erp_system", succeeded.Tag("integration_key"));
+
+        var duration = Assert.Single(metrics.ForInstrument("integrios_delivery_attempt_duration_seconds"));
+        Assert.Equal("success", duration.Tag("result"));
+        Assert.Equal("erp_system", duration.Tag("integration_key"));
+    }
+
+    [Theory]
+    [InlineData(500, false, "5xx")]
+    [InlineData(404, false, "4xx")]
+    [InlineData(0, true, "timeout")]
+    [InlineData(0, false, "error")]
+    public async Task DispatchSubscriptionDeliveriesCommand_OnTransientFailure_EmitsFailedCounter_WithStatusClass(
+        int statusCode, bool isTimeout, string expectedClass)
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(attemptCount: 0, integrationKey: "erp_system")]
+        };
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryAttemptRepository>(new FakeDeliveryAttemptRepository());
+            services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(false, statusCode, "boom", isTimeout)));
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+
+        var failed = Assert.Single(metrics.ForInstrument("integrios_deliveries_failed"));
+        Assert.Equal(1, failed.Value);
+        Assert.Equal("erp_system", failed.Tag("integration_key"));
+        Assert.Equal(expectedClass, failed.Tag("http_status_class"));
+        Assert.Empty(metrics.ForInstrument("integrios_deliveries_dead_lettered"));
+    }
+
+    [Fact]
+    public async Task DispatchSubscriptionDeliveriesCommand_OnMaxAttempts_EmitsDeadLetteredCounter_NotFailed()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(attemptCount: 2, integrationKey: "erp_system")]
+        };
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryAttemptRepository>(new FakeDeliveryAttemptRepository());
+            services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(false, 500, "boom")));
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+
+        var deadLettered = Assert.Single(metrics.ForInstrument("integrios_deliveries_dead_lettered"));
+        Assert.Equal(1, deadLettered.Value);
+        Assert.Equal("erp_system", deadLettered.Tag("integration_key"));
+        Assert.Empty(metrics.ForInstrument("integrios_deliveries_failed"));
+    }
+
+    [Fact]
+    public async Task DeliveryMetrics_NeverEmit_ForbiddenTenantControlledLabels()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems =
+            [
+                MakeWorkItem(integrationKey: "erp_system"),
+                MakeWorkItem(integrationKey: "crm_system")
+            ]
+        };
+        // First item succeeds, second fails — exercises both label sets.
+        var deliveryClient = new SequenceDeliveryClient(
+            new DeliveryResult(true, 200, null),
+            new DeliveryResult(false, 503, "down"));
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryAttemptRepository>(new FakeDeliveryAttemptRepository());
+            services.AddSingleton<IDeliveryClient>(deliveryClient);
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+
+        string[] forbidden = ["tenant_id", "subscription_id", "connection_id"];
+        Assert.DoesNotContain(metrics.AllTagKeys, key => forbidden.Contains(key));
+    }
+
     private static SubscriptionDeliveryWorkItem MakeWorkItem(
         Guid? id = null,
         Guid? eventId = null,
@@ -195,7 +311,8 @@ public sealed class WorkerTransportAbstractionsTests
         int attemptCount = 0,
         string url = "https://erp.example/webhook",
         string payload = "{\"amount\":42}",
-        string? transform = null) =>
+        string? transform = null,
+        string integrationKey = "erp_system") =>
         new(
             id ?? Guid.NewGuid(),
             eventId ?? Guid.NewGuid(),
@@ -207,7 +324,8 @@ public sealed class WorkerTransportAbstractionsTests
             "payment.created",
             "payments",
             DateTimeOffset.UtcNow,
-            transform);
+            transform,
+            integrationKey);
 
     private static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
     {
@@ -325,6 +443,14 @@ public sealed class WorkerTransportAbstractionsTests
             capturedPayloads?.Add(payloadJson);
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class SequenceDeliveryClient(params DeliveryResult[] results) : IDeliveryClient
+    {
+        private int _index;
+
+        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, CancellationToken cancellationToken = default)
+            => Task.FromResult(results[_index++]);
     }
 
     private sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
