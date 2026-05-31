@@ -1,0 +1,52 @@
+using System.Diagnostics.Metrics;
+
+namespace Integrios.Application.Telemetry;
+
+// Instrument names omit the `_total` suffix: the Prometheus exporter appends it to
+// counters, yielding the documented `integrios_*_total` exposition names. Labels are
+// platform-owned only (integration_key, http_status_class, result) — never tenant-controlled.
+public sealed class IntegriosMetrics
+{
+    public const string MeterName = "integrios.application";
+
+    private readonly Counter<long> _eventsIngested;
+    private readonly Counter<long> _fanoutRowsCreated;
+    private readonly Counter<long> _deliveriesSucceeded;
+    private readonly Counter<long> _deliveriesFailed;
+    private readonly Counter<long> _deliveriesDeadLettered;
+    private readonly Histogram<double> _deliveryAttemptDuration;
+
+    public IntegriosMetrics(IMeterFactory meterFactory)
+    {
+        var meter = meterFactory.Create(MeterName);
+
+        _eventsIngested = meter.CreateCounter<long>("integrios_events_ingested");
+        _fanoutRowsCreated = meter.CreateCounter<long>("integrios_fanout_rows_created");
+        _deliveriesSucceeded = meter.CreateCounter<long>("integrios_deliveries_succeeded");
+        _deliveriesFailed = meter.CreateCounter<long>("integrios_deliveries_failed");
+        _deliveriesDeadLettered = meter.CreateCounter<long>("integrios_deliveries_dead_lettered");
+        _deliveryAttemptDuration = meter.CreateHistogram<double>("integrios_delivery_attempt_duration_seconds");
+    }
+
+    public void RecordEventIngested() => _eventsIngested.Add(1);
+
+    public void RecordFanoutRowsCreated(int count) => _fanoutRowsCreated.Add(count);
+
+    public void RecordDeliverySucceeded(string integrationKey) =>
+        _deliveriesSucceeded.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+
+    public void RecordDeliveryFailed(string integrationKey, string httpStatusClass) =>
+        _deliveriesFailed.Add(
+            1,
+            new KeyValuePair<string, object?>("integration_key", integrationKey),
+            new KeyValuePair<string, object?>("http_status_class", httpStatusClass));
+
+    public void RecordDeliveryDeadLettered(string integrationKey) =>
+        _deliveriesDeadLettered.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+
+    public void RecordDeliveryAttemptDuration(double seconds, string result, string integrationKey) =>
+        _deliveryAttemptDuration.Record(
+            seconds,
+            new KeyValuePair<string, object?>("result", result),
+            new KeyValuePair<string, object?>("integration_key", integrationKey));
+}

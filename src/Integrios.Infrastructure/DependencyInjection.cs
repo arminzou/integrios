@@ -1,6 +1,7 @@
 using Integrios.Application.Abstractions;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http;
+using Integrios.Infrastructure.Telemetry;
 using Integrios.Infrastructure.Transform;
 using Integrios.Infrastructure.Transport;
 using Microsoft.Extensions.Configuration;
@@ -44,6 +45,8 @@ public static class DependencyInjection
         {
             client.Timeout = TimeSpan.FromSeconds(30);
         });
+
+        services.AddHostedService<OutboxDepthMetrics>();
 
         return services;
     }

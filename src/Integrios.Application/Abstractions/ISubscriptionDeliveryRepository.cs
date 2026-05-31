@@ -22,4 +22,5 @@ public record SubscriptionDeliveryWorkItem(
     string EventType,
     string? TopicName,
     DateTimeOffset AcceptedAt,
-    string? TransformConfigSnapshot);
+    string? TransformConfigSnapshot,
+    string IntegrationKey);

@@ -1,4 +1,5 @@
 using Integrios.Application.Abstractions;
+using Integrios.Application.Telemetry;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -10,6 +11,7 @@ internal sealed class ProcessOutboxBatchCommandHandler(
     IEventBus eventBus,
     ISubscriptionRepository subscriptionRepository,
     ISubscriptionDeliveryQueue subscriptionDeliveryQueue,
+    IntegriosMetrics metrics,
     ILogger<ProcessOutboxBatchCommandHandler> logger) : IRequestHandler<ProcessOutboxBatchCommand, int>
 {
     public async Task<int> Handle(ProcessOutboxBatchCommand command, CancellationToken cancellationToken)
@@ -57,6 +59,7 @@ internal sealed class ProcessOutboxBatchCommandHandler(
             .ToList();
 
         var inserted = await subscriptionDeliveryQueue.FanoutAsync(ev.Id, targets, cancellationToken);
+        metrics.RecordFanoutRowsCreated(inserted);
 
         await eventBus.UpdateEventStatusAsync(ev.Id, "fanned_out", ev.TopicId, cancellationToken);
         await eventBus.MarkProcessedAsync(row.Id, cancellationToken);

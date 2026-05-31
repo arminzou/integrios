@@ -66,11 +66,13 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
                     e.event_type                      AS EventType,
                     top.name                          AS TopicName,
                     e.accepted_at                     AS AcceptedAt,
-                    u.transform_config_snapshot::text AS TransformConfigSnapshot
+                    u.transform_config_snapshot::text AS TransformConfigSnapshot,
+                    i.key                             AS IntegrationKey
                 FROM updated u
-                JOIN events      e   ON e.id   = u.event_id
-                JOIN connections c   ON c.id   = u.destination_connection_id
-                LEFT JOIN topics top ON top.id = e.topic_id
+                JOIN events       e   ON e.id   = u.event_id
+                JOIN connections  c   ON c.id   = u.destination_connection_id
+                JOIN integrations i   ON i.id   = c.integration_id
+                LEFT JOIN topics  top ON top.id = e.topic_id
                 """,
                 new { Limit = limit },
                 cancellationToken: cancellationToken));
@@ -86,7 +88,8 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
             r.EventType ?? string.Empty,
             r.TopicName,
             r.AcceptedAt,
-            r.TransformConfigSnapshot)).ToList();
+            r.TransformConfigSnapshot,
+            r.IntegrationKey ?? string.Empty)).ToList();
     }
 
     private sealed class DeliveryWorkRow
@@ -102,6 +105,7 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
         public string? TopicName { get; init; }
         public DateTimeOffset AcceptedAt { get; init; }
         public string? TransformConfigSnapshot { get; init; }
+        public string? IntegrationKey { get; init; }
     }
 
     public async Task MarkSucceededAsync(Guid deliveryId, CancellationToken cancellationToken = default)

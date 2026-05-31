@@ -24,6 +24,7 @@ public static class TelemetryExtensions
             .WithMetrics(metrics =>
             {
                 metrics
+                    .AddMeter("integrios.application")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()

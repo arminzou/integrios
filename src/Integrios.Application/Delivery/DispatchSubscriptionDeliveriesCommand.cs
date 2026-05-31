@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Telemetry;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     IDeliveryClient deliveryClient,
     ITransformEvaluator transformEvaluator,
     RetryPolicy retryPolicy,
+    IntegriosMetrics metrics,
     ILogger<DispatchSubscriptionDeliveriesCommandHandler> logger) : IRequestHandler<DispatchSubscriptionDeliveriesCommand, int>
 {
     public async Task<int> Handle(DispatchSubscriptionDeliveriesCommand command, CancellationToken cancellationToken)
@@ -32,6 +34,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             logger.LogWarning("Subscription {SubscriptionId} has no destination URL. Dead-lettering delivery {DeliveryId}.",
                 row.SubscriptionId, row.Id);
             await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
+            metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
             return;
         }
 
@@ -55,6 +58,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         }
 
         var completedAt = DateTimeOffset.UtcNow;
+        var durationSeconds = (completedAt - startedAt).TotalSeconds;
 
         await attemptRepository.RecordAsync(
             eventId: row.EventId,
@@ -73,22 +77,43 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         if (result.Succeeded)
         {
             await deliveryQueue.MarkSucceededAsync(row.Id, cancellationToken);
+            metrics.RecordDeliverySucceeded(row.IntegrationKey);
+            metrics.RecordDeliveryAttemptDuration(durationSeconds, "success", row.IntegrationKey);
             logger.LogInformation("Delivery {DeliveryId} succeeded — HTTP {StatusCode}", row.Id, result.StatusCode);
             return;
         }
 
+        metrics.RecordDeliveryAttemptDuration(durationSeconds, "failure", row.IntegrationKey);
+
         if (attemptNumber >= maxAttempts)
         {
             await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
+            metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
             logger.LogError("Delivery {DeliveryId} dead-lettered after {AttemptCount} attempt(s). Last error: {Error}",
                 row.Id, attemptNumber, result.Error);
             return;
         }
 
+        metrics.RecordDeliveryFailed(row.IntegrationKey, HttpStatusClass(result));
+
         var deliverAfter = DateTimeOffset.UtcNow + retryPolicy.CalculateBackoff(attemptNumber);
         await deliveryQueue.ScheduleRetryAsync(row.Id, attemptNumber, deliverAfter, cancellationToken);
         logger.LogWarning("Delivery {DeliveryId} failed. Scheduled retry {AttemptCount} at {DeliverAfter}. Error: {Error}",
             row.Id, attemptNumber, deliverAfter, result.Error);
+    }
+
+    private static string HttpStatusClass(DeliveryResult result)
+    {
+        if (result.IsTimeout)
+            return "timeout";
+
+        return result.StatusCode switch
+        {
+            >= 200 and < 300 => "2xx",
+            >= 400 and < 500 => "4xx",
+            >= 500 and < 600 => "5xx",
+            _ => "error"
+        };
     }
 
     private (string? payload, string? error) ApplyTransform(SubscriptionDeliveryWorkItem row)

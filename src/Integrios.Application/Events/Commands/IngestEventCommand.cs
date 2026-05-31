@@ -1,4 +1,5 @@
 using Integrios.Application.Abstractions;
+using Integrios.Application.Telemetry;
 using MediatR;
 
 namespace Integrios.Application.Events;
@@ -8,7 +9,8 @@ public sealed record IngestEventCommand(Guid TenantId, IngestEventRequest Reques
 
 internal sealed class IngestEventCommandHandler(
     IEventRepository eventRepository,
-    ITopicRepository topicRepository)
+    ITopicRepository topicRepository,
+    IntegriosMetrics metrics)
     : IRequestHandler<IngestEventCommand, IngestEventResponse>
 {
     public async Task<IngestEventResponse> Handle(IngestEventCommand command, CancellationToken cancellationToken)
@@ -16,6 +18,11 @@ internal sealed class IngestEventCommandHandler(
         var topicId = await topicRepository.FindByNameAsync(command.TenantId, command.Request.TopicName, cancellationToken)
             ?? throw new InvalidOperationException($"topic '{command.Request.TopicName}' does not exist for this tenant");
 
-        return await eventRepository.IngestAsync(command.TenantId, command.Request, topicId, cancellationToken);
+        var response = await eventRepository.IngestAsync(command.TenantId, command.Request, topicId, cancellationToken);
+
+        if (!response.IsDuplicate)
+            metrics.RecordEventIngested();
+
+        return response;
     }
 }

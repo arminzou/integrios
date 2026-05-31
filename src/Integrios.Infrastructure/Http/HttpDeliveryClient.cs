@@ -19,6 +19,11 @@ public sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
             var response = await httpClient.PostAsync(url, content, cancellationToken);
             return new DeliveryResult(response.IsSuccessStatusCode, (int)response.StatusCode);
         }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Token not cancelled by the caller, so this is the HttpClient.Timeout firing.
+            return new DeliveryResult(false, 0, "Request timed out", IsTimeout: true);
+        }
         catch (Exception ex)
         {
             return new DeliveryResult(false, 0, ex.Message);
