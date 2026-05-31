@@ -8,4 +8,4 @@ public interface IEventBus
     Task UpdateEventStatusAsync(Guid eventId, string status, Guid? topicId, CancellationToken cancellationToken = default);
 }
 
-public sealed record EventBusMessage(Guid Id, Guid EventId, int AttemptCount);
+public sealed record EventBusMessage(Guid Id, Guid EventId, int AttemptCount, string? Traceparent = null);

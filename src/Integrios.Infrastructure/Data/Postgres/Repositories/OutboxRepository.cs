@@ -12,7 +12,7 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
         var rows = await connection.QueryAsync<OutboxRow>(
             new CommandDefinition(
                 """
-                SELECT id AS Id, event_id AS EventId, attempt_count AS AttemptCount
+                SELECT id AS Id, event_id AS EventId, attempt_count AS AttemptCount, traceparent AS Traceparent
                 FROM outbox
                 WHERE processed_at IS NULL
                   AND (deliver_after IS NULL OR deliver_after <= now())

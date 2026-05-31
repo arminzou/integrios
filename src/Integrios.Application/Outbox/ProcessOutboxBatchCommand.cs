@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Telemetry;
 using MediatR;
@@ -18,6 +19,10 @@ internal sealed class ProcessOutboxBatchCommandHandler(
     {
         var rows = await eventBus.ClaimBatchAsync(command.BatchSize, cancellationToken);
 
+        // The ambient request span is the batch tick's own operational span, not a child of
+        // any single event's trace.
+        Activity.Current?.SetTag("claimed_rows", rows.Count);
+
         foreach (var row in rows)
             await FanoutRowAsync(row, cancellationToken);
 
@@ -26,6 +31,10 @@ internal sealed class ProcessOutboxBatchCommandHandler(
 
     private async Task FanoutRowAsync(EventBusMessage row, CancellationToken cancellationToken)
     {
+        // Re-parent under the originating event's trace via the stored traceparent.
+        using var activity = ActivitySources.StartLinkedSpan("outbox.fanout", row.Traceparent);
+        activity?.SetTag("event_id", row.EventId);
+
         var ev = await eventBus.GetEventAsync(row.EventId, cancellationToken);
         if (ev is null)
         {
@@ -40,6 +49,14 @@ internal sealed class ProcessOutboxBatchCommandHandler(
             await eventBus.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
+
+        activity?.SetTag("topic_id", ev.TopicId);
+
+        using var scope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["event_id"] = ev.Id,
+            ["topic_id"] = ev.TopicId.Value
+        });
 
         var subscriptions = await subscriptionRepository.GetActiveSubscriptionsAsync(ev.TopicId.Value, cancellationToken);
         var matching = subscriptions
@@ -58,7 +75,8 @@ internal sealed class ProcessOutboxBatchCommandHandler(
             .Select(s => new SubscriptionFanoutTarget(s.Id, s.DestinationConnectionId, s.TransformConfigJson))
             .ToList();
 
-        var inserted = await subscriptionDeliveryQueue.FanoutAsync(ev.Id, targets, cancellationToken);
+        // The fanout span's id anchors each delivery row, so dispatch and its retries stay on this trace.
+        var inserted = await subscriptionDeliveryQueue.FanoutAsync(ev.Id, targets, activity?.Id, cancellationToken);
         metrics.RecordFanoutRowsCreated(inserted);
 
         await eventBus.UpdateEventStatusAsync(ev.Id, "fanned_out", ev.TopicId, cancellationToken);

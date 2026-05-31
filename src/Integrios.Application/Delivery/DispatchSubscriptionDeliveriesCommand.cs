@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Telemetry;
@@ -29,6 +30,20 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
     private async Task DispatchAsync(SubscriptionDeliveryWorkItem row, int maxAttempts, CancellationToken cancellationToken)
     {
+        // Re-parent under the originating event's trace so retries on later ticks stay continuous.
+        using var activity = ActivitySources.StartLinkedSpan("subscription.deliver", row.Traceparent);
+        activity?.SetTag("event_id", row.EventId);
+        activity?.SetTag("subscription_id", row.SubscriptionId);
+        activity?.SetTag("delivery_id", row.Id);
+        activity?.SetTag("integration_key", row.IntegrationKey);
+
+        using var scope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["event_id"] = row.EventId,
+            ["delivery_id"] = row.Id,
+            ["subscription_id"] = row.SubscriptionId
+        });
+
         if (string.IsNullOrWhiteSpace(row.DestinationUrl))
         {
             logger.LogWarning("Subscription {SubscriptionId} has no destination URL. Dead-lettering delivery {DeliveryId}.",
@@ -59,6 +74,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
         var completedAt = DateTimeOffset.UtcNow;
         var durationSeconds = (completedAt - startedAt).TotalSeconds;
+        activity?.SetTag("http_status_class", HttpStatusClass(result));
 
         await attemptRepository.RecordAsync(
             eventId: row.EventId,
@@ -118,8 +134,15 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
     private (string? payload, string? error) ApplyTransform(SubscriptionDeliveryWorkItem row)
     {
+        using var activity = ActivitySources.Application.StartActivity("subscription.transform");
+
         if (string.IsNullOrWhiteSpace(row.TransformConfigSnapshot))
+        {
+            activity?.SetTag("transform", "noop");
             return (row.PayloadJson, null);
+        }
+
+        activity?.SetTag("transform", "evaluated");
 
         try
         {

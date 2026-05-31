@@ -13,6 +13,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
         Guid tenantId,
         IngestEventRequest request,
         Guid? topicId,
+        string? traceparent = null,
         CancellationToken cancellationToken = default)
     {
         var eventId = Guid.NewGuid();
@@ -82,8 +83,8 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
                     cancellationToken: cancellationToken));
 
             const string insertOutboxSql = """
-                INSERT INTO outbox (event_id, payload)
-                VALUES (@EventId, CAST(@PayloadJson AS jsonb));
+                INSERT INTO outbox (event_id, payload, traceparent)
+                VALUES (@EventId, CAST(@PayloadJson AS jsonb), @Traceparent);
                 """;
 
             await connection.ExecuteAsync(
@@ -92,7 +93,8 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
                     new
                     {
                         EventId = eventId,
-                        PayloadJson = outboxPayloadJson
+                        PayloadJson = outboxPayloadJson,
+                        Traceparent = traceparent
                     },
                     transaction,
                     cancellationToken: cancellationToken));

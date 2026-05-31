@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Telemetry;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Events;
 
@@ -10,7 +12,8 @@ public sealed record IngestEventCommand(Guid TenantId, IngestEventRequest Reques
 internal sealed class IngestEventCommandHandler(
     IEventRepository eventRepository,
     ITopicRepository topicRepository,
-    IntegriosMetrics metrics)
+    IntegriosMetrics metrics,
+    ILogger<IngestEventCommandHandler> logger)
     : IRequestHandler<IngestEventCommand, IngestEventResponse>
 {
     public async Task<IngestEventResponse> Handle(IngestEventCommand command, CancellationToken cancellationToken)
@@ -18,10 +21,30 @@ internal sealed class IngestEventCommandHandler(
         var topicId = await topicRepository.FindByNameAsync(command.TenantId, command.Request.TopicName, cancellationToken)
             ?? throw new InvalidOperationException($"topic '{command.Request.TopicName}' does not exist for this tenant");
 
-        var response = await eventRepository.IngestAsync(command.TenantId, command.Request, topicId, cancellationToken);
+        // The ambient request span is the acceptance span; its id becomes the trace anchor
+        // carried across the outbox hop.
+        var activity = Activity.Current;
+        activity?.SetTag("tenant_id", command.TenantId);
+        activity?.SetTag("topic_id", topicId);
+        activity?.SetTag("idempotency_key", command.Request.IdempotencyKey);
+
+        var response = await eventRepository.IngestAsync(
+            command.TenantId, command.Request, topicId, activity?.Id, cancellationToken);
+
+        activity?.SetTag("event_id", response.EventId);
+
+        using var scope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["event_id"] = response.EventId,
+            ["tenant_id"] = command.TenantId,
+            ["topic_id"] = topicId
+        });
 
         if (!response.IsDuplicate)
+        {
             metrics.RecordEventIngested();
+            logger.LogInformation("Accepted event {EventId} on topic {TopicId}.", response.EventId, topicId);
+        }
 
         return response;
     }

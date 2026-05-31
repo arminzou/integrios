@@ -78,7 +78,7 @@ public sealed class IngestMetricsTests
 
     private sealed class FakeEventRepository(bool isDuplicate) : IEventRepository
     {
-        public Task<IngestEventResponse> IngestAsync(Guid tenantId, IngestEventRequest request, Guid? topicId, CancellationToken cancellationToken = default)
+        public Task<IngestEventResponse> IngestAsync(Guid tenantId, IngestEventRequest request, Guid? topicId, string? traceparent = null, CancellationToken cancellationToken = default)
             => Task.FromResult(new IngestEventResponse
             {
                 EventId = Guid.NewGuid(),

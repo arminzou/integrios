@@ -9,6 +9,6 @@ public interface IOutboxRepository
     Task UpdateEventStatusAsync(Guid eventId, string status, Guid? topicId, CancellationToken cancellationToken = default);
 }
 
-public record OutboxRow(Guid Id, Guid EventId, int AttemptCount);
+public record OutboxRow(Guid Id, Guid EventId, int AttemptCount, string? Traceparent = null);
 
 public record EventDetails(Guid Id, Guid TenantId, string EventType, string PayloadJson, Guid? TopicId);

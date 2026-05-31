@@ -96,6 +96,7 @@ public sealed class StubEventRepository : IEventRepository
         Guid tenantId,
         IngestEventRequest request,
         Guid? topicId,
+        string? traceparent = null,
         CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new IngestEventResponse

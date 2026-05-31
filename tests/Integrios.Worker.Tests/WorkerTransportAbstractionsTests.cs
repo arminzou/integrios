@@ -391,7 +391,7 @@ public sealed class WorkerTransportAbstractionsTests
         public List<(Guid DeliveryId, int AttemptCount, DateTimeOffset DeliverAfter)> ScheduledRetries { get; } = [];
         public List<Guid> DeadLetteredIds { get; } = [];
 
-        public Task<int> FanoutAsync(Guid eventId, IReadOnlyList<SubscriptionFanoutTarget> targets, CancellationToken cancellationToken = default)
+        public Task<int> FanoutAsync(Guid eventId, IReadOnlyList<SubscriptionFanoutTarget> targets, string? traceparent = null, CancellationToken cancellationToken = default)
         {
             FanoutCalls.Add((eventId, targets));
             return Task.FromResult(targets.Count);

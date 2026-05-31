@@ -7,7 +7,7 @@ public sealed class PostgresEventBus(IOutboxRepository outboxRepository) : IEven
     public async Task<IReadOnlyList<EventBusMessage>> ClaimBatchAsync(int limit, CancellationToken cancellationToken = default)
     {
         var rows = await outboxRepository.ClaimBatchAsync(limit, cancellationToken);
-        return rows.Select(row => new EventBusMessage(row.Id, row.EventId, row.AttemptCount)).ToList();
+        return rows.Select(row => new EventBusMessage(row.Id, row.EventId, row.AttemptCount, row.Traceparent)).ToList();
     }
 
     public Task<EventDetails?> GetEventAsync(Guid eventId, CancellationToken cancellationToken = default)

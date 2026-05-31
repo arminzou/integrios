@@ -8,6 +8,7 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
     public async Task<int> FanoutAsync(
         Guid eventId,
         IReadOnlyList<SubscriptionFanoutTarget> targets,
+        string? traceparent = null,
         CancellationToken cancellationToken = default)
     {
         if (targets.Count == 0) return 0;
@@ -17,8 +18,8 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
         return await connection.ExecuteAsync(
             new CommandDefinition(
                 """
-                INSERT INTO subscription_deliveries (event_id, subscription_id, destination_connection_id, transform_config_snapshot)
-                VALUES (@EventId, @SubscriptionId, @DestinationConnectionId, CAST(@TransformConfigJson AS jsonb))
+                INSERT INTO subscription_deliveries (event_id, subscription_id, destination_connection_id, transform_config_snapshot, traceparent)
+                VALUES (@EventId, @SubscriptionId, @DestinationConnectionId, CAST(@TransformConfigJson AS jsonb), @Traceparent)
                 ON CONFLICT (event_id, subscription_id) DO NOTHING
                 """,
                 targets.Select(t => new
@@ -26,7 +27,8 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
                     EventId = eventId,
                     t.SubscriptionId,
                     t.DestinationConnectionId,
-                    t.TransformConfigJson
+                    t.TransformConfigJson,
+                    Traceparent = traceparent
                 }),
                 cancellationToken: cancellationToken));
     }
@@ -53,7 +55,7 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
                     UPDATE subscription_deliveries
                     SET status = 'in_flight', updated_at = now()
                     WHERE id IN (SELECT id FROM claimed)
-                    RETURNING id, event_id, subscription_id, destination_connection_id, attempt_count, transform_config_snapshot
+                    RETURNING id, event_id, subscription_id, destination_connection_id, attempt_count, transform_config_snapshot, traceparent
                 )
                 SELECT
                     u.id                              AS Id,
@@ -67,7 +69,8 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
                     top.name                          AS TopicName,
                     e.accepted_at                     AS AcceptedAt,
                     u.transform_config_snapshot::text AS TransformConfigSnapshot,
-                    i.key                             AS IntegrationKey
+                    i.key                             AS IntegrationKey,
+                    u.traceparent                     AS Traceparent
                 FROM updated u
                 JOIN events       e   ON e.id   = u.event_id
                 JOIN connections  c   ON c.id   = u.destination_connection_id
@@ -89,7 +92,8 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
             r.TopicName,
             r.AcceptedAt,
             r.TransformConfigSnapshot,
-            r.IntegrationKey ?? string.Empty)).ToList();
+            r.IntegrationKey ?? string.Empty,
+            r.Traceparent)).ToList();
     }
 
     private sealed class DeliveryWorkRow
@@ -106,6 +110,7 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
         public DateTimeOffset AcceptedAt { get; init; }
         public string? TransformConfigSnapshot { get; init; }
         public string? IntegrationKey { get; init; }
+        public string? Traceparent { get; init; }
     }
 
     public async Task MarkSucceededAsync(Guid deliveryId, CancellationToken cancellationToken = default)
