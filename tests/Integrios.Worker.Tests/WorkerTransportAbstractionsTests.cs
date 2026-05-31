@@ -5,6 +5,7 @@ using Integrios.Application.Abstractions;
 using Integrios.Application.Delivery;
 using Integrios.Application.Outbox;
 using Integrios.Application.Telemetry;
+using Integrios.Domain.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -52,7 +53,48 @@ public sealed class WorkerTransportAbstractionsTests
         Assert.Equal(matchingSubscriptionId, queue.FanoutCalls[0].Targets[0].SubscriptionId);
         Assert.Equal(matchingConnectionId, queue.FanoutCalls[0].Targets[0].DestinationConnectionId);
         Assert.Equal([messageId], eventBus.ProcessedMessageIds);
-        Assert.Equal([(eventId, "fanned_out", topicId)], eventBus.StatusUpdates);
+        Assert.Equal([(eventId, EventStatus.FannedOut, topicId)], eventBus.StatusUpdates);
+    }
+
+    [Fact]
+    public async Task ProcessOutboxBatchCommand_NoMatchingSubscriptions_MarksUnroutedAndEmitsCounter()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+
+        var messageId = Guid.NewGuid();
+        var eventId = Guid.NewGuid();
+        var topicId = Guid.NewGuid();
+
+        var eventBus = new FakeEventBus(
+            [new EventBusMessage(messageId, eventId, 0)],
+            new Dictionary<Guid, EventDetails>
+            {
+                [eventId] = new(eventId, Guid.NewGuid(), "payment.created", "{\"amount\":42}", topicId)
+            });
+
+        // The topic has a subscription, but none match the event type.
+        var subscriptions = new FakeSubscriptionRepository(
+            [
+                new SubscriptionTarget(Guid.NewGuid(), "crm", ["payment.updated"], Guid.NewGuid(), "https://crm.example/webhook", null)
+            ]);
+
+        var queue = new FakeSubscriptionDeliveryQueue();
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<IEventBus>(eventBus);
+            services.AddSingleton<ISubscriptionRepository>(subscriptions);
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+        });
+
+        var processedCount = await mediator.Send(new ProcessOutboxBatchCommand(10));
+
+        Assert.Equal(1, processedCount);
+        Assert.Empty(queue.FanoutCalls);
+        Assert.Equal([(eventId, EventStatus.Unrouted, topicId)], eventBus.StatusUpdates);
+        Assert.Equal([messageId], eventBus.ProcessedMessageIds);
+
+        var unrouted = Assert.Single(metrics.ForInstrument("integrios_events_unrouted"));
+        Assert.Equal(1, unrouted.Value);
     }
 
     [Fact]
@@ -451,7 +493,7 @@ public sealed class WorkerTransportAbstractionsTests
         IReadOnlyDictionary<Guid, EventDetails> eventsById) : IEventBus
     {
         public List<Guid> ProcessedMessageIds { get; } = [];
-        public List<(Guid EventId, string Status, Guid? TopicId)> StatusUpdates { get; } = [];
+        public List<(Guid EventId, EventStatus Status, Guid? TopicId)> StatusUpdates { get; } = [];
 
         public Task<IReadOnlyList<EventBusMessage>> ClaimBatchAsync(int limit, CancellationToken cancellationToken = default)
             => Task.FromResult(claimedMessages);
@@ -465,7 +507,7 @@ public sealed class WorkerTransportAbstractionsTests
             return Task.CompletedTask;
         }
 
-        public Task UpdateEventStatusAsync(Guid eventId, string status, Guid? topicId, CancellationToken cancellationToken = default)
+        public Task UpdateEventStatusAsync(Guid eventId, EventStatus status, Guid? topicId, CancellationToken cancellationToken = default)
         {
             StatusUpdates.Add((eventId, status, topicId));
             return Task.CompletedTask;

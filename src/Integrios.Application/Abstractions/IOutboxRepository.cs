@@ -1,3 +1,5 @@
+using Integrios.Domain.Events;
+
 namespace Integrios.Application.Abstractions;
 
 public interface IOutboxRepository
@@ -6,7 +8,7 @@ public interface IOutboxRepository
     Task MarkProcessedAsync(Guid outboxId, CancellationToken cancellationToken = default);
     Task ScheduleRetryAsync(Guid outboxId, int newAttemptCount, DateTimeOffset deliverAfter, CancellationToken cancellationToken = default);
     Task<EventDetails?> GetEventAsync(Guid eventId, CancellationToken cancellationToken = default);
-    Task UpdateEventStatusAsync(Guid eventId, string status, Guid? topicId, CancellationToken cancellationToken = default);
+    Task UpdateEventStatusAsync(Guid eventId, EventStatus status, Guid? topicId, CancellationToken cancellationToken = default);
 }
 
 public record OutboxRow(Guid Id, Guid EventId, int AttemptCount, string? Traceparent = null);

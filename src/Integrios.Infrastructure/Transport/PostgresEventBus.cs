@@ -1,4 +1,5 @@
 using Integrios.Application.Abstractions;
+using Integrios.Domain.Events;
 
 namespace Integrios.Infrastructure.Transport;
 
@@ -16,6 +17,6 @@ public sealed class PostgresEventBus(IOutboxRepository outboxRepository) : IEven
     public Task MarkProcessedAsync(Guid messageId, CancellationToken cancellationToken = default)
         => outboxRepository.MarkProcessedAsync(messageId, cancellationToken);
 
-    public Task UpdateEventStatusAsync(Guid eventId, string status, Guid? topicId, CancellationToken cancellationToken = default)
+    public Task UpdateEventStatusAsync(Guid eventId, EventStatus status, Guid? topicId, CancellationToken cancellationToken = default)
         => outboxRepository.UpdateEventStatusAsync(eventId, status, topicId, cancellationToken);
 }

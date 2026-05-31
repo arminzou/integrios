@@ -1,5 +1,6 @@
 using Dapper;
 using Integrios.Application.Abstractions;
+using Integrios.Domain.Events;
 
 namespace Integrios.Infrastructure.Data;
 
@@ -79,12 +80,13 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
 
     public async Task UpdateEventStatusAsync(
         Guid eventId,
-        string status,
+        EventStatus status,
         Guid? topicId,
         CancellationToken cancellationToken = default)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 
+        // The @Status literals below are the snake_case values produced by EventStatusMap.ToDbValue.
         await connection.ExecuteAsync(
             new CommandDefinition(
                 """
@@ -92,11 +94,11 @@ public sealed class OutboxRepository(IDbConnectionFactory connectionFactory) : I
                 SET
                     status       = @Status,
                     topic_id     = COALESCE(@TopicId, topic_id),
-                    processed_at = CASE WHEN @Status = 'completed'     THEN now() ELSE processed_at END,
+                    processed_at = CASE WHEN @Status = 'unrouted'     THEN now() ELSE processed_at END,
                     failed_at    = CASE WHEN @Status IN ('failed', 'dead_lettered') THEN now() ELSE failed_at END
                 WHERE id = @EventId
                 """,
-                new { EventId = eventId, Status = status, TopicId = topicId },
+                new { EventId = eventId, Status = EventStatusMap.ToDbValue(status), TopicId = topicId },
                 cancellationToken: cancellationToken));
     }
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Telemetry;
+using Integrios.Domain.Events;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -65,8 +66,9 @@ internal sealed class ProcessOutboxBatchCommandHandler(
 
         if (matching.Count == 0)
         {
-            logger.LogInformation("Event {EventId} matched topic {TopicId} but no subscriptions. Marking completed.", ev.Id, ev.TopicId.Value);
-            await eventBus.UpdateEventStatusAsync(ev.Id, "completed", ev.TopicId, cancellationToken);
+            logger.LogInformation("Event {EventId} matched topic {TopicId} but no subscriptions. Marking unrouted.", ev.Id, ev.TopicId.Value);
+            metrics.RecordEventUnrouted();
+            await eventBus.UpdateEventStatusAsync(ev.Id, EventStatus.Unrouted, ev.TopicId, cancellationToken);
             await eventBus.MarkProcessedAsync(row.Id, cancellationToken);
             return;
         }
@@ -79,7 +81,7 @@ internal sealed class ProcessOutboxBatchCommandHandler(
         var inserted = await subscriptionDeliveryQueue.FanoutAsync(ev.Id, targets, activity?.Id, cancellationToken);
         metrics.RecordFanoutRowsCreated(inserted);
 
-        await eventBus.UpdateEventStatusAsync(ev.Id, "fanned_out", ev.TopicId, cancellationToken);
+        await eventBus.UpdateEventStatusAsync(ev.Id, EventStatus.FannedOut, ev.TopicId, cancellationToken);
         await eventBus.MarkProcessedAsync(row.Id, cancellationToken);
 
         logger.LogInformation(

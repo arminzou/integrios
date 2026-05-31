@@ -150,14 +150,7 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
                && string.Equals(ex.ConstraintName, "idx_events_idempotency", StringComparison.Ordinal);
     }
 
-    private static EventStatus ParseStatus(string status)
-    {
-        if (string.Equals(status, "dead_lettered", StringComparison.OrdinalIgnoreCase))
-            return EventStatus.DeadLettered;
-        return Enum.TryParse<EventStatus>(status, ignoreCase: true, out var parsed)
-            ? parsed
-            : EventStatus.Accepted;
-    }
+    private static EventStatus ParseStatus(string status) => EventStatusMap.FromDbValue(status);
 
     private sealed record ExistingEventRow
     {

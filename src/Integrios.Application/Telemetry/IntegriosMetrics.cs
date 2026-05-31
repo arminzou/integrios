@@ -10,6 +10,7 @@ public sealed class IntegriosMetrics
     public const string MeterName = "integrios.application";
 
     private readonly Counter<long> _eventsIngested;
+    private readonly Counter<long> _eventsUnrouted;
     private readonly Counter<long> _fanoutRowsCreated;
     private readonly Counter<long> _deliveriesSucceeded;
     private readonly Counter<long> _deliveriesFailed;
@@ -21,6 +22,7 @@ public sealed class IntegriosMetrics
         var meter = meterFactory.Create(MeterName);
 
         _eventsIngested = meter.CreateCounter<long>("integrios_events_ingested");
+        _eventsUnrouted = meter.CreateCounter<long>("integrios_events_unrouted");
         _fanoutRowsCreated = meter.CreateCounter<long>("integrios_fanout_rows_created");
         _deliveriesSucceeded = meter.CreateCounter<long>("integrios_deliveries_succeeded");
         _deliveriesFailed = meter.CreateCounter<long>("integrios_deliveries_failed");
@@ -29,6 +31,8 @@ public sealed class IntegriosMetrics
     }
 
     public void RecordEventIngested() => _eventsIngested.Add(1);
+
+    public void RecordEventUnrouted() => _eventsUnrouted.Add(1);
 
     public void RecordFanoutRowsCreated(int count) => _fanoutRowsCreated.Add(count);
 

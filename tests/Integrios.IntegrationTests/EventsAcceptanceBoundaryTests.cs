@@ -86,6 +86,30 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
+    public async Task GetEventsById_ReturnsFannedOutStatus_WhenEventFannedOut()
+    {
+        var request = BuildRequest(idempotencyKey: "idem-evt-fannedout-1");
+        var postResponse = await PostEventAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
+
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        Assert.NotNull(postBody);
+
+        await fixture.ForceEventStatusAsync(postBody.EventId, "fanned_out");
+
+        var getResponse = await GetEventAsync(postBody.EventId);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var getBody = await getResponse.Content.ReadFromJsonAsync<GetEventResponse>();
+        Assert.NotNull(getBody);
+        Assert.Equal(EventStatus.FannedOut, getBody.Status);
+
+        // Wire format: status is the canonical snake_case string, not the enum's integer.
+        var raw = await (await GetEventAsync(postBody.EventId)).Content.ReadAsStringAsync();
+        Assert.Contains("\"status\":\"fanned_out\"", raw);
+    }
+
+    [Fact]
     public async Task GetEventsById_Returns404_WhenEventDoesNotExist()
     {
         var getResponse = await GetEventAsync(Guid.NewGuid());

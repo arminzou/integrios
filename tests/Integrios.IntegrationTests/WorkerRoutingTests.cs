@@ -64,6 +64,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         Assert.Empty(await fixture.GetSubscriptionDeliveriesAsync(eventId));
 
         Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
+        Assert.Equal("unrouted", await fixture.GetEventStatusAsync(eventId));
     }
 
     [Fact]
