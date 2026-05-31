@@ -1,0 +1,125 @@
+# Observability
+
+Integrios is instrumented for **metrics, structured logs, and distributed traces** using
+OpenTelemetry. Observability is a pluggable capability: the platform emits standard,
+vendor-neutral telemetry and **bundles no backend**. You point it at whatever stack you
+run — Prometheus, Grafana, Tempo, Loki, Datadog, or an OpenTelemetry Collector.
+
+There are two audiences:
+
+- **Operators** running the platform get aggregate health — ingest rate, queue depth,
+  delivery success and failure by destination class, dead-letter trends — from low-cardinality
+  metrics and traces.
+- **Tenants** using the platform get per-event delivery state and attempt history from the
+  durable model via the Admin API. (Per-tenant detail stays in the database and in traces,
+  never in metric labels.)
+
+The default path is a **Prometheus scrape endpoint plus structured stdout logs**. OTLP
+export is available and **off by default** — turn it on to ship telemetry to your own
+backend.
+
+## Metrics
+
+Every service exposes a Prometheus-format `/metrics` endpoint.
+
+| Endpoint | Local URL | In-cluster port |
+|----------|-----------|-----------------|
+| Ingress `/metrics` | http://localhost:5231/metrics | `8080` |
+| Admin `/metrics` | http://localhost:5150/metrics | `8080` |
+| Worker `/metrics` | — | `5299` (`WorkerMetricsPort`) |
+
+The Worker has no host-published HTTP port; scrape it on its metrics port (default `5299`,
+configurable via `WorkerMetricsPort`) from inside your network.
+
+### Application metrics
+
+Alongside standard ASP.NET Core, HttpClient, and runtime metrics, Integrios emits:
+
+| Metric | Type | Labels | Meaning |
+|--------|------|--------|---------|
+| `integrios_events_ingested_total` | counter | — | events accepted at the ingress boundary (excludes idempotent duplicates) |
+| `integrios_fanout_rows_created_total` | counter | — | per-subscription delivery rows created by fanout |
+| `integrios_deliveries_succeeded_total` | counter | `integration_key` | successful deliveries, by destination integration class |
+| `integrios_deliveries_failed_total` | counter | `integration_key`, `http_status_class` | transient delivery failures (will retry) |
+| `integrios_deliveries_dead_lettered_total` | counter | `integration_key` | deliveries that exhausted retries or had no destination |
+| `integrios_delivery_attempt_duration_seconds` | histogram | `result`, `integration_key` | outbound attempt latency |
+| `integrios_outbox_pending_depth` | gauge | — | unprocessed outbox rows; your primary "is the worker keeping up?" signal |
+
+`http_status_class` is one of `2xx`, `4xx`, `5xx`, `timeout` (the downstream did not respond
+in time), or `error` (a failure with no HTTP response, such as a transform error or a
+connection failure).
+
+> [!NOTE]
+> Metric labels are deliberately **low-cardinality and platform-owned** (`integration_key`,
+> `http_status_class`, `result`). Tenant-controlled dimensions such as tenant, subscription,
+> or connection identifiers never appear as metric labels — they live in traces and in the
+> database. This keeps your metrics backend cheap regardless of how many tenants you onboard.
+
+## Traces
+
+Each accepted event produces a single **continuous trace** spanning intake, fanout, and
+delivery — including retries that happen minutes or hours later — without any reading of
+database rows. Trace context (W3C `traceparent`) is persisted across the asynchronous hops
+and restored on the consuming side, so the chain stays connected across process and time
+boundaries.
+
+```mermaid
+graph TD
+  A["ingest (acceptance)<br/>tenant, topic, event, idempotency key"]
+  B["fanout<br/>event, topic"]
+  C["deliver — one per attempt, incl. retries<br/>event, subscription, delivery, integration, http status class"]
+  D["transform<br/>no-op or evaluated"]
+  A --> B --> C --> D
+```
+
+Spans are tagged with identifiers (including `tenant_id`) so you can filter traces by tenant
+or destination when investigating a specific problem. The transform step is its own span, so
+you can tell a transform failure apart from a downstream HTTP failure at a glance.
+
+Worker batch ticks are their own operational spans and are intentionally **not** attached to
+any single event's trace.
+
+## Logs
+
+Logs are **structured and written to stdout** (no log backend is bundled). Log lines carry
+scope keys — `event_id`, `delivery_id`, `subscription_id` — so you can search for a specific
+event without pattern-matching free-form text. When a trace is active, lines also carry
+`TraceId` and `SpanId`, letting you jump from a log entry to the corresponding trace in your
+backend.
+
+## Exporting to your own backend (OTLP)
+
+Set an OTLP endpoint to export traces (and, if you choose, metrics and logs) to your own
+collector or backend:
+
+```bash
+# Standard OpenTelemetry variable
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+
+# or the Integrios-specific setting
+Integrios__Telemetry__OtlpEndpoint=http://otel-collector:4317
+```
+
+With no endpoint set, spans are still produced in-process and metrics remain available on
+the Prometheus scrape endpoint; nothing is exported. No Collector, Tempo, or Loki is bundled
+or required.
+
+## Local Prometheus and Grafana
+
+For local development, `docker compose up` (or `make up`) also starts a Prometheus and a
+Grafana preconfigured to scrape all three services and load an operator dashboard. **This is
+a development convenience, not a production backend** — in production you run your own.
+
+| Tool | URL | Notes |
+|------|-----|-------|
+| Prometheus | http://localhost:9090 | Targets page shows ingress, admin, and worker as `UP` |
+| Grafana | http://localhost:3000 | Anonymous access; opens to the **Integrios Overview** dashboard |
+
+The provisioned dashboard shows ingest rate, outbox pending depth, delivery success by
+integration, failures by HTTP status class, dead-letter trends, and delivery-duration
+percentiles. Configuration lives under `infra/` and is version-controlled, so the dashboard
+is reproducible.
+
+> [!TIP]
+> If host port `3000` is already in use, remap Grafana with a `docker-compose.override.yml`
+> (gitignored), for example `ports: ["3001:3000"]`.
