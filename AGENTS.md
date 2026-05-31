@@ -8,8 +8,10 @@ For this repository, private context and deeper guidance live in `dev/AGENTS.md`
 
 ## Project Overview
 
-Integrios is a backend-only multi-tenant integration platform.
+Integrios is an open-source, self-hostable multi-tenant integration platform.
 It receives events, applies tenant-aware routing and transformation rules, and delivers work to downstream systems reliably.
+
+It is backend-first today; an admin UI is planned. Observability is a pluggable capability: the platform emits standard telemetry (metrics, structured logs, OTLP-capable traces) and bundles no backend, so a self-hosting team points it at their own stack. Licensed under MIT.
 
 ## Project Structure
 
@@ -34,7 +36,7 @@ The platform is divided into two planes, each a separate ASP.NET service with it
 - **Data plane** (`Integrios.Ingress`, port 5231): webhook intake, tenant/auth resolution, durable acceptance boundary, outbox writes (publishes accepted events to a topic in the same transaction).
 - **Worker** (`Integrios.Worker`): outbox polling, fanout to subscriptions, per-subscription delivery, retry/DLQ/replay.
 
-`Integrios.Worker` reads topic and subscription config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are no service-to-service config calls in v1. See `dev/decisions.md` for the rationale and migration path.
+`Integrios.Worker` reads topic and subscription config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are currently no service-to-service config calls.
 
 ### Core domain model
 
@@ -56,10 +58,12 @@ The platform is divided into two planes, each a separate ASP.NET service with it
 - `Integrios.MockSink` owns controllable success, failure, and slow-path responses for local testing. It is never a dependency of production services.
 - `Integrios.Domain` owns domain entities, enums, and API contracts. It does not own implementation logic.
 
-### Version 1 constraints
+### Scope constraints
 
-- backend-only
-- no frontend, login/session, or RBAC
+These are current scope boundaries, not permanent non-goals; the admin UI deliberately relaxes the frontend constraint when it lands. Phase sequencing lives in the private roadmap.
+
+- backend-first (the admin UI is planned, not yet in scope)
+- no frontend, login/session, or RBAC yet
 - no required `User` domain entity
 - tenant-aware design from the start
 - idempotency, replayability, retries, and DLQ are platform concerns

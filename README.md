@@ -1,13 +1,13 @@
 # Integrios
 
-Integrios is a backend integration platform built around the reliability patterns used in event-driven distributed systems.
+Integrios is an open-source, self-hostable backend integration platform built around the reliability patterns used in event-driven distributed systems.
 
-It is designed for the class of problems where upstream systems need a stable ingestion boundary, downstream systems can fail or slow down unpredictably, and the platform still needs to preserve correctness, tenant isolation, and delivery history.
+It is designed for the class of problems where upstream systems need a stable ingestion boundary, downstream systems can fail or slow down unpredictably, and the platform still needs to preserve correctness, tenant isolation, and delivery history. Other engineering teams can run it themselves and adapt it to whatever they need to integrate.
 
 The project focuses on the foundation of a serious integration system: durable intake, asynchronous handoff, routing, transformation, retries, dead-letter handling, replayability, and operational visibility.
 
 > [!NOTE]
-> This project is being built incrementally; the README describes the intended platform architecture and the implemented foundation so far.
+> This project is being built incrementally; the README describes the intended platform architecture and the implemented foundation so far. It is backend-first today; an admin UI is planned. Licensed under [MIT](LICENSE).
 
 ## What This Project Demonstrates
 
@@ -17,7 +17,9 @@ The project focuses on the foundation of a serious integration system: durable i
 - Routing and transformation as explicit platform concerns
 - Delivery reliability patterns such as retries, dead-letter handling, and replay
 - Separation between control-plane configuration and data-plane execution
+- Pluggable, vendor-neutral observability: the platform emits metrics, structured logs, and OTLP-capable traces, and bundles no backend
 - A practical backend architecture that can evolve from local development to larger multi-instance deployments
+- Self-hostable and open source, with an admin UI planned
 
 ## Why This Design
 
@@ -43,7 +45,7 @@ Integrios is designed around well-established patterns that address those proble
 
 Integrios uses a deliberate split between platform intent and runtime execution.
 
-**Control plane:** tenant lifecycle and boundaries, connection type definitions and capability contracts, tenant connection configuration and secret references, pipeline and route configuration, policy concerns like quotas, limits, and governance.
+**Control plane:** tenant lifecycle and boundaries, integration definitions and capability contracts, tenant connection configuration and secret references, topic and subscription configuration, policy concerns like quotas, limits, and governance.
 
 **Data plane:** ingress request validation, auth, and tenant resolution, durable acceptance-boundary persistence, outbox-driven asynchronous handoff, routing, transformation, and connection delivery execution, retries, dead-letter handling, replay, and delivery tracking, tracing, logging, and operational observability.
 
@@ -56,8 +58,8 @@ This separation keeps runtime processing paths focused, while allowing control l
 3. Authenticate tenant-scoped API keys.
 4. Persist accepted work at the durable acceptance boundary.
 5. Publish through the database + outbox path.
-6. Route work using tenant flow configuration.
-7. Transform payloads per route rules.
+6. Fan out to matching subscriptions using tenant topic and subscription configuration.
+7. Transform payloads per subscription rules.
 8. Deliver to downstream connections.
 9. Track event status and delivery attempt history.
 10. Retry, dead-letter, or replay when recovery is needed.
@@ -116,31 +118,33 @@ This is the standard reliability toolkit for distributed integration systems whe
 
 ### Scalability Model
 
-Integrios is designed to scale horizontally:
+Integrios is designed to scale horizontally, and to scale *differently per deployment* through configuration and preserved seams rather than bundled infrastructure:
 
 - stateless API instances behind load balancers
 - worker concurrency tuned by queue depth and throughput targets
 - tenant-aware routing and processing partitioning
 - storage-backed durability with clear ownership of consistency boundaries
+- transport behind a port (`IEventBus`): a Postgres outbox/bus by default, with an alternative like Kafka swappable in only when scale justifies it
+- observability split into an operator plane (aggregate metrics) and a tenant plane (per-event drill-down from the durable model), with telemetry exported to whatever backend the operating team runs
 
-This model supports progressive evolution from local or single-node operation to larger multi-instance deployments.
+This model supports progressive evolution from local or single-node operation to larger multi-instance deployments, without forking the product for a given team's scale.
 
 ## Tech Stack
 
-| Area               | Technology                                        |
-| ------------------ | ------------------------------------------------- |
-| Language / Runtime | C# / ASP.NET Core                                 |
-| Database           | PostgreSQL                                        |
-| Event Backbone     | Kafka                                             |
-| Observability      | OpenTelemetry + Grafana (Tempo, Loki, Prometheus) |
-| Deployment         | Docker-first, cloud-ready                         |
+| Area               | Technology                                                              |
+| ------------------ | ----------------------------------------------------------------------- |
+| Language / Runtime | C# / ASP.NET Core                                                       |
+| Database           | PostgreSQL                                                              |
+| Event Backbone     | PostgreSQL outbox + bus behind `IEventBus` (Kafka swappable when justified) |
+| Observability      | OpenTelemetry (OTLP-capable, pluggable); Prometheus scrape + Grafana for local dev; bring your own backend (Tempo/Loki/Datadog) |
+| Deployment         | Docker-first, cloud-ready                                               |
 
-This stack is intentionally practical and proven for backend integration systems: strong transactional storage for acceptance boundaries and outbox consistency, durable event streaming for asynchronous processing and replay, and vendor-neutral observability for operating distributed workflows.
+This stack is intentionally practical and proven for backend integration systems: strong transactional storage for acceptance boundaries and outbox consistency, a transactional outbox that bridges synchronous intake and asynchronous processing (with the transport behind a port so it can be swapped only when scale justifies it), and vendor-neutral observability that emits standard telemetry into whatever backend the operating team runs.
 
 ## Example Use Cases
 
 - Central ingress for webhook-heavy ecosystems (payments, CRM, support, commerce, internal systems).
-- Tenant-scoped event routing to multiple destination connections with per-route logic.
+- Tenant-scoped event routing to multiple destination connections with per-subscription logic.
 - Reliable buffering and recovery during downstream outages or rate limiting.
 - Auditable event lifecycle tracking for compliance and incident response.
 - Reference implementation for outbox-driven integration architecture patterns.
