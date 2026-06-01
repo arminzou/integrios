@@ -174,27 +174,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         if (transform is null || transform.Value.ValueKind == JsonValueKind.Null)
             return null;
 
-        var root = transform.Value;
-        if (root.ValueKind != JsonValueKind.Object)
-            return InvalidTransform("transform must be an object.");
-
-        if (!root.TryGetProperty("engine", out var engineEl) || engineEl.ValueKind != JsonValueKind.String)
-            return InvalidTransform("transform.engine is required and must be a string.");
-
-        if (!root.TryGetProperty("version", out var versionEl) || versionEl.ValueKind != JsonValueKind.String)
-            return InvalidTransform("transform.version is required and must be a string.");
-
-        if (!root.TryGetProperty("expression", out var expressionEl) || expressionEl.ValueKind != JsonValueKind.String)
-            return InvalidTransform("transform.expression is required and must be a string.");
-
-        var engine = engineEl.GetString()!;
-        var version = versionEl.GetString()!;
-        var expression = expressionEl.GetString()!;
-
-        if (string.IsNullOrWhiteSpace(expression))
-            return InvalidTransform("transform.expression must not be empty.");
-
-        var error = evaluator.ValidateExpression(engine, version, expression);
+        var error = TransformConfig.Parse(transform.Value, evaluator, out _);
         return error is not null ? InvalidTransform(error) : null;
     }
 
