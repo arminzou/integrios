@@ -1,0 +1,17 @@
+# Build output and IDE state never belong in the image build context.
+**/bin/
+**/obj/
+.git/
+.github/
+.vs/
+.vscode/
+
+# Source-of-truth and docs are not needed to build runtime images.
+dev/
+docs/
+tests/
+
+# Local environment and secrets.
+.env
+.env.*
+**/*.user
