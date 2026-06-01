@@ -1,5 +1,7 @@
 # Integrios
 
+[![CI](https://github.com/arminzou/integrios/actions/workflows/ci.yml/badge.svg)](https://github.com/arminzou/integrios/actions/workflows/ci.yml)
+
 Integrios is an open-source, self-hostable backend integration platform built around the reliability patterns used in event-driven distributed systems.
 
 It is designed for the class of problems where upstream systems need a stable ingestion boundary, downstream systems can fail or slow down unpredictably, and the platform still needs to preserve correctness, tenant isolation, and delivery history. Other engineering teams can run it themselves and adapt it to whatever they need to integrate.
@@ -8,6 +10,12 @@ The project focuses on the foundation of a serious integration system: durable i
 
 > [!NOTE]
 > This project is being built incrementally; the README describes the intended platform architecture and the implemented foundation so far. It is backend-first today; an admin UI is planned. Licensed under [MIT](LICENSE).
+
+## Getting Started
+
+- **Run it locally:** the full stack (services, Postgres, migrations) comes up with Docker Compose — see [docs/local-setup.md](docs/local-setup.md).
+- **Container images:** every release is published to GitHub Container Registry; pull and run them with your own orchestration — see [docs/ci-cd.md](docs/ci-cd.md).
+- **CI/CD:** build, test, and image publishing run on GitHub Actions, and the pipeline is designed to be forked and pointed at your own registry — see [docs/ci-cd.md](docs/ci-cd.md).
 
 ## What This Project Demonstrates
 

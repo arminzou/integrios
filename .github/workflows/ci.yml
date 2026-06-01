@@ -2,9 +2,11 @@ name: ci
 
 on:
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
 
 permissions:
   contents: read
