@@ -195,7 +195,10 @@ GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{su
 {{globalKey}}
 
 ###
-# Update subscription — add a JSONata transform that reshapes the payload
+# Update subscription — add a JSONata transform that reshapes the payload.
+# Binding: the event payload is the JSONata root — reference its fields directly
+# (e.g. `amount`), NOT `payload.amount`. Platform metadata is the `$context` variable
+# (e.g. `$context.event_type`, `$context.topic_name`).
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
 {{globalKey}}
 Content-Type: application/json
@@ -207,7 +210,7 @@ Content-Type: application/json
   "transform": {
     "engine": "jsonata",
     "version": "1",
-    "expression": "{ \"type\": $context.event_type, \"amount\": payload.amount, \"topic\": $context.topic_name }"
+    "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
   },
   "dlqEnabled": true,
   "orderIndex": 10,
