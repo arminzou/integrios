@@ -218,6 +218,23 @@ Content-Type: application/json
 }
 
 ###
+# Preview a transform (dry-run) — see the output for a sample payload before saving.
+# Try payload.amount vs amount to watch `amount` disappear/appear in the result.
+POST {{baseUrl}}/admin/transform/preview
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "transform": {
+    "engine": "jsonata",
+    "version": "1",
+    "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
+  },
+  "sampleInput": { "amount": 1200, "paymentId": "pay_001" },
+  "sampleContext": { "event_type": "payment.created", "topic_name": "payments" }
+}
+
+###
 # Create a second subscription without a transform
 # @name createRawSubscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
