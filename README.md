@@ -2,157 +2,76 @@
 
 [![CI](https://github.com/arminzou/integrios/actions/workflows/ci.yml/badge.svg)](https://github.com/arminzou/integrios/actions/workflows/ci.yml)
 
-Integrios is an open-source, self-hostable backend integration platform built around the reliability patterns used in event-driven distributed systems.
-
-It is designed for the class of problems where upstream systems need a stable ingestion boundary, downstream systems can fail or slow down unpredictably, and the platform still needs to preserve correctness, tenant isolation, and delivery history. Other engineering teams can run it themselves and adapt it to whatever they need to integrate.
-
-The project focuses on the foundation of a serious integration system: durable intake, asynchronous handoff, routing, transformation, retries, dead-letter handling, replayability, and operational visibility.
+Integrios is an open-source, self-hostable backend integration platform. It gives engineering teams a durable boundary for receiving events, tenant-aware routing and transformation, and reliable delivery to downstream systems, with retries, dead-lettering, replay, and end-to-end observability. Run it yourself and adapt it to whatever you need to integrate.
 
 > [!NOTE]
-> This project is being built incrementally; the README describes the intended platform architecture and the implemented foundation so far. It is backend-first today; an admin UI is planned. Licensed under [MIT](LICENSE).
+> **Early preview, built incrementally.** The backend foundation works end to end and is backend-first (an admin UI is planned). Evaluate it as a self-hostable foundation, not a turnkey production deployment. MIT licensed.
+>
+> Not yet, but planned:
+>
+> - **Authenticated delivery.** Today the worker delivers only to open, no-auth endpoints; authentication to real systems and more built-in integrations are coming.
+> - **No admin UI.** All configuration is through the Admin API.
+> - **No RBAC or rate limiting yet.** Tenant isolation is enforced at the data layer.
 
-## Getting Started
+## Features
 
-- **Run it locally:** the full stack (services, Postgres, migrations) comes up with Docker Compose — see [docs/local-setup.md](docs/local-setup.md).
-- **Container images:** every release is published to GitHub Container Registry; pull and run them with your own orchestration — see [docs/ci-cd.md](docs/ci-cd.md).
-- **CI/CD:** build, test, and image publishing run on GitHub Actions, and the pipeline is designed to be forked and pointed at your own registry — see [docs/ci-cd.md](docs/ci-cd.md).
-
-## What This Project Demonstrates
-
-- Durable event intake with a clear acceptance boundary
-- Transactional outbox for safe asynchronous handoff
-- Tenant-scoped machine authentication and isolation
-- Routing and transformation as explicit platform concerns
-- Delivery reliability patterns such as retries, dead-letter handling, and replay
-- Separation between control-plane configuration and data-plane execution
-- Pluggable, vendor-neutral observability: the platform emits metrics, structured logs, and OTLP-capable traces, and bundles no backend
-- A practical backend architecture that can evolve from local development to larger multi-instance deployments
-- Self-hostable and open source, with an admin UI planned
-
-## Why This Design
-
-Webhook-heavy and integration-heavy systems tend to fail in predictable ways:
-
-- upstream systems retry when they do not get a timely acknowledgment
-- downstream systems become slow, unavailable, or rate-limited
-- naive request/response coupling turns transient failures into data loss or duplicated side effects
-
-Integrios is designed around well-established patterns that address those problems directly:
-
-- durable acceptance boundaries to avoid data loss at ingress
-- transactional outbox to safely bridge write paths and async processing
-- idempotent ingestion and at-least-once delivery semantics
-- explicit retry, dead-letter, and replay paths for failure recovery
-- strict tenant isolation and auditable delivery history
+- Durable event intake behind a transactional-outbox acceptance boundary, so no accepted event is lost
+- Tenant-scoped API-key authentication and isolation
+- Topic/subscription routing with optional JSONata payload transforms
+- Reliable async delivery: bounded retries, dead-lettering, and replay
+- Per-event status and delivery-attempt history
+- Pluggable, vendor-neutral observability (OpenTelemetry metrics, logs, traces); bring your own backend
+- Clean control-plane / data-plane / worker separation; scales horizontally
+- Self-hostable and Docker-first
 
 ## Architecture
 
 ![Integrios architecture](docs/assets/architecture-diagram.png)
 
-### Control Plane vs Data Plane
+Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, integrations, connections, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingress` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
 
-Integrios uses a deliberate split between platform intent and runtime execution.
+For the full design (processing flow, durability guarantees, and platform concepts), see [docs/architecture.md](docs/architecture.md).
 
-**Control plane:** tenant lifecycle and boundaries, integration definitions and capability contracts, tenant connection configuration and secret references, topic and subscription configuration, policy concerns like quotas, limits, and governance.
+## Getting Started
 
-**Data plane:** ingress request validation, auth, and tenant resolution, durable acceptance-boundary persistence, outbox-driven asynchronous handoff, routing, transformation, and connection delivery execution, retries, dead-letter handling, replay, and delivery tracking, tracing, logging, and operational observability.
+Prerequisite: Docker.
 
-This separation keeps runtime processing paths focused, while allowing control logic to evolve independently.
+```bash
+cp .env.example .env
+make up
+```
 
-### Core Processing Flow
+This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingress on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end.
 
-1. Ingest webhook or API event.
-2. Validate request and resolve tenant context.
-3. Authenticate tenant-scoped API keys.
-4. Persist accepted work at the durable acceptance boundary.
-5. Publish through the database + outbox path.
-6. Fan out to matching subscriptions using tenant topic and subscription configuration.
-7. Transform payloads per subscription rules.
-8. Deliver to downstream connections.
-9. Track event status and delivery attempt history.
-10. Retry, dead-letter, or replay when recovery is needed.
+## Documentation
 
-## Key Platform Concepts
-
-### Durable Acceptance Boundary
-
-`Integrios.Ingress` accepts events and persists them durably before acknowledging the caller.
-
-The acceptance boundary is modeled as a single transaction that writes:
-
-- the canonical `events` record
-- a corresponding `outbox` record for async processing
-
-This guarantees the system never "accepts without enqueueing" or "enqueues without accepting."
-
-### Transactional Outbox Pattern
-
-The outbox is the handoff between synchronous API requests and asynchronous worker execution.
-
-This pattern avoids dual-write consistency bugs and enables robust worker-side polling or claiming without coupling upstream latency to downstream reliability.
-
-### Idempotency and De-duplication
-
-Callers can provide `idempotency_key` on `POST /events`.
-
-Within a tenant scope, duplicate submissions with the same idempotency key resolve to the same accepted event, preventing duplicate downstream side effects from retries, network timeouts, or webhook replays.
-
-### Multi-Tenant Isolation
-
-Tenants are first-class boundaries in both auth and data access.
-
-API keys resolve to a tenant context, and event reads and writes are tenant-scoped. This prevents cross-tenant data exposure and enables per-tenant operational controls.
-
-### Asynchronous Processing and Backpressure
-
-Worker execution is decoupled from ingestion. API remains responsive under load or downstream instability because event intake is separated from delivery execution.
-
-This allows:
-
-- smoothing bursty traffic
-- isolating slow or failing downstream connections
-- scaling workers independently from API instances
-
-### Reliability and Failure Resilience
-
-The architecture is built for controlled failure handling:
-
-- retry policies with bounded attempts
-- dead-letter queues for terminal failures
-- replay paths for safe reprocessing
-- delivery attempt history for diagnostics and auditability
-
-This is the standard reliability toolkit for distributed integration systems where downstream availability is variable.
-
-### Scalability Model
-
-Integrios is designed to scale horizontally, and to scale *differently per deployment* through configuration and preserved seams rather than bundled infrastructure:
-
-- stateless API instances behind load balancers
-- worker concurrency tuned by queue depth and throughput targets
-- tenant-aware routing and processing partitioning
-- storage-backed durability with clear ownership of consistency boundaries
-- transport behind a port (`IEventBus`): a Postgres outbox/bus by default, with an alternative like Kafka swappable in only when scale justifies it
-- observability split into an operator plane (aggregate metrics) and a tenant plane (per-event drill-down from the durable model), with telemetry exported to whatever backend the operating team runs
-
-This model supports progressive evolution from local or single-node operation to larger multi-instance deployments, without forking the product for a given team's scale.
+- [Setup & quickstart](docs/setup.md): run locally and deliver your first event
+- [Architecture](docs/architecture.md): design, processing flow, and platform concepts
+- [Observability](docs/observability.md): metrics, traces, logs, and OTLP export
+- [CI/CD](docs/ci-cd.md): the pipeline and published images
+- [Contributing](CONTRIBUTING.md)
 
 ## Tech Stack
 
-| Area               | Technology                                                              |
-| ------------------ | ----------------------------------------------------------------------- |
-| Language / Runtime | C# / ASP.NET Core                                                       |
-| Database           | PostgreSQL                                                              |
-| Event Backbone     | PostgreSQL outbox + bus behind `IEventBus` (Kafka swappable when justified) |
-| Observability      | OpenTelemetry (OTLP-capable, pluggable); Prometheus scrape + Grafana for local dev; bring your own backend (Tempo/Loki/Datadog) |
-| Deployment         | Docker-first, cloud-ready                                               |
+| Area               | Technology                                                                       |
+| ------------------ | -------------------------------------------------------------------------------- |
+| Language / Runtime | C# / ASP.NET Core (.NET 10)                                                       |
+| Database           | PostgreSQL                                                                        |
+| Event backbone     | PostgreSQL transactional outbox + bus behind `IEventBus` (Kafka swappable when justified) |
+| Observability      | OpenTelemetry (OTLP-capable); Prometheus + Grafana for local dev; bring your own backend |
+| Deployment         | Docker / Compose; container images on GHCR                                        |
 
-This stack is intentionally practical and proven for backend integration systems: strong transactional storage for acceptance boundaries and outbox consistency, a transactional outbox that bridges synchronous intake and asynchronous processing (with the transport behind a port so it can be swapped only when scale justifies it), and vendor-neutral observability that emits standard telemetry into whatever backend the operating team runs.
+## Use Cases
 
-## Example Use Cases
+- A central ingress hub for webhook-heavy ecosystems (payments, CRM, support, commerce, internal systems)
+- Tenant-scoped fan-out of one event stream to multiple destinations with per-subscription logic
+- Reliable buffering and recovery during downstream outages or rate limiting
+- Auditable event and delivery history for compliance and incident response
 
-- Central ingress for webhook-heavy ecosystems (payments, CRM, support, commerce, internal systems).
-- Tenant-scoped event routing to multiple destination connections with per-subscription logic.
-- Reliable buffering and recovery during downstream outages or rate limiting.
-- Auditable event lifecycle tracking for compliance and incident response.
-- Reference implementation for outbox-driven integration architecture patterns.
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)

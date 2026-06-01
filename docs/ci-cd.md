@@ -3,11 +3,11 @@
 Integrios ships a single GitHub Actions pipeline (`.github/workflows/ci.yml`) you can run
 as-is or fork and adapt. It is layered so you adopt only what you need:
 
-1. **Verify** — build and unit-test on every push and pull request. No configuration,
+1. **Verify**: build and unit-test on every push and pull request. No configuration,
    no secrets. This runs for forks too.
-2. **Package** — build container images for the deployable services (`ingress`, `admin`,
+2. **Package**: build container images for the deployable services (`ingress`, `admin`,
    `worker`) and publish them to a container registry.
-3. **Deploy** — owned by you. Integrios publishes images; how you run them (Compose,
+3. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
    Kubernetes, etc.) lives in your own infrastructure, not in this repo.
 
 ## What the default pipeline does
@@ -33,10 +33,10 @@ Verify and never need or expose registry credentials.
 The pipeline lives in one file you own in your fork. To publish elsewhere, edit the
 `package` job in `ci.yml`:
 
-- **Different GHCR namespace** — nothing to change. `images:` uses
+- **Different GHCR namespace**: nothing to change. `images:` uses
   `ghcr.io/${{ github.repository }}/<service>`, so your fork publishes under your own
   owner/repo automatically.
-- **A non-GHCR registry** (Docker Hub, a private registry, etc.) — point the `Log in`
+- **A non-GHCR registry** (Docker Hub, a private registry, etc.): point the `Log in`
   step and the `images:` value at your registry, and supply credentials as repository
   secrets:
 
@@ -55,7 +55,7 @@ The pipeline lives in one file you own in your fork. To publish elsewhere, edit 
       images: registry.example.com/my-team/integrios/${{ matrix.service.name }}
   ```
 
-- **Multi-arch images** (e.g. ARM hosts) — add `platforms: linux/amd64,linux/arm64` to
+- **Multi-arch images** (e.g. ARM hosts): add `platforms: linux/amd64,linux/arm64` to
   the `Build and push` step.
 
 ## Consuming the images
