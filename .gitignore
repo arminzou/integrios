@@ -12,7 +12,7 @@ obj/
 .DS_Store
 Thumbs.db
 
-/dev
+/brain
 *.local.md
 .env
 .env.http
