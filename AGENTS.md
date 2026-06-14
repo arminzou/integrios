@@ -179,5 +179,3 @@ chore(db): add initial migration for tenant and connector tables
 - if docs and code disagree, report it plainly instead of guessing
 - keep public docs public and private planning private
 
-@.brain/CLAUDE.md
-Dotbrain: private project context lives at `.brain/AGENTS.md`; read it before substantial agent work.
