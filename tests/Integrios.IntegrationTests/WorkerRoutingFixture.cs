@@ -262,7 +262,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             VALUES (@TopicId, @SourceConnectionId);
 
             -- Intentionally uses the pre-v2.1 event_types[] array shape to cover the
-            -- compat read path in SubscriptionRepository (see ADR-0015).
+            -- compat read path in SubscriptionRepository.
             INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES
                 (@LedgerSubscriptionId, @TopicId, 'to-ledger',

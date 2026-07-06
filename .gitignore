@@ -12,7 +12,6 @@ obj/
 .DS_Store
 Thumbs.db
 
-/brain
 *.local.md
 .env
 .env.http

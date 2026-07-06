@@ -194,7 +194,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         Assert.True(await fixture.IsOutboxRowProcessedAsync(orphanEventId));
     }
 
-    // ADR-0015: the worker reads both the current { "event_type": "..." } shape and the
+    // The worker reads both the current { "event_type": "..." } shape and the
     // pre-v2.1 { "event_types": [...] } array shape during the migration compatibility window.
     // The fixture seeds subscriptions using the old array shape, so the tests above already
     // exercise the compat path. This test makes the intent explicit and documents the exit
