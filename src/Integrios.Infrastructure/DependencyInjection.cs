@@ -1,5 +1,7 @@
 using Integrios.Application.Abstractions;
+using Integrios.Application.Abstractions.Auth;
 using Integrios.Infrastructure.Data;
+using Integrios.Infrastructure.Http.Auth;
 using Integrios.Infrastructure.Http;
 using Integrios.Infrastructure.Telemetry;
 using Integrios.Infrastructure.Transform;
@@ -29,6 +31,9 @@ public static class DependencyInjection
         services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
         services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
         services.AddSingleton<IAdminKeyRepository, AdminKeyRepository>();
+        services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
+        services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
+        services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
         services.AddSingleton<ITenantRepository, TenantRepository>();
         services.AddSingleton<IIntegrationRepository, IntegrationRepository>();
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
