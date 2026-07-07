@@ -34,6 +34,14 @@ public static class DependencyInjection
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
+        services.AddSingleton<ISecretResolver>(_ =>
+        {
+            string? provider = configuration["Integrios:Secrets:Provider"];
+
+            return string.IsNullOrWhiteSpace(provider) || provider.Equals("env", StringComparison.OrdinalIgnoreCase)
+                ? new EnvironmentSecretResolver()
+                : throw new InvalidOperationException($"Unsupported secrets provider '{provider}'.");
+        });
         services.AddSingleton<ITenantRepository, TenantRepository>();
         services.AddSingleton<IIntegrationRepository, IntegrationRepository>();
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
