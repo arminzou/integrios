@@ -10,25 +10,42 @@ public sealed record ConnectionResponse
     public required Guid IntegrationId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
+    public ConnectionAuthResponse? Auth { get; init; }
     public required string Status { get; init; }
     public string? Environment { get; init; }
     public string? Description { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }
 
-    public static ConnectionResponse From(Connection c) => new()
+    public static ConnectionResponse From(Connection connection) => new()
     {
-        Id = c.Id,
-        TenantId = c.TenantId,
-        IntegrationId = c.IntegrationId,
-        Name = c.Name,
-        Config = c.Config,
-        Status = c.Status.ToString().ToLowerInvariant(),
-        Environment = c.Environment,
-        Description = c.Description,
-        CreatedAt = c.CreatedAt,
-        UpdatedAt = c.UpdatedAt,
+        Id = connection.Id,
+        TenantId = connection.TenantId,
+        IntegrationId = connection.IntegrationId,
+        Name = connection.Name,
+        Config = connection.Config,
+        Auth = ConnectionAuthResponse.From(connection.Auth),
+        Status = connection.Status.ToString().ToLowerInvariant(),
+        Environment = connection.Environment,
+        Description = connection.Description,
+        CreatedAt = connection.CreatedAt,
+        UpdatedAt = connection.UpdatedAt,
     };
+}
+
+public sealed record ConnectionAuthResponse
+{
+    public required string Scheme { get; init; }
+    public required JsonElement Config { get; init; }
+
+    public static ConnectionAuthResponse? From(ConnectionAuth? auth) =>
+        auth is null
+            ? null
+            : new ConnectionAuthResponse
+            {
+                Scheme = auth.Scheme,
+                Config = auth.Config
+            };
 }
 
 public sealed record ConnectionListResponse

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dapper;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Pagination;
@@ -8,7 +9,8 @@ namespace Integrios.Infrastructure.Data;
 
 public sealed class IntegrationRepository(IDbConnectionFactory connectionFactory) : IIntegrationRepository
 {
-    private const string SelectColumns = "id, key, name, direction, auth_scheme, status, description, created_at, updated_at";
+    private const string SelectColumns =
+        "id, key, name, direction, supported_auth_schemes::text AS supported_auth_schemes_json, status, description, created_at, updated_at";
 
     public async Task<Integration?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -16,45 +18,57 @@ public sealed class IntegrationRepository(IDbConnectionFactory connectionFactory
             SELECT {SelectColumns}
             FROM integrations
             WHERE id = @Id
+            LIMIT 1
             """;
 
         await using var db = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        var row = await db.QuerySingleOrDefaultAsync<IntegrationRow>(sql, new { Id = id });
+        IntegrationRow? row = await db.QuerySingleOrDefaultAsync<IntegrationRow>(
+            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+
         return row?.ToIntegration();
     }
 
     public async Task<(IReadOnlyList<Integration> Items, string? NextCursor)> ListAsync(
-        string? afterCursor, int limit, CancellationToken cancellationToken = default)
+        string? afterCursor,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
-        DateTimeOffset cursorCreatedAt = default;
+        DateTimeOffset cursorTime = default;
         Guid cursorId = default;
-        bool hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
+        bool hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
 
-        const string sql = $"""
-            SELECT {SelectColumns}
-            FROM integrations
-            WHERE (NOT @HasCursor
-                   OR created_at > @CursorCreatedAt
-                   OR (created_at = @CursorCreatedAt AND id > @CursorId))
-            ORDER BY created_at ASC, id ASC
-            LIMIT @Limit
-            """;
+        var sql = hasCursor
+            ? $"""
+                SELECT {SelectColumns}
+                FROM integrations
+                WHERE (created_at, id) > (@CursorTime, @CursorId)
+                ORDER BY created_at, id
+                LIMIT @Limit
+                """
+            : $"""
+                SELECT {SelectColumns}
+                FROM integrations
+                ORDER BY created_at, id
+                LIMIT @Limit
+                """;
 
         await using var db = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        var rows = (await db.QueryAsync<IntegrationRow>(sql, new
+        var rows = (await db.QueryAsync<IntegrationRow>(
+            new CommandDefinition(
+                sql,
+                new { CursorTime = cursorTime, CursorId = cursorId, Limit = limit + 1 },
+                cancellationToken: cancellationToken))).ToList();
+
+        if (rows.Count == 0)
         {
-            HasCursor = hasCursor,
-            CursorCreatedAt = cursorCreatedAt,
-            CursorId = cursorId,
-            Limit = limit + 1,
-        })).ToList();
+            return ([], null);
+        }
 
         string? nextCursor = null;
         if (rows.Count > limit)
         {
             rows.RemoveAt(rows.Count - 1);
-            var last = rows[^1];
-            nextCursor = PageCursor.Encode(last.CreatedAt, last.Id);
+            nextCursor = PageCursor.Encode(rows[^1].CreatedAt, rows[^1].Id);
         }
 
         return (rows.Select(r => r.ToIntegration()).ToList(), nextCursor);
@@ -66,7 +80,7 @@ public sealed class IntegrationRepository(IDbConnectionFactory connectionFactory
         public string Key { get; init; } = "";
         public string Name { get; init; } = "";
         public string Direction { get; init; } = "";
-        public string AuthScheme { get; init; } = "";
+        public string SupportedAuthSchemesJson { get; init; } = "[]";
         public string Status { get; init; } = "";
         public string? Description { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
@@ -78,7 +92,7 @@ public sealed class IntegrationRepository(IDbConnectionFactory connectionFactory
             Key = Key,
             Name = Name,
             Direction = Enum.Parse<IntegrationDirection>(Direction, ignoreCase: true),
-            AuthScheme = Enum.Parse<IntegrationAuthScheme>(AuthScheme, ignoreCase: true),
+            SupportedAuthSchemes = JsonSerializer.Deserialize<string[]>(SupportedAuthSchemesJson) ?? [],
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             Description = Description,
             CreatedAt = CreatedAt,

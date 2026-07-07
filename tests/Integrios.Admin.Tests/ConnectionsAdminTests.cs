@@ -47,6 +47,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         Assert.Equal(fixture.TenantId, body.TenantId);
         Assert.Equal("erp-sink", body.Name);
         Assert.Equal("active", body.Status);
+        Assert.Null(body.Auth);
         Assert.NotEqual(default, body.Id);
     }
 

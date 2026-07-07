@@ -8,23 +8,23 @@ public sealed record IntegrationResponse
     public required string Key { get; init; }
     public required string Name { get; init; }
     public required string Direction { get; init; }
-    public required string AuthScheme { get; init; }
+    public required IReadOnlyList<string> SupportedAuthSchemes { get; init; }
     public required string Status { get; init; }
     public string? Description { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }
 
-    public static IntegrationResponse From(Integration i) => new()
+    public static IntegrationResponse From(Integration integration) => new()
     {
-        Id = i.Id,
-        Key = i.Key,
-        Name = i.Name,
-        Direction = i.Direction.ToString().ToLowerInvariant(),
-        AuthScheme = i.AuthScheme.ToString().ToLowerInvariant(),
-        Status = i.Status.ToString().ToLowerInvariant(),
-        Description = i.Description,
-        CreatedAt = i.CreatedAt,
-        UpdatedAt = i.UpdatedAt,
+        Id = integration.Id,
+        Key = integration.Key,
+        Name = integration.Name,
+        Direction = integration.Direction.ToString().ToLowerInvariant(),
+        SupportedAuthSchemes = integration.SupportedAuthSchemes,
+        Status = integration.Status.ToString().ToLowerInvariant(),
+        Description = integration.Description,
+        CreatedAt = integration.CreatedAt,
+        UpdatedAt = integration.UpdatedAt,
     };
 }
 

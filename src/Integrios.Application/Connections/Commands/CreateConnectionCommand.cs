@@ -12,8 +12,7 @@ public sealed record CreateConnectionCommand(
     string Name,
     JsonElement Config,
     string? Environment,
-    string? Description
-) : IRequest<ConnectionResponse>;
+    string? Description) : IRequest<ConnectionResponse>;
 
 public sealed class CreateConnectionCommandHandler(IConnectionRepository repository)
     : IRequestHandler<CreateConnectionCommand, ConnectionResponse>
@@ -29,7 +28,7 @@ public sealed class CreateConnectionCommandHandler(IConnectionRepository reposit
             IntegrationId = command.IntegrationId,
             Name = command.Name,
             Config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config,
-            SecretReferences = EmptyObject,
+            Auth = null,
             Status = OperationalStatus.Active,
             Environment = command.Environment,
             Description = command.Description,
