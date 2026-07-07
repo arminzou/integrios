@@ -1,3 +1,5 @@
+using Integrios.Domain.Integrations;
+
 namespace Integrios.Application.Abstractions;
 
 public interface ISubscriptionDeliveryRepository
@@ -16,6 +18,7 @@ public record SubscriptionDeliveryWorkItem(
     Guid EventId,
     Guid SubscriptionId,
     Guid DestinationConnectionId,
+    Guid TenantId,
     int AttemptCount,
     string DestinationUrl,
     string PayloadJson,
@@ -24,4 +27,5 @@ public record SubscriptionDeliveryWorkItem(
     DateTimeOffset AcceptedAt,
     string? TransformConfigSnapshot,
     string IntegrationKey,
-    string? Traceparent = null);
+    ConnectionAuth? DestinationAuth,
+    string? Traceparent);

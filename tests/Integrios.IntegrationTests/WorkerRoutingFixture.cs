@@ -338,8 +338,10 @@ public sealed class FakeDeliveryClient : IDeliveryClient
     public List<(string Url, string Payload)> Calls { get; } = [];
     public bool ShouldSucceed { get; set; } = true;
 
-    public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, CancellationToken cancellationToken = default)
+    public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
     {
+        _ = decorate;
+        _ = cancellationToken;
         Calls.Add((url, payloadJson));
         var result = ShouldSucceed
             ? new DeliveryResult(true, 200)

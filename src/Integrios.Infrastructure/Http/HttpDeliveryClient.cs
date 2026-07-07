@@ -9,19 +9,22 @@ public sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
     public async Task<DeliveryResult> DeliverAsync(
         string url,
         string payloadJson,
+        Action<HttpRequestMessage>? decorate = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
             var content = new StringContent(payloadJson, Encoding.UTF8);
             content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            request.Content = content;
+            decorate?.Invoke(request);
 
-            var response = await httpClient.PostAsync(url, content, cancellationToken);
+            var response = await httpClient.SendAsync(request, cancellationToken);
             return new DeliveryResult(response.IsSuccessStatusCode, (int)response.StatusCode);
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Token not cancelled by the caller, so this is the HttpClient.Timeout firing.
             return new DeliveryResult(false, 0, "Request timed out", IsTimeout: true);
         }
         catch (Exception ex)

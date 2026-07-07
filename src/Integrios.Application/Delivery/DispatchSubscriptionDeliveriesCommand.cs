@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Abstractions.Auth;
 using Integrios.Application.Telemetry;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -14,152 +15,176 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     IDeliveryAttemptRepository attemptRepository,
     IDeliveryClient deliveryClient,
     ITransformEvaluator transformEvaluator,
+    IAuthSchemeRegistry authSchemeRegistry,
+    ISecretResolver secretResolver,
     RetryPolicy retryPolicy,
     IntegriosMetrics metrics,
     ILogger<DispatchSubscriptionDeliveriesCommandHandler> logger) : IRequestHandler<DispatchSubscriptionDeliveriesCommand, int>
 {
     public async Task<int> Handle(DispatchSubscriptionDeliveriesCommand command, CancellationToken cancellationToken)
     {
-        var rows = await deliveryQueue.ClaimBatchAsync(command.BatchSize, cancellationToken);
+        IReadOnlyList<SubscriptionDeliveryWorkItem> rows = await deliveryQueue.ClaimBatchAsync(command.BatchSize, cancellationToken);
 
-        foreach (var row in rows)
+        foreach (SubscriptionDeliveryWorkItem row in rows)
+        {
             await DispatchAsync(row, command.MaxAttempts, cancellationToken);
+        }
 
         return rows.Count;
     }
 
     private async Task DispatchAsync(SubscriptionDeliveryWorkItem row, int maxAttempts, CancellationToken cancellationToken)
     {
-        // Re-parent under the originating event's trace so retries on later ticks stay continuous.
-        using var activity = ActivitySources.StartLinkedSpan("subscription.deliver", row.Traceparent);
+        using Activity? activity = ActivitySources.StartLinkedSpan("subscription.deliver", row.Traceparent);
+        using IDisposable? scope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["event_id"] = row.EventId,
+            ["subscription_id"] = row.SubscriptionId,
+            ["delivery_id"] = row.Id
+        });
         activity?.SetTag("event_id", row.EventId);
         activity?.SetTag("subscription_id", row.SubscriptionId);
         activity?.SetTag("delivery_id", row.Id);
         activity?.SetTag("integration_key", row.IntegrationKey);
 
-        using var scope = logger.BeginScope(new Dictionary<string, object>
+        (string? payload, string? error) = ApplyTransform(row);
+        if (error is not null)
         {
-            ["event_id"] = row.EventId,
-            ["delivery_id"] = row.Id,
-            ["subscription_id"] = row.SubscriptionId
-        });
-
-        if (string.IsNullOrWhiteSpace(row.DestinationUrl))
-        {
-            logger.LogWarning("Subscription {SubscriptionId} has no destination URL. Dead-lettering delivery {DeliveryId}.",
-                row.SubscriptionId, row.Id);
-            await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
-            metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
+            await HandleFailureAsync(row, maxAttempts, new DeliveryResult(false, 0, error), cancellationToken);
             return;
         }
 
-        var attemptNumber = row.AttemptCount + 1;
-        var startedAt = DateTimeOffset.UtcNow;
-
-        logger.LogInformation("Dispatching delivery {DeliveryId} (event {EventId} → subscription {SubscriptionId}, attempt {N}) to {Url}",
-            row.Id, row.EventId, row.SubscriptionId, attemptNumber, row.DestinationUrl);
-
-        var (payloadJson, transformError) = ApplyTransform(row);
-
         DeliveryResult result;
-        if (transformError is not null)
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+
+        try
         {
-            logger.LogError("Transform failed for delivery {DeliveryId}: {Error}", row.Id, transformError);
-            result = new DeliveryResult(false, 0, transformError);
+            Action<HttpRequestMessage>? decorate = await BuildRequestDecoratorAsync(row, cancellationToken);
+            result = await deliveryClient.DeliverAsync(row.DestinationUrl, payload!, decorate, cancellationToken);
         }
-        else
+        catch (Exception ex)
         {
-            result = await deliveryClient.DeliverAsync(row.DestinationUrl, payloadJson!, cancellationToken);
+            result = new DeliveryResult(false, 0, ex.Message);
         }
 
-        var completedAt = DateTimeOffset.UtcNow;
-        var durationSeconds = (completedAt - startedAt).TotalSeconds;
-        activity?.SetTag("http_status_class", HttpStatusClass(result));
+        DateTimeOffset completedAt = DateTimeOffset.UtcNow;
+        int attemptNumber = row.AttemptCount + 1;
+        double durationSeconds = (completedAt - startedAt).TotalSeconds;
 
         await attemptRepository.RecordAsync(
-            eventId: row.EventId,
-            subscriptionId: row.SubscriptionId,
-            destinationConnectionId: row.DestinationConnectionId,
-            attemptNumber: attemptNumber,
-            status: result.Succeeded ? "succeeded" : "failed",
-            requestPayloadJson: payloadJson ?? row.PayloadJson,
-            responseStatusCode: result.StatusCode > 0 ? result.StatusCode : null,
-            responseBody: null,
-            errorMessage: result.Error,
-            startedAt: startedAt,
-            completedAt: completedAt,
-            cancellationToken: cancellationToken);
+            row.EventId,
+            row.SubscriptionId,
+            row.DestinationConnectionId,
+            attemptNumber,
+            result.Succeeded ? "succeeded" : "failed",
+            payload!,
+            result.StatusCode == 0 ? null : result.StatusCode,
+            null,
+            result.Error,
+            startedAt,
+            completedAt,
+            cancellationToken);
 
         if (result.Succeeded)
         {
             await deliveryQueue.MarkSucceededAsync(row.Id, cancellationToken);
             metrics.RecordDeliverySucceeded(row.IntegrationKey);
             metrics.RecordDeliveryAttemptDuration(durationSeconds, "success", row.IntegrationKey);
-            logger.LogInformation("Delivery {DeliveryId} succeeded — HTTP {StatusCode}", row.Id, result.StatusCode);
+            logger.LogInformation(
+                "Delivery succeeded for delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
+                row.Id,
+                row.SubscriptionId,
+                row.EventId);
             return;
         }
 
-        metrics.RecordDeliveryAttemptDuration(durationSeconds, "failure", row.IntegrationKey);
+        await HandleFailureAsync(row, maxAttempts, result, cancellationToken, attemptNumber, durationSeconds);
+    }
 
-        if (attemptNumber >= maxAttempts)
+    private async Task<Action<HttpRequestMessage>?> BuildRequestDecoratorAsync(
+        SubscriptionDeliveryWorkItem row,
+        CancellationToken cancellationToken)
+    {
+        if (row.DestinationAuth is null)
+        {
+            return null;
+        }
+
+        IAuthSchemeHandler handler = authSchemeRegistry.GetRequired(row.DestinationAuth.Scheme);
+        Dictionary<string, string> secrets = [];
+
+        foreach (JsonProperty property in row.DestinationAuth.SecretRefs.EnumerateObject())
+        {
+            string reference = property.Value.GetString()
+                ?? throw new InvalidOperationException($"Secret reference '{property.Name}' is invalid.");
+            secrets[property.Name] = await secretResolver.ResolveAsync(row.TenantId, reference, cancellationToken);
+        }
+
+        return request => handler.Apply(request, row.DestinationAuth.Config, secrets);
+    }
+
+    private async Task HandleFailureAsync(
+        SubscriptionDeliveryWorkItem row,
+        int maxAttempts,
+        DeliveryResult result,
+        CancellationToken cancellationToken,
+        int? attemptNumber = null,
+        double? durationSeconds = null)
+    {
+        int nextAttempt = attemptNumber ?? row.AttemptCount + 1;
+        if (nextAttempt >= maxAttempts)
         {
             await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
             metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
-            logger.LogError("Delivery {DeliveryId} dead-lettered after {AttemptCount} attempt(s). Last error: {Error}",
-                row.Id, attemptNumber, result.Error);
-            return;
+        }
+        else
+        {
+            DateTimeOffset deliverAfter = DateTimeOffset.UtcNow + retryPolicy.CalculateBackoff(nextAttempt);
+            await deliveryQueue.ScheduleRetryAsync(row.Id, nextAttempt, deliverAfter, cancellationToken);
+            metrics.RecordDeliveryFailed(row.IntegrationKey, HttpStatusClass(result));
         }
 
-        metrics.RecordDeliveryFailed(row.IntegrationKey, HttpStatusClass(result));
-
-        var deliverAfter = DateTimeOffset.UtcNow + retryPolicy.CalculateBackoff(attemptNumber);
-        await deliveryQueue.ScheduleRetryAsync(row.Id, attemptNumber, deliverAfter, cancellationToken);
-        logger.LogWarning("Delivery {DeliveryId} failed. Scheduled retry {AttemptCount} at {DeliverAfter}. Error: {Error}",
-            row.Id, attemptNumber, deliverAfter, result.Error);
+        metrics.RecordDeliveryAttemptDuration(durationSeconds ?? 0, "failed", row.IntegrationKey);
+        logger.LogWarning(
+            "Delivery failed for delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}: {Error}",
+            row.Id,
+            row.SubscriptionId,
+            row.EventId,
+            result.Error ?? $"HTTP {result.StatusCode}");
     }
 
-    private static string HttpStatusClass(DeliveryResult result)
-    {
-        if (result.IsTimeout)
-            return "timeout";
-
-        return result.StatusCode switch
+    private static string HttpStatusClass(DeliveryResult result) =>
+        result.IsTimeout ? "timeout" : result.StatusCode switch
         {
             >= 200 and < 300 => "2xx",
             >= 400 and < 500 => "4xx",
-            >= 500 and < 600 => "5xx",
+            >= 500 => "5xx",
             _ => "error"
         };
-    }
 
     private (string? payload, string? error) ApplyTransform(SubscriptionDeliveryWorkItem row)
     {
-        using var activity = ActivitySources.Application.StartActivity("subscription.transform");
-
         if (string.IsNullOrWhiteSpace(row.TransformConfigSnapshot))
         {
-            activity?.SetTag("transform", "noop");
             return (row.PayloadJson, null);
         }
-
-        activity?.SetTag("transform", "evaluated");
 
         try
         {
             using var doc = JsonDocument.Parse(row.TransformConfigSnapshot);
-            var root = doc.RootElement;
-
-            if (!root.TryGetProperty("engine", out var engineEl) ||
-                !root.TryGetProperty("version", out var versionEl) ||
-                !root.TryGetProperty("expression", out var expressionEl))
+            JsonElement root = doc.RootElement;
+            if (!root.TryGetProperty("engine", out JsonElement engineEl)
+                || !root.TryGetProperty("version", out JsonElement versionEl)
+                || !root.TryGetProperty("expression", out JsonElement expressionEl))
+            {
                 return (null, "Transform config is missing required fields (engine, version, expression).");
+            }
 
-            var engine = engineEl.GetString() ?? string.Empty;
-            var version = versionEl.GetString() ?? string.Empty;
-            var expression = expressionEl.GetString() ?? string.Empty;
-
-            var context = new TransformContext(row.EventType, row.TopicName, row.AcceptedAt);
-            var output = transformEvaluator.Evaluate(expression, row.PayloadJson, context);
+            string engine = engineEl.GetString() ?? string.Empty;
+            string version = versionEl.GetString() ?? string.Empty;
+            string expression = expressionEl.GetString() ?? string.Empty;
+            TransformContext context = new(row.EventType, row.TopicName, row.AcceptedAt);
+            string output = transformEvaluator.Evaluate(expression, row.PayloadJson, context);
             return (output, null);
         }
         catch (TransformEvaluationException ex)

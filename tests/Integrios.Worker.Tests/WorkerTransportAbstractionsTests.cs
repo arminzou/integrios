@@ -2,10 +2,12 @@ using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Abstractions.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Application.Outbox;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Events;
+using Integrios.Infrastructure.Http.Auth;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -454,39 +456,44 @@ public sealed class WorkerTransportAbstractionsTests
     }
 
     private static SubscriptionDeliveryWorkItem MakeWorkItem(
-        Guid? id = null,
-        Guid? eventId = null,
-        Guid? subscriptionId = null,
-        Guid? destinationConnectionId = null,
-        int attemptCount = 0,
+    Guid? id = null,
+    Guid? eventId = null,
+    Guid? subscriptionId = null,
+    Guid? destinationConnectionId = null,
+    Guid? tenantId = null,
+    int attemptCount = 0,
         string url = "https://erp.example/webhook",
         string payload = "{\"amount\":42}",
         string? transform = null,
         string integrationKey = "erp_system",
         string? traceparent = null) =>
         new(
-            id ?? Guid.NewGuid(),
-            eventId ?? Guid.NewGuid(),
-            subscriptionId ?? Guid.NewGuid(),
-            destinationConnectionId ?? Guid.NewGuid(),
-            attemptCount,
+    id ?? Guid.NewGuid(),
+    eventId ?? Guid.NewGuid(),
+    subscriptionId ?? Guid.NewGuid(),
+    destinationConnectionId ?? Guid.NewGuid(),
+    tenantId ?? Guid.NewGuid(),
+    attemptCount,
             url,
             payload,
             "payment.created",
             "payments",
-            DateTimeOffset.UtcNow,
-            transform,
-            integrationKey,
-            traceparent);
+    DateTimeOffset.UtcNow,
+    transform,
+    integrationKey,
+    null,
+    traceparent);
 
     private static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddIntegriosApplication();
-        registerTestDoubles(services);
-        return services.BuildServiceProvider().GetRequiredService<IMediator>();
-    }
+    var services = new ServiceCollection();
+    services.AddLogging();
+    services.AddIntegriosApplication();
+    services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]));
+    services.AddSingleton<ISecretResolver>(new NullSecretResolver());
+    registerTestDoubles(services);
+    return services.BuildServiceProvider().GetRequiredService<IMediator>();
+}
 
     private sealed class FakeEventBus(
         IReadOnlyList<EventBusMessage> claimedMessages,
@@ -591,21 +598,35 @@ public sealed class WorkerTransportAbstractionsTests
     {
         public List<string> DeliveredUrls { get; } = [];
 
-        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, CancellationToken cancellationToken = default)
-        {
-            DeliveredUrls.Add(url);
-            capturedPayloads?.Add(payloadJson);
-            return Task.FromResult(result);
-        }
+    public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+    {
+        _ = decorate;
+        _ = cancellationToken;
+        DeliveredUrls.Add(url);
+        capturedPayloads?.Add(payloadJson);
+        return Task.FromResult(result);
+    }
     }
 
     private sealed class SequenceDeliveryClient(params DeliveryResult[] results) : IDeliveryClient
     {
         private int _index;
 
-        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, CancellationToken cancellationToken = default)
-            => Task.FromResult(results[_index++]);
+    public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+    {
+        _ = url;
+        _ = payloadJson;
+        _ = decorate;
+        _ = cancellationToken;
+        return Task.FromResult(results[_index++]);
     }
+}
+
+private sealed class NullSecretResolver : ISecretResolver
+{
+    public Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default)
+        => throw new InvalidOperationException($"Unexpected secret lookup for '{secretName}'.");
+}
 
     private sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
     {
