@@ -47,10 +47,29 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         activity?.SetTag("delivery_id", row.Id);
         activity?.SetTag("integration_key", row.IntegrationKey);
 
+        int attemptNumber = row.AttemptCount + 1;
         (string? payload, string? error) = ApplyTransform(row);
         if (error is not null)
         {
-            await HandleFailureAsync(row, maxAttempts, new DeliveryResult(false, 0, error), cancellationToken);
+            DateTimeOffset transformStartedAt = DateTimeOffset.UtcNow;
+            DateTimeOffset transformCompletedAt = transformStartedAt;
+            DeliveryResult transformFailure = new(false, 0, error);
+
+            await attemptRepository.RecordAsync(
+                row.EventId,
+                row.SubscriptionId,
+                row.DestinationConnectionId,
+                attemptNumber,
+                "failed",
+                row.PayloadJson,
+                null,
+                null,
+                transformFailure.Error,
+                transformStartedAt,
+                transformCompletedAt,
+                cancellationToken);
+
+            await HandleFailureAsync(row, maxAttempts, transformFailure, cancellationToken, attemptNumber, 0);
             return;
         }
 
@@ -68,7 +87,6 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         }
 
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
-        int attemptNumber = row.AttemptCount + 1;
         double durationSeconds = (completedAt - startedAt).TotalSeconds;
 
         await attemptRepository.RecordAsync(

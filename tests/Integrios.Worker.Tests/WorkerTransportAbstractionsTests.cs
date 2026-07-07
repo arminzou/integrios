@@ -232,16 +232,18 @@ public sealed class WorkerTransportAbstractionsTests
         Assert.Single(queue.DeadLetteredIds);
         Assert.Empty(queue.SucceededIds);
         Assert.Empty(deliveryClient.DeliveredUrls);
+        Assert.Single(attempts.RecordedAttempts);
     }
 
     [Fact]
     public async Task DispatchSubscriptionDeliveriesCommand_OnSuccess_EmitsSucceededCounterAndDuration_WithIntegrationKey()
     {
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        const string integrationKey = "erp_system_success_metrics";
 
         var queue = new FakeSubscriptionDeliveryQueue
         {
-            ClaimedItems = [MakeWorkItem(integrationKey: "erp_system")]
+            ClaimedItems = [MakeWorkItem(integrationKey: integrationKey)]
         };
         var mediator = BuildMediator(services =>
         {
@@ -253,13 +255,17 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
 
-        var succeeded = Assert.Single(metrics.ForInstrument("integrios_deliveries_succeeded"));
+        var succeeded = Assert.Single(
+            metrics.ForInstrument("integrios_deliveries_succeeded"),
+            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
         Assert.Equal(1, succeeded.Value);
-        Assert.Equal("erp_system", succeeded.Tag("integration_key"));
+        Assert.Equal(integrationKey, succeeded.Tag("integration_key"));
 
-        var duration = Assert.Single(metrics.ForInstrument("integrios_delivery_attempt_duration_seconds"));
+        var duration = Assert.Single(
+            metrics.ForInstrument("integrios_delivery_attempt_duration_seconds"),
+            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
         Assert.Equal("success", duration.Tag("result"));
-        Assert.Equal("erp_system", duration.Tag("integration_key"));
+        Assert.Equal(integrationKey, duration.Tag("integration_key"));
     }
 
     [Theory]
@@ -271,10 +277,11 @@ public sealed class WorkerTransportAbstractionsTests
         int statusCode, bool isTimeout, string expectedClass)
     {
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        const string integrationKey = "erp_system_failed_metrics";
 
         var queue = new FakeSubscriptionDeliveryQueue
         {
-            ClaimedItems = [MakeWorkItem(attemptCount: 0, integrationKey: "erp_system")]
+            ClaimedItems = [MakeWorkItem(attemptCount: 0, integrationKey: integrationKey)]
         };
         var mediator = BuildMediator(services =>
         {
@@ -286,21 +293,26 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
 
-        var failed = Assert.Single(metrics.ForInstrument("integrios_deliveries_failed"));
+        var failed = Assert.Single(
+            metrics.ForInstrument("integrios_deliveries_failed"),
+            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
         Assert.Equal(1, failed.Value);
-        Assert.Equal("erp_system", failed.Tag("integration_key"));
+        Assert.Equal(integrationKey, failed.Tag("integration_key"));
         Assert.Equal(expectedClass, failed.Tag("http_status_class"));
-        Assert.Empty(metrics.ForInstrument("integrios_deliveries_dead_lettered"));
+        Assert.DoesNotContain(
+            metrics.ForInstrument("integrios_deliveries_dead_lettered"),
+            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
     }
 
     [Fact]
     public async Task DispatchSubscriptionDeliveriesCommand_OnMaxAttempts_EmitsDeadLetteredCounter_NotFailed()
     {
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        const string integrationKey = "erp_system_dead_letter_metrics";
 
         var queue = new FakeSubscriptionDeliveryQueue
         {
-            ClaimedItems = [MakeWorkItem(attemptCount: 2, integrationKey: "erp_system")]
+            ClaimedItems = [MakeWorkItem(attemptCount: 2, integrationKey: integrationKey)]
         };
         var mediator = BuildMediator(services =>
         {
@@ -312,10 +324,14 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
 
-        var deadLettered = Assert.Single(metrics.ForInstrument("integrios_deliveries_dead_lettered"));
+        var deadLettered = Assert.Single(
+            metrics.ForInstrument("integrios_deliveries_dead_lettered"),
+            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
         Assert.Equal(1, deadLettered.Value);
-        Assert.Equal("erp_system", deadLettered.Tag("integration_key"));
-        Assert.Empty(metrics.ForInstrument("integrios_deliveries_failed"));
+        Assert.Equal(integrationKey, deadLettered.Tag("integration_key"));
+        Assert.DoesNotContain(
+            metrics.ForInstrument("integrios_deliveries_failed"),
+            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
     }
 
     [Fact]
