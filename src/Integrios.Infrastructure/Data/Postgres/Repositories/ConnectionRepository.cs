@@ -88,7 +88,7 @@ public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory)
         Guid cursorId = default;
         bool hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
 
-        var sql = hasCursor
+        string sql = hasCursor
             ? $"""
                 SELECT {SelectColumns}
                 FROM connections
@@ -132,6 +132,7 @@ public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory)
         Guid id,
         string name,
         JsonElement config,
+        ConnectionAuth? auth,
         string? environment,
         string? description,
         CancellationToken cancellationToken = default)
@@ -140,6 +141,7 @@ public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory)
             UPDATE connections
             SET name = @Name,
                 config = @Config::jsonb,
+                auth = @Auth::jsonb,
                 environment = @Environment,
                 description = @Description,
                 updated_at = now()
@@ -162,6 +164,7 @@ public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory)
                         Id = id,
                         Name = name,
                         Config = JsonSerializer.Serialize(config),
+                        Auth = auth is null ? null : JsonSerializer.Serialize(auth),
                         Environment = environment,
                         Description = description,
                     },

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Abstractions.Auth;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using MediatR;
@@ -11,16 +12,23 @@ public sealed record CreateConnectionCommand(
     Guid IntegrationId,
     string Name,
     JsonElement Config,
+    ConnectionAuthInput? Auth,
     string? Environment,
     string? Description) : IRequest<ConnectionResponse>;
 
-public sealed class CreateConnectionCommandHandler(IConnectionRepository repository)
+public sealed class CreateConnectionCommandHandler(
+    IConnectionRepository repository,
+    IIntegrationRepository integrationRepository,
+    IAuthSchemeRegistry authSchemeRegistry)
     : IRequestHandler<CreateConnectionCommand, ConnectionResponse>
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
 
     public async Task<ConnectionResponse> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
     {
+        Integration integration = await integrationRepository.GetByIdAsync(command.IntegrationId, cancellationToken)
+            ?? throw new InvalidOperationException("The specified integration does not exist.");
+
         var connection = new Connection
         {
             Id = Guid.NewGuid(),
@@ -28,7 +36,7 @@ public sealed class CreateConnectionCommandHandler(IConnectionRepository reposit
             IntegrationId = command.IntegrationId,
             Name = command.Name,
             Config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config,
-            Auth = null,
+            Auth = ConnectionAuthValidator.Validate(integration, command.Auth, authSchemeRegistry),
             Status = OperationalStatus.Active,
             Environment = command.Environment,
             Description = command.Description,

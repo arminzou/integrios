@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Integrios.Admin.Auth;
 using Integrios.Application.Connections;
 using MediatR;
@@ -27,18 +28,32 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     {
         AdminPrincipal principal = httpContext.GetAdminPrincipal();
         if (!principal.IsGlobal && principal.TenantId != tenantId)
+        {
             return Results.Forbid();
+        }
 
         try
         {
             ConnectionResponse response = await mediator.Send(
-                new CreateConnectionCommand(tenantId, request.IntegrationId, request.Name, request.Config, request.Environment, request.Description),
+                new CreateConnectionCommand(
+                    tenantId,
+                    request.IntegrationId,
+                    request.Name,
+                    request.Config,
+                    request.Auth?.ToInput(),
+                    request.Environment,
+                    request.Description),
                 cancellationToken);
+
             return Results.Created($"/admin/tenants/{tenantId}/connections/{response.Id}", response);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("integration does not exist"))
         {
             return Results.UnprocessableEntity(new { error = "The specified integration does not exist." });
+        }
+        catch (ConnectionRequestValidationException ex)
+        {
+            return Results.UnprocessableEntity(new { error = ex.Message });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists for this tenant"))
         {
@@ -56,11 +71,14 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     {
         AdminPrincipal principal = httpContext.GetAdminPrincipal();
         if (!principal.IsGlobal && principal.TenantId != tenantId)
+        {
             return Results.Forbid();
+        }
 
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         ConnectionListResponse response = await mediator.Send(
-            new ListConnectionsByTenantQuery(tenantId, after, limit), cancellationToken);
+            new ListConnectionsByTenantQuery(tenantId, after, limit),
+            cancellationToken);
         return Results.Ok(response);
     }
 
@@ -73,7 +91,9 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     {
         AdminPrincipal principal = httpContext.GetAdminPrincipal();
         if (!principal.IsGlobal && principal.TenantId != tenantId)
+        {
             return Results.Forbid();
+        }
 
         ConnectionResponse? response = await mediator.Send(new GetConnectionByIdQuery(tenantId, id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
@@ -89,12 +109,33 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     {
         AdminPrincipal principal = httpContext.GetAdminPrincipal();
         if (!principal.IsGlobal && principal.TenantId != tenantId)
+        {
             return Results.Forbid();
+        }
 
-        ConnectionResponse? response = await mediator.Send(
-            new UpdateConnectionCommand(tenantId, id, request.Name, request.Config, request.Environment, request.Description),
-            cancellationToken);
-        return response is null ? Results.NotFound() : Results.Ok(response);
+        try
+        {
+            ConnectionResponse? response = await mediator.Send(
+                new UpdateConnectionCommand(
+                    tenantId,
+                    id,
+                    request.Name,
+                    request.Config,
+                    request.Auth?.ToInput(),
+                    request.Environment,
+                    request.Description),
+                cancellationToken);
+
+            return response is null ? Results.NotFound() : Results.Ok(response);
+        }
+        catch (ConnectionRequestValidationException ex)
+        {
+            return Results.UnprocessableEntity(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists for this tenant"))
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
     }
 
     private static async Task<IResult> DeactivateConnection(
@@ -106,12 +147,39 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     {
         AdminPrincipal principal = httpContext.GetAdminPrincipal();
         if (!principal.IsGlobal && principal.TenantId != tenantId)
+        {
             return Results.Forbid();
+        }
 
         bool deactivated = await mediator.Send(new DeactivateConnectionCommand(tenantId, id), cancellationToken);
         return deactivated ? Results.Ok() : Results.NotFound();
     }
 }
 
-internal sealed record CreateConnectionRequest(Guid IntegrationId, string Name, JsonElement Config, string? Environment, string? Description);
-internal sealed record UpdateConnectionRequest(string Name, JsonElement Config, string? Environment, string? Description);
+internal sealed record CreateConnectionRequest(
+    Guid IntegrationId,
+    string Name,
+    JsonElement Config,
+    ConnectionAuthRequest? Auth,
+    string? Environment,
+    string? Description);
+
+internal sealed record UpdateConnectionRequest(
+    string Name,
+    JsonElement Config,
+    ConnectionAuthRequest? Auth,
+    string? Environment,
+    string? Description);
+
+internal sealed record ConnectionAuthRequest(
+    string Scheme,
+    JsonElement Config,
+    [property: JsonPropertyName("secret_refs")] JsonElement SecretRefs)
+{
+    public ConnectionAuthInput ToInput() => new()
+    {
+        Scheme = Scheme,
+        Config = Config,
+        SecretRefs = SecretRefs
+    };
+}
