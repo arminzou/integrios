@@ -4,7 +4,6 @@ using Integrios.Application;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Abstractions.Auth;
 using Integrios.Application.Delivery;
-using Integrios.Application.Telemetry;
 using Integrios.Domain.Integrations;
 using Integrios.Infrastructure.Http.Auth;
 using MediatR;
@@ -15,9 +14,11 @@ namespace Integrios.Worker.Tests;
 
 public sealed class AuthenticatedDispatchTests
 {
-    private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
-    private static readonly JsonElement ApiKeyConfig = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
-    private static readonly JsonElement ApiKeySecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"api_key":"erp_api_key"}""");
+    private static readonly JsonElement ApiKeyConfig =
+        JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
+
+    private static readonly JsonElement ApiKeySecretRefs =
+        JsonSerializer.Deserialize<JsonElement>("""{"api_key":"erp_api_key"}""");
 
     [Fact]
     public async Task Dispatch_ResolvesSecretsAndAppliesSelectedAuthScheme()
@@ -61,6 +62,45 @@ public sealed class AuthenticatedDispatchTests
         Assert.Equal("secret-value", headerValue);
         Assert.Single(queue.SucceededIds);
         Assert.Empty(queue.ScheduledRetries);
+    }
+
+    [Fact]
+    public async Task Dispatch_ResolvedSecretValue_DoesNotLeakIntoAttemptsOrLogs()
+    {
+        const string resolvedSecret = "super-secret-value";
+        var loggerProvider = new CapturingLoggerProvider();
+        var attempts = new RecordingDeliveryAttemptRepository();
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems =
+            [
+                MakeWorkItem(
+                    auth: new ConnectionAuth
+                    {
+                        Scheme = "api_key_header",
+                        Config = ApiKeyConfig,
+                        SecretRefs = ApiKeySecretRefs
+                    })
+            ]
+        };
+
+        IMediator mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryAttemptRepository>(attempts);
+            services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
+            services.AddSingleton<ILoggerProvider>(loggerProvider);
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+
+        Assert.Single(attempts.Records);
+        Assert.DoesNotContain(resolvedSecret, attempts.Records[0].RequestPayloadJson);
+        Assert.DoesNotContain(resolvedSecret, attempts.Records[0].ErrorMessage ?? string.Empty);
+        Assert.False(loggerProvider.AnyMessageContains(resolvedSecret));
     }
 
     [Fact]
@@ -214,6 +254,19 @@ public sealed class AuthenticatedDispatchTests
 
         public Task RecordAsync(Guid eventId, Guid subscriptionId, Guid destinationConnectionId, int attemptNumber, string status, string requestPayloadJson, int? responseStatusCode, string? responseBody, string? errorMessage, DateTimeOffset startedAt, DateTimeOffset? completedAt, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+    }
+
+    private sealed class RecordingDeliveryAttemptRepository : IDeliveryAttemptRepository
+    {
+        public List<(string RequestPayloadJson, string? ErrorMessage)> Records { get; } = [];
+
+        public Task<int> GetAttemptCountAsync(Guid eventId, Guid subscriptionId, CancellationToken cancellationToken = default) => Task.FromResult(0);
+
+        public Task RecordAsync(Guid eventId, Guid subscriptionId, Guid destinationConnectionId, int attemptNumber, string status, string requestPayloadJson, int? responseStatusCode, string? responseBody, string? errorMessage, DateTimeOffset startedAt, DateTimeOffset? completedAt, CancellationToken cancellationToken = default)
+        {
+            Records.Add((requestPayloadJson, errorMessage));
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class CapturingDeliveryClient(DeliveryResult result) : IDeliveryClient
