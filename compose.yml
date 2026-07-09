@@ -30,12 +30,25 @@ services:
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
     command: migrate
 
+  bootstrap:
+    # dev command only: mints the well-known dev admin credential (global_admin_key:admin_bootstrap_secret).
+    # Never deploy this compose file unchanged to a public/prod environment.
+    build:
+      context: .
+      dockerfile: docker/Admin.Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    command: ["bootstrap", "dev"]
+
   ingress:
     build:
       context: .
       dockerfile: docker/Ingress.Dockerfile
     depends_on:
-      migrate:
+      bootstrap:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
@@ -47,7 +60,7 @@ services:
       context: .
       dockerfile: docker/Admin.Dockerfile
     depends_on:
-      migrate:
+      bootstrap:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
@@ -59,7 +72,7 @@ services:
       context: .
       dockerfile: docker/Worker.Dockerfile
     depends_on:
-      migrate:
+      bootstrap:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}

@@ -12,8 +12,13 @@ delivery.
 
 ```bash
 cp .env.example .env   # defaults are fine for a local demo
-make up                # builds images, starts Postgres, runs migrations, then the services
+make up                # builds images, starts Postgres, runs migrations, bootstrap, then the services
 ```
+
+`make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with `bootstrap dev`)
+after migrations and before the services start. It creates the built-in `webhook` integration and
+the dev admin credential used below — bootstrap output, not migration-seeded data — and is
+idempotent, so re-running `make up` against an existing database is safe.
 
 | Service  | URL                     | Purpose                       |
 |----------|-------------------------|-------------------------------|

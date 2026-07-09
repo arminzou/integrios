@@ -74,6 +74,42 @@ public sealed class IntegrationRepository(IDbConnectionFactory connectionFactory
         return (rows.Select(r => r.ToIntegration()).ToList(), nextCursor);
     }
 
+    // Bootstrap: reconcile a platform-owned built-in row by key, overwriting any drift on re-run
+    public async Task<Integration> UpsertBuiltinAsync(Integration integration, CancellationToken cancellationToken = default)
+    {
+        const string sql = $"""
+            INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status, description, created_at, updated_at)
+            VALUES (@Id, @Key, @Name, @Direction, @SupportedAuthSchemes::jsonb, @Status, @Description, @CreatedAt, @UpdatedAt)
+            ON CONFLICT (key) DO UPDATE SET
+                name = EXCLUDED.name,
+                direction = EXCLUDED.direction,
+                supported_auth_schemes = EXCLUDED.supported_auth_schemes,
+                status = EXCLUDED.status,
+                description = EXCLUDED.description,
+                updated_at = EXCLUDED.updated_at
+            RETURNING {SelectColumns}
+            """;
+
+        await using var db = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        IntegrationRow row = await db.QuerySingleAsync<IntegrationRow>(new CommandDefinition(
+            sql,
+            new
+            {
+                integration.Id,
+                integration.Key,
+                integration.Name,
+                Direction = integration.Direction.ToString().ToLowerInvariant(),
+                SupportedAuthSchemes = JsonSerializer.Serialize(integration.SupportedAuthSchemes),
+                Status = integration.Status.ToString().ToLowerInvariant(),
+                integration.Description,
+                integration.CreatedAt,
+                integration.UpdatedAt,
+            },
+            cancellationToken: cancellationToken));
+
+        return row.ToIntegration();
+    }
+
     private sealed record IntegrationRow
     {
         public Guid Id { get; init; }

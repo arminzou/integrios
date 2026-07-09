@@ -1,10 +1,14 @@
 using Integrios.Admin.Auth;
+using Integrios.Admin.Bootstrap;
 using Integrios.Admin.Endpoints;
 using Integrios.Admin.OpenApi;
 using Integrios.Application;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Telemetry;
 using Microsoft.AspNetCore.Authentication;
+
+if (args is ["bootstrap", ..])
+    return await BootstrapCli.RunAsync(args);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,3 +45,4 @@ admin.MapEndpoints(typeof(Program).Assembly);
 app.MapPrometheusScrapingEndpoint();
 
 app.Run();
+return 0;
