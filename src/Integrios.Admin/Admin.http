@@ -1,33 +1,68 @@
-@baseUrl       = {{ADMIN_BASE_URL}}
-@globalKey     = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
-@webhookIntId  = 00000000-0000-0000-0000-000000000001
+@baseUrl = {{ADMIN_BASE_URL}}
+@globalKey = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
+@webhookIntId = 00000000-0000-0000-0000-000000000001
 
-# Sink base URL — use mocksink:8080 when running via docker compose,
-# localhost:5054 when running services locally outside Docker.
+# Local-only integration IDs seeded for manual verification.
+# These are useful because the stock seed data only includes the open webhook integration.
+@authDestinationIntId = 11111111-1111-1111-1111-111111111111
+@sourceOnlyIntId = 22222222-2222-2222-2222-222222222222
+
+# Sink base URL:
+# - use http://mocksink:8080 when calling from one container to another
+# - use http://localhost:5054 when driving the stack from your host machine
 @sinkBase = {{SINK_BASE}}
 
 ###
-# Health (no auth required)
+# Manual flow
+#
+# Read this file top to bottom. It is a control-plane walkthrough.
+#
+# Data flow refresher:
+# 1. Admin creates tenant-owned config: API keys, connections, topics, subscriptions.
+# 2. Ingress accepts events using the tenant API key.
+# 3. Topic decides which source connections may publish to that stream.
+# 4. Worker reads accepted events, matches subscriptions, applies any transform,
+#    and delivers to each destination connection.
+# 5. MockSink is the local downstream system so you can watch deliveries happen.
+
+###
+# Step 0 - Confirm the control plane is up
 GET {{baseUrl}}/health
 
 ###
-# Auth probe — should 401 without key
+# Step 0a - Auth probe
+# Expect 401 because Admin endpoints require the bootstrap admin key.
 GET {{baseUrl}}/admin/tenants
 
 ###
-# List available integrations
+# Step 1 - Inspect the integration catalog
+# This shows the platform-level connection types the control plane knows about.
 GET {{baseUrl}}/admin/integrations
 {{globalKey}}
 
 ###
-# Get webhook integration
+# Step 1a - Inspect the stock open webhook integration
+# This is the generic HTTP integration used by the normal local walkthrough.
 GET {{baseUrl}}/admin/integrations/{{webhookIntId}}
 {{globalKey}}
 
 ###
-# ── Tenant onboarding ────────────────────────────────────────────────────────
+# Step 1b - Inspect the local-only auth-capable integration
+# Use this for manual v2.6 verification. Expect:
+# - direction = destination
+# - supportedAuthSchemes = ["api_key_header"]
+GET {{baseUrl}}/admin/integrations/{{authDestinationIntId}}
+{{globalKey}}
 
 ###
+# Step 1c - Inspect the local-only source-only integration
+# Use this for the destination direction rejection check later.
+GET {{baseUrl}}/admin/integrations/{{sourceOnlyIntId}}
+{{globalKey}}
+
+###
+# Step 2 - Create a tenant
+# The tenant is the top-level isolation boundary for all config below.
 # @name createTenant
 POST {{baseUrl}}/admin/tenants
 {{globalKey}}
@@ -43,17 +78,20 @@ Content-Type: application/json
 ###
 @tenantId = dfc60b3b-7234-48d1-a119-96acb4179e02
 
-# If createTenant returned 409, run this to find the existing tenant ID, then set @tenantId manually above.
+# If createTenant returned 409, list tenants, find the existing row, and set
+# @tenantId above before continuing.
 # @name findTenant
 GET {{baseUrl}}/admin/tenants
 {{globalKey}}
 
 ###
-# Get the new tenant
+# Step 2a - Fetch the tenant you will use for the rest of the walkthrough
 GET {{baseUrl}}/admin/tenants/{{tenantId}}
 {{globalKey}}
 
 ###
+# Step 3 - Create a data-plane API key
+# Ingress uses this key to authenticate event writes for this tenant.
 # @name createApiKey
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
 {{globalKey}}
@@ -68,19 +106,24 @@ Content-Type: application/json
 ###
 @apiKeyId = {{createApiKey.response.body.$.apiKey.id}}
 
-# List data-plane API keys
+# After this request, copy the returned token into:
+# src/Integrios.Ingress/.env
+#
+# INGRESS_API_KEY=<token>
+
+###
+# Step 3a - List tenant API keys
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
 {{globalKey}}
 
 ###
-# Get the created data-plane API key
+# Step 3b - Fetch the created API key metadata
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}
 {{globalKey}}
 
 ###
-# ── Connections ───────────────────────────────────────────────────────────────
-
-###
+# Step 4 - Create the source connection
+# Source connections represent systems that are allowed to publish into a topic.
 # @name createSourceConnection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 {{globalKey}}
@@ -89,12 +132,16 @@ Content-Type: application/json
 {
   "integrationId": "{{webhookIntId}}",
   "name": "acme-source",
-  "config": { "url": "{{sinkBase}}/sink/acme-source" },
+  "config": {
+    "url": "{{sinkBase}}/sink/acme-source"
+  },
   "environment": "production",
   "description": "Inbound source connection"
 }
 
 ###
+# Step 4a - Create the destination connection
+# Destination connections represent systems the worker may deliver to.
 # @name createDestinationConnection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 {{globalKey}}
@@ -103,49 +150,55 @@ Content-Type: application/json
 {
   "integrationId": "{{webhookIntId}}",
   "name": "acme-erp",
-  "config": { "url": "{{sinkBase}}/sink/acme-erp" },
+  "config": {
+    "url": "{{sinkBase}}/sink/acme-erp"
+  },
   "environment": "production",
   "description": "ERP destination connection"
 }
 
 ###
-@sourceConnectionId      = {{createSourceConnection.response.body.$.id}}
+@sourceConnectionId = {{createSourceConnection.response.body.$.id}}
 @destinationConnectionId = {{createDestinationConnection.response.body.$.id}}
 
-# List tenant connections
+###
+# Step 4b - List connections
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 {{globalKey}}
 
 ###
-# Update source connection config — e.g. point to a different sink URL
+# Step 4c - Update the source connection
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}
 {{globalKey}}
 Content-Type: application/json
 
 {
   "name": "acme-source",
-  "config": { "url": "{{sinkBase}}/sink/acme-source" },
+  "config": {
+    "url": "{{sinkBase}}/sink/acme-source"
+  },
   "environment": "production",
   "description": "Inbound source connection (updated)"
 }
 
 ###
-# Update destination connection config
+# Step 4d - Update the destination connection
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}
 {{globalKey}}
 Content-Type: application/json
 
 {
   "name": "acme-erp",
-  "config": { "url": "{{sinkBase}}/sink/acme-erp" },
+  "config": {
+    "url": "{{sinkBase}}/sink/acme-erp"
+  },
   "environment": "production",
   "description": "ERP destination connection (updated)"
 }
 
 ###
-# ── Topic ─────────────────────────────────────────────────────────────────────
-
-###
+# Step 5 - Create a topic
+# A topic is the named tenant stream. Source connections publish to it.
 # @name createTopic
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
 {{globalKey}}
@@ -160,14 +213,15 @@ Content-Type: application/json
 ###
 @topicId = {{createTopic.response.body.$.id}}
 
-# Get the created topic
+###
+# Step 5a - Fetch the topic
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}
 {{globalKey}}
 
 ###
-# ── Subscriptions ─────────────────────────────────────────────────────────────
-
-###
+# Step 6 - Create the main subscription
+# A subscription is an independent consumer of the topic.
+# The worker will create one delivery path per matching subscription.
 # @name createSubscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
 {{globalKey}}
@@ -175,7 +229,9 @@ Content-Type: application/json
 
 {
   "name": "acme-erp-subscription",
-  "matchRules": { "event_type": "payment.created" },
+  "matchRules": {
+    "event_type": "payment.created"
+  },
   "destinationConnectionId": "{{destinationConnectionId}}",
   "dlqEnabled": true,
   "orderIndex": 10,
@@ -185,27 +241,52 @@ Content-Type: application/json
 ###
 @subscriptionId = {{createSubscription.response.body.$.id}}
 
-# List subscriptions for the topic
+###
+# Step 6a - List subscriptions
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
 {{globalKey}}
 
 ###
-# Get the created subscription
+# Step 6b - Fetch the created subscription
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
 {{globalKey}}
 
 ###
-# Update subscription — add a JSONata transform that reshapes the payload.
-# Binding: the event payload is the JSONata root — reference its fields directly
-# (e.g. `amount`), NOT `payload.amount`. Platform metadata is the `$context` variable
-# (e.g. `$context.event_type`, `$context.topic_name`).
+# Step 7 - Preview a transform before saving it
+# Binding reminder:
+# - the event payload is the JSONata root, so reference `amount`
+# - platform metadata lives under `$context`
+POST {{baseUrl}}/admin/transform/preview
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "transform": {
+    "engine": "jsonata",
+    "version": "1",
+    "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
+  },
+  "sampleInput": {
+    "amount": 1200,
+    "paymentId": "pay_001"
+  },
+  "sampleContext": {
+    "event_type": "payment.created",
+    "topic_name": "payments"
+  }
+}
+
+###
+# Step 7a - Save the transform on the subscription
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
 {{globalKey}}
 Content-Type: application/json
 
 {
   "name": "acme-erp-subscription",
-  "matchRules": { "event_type": "payment.created" },
+  "matchRules": {
+    "event_type": "payment.created"
+  },
   "destinationConnectionId": "{{destinationConnectionId}}",
   "transform": {
     "engine": "jsonata",
@@ -218,24 +299,8 @@ Content-Type: application/json
 }
 
 ###
-# Preview a transform (dry-run) — see the output for a sample payload before saving.
-# Try payload.amount vs amount to watch `amount` disappear/appear in the result.
-POST {{baseUrl}}/admin/transform/preview
-{{globalKey}}
-Content-Type: application/json
-
-{
-  "transform": {
-    "engine": "jsonata",
-    "version": "1",
-    "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
-  },
-  "sampleInput": { "amount": 1200, "paymentId": "pay_001" },
-  "sampleContext": { "event_type": "payment.created", "topic_name": "payments" }
-}
-
-###
-# Create a second subscription without a transform
+# Step 7b - Optional: create a second raw subscription
+# This lets you compare transformed and raw deliveries for the same event.
 # @name createRawSubscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
 {{globalKey}}
@@ -243,7 +308,9 @@ Content-Type: application/json
 
 {
   "name": "acme-erp-raw",
-  "matchRules": { "event_type": "payment.created" },
+  "matchRules": {
+    "event_type": "payment.created"
+  },
   "destinationConnectionId": "{{destinationConnectionId}}",
   "dlqEnabled": false,
   "orderIndex": 20,
@@ -251,11 +318,149 @@ Content-Type: application/json
 }
 
 ###
-# Deactivate the raw subscription
+# Step 7c - Optional: deactivate the raw subscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{createRawSubscription.response.body.$.id}}/deactivate
 {{globalKey}}
 
 ###
-# Revoke the data-plane API key when done testing
+# Step 8 - v2.6 authenticated delivery smoke check
+# This proves the live stack accepts an auth-enabled destination connection.
+# The exact auth validation edge cases are already covered by automated tests.
+#
+# Start the worker with:
+# INTEGRIOS_SECRET_ERP_API_KEY=<secret value>
+#
+# @name createAuthDestinationConnection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "integrationId": "{{authDestinationIntId}}",
+  "name": "acme-erp-auth",
+  "config": {
+    "url": "{{sinkBase}}/sink/acme-erp-auth"
+  },
+  "auth": {
+    "scheme": "api_key_header",
+    "config": {
+      "header_name": "X-Api-Key"
+    },
+    "secret_refs": {
+      "api_key": "erp_api_key"
+    }
+  },
+  "environment": "production",
+  "description": "Auth-enabled destination connection for v2.6 verification"
+}
+
+###
+# Step 8a - Update the auth-enabled connection
+PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createAuthDestinationConnection.response.body.$.id}}
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "name": "acme-erp-auth",
+  "config": {
+    "url": "{{sinkBase}}/sink/acme-erp-auth"
+  },
+  "auth": {
+    "scheme": "api_key_header",
+    "config": {
+      "header_name": "X-Partner-Key"
+    },
+    "secret_refs": {
+      "api_key": "erp_api_key_v2"
+    }
+  },
+  "environment": "production",
+  "description": "Updated auth-enabled destination connection for v2.6 verification"
+}
+
+###
+# Step 8b - Direction enforcement smoke check
+# First create a source-only connection.
+# @name createSourceOnlyDestinationConnection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "integrationId": "{{sourceOnlyIntId}}",
+  "name": "acme-source-only-destination",
+  "config": {
+    "url": "{{sinkBase}}/sink/acme-source-only-destination"
+  },
+  "environment": "production",
+  "description": "Used to verify destination-direction enforcement"
+}
+
+###
+# Step 8c - The subscription create should reject that source-only destination.
+# Expect 422.
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
+{{globalKey}}
+Content-Type: application/json
+
+{
+  "name": "reject-source-only-destination",
+  "matchRules": {
+    "event_type": "payment.created"
+  },
+  "destinationConnectionId": "{{createSourceOnlyDestinationConnection.response.body.$.id}}",
+  "dlqEnabled": true,
+  "orderIndex": 15,
+  "description": "Should fail because the destination connection is source-only"
+}
+
+###
+# Step 9 - Cleanup
+# Walk backward through the control-plane objects so the next manual run starts
+# from a known state. Skip requests for resources you did not create.
+
+###
+# Step 9a - Optional: deactivate the raw subscription if it is still active
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{createRawSubscription.response.body.$.id}}/deactivate
+{{globalKey}}
+
+###
+# Step 9b - Deactivate the main subscription
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}/deactivate
+{{globalKey}}
+
+###
+# Step 9c - Optional: deactivate the auth-enabled destination connection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createAuthDestinationConnection.response.body.$.id}}/deactivate
+{{globalKey}}
+
+###
+# Step 9d - Optional: deactivate the source-only verification connection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createSourceOnlyDestinationConnection.response.body.$.id}}/deactivate
+{{globalKey}}
+
+###
+# Step 9e - Deactivate the topic
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/deactivate
+{{globalKey}}
+
+###
+# Step 9f - Deactivate the standard destination connection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}/deactivate
+{{globalKey}}
+
+###
+# Step 9g - Deactivate the source connection
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}/deactivate
+{{globalKey}}
+
+###
+# Step 9h - Revoke the data-plane API key
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}/revoke
+{{globalKey}}
+
+###
+# Step 9i - Optional: deactivate the tenant if you want the entire runbook state
+# retired instead of reused on the next pass.
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/deactivate
 {{globalKey}}

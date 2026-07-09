@@ -1,13 +1,23 @@
 @baseUrl = {{INGRESS_BASE_URL}}
 
-# Run the Admin.http onboarding flow first to create a tenant and API key.
-# Then set this to the token returned by the create API key response.
+# Run Admin.http first.
+#
+# What this file verifies:
+# 1. Ingress accepts an authenticated event write.
+# 2. The event is stored durably and can be fetched back by ID.
+# 3. Worker will later fan out the event to matching subscriptions and deliver it
+#    to MockSink.
+#
+# Setup:
+# - copy the token from Admin.http createApiKey into src/Integrios.Ingress/.env
+# - if you are testing the auth-enabled destination path, also start Worker with:
+#   INTEGRIOS_SECRET_ERP_API_KEY=<secret value>
 @apiKeyToken = {{$dotenv INGRESS_API_KEY}}
 
 ###
-# ── Event intake ──────────────────────────────────────────────────────────────
-
-###
+# Step 1 - Ingest an event
+# This event targets topic `payments`. The worker will later match subscriptions
+# with `event_type = payment.created`.
 # @name ingest
 POST {{baseUrl}}/events
 Authorization: ApiKey {{apiKeyToken}}
@@ -17,19 +27,27 @@ Content-Type: application/json
   "sourceEventId": "event_src_001",
   "topicName": "payments",
   "eventType": "payment.created",
-  "payload": { "paymentId": "pay_001", "amount": 1200 },
-  "metadata": { "source": "manual-test" },
+  "payload": {
+    "paymentId": "pay_001",
+    "amount": 1200
+  },
+  "metadata": {
+    "source": "manual-test"
+  },
   "idempotencyKey": "manual-001"
 }
 
 ###
-# Get the accepted event by ID
 @eventId = {{ingest.response.body.$.eventId}}
 
+###
+# Step 2 - Fetch the accepted event
+# This confirms the durable acceptance boundary: Ingress committed the event
+# before async delivery begins.
 GET {{baseUrl}}/events/{{eventId}}
 Authorization: ApiKey {{apiKeyToken}}
 
 ###
-# Replay a dead-lettered event
+# Step 3 - Replay the event if it later reaches dead-letter
 POST {{baseUrl}}/events/{{eventId}}/replay
 Authorization: ApiKey {{apiKeyToken}}
