@@ -91,10 +91,12 @@ dotnet run --project src/Integrios.MockSink
 ## Database Commands
 
 ```bash
-cp .env.example .env
 make db-info
 make db-migrate
 ```
+
+No `.env` is needed; the Makefile and `compose.yml` default all dev values. A repo-root `.env`
+overrides them.
 
 ## Code Style Guidelines
 

@@ -11,14 +11,17 @@ delivery.
 ## Start the stack
 
 ```bash
-cp .env.example .env   # defaults are fine for a local demo
-make up                # builds images, starts Postgres, runs migrations, bootstrap, then the services
+make up   # builds images, starts Postgres, runs migrations, bootstrap, then the services
 ```
 
-`make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with `bootstrap dev`)
+No configuration is needed: the dev stack carries working defaults. To override any of them,
+create a `.env` file (see the environment variables table below).
+
+`make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
 after migrations and before the services start. It creates the built-in `webhook` integration and
-the dev admin credential used below — bootstrap output, not migration-seeded data — and is
-idempotent, so re-running `make up` against an existing database is safe.
+the admin credential used below (bootstrap output, not migration-seeded data), and is
+idempotent, so re-running `make up` against an existing database is safe. The dev credential
+`global_admin_key:admin_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET` in `.env`.
 
 | Service  | URL                     | Purpose                       |
 |----------|-------------------------|-------------------------------|
@@ -98,14 +101,15 @@ The `.http` request collections under each service in `src/` cover these flows i
 
 ## Environment variables
 
-The defaults in `.env.example` work for a local demo.
+The dev stack needs no `.env` file: `compose.yml` and the `Makefile` default every variable to
+a working local value. Create a `.env` at the repo root only to override.
 
-| Variable                 | Used by                 | Purpose                             |
-|--------------------------|-------------------------|-------------------------------------|
-| `POSTGRES_USER`          | compose, Postgres       | Database username                   |
-| `POSTGRES_PASSWORD`      | compose, Postgres       | Database password                   |
-| `INTEGRIOS_DB_USER`      | Makefile `db-*` targets | Same user, for bare Flyway commands |
-| `INTEGRIOS_DB_PASSWORD`  | Makefile `db-*` targets | Same password                       |
+| Variable                            | Default                  | Used by                     | Purpose                         |
+|-------------------------------------|--------------------------|-----------------------------|---------------------------------|
+| `POSTGRES_USER`                     | `integrios`              | compose, Makefile `db-*`    | Database username               |
+| `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
+| `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`  | `admin_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the admin credential |
+| `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
 
 ## Useful commands
 
@@ -124,3 +128,8 @@ against a local Postgres on `localhost:5432`:
 make db-migrate
 make db-info
 ```
+
+## Production deployment
+
+This guide covers the local dev stack only. For a production reference deployment, see
+[`deploy/README.md`](../deploy/README.md).

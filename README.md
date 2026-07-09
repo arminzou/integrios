@@ -37,11 +37,10 @@ For the full design (processing flow, durability guarantees, and platform concep
 Prerequisite: Docker.
 
 ```bash
-cp .env.example .env
 make up
 ```
 
-This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingress on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end.
+This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingress on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md).
 
 ## Documentation
 

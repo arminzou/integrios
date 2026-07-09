@@ -1,0 +1,80 @@
+services:
+  # Swap point for a managed/external Postgres: remove this service and point
+  # FLYWAY_URL / ConnectionStrings__Postgres at your database instead.
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: integrios
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d integrios"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: flyway/flyway:10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Paths assume this file runs from a checkout of a tagged release. If you copy deploy/
+    # out of the repo, copy db/ alongside it.
+    volumes:
+      - ../db/migrations:/flyway/sql
+      - ../db/flyway.toml:/flyway/conf/flyway.toml
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/integrios
+      FLYWAY_USER: ${POSTGRES_USER}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+    command: migrate
+
+  # Idempotent one-shot: creates the built-in catalog and, only if no live global admin key
+  # exists, the first admin key. If INTEGRIOS_BOOTSTRAP_ADMIN_SECRET is unset a secret is
+  # generated and printed ONCE to this container's logs.
+  bootstrap:
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.1.0}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      INTEGRIOS_BOOTSTRAP_ADMIN_SECRET: ${INTEGRIOS_BOOTSTRAP_ADMIN_SECRET:-}
+    command: ["bootstrap"]
+
+  ingress:
+    image: ghcr.io/arminzou/integrios/ingress:${INTEGRIOS_VERSION:-0.1.0}
+    restart: unless-stopped
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    ports:
+      - "5231:8080"
+
+  admin:
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.1.0}
+    restart: unless-stopped
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    ports:
+      - "5150:8080"
+
+  worker:
+    image: ghcr.io/arminzou/integrios/worker:${INTEGRIOS_VERSION:-0.1.0}
+    restart: unless-stopped
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+
+volumes:
+  postgres_data:

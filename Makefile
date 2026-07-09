@@ -1,5 +1,11 @@
-include .env
+# Zero-config dev: defaults below match compose.yml; an optional .env overrides them.
+-include .env
+POSTGRES_USER ?= integrios
+POSTGRES_PASSWORD ?= integrios_dev
+DOTNET_ENVIRONMENT ?= Development
+INTEGRIOS_BOOTSTRAP_ADMIN_SECRET ?= admin_bootstrap_secret
 export DOTNET_ENVIRONMENT
+export INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
 
 # --- Docker Compose stack ---
 
@@ -17,8 +23,8 @@ logs:
 db-migrate:
 	docker run --rm \
 		--network host \
-		-e FLYWAY_USER=$(INTEGRIOS_DB_USER) \
-		-e FLYWAY_PASSWORD=$(INTEGRIOS_DB_PASSWORD) \
+		-e FLYWAY_USER=$(POSTGRES_USER) \
+		-e FLYWAY_PASSWORD=$(POSTGRES_PASSWORD) \
 		-v ./db/migrations:/flyway/sql \
 		-v ./db/flyway.toml:/flyway/conf/flyway.toml \
 		flyway/flyway migrate
@@ -26,24 +32,24 @@ db-migrate:
 db-info:
 	docker run --rm \
 		--network host \
-		-e FLYWAY_USER=$(INTEGRIOS_DB_USER) \
-		-e FLYWAY_PASSWORD=$(INTEGRIOS_DB_PASSWORD) \
+		-e FLYWAY_USER=$(POSTGRES_USER) \
+		-e FLYWAY_PASSWORD=$(POSTGRES_PASSWORD) \
 		-v ./db/migrations:/flyway/sql \
 		-v ./db/flyway.toml:/flyway/conf/flyway.toml \
 		flyway/flyway info
 
 # --- Admin bootstrap ---
-# DOTNET_ENVIRONMENT is set from .env (see export above) so appsettings.Development.json
-# is loaded for its Postgres connection string.
+# DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET are exported above
+# so appsettings.Development.json and the dev admin secret are picked up.
 
 # Upsert the built-in webhook integration.
 bootstrap-builtins:
-	dotnet run --project src/Integrios.Admin -- bootstrap builtins
+	dotnet run --project src/Integrios.Admin -- bootstrap --builtins
 
 # Create the global admin key (no-op if a live one already exists).
 bootstrap-admin-key:
-	dotnet run --project src/Integrios.Admin -- bootstrap admin-key
+	dotnet run --project src/Integrios.Admin -- bootstrap --admin-key
 
-# Run builtins + admin-key together using the fixed dev secret.
-bootstrap-dev:
-	dotnet run --project src/Integrios.Admin -- bootstrap dev
+# Run builtins + admin-key together.
+bootstrap:
+	dotnet run --project src/Integrios.Admin -- bootstrap
