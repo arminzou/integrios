@@ -23,7 +23,7 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
             new CommandDefinition(
                 """
                 INSERT INTO subscription_deliveries (event_id, subscription_id, destination_connection_id, transform_config_snapshot, traceparent)
-                VALUES (@EventId, @SubscriptionId, @DestinationConnectionId, @TransformConfigJson, @Traceparent)
+                VALUES (@EventId, @SubscriptionId, @DestinationConnectionId, @TransformConfigJson::jsonb, @Traceparent)
                 ON CONFLICT (event_id, subscription_id) DO NOTHING;
                 """,
                 targets.Select(t => new
@@ -69,7 +69,7 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
                     c.tenant_id AS TenantId,
                     u.attempt_count AS AttemptCount,
                     c.config->>'url' AS DestinationUrl,
-                    e.payload_json AS PayloadJson,
+                    e.payload::text AS PayloadJson,
                     e.event_type AS EventType,
                     t.name AS TopicName,
                     e.accepted_at AS AcceptedAt,
