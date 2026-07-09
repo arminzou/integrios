@@ -11,17 +11,22 @@ namespace Integrios.Admin.Bootstrap;
 public static class BootstrapCli
 {
     private const string GlobalAdminPublicKey = "global_admin_key";
-    private const string DevAdminSecret = "admin_bootstrap_secret";
     private const string AdminSecretConfigKey = "INTEGRIOS_BOOTSTRAP_ADMIN_SECRET";
+
+    // Denylist entry only: refuses this well-known dev secret when running with a Production environment.
+    private const string WellKnownDevSecret = "admin_bootstrap_secret";
 
     public static async Task<int> RunAsync(string[] args)
     {
-        string? verb = args.Length > 1 ? args[1] : null;
-        if (verb is not ("builtins" or "admin-key" or "dev"))
+        string[] flags = args.Skip(1).ToArray();
+        if (flags.Any(flag => flag is not ("--builtins" or "--admin-key")))
         {
-            Console.Error.WriteLine("Usage: bootstrap <builtins|admin-key|dev>");
+            Console.Error.WriteLine("Usage: bootstrap [--builtins] [--admin-key]");
             return 1;
         }
+
+        bool runBuiltins = flags.Length == 0 || flags.Contains("--builtins");
+        bool runAdminKey = flags.Length == 0 || flags.Contains("--admin-key");
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
         hostBuilder.Services.AddIntegriosApplication();
@@ -30,15 +35,21 @@ public static class BootstrapCli
         using IHost host = hostBuilder.Build();
         IMediator mediator = host.Services.GetRequiredService<IMediator>();
 
-        if (verb is "builtins" or "dev")
+        if (runBuiltins)
         {
             IReadOnlyList<Integration> reconciled = await mediator.Send(new BootstrapBuiltinsCommand());
             Console.WriteLine($"builtins: reconciled {reconciled.Count} built-in integration(s).");
         }
 
-        if (verb is "admin-key" or "dev")
+        if (runAdminKey)
         {
-            string? secret = verb == "dev" ? DevAdminSecret : hostBuilder.Configuration[AdminSecretConfigKey];
+            string? secret = hostBuilder.Configuration[AdminSecretConfigKey];
+
+            if (hostBuilder.Environment.IsProduction() && secret == WellKnownDevSecret)
+            {
+                Console.Error.WriteLine("admin-key: refusing to bootstrap Production with the well-known dev secret.");
+                return 1;
+            }
 
             BootstrapAdminKeyResult result = await mediator.Send(
                 new BootstrapAdminKeyCommand(GlobalAdminPublicKey, secret));

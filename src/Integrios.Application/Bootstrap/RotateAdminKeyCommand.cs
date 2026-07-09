@@ -19,8 +19,8 @@ public sealed class RotateAdminKeyCommandHandler(IAdminKeyRepository repository)
     public async Task<RotateAdminKeyResult> Handle(RotateAdminKeyCommand command, CancellationToken cancellationToken)
     {
         string publicKey = "admin_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-        string? generatedSecret = command.Secret is null ? AdminKeySecrets.Generate() : null;
-        string secret = command.Secret ?? generatedSecret!;
+        string? generatedSecret = string.IsNullOrWhiteSpace(command.Secret) ? AdminKeySecrets.Generate() : null;
+        string secret = generatedSecret ?? command.Secret!;
 
         await repository.RotateGlobalAsync(new AdminKey
         {

@@ -16,8 +16,10 @@ public sealed class BootstrapAdminKeyCommandHandler(IAdminKeyRepository reposito
         if (await repository.HasLiveGlobalKeyAsync(cancellationToken))
             return new BootstrapAdminKeyResult(Created: false, GeneratedSecret: null);
 
-        string? generatedSecret = command.Secret is null ? AdminKeySecrets.Generate() : null;
-        string secret = command.Secret ?? generatedSecret!;
+        // An empty/whitespace secret (e.g. an unset env var interpolated as "") must generate,
+        // never be stored: SHA256("") would mint a key no auth header can ever present.
+        string? generatedSecret = string.IsNullOrWhiteSpace(command.Secret) ? AdminKeySecrets.Generate() : null;
+        string secret = generatedSecret ?? command.Secret!;
 
         await repository.InsertAsync(new AdminKey
         {

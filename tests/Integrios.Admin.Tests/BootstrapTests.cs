@@ -90,6 +90,18 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     }
 
     [Fact]
+    public async Task BootstrapAdminKey_GeneratesSecret_WhenSecretIsEmpty()
+    {
+        // An unset env var reaches the command as "" (not null); storing SHA256("")
+        // would mint a key no auth header can present.
+        await DeleteGlobalAdminKeysAsync();
+
+        BootstrapAdminKeyResult result = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", ""));
+        Assert.True(result.Created);
+        Assert.False(string.IsNullOrWhiteSpace(result.GeneratedSecret));
+    }
+
+    [Fact]
     public async Task RotateGlobalAdminKey_MintsNewPublicKey_AndRevokesPrior_NoUniqueViolation()
     {
         await DeleteGlobalAdminKeysAsync();
@@ -107,7 +119,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     }
 
     [Fact]
-    public async Task BootstrapDev_CreatesBuiltinsAndDeterministicKey()
+    public async Task BootstrapBuiltinsAndAdminKey_CreatesBuiltinsAndDeterministicKey()
     {
         await DeleteGlobalAdminKeysAsync();
 

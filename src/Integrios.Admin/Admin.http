@@ -38,7 +38,7 @@ GET {{baseUrl}}/admin/tenants
 # Step 1 - Inspect the integration catalog
 # This shows the platform-level connection types the control plane knows about.
 # The webhook integration and the global admin key below come from the `bootstrap` one-shot
-# (`Integrios.Admin bootstrap dev`, run automatically by `make up`), not from migrations.
+# (`Integrios.Admin bootstrap`, run automatically by `make up`), not from migrations.
 GET {{baseUrl}}/admin/integrations
 {{globalKey}}
 
