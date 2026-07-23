@@ -33,8 +33,7 @@ services:
     command: migrate
 
   # Idempotent one-shot: creates the built-in catalog and, only if no live global admin key
-  # exists, the first admin key. If INTEGRIOS_BOOTSTRAP_ADMIN_SECRET is unset a secret is
-  # generated and printed ONCE to this container's logs.
+  # exists, the first admin key. Production fails closed unless the Operator supplies a secret.
   bootstrap:
     image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.1.0}
     depends_on:
@@ -42,6 +41,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      DOTNET_ENVIRONMENT: Production
       INTEGRIOS_BOOTSTRAP_ADMIN_SECRET: ${INTEGRIOS_BOOTSTRAP_ADMIN_SECRET:-}
     command: ["bootstrap"]
 

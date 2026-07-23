@@ -35,6 +35,23 @@ public static class BootstrapCli
         using IHost host = hostBuilder.Build();
         IMediator mediator = host.Services.GetRequiredService<IMediator>();
 
+        string? adminSecret = runAdminKey
+            ? hostBuilder.Configuration[AdminSecretConfigKey]
+            : null;
+
+        if (runAdminKey && hostBuilder.Environment.IsProduction() && string.IsNullOrWhiteSpace(adminSecret))
+        {
+            Console.Error.WriteLine(
+                $"admin-key: Production Bootstrap requires a non-empty {AdminSecretConfigKey} value.");
+            return 1;
+        }
+
+        if (runAdminKey && hostBuilder.Environment.IsProduction() && adminSecret == WellKnownDevSecret)
+        {
+            Console.Error.WriteLine("admin-key: refusing to bootstrap Production with the well-known dev secret.");
+            return 1;
+        }
+
         if (runBuiltins)
         {
             IReadOnlyList<Integration> reconciled = await mediator.Send(new BootstrapBuiltinsCommand());
@@ -43,16 +60,8 @@ public static class BootstrapCli
 
         if (runAdminKey)
         {
-            string? secret = hostBuilder.Configuration[AdminSecretConfigKey];
-
-            if (hostBuilder.Environment.IsProduction() && secret == WellKnownDevSecret)
-            {
-                Console.Error.WriteLine("admin-key: refusing to bootstrap Production with the well-known dev secret.");
-                return 1;
-            }
-
             BootstrapAdminKeyResult result = await mediator.Send(
-                new BootstrapAdminKeyCommand(GlobalAdminPublicKey, secret));
+                new BootstrapAdminKeyCommand(GlobalAdminPublicKey, adminSecret));
 
             if (!result.Created)
                 Console.WriteLine("admin-key: a live global admin key already exists, no-op.");

@@ -1,0 +1,143 @@
+using System.Security.Cryptography;
+using System.Text;
+
+namespace Integrios.QualificationTests;
+
+[Trait("Category", "Qualification")]
+public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
+    : IClassFixture<DatabaseLifecycleFixture>
+{
+    [Fact]
+    public async Task FreshDatabase_RepeatedFlywayAndProductionBootstrap_AreSafeAndIdempotent()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+
+        string firstMigrate = await fixture.RunFlywayAsync(database, "migrate");
+        string secondMigrate = await fixture.RunFlywayAsync(database, "migrate");
+        string validate = await fixture.RunFlywayAsync(database, "validate");
+
+        Assert.Contains("Successfully applied", firstMigrate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("up to date", secondMigrate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Successfully validated", validate, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(19L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database, "SELECT COUNT(*) FROM flyway_schema_history WHERE success"));
+        Assert.Equal(0L, await CountAsync(database, "integrations"));
+        Assert.Equal(0L, await CountAsync(database, "admin_keys"));
+
+        BootstrapProcessResult missingSecret =
+            await DatabaseLifecycleFixture.RunProductionBootstrapAsync(database, secret: null);
+
+        Assert.NotEqual(0, missingSecret.ExitCode);
+        Assert.Contains("requires a non-empty", missingSecret.StandardError, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("shown once", missingSecret.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0L, await CountAsync(database, "integrations"));
+        Assert.Equal(0L, await CountAsync(database, "admin_keys"));
+
+        const string suppliedSecret = "qualification-production-secret";
+        BootstrapProcessResult firstBootstrap =
+            await DatabaseLifecycleFixture.RunProductionBootstrapAsync(database, suppliedSecret);
+
+        Assert.Equal(0, firstBootstrap.ExitCode);
+        Assert.DoesNotContain(suppliedSecret, firstBootstrap.Output, StringComparison.Ordinal);
+        Assert.Equal(1L, await CountAsync(database, "integrations", "key = 'webhook'"));
+        Assert.Equal(1L, await CountAsync(database, "admin_keys", "tenant_id IS NULL AND revoked_at IS NULL"));
+
+        await ExecuteAsync(database, "UPDATE integrations SET name = 'Drifted', status = 'disabled' WHERE key = 'webhook'");
+
+        BootstrapProcessResult secondBootstrap =
+            await DatabaseLifecycleFixture.RunProductionBootstrapAsync(database, "unused-second-secret");
+
+        Assert.Equal(0, secondBootstrap.ExitCode);
+        Assert.Contains("no-op", secondBootstrap.StandardOutput, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("unused-second-secret", secondBootstrap.Output, StringComparison.Ordinal);
+        Assert.Equal("Webhook|both|active|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal(Hash(suppliedSecret), await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT secret_hash FROM admin_keys WHERE tenant_id IS NULL AND revoked_at IS NULL"));
+    }
+
+    [Fact]
+    public async Task PopulatedV17Database_UpgradesAndReconcilesReferencedBuiltin()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 17);
+        await DatabaseLifecycleFixture.ExecuteFixtureAsync(database, "V17_used_database.sql");
+
+        await fixture.RunFlywayAsync(database, "migrate");
+        await fixture.RunFlywayAsync(database, "validate");
+
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "connections",
+            "id = '17000000-0000-0000-0000-000000000002' AND integration_id = '00000000-0000-0000-0000-000000000001'"));
+        Assert.Equal("Drifted Webhook|destination|disabled", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT name || '|' || direction || '|' || status FROM integrations WHERE key = 'webhook'"));
+
+        BootstrapProcessResult bootstrap = await DatabaseLifecycleFixture.RunProductionBootstrapAsync(
+            database,
+            "v17-upgrade-secret");
+
+        Assert.Equal(0, bootstrap.ExitCode);
+        Assert.DoesNotContain("v17-upgrade-secret", bootstrap.Output, StringComparison.Ordinal);
+        Assert.Equal("Webhook|both|active|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "connections",
+            "id = '17000000-0000-0000-0000-000000000002'"));
+    }
+
+    [Fact]
+    public async Task PopulatedV18Database_UpgradePreservesOperatorKeyAndReferencedBuiltin()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 18);
+        await DatabaseLifecycleFixture.ExecuteFixtureAsync(database, "V18_used_database.sql");
+
+        await fixture.RunFlywayAsync(database, "migrate");
+        await fixture.RunFlywayAsync(database, "validate");
+
+        Assert.Equal("sha256:1111111111111111111111111111111111111111111111111111111111111111", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT secret_hash FROM admin_keys WHERE tenant_id IS NULL AND public_key = 'global_admin_key'"));
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "connections",
+            "id = '18000000-0000-0000-0000-000000000002' AND integration_id = '00000000-0000-0000-0000-000000000001'"));
+
+        BootstrapProcessResult bootstrap = await DatabaseLifecycleFixture.RunProductionBootstrapAsync(
+            database,
+            "must-not-replace-operator-secret");
+
+        Assert.Equal(0, bootstrap.ExitCode);
+        Assert.Contains("no-op", bootstrap.StandardOutput, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("must-not-replace-operator-secret", bootstrap.Output, StringComparison.Ordinal);
+        Assert.Equal("sha256:1111111111111111111111111111111111111111111111111111111111111111", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT secret_hash FROM admin_keys WHERE tenant_id IS NULL AND public_key = 'global_admin_key'"));
+        Assert.Equal("Webhook|both|active|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
+    }
+
+    private static async Task ExecuteAsync(QualificationDatabase database, string sql)
+    {
+        await using var connection = new Npgsql.NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new Npgsql.NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static Task<long> CountAsync(
+        QualificationDatabase database,
+        string table,
+        string where = "TRUE") =>
+        DatabaseLifecycleFixture.ScalarAsync<long>(database, $"SELECT COUNT(*) FROM {table} WHERE {where}");
+
+    private static string Hash(string secret) =>
+        "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(secret))).ToLowerInvariant();
+}
