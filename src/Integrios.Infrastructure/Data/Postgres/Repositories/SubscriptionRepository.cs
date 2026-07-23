@@ -18,8 +18,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         s.match_rules::text AS MatchRulesJson,
         s.destination_connection_id AS DestinationConnectionId,
         s.transform_config::text AS TransformConfigJson,
-        s.delivery_policy::text AS DeliveryPolicyJson,
-        s.dlq_enabled AS DlqEnabled,
         s.status AS Status,
         s.order_index AS OrderIndex,
         s.description AS Description,
@@ -34,7 +32,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         JsonElement matchRules,
         Guid destinationConnectionId,
         JsonElement? transformConfig,
-        bool dlqEnabled,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken = default)
@@ -52,7 +49,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                         match_rules,
                         destination_connection_id,
                         transform_config,
-                        dlq_enabled,
                         status,
                         order_index,
                         description,
@@ -65,7 +61,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                         CAST(@MatchRulesJson AS jsonb),
                         c.id,
                         CAST(@TransformConfigJson AS jsonb),
-                        @DlqEnabled,
                         'active',
                         @OrderIndex,
                         @Description,
@@ -91,7 +86,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                     TransformConfigJson = transformConfig.HasValue && transformConfig.Value.ValueKind != JsonValueKind.Null
                         ? transformConfig.Value.GetRawText()
                         : null,
-                    DlqEnabled = dlqEnabled,
                     OrderIndex = orderIndex,
                     Description = description,
                     Now = DateTimeOffset.UtcNow,
@@ -184,7 +178,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         JsonElement matchRules,
         Guid destinationConnectionId,
         JsonElement? transformConfig,
-        bool dlqEnabled,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken = default)
@@ -200,7 +193,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                         match_rules = CAST(@MatchRulesJson AS jsonb),
                         destination_connection_id = c.id,
                         transform_config = CAST(@TransformConfigJson AS jsonb),
-                        dlq_enabled = @DlqEnabled,
                         order_index = @OrderIndex,
                         description = @Description,
                         updated_at = now()
@@ -228,7 +220,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                     TransformConfigJson = transformConfig.HasValue && transformConfig.Value.ValueKind != JsonValueKind.Null
                         ? transformConfig.Value.GetRawText()
                         : null,
-                    DlqEnabled = dlqEnabled,
                     OrderIndex = orderIndex,
                     Description = description,
                 },
@@ -267,8 +258,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         public string MatchRulesJson { get; init; } = "{}";
         public Guid DestinationConnectionId { get; init; }
         public string? TransformConfigJson { get; init; }
-        public string? DeliveryPolicyJson { get; init; }
-        public bool DlqEnabled { get; init; }
         public string Status { get; init; } = string.Empty;
         public int OrderIndex { get; init; }
         public string? Description { get; init; }
@@ -286,10 +275,6 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
             TransformConfig = string.IsNullOrWhiteSpace(TransformConfigJson)
                 ? null
                 : JsonSerializer.Deserialize<JsonElement>(TransformConfigJson),
-            DeliveryPolicy = string.IsNullOrWhiteSpace(DeliveryPolicyJson)
-                ? null
-                : JsonSerializer.Deserialize<JsonElement>(DeliveryPolicyJson),
-            DlqEnabled = DlqEnabled,
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             OrderIndex = OrderIndex,
             Description = Description,

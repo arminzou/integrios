@@ -82,7 +82,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         });
 
-        var processedCount = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        var processedCount = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Equal(1, processedCount);
         Assert.Single(attempts.RecordedAttempts);
@@ -117,7 +117,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Single(capturedPayloads);
         Assert.Equal(payload, capturedPayloads[0]);
@@ -151,7 +151,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(evaluator);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Single(capturedPayloads);
         Assert.Equal(transformedOutput, capturedPayloads[0]);
@@ -183,7 +183,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(evaluator);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Single(queue.DeadLetteredIds);
         Assert.Empty(queue.SucceededIds);
@@ -209,7 +209,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         var succeeded = Assert.Single(
             metrics.ForInstrument("integrios_deliveries_succeeded"),
@@ -247,7 +247,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         var failed = Assert.Single(
             metrics.ForInstrument("integrios_deliveries_failed"),
@@ -278,7 +278,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         var deadLettered = Assert.Single(
             metrics.ForInstrument("integrios_deliveries_dead_lettered"),
@@ -315,7 +315,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         string[] forbidden = ["tenant_id", "subscription_id", "connection_id"];
         Assert.DoesNotContain(metrics.AllTagKeys, key => forbidden.Contains(key));
@@ -367,7 +367,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ILoggerProvider>(capturing);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.True(capturing.AnyEntryHasScopeKeys("event_id", "delivery_id", "subscription_id"));
     }
@@ -382,7 +382,7 @@ public sealed class WorkerTransportAbstractionsTests
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
     }
 
     private static SubscriptionDeliveryWorkItem MakeWorkItem(

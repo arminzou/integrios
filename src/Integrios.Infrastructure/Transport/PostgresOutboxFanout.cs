@@ -101,8 +101,13 @@ public sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory)
                     s.destination_connection_id AS DestinationConnectionId,
                     s.order_index AS OrderIndex,
                     s.match_rules::text AS MatchRulesJson,
-                    s.transform_config::text AS TransformConfigJson
+                    s.transform_config::text AS TransformConfigJson,
+                    c.config->>'url' AS DestinationUrl,
+                    i.key AS IntegrationKey,
+                    c.auth::text AS DestinationAuthJson
                 FROM subscriptions s
+                JOIN connections c ON c.id = s.destination_connection_id
+                JOIN integrations i ON i.id = c.integration_id
                 WHERE s.topic_id = @TopicId
                   AND s.status = 'active'
                 """,
@@ -116,7 +121,10 @@ public sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory)
                 row.DestinationConnectionId,
                 row.OrderIndex,
                 row.MatchRulesJson,
-                row.TransformConfigJson))
+                row.TransformConfigJson,
+                row.DestinationUrl,
+                row.IntegrationKey,
+                row.DestinationAuthJson))
             .ToList();
     }
 
@@ -138,12 +146,18 @@ public sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory)
                     event_id,
                     subscription_id,
                     destination_connection_id,
+                    destination_url,
+                    integration_key,
+                    destination_auth,
                     transform_config_snapshot,
                     traceparent)
                 VALUES (
                     @EventId,
                     @SubscriptionId,
                     @DestinationConnectionId,
+                    @DestinationUrl,
+                    @IntegrationKey,
+                    @DestinationAuthJson::jsonb,
                     @TransformConfigJson::jsonb,
                     @Traceparent)
                 ON CONFLICT (event_id, subscription_id) DO NOTHING
@@ -153,6 +167,9 @@ public sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory)
                     EventId = eventId,
                     target.SubscriptionId,
                     target.DestinationConnectionId,
+                    target.DestinationUrl,
+                    target.IntegrationKey,
+                    target.DestinationAuthJson,
                     target.TransformConfigJson,
                     Traceparent = traceparent
                 }),
@@ -176,5 +193,8 @@ public sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory)
         public int OrderIndex { get; init; }
         public string? MatchRulesJson { get; init; }
         public string? TransformConfigJson { get; init; }
+        public string DestinationUrl { get; init; } = string.Empty;
+        public string IntegrationKey { get; init; } = string.Empty;
+        public string? DestinationAuthJson { get; init; }
     }
 }

@@ -235,7 +235,6 @@ Content-Type: application/json
     "event_type": "payment.created"
   },
   "destinationConnectionId": "{{destinationConnectionId}}",
-  "dlqEnabled": true,
   "orderIndex": 10,
   "description": "ERP sink for created payments"
 }
@@ -295,7 +294,6 @@ Content-Type: application/json
     "version": "1",
     "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
   },
-  "dlqEnabled": true,
   "orderIndex": 10,
   "description": "ERP sink for created payments (with transform)"
 }
@@ -314,7 +312,6 @@ Content-Type: application/json
     "event_type": "payment.created"
   },
   "destinationConnectionId": "{{destinationConnectionId}}",
-  "dlqEnabled": false,
   "orderIndex": 20,
   "description": "Raw passthrough subscription (no transform)"
 }
@@ -411,7 +408,6 @@ Content-Type: application/json
     "event_type": "payment.created"
   },
   "destinationConnectionId": "{{createSourceOnlyDestinationConnection.response.body.$.id}}",
-  "dlqEnabled": true,
   "orderIndex": 15,
   "description": "Should fail because the destination connection is source-only"
 }

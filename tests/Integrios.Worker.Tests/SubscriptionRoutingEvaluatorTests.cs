@@ -76,5 +76,8 @@ public sealed class SubscriptionRoutingEvaluatorTests
             Guid.NewGuid(),
             orderIndex,
             matchRulesJson,
-            """{"engine":"jsonata","version":"1","expression":"$"}""");
+            """{"engine":"jsonata","version":"1","expression":"$"}""",
+            "https://example.test/deliver",
+            "webhook",
+            null);
 }

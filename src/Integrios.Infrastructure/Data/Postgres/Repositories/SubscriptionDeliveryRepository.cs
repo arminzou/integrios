@@ -29,28 +29,28 @@ public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connecti
                     SET status = 'in_flight',
                         updated_at = now()
                     WHERE sd.id IN (SELECT id FROM claimed)
-                    RETURNING id, event_id, subscription_id, destination_connection_id, attempt_count, transform_config_snapshot, traceparent
+                    RETURNING id, event_id, subscription_id, destination_connection_id, attempt_count,
+                              destination_url, integration_key, destination_auth,
+                              transform_config_snapshot, traceparent
                 )
                 SELECT
                     u.id AS Id,
                     u.event_id AS EventId,
                     u.subscription_id AS SubscriptionId,
                     u.destination_connection_id AS DestinationConnectionId,
-                    c.tenant_id AS TenantId,
+                    e.tenant_id AS TenantId,
                     u.attempt_count AS AttemptCount,
-                    c.config->>'url' AS DestinationUrl,
+                    u.destination_url AS DestinationUrl,
                     e.payload::text AS PayloadJson,
                     e.event_type AS EventType,
                     t.name AS TopicName,
                     e.accepted_at AS AcceptedAt,
                     u.transform_config_snapshot AS TransformConfigSnapshot,
-                    i.key AS IntegrationKey,
-                    c.auth::text AS DestinationAuthJson,
+                    u.integration_key AS IntegrationKey,
+                    u.destination_auth::text AS DestinationAuthJson,
                     u.traceparent AS Traceparent
                 FROM updated u
                 JOIN events e ON e.id = u.event_id
-                JOIN connections c ON c.id = u.destination_connection_id
-                JOIN integrations i ON i.id = c.integration_id
                 LEFT JOIN topics t ON t.id = e.topic_id
                 ORDER BY e.accepted_at, u.id;
                 """,

@@ -45,7 +45,6 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId,
-                dlqEnabled = true,
                 orderIndex = 10
             }));
 
@@ -68,7 +67,6 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId,
-                dlqEnabled = true,
                 orderIndex = 10
             }));
 
@@ -90,7 +88,6 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
                 name = "erp-sink-v2",
                 matchRules = new { event_type = "payment.updated" },
                 destinationConnectionId,
-                dlqEnabled = false,
                 orderIndex = 25
             }));
 
@@ -118,7 +115,6 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
                 name,
                 matchRules = new { event_type = eventType },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = true,
                 orderIndex = 10
             }));
 
@@ -185,7 +181,6 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
         JsonElement MatchRules,
         Guid DestinationConnectionId,
         JsonElement? TransformConfig,
-        bool DlqEnabled,
         string Status,
         int OrderIndex,
         string? Description,

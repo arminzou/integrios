@@ -113,6 +113,16 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
+    public async Task ExecuteMigrationSqlAsync(QualificationDatabase database, string migrationName)
+    {
+        string sql = await File.ReadAllTextAsync(Path.Combine(migrationsDirectory, migrationName));
+
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
     public static async Task<T> ScalarAsync<T>(QualificationDatabase database, string sql)
     {
         await using var connection = new NpgsqlConnection(database.ConnectionString);

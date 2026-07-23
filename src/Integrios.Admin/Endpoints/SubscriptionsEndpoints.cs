@@ -50,7 +50,6 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                     request.MatchRules,
                     request.DestinationConnectionId,
                     request.Transform,
-                    request.DlqEnabled,
                     request.OrderIndex,
                     request.Description),
                 cancellationToken);
@@ -136,7 +135,6 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                     request.MatchRules,
                     request.DestinationConnectionId,
                     request.Transform,
-                    request.DlqEnabled,
                     request.OrderIndex,
                     request.Description),
                 cancellationToken);
@@ -222,7 +220,6 @@ internal sealed record CreateSubscriptionRequest(
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? Transform,
-    bool DlqEnabled,
     int OrderIndex,
     string? Description);
 
@@ -231,6 +228,5 @@ internal sealed record UpdateSubscriptionRequest(
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? Transform,
-    bool DlqEnabled,
     int OrderIndex,
     string? Description);

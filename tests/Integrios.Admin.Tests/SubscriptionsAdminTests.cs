@@ -46,20 +46,22 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = true,
                 orderIndex = 10,
                 description = "Primary ERP delivery"
             }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var responseJson = await response.Content.ReadAsStringAsync();
+        using var responseDocument = JsonDocument.Parse(responseJson);
+        Assert.False(responseDocument.RootElement.TryGetProperty("dlqEnabled", out _));
+
+        var body = JsonSerializer.Deserialize<SubscriptionResponse>(responseJson, WebJson);
         Assert.NotNull(body);
         Assert.Equal(topic.Id, body.TopicId);
         Assert.Equal(fixture.TenantId, body.TenantId);
         Assert.Equal("erp-sink", body.Name);
         Assert.Equal(fixture.SourceConnectionId, body.DestinationConnectionId);
-        Assert.True(body.DlqEnabled);
         Assert.Equal(10, body.OrderIndex);
         Assert.Equal("active", body.Status);
         Assert.Equal("payment.created", body.MatchRules.GetProperty("event_type").GetString());
@@ -130,7 +132,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = JsonDocument.Parse(matchRulesJson).RootElement,
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = true,
                 orderIndex = 10,
                 description = "Primary ERP delivery"
             });
@@ -159,7 +160,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink-v2",
                 matchRules = JsonDocument.Parse(matchRulesJson).RootElement,
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 25,
                 description = "Updated ERP delivery"
             });
@@ -183,7 +183,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink-v2",
                 matchRules = new { event_type = "payment.updated" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 25,
                 description = "Updated ERP delivery"
             }));
@@ -193,7 +192,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal("erp-sink-v2", body.Name);
-        Assert.False(body.DlqEnabled);
         Assert.Equal(25, body.OrderIndex);
         Assert.Equal("payment.updated", body.MatchRules.GetProperty("event_type").GetString());
     }
@@ -235,7 +233,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         Guid topicId,
         string name,
         string eventType,
-        bool dlqEnabled = true,
         int orderIndex = 10,
         string? description = null,
         JsonElement? transform = null)
@@ -248,7 +245,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name,
                 matchRules = new { event_type = eventType },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled,
                 orderIndex,
                 description,
                 transform
@@ -283,7 +279,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 1,
                 transform = transformElement
             }));
@@ -311,7 +306,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 1,
                 transform = (object?)null
             }));
@@ -340,7 +334,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 10,
                 transform = transformElement
             }));
@@ -369,7 +362,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 10,
                 transform = (object?)null
             }));
@@ -396,7 +388,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 1,
                 transform = transformElement
             }));
@@ -419,7 +410,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 1,
                 transform = transformElement
             }));
@@ -442,7 +432,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 1,
                 transform = transformElement
             }));
@@ -464,7 +453,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 1,
                 transform = transformElement
             }));
@@ -490,7 +478,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 10
             }));
 
@@ -527,7 +514,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name = "erp-sink",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = fixture.SourceConnectionId,
-                dlqEnabled = false,
                 orderIndex = 1
             }));
 
@@ -542,7 +528,6 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         JsonElement MatchRules,
         Guid DestinationConnectionId,
         JsonElement? TransformConfig,
-        bool DlqEnabled,
         string Status,
         int OrderIndex,
         string? Description,

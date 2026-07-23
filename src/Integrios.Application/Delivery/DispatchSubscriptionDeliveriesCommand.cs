@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Delivery;
 
-public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize, int MaxAttempts) : IRequest<int>;
+public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize) : IRequest<int>;
 
 internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     ISubscriptionDeliveryQueue deliveryQueue,
@@ -27,13 +27,13 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
         foreach (SubscriptionDeliveryWorkItem row in rows)
         {
-            await DispatchAsync(row, command.MaxAttempts, cancellationToken);
+            await DispatchAsync(row, cancellationToken);
         }
 
         return rows.Count;
     }
 
-    private async Task DispatchAsync(SubscriptionDeliveryWorkItem row, int maxAttempts, CancellationToken cancellationToken)
+    private async Task DispatchAsync(SubscriptionDeliveryWorkItem row, CancellationToken cancellationToken)
     {
         using Activity? activity = ActivitySources.StartLinkedSpan("subscription.deliver", row.Traceparent);
         using IDisposable? scope = logger.BeginScope(new Dictionary<string, object?>
@@ -69,7 +69,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                 transformCompletedAt,
                 cancellationToken);
 
-            await HandleFailureAsync(row, maxAttempts, transformFailure, cancellationToken, attemptNumber, 0);
+            await HandleFailureAsync(row, transformFailure, cancellationToken, attemptNumber, 0);
             return;
         }
 
@@ -116,7 +116,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             return;
         }
 
-        await HandleFailureAsync(row, maxAttempts, result, cancellationToken, attemptNumber, durationSeconds);
+        await HandleFailureAsync(row, result, cancellationToken, attemptNumber, durationSeconds);
     }
 
     private async Task<Action<HttpRequestMessage>?> BuildRequestDecoratorAsync(
@@ -143,14 +143,13 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
     private async Task HandleFailureAsync(
         SubscriptionDeliveryWorkItem row,
-        int maxAttempts,
         DeliveryResult result,
         CancellationToken cancellationToken,
         int? attemptNumber = null,
         double? durationSeconds = null)
     {
         int nextAttempt = attemptNumber ?? row.AttemptCount + 1;
-        if (nextAttempt >= maxAttempts)
+        if (nextAttempt >= RetryPolicy.DefaultMaxAttempts)
         {
             await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
             metrics.RecordDeliveryDeadLettered(row.IntegrationKey);

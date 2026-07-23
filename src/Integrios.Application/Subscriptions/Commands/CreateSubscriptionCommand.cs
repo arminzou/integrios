@@ -12,7 +12,6 @@ public sealed record CreateSubscriptionCommand(
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? TransformConfig,
-    bool DlqEnabled,
     int OrderIndex,
     string? Description) : IRequest<SubscriptionResponse?>;
 
@@ -32,7 +31,6 @@ internal sealed class CreateSubscriptionCommandHandler(
             command.MatchRules,
             command.DestinationConnectionId,
             command.TransformConfig,
-            command.DlqEnabled,
             command.OrderIndex,
             command.Description,
             cancellationToken);

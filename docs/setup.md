@@ -62,7 +62,7 @@ TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Conte
 
 # 5. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"acme-erp-sub\",\"matchRules\":{\"event_type\":\"payment.created\"},\"destinationConnectionId\":\"$DST\",\"dlqEnabled\":true}" > /dev/null
+  -d "{\"name\":\"acme-erp-sub\",\"matchRules\":{\"event_type\":\"payment.created\"},\"destinationConnectionId\":\"$DST\"}" > /dev/null
 
 # 6. Send an event to the data plane
 EVENT=$(curl -s -X POST $INGRESS/events -H "Authorization: ApiKey $TOKEN" -H 'Content-Type: application/json' \

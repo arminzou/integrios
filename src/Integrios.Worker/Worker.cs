@@ -19,7 +19,7 @@ public sealed class OutboxWorker(IMediator mediator, ILogger<OutboxWorker> logge
             try
             {
                 var fannedOut = await mediator.Send(new ProcessOutboxBatchCommand(FanoutBatchSize), stoppingToken);
-                var dispatched = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(DispatchBatchSize, RetryPolicy.DefaultMaxAttempts), stoppingToken);
+                var dispatched = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(DispatchBatchSize), stoppingToken);
 
                 if (fannedOut == 0 && dispatched == 0)
                     await Task.Delay(IdleDelay, stoppingToken);

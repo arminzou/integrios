@@ -12,7 +12,6 @@ public interface ISubscriptionRepository
         JsonElement matchRules,
         Guid destinationConnectionId,
         JsonElement? transformConfig,
-        bool dlqEnabled,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken = default);
@@ -34,7 +33,6 @@ public interface ISubscriptionRepository
         JsonElement matchRules,
         Guid destinationConnectionId,
         JsonElement? transformConfig,
-        bool dlqEnabled,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken = default);

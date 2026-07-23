@@ -39,6 +39,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         .Build();
 
     public FakeDeliveryClient DeliveryClient { get; } = new();
+    public MutableSecretResolver SecretResolver { get; } = new();
     public string ConnectionString => container.GetConnectionString();
 
     private IDbConnectionFactory connectionFactory = null!;
@@ -73,7 +74,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
-        services.AddSingleton<ISecretResolver, EnvironmentSecretResolver>();
+        services.AddSingleton<ISecretResolver>(_ => SecretResolver);
         services.AddSingleton<ITransformEvaluator, Integrios.Infrastructure.Transform.JsonataTransformEvaluator>();
         services.AddLogging();
         mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
@@ -84,6 +85,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task ResetAsync()
     {
         DeliveryClient.Reset();
+        SecretResolver.Reset();
 
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
@@ -101,11 +103,14 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task<int> RunWorkerBatchAsync()
     {
         await mediator.Send(new ProcessOutboxBatchCommand(10));
-        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, RetryPolicy.DefaultMaxAttempts));
+        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
     }
 
     public Task<int> RunFanoutBatchAsync(int batchSize = 10)
         => mediator.Send(new ProcessOutboxBatchCommand(batchSize));
+
+    public Task<int> RunDeliveryBatchAsync(int batchSize = 25)
+        => mediator.Send(new DispatchSubscriptionDeliveriesCommand(batchSize));
 
     public async Task<IReadOnlyList<SubscriptionDeliveryState>> GetSubscriptionDeliveriesAsync(Guid eventId)
     {
@@ -226,6 +231,68 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("Config", transformConfigJson ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("Name", subscriptionName);
         await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task UpdateLedgerExecutionConfigurationAsync(
+        string destinationUrl,
+        string? destinationAuthJson,
+        string integrationKey)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            """
+            UPDATE connections
+            SET config = jsonb_build_object('url', @DestinationUrl),
+                auth = @DestinationAuthJson::jsonb
+            WHERE id = @LedgerConnectionId;
+
+            UPDATE integrations
+            SET key = @IntegrationKey
+            WHERE id = @IntegrationId;
+            """,
+            connection);
+        cmd.Parameters.AddWithValue("DestinationUrl", destinationUrl);
+        cmd.Parameters.AddWithValue("DestinationAuthJson", destinationAuthJson ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("LedgerConnectionId", LedgerConnectionId);
+        cmd.Parameters.AddWithValue("IntegrationKey", integrationKey);
+        cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task ClearLedgerConnectionUrlAsync()
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "UPDATE connections SET config = '{}'::jsonb WHERE id = @LedgerConnectionId",
+            connection);
+        cmd.Parameters.AddWithValue("LedgerConnectionId", LedgerConnectionId);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<SubscriptionDeliverySnapshot> GetSubscriptionDeliverySnapshotAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            """
+            SELECT destination_url, integration_key, destination_auth::text, transform_config_snapshot::text
+            FROM subscription_deliveries
+            WHERE event_id = @EventId
+            """,
+            connection);
+        cmd.Parameters.AddWithValue("EventId", eventId);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            throw new InvalidOperationException($"No SubscriptionDelivery exists for Event {eventId}.");
+
+        return new SubscriptionDeliverySnapshot(
+            reader.IsDBNull(0) ? null : reader.GetString(0),
+            reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3));
     }
 
     public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default)
@@ -352,16 +419,27 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
 public sealed record SubscriptionDeliveryState(Guid SubscriptionId, string Status, int AttemptCount, DateTimeOffset? DeliverAfter);
 
+public sealed record SubscriptionDeliverySnapshot(
+    string? DestinationUrl,
+    string IntegrationKey,
+    string? DestinationAuthJson,
+    string? TransformConfigJson);
+
 public sealed class FakeDeliveryClient : IDeliveryClient
 {
-    public List<(string Url, string Payload)> Calls { get; } = [];
+    public List<DeliveryCall> Calls { get; } = [];
     public bool ShouldSucceed { get; set; } = true;
 
     public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
     {
-        _ = decorate;
         _ = cancellationToken;
-        Calls.Add((url, payloadJson));
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        decorate?.Invoke(request);
+        var headers = request.Headers.ToDictionary(
+            header => header.Key,
+            header => header.Value.Single(),
+            StringComparer.OrdinalIgnoreCase);
+        Calls.Add(new DeliveryCall(url, payloadJson, headers));
         var result = ShouldSucceed
             ? new DeliveryResult(true, 200)
             : new DeliveryResult(false, 500);
@@ -372,5 +450,25 @@ public sealed class FakeDeliveryClient : IDeliveryClient
     {
         Calls.Clear();
         ShouldSucceed = true;
+    }
+}
+
+public sealed record DeliveryCall(string Url, string Payload, IReadOnlyDictionary<string, string> Headers);
+
+public sealed class MutableSecretResolver : ISecretResolver
+{
+    private readonly Dictionary<string, string> values = new(StringComparer.Ordinal);
+
+    public void Set(string reference, string value) => values[reference] = value;
+
+    public void Reset() => values.Clear();
+
+    public Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default)
+    {
+        _ = tenantId;
+        _ = cancellationToken;
+        return values.TryGetValue(secretName, out var value)
+            ? Task.FromResult(value)
+            : throw new InvalidOperationException($"Secret reference '{secretName}' is not configured for the test.");
     }
 }

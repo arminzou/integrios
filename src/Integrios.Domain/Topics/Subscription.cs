@@ -12,8 +12,6 @@ public sealed record Subscription
     public required JsonElement MatchRules { get; init; }
     public required Guid DestinationConnectionId { get; init; }
     public JsonElement? TransformConfig { get; init; }
-    public JsonElement? DeliveryPolicy { get; init; }
-    public required bool DlqEnabled { get; init; }
     public required OperationalStatus Status { get; init; }
     public required int OrderIndex { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }

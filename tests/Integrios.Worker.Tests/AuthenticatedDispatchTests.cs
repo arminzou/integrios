@@ -55,7 +55,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Equal(["erp_api_key"], secretResolver.RequestedSecretNames);
         Assert.True(deliveryClient.Headers.TryGetValue("X-Api-Key", out string? headerValue));
@@ -95,7 +95,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Single(attempts.Records);
         Assert.DoesNotContain(resolvedSecret, attempts.Records[0].RequestPayloadJson);
@@ -134,7 +134,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Single(queue.ScheduledRetries);
         Assert.Empty(queue.SucceededIds);
@@ -172,7 +172,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, 3));
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Single(queue.DeadLetteredIds);
         Assert.Empty(queue.SucceededIds);

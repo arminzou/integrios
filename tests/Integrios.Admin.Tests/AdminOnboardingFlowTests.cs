@@ -106,7 +106,6 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
                 name = "acme-erp-subscription",
                 matchRules = new { event_type = "payment.created" },
                 destinationConnectionId = destinationConnection.Id,
-                dlqEnabled = true,
                 orderIndex = 10,
                 description = "ERP sink"
             }));
@@ -115,7 +114,6 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
         var subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
         Assert.NotNull(subscription);
         Assert.Equal(destinationConnection.Id, subscription.DestinationConnectionId);
-        Assert.True(subscription.DlqEnabled);
 
         var listTopics = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{tenant.Id}/topics"));
         Assert.Equal(HttpStatusCode.OK, listTopics.StatusCode);
@@ -159,7 +157,6 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
         string Name,
         JsonElement MatchRules,
         Guid DestinationConnectionId,
-        bool DlqEnabled,
         string Status,
         int OrderIndex,
         string? Description);
