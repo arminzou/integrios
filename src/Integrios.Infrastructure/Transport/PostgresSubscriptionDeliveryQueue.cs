@@ -4,9 +4,6 @@ namespace Integrios.Infrastructure.Transport;
 
 public sealed class PostgresSubscriptionDeliveryQueue(ISubscriptionDeliveryRepository repository) : ISubscriptionDeliveryQueue
 {
-    public Task<int> FanoutAsync(Guid eventId, IReadOnlyList<SubscriptionFanoutTarget> targets, string? traceparent = null, CancellationToken cancellationToken = default)
-        => repository.FanoutAsync(eventId, targets, traceparent, cancellationToken);
-
     public Task<IReadOnlyList<SubscriptionDeliveryWorkItem>> ClaimBatchAsync(int limit, CancellationToken cancellationToken = default)
         => repository.ClaimBatchAsync(limit, cancellationToken);
 

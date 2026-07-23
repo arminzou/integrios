@@ -7,9 +7,9 @@ namespace Integrios.Worker.Tests;
 internal sealed class MetricCollector : IDisposable
 {
     private readonly MeterListener _listener = new();
-
-    public List<Measurement> Longs { get; } = [];
-    public List<Measurement> Doubles { get; } = [];
+    private readonly object _measurementsLock = new();
+    private readonly List<Measurement> _longs = [];
+    private readonly List<Measurement> _doubles = [];
 
     public MetricCollector(string meterName)
     {
@@ -20,19 +20,34 @@ internal sealed class MetricCollector : IDisposable
         };
 
         _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
-            Longs.Add(new Measurement(instrument.Name, value, ToDictionary(tags))));
+        {
+            lock (_measurementsLock)
+                _longs.Add(new Measurement(instrument.Name, value, ToDictionary(tags)));
+        });
 
         _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
-            Doubles.Add(new Measurement(instrument.Name, value, ToDictionary(tags))));
+        {
+            lock (_measurementsLock)
+                _doubles.Add(new Measurement(instrument.Name, value, ToDictionary(tags)));
+        });
 
         _listener.Start();
     }
 
-    public IEnumerable<Measurement> ForInstrument(string name) =>
-        Longs.Concat(Doubles).Where(m => m.Instrument == name);
+    public IReadOnlyList<Measurement> ForInstrument(string name)
+    {
+        lock (_measurementsLock)
+            return _longs.Concat(_doubles).Where(m => m.Instrument == name).ToArray();
+    }
 
-    public IEnumerable<string> AllTagKeys =>
-        Longs.Concat(Doubles).SelectMany(m => m.Tags.Keys).Distinct();
+    public IReadOnlyList<string> AllTagKeys
+    {
+        get
+        {
+            lock (_measurementsLock)
+                return _longs.Concat(_doubles).SelectMany(m => m.Tags.Keys).Distinct().ToArray();
+        }
+    }
 
     private static IReadOnlyDictionary<string, object?> ToDictionary(ReadOnlySpan<KeyValuePair<string, object?>> tags)
     {

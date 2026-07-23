@@ -40,8 +40,4 @@ public interface ISubscriptionRepository
         CancellationToken cancellationToken = default);
 
     Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<SubscriptionTarget>> GetActiveSubscriptionsAsync(Guid topicId, CancellationToken cancellationToken = default);
 }
-
-public record SubscriptionTarget(Guid Id, string Name, string[] MatchEventTypes, Guid DestinationConnectionId, string DestinationUrl, string? TransformConfigJson);

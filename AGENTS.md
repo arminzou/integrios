@@ -4,7 +4,7 @@ Repository guidelines for AI agents working in this repo.
 
 Read this file first.
 
-For this repository, private context and deeper guidance live in `brain/AGENTS.md`.
+For this repository, private context and deeper guidance live in `.brain/AGENTS.md`.
 
 ## Project Overview
 

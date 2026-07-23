@@ -7,36 +7,6 @@ namespace Integrios.Infrastructure.Data;
 
 public sealed class SubscriptionDeliveryRepository(IDbConnectionFactory connectionFactory) : ISubscriptionDeliveryRepository
 {
-    public async Task<int> FanoutAsync(
-        Guid eventId,
-        IReadOnlyList<SubscriptionFanoutTarget> targets,
-        string? traceparent = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (targets.Count == 0)
-        {
-            return 0;
-        }
-
-        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        return await connection.ExecuteAsync(
-            new CommandDefinition(
-                """
-                INSERT INTO subscription_deliveries (event_id, subscription_id, destination_connection_id, transform_config_snapshot, traceparent)
-                VALUES (@EventId, @SubscriptionId, @DestinationConnectionId, @TransformConfigJson::jsonb, @Traceparent)
-                ON CONFLICT (event_id, subscription_id) DO NOTHING;
-                """,
-                targets.Select(t => new
-                {
-                    EventId = eventId,
-                    t.SubscriptionId,
-                    t.DestinationConnectionId,
-                    TransformConfigJson = t.TransformConfigJson,
-                    Traceparent = traceparent
-                }),
-                cancellationToken: cancellationToken));
-    }
-
     public async Task<IReadOnlyList<SubscriptionDeliveryWorkItem>> ClaimBatchAsync(
         int limit,
         CancellationToken cancellationToken = default)

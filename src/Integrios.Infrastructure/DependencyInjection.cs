@@ -47,8 +47,7 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
         services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<IEventRepository, EventRepository>();
-        services.AddSingleton<IOutboxRepository, OutboxRepository>();
-        services.AddSingleton<IEventBus, PostgresEventBus>();
+        services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
         services.AddSingleton<ISubscriptionDeliveryRepository, SubscriptionDeliveryRepository>();
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();

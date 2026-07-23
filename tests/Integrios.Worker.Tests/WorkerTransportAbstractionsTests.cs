@@ -17,45 +17,21 @@ namespace Integrios.Worker.Tests;
 public sealed class WorkerTransportAbstractionsTests
 {
     [Fact]
-    public async Task ProcessOutboxBatchCommand_FansOutMatchingSubscriptions_ThroughEventBusAndQueue()
+    public async Task ProcessOutboxBatchCommand_ProcessesCommittedFanoutResults()
     {
-        var messageId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
-        var matchingSubscriptionId = Guid.NewGuid();
-        var matchingConnectionId = Guid.NewGuid();
-
-        var eventBus = new FakeEventBus(
-            [new EventBusMessage(messageId, eventId, 0)],
-            new Dictionary<Guid, EventDetails>
-            {
-                [eventId] = new(eventId, Guid.NewGuid(), "payment.created", "{\"amount\":42}", topicId)
-            });
-
-        var subscriptions = new FakeSubscriptionRepository(
-            [
-                new SubscriptionTarget(matchingSubscriptionId, "erp", ["payment.created"], matchingConnectionId, "https://erp.example/webhook", null),
-                new SubscriptionTarget(Guid.NewGuid(), "crm", ["payment.updated"], Guid.NewGuid(), "https://crm.example/webhook", null)
-            ]);
-
-        var queue = new FakeSubscriptionDeliveryQueue();
+        var fanout = new FakeOutboxFanout(
+            [new OutboxFanoutResult(eventId, topicId, EventStatus.FannedOut, 2, 2)]);
         var mediator = BuildMediator(services =>
         {
-            services.AddSingleton<IEventBus>(eventBus);
-            services.AddSingleton<ISubscriptionRepository>(subscriptions);
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IOutboxFanout>(fanout);
         });
 
         var processedCount = await mediator.Send(new ProcessOutboxBatchCommand(10));
 
         Assert.Equal(1, processedCount);
-        Assert.Single(queue.FanoutCalls);
-        Assert.Equal(eventId, queue.FanoutCalls[0].EventId);
-        Assert.Single(queue.FanoutCalls[0].Targets);
-        Assert.Equal(matchingSubscriptionId, queue.FanoutCalls[0].Targets[0].SubscriptionId);
-        Assert.Equal(matchingConnectionId, queue.FanoutCalls[0].Targets[0].DestinationConnectionId);
-        Assert.Equal([messageId], eventBus.ProcessedMessageIds);
-        Assert.Equal([(eventId, EventStatus.FannedOut, topicId)], eventBus.StatusUpdates);
+        Assert.Equal(2, fanout.CallCount);
     }
 
     [Fact]
@@ -63,38 +39,18 @@ public sealed class WorkerTransportAbstractionsTests
     {
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
 
-        var messageId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
-
-        var eventBus = new FakeEventBus(
-            [new EventBusMessage(messageId, eventId, 0)],
-            new Dictionary<Guid, EventDetails>
-            {
-                [eventId] = new(eventId, Guid.NewGuid(), "payment.created", "{\"amount\":42}", topicId)
-            });
-
-        // The topic has a subscription, but none match the event type.
-        var subscriptions = new FakeSubscriptionRepository(
-            [
-                new SubscriptionTarget(Guid.NewGuid(), "crm", ["payment.updated"], Guid.NewGuid(), "https://crm.example/webhook", null)
-            ]);
-
-        var queue = new FakeSubscriptionDeliveryQueue();
+        var fanout = new FakeOutboxFanout(
+            [new OutboxFanoutResult(eventId, topicId, EventStatus.Unrouted, 0, 0)]);
         var mediator = BuildMediator(services =>
         {
-            services.AddSingleton<IEventBus>(eventBus);
-            services.AddSingleton<ISubscriptionRepository>(subscriptions);
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IOutboxFanout>(fanout);
         });
 
         var processedCount = await mediator.Send(new ProcessOutboxBatchCommand(10));
 
         Assert.Equal(1, processedCount);
-        Assert.Empty(queue.FanoutCalls);
-        Assert.Equal([(eventId, EventStatus.Unrouted, topicId)], eventBus.StatusUpdates);
-        Assert.Equal([messageId], eventBus.ProcessedMessageIds);
-
         var unrouted = Assert.Single(metrics.ForInstrument("integrios_events_unrouted"));
         Assert.Equal(1, unrouted.Value);
     }
@@ -366,48 +322,6 @@ public sealed class WorkerTransportAbstractionsTests
     }
 
     [Fact]
-    public async Task ProcessOutboxBatch_RestoresOutboxTraceparent_AsFanoutParent_AndPropagatesToDeliveries()
-    {
-        using var collector = new ActivityCollector(ActivitySources.ApplicationName);
-
-        string outboxTraceparent;
-        ActivityTraceId expectedTraceId;
-        using (var acceptance = ActivitySources.Application.StartActivity("test.accept")!)
-        {
-            outboxTraceparent = acceptance.Id!;
-            expectedTraceId = acceptance.TraceId;
-        }
-
-        var eventId = Guid.NewGuid();
-        var topicId = Guid.NewGuid();
-        var eventBus = new FakeEventBus(
-            [new EventBusMessage(Guid.NewGuid(), eventId, 0, outboxTraceparent)],
-            new Dictionary<Guid, EventDetails>
-            {
-                [eventId] = new(eventId, Guid.NewGuid(), "payment.created", "{\"amount\":42}", topicId)
-            });
-        var subscriptions = new FakeSubscriptionRepository(
-            [new SubscriptionTarget(Guid.NewGuid(), "erp", ["payment.created"], Guid.NewGuid(), "https://erp.example/webhook", null)]);
-        var queue = new FakeSubscriptionDeliveryQueue();
-        var mediator = BuildMediator(services =>
-        {
-            services.AddSingleton<IEventBus>(eventBus);
-            services.AddSingleton<ISubscriptionRepository>(subscriptions);
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
-        });
-
-        await mediator.Send(new ProcessOutboxBatchCommand(10));
-
-        var fanoutSpan = collector.Single("outbox.fanout");
-        Assert.Equal(expectedTraceId, fanoutSpan.TraceId);
-
-        // The fanout span's context is stamped onto the delivery rows it writes.
-        var deliveryTraceparent = Assert.Single(queue.FanoutTraceparents);
-        Assert.True(ActivityContext.TryParse(deliveryTraceparent, null, out var deliveryContext));
-        Assert.Equal(expectedTraceId, deliveryContext.TraceId);
-    }
-
-    [Fact]
     public async Task DispatchSubscriptionDeliveries_KeepsSameTrace_AcrossDeliverAfterRetry()
     {
         using var collector = new ActivityCollector(ActivitySources.ApplicationName);
@@ -472,107 +386,64 @@ public sealed class WorkerTransportAbstractionsTests
     }
 
     private static SubscriptionDeliveryWorkItem MakeWorkItem(
-    Guid? id = null,
-    Guid? eventId = null,
-    Guid? subscriptionId = null,
-    Guid? destinationConnectionId = null,
-    Guid? tenantId = null,
-    int attemptCount = 0,
+        Guid? id = null,
+        Guid? eventId = null,
+        Guid? subscriptionId = null,
+        Guid? destinationConnectionId = null,
+        Guid? tenantId = null,
+        int attemptCount = 0,
         string url = "https://erp.example/webhook",
         string payload = "{\"amount\":42}",
         string? transform = null,
         string integrationKey = "erp_system",
         string? traceparent = null) =>
         new(
-    id ?? Guid.NewGuid(),
-    eventId ?? Guid.NewGuid(),
-    subscriptionId ?? Guid.NewGuid(),
-    destinationConnectionId ?? Guid.NewGuid(),
-    tenantId ?? Guid.NewGuid(),
-    attemptCount,
+            id ?? Guid.NewGuid(),
+            eventId ?? Guid.NewGuid(),
+            subscriptionId ?? Guid.NewGuid(),
+            destinationConnectionId ?? Guid.NewGuid(),
+            tenantId ?? Guid.NewGuid(),
+            attemptCount,
             url,
             payload,
             "payment.created",
             "payments",
-    DateTimeOffset.UtcNow,
-    transform,
-    integrationKey,
-    null,
-    traceparent);
+            DateTimeOffset.UtcNow,
+            transform,
+            integrationKey,
+            null,
+            traceparent);
 
     private static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
     {
-    var services = new ServiceCollection();
-    services.AddLogging();
-    services.AddIntegriosApplication();
-    services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]));
-    services.AddSingleton<ISecretResolver>(new NullSecretResolver());
-    registerTestDoubles(services);
-    return services.BuildServiceProvider().GetRequiredService<IMediator>();
-}
-
-    private sealed class FakeEventBus(
-        IReadOnlyList<EventBusMessage> claimedMessages,
-        IReadOnlyDictionary<Guid, EventDetails> eventsById) : IEventBus
-    {
-        public List<Guid> ProcessedMessageIds { get; } = [];
-        public List<(Guid EventId, EventStatus Status, Guid? TopicId)> StatusUpdates { get; } = [];
-
-        public Task<IReadOnlyList<EventBusMessage>> ClaimBatchAsync(int limit, CancellationToken cancellationToken = default)
-            => Task.FromResult(claimedMessages);
-
-        public Task<EventDetails?> GetEventAsync(Guid eventId, CancellationToken cancellationToken = default)
-            => Task.FromResult(eventsById.TryGetValue(eventId, out var ev) ? ev : null);
-
-        public Task MarkProcessedAsync(Guid messageId, CancellationToken cancellationToken = default)
-        {
-            ProcessedMessageIds.Add(messageId);
-            return Task.CompletedTask;
-        }
-
-        public Task UpdateEventStatusAsync(Guid eventId, EventStatus status, Guid? topicId, CancellationToken cancellationToken = default)
-        {
-            StatusUpdates.Add((eventId, status, topicId));
-            return Task.CompletedTask;
-        }
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddIntegriosApplication();
+        services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]));
+        services.AddSingleton<ISecretResolver>(new NullSecretResolver());
+        registerTestDoubles(services);
+        return services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
-    private sealed class FakeSubscriptionRepository(IReadOnlyList<SubscriptionTarget> activeSubscriptions) : ISubscriptionRepository
+    private sealed class FakeOutboxFanout(IReadOnlyList<OutboxFanoutResult> results) : IOutboxFanout
     {
-        public Task<IReadOnlyList<SubscriptionTarget>> GetActiveSubscriptionsAsync(Guid topicId, CancellationToken cancellationToken = default)
-            => Task.FromResult(activeSubscriptions);
+        private int index;
 
-        public Task<Integrios.Domain.Topics.Subscription?> CreateAsync(Guid tenantId, Guid topicId, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, bool dlqEnabled, int orderIndex, string? description, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        public int CallCount { get; private set; }
 
-        public Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<Integrios.Domain.Topics.Subscription?> GetByIdAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<(IReadOnlyList<Integrios.Domain.Topics.Subscription> Items, string? NextCursor)> ListByTopicAsync(Guid tenantId, Guid topicId, string? afterCursor, int limit, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<Integrios.Domain.Topics.Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, bool dlqEnabled, int orderIndex, string? description, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        public Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult<OutboxFanoutResult?>(index < results.Count ? results[index++] : null);
+        }
     }
 
     private sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
     {
-        public List<(Guid EventId, IReadOnlyList<SubscriptionFanoutTarget> Targets)> FanoutCalls { get; } = [];
-        public List<string?> FanoutTraceparents { get; } = [];
         public IReadOnlyList<SubscriptionDeliveryWorkItem> ClaimedItems { get; init; } = [];
         public List<Guid> SucceededIds { get; } = [];
         public List<(Guid DeliveryId, int AttemptCount, DateTimeOffset DeliverAfter)> ScheduledRetries { get; } = [];
         public List<Guid> DeadLetteredIds { get; } = [];
-
-        public Task<int> FanoutAsync(Guid eventId, IReadOnlyList<SubscriptionFanoutTarget> targets, string? traceparent = null, CancellationToken cancellationToken = default)
-        {
-            FanoutCalls.Add((eventId, targets));
-            FanoutTraceparents.Add(traceparent);
-            return Task.FromResult(targets.Count);
-        }
 
         public Task<IReadOnlyList<SubscriptionDeliveryWorkItem>> ClaimBatchAsync(int limit, CancellationToken cancellationToken = default)
             => Task.FromResult(ClaimedItems);
@@ -614,35 +485,35 @@ public sealed class WorkerTransportAbstractionsTests
     {
         public List<string> DeliveredUrls { get; } = [];
 
-    public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
-    {
-        _ = decorate;
-        _ = cancellationToken;
-        DeliveredUrls.Add(url);
-        capturedPayloads?.Add(payloadJson);
-        return Task.FromResult(result);
-    }
+        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+        {
+            _ = decorate;
+            _ = cancellationToken;
+            DeliveredUrls.Add(url);
+            capturedPayloads?.Add(payloadJson);
+            return Task.FromResult(result);
+        }
     }
 
     private sealed class SequenceDeliveryClient(params DeliveryResult[] results) : IDeliveryClient
     {
         private int _index;
 
-    public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
-    {
-        _ = url;
-        _ = payloadJson;
-        _ = decorate;
-        _ = cancellationToken;
-        return Task.FromResult(results[_index++]);
+        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+        {
+            _ = url;
+            _ = payloadJson;
+            _ = decorate;
+            _ = cancellationToken;
+            return Task.FromResult(results[_index++]);
+        }
     }
-}
 
-private sealed class NullSecretResolver : ISecretResolver
-{
-    public Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default)
-        => throw new InvalidOperationException($"Unexpected secret lookup for '{secretName}'.");
-}
+    private sealed class NullSecretResolver : ISecretResolver
+    {
+        public Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException($"Unexpected secret lookup for '{secretName}'.");
+    }
 
     private sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
     {

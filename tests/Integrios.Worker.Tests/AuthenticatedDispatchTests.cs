@@ -223,9 +223,6 @@ public sealed class AuthenticatedDispatchTests
         public List<(Guid DeliveryId, int AttemptCount, DateTimeOffset DeliverAfter)> ScheduledRetries { get; } = [];
         public List<Guid> DeadLetteredIds { get; } = [];
 
-        public Task<int> FanoutAsync(Guid eventId, IReadOnlyList<SubscriptionFanoutTarget> targets, string? traceparent = null, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
         public Task<IReadOnlyList<SubscriptionDeliveryWorkItem>> ClaimBatchAsync(int limit, CancellationToken cancellationToken = default)
             => Task.FromResult(ClaimedItems);
 

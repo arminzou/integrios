@@ -50,13 +50,13 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
     }
 
     [Fact]
-    public async Task Worker_NoMatchingTopic_SkipsGracefullyAndMarksOutboxProcessed()
+    public async Task Worker_NoMatchingSubscription_MarksUnroutedAndCompletesOutbox()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("unknown.event.type");
 
         var dispatched = await fixture.RunWorkerBatchAsync();
 
-        // Stage 1 ran and skipped the event (no topic), Stage 2 had nothing to dispatch
+        // Stage 1 finds no matching Subscription and terminally classifies the Event as unrouted.
         Assert.Equal(0, dispatched);
         Assert.Empty(fixture.DeliveryClient.Calls);
 
@@ -65,6 +65,19 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
         Assert.Equal("unrouted", await fixture.GetEventStatusAsync(eventId));
+    }
+
+    [Fact]
+    public async Task Worker_EventWithoutTopic_MarksUnroutedAndCompletesOutbox()
+    {
+        var eventId = await fixture.InsertOrphanEventAndOutboxAsync("payment.created");
+
+        var dispatched = await fixture.RunWorkerBatchAsync();
+
+        Assert.Equal(0, dispatched);
+        Assert.Empty(await fixture.GetSubscriptionDeliveriesAsync(eventId));
+        Assert.Equal("unrouted", await fixture.GetEventStatusAsync(eventId));
+        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
     }
 
     [Fact]

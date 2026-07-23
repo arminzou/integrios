@@ -42,7 +42,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public string ConnectionString => container.GetConnectionString();
 
     private IDbConnectionFactory connectionFactory = null!;
-    private IOutboxRepository outboxRepository = null!;
+    private IOutboxFanout outboxFanout = null!;
     private ISubscriptionRepository subscriptionRepository = null!;
     private ISubscriptionDeliveryRepository subscriptionDeliveryRepository = null!;
     private IDeliveryAttemptRepository deliveryAttemptRepository = null!;
@@ -56,7 +56,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
         var dataSource = new NpgsqlDataSourceBuilder(ConnectionString).Build();
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
-        outboxRepository = new OutboxRepository(connectionFactory);
+        outboxFanout = new PostgresOutboxFanout(connectionFactory);
         subscriptionRepository = new SubscriptionRepository(connectionFactory);
         subscriptionDeliveryRepository = new SubscriptionDeliveryRepository(connectionFactory);
         deliveryAttemptRepository = new DeliveryAttemptRepository(connectionFactory);
@@ -64,8 +64,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddIntegriosApplication();
-        services.AddSingleton<IOutboxRepository>(outboxRepository);
-        services.AddSingleton<IEventBus>(_ => new PostgresEventBus(outboxRepository));
+        services.AddSingleton(outboxFanout);
         services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
         services.AddSingleton<ISubscriptionDeliveryRepository>(subscriptionDeliveryRepository);
         services.AddSingleton<ISubscriptionDeliveryQueue>(_ => new PostgresSubscriptionDeliveryQueue(subscriptionDeliveryRepository));
@@ -105,6 +104,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25, RetryPolicy.DefaultMaxAttempts));
     }
 
+    public Task<int> RunFanoutBatchAsync(int batchSize = 10)
+        => mediator.Send(new ProcessOutboxBatchCommand(batchSize));
+
     public async Task<IReadOnlyList<SubscriptionDeliveryState>> GetSubscriptionDeliveriesAsync(Guid eventId)
     {
         await using var connection = new NpgsqlConnection(ConnectionString);
@@ -128,6 +130,17 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3)));
         }
         return rows;
+    }
+
+    public async Task<int> GetSubscriptionDeliveryCountAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT COUNT(*) FROM subscription_deliveries WHERE event_id = @EventId",
+            connection);
+        command.Parameters.AddWithValue("EventId", eventId);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
     public async Task ForceDeliveryRetryNowAsync(Guid eventId)

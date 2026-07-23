@@ -64,8 +64,8 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
     public async Task Replay_EventOwnedByOtherTenant_ReturnsFalse()
     {
         var eventId = await fixture.InsertOrphanEventAndOutboxAsync("payment.created");
-        // Orphan tenant's event dead-letters without deliveries, but even so,
-        // replaying as the main tenant must return false (tenant isolation)
+        // The orphan Tenant's Event produces no deliveries. Replaying it as the main Tenant
+        // must still return false because replay is Tenant-isolated.
         var replayed = await fixture.ReplayAsync(eventId);
         Assert.False(replayed);
     }
