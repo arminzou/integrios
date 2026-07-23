@@ -25,6 +25,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapEndpoints(typeof(Program).Assembly);
 app.MapPrometheusScrapingEndpoint();
 

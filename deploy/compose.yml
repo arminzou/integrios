@@ -54,7 +54,7 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     ports:
-      - "5231:8080"
+      - "${INTEGRIOS_INGRESS_PORT:-5231}:8080"
 
   admin:
     image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.1.0}
@@ -65,7 +65,7 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     ports:
-      - "5150:8080"
+      - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
 
   worker:
     image: ghcr.io/arminzou/integrios/worker:${INTEGRIOS_VERSION:-0.1.0}

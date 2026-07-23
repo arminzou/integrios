@@ -1,0 +1,23 @@
+services:
+  postgres:
+    ports:
+      - "${INTEGRIOS_POSTGRES_PORT}:5432"
+
+  bootstrap:
+    # These explicit tags are also assigned by the development Compose build. The deployment
+    # phase therefore reuses the exact local images without relying on Compose's implicit naming.
+    image: ${INTEGRIOS_ADMIN_IMAGE}
+
+  ingress:
+    image: ${INTEGRIOS_INGRESS_IMAGE}
+
+  admin:
+    image: ${INTEGRIOS_ADMIN_IMAGE}
+
+  worker:
+    image: ${INTEGRIOS_WORKER_IMAGE}
+
+  mocksink:
+    image: ${INTEGRIOS_MOCKSINK_IMAGE}
+    ports:
+      - "${INTEGRIOS_MOCKSINK_PORT}:8080"

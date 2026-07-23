@@ -63,3 +63,19 @@ DELETE {{baseUrl}}/control/acme-source
 
 ###
 DELETE {{baseUrl}}/control/acme-source-only-destination
+
+### Query captured receipts without exposing header values
+GET {{baseUrl}}/receipts/acme-erp
+
+### Assert a captured header value without echoing it in the response
+POST {{baseUrl}}/receipts/acme-erp/assert-headers
+Content-Type: application/json
+
+{
+  "headers": {
+    "X-Qualification": "expected-value"
+  }
+}
+
+### Reset captured receipts
+DELETE {{baseUrl}}/receipts/acme-erp
