@@ -18,7 +18,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
     private static readonly Guid WebhookIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
+    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
         .WithDatabase("integrios")
         .WithUsername("postgres")
         .WithPassword("postgres")

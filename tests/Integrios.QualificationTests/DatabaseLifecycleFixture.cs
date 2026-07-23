@@ -25,7 +25,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             .WithName($"integrios-qualification-{Guid.NewGuid():N}")
             .Build();
 
-        postgres = new PostgreSqlBuilder("postgres:16-alpine")
+        postgres = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
             .WithDatabase("postgres")
             .WithUsername(PostgresUser)
             .WithPassword(PostgresPassword)
@@ -72,7 +72,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         string command,
         int? target = null)
     {
-        var builder = new ContainerBuilder("flyway/flyway:10")
+        var builder = new ContainerBuilder("flyway/flyway:10.22.0")
             .WithNetwork(network)
             .WithBindMount(migrationsDirectory, "/flyway/sql", AccessMode.ReadOnly)
             .WithEnvironment("FLYWAY_URL", $"jdbc:postgresql://{PostgresAlias}:5432/{database.Name}")

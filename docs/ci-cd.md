@@ -3,8 +3,8 @@
 Integrios ships a single GitHub Actions pipeline (`.github/workflows/ci.yml`) you can run
 as-is or fork and adapt. It is layered so you adopt only what you need:
 
-1. **Verify**: build and unit-test on every push and pull request. No configuration,
-   no secrets. This runs for forks too.
+1. **Verify**: locked restore, dependency audit, build, and test on every push and pull
+   request. No configuration, no secrets. This runs for forks too.
 2. **Package**: build container images for the deployable services (`ingress`, `admin`,
    `worker`) and publish them to a container registry.
 3. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
@@ -25,6 +25,10 @@ Images are tagged with the commit SHA, the branch name, `latest` on the default 
 and semver tags on `v*` releases. Each image includes an SBOM and build provenance
 attestation.
 
+The repository pins its .NET SDK, NuGet dependency graph, container versions, and
+third-party GitHub Actions. Action references use immutable commit SHAs with a readable
+release-version comment; keep that form when adapting the workflow.
+
 Publishing is gated to `push` events, so pull requests (including from forks) only run
 Verify and never need or expose registry credentials.
 
@@ -42,7 +46,7 @@ The pipeline lives in one file you own in your fork. To publish elsewhere, edit 
 
   ```yaml
   - name: Log in
-    uses: docker/login-action@v3
+    uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
     with:
       registry: registry.example.com
       username: ${{ secrets.REGISTRY_USERNAME }}
@@ -50,7 +54,7 @@ The pipeline lives in one file you own in your fork. To publish elsewhere, edit 
 
   - name: Derive image metadata
     id: meta
-    uses: docker/metadata-action@v5
+    uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
     with:
       images: registry.example.com/my-team/integrios/${{ matrix.service.name }}
   ```

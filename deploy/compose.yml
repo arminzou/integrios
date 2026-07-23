@@ -2,7 +2,7 @@ services:
   # Swap point for a managed/external Postgres: remove this service and point
   # FLYWAY_URL / ConnectionStrings__Postgres at your database instead.
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.14-alpine3.24
     restart: unless-stopped
     environment:
       POSTGRES_DB: integrios
@@ -17,7 +17,7 @@ services:
       retries: 10
 
   migrate:
-    image: flyway/flyway:10
+    image: flyway/flyway:10.22.0
     depends_on:
       postgres:
         condition: service_healthy

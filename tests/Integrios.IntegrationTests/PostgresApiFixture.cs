@@ -16,7 +16,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public const string TenantAToken = "intg_aa11bb22cc33dd440011223344556677001122334455667700112233445566";
     public const string TenantBToken = "intg_ee55ff66aa77bb888877665544332211887766554433221188776655443322";
 
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
+    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
         .WithDatabase("integrios")
         .WithUsername("postgres")
         .WithPassword("postgres")

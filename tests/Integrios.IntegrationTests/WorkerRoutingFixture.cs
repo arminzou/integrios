@@ -32,7 +32,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private static readonly Guid RiskConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000004");
     private static readonly Guid TopicId = Guid.Parse("cccccccc-0000-0000-0000-000000000005");
 
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
+    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
         .WithDatabase("integrios")
         .WithUsername("postgres")
         .WithPassword("postgres")
