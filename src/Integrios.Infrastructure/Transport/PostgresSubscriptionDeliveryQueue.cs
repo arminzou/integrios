@@ -43,6 +43,7 @@ public sealed class PostgresSubscriptionDeliveryQueue(
                     sd.transform_config_snapshot AS TransformConfigSnapshot,
                     sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId,
+                    tenant.slug AS TenantSlug,
                     e.payload::text AS PayloadJson,
                     e.event_type AS EventType,
                     e.accepted_at AS AcceptedAt,
@@ -50,6 +51,7 @@ public sealed class PostgresSubscriptionDeliveryQueue(
                     now() AS DatabaseNow
                 FROM subscription_deliveries sd
                 JOIN events e ON e.id = sd.event_id
+                JOIN tenants tenant ON tenant.id = e.tenant_id
                 LEFT JOIN topics t ON t.id = e.topic_id
                 WHERE (
                     sd.status = 'in_flight'
@@ -176,6 +178,7 @@ public sealed class PostgresSubscriptionDeliveryQueue(
                 row.SubscriptionId,
                 row.DestinationConnectionId,
                 row.TenantId,
+                row.TenantSlug,
                 row.DestinationUrl ?? string.Empty,
                 row.PayloadJson ?? string.Empty,
                 row.EventType ?? string.Empty,
@@ -387,6 +390,7 @@ public sealed class PostgresSubscriptionDeliveryQueue(
         public Guid SubscriptionId { get; init; }
         public Guid DestinationConnectionId { get; init; }
         public Guid TenantId { get; init; }
+        public string TenantSlug { get; init; } = string.Empty;
         public string Status { get; init; } = string.Empty;
         public int LifetimeAttemptCount { get; init; }
         public int RetryCycleAttemptCount { get; init; }

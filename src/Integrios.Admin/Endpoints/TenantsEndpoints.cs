@@ -37,6 +37,10 @@ public sealed class TenantsEndpoints : IEndpointGroup
         {
             return Results.Conflict(new { error = "A tenant with that slug already exists." });
         }
+        catch (TenantRequestValidationException ex)
+        {
+            return Results.UnprocessableEntity(new { error = ex.Message });
+        }
     }
 
     private static async Task<IResult> ListTenants(

@@ -57,6 +57,8 @@ public sealed class AuthenticatedDispatchTests
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
         Assert.Equal(["erp_api_key"], secretResolver.RequestedSecretNames);
+        Assert.Equal(tenantId, Assert.Single(secretResolver.RequestedScopes).Id);
+        Assert.Equal("test-tenant", Assert.Single(secretResolver.RequestedScopes).Slug);
         Assert.True(deliveryClient.Headers.TryGetValue("X-Api-Key", out string? headerValue));
         Assert.Equal("secret-value", headerValue);
         Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, Assert.Single(queue.Finalizations).Disposition);
@@ -97,6 +99,44 @@ public sealed class AuthenticatedDispatchTests
         Assert.DoesNotContain(resolvedSecret, completion.RequestPayloadJson!);
         Assert.DoesNotContain(resolvedSecret, completion.ErrorMessage ?? string.Empty);
         Assert.False(loggerProvider.AnyMessageContains(resolvedSecret));
+    }
+
+    [Fact]
+    public async Task Dispatch_SecretWithTrailingNewline_FailsRequestConstructionWithoutLeaking()
+    {
+        const string resolvedSecret = "super-secret-value\n";
+        var loggerProvider = new CapturingLoggerProvider();
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems =
+            [
+                MakeWorkItem(
+                    auth: new ConnectionAuth
+                    {
+                        Scheme = "api_key_header",
+                        Config = ApiKeyConfig,
+                        SecretRefs = ApiKeySecretRefs
+                    })
+            ]
+        };
+
+        IMediator mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
+            services.AddSingleton<ILoggerProvider>(loggerProvider);
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+
+        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
+        Assert.False(completion.Succeeded);
+        Assert.Equal(DeliveryFailurePhase.RequestConstruction, completion.FailurePhase);
+        Assert.DoesNotContain("super-secret-value", completion.ErrorMessage ?? string.Empty);
+        Assert.False(loggerProvider.AnyMessageContains("super-secret-value"));
     }
 
     [Fact]
@@ -308,6 +348,7 @@ public sealed class AuthenticatedDispatchTests
             subscriptionId ?? Guid.NewGuid(),
             destinationConnectionId ?? Guid.NewGuid(),
             tenantId ?? Guid.NewGuid(),
+            "test-tenant",
             "https://erp.example/webhook",
             "{\"amount\":42}",
             "payment.created",
@@ -367,11 +408,13 @@ public sealed class AuthenticatedDispatchTests
 
     private sealed class FakeSecretResolver(IReadOnlyDictionary<string, string> values) : ISecretResolver
     {
+        public string ProviderName => "test";
         public List<string> RequestedSecretNames { get; } = [];
+        public List<TenantSecretScope> RequestedScopes { get; } = [];
 
-        public Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default)
+        public Task<string> ResolveAsync(TenantSecretScope tenant, string secretName, CancellationToken cancellationToken = default)
         {
-            _ = tenantId;
+            RequestedScopes.Add(tenant);
             RequestedSecretNames.Add(secretName);
 
             if (values.TryGetValue(secretName, out string? value))

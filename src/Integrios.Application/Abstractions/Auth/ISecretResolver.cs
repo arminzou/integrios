@@ -2,5 +2,12 @@ namespace Integrios.Application.Abstractions.Auth;
 
 public interface ISecretResolver
 {
-    Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default);
+    string ProviderName { get; }
+
+    Task<string> ResolveAsync(
+        TenantSecretScope tenant,
+        string secretReference,
+        CancellationToken cancellationToken = default);
 }
+
+public sealed record TenantSecretScope(Guid Id, string Slug);

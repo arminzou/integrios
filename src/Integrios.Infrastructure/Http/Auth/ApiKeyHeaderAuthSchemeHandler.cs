@@ -19,6 +19,7 @@ public sealed class ApiKeyHeaderAuthSchemeHandler : IAuthSchemeHandler
             throw new InvalidOperationException("Auth secret field 'api_key' is required.");
         }
 
+        SecretValueValidator.EnsureHeaderSafe(apiKey, "api_key");
         request.Headers.TryAddWithoutValidation(headerName, apiKey);
     }
 }

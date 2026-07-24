@@ -9,6 +9,7 @@ using Integrios.Infrastructure.Transform;
 using Integrios.Infrastructure.Transport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 
 namespace Integrios.Infrastructure;
@@ -39,14 +40,7 @@ public static class DependencyInjection
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
-        services.AddSingleton<ISecretResolver>(_ =>
-        {
-            string? provider = configuration["Integrios:Secrets:Provider"];
-
-            return string.IsNullOrWhiteSpace(provider) || provider.Equals("env", StringComparison.OrdinalIgnoreCase)
-                ? new EnvironmentSecretResolver()
-                : throw new InvalidOperationException($"Unsupported secrets provider '{provider}'.");
-        });
+        services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
         services.AddSingleton<ITenantRepository, TenantRepository>();
         services.AddSingleton<IIntegrationRepository, IntegrationRepository>();
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Integrios.Application.Abstractions.Auth;
 using Integrios.Domain.Integrations;
 
@@ -105,14 +104,11 @@ internal static partial class ConnectionAuthValidator
             }
 
             string value = property.Value.GetString() ?? "";
-            if (!SecretReferencePattern().IsMatch(value))
+            if (!SecretReferenceName.IsValid(value))
             {
                 throw new ConnectionRequestValidationException(
-                    $"Secret reference '{property.Name}' must match [a-z0-9_]+.");
+                    $"Secret reference '{property.Name}' must be a lowercase logical name of 1 to 63 characters.");
             }
         }
     }
-
-    [GeneratedRegex("^[a-z0-9_]+$", RegexOptions.CultureInvariant)]
-    private static partial Regex SecretReferencePattern();
 }

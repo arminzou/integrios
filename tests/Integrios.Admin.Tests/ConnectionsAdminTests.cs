@@ -184,6 +184,23 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
     }
 
     [Theory]
+    [InlineData("_leading")]
+    [InlineData("a234567890123456789012345678901234567890123456789012345678901234")]
+    public async Task CreateConnection_RejectsSecretReferenceOutsideFlatNameContract(string reference)
+    {
+        Guid integrationId = await InsertIntegrationAsync($"invalid_ref_{Guid.NewGuid():N}", ["api_key_header"]);
+
+        var response = await PostConnectionWithAuthAsync(
+            integrationId,
+            "invalid-reference",
+            "api_key_header",
+            new { header_name = "X-Api-Key" },
+            new { api_key = reference });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("Integrios-Delivery-Id")]
     [InlineData("integrios-attempt-number")]
     public async Task CreateConnection_ReservedDeliveryHeader_Returns422(string headerName)

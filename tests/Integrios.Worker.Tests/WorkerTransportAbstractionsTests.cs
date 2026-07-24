@@ -462,6 +462,7 @@ public sealed class WorkerTransportAbstractionsTests
             subscriptionId ?? Guid.NewGuid(),
             destinationConnectionId ?? Guid.NewGuid(),
             tenantId ?? Guid.NewGuid(),
+            "test-tenant",
             url,
             payload,
             "payment.created",
@@ -565,7 +566,9 @@ public sealed class WorkerTransportAbstractionsTests
 
     private sealed class NullSecretResolver : ISecretResolver
     {
-        public Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default)
+        public string ProviderName => "test";
+
+        public Task<string> ResolveAsync(TenantSecretScope tenant, string secretName, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException($"Unexpected secret lookup for '{secretName}'.");
     }
 

@@ -11,6 +11,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0.10
 # Npgsql probes for Kerberos/GSSAPI on connect; the slim base image omits it.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && mkdir -p /run/secrets/integrios \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app .

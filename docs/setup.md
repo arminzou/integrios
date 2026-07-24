@@ -17,6 +17,13 @@ make up   # builds images, starts Postgres, runs migrations, bootstrap, then the
 No configuration is needed: the dev stack carries working defaults. To override any of them,
 create a `.env` file (see the environment variables table below).
 
+Create the local secret mount directory before starting Compose (it may remain empty when the
+quickstart uses unauthenticated connections):
+
+```bash
+mkdir -p secrets
+```
+
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
 after migrations and before the services start. It creates the built-in `webhook` integration and
 the admin credential used below (bootstrap output, not migration-seeded data), and is
@@ -110,6 +117,52 @@ a working local value. Create a `.env` at the repo root only to override.
 | `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
 | `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`  | `admin_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the admin credential |
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
+| `INTEGRIOS_SECRETS_PROVIDER`        | `file`                   | Worker                      | Selects `file` or `configuration` secret resolution |
+| `INTEGRIOS_SECRETS_DIR`             | `./secrets`              | Worker                      | Host directory mounted read-only for the file backend |
+
+## Delivery secrets
+
+Connections store logical secret references, never resolved values. The Worker resolves each
+reference immediately before each delivery attempt. This means retries and replay use the current
+value after rotation.
+
+The default `file` backend reads one exact UTF-8 value from:
+
+```text
+./secrets/<tenant-slug>/<reference>
+```
+
+For example, reference `erp_api_key` for tenant `acme` is mounted into the Worker as
+`/run/secrets/integrios/acme/erp_api_key`. Values are not trimmed, and the header-based auth
+schemes reject values containing CR or LF, so an accidental trailing newline (for example from
+`echo` without `-n`) fails delivery. Files may be symlinks, which makes atomic provider-driven
+rotation practical. Values must be non-empty, contain no NUL, and be at most 64 KiB.
+
+The alternative `configuration` backend is selected with
+`Integrios:Secrets:Provider=configuration` (or `INTEGRIOS_SECRETS_PROVIDER=configuration` in
+Compose). It reads `Secrets:<tenant-slug>:<reference>` from the Worker's normal .NET configuration.
+For local Development, the Worker enables .NET User Secrets:
+
+```bash
+dotnet user-secrets --project src/Integrios.Worker set "Secrets:acme:erp_api_key" "secret-value"
+Integrios__Secrets__Provider=configuration dotnet run --project src/Integrios.Worker
+```
+
+Any .NET configuration provider can supply the same key (for example appsettings, environment
+variables using `Secrets__acme__erp_api_key`, or a provider added in your own build). Only the
+selected backend is consulted; there is no file/configuration fallback.
+
+Validate resolution without making deliveries:
+
+```bash
+docker compose run --rm worker secrets validate --all
+docker compose run --rm worker secrets validate --tenant acme
+docker compose run --rm worker secrets validate --tenant acme --connection <connection-id>
+```
+
+Validation prints references and resolution status, never values. Tenant slugs are lowercase DNS
+labels up to 63 characters. References are flat lowercase names up to 63 characters using letters,
+digits, and underscores, and must begin with a letter or digit.
 
 ## Useful commands
 

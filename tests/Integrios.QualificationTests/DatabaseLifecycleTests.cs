@@ -19,7 +19,7 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Contains("Successfully applied", firstMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("up to date", secondMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Successfully validated", validate, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(21L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+        Assert.Equal(22L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database, "SELECT COUNT(*) FROM flyway_schema_history WHERE success"));
         Assert.Equal("text|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_url"));
         Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "integration_key"));
@@ -244,6 +244,46 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
             "requires subscription_deliveries and delivery_attempts to be empty",
             exception.MessageText,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task V22_InvalidExistingSlugFailsWithRemediationAndLeavesDataUnchanged()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 21);
+        await ExecuteAsync(
+            database,
+            """
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES ('22000000-0000-0000-0000-000000000001', 'Invalid_Slug', 'Invalid Tenant', 'active');
+            """);
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V22__enforce_tenant_slug_contract.sql"));
+
+        Assert.Contains("lowercase DNS-label tenant slugs", exception.MessageText, StringComparison.Ordinal);
+        Assert.Contains("move or map its external secret namespace", exception.MessageText, StringComparison.Ordinal);
+        Assert.Equal("Invalid_Slug", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database, "SELECT slug FROM tenants WHERE id = '22000000-0000-0000-0000-000000000001'"));
+        Assert.Equal(0L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database, "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_tenants_slug_dns_label'"));
+    }
+
+    [Fact]
+    public async Task V22_DatabaseConstraintRejectsInvalidDirectInsert()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate");
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => ExecuteAsync(
+            database,
+            """
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES ('22000000-0000-0000-0000-000000000002', '-invalid', 'Invalid Tenant', 'active');
+            """));
+
+        Assert.Equal(Npgsql.PostgresErrorCodes.CheckViolation, exception.SqlState);
+        Assert.Equal("chk_tenants_slug_dns_label", exception.ConstraintName);
     }
 
     private const string V21GraphSql =

@@ -54,6 +54,41 @@ public sealed class AuthSchemeRegistryTests
         Assert.Equal("secret-token", request.Headers.Authorization.Parameter);
     }
 
+    [Theory]
+    [InlineData("secret-value\n")]
+    [InlineData("secret\r\nvalue")]
+    public void ApiKeyHeaderHandler_RejectsLineBreaksWithoutLeakingValue(string apiKey)
+    {
+        var handler = new ApiKeyHeaderAuthSchemeHandler();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
+        JsonElement config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => handler.Apply(request, config, new Dictionary<string, string> { ["api_key"] = apiKey }));
+
+        Assert.Equal(
+            "Auth secret field 'api_key' contains a line break, which is not permitted in an HTTP header value.",
+            error.Message);
+        Assert.False(request.Headers.Contains("X-Api-Key"));
+    }
+
+    [Theory]
+    [InlineData("secret-token\n")]
+    [InlineData("secret\r\ntoken")]
+    public void BearerTokenHandler_RejectsLineBreaksWithoutLeakingValue(string token)
+    {
+        var handler = new BearerTokenAuthSchemeHandler();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => handler.Apply(request, EmptyObject, new Dictionary<string, string> { ["token"] = token }));
+
+        Assert.Equal(
+            "Auth secret field 'token' contains a line break, which is not permitted in an HTTP header value.",
+            error.Message);
+        Assert.Null(request.Headers.Authorization);
+    }
+
     private static IAuthSchemeRegistry CreateRegistry()
     {
         return new AuthSchemeRegistry(

@@ -75,6 +75,9 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Integrios__Secrets__Provider: ${INTEGRIOS_SECRETS_PROVIDER:-file}
+    volumes:
+      - ${INTEGRIOS_SECRETS_DIR:-./secrets}:/run/secrets/integrios:ro
 
 volumes:
   postgres_data:

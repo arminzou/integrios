@@ -11,6 +11,7 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 ```bash
 cp .env.example .env
 # edit .env: set POSTGRES_PASSWORD, INTEGRIOS_VERSION, and optionally INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
+mkdir -p secrets
 docker compose up -d
 ```
 
@@ -36,6 +37,39 @@ Store it immediately, it is not shown again. The admin credential format is:
 ```text
 global_admin_key:<secret>
 ```
+
+## Delivery secrets
+
+The Worker defaults to the `file` backend. For every connection secret reference, it reads the
+current value from the host directory configured by `INTEGRIOS_SECRETS_DIR`, mounted read-only at:
+
+```text
+/run/secrets/integrios/<tenant-slug>/<reference>
+```
+
+Create one file per logical reference. File contents are exact UTF-8 and are not trimmed; values
+must be non-empty, contain no NUL, and be at most 64 KiB. The header-based auth schemes reject
+values containing CR or LF, so an accidental trailing newline (for example from `echo` without
+`-n`) fails delivery. Symlinks are supported. Each delivery
+attempt performs a fresh read, so rotate a file or symlink atomically and subsequent retries and
+replays see the new value.
+
+Set `INTEGRIOS_SECRETS_PROVIDER=configuration` to use the Worker's .NET configuration instead.
+That backend reads `Secrets:<tenant-slug>:<reference>`. In your owned Compose file, supply those
+keys through the .NET provider you choose—for example an added configuration package/source or
+environment keys such as `Secrets__acme__erp_api_key`. The Worker consults exactly one selected
+backend and never falls back between configuration and files.
+
+Check the configured references before traffic or after rotation:
+
+```bash
+docker compose run --rm worker secrets validate --all
+docker compose run --rm worker secrets validate --tenant acme
+docker compose run --rm worker secrets validate --tenant acme --connection <connection-id>
+```
+
+The command exits `0` when all selected references resolve, `1` when any do not, and `2` for an
+invalid selection or startup configuration. It prints no resolved values.
 
 ## Upgrading
 

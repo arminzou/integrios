@@ -166,6 +166,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         IAuthSchemeHandler? handler = null;
         ConnectionAuth? destinationAuth = null;
         Dictionary<string, string> secrets = [];
+        string? resolvingReference = null;
 
         if (!string.IsNullOrWhiteSpace(row.DestinationAuthJson))
         {
@@ -186,12 +187,26 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                 {
                     string reference = property.Value.GetString()
                         ?? throw new InvalidOperationException($"Secret reference '{property.Name}' is invalid.");
-                    secrets[property.Name] = await secretResolver.ResolveAsync(row.TenantId, reference, cancellationToken);
+                    resolvingReference = reference;
+                    secrets[property.Name] = await secretResolver.ResolveAsync(
+                        new TenantSecretScope(row.TenantId, row.TenantSlug),
+                        reference,
+                        cancellationToken);
                 }
             }
-            catch (Exception ex)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                throw new DeliveryPreparationException(DeliveryFailurePhase.SecretResolution, ex);
+                throw;
+            }
+            catch
+            {
+                string safeReference = SecretReferenceName.IsValid(resolvingReference)
+                    ? resolvingReference!
+                    : "invalid";
+                throw new DeliveryPreparationException(
+                    DeliveryFailurePhase.SecretResolution,
+                    new InvalidOperationException(
+                        $"Secret reference '{safeReference}' could not be resolved using provider '{secretResolver.ProviderName}'."));
             }
         }
 

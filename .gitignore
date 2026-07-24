@@ -15,5 +15,6 @@ Thumbs.db
 *.local.md
 .env
 .env.http
+secrets/
 *.lscache
 archive

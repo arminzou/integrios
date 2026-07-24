@@ -55,6 +55,19 @@ public sealed class TenantRepository(IDbConnectionFactory connectionFactory) : I
         return row?.ToTenant();
     }
 
+    public async Task<Tenant?> GetBySlugAsync(string slug, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT id, slug, name, status, environment, description, created_at, updated_at
+            FROM tenants
+            WHERE slug = @Slug
+            """;
+
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        var row = await connection.QuerySingleOrDefaultAsync<TenantRow>(sql, new { Slug = slug });
+        return row?.ToTenant();
+    }
+
     public async Task<(IReadOnlyList<Tenant> Items, string? NextCursor)> ListAsync(
         string? afterCursor, int limit, CancellationToken cancellationToken = default)
     {

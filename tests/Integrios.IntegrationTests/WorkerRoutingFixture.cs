@@ -578,14 +578,15 @@ public sealed record DeliveryCall(string Url, string Payload, IReadOnlyDictionar
 public sealed class MutableSecretResolver : ISecretResolver
 {
     private readonly Dictionary<string, string> values = new(StringComparer.Ordinal);
+    public string ProviderName => "test";
 
     public void Set(string reference, string value) => values[reference] = value;
 
     public void Reset() => values.Clear();
 
-    public Task<string> ResolveAsync(Guid tenantId, string secretName, CancellationToken cancellationToken = default)
+    public Task<string> ResolveAsync(TenantSecretScope tenant, string secretName, CancellationToken cancellationToken = default)
     {
-        _ = tenantId;
+        _ = tenant;
         _ = cancellationToken;
         return values.TryGetValue(secretName, out var value)
             ? Task.FromResult(value)

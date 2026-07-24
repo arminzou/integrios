@@ -24,6 +24,7 @@ public sealed record SubscriptionDeliveryWorkItem(
     Guid SubscriptionId,
     Guid DestinationConnectionId,
     Guid TenantId,
+    string TenantSlug,
     string DestinationUrl,
     string PayloadJson,
     string EventType,

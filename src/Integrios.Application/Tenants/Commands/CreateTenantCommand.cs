@@ -17,6 +17,12 @@ public sealed class CreateTenantCommandHandler(ITenantRepository repository)
 {
     public async Task<TenantResponse> Handle(CreateTenantCommand command, CancellationToken cancellationToken)
     {
+        if (!TenantSlug.IsValid(command.Slug))
+        {
+            throw new TenantRequestValidationException(
+                "Tenant slug must be a lowercase DNS label of 1 to 63 characters.");
+        }
+
         var now = DateTimeOffset.UtcNow;
         var tenant = new Tenant
         {

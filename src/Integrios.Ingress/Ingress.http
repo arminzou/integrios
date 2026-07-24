@@ -10,8 +10,8 @@
 #
 # Setup:
 # - copy the token from Admin.http createApiKey into src/Integrios.Ingress/.env
-# - if you are testing the auth-enabled destination path, also start Worker with:
-#   INTEGRIOS_SECRET_ERP_API_KEY=<secret value>
+# - for the auth-enabled destination path, provision the default file-backed Worker secret at:
+#   secrets/acme-corp/erp_api_key (exact secret value; no automatic trimming)
 @apiKeyToken = {{$dotenv INGRESS_API_KEY}}
 
 ###

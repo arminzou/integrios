@@ -326,8 +326,8 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{c
 # This proves the live stack accepts an auth-enabled destination connection.
 # The exact auth validation edge cases are already covered by automated tests.
 #
-# Start the worker with:
-# INTEGRIOS_SECRET_ERP_API_KEY=<secret value>
+# Before starting the default file-backed Worker, create:
+# secrets/acme-corp/erp_api_key (exact secret value; no automatic trimming)
 #
 # @name createAuthDestinationConnection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections

@@ -19,6 +19,7 @@ public sealed class BearerTokenAuthSchemeHandler : IAuthSchemeHandler
             throw new InvalidOperationException("Auth secret field 'token' is required.");
         }
 
+        SecretValueValidator.EnsureHeaderSafe(token, "token");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 }

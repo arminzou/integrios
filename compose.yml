@@ -92,6 +92,9 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      Integrios__Secrets__Provider: ${INTEGRIOS_SECRETS_PROVIDER:-file}
+    volumes:
+      - ${INTEGRIOS_SECRETS_DIR:-./secrets}:/run/secrets/integrios:ro
 
   mocksink:
     build:

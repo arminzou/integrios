@@ -122,6 +122,34 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
         Assert.Equal(HttpStatusCode.OK, listSubscriptions.StatusCode);
     }
 
+    [Fact]
+    public async Task CreateTenant_AcceptsSixtyThreeCharacterDnsLabel()
+    {
+        string slug = "a" + new string('b', 61) + "z";
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            "/admin/tenants",
+            new { slug, name = "Boundary Tenant" }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Uppercase")]
+    [InlineData("-leading")]
+    [InlineData("trailing-")]
+    [InlineData("has_underscore")]
+    public async Task CreateTenant_RejectsInvalidSecretNamespaceSlug(string slug)
+    {
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            "/admin/tenants",
+            new { slug, name = "Invalid Tenant" }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
     private async Task<ConnectionResponse> CreateConnectionAsync(Guid tenantId, string name, string url, string environment)
     {
         var response = await client.SendAsync(AdminRequest(
