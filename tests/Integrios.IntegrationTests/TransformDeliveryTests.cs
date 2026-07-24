@@ -54,6 +54,12 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         Assert.Equal("pending", deliveries[0].Status);
         Assert.Equal(1, deliveries[0].AttemptCount);
         Assert.NotNull(deliveries[0].DeliverAfter);
+
+        var details = await fixture.GetEventDetailsAsync(eventId);
+        Assert.NotNull(details);
+        var attempt = Assert.Single(details.DeliveryAttempts);
+        Assert.Equal("failed", attempt.Status);
+        Assert.Equal("transform", attempt.FailurePhase);
     }
 
     [Fact]

@@ -1,3 +1,5 @@
+using Integrios.Domain.Delivery;
+
 namespace Integrios.Application.Abstractions;
 
 public interface IDeliveryClient
@@ -9,4 +11,9 @@ public interface IDeliveryClient
         CancellationToken cancellationToken = default);
 }
 
-public record DeliveryResult(bool Succeeded, int StatusCode, string? Error = null, bool IsTimeout = false);
+public record DeliveryResult(
+    bool Succeeded,
+    int StatusCode,
+    string? Error = null,
+    bool IsTimeout = false,
+    DeliveryFailurePhase? FailurePhase = null);

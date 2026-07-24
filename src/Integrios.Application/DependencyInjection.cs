@@ -16,6 +16,7 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<RetryPolicy>();
+        services.AddSingleton<DeliveryOutcomePolicy>();
 
         services.AddMetrics();
         services.AddSingleton<IntegriosMetrics>();

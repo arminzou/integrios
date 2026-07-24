@@ -14,10 +14,13 @@ public sealed record GetEventResponse
 
 public sealed record DeliveryAttemptSummary
 {
+    public required Guid AttemptId { get; init; }
+    public required Guid SubscriptionDeliveryId { get; init; }
     public required Guid SubscriptionId { get; init; }
     public required Guid DestinationConnectionId { get; init; }
     public required int AttemptNumber { get; init; }
     public required string Status { get; init; }
+    public string? FailurePhase { get; init; }
     public int? ResponseStatusCode { get; init; }
     public string? ErrorMessage { get; init; }
     public required DateTimeOffset StartedAt { get; init; }

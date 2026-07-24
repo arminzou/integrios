@@ -37,7 +37,8 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         var resetDeliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
         Assert.Single(resetDeliveries);
         Assert.Equal("pending", resetDeliveries[0].Status);
-        Assert.Equal(0, resetDeliveries[0].AttemptCount);
+        Assert.Equal(RetryPolicy.DefaultMaxAttempts, resetDeliveries[0].LifetimeAttemptCount);
+        Assert.Equal(0, resetDeliveries[0].RetryCycleAttemptCount);
         Assert.Null(resetDeliveries[0].DeliverAfter);
     }
 

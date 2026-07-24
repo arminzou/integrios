@@ -194,9 +194,9 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             )
             INSERT INTO subscription_deliveries
                 (event_id, subscription_id, destination_connection_id, destination_url,
-                 integration_key, status, attempt_count, failed_at)
+                 integration_key, status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
             SELECT @EventId, si.id, si.destination_connection_id, 'http://test/sink',
-                   'webhook', 'dead_lettered', 3, now()
+                   'webhook', 'dead_lettered', 3, 3, now()
             FROM sub_insert si;
             """, connection);
         cmd.Parameters.AddWithValue("EventId", eventId);

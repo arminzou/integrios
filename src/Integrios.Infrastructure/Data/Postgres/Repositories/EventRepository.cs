@@ -190,17 +190,21 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
             new CommandDefinition(
                 """
                 SELECT
-                    subscription_id           AS SubscriptionId,
-                    destination_connection_id AS DestinationConnectionId,
-                    attempt_number            AS AttemptNumber,
-                    status                    AS Status,
-                    response_status_code      AS ResponseStatusCode,
-                    error_message             AS ErrorMessage,
-                    started_at                AS StartedAt,
-                    completed_at              AS CompletedAt
-                FROM delivery_attempts
-                WHERE event_id = @EventId
-                ORDER BY attempt_number, started_at;
+                    da.id                        AS AttemptId,
+                    sd.id                        AS SubscriptionDeliveryId,
+                    sd.subscription_id           AS SubscriptionId,
+                    sd.destination_connection_id AS DestinationConnectionId,
+                    da.attempt_number            AS AttemptNumber,
+                    da.status                    AS Status,
+                    da.failure_phase             AS FailurePhase,
+                    da.response_status_code      AS ResponseStatusCode,
+                    da.error_message             AS ErrorMessage,
+                    da.started_at                AS StartedAt,
+                    da.completed_at              AS CompletedAt
+                FROM delivery_attempts da
+                JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id
+                WHERE sd.event_id = @EventId
+                ORDER BY sd.id, da.attempt_number, da.started_at;
                 """,
                 new { EventId = eventId },
                 cancellationToken: cancellationToken));
@@ -214,10 +218,13 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
             FailedAt = row.FailedAt,
             DeliveryAttempts = attempts.Select(a => new DeliveryAttemptSummary
             {
+                AttemptId = a.AttemptId,
+                SubscriptionDeliveryId = a.SubscriptionDeliveryId,
                 SubscriptionId = a.SubscriptionId,
                 DestinationConnectionId = a.DestinationConnectionId,
                 AttemptNumber = a.AttemptNumber,
                 Status = a.Status,
+                FailurePhase = a.FailurePhase,
                 ResponseStatusCode = a.ResponseStatusCode,
                 ErrorMessage = a.ErrorMessage,
                 StartedAt = a.StartedAt,
@@ -235,47 +242,15 @@ public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IE
         public DateTimeOffset? FailedAt { get; init; }
     }
 
-    public async Task<bool> ReplayEventAsync(
-        Guid tenantId,
-        Guid eventId,
-        CancellationToken cancellationToken = default)
-    {
-        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-
-        var resetCount = await connection.ExecuteAsync(
-            new CommandDefinition(
-                """
-                UPDATE subscription_deliveries sd
-                SET status        = 'pending',
-                    attempt_count = 0,
-                    deliver_after = NULL,
-                    failed_at     = NULL,
-                    updated_at    = now()
-                FROM events e
-                WHERE sd.event_id = e.id
-                  AND e.tenant_id = @TenantId
-                  AND e.id        = @EventId
-                  AND sd.status IN ('failed', 'dead_lettered')
-                """,
-                new { TenantId = tenantId, EventId = eventId },
-                cancellationToken: cancellationToken));
-
-        return resetCount > 0;
-    }
-
-    private sealed record ReplayableEventRow
-    {
-        public Guid Id { get; init; }
-        public string Status { get; init; } = "";
-        public string OutboxPayloadJson { get; init; } = "";
-    }
-
     private sealed record DeliveryAttemptRow
     {
+        public Guid AttemptId { get; init; }
+        public Guid SubscriptionDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
         public Guid DestinationConnectionId { get; init; }
         public int AttemptNumber { get; init; }
         public string Status { get; init; } = "";
+        public string? FailurePhase { get; init; }
         public int? ResponseStatusCode { get; init; }
         public string? ErrorMessage { get; init; }
         public DateTimeOffset StartedAt { get; init; }

@@ -183,6 +183,23 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("Integrios-Delivery-Id")]
+    [InlineData("integrios-attempt-number")]
+    public async Task CreateConnection_ReservedDeliveryHeader_Returns422(string headerName)
+    {
+        Guid integrationId = await InsertIntegrationAsync($"reserved_{Guid.NewGuid():N}", ["api_key_header"]);
+
+        var response = await PostConnectionWithAuthAsync(
+            integrationId,
+            "reserved-header",
+            "api_key_header",
+            new { header_name = headerName },
+            new { api_key = "erp_api_key" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
     [Fact]
     public async Task CreateConnection_NoAuthRejected_WhenIntegrationIsNotOpen()
     {
@@ -227,6 +244,30 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         Assert.NotNull(body);
         Assert.NotNull(body!.Auth);
         Assert.Equal("api_key_header", body.Auth!.Scheme);
+    }
+
+    [Fact]
+    public async Task UpdateConnection_ReservedDeliveryHeader_Returns422()
+    {
+        Guid integrationId = await InsertIntegrationAsync("update_reserved_header", ["api_key_header"]);
+        Guid connectionId = await InsertConnectionAsync(integrationId, "erp-auth");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/connections/{connectionId}",
+            new
+            {
+                name = "erp-auth",
+                config = new { url = "http://localhost:5054/sink/erp-auth" },
+                auth = new
+                {
+                    scheme = "api_key_header",
+                    config = new { header_name = "INTEGRIOS-ATTEMPT-ID" },
+                    secret_refs = new { api_key = "erp_api_key" }
+                }
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     private Task<HttpResponseMessage> PostConnectionAsync(string name, string url) =>

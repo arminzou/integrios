@@ -8,6 +8,13 @@ namespace Integrios.Application.Connections;
 internal static partial class ConnectionAuthValidator
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
+    private static readonly string[] ReservedDeliveryHeaders =
+    [
+        "Integrios-Event-Id",
+        "Integrios-Delivery-Id",
+        "Integrios-Attempt-Id",
+        "Integrios-Attempt-Number"
+    ];
 
     public static ConnectionAuth? Validate(Integration integration, ConnectionAuthInput? auth, IAuthSchemeRegistry registry)
     {
@@ -38,6 +45,7 @@ internal static partial class ConnectionAuthValidator
 
         EnsureRequiredFields(config, handler.RequiredConfigFields, "config");
         EnsureRequiredFields(secretRefs, handler.RequiredSecretFields, "secret_refs");
+        EnsureReservedHeadersAreNotConfigured(handler.Name, config);
         EnsureSecretReferencesAreSafe(secretRefs);
 
         return new ConnectionAuth
@@ -46,6 +54,23 @@ internal static partial class ConnectionAuthValidator
             Config = config,
             SecretRefs = secretRefs
         };
+    }
+
+    private static void EnsureReservedHeadersAreNotConfigured(string scheme, JsonElement config)
+    {
+        if (!scheme.Equals("api_key_header", StringComparison.OrdinalIgnoreCase)
+            || !config.TryGetProperty("header_name", out JsonElement headerElement)
+            || headerElement.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        string headerName = headerElement.GetString() ?? string.Empty;
+        if (ReservedDeliveryHeaders.Contains(headerName, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ConnectionRequestValidationException(
+                $"Header '{headerName}' is reserved for Integrios delivery identity metadata.");
+        }
     }
 
     private static JsonElement NormalizeObject(JsonElement value)

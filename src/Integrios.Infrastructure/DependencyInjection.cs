@@ -1,5 +1,6 @@
 using Integrios.Application.Abstractions;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Delivery;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http.Auth;
 using Integrios.Infrastructure.Http;
@@ -17,6 +18,10 @@ public static class DependencyInjection
     public static IServiceCollection AddIntegriosInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
+        DeliveryExecutionOptions deliveryOptions = ReadDeliveryOptions(configuration);
+        deliveryOptions.Validate();
+        services.AddSingleton(deliveryOptions);
 
         var postgresConnectionString = configuration.GetConnectionString("Postgres");
         if (string.IsNullOrWhiteSpace(postgresConnectionString))
@@ -49,17 +54,37 @@ public static class DependencyInjection
         services.AddSingleton<IEventRepository, EventRepository>();
         services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
-        services.AddSingleton<ISubscriptionDeliveryRepository, SubscriptionDeliveryRepository>();
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
-        services.AddSingleton<IDeliveryAttemptRepository, DeliveryAttemptRepository>();
         services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout = deliveryOptions.HttpTimeout;
         });
 
         services.AddHostedService<OutboxDepthMetrics>();
 
         return services;
+    }
+
+    private static DeliveryExecutionOptions ReadDeliveryOptions(IConfiguration configuration)
+    {
+        DeliveryExecutionOptions defaults = DeliveryExecutionOptions.Default;
+
+        return new DeliveryExecutionOptions(
+            ReadDuration(configuration, "Integrios:Delivery:HttpTimeout", defaults.HttpTimeout),
+            ReadDuration(configuration, "Integrios:Delivery:AttemptDeadline", defaults.AttemptDeadline),
+            ReadDuration(configuration, "Integrios:Delivery:LeaseDuration", defaults.LeaseDuration),
+            ReadDuration(configuration, "Integrios:Delivery:ShutdownGracePeriod", defaults.ShutdownGracePeriod));
+    }
+
+    private static TimeSpan ReadDuration(IConfiguration configuration, string key, TimeSpan fallback)
+    {
+        string? configured = configuration[key];
+        if (string.IsNullOrWhiteSpace(configured))
+            return fallback;
+
+        return TimeSpan.TryParse(configured, out TimeSpan parsed)
+            ? parsed
+            : throw new InvalidOperationException($"{key} must be a TimeSpan value.");
     }
 }

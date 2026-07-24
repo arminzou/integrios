@@ -41,12 +41,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public FakeDeliveryClient DeliveryClient { get; } = new();
     public MutableSecretResolver SecretResolver { get; } = new();
     public string ConnectionString => container.GetConnectionString();
+    public ISubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
 
     private IDbConnectionFactory connectionFactory = null!;
     private IOutboxFanout outboxFanout = null!;
     private ISubscriptionRepository subscriptionRepository = null!;
-    private ISubscriptionDeliveryRepository subscriptionDeliveryRepository = null!;
-    private IDeliveryAttemptRepository deliveryAttemptRepository = null!;
     private IEventRepository eventRepository = null!;
     private IMediator mediator = null!;
 
@@ -59,17 +58,19 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
         outboxFanout = new PostgresOutboxFanout(connectionFactory);
         subscriptionRepository = new SubscriptionRepository(connectionFactory);
-        subscriptionDeliveryRepository = new SubscriptionDeliveryRepository(connectionFactory);
-        deliveryAttemptRepository = new DeliveryAttemptRepository(connectionFactory);
         eventRepository = new EventRepository(connectionFactory);
+        var deliveryOptions = DeliveryExecutionOptions.Default;
+        DeliveryQueue = new PostgresSubscriptionDeliveryQueue(
+            connectionFactory,
+            deliveryOptions,
+            new DeliveryOutcomePolicy(new RetryPolicy()));
 
         var services = new ServiceCollection();
         services.AddIntegriosApplication();
         services.AddSingleton(outboxFanout);
         services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
-        services.AddSingleton<ISubscriptionDeliveryRepository>(subscriptionDeliveryRepository);
-        services.AddSingleton<ISubscriptionDeliveryQueue>(_ => new PostgresSubscriptionDeliveryQueue(subscriptionDeliveryRepository));
-        services.AddSingleton<IDeliveryAttemptRepository>(deliveryAttemptRepository);
+        services.AddSingleton(deliveryOptions);
+        services.AddSingleton(DeliveryQueue);
         services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
@@ -118,7 +119,14 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await connection.OpenAsync();
         await using var cmd = new NpgsqlCommand(
             """
-            SELECT subscription_id, status, attempt_count, deliver_after
+            SELECT id,
+                   subscription_id,
+                   status,
+                   lifetime_attempt_count,
+                   retry_cycle_attempt_count,
+                   active_attempt_id,
+                   lease_expires_at,
+                   deliver_after
             FROM subscription_deliveries
             WHERE event_id = @EventId
             ORDER BY created_at
@@ -130,11 +138,104 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         {
             rows.Add(new SubscriptionDeliveryState(
                 reader.GetGuid(0),
-                reader.GetString(1),
-                reader.GetInt32(2),
-                reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3)));
+                reader.GetGuid(1),
+                reader.GetString(2),
+                reader.GetInt32(3),
+                reader.GetInt32(4),
+                reader.IsDBNull(5) ? null : reader.GetGuid(5),
+                reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6),
+                reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7)));
         }
         return rows;
+    }
+
+    public async Task<Guid> FanoutSingleDeliveryAsync(string eventType = "payment.created")
+    {
+        Guid eventId = await InsertEventAndOutboxAsync(eventType);
+        int processed = await RunFanoutBatchAsync();
+        if (processed != 1)
+            throw new InvalidOperationException($"Expected one Event to fan out, but processed {processed}.");
+
+        SubscriptionDeliveryState delivery = Assert.Single(await GetSubscriptionDeliveriesAsync(eventId));
+        return delivery.Id;
+    }
+
+    public async Task ForceLeaseExpiredAsync(Guid deliveryId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "UPDATE subscription_deliveries SET lease_expires_at = now() - interval '1 second' WHERE id = @DeliveryId AND status = 'in_flight'",
+            connection);
+        command.Parameters.AddWithValue("DeliveryId", deliveryId);
+        int updated = await command.ExecuteNonQueryAsync();
+        if (updated != 1)
+            throw new InvalidOperationException($"Delivery {deliveryId} did not have an active lease to expire.");
+    }
+
+    public async Task<IReadOnlyList<DeliveryAttemptState>> GetDeliveryAttemptsAsync(Guid deliveryId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT id, subscription_delivery_id, attempt_number, status, failure_phase, completed_at
+            FROM delivery_attempts
+            WHERE subscription_delivery_id = @DeliveryId
+            ORDER BY attempt_number
+            """,
+            connection);
+        command.Parameters.AddWithValue("DeliveryId", deliveryId);
+
+        var attempts = new List<DeliveryAttemptState>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            attempts.Add(new DeliveryAttemptState(
+                reader.GetGuid(0),
+                reader.GetGuid(1),
+                reader.GetInt32(2),
+                reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5)));
+        }
+
+        return attempts;
+    }
+
+    public async Task<SubscriptionDeliveryState> GetSubscriptionDeliveryAsync(Guid deliveryId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT id,
+                   subscription_id,
+                   status,
+                   lifetime_attempt_count,
+                   retry_cycle_attempt_count,
+                   active_attempt_id,
+                   lease_expires_at,
+                   deliver_after
+            FROM subscription_deliveries
+            WHERE id = @DeliveryId
+            """,
+            connection);
+        command.Parameters.AddWithValue("DeliveryId", deliveryId);
+
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            throw new InvalidOperationException($"No SubscriptionDelivery exists with id {deliveryId}.");
+
+        return new SubscriptionDeliveryState(
+            reader.GetGuid(0),
+            reader.GetGuid(1),
+            reader.GetString(2),
+            reader.GetInt32(3),
+            reader.GetInt32(4),
+            reader.IsDBNull(5) ? null : reader.GetGuid(5),
+            reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6),
+            reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7));
     }
 
     public async Task<int> GetSubscriptionDeliveryCountAsync(Guid eventId)
@@ -296,7 +397,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     }
 
     public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default)
-        => eventRepository.ReplayEventAsync(TenantId, eventId, cancellationToken);
+        => mediator.Send(new ReplayEventCommand(TenantId, eventId), cancellationToken);
 
     public Task<GetEventResponse?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default)
         => eventRepository.GetEventByIdAsync(TenantId, eventId, cancellationToken);
@@ -417,7 +518,26 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     }
 }
 
-public sealed record SubscriptionDeliveryState(Guid SubscriptionId, string Status, int AttemptCount, DateTimeOffset? DeliverAfter);
+public sealed record SubscriptionDeliveryState(
+    Guid Id,
+    Guid SubscriptionId,
+    string Status,
+    int LifetimeAttemptCount,
+    int RetryCycleAttemptCount,
+    Guid? ActiveAttemptId,
+    DateTimeOffset? LeaseExpiresAt,
+    DateTimeOffset? DeliverAfter)
+{
+    public int AttemptCount => LifetimeAttemptCount;
+}
+
+public sealed record DeliveryAttemptState(
+    Guid Id,
+    Guid SubscriptionDeliveryId,
+    int AttemptNumber,
+    string Status,
+    string? FailurePhase,
+    DateTimeOffset? CompletedAt);
 
 public sealed record SubscriptionDeliverySnapshot(
     string? DestinationUrl,

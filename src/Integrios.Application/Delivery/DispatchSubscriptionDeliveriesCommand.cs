@@ -1,8 +1,11 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Abstractions.Auth;
 using Integrios.Application.Telemetry;
+using Integrios.Domain.Delivery;
+using Integrios.Domain.Integrations;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -12,29 +15,49 @@ public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize) : IReq
 
 internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     ISubscriptionDeliveryQueue deliveryQueue,
-    IDeliveryAttemptRepository attemptRepository,
     IDeliveryClient deliveryClient,
     ITransformEvaluator transformEvaluator,
     IAuthSchemeRegistry authSchemeRegistry,
     ISecretResolver secretResolver,
-    RetryPolicy retryPolicy,
+    DeliveryExecutionOptions executionOptions,
     IntegriosMetrics metrics,
     ILogger<DispatchSubscriptionDeliveriesCommandHandler> logger) : IRequestHandler<DispatchSubscriptionDeliveriesCommand, int>
 {
     public async Task<int> Handle(DispatchSubscriptionDeliveriesCommand command, CancellationToken cancellationToken)
     {
-        IReadOnlyList<SubscriptionDeliveryWorkItem> rows = await deliveryQueue.ClaimBatchAsync(command.BatchSize, cancellationToken);
+        int processedCount = 0;
 
-        foreach (SubscriptionDeliveryWorkItem row in rows)
+        while (processedCount < command.BatchSize && !cancellationToken.IsCancellationRequested)
         {
-            await DispatchAsync(row, cancellationToken);
+            SubscriptionDeliveryWorkItem? row = await deliveryQueue.ClaimNextAsync(cancellationToken);
+            if (row is null)
+                break;
+
+            try
+            {
+                await DispatchAsync(row);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Delivery attempt_id={AttemptId} for delivery_id={DeliveryId} was abandoned before finalization; lease recovery will reclaim it",
+                    row.AttemptId,
+                    row.Id);
+            }
+
+            processedCount++;
         }
 
-        return rows.Count;
+        return processedCount;
     }
 
-    private async Task DispatchAsync(SubscriptionDeliveryWorkItem row, CancellationToken cancellationToken)
+    private async Task DispatchAsync(SubscriptionDeliveryWorkItem row)
     {
+        using var attemptDeadline = new CancellationTokenSource(executionOptions.AttemptDeadline);
+        CancellationToken cancellationToken = attemptDeadline.Token;
+        long startedTimestamp = Stopwatch.GetTimestamp();
+
         using Activity? activity = ActivitySources.StartLinkedSpan("subscription.deliver", row.Traceparent);
         using IDisposable? scope = logger.BeginScope(new Dictionary<string, object?>
         {
@@ -45,128 +68,160 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         activity?.SetTag("event_id", row.EventId);
         activity?.SetTag("subscription_id", row.SubscriptionId);
         activity?.SetTag("delivery_id", row.Id);
+        activity?.SetTag("attempt_id", row.AttemptId);
+        activity?.SetTag("attempt_number", row.AttemptNumber);
         activity?.SetTag("integration_key", row.IntegrationKey);
 
-        int attemptNumber = row.AttemptCount + 1;
         (string? payload, string? error) = ApplyTransform(row);
         if (error is not null)
         {
-            DateTimeOffset transformStartedAt = DateTimeOffset.UtcNow;
-            DateTimeOffset transformCompletedAt = transformStartedAt;
-            DeliveryResult transformFailure = new(false, 0, error);
-
-            await attemptRepository.RecordAsync(
-                row.EventId,
-                row.SubscriptionId,
-                row.DestinationConnectionId,
-                attemptNumber,
-                "failed",
-                row.PayloadJson,
-                null,
-                null,
-                transformFailure.Error,
-                transformStartedAt,
-                transformCompletedAt,
-                cancellationToken);
-
-            await HandleFailureAsync(row, transformFailure, cancellationToken, attemptNumber, 0);
+            var transformFailure = new DeliveryResult(
+                false,
+                0,
+                error,
+                FailurePhase: DeliveryFailurePhase.Transform);
+            await FinalizeAsync(row, row.PayloadJson, transformFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
             return;
         }
 
         DeliveryResult result;
-        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
 
         try
         {
-            Action<HttpRequestMessage>? decorate = await BuildRequestDecoratorAsync(row, cancellationToken);
+            Action<HttpRequestMessage> decorate = await BuildRequestDecoratorAsync(row, cancellationToken);
             result = await deliveryClient.DeliverAsync(row.DestinationUrl, payload!, decorate, cancellationToken);
+        }
+        catch (DeliveryPreparationException ex)
+        {
+            result = new DeliveryResult(false, 0, ex.Message, FailurePhase: ex.FailurePhase);
         }
         catch (Exception ex)
         {
-            result = new DeliveryResult(false, 0, ex.Message);
+            result = new DeliveryResult(false, 0, ex.Message, FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
-        DateTimeOffset completedAt = DateTimeOffset.UtcNow;
-        double durationSeconds = (completedAt - startedAt).TotalSeconds;
+        await FinalizeAsync(row, payload!, result, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
+    }
 
-        await attemptRepository.RecordAsync(
-            row.EventId,
-            row.SubscriptionId,
-            row.DestinationConnectionId,
-            attemptNumber,
-            result.Succeeded ? "succeeded" : "failed",
-            payload!,
+    private async Task FinalizeAsync(
+        SubscriptionDeliveryWorkItem row,
+        string requestPayload,
+        DeliveryResult result,
+        TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        var completion = new DeliveryAttemptCompletion(
+            row.Id,
+            row.AttemptId,
+            result.Succeeded,
+            result.Succeeded ? null : result.FailurePhase ?? DeliveryFailurePhase.Http,
+            requestPayload,
             result.StatusCode == 0 ? null : result.StatusCode,
             null,
-            result.Error,
-            startedAt,
-            completedAt,
-            cancellationToken);
+            result.Error);
 
-        if (result.Succeeded)
+        DeliveryFinalizationResult finalization = await deliveryQueue.FinalizeAsync(completion, cancellationToken);
+        if (finalization.Status == DeliveryFinalizationStatus.OwnershipLost)
         {
-            await deliveryQueue.MarkSucceededAsync(row.Id, cancellationToken);
-            metrics.RecordDeliverySucceeded(row.IntegrationKey);
-            metrics.RecordDeliveryAttemptDuration(durationSeconds, "success", row.IntegrationKey);
-            logger.LogInformation(
-                "Delivery succeeded for delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
+            metrics.RecordDeliveryStaleFinalization();
+            logger.LogWarning(
+                "Discarded stale finalization for attempt_id={AttemptId}, delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
+                row.AttemptId,
                 row.Id,
                 row.SubscriptionId,
                 row.EventId);
             return;
         }
 
-        await HandleFailureAsync(row, result, cancellationToken, attemptNumber, durationSeconds);
+        metrics.RecordDeliveryAttemptDuration(duration.TotalSeconds, result.Succeeded ? "success" : "failed", row.IntegrationKey);
+
+        switch (finalization.Disposition)
+        {
+            case SubscriptionDeliveryDisposition.Succeeded:
+                metrics.RecordDeliverySucceeded(row.IntegrationKey);
+                logger.LogInformation(
+                    "Delivery succeeded for attempt_id={AttemptId}, delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
+                    row.AttemptId,
+                    row.Id,
+                    row.SubscriptionId,
+                    row.EventId);
+                break;
+            case SubscriptionDeliveryDisposition.RetryScheduled:
+                metrics.RecordDeliveryFailed(row.IntegrationKey, HttpStatusClass(result));
+                LogFailure(row, result, "scheduled for retry");
+                break;
+            case SubscriptionDeliveryDisposition.DeadLettered:
+                metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
+                LogFailure(row, result, "dead-lettered");
+                break;
+            default:
+                throw new InvalidOperationException("Applied finalization did not return a delivery disposition.");
+        }
     }
 
-    private async Task<Action<HttpRequestMessage>?> BuildRequestDecoratorAsync(
+    private async Task<Action<HttpRequestMessage>> BuildRequestDecoratorAsync(
         SubscriptionDeliveryWorkItem row,
         CancellationToken cancellationToken)
     {
-        if (row.DestinationAuth is null)
-        {
-            return null;
-        }
-
-        IAuthSchemeHandler handler = authSchemeRegistry.GetRequired(row.DestinationAuth.Scheme);
+        IAuthSchemeHandler? handler = null;
+        ConnectionAuth? destinationAuth = null;
         Dictionary<string, string> secrets = [];
 
-        foreach (JsonProperty property in row.DestinationAuth.SecretRefs.EnumerateObject())
+        if (!string.IsNullOrWhiteSpace(row.DestinationAuthJson))
         {
-            string reference = property.Value.GetString()
-                ?? throw new InvalidOperationException($"Secret reference '{property.Name}' is invalid.");
-            secrets[property.Name] = await secretResolver.ResolveAsync(row.TenantId, reference, cancellationToken);
+            try
+            {
+                destinationAuth = JsonSerializer.Deserialize<ConnectionAuth>(row.DestinationAuthJson)
+                    ?? throw new InvalidOperationException("Destination auth snapshot is invalid.");
+                handler = authSchemeRegistry.GetRequired(destinationAuth.Scheme);
+            }
+            catch (Exception ex)
+            {
+                throw new DeliveryPreparationException(DeliveryFailurePhase.RequestConstruction, ex);
+            }
+
+            try
+            {
+                foreach (JsonProperty property in destinationAuth.SecretRefs.EnumerateObject())
+                {
+                    string reference = property.Value.GetString()
+                        ?? throw new InvalidOperationException($"Secret reference '{property.Name}' is invalid.");
+                    secrets[property.Name] = await secretResolver.ResolveAsync(row.TenantId, reference, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new DeliveryPreparationException(DeliveryFailurePhase.SecretResolution, ex);
+            }
         }
 
-        return request => handler.Apply(request, row.DestinationAuth.Config, secrets);
+        return request =>
+        {
+            if (handler is not null && destinationAuth is not null)
+                handler.Apply(request, destinationAuth.Config, secrets);
+
+            SetReservedHeader(request, "Integrios-Event-Id", row.EventId.ToString());
+            SetReservedHeader(request, "Integrios-Delivery-Id", row.Id.ToString());
+            SetReservedHeader(request, "Integrios-Attempt-Id", row.AttemptId.ToString());
+            SetReservedHeader(request, "Integrios-Attempt-Number", row.AttemptNumber.ToString(CultureInfo.InvariantCulture));
+        };
     }
 
-    private async Task HandleFailureAsync(
-        SubscriptionDeliveryWorkItem row,
-        DeliveryResult result,
-        CancellationToken cancellationToken,
-        int? attemptNumber = null,
-        double? durationSeconds = null)
+    private static void SetReservedHeader(HttpRequestMessage request, string name, string value)
     {
-        int nextAttempt = attemptNumber ?? row.AttemptCount + 1;
-        if (nextAttempt >= RetryPolicy.DefaultMaxAttempts)
-        {
-            await deliveryQueue.MarkDeadLetteredAsync(row.Id, cancellationToken);
-            metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
-        }
-        else
-        {
-            DateTimeOffset deliverAfter = DateTimeOffset.UtcNow + retryPolicy.CalculateBackoff(nextAttempt);
-            await deliveryQueue.ScheduleRetryAsync(row.Id, nextAttempt, deliverAfter, cancellationToken);
-            metrics.RecordDeliveryFailed(row.IntegrationKey, HttpStatusClass(result));
-        }
+        request.Headers.Remove(name);
+        request.Headers.TryAddWithoutValidation(name, value);
+    }
 
-        metrics.RecordDeliveryAttemptDuration(durationSeconds ?? 0, "failed", row.IntegrationKey);
+    private void LogFailure(SubscriptionDeliveryWorkItem row, DeliveryResult result, string disposition)
+    {
         logger.LogWarning(
-            "Delivery failed for delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}: {Error}",
+            "Delivery attempt_id={AttemptId} for delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId} was {Disposition}: {Error}",
+            row.AttemptId,
             row.Id,
             row.SubscriptionId,
             row.EventId,
+            disposition,
             result.Error ?? $"HTTP {result.StatusCode}");
     }
 
@@ -212,5 +267,11 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         {
             return (null, $"Unexpected transform error: {ex.Message}");
         }
+    }
+
+    private sealed class DeliveryPreparationException(DeliveryFailurePhase failurePhase, Exception innerException)
+        : Exception(innerException.Message, innerException)
+    {
+        public DeliveryFailurePhase FailurePhase { get; } = failurePhase;
     }
 }

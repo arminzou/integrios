@@ -79,7 +79,15 @@ The platform is built for controlled failure handling:
 - retry policies with bounded attempts
 - dead-letter queues for terminal failures
 - replay paths for safe reprocessing
-- delivery-attempt history for diagnostics and auditability
+- just-in-time, fenced leases that make abandoned per-subscription work reclaimable without letting
+  an older worker overwrite a newer result
+- atomic delivery-attempt and current-state transitions inside Postgres
+- append-only, monotonically numbered delivery-attempt history across retry and replay
+
+Outbound HTTP delivery is at least once. A process can stop after a downstream accepts a request but
+before Integrios persists success, so recovery may repeat that logical delivery. Every request
+carries stable Event and SubscriptionDelivery identifiers for downstream deduplication plus a
+per-attempt identifier and number for diagnostics.
 
 ### Scalability model
 

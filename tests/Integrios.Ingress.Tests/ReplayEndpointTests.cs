@@ -36,7 +36,7 @@ public sealed class ReplayEndpointTests(ApiTestAppFixture fixture)
     {
         var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic(ApiKeyAuthHandlerTests.TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
-        fixture.EventRepository.ReplayResult = true;
+        fixture.DeliveryQueue.ReplayResult = true;
 
         var eventId = Guid.NewGuid();
         var response = await ReplayAsync(eventId, $"ApiKey {ApiKeyAuthHandlerTests.TestToken}");
@@ -50,7 +50,7 @@ public sealed class ReplayEndpointTests(ApiTestAppFixture fixture)
     {
         var (apiKey, tenant) = ApiKeyAuthHandlerTests.BuildValidApiKeyPublic(ApiKeyAuthHandlerTests.TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
-        fixture.EventRepository.ReplayResult = false;
+        fixture.DeliveryQueue.ReplayResult = false;
 
         var response = await ReplayAsync(Guid.NewGuid(), $"ApiKey {ApiKeyAuthHandlerTests.TestToken}");
 

@@ -15,19 +15,20 @@ public sealed class ApiTestAppFixture : IDisposable
 {
     public StubApiKeyRepository ApiKeyRepository { get; } = new();
     public StubEventRepository EventRepository { get; } = new();
+    public StubSubscriptionDeliveryQueue DeliveryQueue { get; } = new();
     public StubTopicRepository TopicRepository { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
     public ApiTestAppFixture()
     {
-        Factory = new CustomApiFactory(ApiKeyRepository, EventRepository, TopicRepository);
+        Factory = new CustomApiFactory(ApiKeyRepository, EventRepository, TopicRepository, DeliveryQueue);
     }
 
     public void Reset()
     {
         ApiKeyRepository.Result = null;
         EventRepository.GetEventResult = null;
-        EventRepository.ReplayResult = false;
+        DeliveryQueue.ReplayResult = false;
         TopicRepository.ResolvedTopicId = Guid.NewGuid();
     }
 
@@ -40,7 +41,8 @@ public sealed class ApiTestAppFixture : IDisposable
 internal sealed class CustomApiFactory(
     StubApiKeyRepository apiKeyRepository,
     StubEventRepository eventRepository,
-    StubTopicRepository topicRepository) : WebApplicationFactory<Program>
+    StubTopicRepository topicRepository,
+    StubSubscriptionDeliveryQueue deliveryQueue) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -56,6 +58,7 @@ internal sealed class CustomApiFactory(
             services.AddSingleton<IApiKeyRepository>(apiKeyRepository);
             services.AddSingleton<IEventRepository>(eventRepository);
             services.AddSingleton<ITopicRepository>(topicRepository);
+            services.AddSingleton<ISubscriptionDeliveryQueue>(deliveryQueue);
         });
     }
 }
@@ -90,7 +93,6 @@ public sealed class StubApiKeyRepository : IApiKeyRepository
 public sealed class StubEventRepository : IEventRepository
 {
     public GetEventResponse? GetEventResult { get; set; }
-    public bool ReplayResult { get; set; } = false;
 
     public Task<IngestEventResponse> IngestAsync(
         Guid tenantId,
@@ -116,13 +118,25 @@ public sealed class StubEventRepository : IEventRepository
         return Task.FromResult(GetEventResult);
     }
 
-    public Task<bool> ReplayEventAsync(
+}
+
+public sealed class StubSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
+{
+    public bool ReplayResult { get; set; }
+
+    public Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<SubscriptionDeliveryWorkItem?>(null);
+
+    public Task<DeliveryFinalizationResult> FinalizeAsync(
+        DeliveryAttemptCompletion completion,
+        CancellationToken cancellationToken = default) =>
+        throw new NotImplementedException();
+
+    public Task<bool> ReplayDeadLetteredAsync(
         Guid tenantId,
         Guid eventId,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(ReplayResult);
-    }
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(ReplayResult);
 }
 
 public sealed class StubTopicRepository : ITopicRepository

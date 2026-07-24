@@ -22,7 +22,9 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         var details = await fixture.GetEventDetailsAsync(eventId);
         Assert.NotNull(details);
         var attempt = Assert.Single(details.DeliveryAttempts);
+        var delivery = Assert.Single(await fixture.GetSubscriptionDeliveriesAsync(eventId));
         Assert.Equal(1, attempt.AttemptNumber);
+        Assert.Equal(delivery.Id, attempt.SubscriptionDeliveryId);
         Assert.Equal("succeeded", attempt.Status);
         Assert.Equal(200, attempt.ResponseStatusCode);
         Assert.Null(attempt.ErrorMessage);
@@ -43,6 +45,7 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         var attempt = Assert.Single(details.DeliveryAttempts);
         Assert.Equal(1, attempt.AttemptNumber);
         Assert.Equal("failed", attempt.Status);
+        Assert.Equal("http", attempt.FailurePhase);
         Assert.Equal(500, attempt.ResponseStatusCode);
         Assert.NotEqual(default, attempt.StartedAt);
         Assert.NotNull(attempt.CompletedAt);
@@ -91,5 +94,29 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
 
         var attemptNumbers = details.DeliveryAttempts.Select(a => a.AttemptNumber).ToList();
         Assert.Equal(attemptNumbers.OrderBy(n => n).ToList(), attemptNumbers);
+    }
+
+    [Fact]
+    public async Task OutboundRequest_UsesStableDeliveryAndDiagnosticAttemptHeaders_OverAuthConfiguration()
+    {
+        const string reservedOverrideSecret = "reserved_override";
+        fixture.SecretResolver.Set(reservedOverrideSecret, "must-not-win");
+        await fixture.UpdateLedgerExecutionConfigurationAsync(
+            WorkerRoutingFixture.LedgerSinkUrl,
+            """{"scheme":"api_key_header","config":{"header_name":"Integrios-Delivery-Id"},"secret_refs":{"api_key":"reserved_override"}}""",
+            "webhook");
+        Guid eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        await fixture.RunWorkerBatchAsync();
+
+        DeliveryCall call = Assert.Single(fixture.DeliveryClient.Calls);
+        var details = await fixture.GetEventDetailsAsync(eventId);
+        Assert.NotNull(details);
+        var attempt = Assert.Single(details.DeliveryAttempts);
+        Assert.Equal(eventId.ToString(), call.Headers["Integrios-Event-Id"]);
+        Assert.Equal(attempt.SubscriptionDeliveryId.ToString(), call.Headers["Integrios-Delivery-Id"]);
+        Assert.Equal(attempt.AttemptId.ToString(), call.Headers["Integrios-Attempt-Id"]);
+        Assert.Equal(attempt.AttemptNumber.ToString(), call.Headers["Integrios-Attempt-Number"]);
+        Assert.NotEqual("must-not-win", call.Headers["Integrios-Delivery-Id"]);
     }
 }

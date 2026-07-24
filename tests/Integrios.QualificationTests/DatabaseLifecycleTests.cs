@@ -19,11 +19,15 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Contains("Successfully applied", firstMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("up to date", secondMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Successfully validated", validate, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(20L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+        Assert.Equal(21L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database, "SELECT COUNT(*) FROM flyway_schema_history WHERE success"));
         Assert.Equal("text|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_url"));
         Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "integration_key"));
         Assert.Equal("jsonb|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_auth"));
+        Assert.Equal("uuid|YES", await ColumnShapeAsync(database, "subscription_deliveries", "active_attempt_id"));
+        Assert.Equal("timestamp with time zone|YES", await ColumnShapeAsync(database, "subscription_deliveries", "lease_expires_at"));
+        Assert.Equal("uuid|NO", await ColumnShapeAsync(database, "delivery_attempts", "subscription_delivery_id"));
+        Assert.Equal("text|YES", await ColumnShapeAsync(database, "delivery_attempts", "failure_phase"));
         Assert.Equal(0L, await CountColumnsAsync(database, "subscriptions", "delivery_policy", "dlq_enabled"));
         Assert.Equal(0L, await CountAsync(database, "integrations"));
         Assert.Equal(0L, await CountAsync(database, "admin_keys"));
@@ -189,6 +193,102 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
 
         Assert.Contains("requires subscription_deliveries to be empty", exception.MessageText, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task V21_WithExistingDeliveryState_FailsWithClearMessage(
+        bool insertSubscriptionDelivery,
+        bool insertDeliveryAttempt)
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 20);
+        await ExecuteAsync(database, V21GraphSql);
+
+        if (insertSubscriptionDelivery)
+        {
+            await ExecuteAsync(
+                database,
+                """
+                INSERT INTO subscription_deliveries (
+                    event_id, subscription_id, destination_connection_id, destination_url, integration_key)
+                VALUES (
+                    '21000000-0000-0000-0000-000000000006',
+                    '21000000-0000-0000-0000-000000000005',
+                    '21000000-0000-0000-0000-000000000003',
+                    'https://example.invalid/v21',
+                    'v21_webhook');
+                """);
+        }
+
+        if (insertDeliveryAttempt)
+        {
+            await ExecuteAsync(
+                database,
+                """
+                INSERT INTO delivery_attempts (
+                    event_id, subscription_id, destination_connection_id, attempt_number, status)
+                VALUES (
+                    '21000000-0000-0000-0000-000000000006',
+                    '21000000-0000-0000-0000-000000000005',
+                    '21000000-0000-0000-0000-000000000003',
+                    1,
+                    'failed');
+                """);
+        }
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V21__fence_subscription_delivery_attempts.sql"));
+
+        Assert.Contains(
+            "requires subscription_deliveries and delivery_attempts to be empty",
+            exception.MessageText,
+            StringComparison.Ordinal);
+    }
+
+    private const string V21GraphSql =
+        """
+        INSERT INTO integrations (id, key, name, direction, status)
+        VALUES ('21000000-0000-0000-0000-000000000001', 'v21_webhook', 'V21 Webhook', 'both', 'active');
+
+        INSERT INTO tenants (id, slug, name, status)
+        VALUES ('21000000-0000-0000-0000-000000000002', 'v21-tenant', 'V21 Tenant', 'active');
+
+        INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+        VALUES (
+            '21000000-0000-0000-0000-000000000003',
+            '21000000-0000-0000-0000-000000000002',
+            '21000000-0000-0000-0000-000000000001',
+            'v21-destination',
+            '{"url":"https://example.invalid/v21"}',
+            'active');
+
+        INSERT INTO topics (id, tenant_id, name, status)
+        VALUES (
+            '21000000-0000-0000-0000-000000000004',
+            '21000000-0000-0000-0000-000000000002',
+            'v21-topic',
+            'active');
+
+        INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, status)
+        VALUES (
+            '21000000-0000-0000-0000-000000000005',
+            '21000000-0000-0000-0000-000000000004',
+            'v21-subscription',
+            '{"event_type":"v21.test"}',
+            '21000000-0000-0000-0000-000000000003',
+            'active');
+
+        INSERT INTO events (id, tenant_id, topic_id, event_type, payload, status, accepted_at)
+        VALUES (
+            '21000000-0000-0000-0000-000000000006',
+            '21000000-0000-0000-0000-000000000002',
+            '21000000-0000-0000-0000-000000000004',
+            'v21.test',
+            '{}',
+            'fanned_out',
+            now());
+        """;
 
     private static async Task ExecuteAsync(QualificationDatabase database, string sql)
     {

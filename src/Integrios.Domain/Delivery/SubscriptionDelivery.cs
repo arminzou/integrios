@@ -14,7 +14,10 @@ public sealed record SubscriptionDelivery
     public ConnectionAuth? DestinationAuth { get; init; }
     public JsonElement? TransformConfigSnapshot { get; init; }
     public required string Status { get; init; }
-    public required int AttemptCount { get; init; }
+    public required int LifetimeAttemptCount { get; init; }
+    public required int RetryCycleAttemptCount { get; init; }
+    public Guid? ActiveAttemptId { get; init; }
+    public DateTimeOffset? LeaseExpiresAt { get; init; }
     public DateTimeOffset? DeliverAfter { get; init; }
     public DateTimeOffset? ProcessedAt { get; init; }
     public DateTimeOffset? FailedAt { get; init; }

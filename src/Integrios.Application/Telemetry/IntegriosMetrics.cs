@@ -15,6 +15,7 @@ public sealed class IntegriosMetrics
     private readonly Counter<long> _deliveriesSucceeded;
     private readonly Counter<long> _deliveriesFailed;
     private readonly Counter<long> _deliveriesDeadLettered;
+    private readonly Counter<long> _deliveryStaleFinalizations;
     private readonly Histogram<double> _deliveryAttemptDuration;
 
     public IntegriosMetrics(IMeterFactory meterFactory)
@@ -27,6 +28,7 @@ public sealed class IntegriosMetrics
         _deliveriesSucceeded = meter.CreateCounter<long>("integrios_deliveries_succeeded");
         _deliveriesFailed = meter.CreateCounter<long>("integrios_deliveries_failed");
         _deliveriesDeadLettered = meter.CreateCounter<long>("integrios_deliveries_dead_lettered");
+        _deliveryStaleFinalizations = meter.CreateCounter<long>("integrios_delivery_stale_finalizations");
         _deliveryAttemptDuration = meter.CreateHistogram<double>("integrios_delivery_attempt_duration_seconds");
     }
 
@@ -47,6 +49,8 @@ public sealed class IntegriosMetrics
 
     public void RecordDeliveryDeadLettered(string integrationKey) =>
         _deliveriesDeadLettered.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+
+    public void RecordDeliveryStaleFinalization() => _deliveryStaleFinalizations.Add(1);
 
     public void RecordDeliveryAttemptDuration(double seconds, string result, string integrationKey) =>
         _deliveryAttemptDuration.Record(

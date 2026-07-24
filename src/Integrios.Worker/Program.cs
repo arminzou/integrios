@@ -1,4 +1,5 @@
 using Integrios.Application;
+using Integrios.Application.Delivery;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Telemetry;
 using Integrios.Worker;
@@ -13,6 +14,12 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{metricsPort}");
 builder.Services.AddIntegriosApplication();
 builder.Services.AddIntegriosInfrastructure(builder.Configuration);
 builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-worker");
+
+// Only the Worker holds in-flight delivery attempts at shutdown; the shutdown
+// timeout must outlast the attempt deadline so finalization can commit.
+builder.Services.AddOptions<HostOptions>()
+    .Configure<DeliveryExecutionOptions>((hostOptions, deliveryOptions) =>
+        hostOptions.ShutdownTimeout = deliveryOptions.ShutdownGracePeriod);
 
 builder.Services.AddHostedService<OutboxWorker>();
 
