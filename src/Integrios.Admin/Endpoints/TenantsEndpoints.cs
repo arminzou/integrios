@@ -26,21 +26,10 @@ public sealed class TenantsEndpoints : IEndpointGroup
         if (!httpContext.GetAdminPrincipal().IsGlobal)
             return Results.Forbid();
 
-        try
-        {
-            var response = await mediator.Send(
-                new CreateTenantCommand(request.Slug, request.Name, request.Environment, request.Description),
-                cancellationToken);
-            return Results.Created($"/admin/tenants/{response.Id}", response);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
-        {
-            return Results.Conflict(new { error = "A tenant with that slug already exists." });
-        }
-        catch (TenantRequestValidationException ex)
-        {
-            return Results.UnprocessableEntity(new { error = ex.Message });
-        }
+        var response = await mediator.Send(
+            new CreateTenantCommand(request.Slug, request.Name, request.Environment, request.Description),
+            cancellationToken);
+        return Results.Created($"/admin/tenants/{response.Id}", response);
     }
 
     private static async Task<IResult> ListTenants(

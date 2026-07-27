@@ -28,17 +28,10 @@ public sealed class TopicsEndpoints : IEndpointGroup
         if (!principal.IsGlobal && principal.TenantId != tenantId)
             return Results.Forbid();
 
-        try
-        {
-            var response = await mediator.Send(
-                new CreateTopicCommand(tenantId, request.Name, request.Description, request.SourceConnectionIds ?? []),
-                cancellationToken);
-            return Results.Created($"/admin/tenants/{tenantId}/topics/{response.Id}", response);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists for this tenant"))
-        {
-            return Results.Conflict(new { error = ex.Message });
-        }
+        var response = await mediator.Send(
+            new CreateTopicCommand(tenantId, request.Name, request.Description, request.SourceConnectionIds ?? []),
+            cancellationToken);
+        return Results.Created($"/admin/tenants/{tenantId}/topics/{response.Id}", response);
     }
 
     private static async Task<IResult> ListTopics(
@@ -85,17 +78,10 @@ public sealed class TopicsEndpoints : IEndpointGroup
         if (!principal.IsGlobal && principal.TenantId != tenantId)
             return Results.Forbid();
 
-        try
-        {
-            var response = await mediator.Send(
-                new UpdateTopicCommand(tenantId, id, request.Name, request.Description, request.SourceConnectionIds),
-                cancellationToken);
-            return response is null ? Results.NotFound() : Results.Ok(response);
-        }
-        catch (TopicRequestValidationException ex)
-        {
-            return Results.UnprocessableEntity(new { error = ex.Message });
-        }
+        var response = await mediator.Send(
+            new UpdateTopicCommand(tenantId, id, request.Name, request.Description, request.SourceConnectionIds),
+            cancellationToken);
+        return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
     private static async Task<IResult> DeactivateTopic(

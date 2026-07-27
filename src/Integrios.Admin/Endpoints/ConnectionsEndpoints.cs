@@ -32,33 +32,18 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
             return Results.Forbid();
         }
 
-        try
-        {
-            ConnectionResponse response = await mediator.Send(
-                new CreateConnectionCommand(
-                    tenantId,
-                    request.IntegrationId,
-                    request.Name,
-                    request.Config,
-                    request.Auth?.ToInput(),
-                    request.Environment,
-                    request.Description),
-                cancellationToken);
+        ConnectionResponse response = await mediator.Send(
+            new CreateConnectionCommand(
+                tenantId,
+                request.IntegrationId,
+                request.Name,
+                request.Config,
+                request.Auth?.ToInput(),
+                request.Environment,
+                request.Description),
+            cancellationToken);
 
-            return Results.Created($"/admin/tenants/{tenantId}/connections/{response.Id}", response);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("integration does not exist"))
-        {
-            return Results.UnprocessableEntity(new { error = "The specified integration does not exist." });
-        }
-        catch (ConnectionRequestValidationException ex)
-        {
-            return Results.UnprocessableEntity(new { error = ex.Message });
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists for this tenant"))
-        {
-            return Results.Conflict(new { error = ex.Message });
-        }
+        return Results.Created($"/admin/tenants/{tenantId}/connections/{response.Id}", response);
     }
 
     private static async Task<IResult> ListConnections(
@@ -113,29 +98,18 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
             return Results.Forbid();
         }
 
-        try
-        {
-            ConnectionResponse? response = await mediator.Send(
-                new UpdateConnectionCommand(
-                    tenantId,
-                    id,
-                    request.Name,
-                    request.Config,
-                    request.Auth?.ToInput(),
-                    request.Environment,
-                    request.Description),
-                cancellationToken);
+        ConnectionResponse? response = await mediator.Send(
+            new UpdateConnectionCommand(
+                tenantId,
+                id,
+                request.Name,
+                request.Config,
+                request.Auth?.ToInput(),
+                request.Environment,
+                request.Description),
+            cancellationToken);
 
-            return response is null ? Results.NotFound() : Results.Ok(response);
-        }
-        catch (ConnectionRequestValidationException ex)
-        {
-            return Results.UnprocessableEntity(new { error = ex.Message });
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists for this tenant"))
-        {
-            return Results.Conflict(new { error = ex.Message });
-        }
+        return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
     private static async Task<IResult> DeactivateConnection(

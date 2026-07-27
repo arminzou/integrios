@@ -32,7 +32,7 @@ public sealed class UpdateConnectionCommandHandler(
         }
 
         Integration integration = await integrationRepository.GetByIdAsync(existing.IntegrationId, cancellationToken)
-            ?? throw new InvalidOperationException("The specified integration does not exist.");
+            ?? throw new ConnectionRequestValidationException("The specified integration does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
         ConnectionConfigValidator.ValidateDestination(integration, config);

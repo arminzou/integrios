@@ -1,15 +1,11 @@
-using Integrios.Application.Auth;
 using Integrios.Domain.Tenants;
 
 namespace Integrios.Ingress.Auth;
 
-public sealed record TenantContext : IPrincipalContext
+public sealed record TenantContext
 {
     public required Tenant Tenant { get; init; }
     public required ApiKey ApiKey { get; init; }
-
-    Guid? IPrincipalContext.TenantId => Tenant.Id;
-    bool IPrincipalContext.IsGlobal => false;
 }
 
 public static class HttpContextTenantExtensions

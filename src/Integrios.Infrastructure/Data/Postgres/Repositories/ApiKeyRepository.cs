@@ -1,6 +1,6 @@
 using Dapper;
 using Integrios.Application.Abstractions;
-using Integrios.Application.Pagination;
+using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 

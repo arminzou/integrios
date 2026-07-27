@@ -1,6 +1,7 @@
 using Integrios.Admin.Auth;
 using Integrios.Admin.Bootstrap;
 using Integrios.Admin.Endpoints;
+using Integrios.Admin.ErrorHandling;
 using Integrios.Admin.OpenApi;
 using Integrios.Application;
 using Integrios.Infrastructure;
@@ -17,6 +18,7 @@ builder.Services.AddOpenApi(options =>
     options.AddDocumentTransformer<AdminKeySchemeTransformer>();
 });
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<AdminExceptionHandler>();
 builder.Services.AddIntegriosApplication();
 builder.Services.AddIntegriosInfrastructure(builder.Configuration);
 builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-admin");

@@ -1,7 +1,8 @@
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Abstractions;
-using Integrios.Application.Pagination;
+using Integrios.Application.Common.Exceptions;
+using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using Npgsql;
@@ -57,7 +58,7 @@ public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory)
         }
         catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
         {
-            throw new InvalidOperationException($"A connection named '{connection.Name}' already exists for this tenant.", ex);
+            throw new DuplicateResourceException($"A connection named '{connection.Name}' already exists for this tenant.", ex);
         }
     }
 
@@ -174,7 +175,7 @@ public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory)
         }
         catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
         {
-            throw new InvalidOperationException($"A connection named '{name}' already exists for this tenant.", ex);
+            throw new DuplicateResourceException($"A connection named '{name}' already exists for this tenant.", ex);
         }
     }
 

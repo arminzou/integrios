@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Integrios.Application.Pagination;
+namespace Integrios.Application.Common.Pagination;
 
 public static class PageCursor
 {

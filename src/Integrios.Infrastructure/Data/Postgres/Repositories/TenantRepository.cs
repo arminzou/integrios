@@ -1,6 +1,7 @@
 using Dapper;
 using Integrios.Application.Abstractions;
-using Integrios.Application.Pagination;
+using Integrios.Application.Common.Exceptions;
+using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using Npgsql;
@@ -38,7 +39,7 @@ public sealed class TenantRepository(IDbConnectionFactory connectionFactory) : I
         }
         catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
         {
-            throw new InvalidOperationException($"A tenant with slug '{tenant.Slug}' already exists.", ex);
+            throw new DuplicateResourceException("A tenant with that slug already exists.", ex);
         }
     }
 

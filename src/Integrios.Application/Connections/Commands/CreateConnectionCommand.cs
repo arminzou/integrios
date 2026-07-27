@@ -27,7 +27,7 @@ public sealed class CreateConnectionCommandHandler(
     public async Task<ConnectionResponse> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
     {
         Integration integration = await integrationRepository.GetByIdAsync(command.IntegrationId, cancellationToken)
-            ?? throw new InvalidOperationException("The specified integration does not exist.");
+            ?? throw new ConnectionRequestValidationException("The specified integration does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
         ConnectionConfigValidator.ValidateDestination(integration, config);

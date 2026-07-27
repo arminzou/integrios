@@ -1,7 +1,9 @@
 using System.Data.Common;
 using Dapper;
 using Integrios.Application.Abstractions;
-using Integrios.Application.Pagination;
+using Integrios.Application.Common.Exceptions;
+using Integrios.Application.Common.Pagination;
+using Integrios.Application.Topics;
 using Integrios.Domain.Common;
 using Integrios.Domain.Topics;
 using Npgsql;
@@ -10,6 +12,8 @@ namespace Integrios.Infrastructure.Data;
 
 public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : ITopicRepository
 {
+    private const string ForeignKeyViolation = "23503";
+    private const string SourceConnectionTenantConstraint = "fk_topic_sources_connection_tenant";
     private const string UniqueViolation = "23505";
 
     private const string SelectColumns =
@@ -48,7 +52,14 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         }
         catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
         {
-            throw new InvalidOperationException($"A topic named '{name}' already exists for this tenant.", ex);
+            throw new DuplicateResourceException($"A topic named '{name}' already exists for this tenant.", ex);
+        }
+        catch (PostgresException ex) when (
+            ex.SqlState == ForeignKeyViolation
+            && ex.ConstraintName == SourceConnectionTenantConstraint)
+        {
+            throw new TopicRequestValidationException(
+                "Every source connection must exist in the same tenant as the topic.", ex);
         }
     }
 

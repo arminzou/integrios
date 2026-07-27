@@ -40,28 +40,21 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
             return validationError;
         }
 
-        try
-        {
-            var response = await mediator.Send(
-                new CreateSubscriptionCommand(
-                    tenantId,
-                    topicId,
-                    request.Name,
-                    request.MatchRules,
-                    request.DestinationConnectionId,
-                    request.Transform,
-                    request.OrderIndex,
-                    request.Description),
-                cancellationToken);
+        var response = await mediator.Send(
+            new CreateSubscriptionCommand(
+                tenantId,
+                topicId,
+                request.Name,
+                request.MatchRules,
+                request.DestinationConnectionId,
+                request.Transform,
+                request.OrderIndex,
+                request.Description),
+            cancellationToken);
 
-            return response is null
-                ? Results.NotFound()
-                : Results.Created($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{response.Id}", response);
-        }
-        catch (SubscriptionRequestValidationException ex)
-        {
-            return Results.UnprocessableEntity(new { error = ex.Message });
-        }
+        return response is null
+            ? Results.NotFound()
+            : Results.Created($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{response.Id}", response);
     }
 
     private static async Task<IResult> ListSubscriptions(
@@ -124,27 +117,20 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
             return validationError;
         }
 
-        try
-        {
-            var response = await mediator.Send(
-                new UpdateSubscriptionCommand(
-                    tenantId,
-                    topicId,
-                    id,
-                    request.Name,
-                    request.MatchRules,
-                    request.DestinationConnectionId,
-                    request.Transform,
-                    request.OrderIndex,
-                    request.Description),
-                cancellationToken);
+        var response = await mediator.Send(
+            new UpdateSubscriptionCommand(
+                tenantId,
+                topicId,
+                id,
+                request.Name,
+                request.MatchRules,
+                request.DestinationConnectionId,
+                request.Transform,
+                request.OrderIndex,
+                request.Description),
+            cancellationToken);
 
-            return response is null ? Results.NotFound() : Results.Ok(response);
-        }
-        catch (SubscriptionRequestValidationException ex)
-        {
-            return Results.UnprocessableEntity(new { error = ex.Message });
-        }
+        return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
     private static async Task<IResult> DeactivateSubscription(

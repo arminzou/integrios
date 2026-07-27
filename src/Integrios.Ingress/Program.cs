@@ -3,11 +3,14 @@ using Integrios.Infrastructure;
 using Integrios.Infrastructure.Telemetry;
 using Integrios.Ingress.Auth;
 using Integrios.Ingress.Endpoints;
+using Integrios.Ingress.ErrorHandling;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<IngressExceptionHandler>();
 builder.Services.AddIntegriosApplication();
 builder.Services.AddIntegriosInfrastructure(builder.Configuration);
 builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-ingress");
@@ -17,6 +20,8 @@ builder.Services.AddAuthentication(ApiKeyAuthHandler.SchemeName)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();

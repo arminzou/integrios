@@ -1,9 +1,8 @@
-using Integrios.Application.Auth;
 using Integrios.Domain.Tenants;
 
 namespace Integrios.Admin.Auth;
 
-public sealed record AdminPrincipal : IPrincipalContext
+public sealed record AdminPrincipal
 {
     public required AdminKey AdminKey { get; init; }
 
