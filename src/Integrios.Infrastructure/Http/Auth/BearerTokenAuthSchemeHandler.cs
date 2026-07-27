@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Delivery;
 
 namespace Integrios.Infrastructure.Http.Auth;
 
@@ -16,7 +17,7 @@ public sealed class BearerTokenAuthSchemeHandler : IAuthSchemeHandler
 
         if (!secrets.TryGetValue("token", out string? token))
         {
-            throw new InvalidOperationException("Auth secret field 'token' is required.");
+            throw new DeliveryConfigurationException("Auth secret field 'token' is required.");
         }
 
         SecretValueValidator.EnsureHeaderSafe(token, "token");

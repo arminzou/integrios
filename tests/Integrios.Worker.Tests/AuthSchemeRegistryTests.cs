@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Delivery;
 using Integrios.Infrastructure.Http.Auth;
 
 namespace Integrios.Worker.Tests;
@@ -23,7 +24,7 @@ public sealed class AuthSchemeRegistryTests
     {
         IAuthSchemeRegistry registry = CreateRegistry();
 
-        var error = Assert.Throws<InvalidOperationException>(() => registry.GetRequired("nope"));
+        var error = Assert.Throws<DeliveryConfigurationException>(() => registry.GetRequired("nope"));
 
         Assert.Contains("Unknown auth scheme 'nope'.", error.Message);
     }
@@ -63,7 +64,7 @@ public sealed class AuthSchemeRegistryTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
         JsonElement config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
 
-        var error = Assert.Throws<InvalidOperationException>(
+        var error = Assert.Throws<DeliveryConfigurationException>(
             () => handler.Apply(request, config, new Dictionary<string, string> { ["api_key"] = apiKey }));
 
         Assert.Equal(
@@ -80,7 +81,7 @@ public sealed class AuthSchemeRegistryTests
         var handler = new BearerTokenAuthSchemeHandler();
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
 
-        var error = Assert.Throws<InvalidOperationException>(
+        var error = Assert.Throws<DeliveryConfigurationException>(
             () => handler.Apply(request, EmptyObject, new Dictionary<string, string> { ["token"] = token }));
 
         Assert.Equal(

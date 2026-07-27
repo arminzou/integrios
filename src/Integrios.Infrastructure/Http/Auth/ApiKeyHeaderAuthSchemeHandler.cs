@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Delivery;
 
 namespace Integrios.Infrastructure.Http.Auth;
 
@@ -12,11 +13,11 @@ public sealed class ApiKeyHeaderAuthSchemeHandler : IAuthSchemeHandler
     public void Apply(HttpRequestMessage request, JsonElement config, IReadOnlyDictionary<string, string> secrets)
     {
         string headerName = config.GetProperty("header_name").GetString()
-            ?? throw new InvalidOperationException("Auth config field 'header_name' is required.");
+            ?? throw new DeliveryConfigurationException("Auth config field 'header_name' is required.");
 
         if (!secrets.TryGetValue("api_key", out string? apiKey))
         {
-            throw new InvalidOperationException("Auth secret field 'api_key' is required.");
+            throw new DeliveryConfigurationException("Auth secret field 'api_key' is required.");
         }
 
         SecretValueValidator.EnsureHeaderSafe(apiKey, "api_key");

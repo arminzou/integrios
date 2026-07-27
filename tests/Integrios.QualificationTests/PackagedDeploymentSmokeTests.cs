@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Integrios.QualificationTests;
 
@@ -9,6 +10,9 @@ namespace Integrios.QualificationTests;
 [Trait("Category", "Qualification")]
 public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixture)
 {
+    private const string AdminAuthorization = "AdminKey global_admin_key:qualification-admin-secret";
+    private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
+
     [Fact]
     public async Task PackagedDeployment_StartsAndExposesDeterministicEvidence()
     {
@@ -62,6 +66,214 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/receipts/{sinkName}") ?? throw new InvalidOperationException("MockSink returned no reset receipt document.");
         Assert.Equal(0, emptyQuery.RootElement.GetProperty("count").GetInt32());
     }
+
+    [Fact]
+    public async Task OperatorObservability_ExposesMetricsLogsAndContinuousRetryTrace()
+    {
+        string suffix = Guid.NewGuid().ToString("N")[..10];
+        string tenantSlug = $"otel-{suffix}";
+        string sinkName = $"otel-{suffix}";
+
+        Guid tenantId = await PostAdminForIdAsync(
+            "/admin/tenants",
+            new { slug = tenantSlug, name = "OTLP qualification", environment = "production" });
+        string apiToken = await PostAdminForPropertyAsync(
+            $"/admin/tenants/{tenantId}/api-keys",
+            new { name = "qualification-ingress" },
+            "token");
+
+        Guid sourceConnectionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/connections",
+            new
+            {
+                integrationId = "00000000-0000-0000-0000-000000000001",
+                name = "qualification-source",
+                config = new { url = $"http://mocksink:8080/sink/{sinkName}-source" },
+                environment = "production"
+            });
+        Guid destinationConnectionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/connections",
+            new
+            {
+                integrationId = "00000000-0000-0000-0000-000000000001",
+                name = "qualification-destination",
+                config = new { url = $"http://mocksink:8080/sink/{sinkName}" },
+                environment = "production"
+            });
+        Guid topicId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/topics",
+            new
+            {
+                name = $"payments-{suffix}",
+                sourceConnectionIds = new[] { sourceConnectionId }
+            });
+        Guid subscriptionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
+            new
+            {
+                name = "qualification-retry",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId
+            });
+
+        using HttpResponseMessage failMode = await fixture.MockSinkClient.PutAsJsonAsync(
+            $"/control/{sinkName}",
+            new { mode = "fail" });
+        Assert.Equal(HttpStatusCode.OK, failMode.StatusCode);
+
+        using var ingest = new HttpRequestMessage(HttpMethod.Post, "/events")
+        {
+            Content = JsonContent.Create(new
+            {
+                sourceConnectionId,
+                topicName = $"payments-{suffix}",
+                eventType = "payment.created",
+                payload = new { paymentId = $"pay-{suffix}", amount = 1200 },
+                idempotencyKey = $"qualification-{suffix}"
+            })
+        };
+        ingest.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {apiToken}");
+        using HttpResponseMessage accepted = await fixture.IngressClient.SendAsync(ingest);
+        string acceptedBody = await accepted.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+        using JsonDocument acceptedDocument = JsonDocument.Parse(acceptedBody);
+        Guid eventId = acceptedDocument.RootElement.GetProperty("eventId").GetGuid();
+
+        await WaitForAsync(async () =>
+            await fixture.ScalarAsync<long>(
+                $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
+
+        using HttpResponseMessage successMode = await fixture.MockSinkClient.DeleteAsync($"/control/{sinkName}");
+        Assert.Equal(HttpStatusCode.OK, successMode.StatusCode);
+
+        await WaitForAsync(async () =>
+            await fixture.ScalarAsync<string>(
+                $"SELECT status FROM subscription_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
+        Assert.True(await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}'") >= 2);
+
+        Guid deliveryId = await fixture.ScalarAsync<Guid>(
+            $"SELECT id FROM subscription_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'");
+        string traceparent = await fixture.ScalarAsync<string>(
+            $"SELECT traceparent FROM subscription_deliveries WHERE id = '{deliveryId}'");
+        string traceId = traceparent.Split('-')[1];
+
+        IReadOnlyList<ExportedSpan> traceSpans = [];
+        await WaitForAsync(async () =>
+        {
+            traceSpans = ParseSpans(await fixture.ReadTraceArtifactsAsync())
+                .Where(span => span.TraceId == traceId)
+                .ToArray();
+            return traceSpans.Count(span => span.Name == "subscription.deliver") >= 2;
+        });
+
+        ExportedSpan acceptanceSpan = Assert.Single(traceSpans, span => span.Name == "IngestEventCommand");
+        ExportedSpan fanoutSpan = Assert.Single(traceSpans, span => span.Name == "outbox.fanout");
+        ExportedSpan[] deliverySpans = traceSpans.Where(span => span.Name == "subscription.deliver").ToArray();
+        Assert.Equal(acceptanceSpan.SpanId, fanoutSpan.ParentSpanId);
+        Assert.All(deliverySpans, span => Assert.Equal(fanoutSpan.SpanId, span.ParentSpanId));
+
+        string ingressMetrics = await fixture.IngressClient.GetStringAsync("/metrics");
+        string adminMetrics = await fixture.AdminClient.GetStringAsync("/metrics");
+        string workerMetrics = await fixture.WorkerMetricsClient.GetStringAsync("/metrics");
+        Assert.Contains("integrios_events_ingested_total", ingressMetrics, StringComparison.Ordinal);
+        Assert.Contains("http_server_request_duration", adminMetrics, StringComparison.Ordinal);
+        Assert.Contains("integrios_fanout_rows_created_total", workerMetrics, StringComparison.Ordinal);
+        Assert.Contains("integrios_deliveries_failed_total", workerMetrics, StringComparison.Ordinal);
+        Assert.Contains("integrios_deliveries_succeeded_total", workerMetrics, StringComparison.Ordinal);
+        Assert.Contains("integrios_delivery_attempt_duration_seconds", workerMetrics, StringComparison.Ordinal);
+
+        string workerLogs = await fixture.GetServiceLogsAsync("worker");
+        Assert.Contains(eventId.ToString(), workerLogs, StringComparison.Ordinal);
+        Assert.Contains(deliveryId.ToString(), workerLogs, StringComparison.Ordinal);
+        Assert.Contains(subscriptionId.ToString(), workerLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain("qualification-admin-secret", workerLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain(apiToken, workerLogs, StringComparison.Ordinal);
+    }
+
+    private async Task<Guid> PostAdminForIdAsync(string path, object body) =>
+        Guid.Parse(await PostAdminForPropertyAsync(path, body, "id"));
+
+    private async Task<string> PostAdminForPropertyAsync(string path, object body, string property)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        request.Headers.TryAddWithoutValidation("Authorization", AdminAuthorization);
+        using HttpResponseMessage response = await fixture.AdminClient.SendAsync(request);
+        string responseBody = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, $"POST {path} returned {(int)response.StatusCode}: {responseBody}");
+        using JsonDocument document = JsonDocument.Parse(responseBody);
+        return document.RootElement.GetProperty(property).ToString();
+    }
+
+    private static async Task WaitForAsync(Func<Task<bool>> condition)
+    {
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        Exception? lastException = null;
+        while (deadline.Elapsed < EvidenceTimeout)
+        {
+            try
+            {
+                if (await condition())
+                    return;
+            }
+            catch (Exception exception)
+            {
+                lastException = exception;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+        }
+
+        throw new TimeoutException($"Observability evidence was not ready within {EvidenceTimeout}. {lastException?.Message}");
+    }
+
+    private static IReadOnlyList<ExportedSpan> ParseSpans(string jsonLines)
+    {
+        var spans = new List<ExportedSpan>();
+        foreach (string line in jsonLines.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            JsonNode? root;
+            try
+            {
+                root = JsonNode.Parse(line);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            Visit(root, spans);
+        }
+
+        return spans;
+    }
+
+    private static void Visit(JsonNode? node, ICollection<ExportedSpan> spans)
+    {
+        if (node is JsonObject obj)
+        {
+            if (obj["name"] is JsonValue name
+                && obj["traceId"] is JsonValue traceId
+                && obj["spanId"] is JsonValue spanId)
+            {
+                spans.Add(new ExportedSpan(
+                    name.GetValue<string>(),
+                    traceId.GetValue<string>(),
+                    spanId.GetValue<string>(),
+                    obj["parentSpanId"]?.GetValue<string>() ?? string.Empty));
+            }
+
+            foreach ((_, JsonNode? child) in obj)
+                Visit(child, spans);
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (JsonNode? child in array)
+                Visit(child, spans);
+        }
+    }
+
+    private sealed record ExportedSpan(string Name, string TraceId, string SpanId, string ParentSpanId);
 
     private static async Task AssertHealthyAsync(HttpClient client)
     {

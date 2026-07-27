@@ -1,4 +1,5 @@
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Delivery;
 
 namespace Integrios.Infrastructure.Http.Auth;
 
@@ -14,7 +15,7 @@ public sealed class AuthSchemeRegistry(IEnumerable<IAuthSchemeHandler> handlers)
             return handler;
         }
 
-        throw new InvalidOperationException($"Unknown auth scheme '{scheme}'.");
+        throw new DeliveryConfigurationException($"Unknown auth scheme '{scheme}'.");
     }
 
     public bool TryGet(string scheme, out IAuthSchemeHandler handler)

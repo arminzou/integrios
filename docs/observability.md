@@ -5,13 +5,13 @@ OpenTelemetry. Observability is a pluggable capability: the platform emits stand
 vendor-neutral telemetry and **bundles no backend**. You point it at whatever stack you
 run — Prometheus, Grafana, Tempo, Loki, Datadog, or an OpenTelemetry Collector.
 
-There are two audiences:
+There are two operational planes for one audience, the **Operator** running the deployment:
 
-- **Operators** running the platform get aggregate health — ingest rate, queue depth,
+- The **aggregate telemetry plane** provides platform health — ingest rate, queue depth,
   delivery success and failure by destination class, dead-letter trends — from low-cardinality
   metrics and traces.
-- **Tenants** using the platform get per-event delivery state and attempt history from the
-  durable model via the Admin API. (Per-tenant detail stays in the database and in traces,
+- The **Tenant-scoped detail plane** provides per-event delivery state and attempt history from the
+  durable model via the Admin API. (Per-Tenant detail stays in the database and in traces,
   never in metric labels.)
 
 The default path is a **Prometheus scrape endpoint plus structured stdout logs**. OTLP
@@ -38,10 +38,14 @@ Alongside standard ASP.NET Core, HttpClient, and runtime metrics, Integrios emit
 | Metric | Type | Labels | Meaning |
 |--------|------|--------|---------|
 | `integrios_events_ingested_total` | counter | — | events accepted at the ingress boundary (excludes idempotent duplicates) |
+| `integrios_events_unrouted_total` | counter | — | events that matched no Subscription during fanout |
 | `integrios_fanout_rows_created_total` | counter | — | per-subscription delivery rows created by fanout |
 | `integrios_deliveries_succeeded_total` | counter | `integration_key` | successful deliveries, by destination integration class |
 | `integrios_deliveries_failed_total` | counter | `integration_key`, `http_status_class` | transient delivery failures (will retry) |
-| `integrios_deliveries_dead_lettered_total` | counter | `integration_key` | deliveries that exhausted retries or had no destination |
+| `integrios_deliveries_dead_lettered_total` | counter | `integration_key` | deliveries that exhausted their retry budget |
+| `integrios_delivery_secret_resolution_failures_total` | counter | `integration_key` | attempts that could not resolve a required secret reference |
+| `integrios_delivery_request_construction_failures_total` | counter | `integration_key` | attempts that could not construct a valid outbound request |
+| `integrios_delivery_stale_finalizations_total` | counter | — | finalization results discarded after delivery ownership was lost |
 | `integrios_delivery_attempt_duration_seconds` | histogram | `result`, `integration_key` | outbound attempt latency |
 | `integrios_outbox_pending_depth` | gauge | — | unprocessed outbox rows; your primary "is the worker keeping up?" signal |
 
@@ -89,8 +93,8 @@ backend.
 
 ## Exporting to your own backend (OTLP)
 
-Set an OTLP endpoint to export traces (and, if you choose, metrics and logs) to your own
-collector or backend:
+Set an OTLP endpoint to export traces to your own collector or backend. Metrics remain on the
+Prometheus scrape endpoints and structured logs remain on stdout:
 
 ```bash
 # Standard OpenTelemetry variable

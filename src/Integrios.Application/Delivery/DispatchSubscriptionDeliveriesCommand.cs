@@ -29,9 +29,27 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
         while (processedCount < command.BatchSize && !cancellationToken.IsCancellationRequested)
         {
-            SubscriptionDeliveryWorkItem? row = await deliveryQueue.ClaimNextAsync(cancellationToken);
-            if (row is null)
+            SubscriptionDeliveryClaimResult? claim = await deliveryQueue.ClaimNextWithRecoveryAsync(cancellationToken);
+            if (claim is null)
                 break;
+
+            if (claim is RecoveredSubscriptionDeliveryDeadLetter recovered)
+            {
+                metrics.RecordDeliveryDeadLettered(recovered.IntegrationKey);
+                logger.LogWarning(
+                    "Recovered expired attempt_id={AttemptId}, attempt_number={AttemptNumber} and dead-lettered delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
+                    recovered.AttemptId,
+                    recovered.AttemptNumber,
+                    recovered.DeliveryId,
+                    recovered.SubscriptionId,
+                    recovered.EventId);
+                continue;
+            }
+
+            if (claim is not ClaimedSubscriptionDelivery claimed)
+                throw new InvalidOperationException($"Unknown delivery claim result '{claim.GetType().Name}'.");
+
+            SubscriptionDeliveryWorkItem row = claimed.WorkItem;
 
             try
             {
@@ -97,7 +115,11 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         }
         catch (Exception ex)
         {
-            result = new DeliveryResult(false, 0, ex.Message, FailurePhase: DeliveryFailurePhase.RequestConstruction);
+            result = new DeliveryResult(
+                false,
+                0,
+                DeliveryConfigurationException.SafeMessage(ex),
+                FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
         await FinalizeAsync(row, payload!, result, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
@@ -110,11 +132,15 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         TimeSpan duration,
         CancellationToken cancellationToken)
     {
+        DeliveryFailurePhase? failurePhase = result.Succeeded
+            ? null
+            : result.FailurePhase ?? DeliveryFailurePhase.Http;
+
         var completion = new DeliveryAttemptCompletion(
             row.Id,
             row.AttemptId,
             result.Succeeded,
-            result.Succeeded ? null : result.FailurePhase ?? DeliveryFailurePhase.Http,
+            failurePhase,
             requestPayload,
             result.StatusCode == 0 ? null : result.StatusCode,
             null,
@@ -134,6 +160,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         }
 
         metrics.RecordDeliveryAttemptDuration(duration.TotalSeconds, result.Succeeded ? "success" : "failed", row.IntegrationKey);
+        RecordFailurePhaseMetric(failurePhase, row.IntegrationKey);
 
         switch (finalization.Disposition)
         {
@@ -148,11 +175,11 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                 break;
             case SubscriptionDeliveryDisposition.RetryScheduled:
                 metrics.RecordDeliveryFailed(row.IntegrationKey, HttpStatusClass(result));
-                LogFailure(row, result, "scheduled for retry");
+                LogFailure(row, result, failurePhase, "scheduled for retry");
                 break;
             case SubscriptionDeliveryDisposition.DeadLettered:
                 metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
-                LogFailure(row, result, "dead-lettered");
+                LogFailure(row, result, failurePhase, "dead-lettered");
                 break;
             default:
                 throw new InvalidOperationException("Applied finalization did not return a delivery disposition.");
@@ -173,12 +200,15 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             try
             {
                 destinationAuth = JsonSerializer.Deserialize<ConnectionAuth>(row.DestinationAuthJson)
-                    ?? throw new InvalidOperationException("Destination auth snapshot is invalid.");
+                    ?? throw new DeliveryConfigurationException("Destination auth snapshot is invalid.");
                 handler = authSchemeRegistry.GetRequired(destinationAuth.Scheme);
             }
             catch (Exception ex)
             {
-                throw new DeliveryPreparationException(DeliveryFailurePhase.RequestConstruction, ex);
+                throw new DeliveryPreparationException(
+                    DeliveryFailurePhase.RequestConstruction,
+                    DeliveryConfigurationException.SafeMessage(ex, "Destination auth snapshot could not be read."),
+                    ex);
             }
 
             try
@@ -205,8 +235,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                     : "invalid";
                 throw new DeliveryPreparationException(
                     DeliveryFailurePhase.SecretResolution,
-                    new InvalidOperationException(
-                        $"Secret reference '{safeReference}' could not be resolved using provider '{secretResolver.ProviderName}'."));
+                    $"Secret reference '{safeReference}' could not be resolved using provider '{secretResolver.ProviderName}'.");
             }
         }
 
@@ -228,17 +257,39 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         request.Headers.TryAddWithoutValidation(name, value);
     }
 
-    private void LogFailure(SubscriptionDeliveryWorkItem row, DeliveryResult result, string disposition)
+    private void LogFailure(
+        SubscriptionDeliveryWorkItem row,
+        DeliveryResult result,
+        DeliveryFailurePhase? failurePhase,
+        string disposition)
     {
         logger.LogWarning(
-            "Delivery attempt_id={AttemptId} for delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId} was {Disposition}: {Error}",
+            "Delivery attempt_id={AttemptId} for delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId} failed in failure_phase={FailurePhase} and was {Disposition}: {Error}",
             row.AttemptId,
             row.Id,
             row.SubscriptionId,
             row.EventId,
+            MapFailurePhase(failurePhase),
             disposition,
             result.Error ?? $"HTTP {result.StatusCode}");
     }
+
+    private void RecordFailurePhaseMetric(DeliveryFailurePhase? failurePhase, string integrationKey)
+    {
+        if (failurePhase == DeliveryFailurePhase.SecretResolution)
+            metrics.RecordDeliverySecretResolutionFailure(integrationKey);
+        else if (failurePhase == DeliveryFailurePhase.RequestConstruction)
+            metrics.RecordDeliveryRequestConstructionFailure(integrationKey);
+    }
+
+    private static string MapFailurePhase(DeliveryFailurePhase? failurePhase) => failurePhase switch
+    {
+        DeliveryFailurePhase.Transform => "transform",
+        DeliveryFailurePhase.SecretResolution => "secret_resolution",
+        DeliveryFailurePhase.RequestConstruction => "request_construction",
+        DeliveryFailurePhase.Http => "http",
+        _ => "none"
+    };
 
     private static string HttpStatusClass(DeliveryResult result) =>
         result.IsTimeout ? "timeout" : result.StatusCode switch
@@ -284,8 +335,11 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         }
     }
 
-    private sealed class DeliveryPreparationException(DeliveryFailurePhase failurePhase, Exception innerException)
-        : Exception(innerException.Message, innerException)
+    private sealed class DeliveryPreparationException(
+        DeliveryFailurePhase failurePhase,
+        string message,
+        Exception? innerException = null)
+        : Exception(message, innerException)
     {
         public DeliveryFailurePhase FailurePhase { get; } = failurePhase;
     }

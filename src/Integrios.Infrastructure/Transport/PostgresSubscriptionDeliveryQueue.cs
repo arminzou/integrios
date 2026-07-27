@@ -22,12 +22,30 @@ public sealed class PostgresSubscriptionDeliveryQueue(
     {
         while (true)
         {
-            await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            SubscriptionDeliveryClaimResult? result = await ClaimNextWithRecoveryAsync(cancellationToken);
+            switch (result)
+            {
+                case null:
+                    return null;
+                case ClaimedSubscriptionDelivery claimed:
+                    return claimed.WorkItem;
+                case RecoveredSubscriptionDeliveryDeadLetter:
+                    continue;
+                default:
+                    throw new InvalidOperationException($"Unknown delivery claim result '{result.GetType().Name}'.");
+            }
+        }
+    }
 
-            var row = await connection.QuerySingleOrDefaultAsync<DeliveryWorkRow>(
-            new CommandDefinition(
-                """
+    public async Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var row = await connection.QuerySingleOrDefaultAsync<DeliveryWorkRow>(
+        new CommandDefinition(
+            """
                 SELECT
                     sd.id AS Id,
                     sd.event_id AS EventId,
@@ -69,20 +87,20 @@ public sealed class PostgresSubscriptionDeliveryQueue(
                 LIMIT 1
                 FOR UPDATE OF sd SKIP LOCKED;
                 """,
-                transaction: transaction,
-                cancellationToken: cancellationToken));
+            transaction: transaction,
+            cancellationToken: cancellationToken));
 
-            if (row is null)
-            {
-                await transaction.CommitAsync(cancellationToken);
-                return null;
-            }
+        if (row is null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return null;
+        }
 
-            if (row.Status == "in_flight")
-            {
-                int finalized = await connection.ExecuteAsync(
-                new CommandDefinition(
-                    """
+        if (row.Status == "in_flight")
+        {
+            int finalized = await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
                     UPDATE delivery_attempts
                     SET status = 'indeterminate',
                         completed_at = @DatabaseNow,
@@ -91,23 +109,23 @@ public sealed class PostgresSubscriptionDeliveryQueue(
                       AND subscription_delivery_id = @Id
                       AND status = 'in_progress';
                     """,
-                    row,
-                    transaction,
-                    cancellationToken: cancellationToken));
+                row,
+                transaction,
+                cancellationToken: cancellationToken));
 
-                if (finalized != 1)
-                    throw new InvalidOperationException($"Active attempt {row.ActiveAttemptId} for delivery {row.Id} could not be made indeterminate.");
+            if (finalized != 1)
+                throw new InvalidOperationException($"Active attempt {row.ActiveAttemptId} for delivery {row.Id} could not be made indeterminate.");
 
-                DeliveryOutcomeDecision recoveryDecision = outcomePolicy.Decide(
-                    DeliveryOutcomeKind.Indeterminate,
-                    row.RetryCycleAttemptCount,
-                    row.DatabaseNow);
+            DeliveryOutcomeDecision recoveryDecision = outcomePolicy.Decide(
+                DeliveryOutcomeKind.Indeterminate,
+                row.RetryCycleAttemptCount,
+                row.DatabaseNow);
 
-                if (recoveryDecision.Disposition == SubscriptionDeliveryDisposition.DeadLettered)
-                {
-                    await connection.ExecuteAsync(
-                    new CommandDefinition(
-                        """
+            if (recoveryDecision.Disposition == SubscriptionDeliveryDisposition.DeadLettered)
+            {
+                await connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
                         UPDATE subscription_deliveries
                         SET status = 'dead_lettered',
                             active_attempt_id = NULL,
@@ -117,22 +135,28 @@ public sealed class PostgresSubscriptionDeliveryQueue(
                             updated_at = @DatabaseNow
                         WHERE id = @Id;
                         """,
-                        row,
-                        transaction,
-                        cancellationToken: cancellationToken));
+                    row,
+                    transaction,
+                    cancellationToken: cancellationToken));
 
-                    await transaction.CommitAsync(cancellationToken);
-                    continue;
-                }
+                await transaction.CommitAsync(cancellationToken);
+                return new RecoveredSubscriptionDeliveryDeadLetter(
+                    row.Id,
+                    row.ActiveAttemptId!.Value,
+                    row.LifetimeAttemptCount,
+                    row.EventId,
+                    row.SubscriptionId,
+                    row.IntegrationKey ?? string.Empty);
             }
+        }
 
-            Guid attemptId = Guid.NewGuid();
-            int attemptNumber = row.LifetimeAttemptCount + 1;
-            int retryCycleAttemptCount = row.RetryCycleAttemptCount + 1;
+        Guid attemptId = Guid.NewGuid();
+        int attemptNumber = row.LifetimeAttemptCount + 1;
+        int retryCycleAttemptCount = row.RetryCycleAttemptCount + 1;
 
-            await connection.ExecuteAsync(
-            new CommandDefinition(
-                """
+        await connection.ExecuteAsync(
+        new CommandDefinition(
+            """
                 INSERT INTO delivery_attempts (
                     id,
                     subscription_delivery_id,
@@ -156,39 +180,38 @@ public sealed class PostgresSubscriptionDeliveryQueue(
                     updated_at = @DatabaseNow
                 WHERE id = @DeliveryId;
                 """,
-                new
-                {
-                    AttemptId = attemptId,
-                    DeliveryId = row.Id,
-                    AttemptNumber = attemptNumber,
-                    RetryCycleAttemptCount = retryCycleAttemptCount,
-                    row.DatabaseNow,
-                    options.LeaseDuration
-                },
-                transaction,
-                cancellationToken: cancellationToken));
+            new
+            {
+                AttemptId = attemptId,
+                DeliveryId = row.Id,
+                AttemptNumber = attemptNumber,
+                RetryCycleAttemptCount = retryCycleAttemptCount,
+                row.DatabaseNow,
+                options.LeaseDuration
+            },
+            transaction,
+            cancellationToken: cancellationToken));
 
-            await transaction.CommitAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
-            return new SubscriptionDeliveryWorkItem(
-                row.Id,
-                attemptId,
-                attemptNumber,
-                row.EventId,
-                row.SubscriptionId,
-                row.DestinationConnectionId,
-                row.TenantId,
-                row.TenantSlug,
-                row.DestinationUrl ?? string.Empty,
-                row.PayloadJson ?? string.Empty,
-                row.EventType ?? string.Empty,
-                row.TopicName,
-                row.AcceptedAt,
-                row.TransformConfigSnapshot,
-                row.IntegrationKey ?? string.Empty,
-                row.DestinationAuthJson,
-                row.Traceparent);
-        }
+        return new ClaimedSubscriptionDelivery(new SubscriptionDeliveryWorkItem(
+            row.Id,
+            attemptId,
+            attemptNumber,
+            row.EventId,
+            row.SubscriptionId,
+            row.DestinationConnectionId,
+            row.TenantId,
+            row.TenantSlug,
+            row.DestinationUrl ?? string.Empty,
+            row.PayloadJson ?? string.Empty,
+            row.EventType ?? string.Empty,
+            row.TopicName,
+            row.AcceptedAt,
+            row.TransformConfigSnapshot,
+            row.IntegrationKey ?? string.Empty,
+            row.DestinationAuthJson,
+            row.Traceparent));
     }
 
     public async Task<DeliveryFinalizationResult> FinalizeAsync(

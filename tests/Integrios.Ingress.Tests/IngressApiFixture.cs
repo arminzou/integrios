@@ -127,6 +127,9 @@ public sealed class StubSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
     public Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<SubscriptionDeliveryWorkItem?>(null);
 
+    public Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<SubscriptionDeliveryClaimResult?>(null);
+
     public Task<DeliveryFinalizationResult> FinalizeAsync(
         DeliveryAttemptCompletion completion,
         CancellationToken cancellationToken = default) =>

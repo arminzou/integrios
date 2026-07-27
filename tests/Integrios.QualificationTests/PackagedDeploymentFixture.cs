@@ -12,6 +12,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     private readonly string repoRoot = ResolveRepoRoot();
     private readonly string projectName = $"integrios-q-{Guid.NewGuid():N}"[..25];
+    private readonly string otelArtifactsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-otel-{Guid.NewGuid():N}");
     private readonly Dictionary<string, string> environment;
     private IReadOnlyList<string> composeFiles;
 
@@ -19,9 +20,19 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly int ingressPort = GetAvailablePort();
     private readonly int adminPort = GetAvailablePort();
     private readonly int mockSinkPort = GetAvailablePort();
+    private readonly int workerMetricsPort = GetAvailablePort();
 
     public PackagedDeploymentFixture()
     {
+        Directory.CreateDirectory(otelArtifactsDirectory);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                otelArtifactsDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+        }
         composeFiles = [Path.Combine(repoRoot, "compose.yml")];
         environment = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -29,6 +40,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_INGRESS_PORT"] = ingressPort.ToString(),
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
             ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
+            ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
+            ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.QualificationTests", "otel-collector.qualification.yaml"),
+            ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "qualification_postgres",
             ["INTEGRIOS_BOOTSTRAP_ADMIN_SECRET"] = "qualification-admin-secret",
@@ -43,6 +57,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public HttpClient AdminClient { get; private set; } = null!;
     public HttpClient IngressClient { get; private set; } = null!;
     public HttpClient MockSinkClient { get; private set; } = null!;
+    public HttpClient WorkerMetricsClient { get; private set; } = null!;
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
     {
@@ -92,6 +107,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         finally
         {
             await RemoveImagesBestEffortAsync();
+            Directory.Delete(otelArtifactsDirectory, recursive: true);
         }
     }
 
@@ -121,6 +137,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "worker",
             "mocksink",
         ]);
+        if (!buildImages)
+            arguments.Add("otel-collector");
 
         ComposeResult startup = await RunComposeAsync(ComposeTimeout, arguments.ToArray());
         if (startup.ExitCode != 0)
@@ -134,7 +152,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         AdminClient = CreateClient(adminPort);
         IngressClient = CreateClient(ingressPort);
         MockSinkClient = CreateClient(mockSinkPort);
-        await WaitUntilReadyAsync();
+        WorkerMetricsClient = CreateClient(workerMetricsPort);
+        await WaitUntilReadyAsync(expectCollector: !buildImages);
     }
 
     private async Task StopDeploymentAsync()
@@ -169,7 +188,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         }
     }
 
-    private async Task WaitUntilReadyAsync()
+    private async Task WaitUntilReadyAsync(bool expectCollector)
     {
         var deadline = Stopwatch.StartNew();
         string lastObservation = "No readiness check completed.";
@@ -181,6 +200,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                 await AssertHealthyAsync(AdminClient, "Admin");
                 await AssertHealthyAsync(IngressClient, "Ingress");
                 await AssertHealthyAsync(MockSinkClient, "MockSink");
+
+                // The OTLP receiver must accept spans before a test emits any, or early spans are
+                // dropped and the trace-continuity assertions fail with no usable diagnostic.
+                if (expectCollector)
+                    await AssertCollectorReceivingAsync();
 
                 await using (var connection = new NpgsqlConnection(ConnectionString))
                     await connection.OpenAsync();
@@ -199,7 +223,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                     && services.Contains("admin", StringComparer.Ordinal)
                     && services.Contains("ingress", StringComparer.Ordinal)
                     && services.Contains("worker", StringComparer.Ordinal)
-                    && services.Contains("mocksink", StringComparer.Ordinal))
+                    && services.Contains("mocksink", StringComparer.Ordinal)
+                    && (!expectCollector || services.Contains("otel-collector", StringComparer.Ordinal)))
                 {
                     return;
                 }
@@ -216,6 +241,15 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
         throw new TimeoutException(
             $"Services were not ready within {ReadinessTimeout}. Last observation: {lastObservation}");
+    }
+
+    // Readiness comes from the pinned collector's own startup line rather than a published health
+    // port, so the harness does not draw another host port it would have to win a race for.
+    private async Task AssertCollectorReceivingAsync()
+    {
+        string logs = await GetServiceLogsAsync("otel-collector");
+        if (!logs.Contains("Everything is ready", StringComparison.Ordinal))
+            throw new InvalidOperationException("OTLP collector has not reported readiness yet.");
     }
 
     private static async Task AssertHealthyAsync(HttpClient client, string serviceName)
@@ -297,6 +331,27 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         AdminClient?.Dispose();
         IngressClient?.Dispose();
         MockSinkClient?.Dispose();
+        WorkerMetricsClient?.Dispose();
+    }
+
+    public async Task<string> ReadTraceArtifactsAsync()
+    {
+        string path = Path.Combine(otelArtifactsDirectory, "traces.jsonl");
+        return File.Exists(path)
+            ? await File.ReadAllTextAsync(path)
+            : string.Empty;
+    }
+
+    public async Task<string> GetServiceLogsAsync(string serviceName)
+    {
+        ComposeResult logs = await RunComposeAsync(
+            TimeSpan.FromSeconds(30),
+            "logs",
+            "--no-color",
+            serviceName);
+        if (logs.ExitCode != 0)
+            throw new InvalidOperationException($"Could not read {serviceName} logs: {logs.Output}");
+        return logs.Output;
     }
 
     private async Task<ComposeResult> RunComposeAsync(TimeSpan timeout, params string[] arguments)

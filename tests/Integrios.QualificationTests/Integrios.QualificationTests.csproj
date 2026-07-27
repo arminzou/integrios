@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <None Include="compose.deploy.qualification.yml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="otel-collector.qualification.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

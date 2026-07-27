@@ -1,4 +1,11 @@
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.130.1
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - "${INTEGRIOS_OTEL_CONFIG}:/etc/otelcol-contrib/config.yaml:ro"
+      - "${INTEGRIOS_OTEL_ARTIFACTS_DIR}:/var/lib/otelcol"
+
   postgres:
     ports:
       - "${INTEGRIOS_POSTGRES_PORT}:5432"
@@ -10,12 +17,20 @@ services:
 
   ingress:
     image: ${INTEGRIOS_INGRESS_IMAGE}
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
 
   admin:
     image: ${INTEGRIOS_ADMIN_IMAGE}
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
 
   worker:
     image: ${INTEGRIOS_WORKER_IMAGE}
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports:
+      - "${INTEGRIOS_WORKER_METRICS_PORT}:5299"
 
   mocksink:
     image: ${INTEGRIOS_MOCKSINK_IMAGE}

@@ -34,7 +34,11 @@ public sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
         }
         catch (Exception ex)
         {
-            return new DeliveryResult(false, 0, ex.Message, FailurePhase: DeliveryFailurePhase.RequestConstruction);
+            return new DeliveryResult(
+                false,
+                0,
+                DeliveryConfigurationException.SafeMessage(ex),
+                FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
         try
@@ -49,13 +53,23 @@ public sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
         {
             return new DeliveryResult(false, 0, "Request timed out", IsTimeout: true, FailurePhase: DeliveryFailurePhase.Http);
         }
-        catch (TaskCanceledException ex)
+        catch (TaskCanceledException)
+        {
+            return new DeliveryResult(false, 0, "Request was canceled.", FailurePhase: DeliveryFailurePhase.Http);
+        }
+        // The stock HttpClientHandler supplies transport diagnostics such as DNS, connection,
+        // and TLS failures through HttpRequestException without including request headers.
+        catch (HttpRequestException ex)
         {
             return new DeliveryResult(false, 0, ex.Message, FailurePhase: DeliveryFailurePhase.Http);
         }
         catch (Exception ex)
         {
-            return new DeliveryResult(false, 0, ex.Message, FailurePhase: DeliveryFailurePhase.Http);
+            return new DeliveryResult(
+                false,
+                0,
+                DeliveryConfigurationException.SafeMessage(ex, "Outbound HTTP request failed."),
+                FailurePhase: DeliveryFailurePhase.Http);
         }
     }
 }

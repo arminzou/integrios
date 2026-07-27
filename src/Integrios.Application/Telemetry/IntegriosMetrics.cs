@@ -15,6 +15,8 @@ public sealed class IntegriosMetrics
     private readonly Counter<long> _deliveriesSucceeded;
     private readonly Counter<long> _deliveriesFailed;
     private readonly Counter<long> _deliveriesDeadLettered;
+    private readonly Counter<long> _deliverySecretResolutionFailures;
+    private readonly Counter<long> _deliveryRequestConstructionFailures;
     private readonly Counter<long> _deliveryStaleFinalizations;
     private readonly Histogram<double> _deliveryAttemptDuration;
 
@@ -28,6 +30,8 @@ public sealed class IntegriosMetrics
         _deliveriesSucceeded = meter.CreateCounter<long>("integrios_deliveries_succeeded");
         _deliveriesFailed = meter.CreateCounter<long>("integrios_deliveries_failed");
         _deliveriesDeadLettered = meter.CreateCounter<long>("integrios_deliveries_dead_lettered");
+        _deliverySecretResolutionFailures = meter.CreateCounter<long>("integrios_delivery_secret_resolution_failures");
+        _deliveryRequestConstructionFailures = meter.CreateCounter<long>("integrios_delivery_request_construction_failures");
         _deliveryStaleFinalizations = meter.CreateCounter<long>("integrios_delivery_stale_finalizations");
         _deliveryAttemptDuration = meter.CreateHistogram<double>("integrios_delivery_attempt_duration_seconds");
     }
@@ -49,6 +53,12 @@ public sealed class IntegriosMetrics
 
     public void RecordDeliveryDeadLettered(string integrationKey) =>
         _deliveriesDeadLettered.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+
+    public void RecordDeliverySecretResolutionFailure(string integrationKey) =>
+        _deliverySecretResolutionFailures.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+
+    public void RecordDeliveryRequestConstructionFailure(string integrationKey) =>
+        _deliveryRequestConstructionFailures.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
 
     public void RecordDeliveryStaleFinalization() => _deliveryStaleFinalizations.Add(1);
 

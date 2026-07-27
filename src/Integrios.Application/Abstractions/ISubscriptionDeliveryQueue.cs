@@ -6,6 +6,9 @@ public interface ISubscriptionDeliveryQueue
 {
     Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
+    Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
+        CancellationToken cancellationToken = default);
+
     Task<DeliveryFinalizationResult> FinalizeAsync(
         DeliveryAttemptCompletion completion,
         CancellationToken cancellationToken = default);
@@ -15,6 +18,20 @@ public interface ISubscriptionDeliveryQueue
         Guid eventId,
         CancellationToken cancellationToken = default);
 }
+
+public abstract record SubscriptionDeliveryClaimResult;
+
+public sealed record ClaimedSubscriptionDelivery(SubscriptionDeliveryWorkItem WorkItem)
+    : SubscriptionDeliveryClaimResult;
+
+public sealed record RecoveredSubscriptionDeliveryDeadLetter(
+    Guid DeliveryId,
+    Guid AttemptId,
+    int AttemptNumber,
+    Guid EventId,
+    Guid SubscriptionId,
+    string IntegrationKey)
+    : SubscriptionDeliveryClaimResult;
 
 public sealed record SubscriptionDeliveryWorkItem(
     Guid Id,

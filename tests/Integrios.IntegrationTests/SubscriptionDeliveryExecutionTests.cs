@@ -274,6 +274,11 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
             await fixture.ForceLeaseExpiredAsync(deliveryId);
         }
 
+        var recovery = Assert.IsType<RecoveredSubscriptionDeliveryDeadLetter>(
+            await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync());
+        Assert.Equal(deliveryId, recovery.DeliveryId);
+        Assert.Equal(RetryPolicy.DefaultMaxAttempts, recovery.AttemptNumber);
+        Assert.NotEqual(Guid.Empty, recovery.AttemptId);
         Assert.Null(await fixture.DeliveryQueue.ClaimNextAsync());
 
         SubscriptionDeliveryState delivery = await fixture.GetSubscriptionDeliveryAsync(deliveryId);

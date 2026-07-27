@@ -1,5 +1,6 @@
 using System.Text;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Delivery;
 using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.Http.Auth;
@@ -19,7 +20,7 @@ internal static class SecretValueValidator
     {
         if (value.Contains('\r') || value.Contains('\n'))
         {
-            throw new InvalidOperationException(
+            throw new DeliveryConfigurationException(
                 $"Auth secret field '{secretField}' contains a line break, which is not permitted in an HTTP header value.");
         }
     }

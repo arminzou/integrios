@@ -403,12 +403,13 @@ public sealed class WorkerTransportAbstractionsTests
     public async Task DispatchSubscriptionDeliveries_OwnershipLost_EmitsOnlyStaleFinalizationSignal()
     {
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        const string integrationKey = "ownership_lost_observability";
         var capturing = new CapturingLoggerProvider();
         Guid attemptId = Guid.NewGuid();
         var queue = new FakeSubscriptionDeliveryQueue
         {
             FinalizationStatus = DeliveryFinalizationStatus.OwnershipLost,
-            ClaimedItems = [MakeWorkItem(attemptId: attemptId)]
+            ClaimedItems = [MakeWorkItem(attemptId: attemptId, integrationKey: integrationKey)]
         };
         var mediator = BuildMediator(services =>
         {
@@ -422,11 +423,52 @@ public sealed class WorkerTransportAbstractionsTests
 
         Assert.Equal(DeliveryFinalizationStatus.OwnershipLost, Assert.Single(queue.Finalizations).Status);
         Assert.Single(metrics.ForInstrument("integrios_delivery_stale_finalizations"));
-        Assert.Empty(metrics.ForInstrument("integrios_deliveries_succeeded"));
-        Assert.Empty(metrics.ForInstrument("integrios_deliveries_failed"));
-        Assert.Empty(metrics.ForInstrument("integrios_deliveries_dead_lettered"));
-        Assert.Empty(metrics.ForInstrument("integrios_delivery_attempt_duration_seconds"));
+        Assert.DoesNotContain(metrics.ForInstrument("integrios_deliveries_succeeded"), m => Equals(m.Tag("integration_key"), integrationKey));
+        Assert.DoesNotContain(metrics.ForInstrument("integrios_deliveries_failed"), m => Equals(m.Tag("integration_key"), integrationKey));
+        Assert.DoesNotContain(metrics.ForInstrument("integrios_deliveries_dead_lettered"), m => Equals(m.Tag("integration_key"), integrationKey));
+        Assert.DoesNotContain(metrics.ForInstrument("integrios_delivery_attempt_duration_seconds"), m => Equals(m.Tag("integration_key"), integrationKey));
         Assert.True(capturing.AnyMessageContains(attemptId.ToString()));
+    }
+
+    [Fact]
+    public async Task DispatchSubscriptionDeliveries_RecoveryDeadLetter_EmitsSignalAndContinuesToPendingWork()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        var capturing = new CapturingLoggerProvider();
+        var recovered = new RecoveredSubscriptionDeliveryDeadLetter(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            3,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "webhook");
+        SubscriptionDeliveryWorkItem pending = MakeWorkItem(integrationKey: "webhook");
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimResults = [recovered, new ClaimedSubscriptionDelivery(pending)]
+        };
+        var deliveryClient = new FakeDeliveryClient(new DeliveryResult(true, 200));
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(deliveryClient);
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ILoggerProvider>(capturing);
+        });
+
+        int processed = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+
+        Assert.Equal(1, processed);
+        Assert.Single(deliveryClient.DeliveredUrls);
+        Assert.Equal(3, queue.ClaimCallCount);
+        var deadLettered = Assert.Single(
+            metrics.ForInstrument("integrios_deliveries_dead_lettered"),
+            measurement => Equals(measurement.Tag("integration_key"), "webhook"));
+        Assert.Equal("webhook", deadLettered.Tag("integration_key"));
+        Assert.True(capturing.AnyMessageContains(recovered.DeliveryId.ToString()));
+        Assert.True(capturing.AnyMessageContains(recovered.AttemptId.ToString()));
+        Assert.True(capturing.AnyMessageContains(recovered.EventId.ToString()));
+        Assert.True(capturing.AnyMessageContains(recovered.SubscriptionId.ToString()));
     }
 
     private static async Task SendDispatch(FakeSubscriptionDeliveryQueue queue, DeliveryResult result)
@@ -501,6 +543,7 @@ public sealed class WorkerTransportAbstractionsTests
     private sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
     {
         public IReadOnlyList<SubscriptionDeliveryWorkItem> ClaimedItems { get; init; } = [];
+        public IReadOnlyList<SubscriptionDeliveryClaimResult>? ClaimResults { get; init; }
         public SubscriptionDeliveryDisposition FailureDisposition { get; set; } = SubscriptionDeliveryDisposition.RetryScheduled;
         public DeliveryFinalizationStatus FinalizationStatus { get; set; } = DeliveryFinalizationStatus.Applied;
         public List<DeliveryAttemptCompletion> Completions { get; } = [];
@@ -514,6 +557,22 @@ public sealed class WorkerTransportAbstractionsTests
             ClaimCallCount++;
             Operations?.Add("claim");
             return Task.FromResult<SubscriptionDeliveryWorkItem?>(claimIndex < ClaimedItems.Count ? ClaimedItems[claimIndex++] : null);
+        }
+
+        public Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default)
+        {
+            ClaimCallCount++;
+            Operations?.Add("claim");
+            if (ClaimResults is not null)
+            {
+                return Task.FromResult<SubscriptionDeliveryClaimResult?>(
+                    claimIndex < ClaimResults.Count ? ClaimResults[claimIndex++] : null);
+            }
+
+            return Task.FromResult<SubscriptionDeliveryClaimResult?>(
+                claimIndex < ClaimedItems.Count
+                    ? new ClaimedSubscriptionDelivery(ClaimedItems[claimIndex++])
+                    : null);
         }
 
         public Task<DeliveryFinalizationResult> FinalizeAsync(DeliveryAttemptCompletion completion, CancellationToken cancellationToken = default)
