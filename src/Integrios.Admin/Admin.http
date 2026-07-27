@@ -1,5 +1,5 @@
 @baseUrl = {{ADMIN_BASE_URL}}
-@globalKey = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
+@operatorKey = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
 @webhookIntId = 00000000-0000-0000-0000-000000000001
 
 # Local-only integration IDs seeded for manual verification.
@@ -40,13 +40,13 @@ GET {{baseUrl}}/admin/tenants
 # The webhook integration and deployment-wide AdminKey below come from the `bootstrap` one-shot
 # (`Integrios.Admin bootstrap`, run automatically by `make up`), not from migrations.
 GET {{baseUrl}}/admin/integrations
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 1a - Inspect the stock open webhook integration
 # This is the generic HTTP integration used by the normal local walkthrough.
 GET {{baseUrl}}/admin/integrations/{{webhookIntId}}
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 1b - Inspect the local-only auth-capable integration
@@ -54,20 +54,20 @@ GET {{baseUrl}}/admin/integrations/{{webhookIntId}}
 # - direction = destination
 # - supportedAuthSchemes = ["api_key_header"]
 GET {{baseUrl}}/admin/integrations/{{authDestinationIntId}}
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 1c - Inspect the local-only source-only integration
 # Use this for the destination direction rejection check later.
 GET {{baseUrl}}/admin/integrations/{{sourceOnlyIntId}}
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 2 - Create a tenant
 # The tenant is the top-level isolation boundary for all config below.
 # @name createTenant
 POST {{baseUrl}}/admin/tenants
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -84,19 +84,19 @@ Content-Type: application/json
 # @tenantId above before continuing.
 # @name findTenant
 GET {{baseUrl}}/admin/tenants
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 2a - Fetch the tenant you will use for the rest of the walkthrough
 GET {{baseUrl}}/admin/tenants/{{tenantId}}
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 3 - Create a data-plane API key
 # Ingress uses this key to authenticate event writes for this tenant.
 # @name createApiKey
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -115,19 +115,19 @@ Content-Type: application/json
 ###
 # Step 3a - List tenant API keys
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 3b - Fetch the created API key metadata
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 4 - Create the source connection
 # Source connections represent systems that are allowed to publish into a topic.
 # @name createSourceConnection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -145,7 +145,7 @@ Content-Type: application/json
 # Destination connections represent systems the worker may deliver to.
 # @name createDestinationConnection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -165,12 +165,12 @@ Content-Type: application/json
 ###
 # Step 4b - List connections
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 4c - Update the source connection
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -185,7 +185,7 @@ Content-Type: application/json
 ###
 # Step 4d - Update the destination connection
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -202,7 +202,7 @@ Content-Type: application/json
 # A topic is the named tenant stream. Source connections publish to it.
 # @name createTopic
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -217,7 +217,7 @@ Content-Type: application/json
 ###
 # Step 5a - Fetch the topic
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 6 - Create the main subscription
@@ -225,7 +225,7 @@ GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}
 # The worker will create one delivery path per matching subscription.
 # @name createSubscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -244,12 +244,12 @@ Content-Type: application/json
 ###
 # Step 6a - List subscriptions
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 6b - Fetch the created subscription
 GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 7 - Preview a transform before saving it
@@ -257,7 +257,7 @@ GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{su
 # - the event payload is the JSONata root, so reference `amount`
 # - platform metadata lives under `$context`
 POST {{baseUrl}}/admin/transform/preview
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -279,7 +279,7 @@ Content-Type: application/json
 ###
 # Step 7a - Save the transform on the subscription
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -302,7 +302,7 @@ Content-Type: application/json
 # This lets you compare transformed and raw deliveries for the same event.
 # @name createRawSubscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -318,7 +318,7 @@ Content-Type: application/json
 ###
 # Step 7c - Optional: deactivate the raw subscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{createRawSubscription.response.body.$.id}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 8 - v2.6 authenticated delivery smoke check
@@ -330,7 +330,7 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{c
 #
 # @name createAuthDestinationConnection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -355,7 +355,7 @@ Content-Type: application/json
 ###
 # Step 8a - Update the auth-enabled connection
 PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createAuthDestinationConnection.response.body.$.id}}
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -381,7 +381,7 @@ Content-Type: application/json
 # First create a source-only connection.
 # @name createSourceOnlyDestinationConnection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -398,7 +398,7 @@ Content-Type: application/json
 # Step 8c - The subscription create should reject that source-only destination.
 # Expect 422.
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
-{{globalKey}}
+{{operatorKey}}
 Content-Type: application/json
 
 {
@@ -419,45 +419,45 @@ Content-Type: application/json
 ###
 # Step 9a - Optional: deactivate the raw subscription if it is still active
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{createRawSubscription.response.body.$.id}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9b - Deactivate the main subscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9c - Optional: deactivate the auth-enabled destination connection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createAuthDestinationConnection.response.body.$.id}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9d - Optional: deactivate the source-only verification connection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createSourceOnlyDestinationConnection.response.body.$.id}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9e - Deactivate the topic
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9f - Deactivate the standard destination connection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9g - Deactivate the source connection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}/deactivate
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9h - Revoke the data-plane API key
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}/revoke
-{{globalKey}}
+{{operatorKey}}
 
 ###
 # Step 9i - Optional: deactivate the tenant if you want the entire runbook state
 # retired instead of reused on the next pass.
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/deactivate
-{{globalKey}}
+{{operatorKey}}
