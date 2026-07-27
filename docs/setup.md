@@ -82,6 +82,12 @@ curl -s $INGRESS/events/$EVENT -H "Authorization: ApiKey $TOKEN" | jq
 docker compose logs mocksink | grep MockSink
 ```
 
+Connection updates replace the complete `config` object rather than merging fields. Connections
+whose Integration direction is `destination` or `both` must include an absolute HTTP(S)
+`config.url` on both create and update. When upgrading a deployment with a legacy
+destination-capable Connection that has no URL, include a valid URL the next time that Connection
+is updated. Source-only Integration configuration remains free-form.
+
 The last command should show a line like:
 
 ```

@@ -29,13 +29,16 @@ public sealed class CreateConnectionCommandHandler(
         Integration integration = await integrationRepository.GetByIdAsync(command.IntegrationId, cancellationToken)
             ?? throw new InvalidOperationException("The specified integration does not exist.");
 
+        JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
+        ConnectionConfigValidator.ValidateDestination(integration, config);
+
         var connection = new Connection
         {
             Id = Guid.NewGuid(),
             TenantId = command.TenantId,
             IntegrationId = command.IntegrationId,
             Name = command.Name,
-            Config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config,
+            Config = config,
             Auth = ConnectionAuthValidator.Validate(integration, command.Auth, authSchemeRegistry),
             Status = OperationalStatus.Active,
             Environment = command.Environment,

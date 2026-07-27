@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using Integrios.Application.Delivery;
 using Integrios.Application;
 using Integrios.Application.Abstractions;
@@ -86,9 +89,103 @@ public sealed class DeliveryExecutionOptionsTests
         Assert.Contains("AttemptDeadline", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task InfrastructureRegistration_DeliveryClientDoesNotFollowRedirects()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        string destination = $"http://127.0.0.1:{port}/initial";
+        string redirectTarget = $"http://127.0.0.1:{port}/redirected";
+        using var stopServer = new CancellationTokenSource();
+        Task<RedirectObservation> serverTask = ObserveRedirectAsync(listener, redirectTarget, stopServer.Token);
+
+        IConfiguration configuration = BuildConfiguration([]);
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddIntegriosApplication();
+        services.AddIntegriosInfrastructure(configuration);
+        await using ServiceProvider provider = services.BuildServiceProvider();
+        IDeliveryClient deliveryClient = provider.GetRequiredService<IDeliveryClient>();
+
+        DeliveryResult result = await deliveryClient.DeliverAsync(
+            destination,
+            "{}",
+            request => request.Headers.TryAddWithoutValidation("X-Api-Key", "must-not-follow"));
+
+        await stopServer.CancelAsync();
+        RedirectObservation observation = await serverTask;
+
+        Assert.False(result.Succeeded);
+        Assert.Equal((int)HttpStatusCode.Found, result.StatusCode);
+        Assert.Equal(1, observation.RequestCount);
+        Assert.Contains("X-Api-Key: must-not-follow", observation.FirstRequest, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static IConfiguration BuildConfiguration(Dictionary<string, string?> values)
     {
         values["ConnectionStrings:Postgres"] = "Host=localhost;Database=integrios;Username=integrios;Password=integrios";
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
+
+    private static async Task<RedirectObservation> ObserveRedirectAsync(
+        TcpListener listener,
+        string redirectTarget,
+        CancellationToken cancellationToken)
+    {
+        int requestCount = 0;
+        string firstRequest;
+
+        using (TcpClient firstClient = await listener.AcceptTcpClientAsync(cancellationToken))
+        {
+            requestCount++;
+            firstRequest = await ReadHeadersAsync(firstClient.GetStream(), cancellationToken);
+            await WriteResponseAsync(
+                firstClient.GetStream(),
+                $"HTTP/1.1 302 Found\r\nLocation: {redirectTarget}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                cancellationToken);
+        }
+
+        try
+        {
+            using TcpClient redirectedClient = await listener.AcceptTcpClientAsync(cancellationToken);
+            requestCount++;
+            await ReadHeadersAsync(redirectedClient.GetStream(), cancellationToken);
+            await WriteResponseAsync(
+                redirectedClient.GetStream(),
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+
+        return new RedirectObservation(requestCount, firstRequest);
+    }
+
+    private static async Task<string> ReadHeadersAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[4096];
+        var request = new StringBuilder();
+
+        while (!request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+        {
+            int read = await stream.ReadAsync(buffer, cancellationToken);
+            if (read == 0)
+                break;
+
+            request.Append(Encoding.ASCII.GetString(buffer, 0, read));
+        }
+
+        return request.ToString();
+    }
+
+    private static async Task WriteResponseAsync(NetworkStream stream, string response, CancellationToken cancellationToken)
+    {
+        byte[] bytes = Encoding.ASCII.GetBytes(response);
+        await stream.WriteAsync(bytes, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+    }
+
+    private sealed record RedirectObservation(int RequestCount, string FirstRequest);
 }

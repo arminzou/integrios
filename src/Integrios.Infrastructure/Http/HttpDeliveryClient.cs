@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
 
 namespace Integrios.Infrastructure.Http;
@@ -13,7 +14,16 @@ public sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
         Action<HttpRequestMessage>? decorate = null,
         CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        if (!OutboundHttpDestination.TryParse(url, out Uri? destination))
+        {
+            return new DeliveryResult(
+                false,
+                0,
+                "Destination must be an absolute HTTP or HTTPS URL.",
+                FailurePhase: DeliveryFailurePhase.RequestConstruction);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, destination);
         var content = new StringContent(payloadJson, Encoding.UTF8);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
         request.Content = content;
@@ -29,7 +39,7 @@ public sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
 
         try
         {
-            var response = await httpClient.SendAsync(request, cancellationToken);
+            using var response = await httpClient.SendAsync(request, cancellationToken);
             return new DeliveryResult(
                 response.IsSuccessStatusCode,
                 (int)response.StatusCode,

@@ -42,6 +42,66 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         Assert.Null(body.Auth);
     }
 
+    [Theory]
+    [InlineData("http://127.0.0.1:5054/sink/private")]
+    [InlineData("http://10.20.30.40/sink/private")]
+    [InlineData("https://[::1]/sink/private")]
+    public async Task CreateConnection_PrivateOrLoopbackHttpDestination_ReturnsCreated(string url)
+    {
+        var response = await PostConnectionAsync($"private-{Guid.NewGuid():N}", url);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/relative")]
+    [InlineData("ftp://example.test/sink")]
+    [InlineData("file:///tmp/sink")]
+    [InlineData("not a url")]
+    public async Task CreateConnection_InvalidHttpDestination_Returns422(string url)
+    {
+        var response = await PostConnectionAsync($"invalid-{Guid.NewGuid():N}", url);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateConnection_MissingDestinationUrl_Returns422()
+    {
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/connections",
+            new
+            {
+                integrationId = WebhookIntegrationId,
+                name = "missing-url",
+                config = new { }
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateConnection_SourceOnlyIntegration_AllowsFreeFormConfig()
+    {
+        Guid integrationId = await InsertIntegrationAsync(
+            $"source_only_{Guid.NewGuid():N}",
+            [],
+            "source");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/connections",
+            new
+            {
+                integrationId,
+                name = "source-without-url",
+                config = new { source_name = "orders" }
+            }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
     [Fact]
     public async Task CreateConnection_WithSupportedAuth_PersistsAndHidesSecretRefs()
     {
@@ -264,6 +324,60 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
     }
 
     [Fact]
+    public async Task UpdateConnection_InvalidHttpDestination_Returns422()
+    {
+        Guid connectionId = await InsertConnectionAsync(WebhookIntegrationId, "invalid-update");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/connections/{connectionId}",
+            new
+            {
+                name = "invalid-update",
+                config = new { url = "ftp://example.test/sink" }
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateConnection_DestinationCapableIntegration_OmittedConfigReturns422()
+    {
+        Guid connectionId = await InsertConnectionAsync(WebhookIntegrationId, "omitted-config");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/connections/{connectionId}",
+            new
+            {
+                name = "omitted-config"
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateConnection_SourceOnlyIntegration_AllowsFreeFormConfig()
+    {
+        Guid integrationId = await InsertIntegrationAsync(
+            $"source_only_update_{Guid.NewGuid():N}",
+            [],
+            "source");
+        Guid connectionId = await InsertConnectionAsync(integrationId, "source-update");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/connections/{connectionId}",
+            new
+            {
+                name = "source-update",
+                config = new { source_name = "updated-orders" }
+            }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdateConnection_ReservedDeliveryHeader_Returns422()
     {
         Guid integrationId = await InsertIntegrationAsync("update_reserved_header", ["api_key_header"]);
@@ -332,7 +446,10 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         return msg;
     }
 
-    private async Task<Guid> InsertIntegrationAsync(string key, string[] supportedAuthSchemes)
+    private async Task<Guid> InsertIntegrationAsync(
+        string key,
+        string[] supportedAuthSchemes,
+        string direction = "destination")
     {
         Guid id = Guid.NewGuid();
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
@@ -341,12 +458,13 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         await using var cmd = new NpgsqlCommand(
             """
             INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status, description, created_at, updated_at)
-            VALUES (@Id, @Key, @Name, 'destination', @SupportedAuthSchemes::jsonb, 'active', 'test integration', now(), now());
+            VALUES (@Id, @Key, @Name, @Direction, @SupportedAuthSchemes::jsonb, 'active', 'test integration', now(), now());
             """,
             connection);
         cmd.Parameters.AddWithValue("Id", id);
         cmd.Parameters.AddWithValue("Key", key);
         cmd.Parameters.AddWithValue("Name", key);
+        cmd.Parameters.AddWithValue("Direction", direction);
         cmd.Parameters.AddWithValue("SupportedAuthSchemes", JsonSerializer.Serialize(supportedAuthSchemes));
         await cmd.ExecuteNonQueryAsync();
 

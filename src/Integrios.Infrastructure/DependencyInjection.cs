@@ -53,6 +53,9 @@ public static class DependencyInjection
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
             client.Timeout = deliveryOptions.HttpTimeout;
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            AllowAutoRedirect = false
         });
 
         services.AddHostedService<OutboxDepthMetrics>();

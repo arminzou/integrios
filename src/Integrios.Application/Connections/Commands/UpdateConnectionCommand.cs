@@ -35,6 +35,7 @@ public sealed class UpdateConnectionCommandHandler(
             ?? throw new InvalidOperationException("The specified integration does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
+        ConnectionConfigValidator.ValidateDestination(integration, config);
         ConnectionAuth? auth = ConnectionAuthValidator.Validate(integration, command.Auth, authSchemeRegistry);
 
         Connection? updated = await repository.UpdateAsync(

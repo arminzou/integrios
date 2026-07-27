@@ -62,6 +62,24 @@ public sealed class HttpDeliveryClientTests
         Assert.Equal(["secret"], values);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("/relative")]
+    [InlineData("ftp://example.test/sink")]
+    [InlineData("not a url")]
+    public async Task DeliverAsync_InvalidDestination_ReturnsRequestConstructionFailure(string url)
+    {
+        var handler = new StubHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+        var client = new HttpDeliveryClient(new HttpClient(handler));
+
+        var result = await client.DeliverAsync(url, "{}");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, result.StatusCode);
+        Assert.Equal(Integrios.Domain.Delivery.DeliveryFailurePhase.RequestConstruction, result.FailurePhase);
+    }
+
     private sealed class StubHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
