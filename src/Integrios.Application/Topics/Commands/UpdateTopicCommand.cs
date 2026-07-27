@@ -28,18 +28,12 @@ internal sealed class UpdateTopicCommandHandler(ITopicRepository topicRepository
                 "Topic names are immutable; create a new topic to change the stream identifier.");
 
         var topic = await topicRepository.UpdateAsync(
-            command.TenantId, command.Id, command.Description, cancellationToken);
+            command.TenantId,
+            command.Id,
+            command.Description,
+            command.SourceConnectionIds,
+            cancellationToken);
 
-        if (topic is null)
-            return null;
-
-        if (command.SourceConnectionIds is not null)
-            await topicRepository.SetSourceConnectionsAsync(
-                command.TenantId, command.Id, command.SourceConnectionIds, cancellationToken);
-
-        return TopicResponse.From(topic with
-        {
-            SourceConnectionIds = command.SourceConnectionIds ?? topic.SourceConnectionIds
-        });
+        return topic is null ? null : TopicResponse.From(topic);
     }
 }

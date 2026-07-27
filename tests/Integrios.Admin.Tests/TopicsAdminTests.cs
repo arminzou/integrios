@@ -158,6 +158,38 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
+    public async Task UpdateTopic_InvalidSourceConnection_RollsBackEntireUpdate()
+    {
+        var created = await (await PostTopicAsync(new
+        {
+            name = "atomic-update",
+            description = "original",
+            sourceConnectionIds = new[] { fixture.SourceConnectionId }
+        })).Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        Assert.NotNull(created);
+
+        var patch = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new
+            {
+                name = "atomic-update",
+                description = "must roll back",
+                sourceConnectionIds = new[] { Guid.NewGuid() }
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, patch.StatusCode);
+
+        var get = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
+        var body = await get.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Equal("original", body.Description);
+        Assert.Equal([fixture.SourceConnectionId], body.SourceConnectionIds);
+    }
+
+    [Fact]
     public async Task UpdateTopic_ChangingName_Returns422AndPreservesName()
     {
         var created = await (await PostTopicAsync(new { name = "immutable-name" }))

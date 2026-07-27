@@ -76,7 +76,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         if (row is null)
             return null;
 
-        var sources = await LoadSourcesAsync(db, id, ct);
+        var sources = await LoadSourcesAsync(db, id, null, ct);
         return row.ToTopic(sources);
     }
 
@@ -130,26 +130,55 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         Guid tenantId,
         Guid id,
         string? description,
+        IReadOnlyList<Guid>? sourceConnectionIds,
         CancellationToken ct = default)
     {
         await using var db = await connectionFactory.OpenConnectionAsync(ct);
+        await using var tx = await db.BeginTransactionAsync(ct);
 
-        var row = await db.QuerySingleOrDefaultAsync<TopicRow>(
-            new CommandDefinition(
-                $"""
-                UPDATE topics
-                SET description = @Description, updated_at = now()
-                WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
-                RETURNING {SelectColumns}
-                """,
-                new { TenantId = tenantId, Id = id, Description = description },
-                cancellationToken: ct));
+        try
+        {
+            var row = await db.QuerySingleOrDefaultAsync<TopicRow>(
+                new CommandDefinition(
+                    $"""
+                    UPDATE topics
+                    SET description = @Description, updated_at = now()
+                    WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
+                    RETURNING {SelectColumns}
+                    """,
+                    new { TenantId = tenantId, Id = id, Description = description },
+                    tx,
+                    cancellationToken: ct));
 
-        if (row is null)
-            return null;
+            if (row is null)
+            {
+                await tx.RollbackAsync(ct);
+                return null;
+            }
 
-        var sources = await LoadSourcesAsync(db, id, ct);
-        return row.ToTopic(sources);
+            if (sourceConnectionIds is not null)
+            {
+                await db.ExecuteAsync(
+                    new CommandDefinition(
+                        "DELETE FROM topic_sources WHERE tenant_id = @TenantId AND topic_id = @TopicId",
+                        new { TenantId = tenantId, TopicId = id },
+                        tx,
+                        cancellationToken: ct));
+
+                await InsertSourcesAsync(db, tenantId, id, sourceConnectionIds, tx, ct);
+            }
+
+            var sources = await LoadSourcesAsync(db, id, tx, ct);
+            await tx.CommitAsync(ct);
+            return row.ToTopic(sources);
+        }
+        catch (PostgresException ex) when (
+            ex.SqlState == ForeignKeyViolation
+            && ex.ConstraintName == SourceConnectionTenantConstraint)
+        {
+            throw new TopicRequestValidationException(
+                "Every source connection must exist in the same tenant as the topic.", ex);
+        }
     }
 
     public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default)
@@ -165,40 +194,6 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                 new { TenantId = tenantId, Id = id },
                 cancellationToken: ct));
         return affected > 0;
-    }
-
-    public async Task<bool> SetSourceConnectionsAsync(
-        Guid tenantId,
-        Guid id,
-        IReadOnlyList<Guid> sourceConnectionIds,
-        CancellationToken ct = default)
-    {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        await using var tx = await db.BeginTransactionAsync(ct);
-
-        var exists = await db.ExecuteScalarAsync<bool>(
-            new CommandDefinition(
-                "SELECT EXISTS(SELECT 1 FROM topics WHERE tenant_id = @TenantId AND id = @Id)",
-                new { TenantId = tenantId, Id = id },
-                tx,
-                cancellationToken: ct));
-
-        if (!exists)
-        {
-            await tx.RollbackAsync(ct);
-            return false;
-        }
-
-        await db.ExecuteAsync(
-            new CommandDefinition(
-                "DELETE FROM topic_sources WHERE topic_id = @TopicId",
-                new { TopicId = id },
-                tx,
-                cancellationToken: ct));
-
-        await InsertSourcesAsync(db, tenantId, id, sourceConnectionIds, tx, ct);
-        await tx.CommitAsync(ct);
-        return true;
     }
 
     public async Task<Guid?> FindByNameAsync(Guid tenantId, string name, CancellationToken ct = default)
@@ -262,12 +257,17 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         }
     }
 
-    private static async Task<IReadOnlyList<Guid>> LoadSourcesAsync(DbConnection db, Guid topicId, CancellationToken ct)
+    private static async Task<IReadOnlyList<Guid>> LoadSourcesAsync(
+        DbConnection db,
+        Guid topicId,
+        DbTransaction? tx,
+        CancellationToken ct)
     {
         var ids = await db.QueryAsync<Guid>(
             new CommandDefinition(
                 "SELECT connection_id FROM topic_sources WHERE topic_id = @TopicId ORDER BY created_at",
                 new { TopicId = topicId },
+                tx,
                 cancellationToken: ct));
         return ids.ToList();
     }
