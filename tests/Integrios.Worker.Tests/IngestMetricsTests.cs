@@ -13,6 +13,8 @@ namespace Integrios.Worker.Tests;
 
 public sealed class IngestMetricsTests
 {
+    private static readonly Guid SourceConnectionId = Guid.NewGuid();
+
     [Fact]
     public async Task IngestEventCommand_OnAcceptance_IncrementsEventsIngested()
     {
@@ -56,7 +58,8 @@ public sealed class IngestMetricsTests
     {
         EventType = "payment.created",
         Payload = JsonDocument.Parse("{\"amount\":42}").RootElement,
-        TopicName = "payments"
+        TopicName = "payments",
+        SourceConnectionId = SourceConnectionId
     };
 
     private static IMediator BuildMediator(bool isDuplicate)
@@ -83,7 +86,7 @@ public sealed class IngestMetricsTests
         public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct = default)
             => throw new NotSupportedException();
 
-        public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string name, string? description, CancellationToken ct = default)
+        public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? description, CancellationToken ct = default)
             => throw new NotSupportedException();
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default)
@@ -91,11 +94,14 @@ public sealed class IngestMetricsTests
 
         public Task<bool> SetSourceConnectionsAsync(Guid tenantId, Guid id, IReadOnlyList<Guid> sourceConnectionIds, CancellationToken ct = default)
             => throw new NotSupportedException();
+
+        public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct = default)
+            => Task.FromResult<Guid?>(Guid.NewGuid());
     }
 
     private sealed class FakeEventRepository(bool isDuplicate) : IEventRepository
     {
-        public Task<IngestEventResponse> IngestAsync(Guid tenantId, IngestEventRequest request, Guid? topicId, string? traceparent = null, CancellationToken cancellationToken = default)
+        public Task<IngestEventResponse> IngestAsync(Guid tenantId, IngestEventRequest request, Guid topicId, string? traceparent = null, CancellationToken cancellationToken = default)
             => Task.FromResult(new IngestEventResponse
             {
                 EventId = Guid.NewGuid(),

@@ -97,7 +97,7 @@ public sealed class StubEventRepository : IEventRepository
     public Task<IngestEventResponse> IngestAsync(
         Guid tenantId,
         IngestEventRequest request,
-        Guid? topicId,
+        Guid topicId,
         string? traceparent = null,
         CancellationToken cancellationToken = default)
     {
@@ -155,7 +155,7 @@ public sealed class StubTopicRepository : ITopicRepository
     public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct = default)
         => throw new NotImplementedException();
 
-    public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string name, string? description, CancellationToken ct = default)
+    public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? description, CancellationToken ct = default)
         => throw new NotImplementedException();
 
     public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default)
@@ -163,4 +163,7 @@ public sealed class StubTopicRepository : ITopicRepository
 
     public Task<bool> SetSourceConnectionsAsync(Guid tenantId, Guid id, IReadOnlyList<Guid> sourceConnectionIds, CancellationToken ct = default)
         => throw new NotImplementedException();
+
+    public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct = default)
+        => Task.FromResult(ResolvedTopicId);
 }

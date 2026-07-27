@@ -28,6 +28,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private static readonly Guid TenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000001");
     private static readonly Guid OrphanTenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000009");
     private static readonly Guid SourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
+    private static readonly Guid OrphanSourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000008");
     private static readonly Guid LedgerConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000003");
     private static readonly Guid RiskConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000004");
     private static readonly Guid TopicId = Guid.Parse("cccccccc-0000-0000-0000-000000000005");
@@ -265,7 +266,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var eventId = Guid.NewGuid();
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
-        await InsertEventRowAsync(connection, eventId, TenantId, eventType, TopicId);
+        await InsertEventRowAsync(connection, eventId, TenantId, SourceConnectionId, eventType, TopicId);
         return eventId;
     }
 
@@ -274,7 +275,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var eventId = Guid.NewGuid();
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
-        await InsertEventRowAsync(connection, eventId, OrphanTenantId, eventType, topicId: null);
+        await InsertEventRowAsync(
+            connection, eventId, OrphanTenantId, OrphanSourceConnectionId, eventType, topicId: null);
         return eventId;
     }
 
@@ -402,18 +404,28 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public Task<GetEventResponse?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default)
         => eventRepository.GetEventByIdAsync(TenantId, eventId, cancellationToken);
 
-    private static async Task InsertEventRowAsync(NpgsqlConnection connection, Guid eventId, Guid tenantId, string eventType, Guid? topicId = null)
+    private static async Task InsertEventRowAsync(
+        NpgsqlConnection connection,
+        Guid eventId,
+        Guid tenantId,
+        Guid sourceConnectionId,
+        string eventType,
+        Guid? topicId = null)
     {
         var payload = JsonSerializer.Serialize(new { test = true });
         await using var cmd = new NpgsqlCommand("""
-            INSERT INTO events (id, tenant_id, topic_id, event_type, payload, status, accepted_at)
-            VALUES (@Id, @TenantId, @TopicId, @EventType, @Payload::jsonb, 'accepted', now());
+            INSERT INTO events (
+                id, tenant_id, topic_id, source_connection_id, event_type, payload, status, accepted_at
+            ) VALUES (
+                @Id, @TenantId, @TopicId, @SourceConnectionId, @EventType,
+                @Payload::jsonb, 'accepted', now());
             INSERT INTO outbox (event_id, payload)
             VALUES (@Id, @Payload::jsonb);
             """, connection);
         cmd.Parameters.AddWithValue("Id", eventId);
         cmd.Parameters.AddWithValue("TenantId", tenantId);
         cmd.Parameters.AddWithValue("TopicId", topicId.HasValue ? (object)topicId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("SourceConnectionId", sourceConnectionId);
         cmd.Parameters.AddWithValue("EventType", eventType);
         cmd.Parameters.AddWithValue("Payload", payload);
         await cmd.ExecuteNonQueryAsync();
@@ -439,14 +451,15 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
             VALUES
                 (@SourceConnectionId, @TenantId, @IntegrationId, 'source',        '{}',                              'active'),
+                (@OrphanSourceConnectionId, @OrphanTenantId, @IntegrationId, 'orphan-source', '{}',                 'active'),
                 (@LedgerConnectionId, @TenantId, @IntegrationId, 'ledger-sink',   @LedgerConfig::jsonb,              'active'),
                 (@RiskConnectionId,   @TenantId, @IntegrationId, 'risk-sink',     @RiskConfig::jsonb,                'active');
 
             INSERT INTO topics (id, tenant_id, name, status)
             VALUES (@TopicId, @TenantId, 'test-topic', 'active');
 
-            INSERT INTO topic_sources (topic_id, connection_id)
-            VALUES (@TopicId, @SourceConnectionId);
+            INSERT INTO topic_sources (tenant_id, topic_id, connection_id)
+            VALUES (@TenantId, @TopicId, @SourceConnectionId);
 
             -- Intentionally uses the pre-v2.1 event_types[] array shape to cover the
             -- compat read path in SubscriptionRepository.
@@ -467,6 +480,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("KeyPrefix", TenantToken[..12]);
         cmd.Parameters.AddWithValue("KeyHash", secretHash);
         cmd.Parameters.AddWithValue("SourceConnectionId", SourceConnectionId);
+        cmd.Parameters.AddWithValue("OrphanSourceConnectionId", OrphanSourceConnectionId);
         cmd.Parameters.AddWithValue("LedgerConnectionId", LedgerConnectionId);
         cmd.Parameters.AddWithValue("RiskConnectionId", RiskConnectionId);
         cmd.Parameters.AddWithValue("LedgerConfig", $"{{\"url\":\"{LedgerSinkUrl}\"}}");

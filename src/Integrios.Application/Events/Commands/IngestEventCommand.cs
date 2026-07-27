@@ -18,14 +18,20 @@ internal sealed class IngestEventCommandHandler(
 {
     public async Task<IngestEventResponse> Handle(IngestEventCommand command, CancellationToken cancellationToken)
     {
-        var topicId = await topicRepository.FindByNameAsync(command.TenantId, command.Request.TopicName, cancellationToken)
-            ?? throw new InvalidOperationException($"topic '{command.Request.TopicName}' does not exist for this tenant");
+        var topicId = await topicRepository.FindActiveSourceTopicAsync(
+                command.TenantId,
+                command.Request.TopicName,
+                command.Request.SourceConnectionId,
+                cancellationToken)
+            ?? throw new EventAcceptanceException(
+                "The source connection must be active, source-capable, belong to this tenant, and be associated with the selected topic.");
 
         // The ambient request span is the acceptance span; its id becomes the trace anchor
         // carried across the outbox hop.
         var activity = Activity.Current;
         activity?.SetTag("tenant_id", command.TenantId);
         activity?.SetTag("topic_id", topicId);
+        activity?.SetTag("source_connection_id", command.Request.SourceConnectionId);
         activity?.SetTag("idempotency_key", command.Request.IdempotencyKey);
 
         var response = await eventRepository.IngestAsync(
@@ -37,7 +43,8 @@ internal sealed class IngestEventCommandHandler(
         {
             ["event_id"] = response.EventId,
             ["tenant_id"] = command.TenantId,
-            ["topic_id"] = topicId
+            ["topic_id"] = topicId,
+            ["source_connection_id"] = command.Request.SourceConnectionId
         });
 
         if (!response.IsDuplicate)

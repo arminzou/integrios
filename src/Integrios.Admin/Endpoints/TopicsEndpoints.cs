@@ -85,10 +85,17 @@ public sealed class TopicsEndpoints : IEndpointGroup
         if (!principal.IsGlobal && principal.TenantId != tenantId)
             return Results.Forbid();
 
-        var response = await mediator.Send(
-            new UpdateTopicCommand(tenantId, id, request.Name, request.Description, request.SourceConnectionIds),
-            cancellationToken);
-        return response is null ? Results.NotFound() : Results.Ok(response);
+        try
+        {
+            var response = await mediator.Send(
+                new UpdateTopicCommand(tenantId, id, request.Name, request.Description, request.SourceConnectionIds),
+                cancellationToken);
+            return response is null ? Results.NotFound() : Results.Ok(response);
+        }
+        catch (TopicRequestValidationException ex)
+        {
+            return Results.UnprocessableEntity(new { error = ex.Message });
+        }
     }
 
     private static async Task<IResult> DeactivateTopic(
@@ -113,6 +120,6 @@ internal sealed record CreateTopicRequest(
     IReadOnlyList<Guid>? SourceConnectionIds);
 
 internal sealed record UpdateTopicRequest(
-    string Name,
+    string? Name,
     string? Description,
     IReadOnlyList<Guid>? SourceConnectionIds);

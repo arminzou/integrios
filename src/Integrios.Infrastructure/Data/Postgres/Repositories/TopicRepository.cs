@@ -41,7 +41,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                     tx,
                     cancellationToken: ct));
 
-            await InsertSourcesAsync(db, id, sourceConnectionIds, tx, ct);
+            await InsertSourcesAsync(db, tenantId, id, sourceConnectionIds, tx, ct);
             await tx.CommitAsync(ct);
 
             return row.ToTopic(sourceConnectionIds);
@@ -118,7 +118,6 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
     public async Task<Topic?> UpdateAsync(
         Guid tenantId,
         Guid id,
-        string name,
         string? description,
         CancellationToken ct = default)
     {
@@ -128,11 +127,11 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
             new CommandDefinition(
                 $"""
                 UPDATE topics
-                SET name = @Name, description = @Description, updated_at = now()
+                SET description = @Description, updated_at = now()
                 WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
                 RETURNING {SelectColumns}
                 """,
-                new { TenantId = tenantId, Id = id, Name = name, Description = description },
+                new { TenantId = tenantId, Id = id, Description = description },
                 cancellationToken: ct));
 
         if (row is null)
@@ -186,7 +185,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                 tx,
                 cancellationToken: ct));
 
-        await InsertSourcesAsync(db, id, sourceConnectionIds, tx, ct);
+        await InsertSourcesAsync(db, tenantId, id, sourceConnectionIds, tx, ct);
         await tx.CommitAsync(ct);
         return true;
     }
@@ -201,8 +200,41 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                 cancellationToken: ct));
     }
 
+    public async Task<Guid?> FindActiveSourceTopicAsync(
+        Guid tenantId,
+        string name,
+        Guid sourceConnectionId,
+        CancellationToken ct = default)
+    {
+        await using var db = await connectionFactory.OpenConnectionAsync(ct);
+        return await db.QuerySingleOrDefaultAsync<Guid?>(
+            new CommandDefinition(
+                """
+                SELECT t.id
+                FROM topics t
+                JOIN topic_sources ts
+                  ON ts.tenant_id = t.tenant_id
+                 AND ts.topic_id = t.id
+                JOIN connections c
+                  ON c.tenant_id = ts.tenant_id
+                 AND c.id = ts.connection_id
+                JOIN integrations i ON i.id = c.integration_id
+                WHERE t.tenant_id = @TenantId
+                  AND t.name = @Name
+                  AND t.status = 'active'
+                  AND c.id = @SourceConnectionId
+                  AND c.status = 'active'
+                  AND i.status = 'active'
+                  AND i.direction IN ('source', 'both')
+                LIMIT 1
+                """,
+                new { TenantId = tenantId, Name = name, SourceConnectionId = sourceConnectionId },
+                cancellationToken: ct));
+    }
+
     private static async Task InsertSourcesAsync(
         DbConnection db,
+        Guid tenantId,
         Guid topicId,
         IReadOnlyList<Guid> connectionIds,
         DbTransaction tx,
@@ -212,8 +244,8 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         {
             await db.ExecuteAsync(
                 new CommandDefinition(
-                    "INSERT INTO topic_sources (topic_id, connection_id) VALUES (@TopicId, @ConnectionId) ON CONFLICT DO NOTHING",
-                    new { TopicId = topicId, ConnectionId = cid },
+                    "INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @ConnectionId) ON CONFLICT DO NOTHING",
+                    new { TenantId = tenantId, TopicId = topicId, ConnectionId = cid },
                     tx,
                     cancellationToken: ct));
         }

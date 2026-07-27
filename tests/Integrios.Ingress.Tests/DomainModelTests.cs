@@ -15,6 +15,7 @@ public sealed class DomainModelTests
         var json = """
             {
               "sourceEventId": "evt_123",
+              "sourceConnectionId": "6fd3608d-b34b-4cf8-a5fd-401c8d95f149",
               "topicName": "payments",
               "eventType": "payment.created",
               "payload": {
@@ -33,6 +34,7 @@ public sealed class DomainModelTests
 
         Assert.NotNull(request);
         Assert.Equal("evt_123", request.SourceEventId);
+        Assert.Equal(Guid.Parse("6fd3608d-b34b-4cf8-a5fd-401c8d95f149"), request.SourceConnectionId);
         Assert.Equal("payment.created", request.EventType);
         Assert.Equal("pay_456", request.Payload.GetProperty("paymentId").GetString());
         Assert.Equal(1200, request.Payload.GetProperty("amount").GetInt32());
@@ -51,6 +53,8 @@ public sealed class DomainModelTests
         {
             Id = Guid.NewGuid(),
             TenantId = Guid.NewGuid(),
+            TopicId = Guid.NewGuid(),
+            SourceConnectionId = Guid.NewGuid(),
             EventType = "payment.created",
             Payload = payload,
             Metadata = metadata,

@@ -73,7 +73,7 @@ curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AU
 
 # 6. Send an event to the data plane
 EVENT=$(curl -s -X POST $INGRESS/events -H "Authorization: ApiKey $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"topicName":"payments","eventType":"payment.created","payload":{"paymentId":"pay_001","amount":1200},"idempotencyKey":"demo-001"}' | jq -r .eventId)
+  -d "{\"sourceConnectionId\":\"$SRC\",\"topicName\":\"payments\",\"eventType\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_001\",\"amount\":1200},\"idempotencyKey\":\"demo-001\"}" | jq -r .eventId)
 
 # 7. Check it was accepted and fanned out to the subscription
 curl -s $INGRESS/events/$EVENT -H "Authorization: ApiKey $TOKEN" | jq
@@ -87,6 +87,10 @@ whose Integration direction is `destination` or `both` must include an absolute 
 `config.url` on both create and update. When upgrading a deployment with a legacy
 destination-capable Connection that has no URL, include a valid URL the next time that Connection
 is updated. Source-only Integration configuration remains free-form.
+
+Topic update requests must include the Topic's current `name`. The name is its immutable,
+Tenant-scoped stream identifier; changing it requires creating a new Topic. Updates may change the
+description and, when supplied, replace `sourceConnectionIds`.
 
 The last command should show a line like:
 

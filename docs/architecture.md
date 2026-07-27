@@ -60,6 +60,10 @@ The outbox is the handoff between synchronous API requests and asynchronous work
 
 Callers can provide an `idempotencyKey` on `POST /events`. Within a tenant scope, duplicate submissions with the same key resolve to the same accepted event, preventing duplicate downstream side effects from retries, network timeouts, or webhook replays.
 
+Every accepted event also identifies its source connection. `POST /events` requires a
+`sourceConnectionId`; Ingress accepts it only when the connection belongs to the authenticated
+tenant, is active, uses a source-capable integration, and is associated with the selected topic.
+
 ### Multi-tenant isolation
 
 Tenants are first-class boundaries in both auth and data access. API keys resolve to a tenant context, and event reads and writes are tenant-scoped, preventing cross-tenant exposure and enabling per-tenant operational controls.

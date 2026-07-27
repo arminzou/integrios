@@ -13,6 +13,7 @@
 # - for the auth-enabled destination path, provision the default file-backed Worker secret at:
 #   secrets/acme-corp/erp_api_key (exact secret value; no automatic trimming)
 @apiKeyToken = {{$dotenv INGRESS_API_KEY}}
+@sourceConnectionId = {{$dotenv INGRESS_SOURCE_CONNECTION_ID}}
 
 ###
 # Step 1 - Ingest an event
@@ -25,6 +26,7 @@ Content-Type: application/json
 
 {
   "sourceEventId": "event_src_001",
+  "sourceConnectionId": "{{sourceConnectionId}}",
   "topicName": "payments",
   "eventType": "payment.created",
   "payload": {

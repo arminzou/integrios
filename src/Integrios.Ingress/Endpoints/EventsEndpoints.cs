@@ -30,7 +30,7 @@ public sealed class EventsEndpoints : IEndpointGroup
                 cancellationToken);
             return Results.Accepted($"/events/{response.EventId}", response);
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist for this tenant"))
+        catch (EventAcceptanceException ex)
         {
             return Results.UnprocessableEntity(new { error = ex.Message });
         }

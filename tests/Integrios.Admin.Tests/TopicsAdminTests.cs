@@ -132,7 +132,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
-    public async Task UpdateTopic_UpdatesNameDescriptionAndSources()
+    public async Task UpdateTopic_UpdatesDescriptionAndSources_WithoutChangingName()
     {
         var created = await (await PostTopicAsync(new { name = "old-name" }))
             .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
@@ -143,7 +143,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
             new
             {
-                name = "new-name",
+                name = "old-name",
                 description = "updated",
                 sourceConnectionIds = new[] { fixture.SourceConnectionId }
             }));
@@ -151,10 +151,50 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
 
         var body = await patch.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
         Assert.NotNull(body);
-        Assert.Equal("new-name", body.Name);
+        Assert.Equal("old-name", body.Name);
         Assert.Equal("updated", body.Description);
         Assert.Single(body.SourceConnectionIds);
         Assert.Equal(fixture.SourceConnectionId, body.SourceConnectionIds[0]);
+    }
+
+    [Fact]
+    public async Task UpdateTopic_ChangingName_Returns422AndPreservesName()
+    {
+        var created = await (await PostTopicAsync(new { name = "immutable-name" }))
+            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        Assert.NotNull(created);
+
+        var patch = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { name = "renamed", description = "not applied" }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, patch.StatusCode);
+
+        var get = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
+        var body = await get.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Equal("immutable-name", body.Name);
+        Assert.Null(body.Description);
+    }
+
+    [Fact]
+    public async Task UpdateTopic_MissingName_Returns422WithRequiredFieldError()
+    {
+        var created = await (await PostTopicAsync(new { name = "required-name" }))
+            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        Assert.NotNull(created);
+
+        var patch = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { description = "not applied" }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, patch.StatusCode);
+        var error = await patch.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Topic name is required for update.", error.GetProperty("error").GetString());
     }
 
     [Fact]

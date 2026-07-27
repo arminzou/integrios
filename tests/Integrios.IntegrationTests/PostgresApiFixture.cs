@@ -13,6 +13,7 @@ namespace Integrios.IntegrationTests;
 
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
+    private static readonly Guid SourceIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000101");
     public const string TenantAToken = "intg_aa11bb22cc33dd440011223344556677001122334455667700112233445566";
     public const string TenantBToken = "intg_ee55ff66aa77bb888877665544332211887766554433221188776655443322";
 
@@ -25,6 +26,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public WebApplicationFactory<Program> WebFactory { get; private set; } = null!;
     public string ConnectionString => container.GetConnectionString();
     public Guid TenantAId { get; private set; }
+    public Guid TenantBId { get; private set; }
 
     public async Task InitializeAsync()
     {
@@ -54,7 +56,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
 
         TenantAId = Guid.NewGuid();
         var tenantAId = TenantAId;
-        var tenantBId = Guid.NewGuid();
+        TenantBId = Guid.NewGuid();
+        var tenantBId = TenantBId;
         var credentialAId = Guid.NewGuid();
         var credentialBId = Guid.NewGuid();
         var secretHashA = "sha256:" + Convert.ToHexString(
@@ -98,6 +101,12 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 'active',
                 now()
             );
+
+            INSERT INTO integrations (
+                id, key, name, direction, supported_auth_schemes, status, created_at, updated_at
+            ) VALUES (
+                @SourceIntegrationId, 'test_source', 'Test Source', 'source', '[]'::jsonb, 'active', now(), now()
+            );
             """;
 
         await using var seedCommand = new NpgsqlCommand(seedSql, connection);
@@ -109,6 +118,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         seedCommand.Parameters.AddWithValue("KeyPrefixB", TenantBToken[..12]);
         seedCommand.Parameters.AddWithValue("KeyHashA", secretHashA);
         seedCommand.Parameters.AddWithValue("KeyHashB", secretHashB);
+        seedCommand.Parameters.AddWithValue("SourceIntegrationId", SourceIntegrationId);
         await seedCommand.ExecuteNonQueryAsync();
     }
 
@@ -145,6 +155,79 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("Name", name);
         await cmd.ExecuteNonQueryAsync();
         return topicId;
+    }
+
+    public async Task<Guid> SeedSourceConnectionAsync(
+        Guid tenantId,
+        string name,
+        string status = "active",
+        string direction = "source")
+    {
+        var integrationId = SourceIntegrationId;
+        if (direction != "source")
+        {
+            integrationId = Guid.NewGuid();
+        }
+
+        var connectionId = Guid.NewGuid();
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+
+        if (integrationId != SourceIntegrationId)
+        {
+            await using var integrationCommand = new NpgsqlCommand(
+                """
+                INSERT INTO integrations (
+                    id, key, name, direction, supported_auth_schemes, status, created_at, updated_at
+                ) VALUES (@Id, @Key, @Key, @Direction, '[]'::jsonb, 'active', now(), now())
+                """,
+                connection);
+            integrationCommand.Parameters.AddWithValue("Id", integrationId);
+            integrationCommand.Parameters.AddWithValue("Key", $"test_{direction}_{integrationId:N}");
+            integrationCommand.Parameters.AddWithValue("Direction", direction);
+            await integrationCommand.ExecuteNonQueryAsync();
+        }
+
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO connections (
+                id, tenant_id, integration_id, name, config, status, created_at, updated_at
+            ) VALUES (@Id, @TenantId, @IntegrationId, @Name, '{}'::jsonb, @Status, now(), now())
+            """,
+            connection);
+        command.Parameters.AddWithValue("Id", connectionId);
+        command.Parameters.AddWithValue("TenantId", tenantId);
+        command.Parameters.AddWithValue("IntegrationId", integrationId);
+        command.Parameters.AddWithValue("Name", name);
+        command.Parameters.AddWithValue("Status", status);
+        await command.ExecuteNonQueryAsync();
+        return connectionId;
+    }
+
+    public async Task AssociateSourceAsync(Guid tenantId, Guid topicId, Guid connectionId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO topic_sources (tenant_id, topic_id, connection_id)
+            VALUES (@TenantId, @TopicId, @ConnectionId)
+            """,
+            connection);
+        command.Parameters.AddWithValue("TenantId", tenantId);
+        command.Parameters.AddWithValue("TopicId", topicId);
+        command.Parameters.AddWithValue("ConnectionId", connectionId);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task<Guid?> GetEventSourceConnectionIdAsync(Guid eventId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT source_connection_id FROM events WHERE id = @Id", connection);
+        command.Parameters.AddWithValue("Id", eventId);
+        return await command.ExecuteScalarAsync() is Guid id ? id : null;
     }
 
     public async Task ForceEventStatusAsync(Guid eventId, string status)
