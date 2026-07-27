@@ -53,7 +53,7 @@ WEBHOOK=00000000-0000-0000-0000-000000000001   # built-in generic webhook integr
 TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"slug":"acme","name":"Acme","environment":"production"}' | jq -r .id)
 
-# 2. Create a data-plane API key (the token is shown once, capture it)
+# 2. Create an Integrios API key for this generic source (the token is shown once, capture it)
 TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/api-keys -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name":"acme-ingress","scopes":["events:write"]}' | jq -r .token)
 

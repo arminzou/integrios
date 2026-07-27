@@ -5,18 +5,18 @@
 Integrios is an open-source, self-hostable backend integration platform. It gives engineering teams a durable boundary for receiving events, tenant-aware routing and transformation, and reliable delivery to downstream systems, with retries, dead-lettering, replay, and end-to-end observability. Run it yourself and adapt it to whatever you need to integrate.
 
 > [!NOTE]
-> **Early preview, built incrementally.** The backend foundation works end to end and is backend-first (an admin UI is planned). Evaluate it as a self-hostable foundation, not a turnkey production deployment. MIT licensed.
+> **Early preview, built incrementally.** The backend foundation works end to end and is backend-first (an Operator-facing admin UI is planned). Evaluate it as a self-hostable foundation, not a turnkey production deployment. MIT licensed.
 >
 > Not yet, but planned:
 >
-> - **Authenticated delivery.** Today the worker delivers only to open, no-auth endpoints; authentication to real systems and more built-in integrations are coming.
-> - **No admin UI.** All configuration is through the Admin API.
-> - **No RBAC or rate limiting yet.** Tenant isolation is enforced at the data layer.
+> - **Provider-native integrations.** Generic HTTP delivery supports open, API-key-header, and bearer-token authentication; provider-native webhooks, polling, OAuth lifecycle, and actions are still to come.
+> - **No admin UI.** The Operator configures every Tenant and integration through the Admin API.
+> - **No Operator RBAC or rate limiting yet.** Tenant isolation is enforced at the data layer; Tenants do not receive control-plane access.
 
 ## Features
 
 - Durable event intake behind a transactional-outbox acceptance boundary, so no accepted event is lost
-- Tenant-scoped API-key authentication and isolation
+- ApiKey-authenticated generic intake with Tenant isolation
 - Topic/subscription routing with optional JSONata payload transforms
 - Reliable async delivery: bounded retries, dead-lettering, and replay
 - Per-event status and delivery-attempt history

@@ -11,7 +11,11 @@ For this repository, private context and deeper guidance live in `.brain/AGENTS.
 Integrios is an open-source, self-hostable multi-tenant integration platform.
 It receives events, applies tenant-aware routing and transformation rules, and delivers work to downstream systems reliably.
 
-It is backend-first today; an admin UI is planned. Observability is a pluggable capability: the platform emits standard telemetry (metrics, structured logs, OTLP-capable traces) and bundles no backend, so a self-hosting team points it at their own stack. Licensed under MIT.
+It is backend-first today; an Operator-facing admin UI is planned. The engineering team running a
+deployment exclusively owns control-plane configuration; Tenants are ownership and isolation
+boundaries, not backend users. Observability is a pluggable capability: the platform emits standard
+telemetry (metrics, structured logs, OTLP-capable traces) and bundles no backend, so a self-hosting
+team points it at their own stack. Licensed under MIT.
 
 ## Project Structure
 
@@ -32,17 +36,17 @@ It is backend-first today; an admin UI is planned. Observability is a pluggable 
 
 The platform is divided into two planes, each a separate ASP.NET service with its own `Program.cs` and port.
 
-- **Control plane** (`Integrios.Admin`, port 5150): tenant lifecycle, connection configuration, topic and subscription management, policy. Auth will diverge from the data plane (admin tokens, human sessions) as the platform grows.
-- **Data plane** (`Integrios.Ingress`, port 5231): webhook intake, tenant/auth resolution, durable acceptance boundary, outbox writes (publishes accepted events to a topic in the same transaction).
+- **Control plane** (`Integrios.Admin`, port 5150): Operator-owned Tenant lifecycle, connection configuration, topic and subscription management, and policy. Auth may evolve for Operator identities, but never into Tenant-scoped control-plane authority.
+- **Data plane** (`Integrios.Ingress`, port 5231): generic ApiKey-authenticated intake today, Tenant resolution, durable acceptance boundary, and outbox writes. Provider-native source authentication and normalization belong to future Integration capabilities.
 - **Worker** (`Integrios.Worker`): outbox polling, fanout to subscriptions, per-subscription delivery, retry/DLQ/replay.
 
 `Integrios.Worker` reads topic and subscription config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are currently no service-to-service config calls.
 
 ### Core domain model
 
-- `Tenant` is the top-level isolation boundary.
-- `ApiKey` represents machine credentials used to call Integrios APIs.
-- `Integration` represents a reusable platform-level definition of how to talk to a system.
+- `Tenant` is the top-level ownership and isolation boundary, not a control-plane actor.
+- `ApiKey` represents the Integrios-issued machine credential for generic Event intake.
+- `Integration` represents reusable source triggers and/or destination actions for an external system.
 - `Connection` represents a tenant-scoped configured connection.
 - `Topic` represents a tenant-owned named stream of events; source connections publish to it.
 - `Subscription` represents an independent consumer of a topic with its own filter, destination connection, retry policy, and DLQ scope.
@@ -60,9 +64,9 @@ The platform is divided into two planes, each a separate ASP.NET service with it
 
 ### Scope constraints
 
-These are current scope boundaries, not permanent non-goals; the admin UI deliberately relaxes the frontend constraint when it lands. Phase sequencing lives in the private roadmap.
+These are current scope boundaries, not permanent non-goals; the Operator Admin UI deliberately relaxes the frontend constraint when it lands. Phase sequencing lives in the private roadmap.
 
-- backend-first (the admin UI is planned, not yet in scope)
+- backend-first (the Operator Admin UI is planned, not yet in scope)
 - no frontend, login/session, or RBAC yet
 - no required `User` domain entity
 - tenant-aware design from the start
@@ -180,4 +184,3 @@ chore(db): add initial migration for tenant and connector tables
 - read the minimum code and docs needed to avoid guessing
 - if docs and code disagree, report it plainly instead of guessing
 - keep public docs public and private planning private
-
