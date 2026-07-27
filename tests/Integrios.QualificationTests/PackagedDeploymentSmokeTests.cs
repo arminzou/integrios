@@ -19,7 +19,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.Equal(1L, await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM integrations WHERE key = 'webhook' AND status = 'active'"));
         Assert.Equal(1L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM admin_keys WHERE tenant_id IS NULL AND revoked_at IS NULL"));
+            "SELECT COUNT(*) FROM admin_keys WHERE revoked_at IS NULL"));
 
         const string sinkName = "qualification-harness";
         const string headerValue = "expected-value";

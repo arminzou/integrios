@@ -132,9 +132,38 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         return (T)(value ?? throw new InvalidOperationException("Query returned null."));
     }
 
-    public static async Task<BootstrapProcessResult> RunProductionBootstrapAsync(
+    public static Task<BootstrapProcessResult> RunProductionBootstrapAsync(
         QualificationDatabase database,
-        string? secret)
+        string? secret) =>
+        RunAdminProcessAsync(
+            database,
+            ["bootstrap"],
+            "INTEGRIOS_BOOTSTRAP_ADMIN_SECRET",
+            secret,
+            "Production Bootstrap",
+            new Dictionary<string, string?>
+            {
+                ["DOTNET_ENVIRONMENT"] = "Production",
+                ["ASPNETCORE_ENVIRONMENT"] = "Production",
+            });
+
+    public static Task<BootstrapProcessResult> RunAdminKeyRotationAsync(
+        QualificationDatabase database,
+        string? secret) =>
+        RunAdminProcessAsync(
+            database,
+            ["admin-key", "rotate"],
+            "INTEGRIOS_ADMIN_KEY_ROTATION_SECRET",
+            secret,
+            "AdminKey rotation");
+
+    private static async Task<BootstrapProcessResult> RunAdminProcessAsync(
+        QualificationDatabase database,
+        IReadOnlyList<string> arguments,
+        string secretVariable,
+        string? secret,
+        string operation,
+        IReadOnlyDictionary<string, string?>? environment = null)
     {
         string adminAssembly = typeof(Integrios.Admin.Bootstrap.BootstrapCli).Assembly.Location;
         var startInfo = new ProcessStartInfo("dotnet")
@@ -145,16 +174,20 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         };
 
         startInfo.ArgumentList.Add(adminAssembly);
-        startInfo.ArgumentList.Add("bootstrap");
+        foreach (string argument in arguments)
+            startInfo.ArgumentList.Add(argument);
         startInfo.Environment["ConnectionStrings__Postgres"] = database.ConnectionString;
-        startInfo.Environment["DOTNET_ENVIRONMENT"] = "Production";
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
-        startInfo.Environment.Remove("INTEGRIOS_BOOTSTRAP_ADMIN_SECRET");
+        if (environment is not null)
+        {
+            foreach ((string key, string? value) in environment)
+                startInfo.Environment[key] = value;
+        }
+        startInfo.Environment.Remove(secretVariable);
         if (secret is not null)
-            startInfo.Environment["INTEGRIOS_BOOTSTRAP_ADMIN_SECRET"] = secret;
+            startInfo.Environment[secretVariable] = secret;
 
         using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Could not start the Bootstrap process.");
+            ?? throw new InvalidOperationException($"Could not start the {operation} process.");
 
         Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
         Task<string> stderrTask = process.StandardError.ReadToEndAsync();
@@ -167,7 +200,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         catch (OperationCanceledException)
         {
             process.Kill(entireProcessTree: true);
-            throw new TimeoutException("Production Bootstrap did not exit within one minute.");
+            throw new TimeoutException($"{operation} did not exit within one minute.");
         }
 
         return new BootstrapProcessResult(process.ExitCode, await stdoutTask, await stderrTask);

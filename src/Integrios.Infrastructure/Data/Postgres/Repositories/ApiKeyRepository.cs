@@ -19,7 +19,6 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
                 c.name         AS ApiKeyName,
                 c.key_prefix   AS ApiKeyKeyPrefix,
                 c.key_hash     AS ApiKeyKeyHash,
-                c.scopes       AS ApiKeyScopes,
                 c.status       AS ApiKeyStatus,
                 c.created_at   AS ApiKeyCreatedAt,
                 c.expires_at   AS ApiKeyExpiresAt,
@@ -54,9 +53,9 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
     public async Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at)
-            VALUES (@Id, @TenantId, @Name, @KeyPrefix, @KeyHash, @Scopes, @Status, @Description, @CreatedAt, @ExpiresAt)
-            RETURNING id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at, last_used_at, revoked_at
+            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, status, description, created_at, expires_at)
+            VALUES (@Id, @TenantId, @Name, @KeyPrefix, @KeyHash, @Status, @Description, @CreatedAt, @ExpiresAt)
+            RETURNING id, tenant_id, name, key_prefix, key_hash, status, description, created_at, expires_at, last_used_at, revoked_at
             """;
 
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -67,7 +66,6 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
             apiKey.Name,
             KeyPrefix = apiKey.KeyPrefix,
             KeyHash = apiKey.KeyHash,
-            Scopes = apiKey.Scopes.ToArray(),
             Status = apiKey.Status.ToString().ToLowerInvariant(),
             apiKey.Description,
             apiKey.CreatedAt,
@@ -80,7 +78,7 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
     public async Task<ApiKey?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            SELECT id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at, last_used_at, revoked_at
+            SELECT id, tenant_id, name, key_prefix, key_hash, status, description, created_at, expires_at, last_used_at, revoked_at
             FROM api_keys
             WHERE tenant_id = @TenantId AND id = @Id
             """;
@@ -99,7 +97,7 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
         bool hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
 
         const string sql = """
-            SELECT id, tenant_id, name, key_prefix, key_hash, scopes, status, description, created_at, expires_at, last_used_at, revoked_at
+            SELECT id, tenant_id, name, key_prefix, key_hash, status, description, created_at, expires_at, last_used_at, revoked_at
             FROM api_keys
             WHERE tenant_id = @TenantId
               AND (NOT @HasCursor
@@ -152,7 +150,6 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
         public string Name { get; init; } = "";
         public string KeyPrefix { get; init; } = "";
         public string KeyHash { get; init; } = "";
-        public string[] Scopes { get; init; } = [];
         public string Status { get; init; } = "";
         public string? Description { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
@@ -167,7 +164,6 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
             Name = Name,
             KeyPrefix = KeyPrefix,
             KeyHash = KeyHash,
-            Scopes = Scopes,
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             CreatedAt = CreatedAt,
             ExpiresAt = ExpiresAt,
@@ -185,7 +181,6 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
         public string ApiKeyName { get; init; } = "";
         public string ApiKeyKeyPrefix { get; init; } = "";
         public string ApiKeyKeyHash { get; init; } = "";
-        public string[] ApiKeyScopes { get; init; } = [];
         public string ApiKeyStatus { get; init; } = "";
         public DateTimeOffset ApiKeyCreatedAt { get; init; }
         public DateTimeOffset? ApiKeyExpiresAt { get; init; }
@@ -208,7 +203,6 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
             Name = ApiKeyName,
             KeyPrefix = ApiKeyKeyPrefix,
             KeyHash = ApiKeyKeyHash,
-            Scopes = ApiKeyScopes,
             Status = Enum.Parse<OperationalStatus>(ApiKeyStatus, ignoreCase: true),
             CreatedAt = ApiKeyCreatedAt,
             ExpiresAt = ApiKeyExpiresAt,

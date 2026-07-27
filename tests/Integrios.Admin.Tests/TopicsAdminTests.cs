@@ -267,14 +267,14 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
-    public async Task CreateTopic_WrongTenantKey_Returns403()
+    public async Task CreateTopic_UnknownCredential_Returns401()
     {
         var response = await client.SendAsync(TenantRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics",
             new { name = "forbidden" },
-            fixture.OtherTenantAdminKey));
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            AdminApiFixture.InvalidAdminAuthHeader));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
         Assert.NotNull(created);
 
-        // confirm it's accessible with the global key (which PostTopicAsync uses)
+        // Confirm it is accessible with the deployment-wide key (which PostTopicAsync uses).
         var get = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
     }

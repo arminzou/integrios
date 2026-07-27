@@ -161,11 +161,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         long builtins = await ScalarAsync<long>(
             "SELECT COUNT(*) FROM integrations WHERE key = 'webhook' AND status = 'active'");
         long liveAdminKeys = await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM admin_keys WHERE tenant_id IS NULL AND revoked_at IS NULL");
+            "SELECT COUNT(*) FROM admin_keys WHERE revoked_at IS NULL");
         if (builtins != 1 || liveAdminKeys != 1)
         {
             throw new InvalidOperationException(
-                $"Packaged Bootstrap state was unexpected: built-ins={builtins}, live global AdminKeys={liveAdminKeys}.");
+                $"Packaged Bootstrap state was unexpected: built-ins={builtins}, live AdminKeys={liveAdminKeys}.");
         }
     }
 

@@ -22,7 +22,7 @@ public static class BootstrapCli
         if (flags.Any(flag => flag is not ("--builtins" or "--admin-key")))
         {
             Console.Error.WriteLine("Usage: bootstrap [--builtins] [--admin-key]");
-            return 1;
+            return 2;
         }
 
         bool runBuiltins = flags.Length == 0 || flags.Contains("--builtins");
@@ -64,11 +64,11 @@ public static class BootstrapCli
                 new BootstrapAdminKeyCommand(GlobalAdminPublicKey, adminSecret));
 
             if (!result.Created)
-                Console.WriteLine("admin-key: a live global admin key already exists, no-op.");
+                Console.WriteLine("admin-key: a live deployment-wide admin key already exists, no-op.");
             else if (result.GeneratedSecret is not null)
-                Console.WriteLine($"admin-key: created global admin key. Secret (store securely, shown once): {result.GeneratedSecret}");
+                Console.WriteLine($"admin-key: created deployment-wide admin key. Secret (store securely, shown once): {result.GeneratedSecret}");
             else
-                Console.WriteLine("admin-key: created global admin key using the supplied secret.");
+                Console.WriteLine("admin-key: created deployment-wide admin key using the supplied secret.");
         }
 
         return 0;

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Integrios.Admin.Auth;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Subscriptions;
 using MediatR;
@@ -23,17 +22,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid tenantId,
         Guid topicId,
         CreateSubscriptionRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         ITransformEvaluator transformEvaluator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         var validationError = ValidateMatchRules(request.MatchRules) ?? ValidateTransformConfig(request.Transform, transformEvaluator);
         if (validationError is not null)
         {
@@ -60,18 +52,11 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
     private static async Task<IResult> ListSubscriptions(
         Guid tenantId,
         Guid topicId,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken,
         string? after,
         int limit = 0)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         var response = await mediator.Send(new ListSubscriptionsByTopicQuery(tenantId, topicId, after, limit), cancellationToken);
         return Results.Ok(response);
@@ -81,16 +66,9 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid tenantId,
         Guid topicId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         var response = await mediator.Send(new GetSubscriptionByIdQuery(tenantId, topicId, id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
@@ -100,17 +78,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid topicId,
         Guid id,
         UpdateSubscriptionRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         ITransformEvaluator transformEvaluator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         var validationError = ValidateMatchRules(request.MatchRules) ?? ValidateTransformConfig(request.Transform, transformEvaluator);
         if (validationError is not null)
         {
@@ -137,16 +108,9 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid tenantId,
         Guid topicId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         bool deactivated = await mediator.Send(new DeactivateSubscriptionCommand(tenantId, topicId, id), cancellationToken);
         return deactivated ? Results.Ok() : Results.NotFound();
     }

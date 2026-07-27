@@ -91,13 +91,12 @@ public sealed class DomainModelTests
             Name = "default-ingest-key",
             KeyPrefix = "intg_3f8a2c1",
             KeyHash = "hash",
-            Scopes = ["events.write"],
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
         Assert.Equal(OperationalStatus.Active, tenant.Status);
         Assert.Equal(OperationalStatus.Active, apiKey.Status);
-        Assert.Contains("events.write", apiKey.Scopes);
+        Assert.Equal(tenant.Id, apiKey.TenantId);
     }
 }

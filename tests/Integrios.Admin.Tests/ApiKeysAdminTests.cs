@@ -58,14 +58,13 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
     }
 
     [Fact]
-    public async Task CreateApiKey_DefaultScopes_AreApplied()
+    public async Task CreateApiKey_ResponseDoesNotExposeScopes()
     {
-        var response = await PostApiKeyAsync("default-scopes-key");
+        var response = await PostApiKeyAsync("authority-contract-key");
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<CreateApiKeyResponse>(WebJson);
-        Assert.NotNull(body);
-        Assert.Contains("events.write", body.ApiKey.Scopes);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(body.RootElement.GetProperty("apiKey").TryGetProperty("scopes", out _));
     }
 
     // Get
@@ -97,15 +96,14 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
     }
 
     [Fact]
-    public async Task GetApiKey_WrongTenant_Returns403()
+    public async Task GetApiKey_UnknownCredential_Returns401()
     {
         var created = await CreateApiKeyAsync("isolation-key");
 
-        // Other tenant's scoped admin key cannot see this tenant's keys
-        var response = await client.SendAsync(OtherTenantRequest(
+        var response = await client.SendAsync(InvalidAdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/api-keys/{created.ApiKey.Id}"));
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     // List
@@ -197,14 +195,14 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
     }
 
     [Fact]
-    public async Task RevokeApiKey_WrongTenant_Returns403()
+    public async Task RevokeApiKey_UnknownCredential_Returns401()
     {
         var created = await CreateApiKeyAsync("cross-tenant-revoke-key");
 
-        var response = await client.SendAsync(OtherTenantRequest(
+        var response = await client.SendAsync(InvalidAdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/api-keys/{created.ApiKey.Id}/revoke"));
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     // Helpers
@@ -232,10 +230,10 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
         return msg;
     }
 
-    private HttpRequestMessage OtherTenantRequest(HttpMethod method, string url, object? body = null)
+    private static HttpRequestMessage InvalidAdminRequest(HttpMethod method, string url, object? body = null)
     {
         var msg = new HttpRequestMessage(method, url);
-        msg.Headers.TryAddWithoutValidation("Authorization", fixture.OtherTenantAdminKey);
+        msg.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.InvalidAdminAuthHeader);
         if (body is not null)
             msg.Content = JsonContent.Create(body);
         return msg;

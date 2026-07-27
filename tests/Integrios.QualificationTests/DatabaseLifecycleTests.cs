@@ -19,7 +19,7 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Contains("Successfully applied", firstMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("up to date", secondMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Successfully validated", validate, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(23L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+        Assert.Equal(24L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database, "SELECT COUNT(*) FROM flyway_schema_history WHERE success"));
         Assert.Equal("text|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_url"));
         Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "integration_key"));
@@ -29,6 +29,8 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Equal("uuid|NO", await ColumnShapeAsync(database, "delivery_attempts", "subscription_delivery_id"));
         Assert.Equal("text|YES", await ColumnShapeAsync(database, "delivery_attempts", "failure_phase"));
         Assert.Equal(0L, await CountColumnsAsync(database, "subscriptions", "delivery_policy", "dlq_enabled"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "admin_keys", "tenant_id"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "api_keys", "scopes"));
         Assert.Equal(0L, await CountAsync(database, "integrations"));
         Assert.Equal(0L, await CountAsync(database, "admin_keys"));
 
@@ -48,7 +50,7 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Equal(0, firstBootstrap.ExitCode);
         Assert.DoesNotContain(suppliedSecret, firstBootstrap.Output, StringComparison.Ordinal);
         Assert.Equal(1L, await CountAsync(database, "integrations", "key = 'webhook'"));
-        Assert.Equal(1L, await CountAsync(database, "admin_keys", "tenant_id IS NULL AND revoked_at IS NULL"));
+        Assert.Equal(1L, await CountAsync(database, "admin_keys", "revoked_at IS NULL"));
 
         await ExecuteAsync(database, "UPDATE integrations SET name = 'Drifted', status = 'disabled' WHERE key = 'webhook'");
 
@@ -63,7 +65,7 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
             "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
         Assert.Equal(Hash(suppliedSecret), await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
-            "SELECT secret_hash FROM admin_keys WHERE tenant_id IS NULL AND revoked_at IS NULL"));
+            "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL"));
     }
 
     [Fact]
@@ -111,7 +113,7 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
 
         Assert.Equal("sha256:1111111111111111111111111111111111111111111111111111111111111111", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
-            "SELECT secret_hash FROM admin_keys WHERE tenant_id IS NULL AND public_key = 'global_admin_key'"));
+            "SELECT secret_hash FROM admin_keys WHERE public_key = 'global_admin_key'"));
         Assert.Equal(1L, await CountAsync(
             database,
             "connections",
@@ -126,7 +128,7 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.DoesNotContain("must-not-replace-operator-secret", bootstrap.Output, StringComparison.Ordinal);
         Assert.Equal("sha256:1111111111111111111111111111111111111111111111111111111111111111", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
-            "SELECT secret_hash FROM admin_keys WHERE tenant_id IS NULL AND public_key = 'global_admin_key'"));
+            "SELECT secret_hash FROM admin_keys WHERE public_key = 'global_admin_key'"));
         Assert.Equal("Webhook|both|active|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
@@ -370,6 +372,74 @@ public sealed class DatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
             database,
             "events",
             "id = '23000000-0000-0000-0000-000000000007'"));
+    }
+
+    [Fact]
+    public async Task V24_RevokesLegacyTenantKeyBeforeRemovingUnsupportedCredentialScope()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 23);
+        await ExecuteAsync(
+            database,
+            """
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES ('24000000-0000-0000-0000-000000000001', 'v24-tenant', 'V24 Tenant', 'active');
+
+            INSERT INTO admin_keys (id, tenant_id, public_key, secret_hash, name)
+            VALUES
+                ('24000000-0000-0000-0000-000000000002', NULL, 'v24_global', 'sha256:global', 'Global'),
+                ('24000000-0000-0000-0000-000000000003',
+                 '24000000-0000-0000-0000-000000000001', 'v24_tenant', 'sha256:tenant', 'Tenant');
+
+            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, scopes, status)
+            VALUES (
+                '24000000-0000-0000-0000-000000000004',
+                '24000000-0000-0000-0000-000000000001',
+                'v24-api-key', 'intg_v24', 'sha256:api', ARRAY['events.write'], 'active');
+            """);
+
+        await fixture.ExecuteMigrationSqlAsync(database, "V24__enforce_credential_authority.sql");
+
+        Assert.Equal(1L, await CountAsync(database, "admin_keys", "public_key = 'v24_global' AND revoked_at IS NULL"));
+        Assert.Equal(1L, await CountAsync(database, "admin_keys", "public_key = 'v24_tenant' AND revoked_at IS NOT NULL"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "admin_keys", "tenant_id"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "api_keys", "scopes"));
+    }
+
+    [Fact]
+    public async Task AdminKeyRotation_RequiresOutOfBandSecretAndDoesNotDiscloseIt()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate");
+
+        BootstrapProcessResult beforeBootstrap =
+            await DatabaseLifecycleFixture.RunAdminKeyRotationAsync(database, "premature-rotation-secret");
+        Assert.NotEqual(0, beforeBootstrap.ExitCode);
+        Assert.Contains("Run bootstrap before rotation", beforeBootstrap.StandardError, StringComparison.Ordinal);
+        Assert.Equal(0L, await CountAsync(database, "admin_keys"));
+
+        const string oldSecret = "rotation-old-secret";
+        Assert.Equal(0, (await DatabaseLifecycleFixture.RunProductionBootstrapAsync(database, oldSecret)).ExitCode);
+
+        BootstrapProcessResult missingSecret =
+            await DatabaseLifecycleFixture.RunAdminKeyRotationAsync(database, secret: null);
+        Assert.NotEqual(0, missingSecret.ExitCode);
+        Assert.Equal(Hash(oldSecret), await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database, "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL"));
+
+        const string replacementSecret = "rotation-replacement-secret";
+        BootstrapProcessResult rotated =
+            await DatabaseLifecycleFixture.RunAdminKeyRotationAsync(database, replacementSecret);
+
+        Assert.Equal(0, rotated.ExitCode);
+        Assert.DoesNotContain(replacementSecret, rotated.Output, StringComparison.Ordinal);
+        string publicKey = await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database, "SELECT public_key FROM admin_keys WHERE revoked_at IS NULL");
+        Assert.Contains(publicKey, rotated.StandardOutput, StringComparison.Ordinal);
+        Assert.Equal(Hash(replacementSecret), await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database, "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL"));
+        Assert.Equal(1L, await CountAsync(database, "admin_keys", "revoked_at IS NULL"));
+        Assert.Equal(1L, await CountAsync(database, "admin_keys", "secret_hash = '" + Hash(oldSecret) + "' AND revoked_at IS NOT NULL"));
     }
 
     private const string V21GraphSql =

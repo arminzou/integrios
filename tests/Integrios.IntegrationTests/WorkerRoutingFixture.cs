@@ -445,8 +445,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@TenantId,       'test-routing-tenant', 'Test Routing Tenant', 'active', now(), now()),
                 (@OrphanTenantId, 'test-orphan-tenant',  'Test Orphan Tenant',  'active', now(), now());
 
-            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, scopes, status, created_at)
-            VALUES (@ApiKeyId, @TenantId, 'test-key', @KeyPrefix, @KeyHash, '{}', 'active', now());
+            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, status, created_at)
+            VALUES (@ApiKeyId, @TenantId, 'test-key', @KeyPrefix, @KeyHash, 'active', now());
 
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
             VALUES

@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Integrios.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -15,6 +13,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string GlobalAdminPublicKey = "global_admin_key";
     public const string GlobalAdminSecret = "admin_bootstrap_secret";
     public const string GlobalAdminAuthHeader = $"AdminKey {GlobalAdminPublicKey}:{GlobalAdminSecret}";
+    public const string InvalidAdminAuthHeader = "AdminKey legacy_tenant_key:unsupported-secret";
 
     private static readonly Guid WebhookIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
@@ -28,7 +27,6 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public string ConnectionString => container.GetConnectionString();
     public Guid TenantId { get; private set; }
     public Guid SourceConnectionId { get; private set; }
-    public string OtherTenantAdminKey { get; private set; } = "";
 
     public async Task InitializeAsync()
     {
@@ -66,13 +64,6 @@ public sealed class AdminApiFixture : IAsyncLifetime
         TenantId = Guid.NewGuid();
         SourceConnectionId = Guid.NewGuid();
         var otherTenantId = Guid.NewGuid();
-        var otherAdminKeyId = Guid.NewGuid();
-
-        var otherKeySecret = "other-tenant-secret";
-        var otherKeyHash = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(otherKeySecret))).ToLowerInvariant();
-        OtherTenantAdminKey = $"AdminKey other_tenant_key:{otherKeySecret}";
-
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES
@@ -87,21 +78,16 @@ public sealed class AdminApiFixture : IAsyncLifetime
             VALUES (@SourceConnectionId, @TenantId, @IntegrationId, 'source', '{}', 'active');
 
             -- Re-seed global bootstrap key (truncated in ResetAsync)
-            INSERT INTO admin_keys (tenant_id, public_key, secret_hash, name, created_at)
-            VALUES (NULL, 'global_admin_key',
+            INSERT INTO admin_keys (public_key, secret_hash, name, created_at)
+            VALUES ('global_admin_key',
                     'sha256:5af35a0149f5a07231b181c3b4d5d3a76a4c765258533a123b34dfb843599328',
-                    'Bootstrap Global Admin Key', now());
-
-            INSERT INTO admin_keys (id, tenant_id, public_key, secret_hash, name, created_at)
-            VALUES (@OtherAdminKeyId, @OtherTenantId, 'other_tenant_key', @OtherKeyHash, 'Other Tenant Key', now());
+                    'Bootstrap Operator Admin Key', now());
             """, connection);
 
         cmd.Parameters.AddWithValue("TenantId", TenantId);
         cmd.Parameters.AddWithValue("OtherTenantId", otherTenantId);
         cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
         cmd.Parameters.AddWithValue("SourceConnectionId", SourceConnectionId);
-        cmd.Parameters.AddWithValue("OtherAdminKeyId", otherAdminKeyId);
-        cmd.Parameters.AddWithValue("OtherKeyHash", otherKeyHash);
         await cmd.ExecuteNonQueryAsync();
     }
 

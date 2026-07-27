@@ -9,7 +9,6 @@ public sealed record ApiKeyResponse
     public required string Name { get; init; }
     public required string KeyPrefix { get; init; }
     public required string Status { get; init; }
-    public required IReadOnlyList<string> Scopes { get; init; }
     public string? Description { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? ExpiresAt { get; init; }
@@ -22,7 +21,6 @@ public sealed record ApiKeyResponse
         Name = key.Name,
         KeyPrefix = key.KeyPrefix,
         Status = key.Status.ToString().ToLowerInvariant(),
-        Scopes = key.Scopes,
         Description = key.Description,
         CreatedAt = key.CreatedAt,
         ExpiresAt = key.ExpiresAt,

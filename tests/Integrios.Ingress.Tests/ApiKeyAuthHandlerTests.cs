@@ -158,7 +158,6 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
                 Name = "test-key",
                 KeyPrefix = token[..12],
                 KeyHash = hash,
-                Scopes = ["events.write"],
                 Status = OperationalStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow,
             },

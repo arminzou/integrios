@@ -12,7 +12,6 @@ public sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) :
         const string sql = """
             SELECT
                 id         AS Id,
-                tenant_id  AS TenantId,
                 public_key AS PublicKey,
                 secret_hash AS SecretHash,
                 name       AS Name,
@@ -28,12 +27,12 @@ public sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) :
         return row?.ToAdminKey();
     }
 
-    // Bootstrap: does a live global admin key already exist?
-    public async Task<bool> HasLiveGlobalKeyAsync(CancellationToken cancellationToken = default)
+    // Bootstrap: does a live deployment-wide admin key already exist?
+    public async Task<bool> HasLiveKeyAsync(CancellationToken cancellationToken = default)
     {
         const string sql = """
             SELECT EXISTS (
-                SELECT 1 FROM admin_keys WHERE tenant_id IS NULL AND revoked_at IS NULL
+                SELECT 1 FROM admin_keys WHERE revoked_at IS NULL
             )
             """;
 
@@ -45,11 +44,10 @@ public sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) :
     public async Task<AdminKey> InsertAsync(AdminKey adminKey, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            INSERT INTO admin_keys (id, tenant_id, public_key, secret_hash, name, created_at)
-            VALUES (@Id, @TenantId, @PublicKey, @SecretHash, @Name, @CreatedAt)
+            INSERT INTO admin_keys (id, public_key, secret_hash, name, created_at)
+            VALUES (@Id, @PublicKey, @SecretHash, @Name, @CreatedAt)
             RETURNING
                 id         AS Id,
-                tenant_id  AS TenantId,
                 public_key AS PublicKey,
                 secret_hash AS SecretHash,
                 name       AS Name,
@@ -63,7 +61,6 @@ public sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) :
             new
             {
                 adminKey.Id,
-                adminKey.TenantId,
                 adminKey.PublicKey,
                 adminKey.SecretHash,
                 adminKey.Name,
@@ -73,24 +70,34 @@ public sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) :
         return row.ToAdminKey();
     }
 
-    // Rotate the live global admin key: revoke the current one (if any), insert newKey
-    public async Task<AdminKey> RotateGlobalAsync(AdminKey newKey, CancellationToken cancellationToken = default)
+    // Rotate the live deployment-wide admin key: revoke the current one (if any), insert newKey.
+    public async Task<AdminKey> RotateAsync(AdminKey newKey, CancellationToken cancellationToken = default)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        // Serialize concurrent rotations so they cannot leave two live keys.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "LOCK TABLE admin_keys IN SHARE ROW EXCLUSIVE MODE",
+            transaction: transaction,
+            cancellationToken: cancellationToken));
+
         const string revokeSql = """
             UPDATE admin_keys SET revoked_at = now()
-            WHERE tenant_id IS NULL AND revoked_at IS NULL
+            WHERE revoked_at IS NULL
             """;
-        await connection.ExecuteAsync(new CommandDefinition(revokeSql, transaction: transaction, cancellationToken: cancellationToken));
+        int revoked = await connection.ExecuteAsync(new CommandDefinition(
+            revokeSql,
+            transaction: transaction,
+            cancellationToken: cancellationToken));
+        if (revoked == 0)
+            throw new InvalidOperationException("No live AdminKey exists. Run bootstrap before rotation.");
 
         const string insertSql = """
-            INSERT INTO admin_keys (id, tenant_id, public_key, secret_hash, name, created_at)
-            VALUES (@Id, NULL, @PublicKey, @SecretHash, @Name, @CreatedAt)
+            INSERT INTO admin_keys (id, public_key, secret_hash, name, created_at)
+            VALUES (@Id, @PublicKey, @SecretHash, @Name, @CreatedAt)
             RETURNING
                 id         AS Id,
-                tenant_id  AS TenantId,
                 public_key AS PublicKey,
                 secret_hash AS SecretHash,
                 name       AS Name,
@@ -117,7 +124,6 @@ public sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) :
     private sealed record AdminKeyRow
     {
         public Guid Id { get; init; }
-        public Guid? TenantId { get; init; }
         public string PublicKey { get; init; } = "";
         public string SecretHash { get; init; } = "";
         public string Name { get; init; } = "";
@@ -127,7 +133,6 @@ public sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) :
         public AdminKey ToAdminKey() => new()
         {
             Id = Id,
-            TenantId = TenantId,
             PublicKey = PublicKey,
             SecretHash = SecretHash,
             Name = Name,

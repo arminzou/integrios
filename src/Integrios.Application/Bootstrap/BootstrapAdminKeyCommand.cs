@@ -13,7 +13,7 @@ public sealed class BootstrapAdminKeyCommandHandler(IAdminKeyRepository reposito
 {
     public async Task<BootstrapAdminKeyResult> Handle(BootstrapAdminKeyCommand command, CancellationToken cancellationToken)
     {
-        if (await repository.HasLiveGlobalKeyAsync(cancellationToken))
+        if (await repository.HasLiveKeyAsync(cancellationToken))
             return new BootstrapAdminKeyResult(Created: false, GeneratedSecret: null);
 
         // An empty/whitespace secret (e.g. an unset env var interpolated as "") must generate,
@@ -24,10 +24,9 @@ public sealed class BootstrapAdminKeyCommandHandler(IAdminKeyRepository reposito
         await repository.InsertAsync(new AdminKey
         {
             Id = Guid.NewGuid(),
-            TenantId = null,
             PublicKey = command.PublicKey,
             SecretHash = AdminKeySecrets.Hash(secret),
-            Name = "Bootstrap Global Admin Key",
+            Name = "Bootstrap Operator Admin Key",
             CreatedAt = DateTimeOffset.UtcNow,
         }, cancellationToken);
 

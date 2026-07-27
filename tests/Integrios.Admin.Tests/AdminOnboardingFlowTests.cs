@@ -61,7 +61,6 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             new
             {
                 name = "acme-ingress",
-                scopes = new[] { "events:write" },
                 description = "Ingress automation key"
             }));
         Assert.Equal(HttpStatusCode.Created, apiKeyResponse.StatusCode);

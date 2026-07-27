@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Integrios.Admin.Auth;
 using Integrios.Application.Connections;
 using MediatR;
 
@@ -22,16 +21,9 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     private static async Task<IResult> CreateConnection(
         Guid tenantId,
         CreateConnectionRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         ConnectionResponse response = await mediator.Send(
             new CreateConnectionCommand(
                 tenantId,
@@ -48,18 +40,11 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
 
     private static async Task<IResult> ListConnections(
         Guid tenantId,
-        HttpContext httpContext,
         IMediator mediator,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         ConnectionListResponse response = await mediator.Send(
             new ListConnectionsByTenantQuery(tenantId, after, limit),
@@ -70,16 +55,9 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     private static async Task<IResult> GetConnectionById(
         Guid tenantId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         ConnectionResponse? response = await mediator.Send(new GetConnectionByIdQuery(tenantId, id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
@@ -88,16 +66,9 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         Guid tenantId,
         Guid id,
         UpdateConnectionRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         ConnectionResponse? response = await mediator.Send(
             new UpdateConnectionCommand(
                 tenantId,
@@ -115,16 +86,9 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     private static async Task<IResult> DeactivateConnection(
         Guid tenantId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-        {
-            return Results.Forbid();
-        }
-
         bool deactivated = await mediator.Send(new DeactivateConnectionCommand(tenantId, id), cancellationToken);
         return deactivated ? Results.Ok() : Results.NotFound();
     }

@@ -10,7 +10,7 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 
 ```bash
 cp .env.example .env
-# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_VERSION, and optionally INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
+# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_VERSION, and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
 mkdir -p secrets
 docker compose up -d
 ```
@@ -22,21 +22,26 @@ and `worker` start.
 ## Bootstrap semantics
 
 The `bootstrap` service is idempotent and safe to re-run. It creates the built-in integration
-catalog and, only if no live global admin key exists yet, the first admin key.
+catalog and, only if no live deployment-wide AdminKey exists yet, the first AdminKey.
 
-The admin secret comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`. If you set it in `.env`, that
-secret is used. If you leave it empty, bootstrap generates a random secret and prints it once
-to the bootstrap container's logs; retrieve it with:
-
-```bash
-docker compose logs bootstrap
-```
-
-Store it immediately, it is not shown again. The admin credential format is:
+The admin secret comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`. Production bootstrap requires a
+non-empty Operator-supplied value and never prints the secret. The admin credential format is:
 
 ```text
 global_admin_key:<secret>
 ```
+
+Every AdminKey has deployment-wide Operator authority. Rotate it by supplying the replacement
+secret out of band to the one-shot Admin CLI:
+
+```bash
+docker compose run --rm \
+  -e INTEGRIOS_ADMIN_KEY_ROTATION_SECRET='<replacement-secret>' \
+  admin admin-key rotate
+```
+
+Rotation atomically revokes the previous live key and creates its replacement. The command prints
+only the replacement public identifier; it never generates or outputs the replacement secret.
 
 ## Delivery secrets
 

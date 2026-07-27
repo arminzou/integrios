@@ -1,4 +1,3 @@
-using Integrios.Admin.Auth;
 using Integrios.Application.ApiKeys;
 using MediatR;
 
@@ -19,32 +18,22 @@ public sealed class ApiKeysEndpoints : IEndpointGroup
     private static async Task<IResult> CreateApiKey(
         Guid tenantId,
         CreateApiKeyRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         CreateApiKeyResponse response = await mediator.Send(
-            new CreateApiKeyCommand(tenantId, request.Name, request.Scopes, request.Description, request.ExpiresAt),
+            new CreateApiKeyCommand(tenantId, request.Name, request.Description, request.ExpiresAt),
             cancellationToken);
         return Results.Created($"/admin/tenants/{tenantId}/api-keys/{response.ApiKey.Id}", response);
     }
 
     private static async Task<IResult> ListApiKeys(
         Guid tenantId,
-        HttpContext httpContext,
         IMediator mediator,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         ApiKeyListResponse response = await mediator.Send(
             new ListApiKeysByTenantQuery(tenantId, after, limit), cancellationToken);
@@ -54,14 +43,9 @@ public sealed class ApiKeysEndpoints : IEndpointGroup
     private static async Task<IResult> GetApiKeyById(
         Guid tenantId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         ApiKeyResponse? response = await mediator.Send(new GetApiKeyByIdQuery(tenantId, id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
@@ -69,17 +53,12 @@ public sealed class ApiKeysEndpoints : IEndpointGroup
     private static async Task<IResult> RevokeApiKey(
         Guid tenantId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        AdminPrincipal principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         bool revoked = await mediator.Send(new RevokeApiKeyCommand(tenantId, id), cancellationToken);
         return revoked ? Results.Ok() : Results.NotFound();
     }
 }
 
-internal sealed record CreateApiKeyRequest(string Name, IReadOnlyList<string>? Scopes, string? Description, DateTimeOffset? ExpiresAt);
+internal sealed record CreateApiKeyRequest(string Name, string? Description, DateTimeOffset? ExpiresAt);

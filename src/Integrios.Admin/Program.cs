@@ -1,4 +1,5 @@
 using Integrios.Admin.Auth;
+using Integrios.Admin.AdminKeys;
 using Integrios.Admin.Bootstrap;
 using Integrios.Admin.Endpoints;
 using Integrios.Admin.ErrorHandling;
@@ -10,6 +11,8 @@ using Microsoft.AspNetCore.Authentication;
 
 if (args is ["bootstrap", ..])
     return await BootstrapCli.RunAsync(args);
+if (args is ["admin-key", ..])
+    return await AdminKeyCli.RunAsync(args);
 
 var builder = WebApplication.CreateBuilder(args);
 

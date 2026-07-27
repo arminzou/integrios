@@ -77,7 +77,6 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 name,
                 key_prefix,
                 key_hash,
-                scopes,
                 status,
                 created_at
             )
@@ -87,7 +86,6 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 'test-ingest-key-a',
                 @KeyPrefixA,
                 @KeyHashA,
-                ARRAY['events.write'],
                 'active',
                 now()
             ),
@@ -97,7 +95,6 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 'test-ingest-key-b',
                 @KeyPrefixB,
                 @KeyHashB,
-                ARRAY['events.write'],
                 'active',
                 now()
             );

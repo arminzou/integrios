@@ -55,7 +55,7 @@ TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: appli
 
 # 2. Create an Integrios API key for this generic source (the token is shown once, capture it)
 TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/api-keys -H "$AUTH" -H 'Content-Type: application/json' \
-  -d '{"name":"acme-ingress","scopes":["events:write"]}' | jq -r .token)
+  -d '{"name":"acme-ingress"}' | jq -r .token)
 
 # 3. Create source and destination connections (destination points at MockSink)
 SRC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
@@ -115,6 +115,20 @@ curl -s -X POST $INGRESS/events/$EVENT/replay -H "Authorization: ApiKey $TOKEN"
 ```
 
 The `.http` request collections under each service in `src/` cover these flows in full.
+
+## Rotate the Operator AdminKey
+
+Every AdminKey has deployment-wide control-plane authority. Supply the replacement secret out of
+band when running the one-shot rotation command:
+
+```bash
+docker compose run --rm \
+  -e INTEGRIOS_ADMIN_KEY_ROTATION_SECRET='<replacement-secret>' \
+  admin admin-key rotate
+```
+
+Rotation atomically revokes the previous live key and creates its replacement. The command prints
+the new public identifier but never generates or outputs the replacement secret.
 
 ## Environment variables
 

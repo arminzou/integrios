@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
 using Integrios.Domain.Common;
@@ -76,7 +78,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         BootstrapAdminKeyResult second = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", "test-secret"));
         Assert.False(second.Created);
 
-        Assert.Equal(1, await CountAsync("admin_keys", "tenant_id IS NULL AND revoked_at IS NULL"));
+        Assert.Equal(1, await CountAsync("admin_keys", "revoked_at IS NULL"));
     }
 
     [Fact]
@@ -102,7 +104,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     }
 
     [Fact]
-    public async Task RotateGlobalAdminKey_MintsNewPublicKey_AndRevokesPrior_NoUniqueViolation()
+    public async Task RotateAdminKey_MintsNewPublicKey_AndRevokesPrior_NoUniqueViolation()
     {
         await DeleteGlobalAdminKeysAsync();
         BootstrapAdminKeyResult first = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", "first-secret"));
@@ -114,8 +116,33 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         RotateAdminKeyResult rotate2 = await mediator.Send(new RotateAdminKeyCommand("rotated-secret-2"));
         Assert.NotEqual(rotate1.PublicKey, rotate2.PublicKey);
 
-        Assert.Equal(1, await CountAsync("admin_keys", "tenant_id IS NULL AND revoked_at IS NULL"));
-        Assert.Equal(3, await CountAsync("admin_keys", "tenant_id IS NULL")); // original + 2 rotations retained
+        Assert.Equal(1, await CountAsync("admin_keys", "revoked_at IS NULL"));
+        Assert.Equal(3, await CountAsync("admin_keys")); // original + 2 rotations retained
+        Assert.Equal(Hash("rotated-secret-2"), await ScalarAsync<string>(
+            "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RotateAdminKey_RejectsMissingReplacementSecret(string secret)
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            mediator.Send(new RotateAdminKeyCommand(secret)));
+
+        Assert.Equal(1, await CountAsync("admin_keys", "revoked_at IS NULL"));
+    }
+
+    [Fact]
+    public async Task RotateAdminKey_WithoutLiveKey_RequiresBootstrap()
+    {
+        await DeleteGlobalAdminKeysAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            mediator.Send(new RotateAdminKeyCommand("replacement-secret")));
+
+        Assert.Contains("Run bootstrap before rotation", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, await CountAsync("admin_keys"));
     }
 
     [Fact]
@@ -131,14 +158,14 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Assert.Equal(1, await CountAsync("integrations", "key = 'webhook'"));
 
         string? secretHash = await ScalarAsync<string>(
-            "SELECT secret_hash FROM admin_keys WHERE tenant_id IS NULL AND revoked_at IS NULL");
+            "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL");
         Assert.Equal(
             "sha256:5af35a0149f5a07231b181c3b4d5d3a76a4c765258533a123b34dfb843599328",
             secretHash);
     }
 
     private async Task DeleteGlobalAdminKeysAsync() =>
-        await ExecuteAsync("DELETE FROM admin_keys WHERE tenant_id IS NULL");
+        await ExecuteAsync("DELETE FROM admin_keys");
 
     private async Task ExecuteAsync(string sql)
     {
@@ -157,6 +184,9 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         return result is null ? default : (T)result;
     }
 
-    private async Task<long> CountAsync(string table, string where) =>
+    private async Task<long> CountAsync(string table, string where = "TRUE") =>
         await ScalarAsync<long>($"SELECT COUNT(*) FROM {table} WHERE {where}");
+
+    private static string Hash(string secret) =>
+        "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(secret))).ToLowerInvariant();
 }

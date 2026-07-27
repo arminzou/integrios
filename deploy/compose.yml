@@ -32,7 +32,7 @@ services:
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
     command: migrate
 
-  # Idempotent one-shot: creates the built-in catalog and, only if no live global admin key
+  # Idempotent one-shot: creates the built-in catalog and, only if no live deployment-wide AdminKey
   # exists, the first admin key. Production fails closed unless the Operator supplies a secret.
   bootstrap:
     image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.1.0}

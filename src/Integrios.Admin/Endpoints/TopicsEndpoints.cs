@@ -1,4 +1,3 @@
-using Integrios.Admin.Auth;
 using Integrios.Application.Topics;
 using MediatR;
 
@@ -20,14 +19,9 @@ public sealed class TopicsEndpoints : IEndpointGroup
     private static async Task<IResult> CreateTopic(
         Guid tenantId,
         CreateTopicRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         var response = await mediator.Send(
             new CreateTopicCommand(tenantId, request.Name, request.Description, request.SourceConnectionIds ?? []),
             cancellationToken);
@@ -36,16 +30,11 @@ public sealed class TopicsEndpoints : IEndpointGroup
 
     private static async Task<IResult> ListTopics(
         Guid tenantId,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken,
         string? after = null,
         int limit = 20)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         limit = Math.Clamp(limit, 1, 100);
         var response = await mediator.Send(new ListTopicsByTenantQuery(tenantId, after, limit), cancellationToken);
         return Results.Ok(response);
@@ -54,14 +43,9 @@ public sealed class TopicsEndpoints : IEndpointGroup
     private static async Task<IResult> GetTopicById(
         Guid tenantId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         var response = await mediator.Send(new GetTopicByIdQuery(tenantId, id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
@@ -70,14 +54,9 @@ public sealed class TopicsEndpoints : IEndpointGroup
         Guid tenantId,
         Guid id,
         UpdateTopicRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         var response = await mediator.Send(
             new UpdateTopicCommand(tenantId, id, request.Name, request.Description, request.SourceConnectionIds),
             cancellationToken);
@@ -87,14 +66,9 @@ public sealed class TopicsEndpoints : IEndpointGroup
     private static async Task<IResult> DeactivateTopic(
         Guid tenantId,
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var principal = httpContext.GetAdminPrincipal();
-        if (!principal.IsGlobal && principal.TenantId != tenantId)
-            return Results.Forbid();
-
         var deactivated = await mediator.Send(new DeactivateTopicCommand(tenantId, id), cancellationToken);
         return deactivated ? Results.Ok() : Results.NotFound();
     }

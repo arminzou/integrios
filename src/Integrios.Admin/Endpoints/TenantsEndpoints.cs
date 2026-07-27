@@ -1,4 +1,3 @@
-using Integrios.Admin.Auth;
 using Integrios.Application.Tenants;
 using MediatR;
 
@@ -19,13 +18,9 @@ public sealed class TenantsEndpoints : IEndpointGroup
 
     private static async Task<IResult> CreateTenant(
         CreateTenantRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (!httpContext.GetAdminPrincipal().IsGlobal)
-            return Results.Forbid();
-
         var response = await mediator.Send(
             new CreateTenantCommand(request.Slug, request.Name, request.Environment, request.Description),
             cancellationToken);
@@ -33,15 +28,11 @@ public sealed class TenantsEndpoints : IEndpointGroup
     }
 
     private static async Task<IResult> ListTenants(
-        HttpContext httpContext,
         IMediator mediator,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
-        if (!httpContext.GetAdminPrincipal().IsGlobal)
-            return Results.Forbid();
-
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         var response = await mediator.Send(new ListTenantsQuery(after, limit), cancellationToken);
         return Results.Ok(response);
@@ -49,13 +40,9 @@ public sealed class TenantsEndpoints : IEndpointGroup
 
     private static async Task<IResult> GetTenantById(
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (!httpContext.GetAdminPrincipal().IsGlobal)
-            return Results.Forbid();
-
         var response = await mediator.Send(new GetTenantByIdQuery(id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
@@ -63,13 +50,9 @@ public sealed class TenantsEndpoints : IEndpointGroup
     private static async Task<IResult> UpdateTenant(
         Guid id,
         UpdateTenantRequest request,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (!httpContext.GetAdminPrincipal().IsGlobal)
-            return Results.Forbid();
-
         var response = await mediator.Send(
             new UpdateTenantCommand(id, request.Name, request.Description, request.Environment),
             cancellationToken);
@@ -78,13 +61,9 @@ public sealed class TenantsEndpoints : IEndpointGroup
 
     private static async Task<IResult> DeactivateTenant(
         Guid id,
-        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (!httpContext.GetAdminPrincipal().IsGlobal)
-            return Results.Forbid();
-
         bool deactivated = await mediator.Send(new DeactivateTenantCommand(id), cancellationToken);
         return deactivated ? Results.Ok() : Results.NotFound();
     }

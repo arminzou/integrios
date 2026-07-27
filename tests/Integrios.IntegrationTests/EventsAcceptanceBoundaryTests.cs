@@ -192,6 +192,22 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         await fixture.ForceDeadLetteredDeliveryAsync(body.EventId);
 
+        var otherTenantReplay = await client.SendAsync(new HttpRequestMessage(
+            HttpMethod.Post, $"/events/{body.EventId}/replay")
+        {
+            Headers = { { "Authorization", tenantBAuthHeaderValue } }
+        });
+        Assert.Equal(HttpStatusCode.NotFound, otherTenantReplay.StatusCode);
+
+        await using (var isolationConnection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await isolationConnection.OpenAsync();
+            await using var isolationStatus = new NpgsqlCommand(
+                "SELECT status FROM subscription_deliveries WHERE event_id = @Id", isolationConnection);
+            isolationStatus.Parameters.AddWithValue("Id", body.EventId);
+            Assert.Equal("dead_lettered", await isolationStatus.ExecuteScalarAsync());
+        }
+
         var replayResponse = await client.SendAsync(new HttpRequestMessage(
             HttpMethod.Post, $"/events/{body.EventId}/replay")
         {

@@ -27,15 +27,11 @@ public sealed class AdminKeyAuthHandler(
         if (adminKey is null || !VerifySecret(secret, adminKey.SecretHash))
             return AuthenticateResult.Fail("Invalid admin key or secret.");
 
-        Context.SetAdminPrincipal(new AdminPrincipal { AdminKey = adminKey });
-
-        var claims = new List<Claim>
+        Claim[] claims =
         {
             new(ClaimTypes.NameIdentifier, adminKey.Id.ToString()),
             new("admin_key_id", adminKey.Id.ToString()),
         };
-        if (adminKey.TenantId is { } tenantId)
-            claims.Add(new Claim("tenant_id", tenantId.ToString()));
 
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);

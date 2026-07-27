@@ -10,7 +10,6 @@ namespace Integrios.Application.ApiKeys;
 public sealed record CreateApiKeyCommand(
     Guid TenantId,
     string Name,
-    IReadOnlyList<string>? Scopes,
     string? Description,
     DateTimeOffset? ExpiresAt
 ) : IRequest<CreateApiKeyResponse>;
@@ -32,7 +31,6 @@ public sealed class CreateApiKeyCommandHandler(IApiKeyRepository repository)
             Name = command.Name,
             KeyPrefix = keyPrefix,
             KeyHash = keyHash,
-            Scopes = command.Scopes ?? ["events.write"],
             Status = OperationalStatus.Active,
             Description = command.Description,
             CreatedAt = DateTimeOffset.UtcNow,
