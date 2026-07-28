@@ -461,6 +461,31 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
     }
 
     [Fact]
+    public async Task CreateSubscription_WithTransformLargerThan64KiB_ReturnsBadRequest()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "oversized-transform",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                orderIndex = 10,
+                transform = new
+                {
+                    engine = "jsonata",
+                    version = "1",
+                    expression = new string('x', 65537)
+                }
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("64 KiB", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task UpdateSubscription_WhenDisabled_ReturnsNotFound()
     {
         var topic = await CreateTopicAsync("payments");
