@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Subscriptions;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -40,7 +41,7 @@ internal static class TransformPreview
         JsonElement? sampleContext,
         ITransformEvaluator evaluator)
     {
-        var error = TransformConfig.Parse(transform, evaluator, out var expression);
+        var error = TransformConfigValidator.Validate(transform, evaluator, out var expression);
         if (error is not null)
             return new TransformPreviewResult(error, null);
 

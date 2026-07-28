@@ -120,7 +120,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
     [InlineData("{\"event_type\":123}")]
     [InlineData("{\"event_type\":\"\"}")]
     [InlineData("{\"event_type\":\"payment.created\",\"foo\":\"bar\"}")]
-    public async Task CreateSubscription_WithInvalidMatchRules_ReturnsBadRequest(string matchRulesJson)
+    public async Task CreateSubscription_WithInvalidMatchRules_ReturnsUnprocessableEntity(string matchRulesJson)
     {
         var topic = await CreateTopicAsync("payments");
 
@@ -138,7 +138,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Theory]
@@ -147,7 +147,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
     [InlineData("{\"event_type\":null}")]
     [InlineData("{\"event_type\":\"   \"}")]
     [InlineData("{\"event_type\":\"payment.updated\",\"foo\":true}")]
-    public async Task UpdateSubscription_WithInvalidMatchRules_ReturnsBadRequest(string matchRulesJson)
+    public async Task UpdateSubscription_WithInvalidMatchRules_ReturnsUnprocessableEntity(string matchRulesJson)
     {
         var topic = await CreateTopicAsync("payments");
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
@@ -166,7 +166,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact]
@@ -375,7 +375,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
     [Theory]
     [InlineData("""{"engine":"unknown","version":"1","expression":"$.amount"}""")]
-    public async Task CreateSubscription_WithTransform_InvalidEngine_ReturnsBadRequest(string transformJson)
+    public async Task CreateSubscription_WithTransform_InvalidEngine_ReturnsUnprocessableEntity(string transformJson)
     {
         var topic = await CreateTopicAsync("payments");
         var transformElement = JsonDocument.Parse(transformJson).RootElement;
@@ -392,12 +392,12 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 transform = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Theory]
     [InlineData("""{"engine":"jsonata","version":"99","expression":"$.amount"}""")]
-    public async Task CreateSubscription_WithTransform_InvalidVersion_ReturnsBadRequest(string transformJson)
+    public async Task CreateSubscription_WithTransform_InvalidVersion_ReturnsUnprocessableEntity(string transformJson)
     {
         var topic = await CreateTopicAsync("payments");
         var transformElement = JsonDocument.Parse(transformJson).RootElement;
@@ -414,12 +414,12 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 transform = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Theory]
     [InlineData("""{"engine":"jsonata","version":"1","expression":"$.[invalid"}""")]
-    public async Task CreateSubscription_WithTransform_InvalidJsonataExpression_ReturnsBadRequest(string transformJson)
+    public async Task CreateSubscription_WithTransform_InvalidJsonataExpression_ReturnsUnprocessableEntity(string transformJson)
     {
         var topic = await CreateTopicAsync("payments");
         var transformElement = JsonDocument.Parse(transformJson).RootElement;
@@ -436,11 +436,11 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 transform = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact]
-    public async Task CreateSubscription_WithTransform_MissingExpression_ReturnsBadRequest()
+    public async Task CreateSubscription_WithTransform_MissingExpression_ReturnsUnprocessableEntity()
     {
         var topic = await CreateTopicAsync("payments");
         var transformElement = JsonDocument.Parse("""{"engine":"jsonata","version":"1"}""").RootElement;
@@ -457,11 +457,11 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 transform = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact]
-    public async Task CreateSubscription_WithTransformLargerThan64KiB_ReturnsBadRequest()
+    public async Task CreateSubscription_WithTransformLargerThan64KiB_ReturnsUnprocessableEntity()
     {
         var topic = await CreateTopicAsync("payments");
         var response = await client.SendAsync(AdminRequest(
@@ -481,7 +481,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 }
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains("64 KiB", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
