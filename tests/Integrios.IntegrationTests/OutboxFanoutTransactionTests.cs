@@ -1,3 +1,6 @@
+using Integrios.Application.Abstractions;
+using Integrios.Application.Delivery;
+using Integrios.Domain.Delivery;
 using Npgsql;
 
 namespace Integrios.IntegrationTests;
@@ -101,11 +104,81 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
         Assert.Equal(1, await fixture.GetSubscriptionDeliveryCountAsync(eventId));
     }
 
+    [Fact]
+    public async Task TwoExecutionLoops_BoundedStressLosesNoWorkAndCreatesNoDuplicates()
+    {
+        const int eventCount = 50;
+        for (int index = 0; index < eventCount; index++)
+            await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        int[] fanoutCounts = await Task.WhenAll(FanoutUntilEmptyAsync(), FanoutUntilEmptyAsync())
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(eventCount, fanoutCounts.Sum());
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM outbox WHERE processed_at IS NOT NULL"));
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM events WHERE status = 'fanned_out'"));
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM subscription_deliveries"));
+        Assert.Equal(0, await ScalarAsync<long>(
+            "SELECT COUNT(*) FROM (SELECT event_id, subscription_id FROM subscription_deliveries GROUP BY event_id, subscription_id HAVING COUNT(*) > 1) duplicates"));
+
+        int[] deliveryCounts = await Task.WhenAll(DeliverUntilEmptyAsync(), DeliverUntilEmptyAsync())
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(eventCount, deliveryCounts.Sum());
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM subscription_deliveries WHERE status = 'succeeded'"));
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM delivery_attempts WHERE status = 'succeeded'"));
+        Assert.Equal(0, await ScalarAsync<long>(
+            "SELECT COUNT(*) FROM (SELECT subscription_delivery_id, attempt_number FROM delivery_attempts GROUP BY subscription_delivery_id, attempt_number HAVING COUNT(*) > 1) duplicates"));
+
+        async Task<int> FanoutUntilEmptyAsync()
+        {
+            int total = 0;
+            while (true)
+            {
+                int processed = await fixture.RunFanoutBatchAsync(10);
+                total += processed;
+                if (processed == 0)
+                    return total;
+            }
+        }
+
+        async Task<int> DeliverUntilEmptyAsync()
+        {
+            int total = 0;
+            while (await fixture.DeliveryQueue.ClaimNextAsync() is { } claimed)
+            {
+                DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(
+                    new DeliveryAttemptCompletion(
+                        claimed.Id,
+                        claimed.AttemptId,
+                        true,
+                        null,
+                        claimed.PayloadJson,
+                        200,
+                        null,
+                        null));
+                Assert.Equal(DeliveryFinalizationStatus.Applied, result.Status);
+                Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, result.Disposition);
+                total++;
+            }
+            return total;
+        }
+    }
+
     private async Task ExecuteAsync(string sql)
     {
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task<T> ScalarAsync<T>(string sql)
+    {
+        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        return (T)(await command.ExecuteScalarAsync()
+            ?? throw new InvalidOperationException($"Query returned no value: {sql}"));
     }
 }
