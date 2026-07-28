@@ -45,7 +45,7 @@ internal static class SubscriptionAuthoringRules
     }
 }
 
-public static class TransformConfigValidator
+internal static class TransformConfigValidator
 {
     private const int MaxExpressionBytes = 64 * 1024;
 

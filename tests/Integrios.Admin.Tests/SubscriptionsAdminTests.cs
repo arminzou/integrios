@@ -486,6 +486,45 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
     }
 
     [Fact]
+    public async Task PreviewTransform_InvalidConfig_ReturnsBadRequestWithErrorBody()
+    {
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            "/admin/transform/preview",
+            new
+            {
+                transform = new { engine = "jsonata", version = "1" },
+                sampleInput = new { amount = 42 }
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(WebJson);
+        Assert.Contains("expression", body.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task PreviewTransform_EvaluationFailure_ReturnsBadRequestWithErrorBody()
+    {
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            "/admin/transform/preview",
+            new
+            {
+                transform = new
+                {
+                    engine = "jsonata",
+                    version = "1",
+                    expression = "amount + $context.event_type"
+                },
+                sampleInput = new { amount = 42 }
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(WebJson);
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("error").GetString()));
+    }
+
+    [Fact]
     public async Task UpdateSubscription_WhenDisabled_ReturnsNotFound()
     {
         var topic = await CreateTopicAsync("payments");
