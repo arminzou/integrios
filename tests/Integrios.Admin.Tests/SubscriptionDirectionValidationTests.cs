@@ -74,6 +74,29 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
     }
 
     [Fact]
+    public async Task CreateSubscription_CrossTenantDestinationConnection_Returns422()
+    {
+        var topic = await CreateTopicAsync("payments");
+        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+            "cross_tenant_create_sink",
+            "destination",
+            fixture.OtherTenantId);
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "cross-tenant-sink",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId,
+                orderIndex = 10
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdateSubscription_SourceOnlyDestinationConnection_Returns422()
     {
         var topic = await CreateTopicAsync("payments");
@@ -92,6 +115,64 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_CrossTenantDestinationConnection_Returns422()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
+        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+            "cross_tenant_update_sink",
+            "destination",
+            fixture.OtherTenantId);
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
+            new
+            {
+                name = "cross-tenant-sink",
+                matchRules = new { event_type = "payment.updated" },
+                destinationConnectionId,
+                orderIndex = 25
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Database_CrossTenantDestinationConnection_IsRejected()
+    {
+        var topic = await CreateTopicAsync("payments");
+        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+            "cross_tenant_direct_sink",
+            "destination",
+            fixture.OtherTenantId);
+
+        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO subscriptions (
+                id, tenant_id, topic_id, name, match_rules,
+                destination_connection_id, status, order_index)
+            VALUES (
+                @Id, @TenantId, @TopicId, 'cross-tenant-direct',
+                '{"event_type":"payment.created"}'::jsonb,
+                @DestinationConnectionId, 'active', 0);
+            """,
+            connection);
+        command.Parameters.AddWithValue("Id", Guid.NewGuid());
+        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
+        command.Parameters.AddWithValue("TopicId", topic.Id);
+        command.Parameters.AddWithValue("DestinationConnectionId", destinationConnectionId);
+
+        var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await command.ExecuteNonQueryAsync());
+
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
+        Assert.Equal("fk_subscriptions_destination_connection_tenant", exception.ConstraintName);
     }
 
     private async Task<TopicResponse> CreateTopicAsync(string name)
@@ -134,7 +215,10 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
         return msg;
     }
 
-    private async Task<Guid> InsertConnectionWithDirectionAsync(string key, string direction)
+    private async Task<Guid> InsertConnectionWithDirectionAsync(
+        string key,
+        string direction,
+        Guid? tenantId = null)
     {
         Guid integrationId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
@@ -164,7 +248,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             connection))
         {
             connectionCmd.Parameters.AddWithValue("Id", connectionId);
-            connectionCmd.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            connectionCmd.Parameters.AddWithValue("TenantId", tenantId ?? fixture.TenantId);
             connectionCmd.Parameters.AddWithValue("IntegrationId", integrationId);
             connectionCmd.Parameters.AddWithValue("Name", key);
             await connectionCmd.ExecuteNonQueryAsync();

@@ -463,12 +463,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
             -- Intentionally uses the pre-v2.1 event_types[] array shape to cover the
             -- compat read path in SubscriptionRepository.
-            INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, order_index, status)
+            INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES
-                (@LedgerSubscriptionId, @TopicId, 'to-ledger',
+                (@LedgerSubscriptionId, @TenantId, @TopicId, 'to-ledger',
                  '{"event_types":["payment.created","payment.settled","payment.multi"]}'::jsonb,
                  @LedgerConnectionId, 0, 'active'),
-                (@RiskSubscriptionId, @TopicId, 'to-risk',
+                (@RiskSubscriptionId, @TenantId, @TopicId, 'to-risk',
                  '{"event_types":["payment.authorized","payment.multi"]}'::jsonb,
                  @RiskConnectionId, 1, 'active');
             """, connection);
