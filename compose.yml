@@ -38,8 +38,6 @@ services:
     build:
       context: .
       dockerfile: docker/Admin.Dockerfile
-      sbom: true
-      provenance: true
     image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
     depends_on:
       migrate:
@@ -54,8 +52,6 @@ services:
     build:
       context: .
       dockerfile: docker/Ingress.Dockerfile
-      sbom: true
-      provenance: true
     image: ${INTEGRIOS_INGRESS_IMAGE:-integrios-ingress:dev}
     depends_on:
       bootstrap:
@@ -69,8 +65,6 @@ services:
     build:
       context: .
       dockerfile: docker/Admin.Dockerfile
-      sbom: true
-      provenance: true
     image: ${INTEGRIOS_ADMIN_IMAGE:-integrios-admin:dev}
     depends_on:
       bootstrap:
@@ -84,8 +78,6 @@ services:
     build:
       context: .
       dockerfile: docker/Worker.Dockerfile
-      sbom: true
-      provenance: true
     image: ${INTEGRIOS_WORKER_IMAGE:-integrios-worker:dev}
     depends_on:
       bootstrap:
@@ -100,8 +92,6 @@ services:
     build:
       context: .
       dockerfile: docker/MockSink.Dockerfile
-      sbom: true
-      provenance: true
     image: ${INTEGRIOS_MOCKSINK_IMAGE:-integrios-mocksink:dev}
     ports:
       - "${INTEGRIOS_MOCKSINK_PORT:-5054}:8080"
