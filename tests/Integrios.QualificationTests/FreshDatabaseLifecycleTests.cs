@@ -12,14 +12,19 @@ public sealed class FreshDatabaseLifecycleTests(DatabaseLifecycleFixture fixture
         QualificationDatabase database = await fixture.CreateDatabaseAsync();
 
         string firstMigrate = await fixture.RunFlywayAsync(database, "migrate");
+        long historyCountAfterFirstMigrate = await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database, "SELECT COUNT(*) FROM flyway_schema_history");
         string secondMigrate = await fixture.RunFlywayAsync(database, "migrate");
         string validate = await fixture.RunFlywayAsync(database, "validate");
 
         Assert.Contains("Successfully applied", firstMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("up to date", secondMigrate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Successfully validated", validate, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(24L, await DatabaseLifecycleFixture.ScalarAsync<long>(
-            database, "SELECT COUNT(*) FROM flyway_schema_history WHERE success"));
+        Assert.True(historyCountAfterFirstMigrate > 0);
+        Assert.Equal(historyCountAfterFirstMigrate, await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database, "SELECT COUNT(*) FROM flyway_schema_history"));
+        Assert.Equal(0L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database, "SELECT COUNT(*) FROM flyway_schema_history WHERE NOT success"));
         Assert.Equal("text|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_url"));
         Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "integration_key"));
         Assert.Equal("jsonb|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_auth"));
