@@ -35,8 +35,8 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
             .Build();
 
         var services = new ServiceCollection();
-        services.AddIntegriosApplication();
-        services.AddIntegriosInfrastructure(configuration);
+        services.AddIntegriosAdminApplication();
+        services.AddIntegriosAdminInfrastructure(configuration);
         provider = services.BuildServiceProvider();
         mediator = provider.GetRequiredService<IMediator>();
     }

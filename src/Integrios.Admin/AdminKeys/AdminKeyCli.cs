@@ -27,8 +27,8 @@ public static class AdminKeyCli
             return 2;
         }
 
-        hostBuilder.Services.AddIntegriosApplication();
-        hostBuilder.Services.AddIntegriosInfrastructure(hostBuilder.Configuration);
+        hostBuilder.Services.AddIntegriosAdminApplication();
+        hostBuilder.Services.AddIntegriosAdminInfrastructure(hostBuilder.Configuration);
 
         using IHost host = hostBuilder.Build();
         IMediator mediator = host.Services.GetRequiredService<IMediator>();

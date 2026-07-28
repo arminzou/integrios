@@ -14,8 +14,8 @@ try
     var metricsPort = builder.Configuration.GetValue("WorkerMetricsPort", 5299);
     builder.WebHost.UseUrls($"http://0.0.0.0:{metricsPort}");
 
-    builder.Services.AddIntegriosApplication();
-    builder.Services.AddIntegriosInfrastructure(builder.Configuration);
+    builder.Services.AddIntegriosWorkerApplication();
+    builder.Services.AddIntegriosWorkerInfrastructure(builder.Configuration);
     builder.Services.AddIntegriosSecretResolution(builder.Configuration);
     builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-worker");
     builder.Services.AddIntegriosOutboxDepthMetrics(builder.Configuration);
