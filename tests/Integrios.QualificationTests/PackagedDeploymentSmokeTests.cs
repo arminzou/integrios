@@ -10,7 +10,6 @@ namespace Integrios.QualificationTests;
 [Trait("Category", "Qualification")]
 public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixture)
 {
-    private const string AdminAuthorization = "AdminKey global_admin_key:qualification-admin-secret";
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
 
     [Fact]
@@ -197,7 +196,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     private async Task<string> PostAdminForPropertyAsync(string path, object body, string property)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
-        request.Headers.TryAddWithoutValidation("Authorization", AdminAuthorization);
+        request.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
         using HttpResponseMessage response = await fixture.AdminClient.SendAsync(request);
         string responseBody = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"POST {path} returned {(int)response.StatusCode}: {responseBody}");

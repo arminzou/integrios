@@ -29,6 +29,8 @@ services:
     image: ${INTEGRIOS_WORKER_IMAGE}
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      Secrets__qualification-config__shared_secret: ${INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET:-}
+      Secrets__qualification-config__config_only: ${INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET:-}
     ports:
       - "${INTEGRIOS_WORKER_METRICS_PORT}:5299"
 

@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using Npgsql;
 
 namespace Integrios.QualificationTests;
@@ -13,6 +15,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly string repoRoot = ResolveRepoRoot();
     private readonly string projectName = $"integrios-q-{Guid.NewGuid():N}"[..25];
     private readonly string otelArtifactsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-otel-{Guid.NewGuid():N}");
+    private readonly string secretsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-secrets-{Guid.NewGuid():N}");
     private readonly Dictionary<string, string> environment;
     private IReadOnlyList<string> composeFiles;
 
@@ -25,6 +28,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public PackagedDeploymentFixture()
     {
         Directory.CreateDirectory(otelArtifactsDirectory);
+        Directory.CreateDirectory(secretsDirectory);
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(
@@ -43,6 +47,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.QualificationTests", "otel-collector.qualification.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
+            ["INTEGRIOS_SECRETS_DIR"] = secretsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "qualification_postgres",
             ["INTEGRIOS_BOOTSTRAP_ADMIN_SECRET"] = "qualification-admin-secret",
@@ -58,6 +63,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public HttpClient IngressClient { get; private set; } = null!;
     public HttpClient MockSinkClient { get; private set; } = null!;
     public HttpClient WorkerMetricsClient { get; private set; } = null!;
+    public string AdminAuthorization { get; private set; } = "AdminKey global_admin_key:qualification-admin-secret";
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
     {
@@ -108,6 +114,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             await RemoveImagesBestEffortAsync();
             Directory.Delete(otelArtifactsDirectory, recursive: true);
+            Directory.Delete(secretsDirectory, recursive: true);
         }
     }
 
@@ -117,7 +124,129 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection);
         object? value = await command.ExecuteScalarAsync();
-        return (T)(value ?? throw new InvalidOperationException("Query returned null."));
+        if (value is null)
+            throw new InvalidOperationException("Query returned null.");
+        return value is T typed
+            ? typed
+            : (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
+    }
+
+    public async Task<int> ExecuteAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        return await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task WriteSecretAsync(string tenantSlug, string reference, string value)
+    {
+        string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
+        Directory.CreateDirectory(tenantDirectory);
+        await File.WriteAllTextAsync(Path.Combine(tenantDirectory, reference), value);
+    }
+
+    // Rotation must be atomic: staging the new link and renaming it over the reference leaves no
+    // window in which the reference is absent. A delete-then-create would let a Worker poll land in
+    // the gap and record a spurious secret_resolution failure.
+    public void RotateSecretSymlink(string tenantSlug, string reference, string targetName, string value)
+    {
+        string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
+        Directory.CreateDirectory(tenantDirectory);
+        File.WriteAllText(Path.Combine(tenantDirectory, targetName), value);
+
+        string staging = Path.Combine(tenantDirectory, $".{reference}.staging");
+        if (File.Exists(staging))
+            File.Delete(staging);
+        File.CreateSymbolicLink(staging, targetName);
+        File.Move(staging, Path.Combine(tenantDirectory, reference), overwrite: true);
+    }
+
+    // Deployment-wide and irreversible for the rest of the fixture lifetime: the Worker keeps the
+    // new provider for every later test in this collection, and its metrics counters restart from
+    // zero. Test classes sharing this fixture must not assume a pre-recreation Worker.
+    public async Task RecreateWorkerAsync(
+        string provider,
+        string? configurationSharedSecret = null,
+        string? configurationOnlySecret = null)
+    {
+        environment["INTEGRIOS_SECRETS_PROVIDER"] = provider;
+        environment["INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET"] = configurationSharedSecret ?? string.Empty;
+        environment["INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET"] = configurationOnlySecret ?? string.Empty;
+
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromMinutes(2),
+            "up",
+            "--detach",
+            "--force-recreate",
+            "worker");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not recreate Worker: {result.Output}");
+
+        await WaitForServiceAsync("worker");
+    }
+
+    public async Task<ComposeResult> RunWorkerCommandAsync(
+        IReadOnlyDictionary<string, string?> commandEnvironment,
+        params string[] arguments)
+    {
+        var composeArguments = new List<string> { "run", "--rm", "--no-deps" };
+        foreach ((string key, string? value) in commandEnvironment)
+        {
+            composeArguments.Add("-e");
+            composeArguments.Add($"{key}={value ?? string.Empty}");
+        }
+        composeArguments.Add("worker");
+        composeArguments.AddRange(arguments);
+        return await RunComposeAsync(TimeSpan.FromMinutes(2), composeArguments.ToArray());
+    }
+
+    // Revokes the bootstrap AdminKey deployment-wide. Every later control-plane call in this
+    // collection must authenticate through AdminAuthorization rather than a captured header value.
+    public async Task<string> RotateAdminKeyAsync(string replacementSecret)
+    {
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromMinutes(2),
+            "run",
+            "--rm",
+            "--no-deps",
+            "-e",
+            $"INTEGRIOS_ADMIN_KEY_ROTATION_SECRET={replacementSecret}",
+            "admin",
+            "admin-key",
+            "rotate");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"AdminKey rotation failed: {result.Output}");
+        if (result.Output.Contains(replacementSecret, StringComparison.Ordinal))
+            throw new InvalidOperationException("AdminKey rotation disclosed the replacement secret.");
+
+        Match match = Regex.Match(result.StandardOutput, @"Public key:\s*(?<key>[a-zA-Z0-9_]+)");
+        if (!match.Success)
+            throw new InvalidOperationException($"AdminKey rotation did not print a public identifier: {result.Output}");
+
+        string publicKey = match.Groups["key"].Value;
+        AdminAuthorization = $"AdminKey {publicKey}:{replacementSecret}";
+        return publicKey;
+    }
+
+    public async Task RunBootstrapAgainAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "run", "--rm", "bootstrap");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Bootstrap rerun failed: {result.Output}");
+    }
+
+    public async Task RestartProductServicesAsync()
+    {
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromMinutes(2),
+            "restart",
+            "admin",
+            "ingress",
+            "worker");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Service restart failed: {result.Output}");
+        await WaitUntilReadyAsync(expectCollector: true);
     }
 
     private async Task StartDeploymentAsync(bool buildImages)
@@ -173,6 +302,32 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                 + Environment.NewLine
                 + cleanup.Output);
         }
+    }
+
+    private async Task WaitForServiceAsync(string serviceName)
+    {
+        var deadline = Stopwatch.StartNew();
+        string lastObservation = "No service status available.";
+        while (deadline.Elapsed < ReadinessTimeout)
+        {
+            ComposeResult status = await RunComposeAsync(
+                TimeSpan.FromSeconds(15),
+                "ps",
+                "--status",
+                "running",
+                "--services",
+                serviceName);
+            lastObservation = status.Output;
+            if (status.ExitCode == 0
+                && status.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                    .Contains(serviceName, StringComparer.Ordinal))
+            {
+                return;
+            }
+            await Task.Delay(TimeSpan.FromSeconds(1));
+        }
+
+        throw new TimeoutException($"{serviceName} did not become ready. Last observation: {lastObservation}");
     }
 
     private async Task AssertBootstrapStateAsync()
