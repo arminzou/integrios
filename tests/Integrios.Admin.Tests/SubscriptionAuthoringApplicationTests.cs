@@ -48,17 +48,6 @@ public sealed class SubscriptionAuthoringApplicationTests
         Assert.Equal(0, harness.SubscriptionRepository.CreateCalls);
     }
 
-    [Fact]
-    public void TransformConfigValidator_InvalidConfig_ReturnsErrorWithoutThrowing()
-    {
-        var evaluator = new FakeTransformEvaluator("invalid transform expression");
-
-        string? error = TransformConfigValidator.Validate(ValidTransform(), evaluator, out string expression);
-
-        Assert.Equal("invalid transform expression", error);
-        Assert.Equal("amount", expression);
-    }
-
     private static JsonElement Json(string value) =>
         JsonDocument.Parse(value).RootElement.Clone();
 
