@@ -40,6 +40,8 @@ internal sealed class MetricCollector : IDisposable
             return _longs.Concat(_doubles).Where(m => m.Instrument == name).ToArray();
     }
 
+    public void CollectObservableInstruments() => _listener.RecordObservableInstruments();
+
     public IReadOnlyList<string> AllTagKeys
     {
         get

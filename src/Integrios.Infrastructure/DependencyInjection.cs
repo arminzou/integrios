@@ -4,7 +4,6 @@ using Integrios.Application.Delivery;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http.Auth;
 using Integrios.Infrastructure.Http;
-using Integrios.Infrastructure.Telemetry;
 using Integrios.Infrastructure.Transform;
 using Integrios.Infrastructure.Transport;
 using Microsoft.Extensions.Configuration;
@@ -62,8 +61,6 @@ public static class DependencyInjection
         {
             AllowAutoRedirect = false
         });
-
-        services.AddHostedService<OutboxDepthMetrics>();
 
         return services;
     }

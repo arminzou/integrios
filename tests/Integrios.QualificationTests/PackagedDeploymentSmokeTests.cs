@@ -181,6 +181,9 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.Contains("integrios_deliveries_failed_total", workerMetrics, StringComparison.Ordinal);
         Assert.Contains("integrios_deliveries_succeeded_total", workerMetrics, StringComparison.Ordinal);
         Assert.Contains("integrios_delivery_attempt_duration_seconds", workerMetrics, StringComparison.Ordinal);
+        Assert.DoesNotContain("integrios_outbox_pending_depth", ingressMetrics, StringComparison.Ordinal);
+        Assert.DoesNotContain("integrios_outbox_pending_depth", adminMetrics, StringComparison.Ordinal);
+        Assert.Contains("integrios_outbox_pending_depth", workerMetrics, StringComparison.Ordinal);
 
         string workerLogs = await fixture.GetServiceLogsAsync("worker");
         Assert.Contains(eventId.ToString(), workerLogs, StringComparison.Ordinal);
