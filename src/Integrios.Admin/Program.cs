@@ -22,8 +22,8 @@ builder.Services.AddOpenApi(options =>
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AdminExceptionHandler>();
-builder.Services.AddIntegriosApplication();
-builder.Services.AddIntegriosInfrastructure(builder.Configuration);
+builder.Services.AddIntegriosAdminApplication();
+builder.Services.AddIntegriosAdminInfrastructure(builder.Configuration);
 builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-admin");
 
 builder.Services.AddAuthentication(AdminKeyAuthHandler.SchemeName)
