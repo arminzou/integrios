@@ -6,6 +6,9 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -32,19 +35,187 @@ jobs:
       - name: Build
         run: dotnet build Integrios.slnx --configuration Release --no-restore
 
-      # Unit test projects only. The integration test project needs Postgres and
-      # is run out of band, not in this gate.
-      - name: Test
+      - name: Test component and Postgres tiers
         run: |
           dotnet test tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Admin.Tests/Integrios.Admin.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.Tests/Integrios.Worker.Tests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.IntegrationTests/Integrios.IntegrationTests.csproj --configuration Release --no-build
 
-  # Build and publish images, only on push to the canonical repo (merges/tags on
-  # GitHub). Fork PRs never reach this job, so no secrets are exposed to them.
-  package:
+  qualify:
+    if: github.event_name != 'pull_request'
     needs: verify
-    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Restore
+        run: dotnet restore Integrios.slnx --locked-mode
+
+      - name: Select qualification tier
+        id: tier
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
+            echo 'name=nightly' >> "$GITHUB_OUTPUT"
+            echo 'minimum_tests=7' >> "$GITHUB_OUTPUT"
+            echo 'minimum_qualification_tests=7' >> "$GITHUB_OUTPUT"
+            echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
+            echo 'filter=FullyQualifiedName~Integrios.QualificationTests.PopulatedUpgradeLifecycleTests|FullyQualifiedName~Integrios.QualificationTests.InterruptionAndConcurrencyTests|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.OperatorObservability_ExposesMetricsLogsAndContinuousRetryTrace' >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' || "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo 'name=release' >> "$GITHUB_OUTPUT"
+            echo 'minimum_tests=1' >> "$GITHUB_OUTPUT"
+            echo 'minimum_qualification_tests=18' >> "$GITHUB_OUTPUT"
+            echo 'target=Integrios.slnx' >> "$GITHUB_OUTPUT"
+            echo 'filter=' >> "$GITHUB_OUTPUT"
+          else
+            echo 'name=main' >> "$GITHUB_OUTPUT"
+            echo 'minimum_tests=3' >> "$GITHUB_OUTPUT"
+            echo 'minimum_qualification_tests=3' >> "$GITHUB_OUTPUT"
+            echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
+            echo 'filter=FullyQualifiedName~Integrios.QualificationTests.FreshDatabaseLifecycleTests|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.PackagedDeployment_StartsAndExposesDeterministicEvidence' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Record release inputs
+        if: steps.tier.outputs.name == 'release'
+        shell: bash
+        run: |
+          mkdir -p evidence/test-results
+          dotnet --info > evidence/dotnet-info.txt
+          docker version > evidence/docker-version.txt
+          docker compose version > evidence/docker-compose-version.txt
+          dotnet list Integrios.slnx package --include-transitive --format json --no-restore > evidence/dependencies.json
+          dotnet list Integrios.slnx package --vulnerable --include-transitive --no-restore > evidence/vulnerability-audit.txt
+          cp global.json evidence/global.json
+          cp .github/workflows/ci.yml evidence/ci-workflow.yml
+          cat > evidence/commands.txt <<'EOF'
+          # Component/Postgres tests below ran in this workflow run's verify job; see its log.
+          # The full-suite command below ran in this qualify job; see qualification.log.
+          dotnet restore Integrios.slnx --locked-mode
+          dotnet list Integrios.slnx package --vulnerable --include-transitive --no-restore
+          dotnet build Integrios.slnx --configuration Release --no-restore
+          dotnet test tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.Admin.Tests/Integrios.Admin.Tests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.Worker.Tests/Integrios.Worker.Tests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.IntegrationTests/Integrios.IntegrationTests.csproj --configuration Release --no-build
+          dotnet test Integrios.slnx --configuration Release --no-restore
+          EOF
+
+      - name: Run selected qualification tier
+        shell: bash
+        env:
+          TIER: ${{ steps.tier.outputs.name }}
+          TARGET: ${{ steps.tier.outputs.target }}
+          FILTER: ${{ steps.tier.outputs.filter }}
+          MINIMUM_TESTS: ${{ steps.tier.outputs.minimum_tests }}
+          MINIMUM_QUALIFICATION_TESTS: ${{ steps.tier.outputs.minimum_qualification_tests }}
+        run: |
+          set -o pipefail
+          mkdir -p evidence/test-results
+          command=(dotnet test "$TARGET" --configuration Release --no-restore --logger trx --results-directory evidence/test-results)
+          if [[ -n "$FILTER" ]]; then
+            command+=(--filter "$FILTER")
+          fi
+
+          printf '%q ' "${command[@]}" > evidence/selected-command.txt
+          printf '\n' >> evidence/selected-command.txt
+          "${command[@]}" 2>&1 | tee evidence/qualification.log
+
+          python3 - "$TIER" "$MINIMUM_TESTS" "$MINIMUM_QUALIFICATION_TESTS" <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          tier = sys.argv[1]
+          minimum = int(sys.argv[2])
+          minimum_qualification = int(sys.argv[3])
+          total = 0
+          not_executed = 0
+          qualification_results = 0
+          files = glob.glob('evidence/test-results/**/*.trx', recursive=True)
+          for path in files:
+              root = ET.parse(path).getroot()
+              counters = root.find('.//{*}Counters')
+              if counters is not None:
+                  total += int(counters.attrib.get('total', '0'))
+                  not_executed += int(counters.attrib.get('notExecuted', '0'))
+
+              qualification_ids = {
+                  test.attrib['id']
+                  for test in root.findall('.//{*}UnitTest')
+                  if test.attrib.get('storage', '').replace('\\', '/').lower().endswith('/integrios.qualificationtests.dll')
+              }
+              qualification_results += sum(
+                  1
+                  for result in root.findall('.//{*}UnitTestResult')
+                  if result.attrib.get('testId') in qualification_ids
+              )
+
+          with open('evidence/test-counts.txt', 'w', encoding='utf-8') as output:
+              output.write(
+                  f'tier={tier}\n'
+                  f'trx_files={len(files)}\n'
+                  f'total_tests={total}\n'
+                  f'minimum_tests={minimum}\n'
+                  f'qualification_tests={qualification_results}\n'
+                  f'minimum_qualification_tests={minimum_qualification}\n'
+                  f'not_executed={not_executed}\n'
+              )
+
+          if not files or total < minimum:
+              raise SystemExit(f'{tier} qualification selected {total} tests; expected at least {minimum}')
+          if qualification_results < minimum_qualification:
+              raise SystemExit(
+                  f'{tier} qualification executed {qualification_results} qualification-project tests; '
+                  f'expected at least {minimum_qualification}'
+              )
+          if not_executed:
+              raise SystemExit(f'{tier} qualification reported {not_executed} skipped or unexecuted tests')
+          PY
+
+      - name: Record resolved external image digests
+        if: always() && steps.tier.outputs.name == 'release'
+        shell: bash
+        run: |
+          mapfile -t images < <(
+            {
+              awk 'toupper($1) == "FROM" { print $2 }' docker/*.Dockerfile
+              awk '$1 == "image:" { print $2 }' \
+                compose.yml \
+                deploy/compose.yml \
+                tests/Integrios.QualificationTests/compose.deploy.qualification.yml
+            } | grep -v '\${' | sort -u
+          )
+
+          : > evidence/external-image-digests.txt
+          for image in "${images[@]}"; do
+            digest=$(docker buildx imagetools inspect --raw "$image" | sha256sum | cut -d' ' -f1)
+            printf '%s@sha256:%s\n' "$image" "$digest" >> evidence/external-image-digests.txt
+          done
+
+      - name: Upload qualification evidence
+        if: always() && steps.tier.outputs.name == 'release'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-qualification-${{ github.run_id }}
+          path: evidence
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 90
+
+  package:
+    needs: [verify, qualify]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,8 +223,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # MockSink is a local test/demo aid, not a deployable service, so it is
-        # compile-verified in the verify job but never published.
         service:
           - name: ingress
             dockerfile: docker/Ingress.Dockerfile
@@ -101,4 +270,68 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Record published image digest
-        run: echo '${{ matrix.service.name }} ${{ steps.build.outputs.digest }}' >> "$GITHUB_STEP_SUMMARY"
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+        shell: bash
+        env:
+          SERVICE: ${{ matrix.service.name }}
+          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.service.name }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p image-digest
+          {
+            printf 'service=%s\n' "$SERVICE"
+            printf 'image=%s\n' "$IMAGE"
+            printf 'tags=%s\n' "$TAGS"
+            printf 'digest=%s\n' "$DIGEST"
+          } > "image-digest/$SERVICE.txt"
+
+      - name: Upload image digest
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-image-digest-${{ matrix.service.name }}-${{ github.run_id }}
+          path: image-digest
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 90
+
+  retain-release-evidence:
+    needs: [qualify, package]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download qualification evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-qualification-${{ github.run_id }}
+          path: release-evidence
+
+      - name: Download image digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-image-digest-*-${{ github.run_id }}
+          path: release-evidence/image-digests
+          merge-multiple: true
+
+      - name: Record workflow identity
+        shell: bash
+        run: |
+          {
+            printf 'repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'ref=%s\n' "$GITHUB_REF"
+            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'event=%s\n' "$GITHUB_EVENT_NAME"
+            printf 'run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'run_attempt=%s\n' "$GITHUB_RUN_ATTEMPT"
+            printf 'run_url=https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+          } > release-evidence/manifest.txt
+
+      - name: Upload retained release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-evidence-${{ github.run_id }}
+          path: release-evidence
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 90
