@@ -471,6 +471,62 @@ public sealed class WorkerTransportAbstractionsTests
         Assert.True(capturing.AnyMessageContains(recovered.SubscriptionId.ToString()));
     }
 
+    [Fact]
+    public async Task DispatchSubscriptionDeliveries_FinalizationFailure_AbandonsOnlyCurrentAttempt()
+    {
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(), MakeWorkItem()],
+            FinalizationExceptions = new Queue<Exception>(
+                [new InvalidOperationException("injected finalization failure")])
+        };
+        var deliveryClient = new FakeDeliveryClient(new DeliveryResult(true, 200));
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(deliveryClient);
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+        });
+
+        int processed = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(2));
+
+        Assert.Equal(2, processed);
+        Assert.Equal(2, deliveryClient.DeliveredUrls.Count);
+        Assert.Equal(2, queue.Completions.Count);
+        Assert.Single(queue.Finalizations);
+        Assert.Equal(queue.ClaimedItems[1].Id, queue.Completions[1].DeliveryId);
+    }
+
+    [Fact]
+    public async Task DispatchSubscriptionDeliveries_AttemptDeadline_AbandonsOnlyCurrentAttempt()
+    {
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(), MakeWorkItem()],
+            HonorFinalizationCancellation = true
+        };
+        var deliveryClient = new DeadlineThenSuccessDeliveryClient();
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton(new DeliveryExecutionOptions(
+                TimeSpan.FromMilliseconds(10),
+                TimeSpan.FromMilliseconds(50),
+                TimeSpan.FromMinutes(2),
+                TimeSpan.FromSeconds(1)));
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(deliveryClient);
+            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+        });
+
+        int processed = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(2));
+
+        Assert.Equal(2, processed);
+        Assert.Equal(2, deliveryClient.CallCount);
+        Assert.Equal(2, queue.Completions.Count);
+        Assert.Single(queue.Finalizations);
+        Assert.Equal(queue.ClaimedItems[1].Id, queue.Completions[1].DeliveryId);
+    }
+
     private static async Task SendDispatch(FakeSubscriptionDeliveryQueue queue, DeliveryResult result)
     {
         var mediator = BuildMediator(services =>
@@ -548,6 +604,8 @@ public sealed class WorkerTransportAbstractionsTests
         public DeliveryFinalizationStatus FinalizationStatus { get; set; } = DeliveryFinalizationStatus.Applied;
         public List<DeliveryAttemptCompletion> Completions { get; } = [];
         public List<DeliveryFinalizationResult> Finalizations { get; } = [];
+        public Queue<Exception> FinalizationExceptions { get; init; } = [];
+        public bool HonorFinalizationCancellation { get; init; }
         public List<string>? Operations { get; init; }
         public int ClaimCallCount { get; private set; }
         private int claimIndex;
@@ -579,6 +637,11 @@ public sealed class WorkerTransportAbstractionsTests
         {
             Completions.Add(completion);
             Operations?.Add("finalize");
+            if (HonorFinalizationCancellation)
+                cancellationToken.ThrowIfCancellationRequested();
+            if (FinalizationExceptions.TryDequeue(out Exception? exception))
+                throw exception;
+
             var disposition = completion.Succeeded ? SubscriptionDeliveryDisposition.Succeeded : FailureDisposition;
             var result = FinalizationStatus == DeliveryFinalizationStatus.Applied
                 ? new DeliveryFinalizationResult(FinalizationStatus, disposition)
@@ -620,6 +683,26 @@ public sealed class WorkerTransportAbstractionsTests
             _ = decorate;
             _ = cancellationToken;
             return Task.FromResult(results[_index++]);
+        }
+    }
+
+    private sealed class DeadlineThenSuccessDeliveryClient : IDeliveryClient
+    {
+        public int CallCount { get; private set; }
+
+        public async Task<DeliveryResult> DeliverAsync(
+            string url,
+            string payloadJson,
+            Action<HttpRequestMessage>? decorate = null,
+            CancellationToken cancellationToken = default)
+        {
+            _ = url;
+            _ = payloadJson;
+            _ = decorate;
+            CallCount++;
+            if (CallCount == 1)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new DeliveryResult(true, 200);
         }
     }
 
