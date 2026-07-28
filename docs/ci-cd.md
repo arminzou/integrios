@@ -1,19 +1,26 @@
 # CI/CD
 
-Integrios ships a single GitHub Actions pipeline (`.github/workflows/ci.yml`) you can run
-as-is or fork and adapt. It is layered so you adopt only what you need:
+Integrios ships one tiered GitHub Actions workflow (`.github/workflows/ci.yml`) you can run
+as-is or fork and adapt. The tiers keep routine feedback prompt while still making complete
+qualification mandatory before publishing a release:
 
-1. **Verify**: locked restore, dependency audit, build, and test on every push and pull
-   request. No configuration, no secrets. This runs for forks too.
-2. **Package**: build container images for the deployable services (`ingress`, `admin`,
-   `worker`) and publish them to a container registry.
-3. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
+1. **Pull request**: locked restore, dependency audit, Release build, component
+   tests, and Postgres integration tests. No configuration or secrets are required, so
+   this runs for fork pull requests too.
+2. **Main**: repeats the pull-request gate, then exercises migration and
+   Bootstrap lifecycle behavior plus packaged deployment smoke behavior before publishing
+   commit, `main`, and `latest` images.
+3. **Nightly**: exercises representative populated-database upgrades,
+   concurrent and interrupted Worker behavior, and observability export on the configured
+   schedule.
+4. **Release**: runs the complete test matrix before publishing images.
+   A `v*` tag, or an explicit manual run from `main`, triggers it.
+5. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
    Kubernetes, etc.) lives in your own infrastructure, not in this repo.
 
 ## What the default pipeline does
 
-`ci.yml` runs Verify on every push and PR. On pushes to the default branch and on `v*`
-tags, it also runs Package, publishing images to GitHub Container Registry (GHCR) under:
+The main and release tiers publish images to GitHub Container Registry (GHCR) under:
 
 ```
 ghcr.io/<owner>/<repo>/ingress
@@ -21,20 +28,26 @@ ghcr.io/<owner>/<repo>/admin
 ghcr.io/<owner>/<repo>/worker
 ```
 
-Images are tagged with the commit SHA, the branch name, `latest` on the default branch,
-and semver tags on `v*` releases. Each image includes an SBOM and build provenance
-attestation.
+Main images are tagged with the commit SHA, branch name, and `latest`. Release images are
+tagged with the commit SHA and, for `v*` tags, semantic-version tags. Each image includes
+an SBOM and build provenance attestation.
+
+Successful release runs retain a downloadable evidence artifact for 90 days. It contains
+the workflow and commit identity, .NET and dependency versions, exact qualification
+commands, test logs and TRX results, resolved external image digests, and the published
+Ingress, Admin, and Worker image digests.
 
 The repository pins its .NET SDK, NuGet dependency graph, container versions, and
 third-party GitHub Actions. Action references use immutable commit SHAs with a readable
 release-version comment; keep that form when adapting the workflow.
 
-Publishing is gated to `push` events, so pull requests (including from forks) only run
-Verify and never need or expose registry credentials.
+Publishing exists only in the main and release tiers. Pull requests, including those from
+forks, run only the read-only verification job and never need or receive registry
+credentials.
 
 ## Publishing to your own registry
 
-The pipeline lives in one file you own in your fork. To publish elsewhere, edit the
+The workflow lives in one file you own in your fork. To publish elsewhere, edit the
 `package` job in `ci.yml`:
 
 - **Different GHCR namespace**: nothing to change. `images:` uses
