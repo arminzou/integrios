@@ -19,10 +19,13 @@ internal sealed class CreateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     ITopicRepository topicRepository,
     IConnectionRepository connectionRepository,
-    IIntegrationRepository integrationRepository) : IRequestHandler<CreateSubscriptionCommand, SubscriptionResponse?>
+    IIntegrationRepository integrationRepository,
+    ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionResponse?>
 {
     public async Task<SubscriptionResponse?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
     {
+        SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, transformEvaluator);
+
         var topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken);
         if (topic is null)
         {
