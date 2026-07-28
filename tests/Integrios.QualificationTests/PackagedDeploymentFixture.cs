@@ -146,6 +146,37 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         await File.WriteAllTextAsync(Path.Combine(tenantDirectory, reference), value);
     }
 
+    public async Task CreateBlockingSecretPipeAsync(string tenantSlug, string reference)
+    {
+        if (OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("The packaged resilience matrix requires a POSIX FIFO.");
+
+        string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
+        Directory.CreateDirectory(tenantDirectory);
+        string path = Path.Combine(tenantDirectory, reference);
+        File.Delete(path);
+
+        var startInfo = new ProcessStartInfo("mkfifo")
+        {
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add(path);
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start mkfifo.");
+        string error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"Could not create blocking secret pipe: {error}");
+    }
+
+    public async Task ReplaceSecretWithFileAsync(string tenantSlug, string reference, string value)
+    {
+        string path = Path.Combine(secretsDirectory, tenantSlug, reference);
+        File.Delete(path);
+        await File.WriteAllTextAsync(path, value);
+    }
+
     // Rotation must be atomic: staging the new link and renaming it over the reference leaves no
     // window in which the reference is absent. A delete-then-create would let a Worker poll land in
     // the gap and record a spurious secret_resolution failure.
@@ -247,6 +278,80 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"Service restart failed: {result.Output}");
         await WaitUntilReadyAsync(expectCollector: true);
+    }
+
+    public async Task KillWorkerAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromSeconds(30), "kill", "--signal", "SIGKILL", "worker");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not kill Worker: {result.Output}");
+    }
+
+    public async Task StartWorkerAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "start", "worker");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not start Worker: {result.Output}");
+        await WaitForServiceAsync("worker");
+    }
+
+    public async Task<string> StartAdditionalWorkerAsync()
+    {
+        string containerName = $"{projectName}-worker-extra-{Guid.NewGuid():N}"[..50];
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromMinutes(2),
+            "run",
+            "--detach",
+            "--no-deps",
+            "--name",
+            containerName,
+            "worker");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not start additional Worker: {result.Output}");
+        return containerName;
+    }
+
+    public async Task RemoveContainerAsync(string containerName)
+    {
+        ComposeResult result = await RunDockerAsync(
+            TimeSpan.FromSeconds(30),
+            ["rm", "--force", containerName]);
+        if (result.ExitCode != 0 && !result.Output.Contains("No such container", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Could not remove container '{containerName}': {result.Output}");
+    }
+
+    public async Task<string> GetContainerLogsAsync(string containerName)
+    {
+        ComposeResult result = await RunDockerAsync(TimeSpan.FromSeconds(30), ["logs", containerName]);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not read container '{containerName}' logs: {result.Output}");
+        return result.Output;
+    }
+
+    public async Task RestartPostgresAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "restart", "postgres");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not restart Postgres: {result.Output}");
+
+        var deadline = Stopwatch.StartNew();
+        Exception? lastException = null;
+        while (deadline.Elapsed < ReadinessTimeout)
+        {
+            try
+            {
+                await using var connection = new NpgsqlConnection(ConnectionString);
+                await connection.OpenAsync();
+                return;
+            }
+            catch (Exception exception)
+            {
+                lastException = exception;
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+            }
+        }
+
+        throw new TimeoutException($"Postgres did not recover after restart: {lastException?.Message}");
     }
 
     private async Task StartDeploymentAsync(bool buildImages)
