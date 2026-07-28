@@ -49,6 +49,12 @@ app.MapPost("/sink/{name}", async (string name, HttpRequest request, ILogger<Pro
     return Results.Ok(new { sink = name, received = true });
 });
 
+// A controlled redirect proves that delivery treats the configured URL as the complete
+// Operator-selected boundary. The Worker must record the redirect response and never send a
+// second request (or its credentials) to the Location target.
+app.MapPost("/redirect/{name}", (string name) =>
+    Results.Redirect($"/sink/{name}", permanent: false, preserveMethod: true));
+
 // Receipt queries expose request metadata and header names, but never header values.
 app.MapGet("/receipts/{name}", (string name) =>
 {
