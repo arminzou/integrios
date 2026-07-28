@@ -23,6 +23,9 @@ public sealed class DeliveryExecutionOptionsTests
         Assert.Equal(TimeSpan.FromSeconds(45), options.AttemptDeadline);
         Assert.Equal(TimeSpan.FromMinutes(2), options.LeaseDuration);
         Assert.Equal(TimeSpan.FromSeconds(60), options.ShutdownGracePeriod);
+        Assert.Equal(TimeSpan.FromSeconds(2), options.IdlePollInterval);
+        Assert.Equal(TimeSpan.FromSeconds(30), options.RetryBaseDelay);
+        Assert.Equal(3, options.RetryMaxAttempts);
         options.Validate();
     }
 
@@ -40,8 +43,52 @@ public sealed class DeliveryExecutionOptionsTests
         { new(TimeSpan.Zero, TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(60)), "HttpTimeout" },
         { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(60)), "AttemptDeadline" },
         { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(60)), "LeaseDuration" },
-        { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(45)), "ShutdownGracePeriod" }
+        { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(45)), "ShutdownGracePeriod" },
+        { Valid with { IdlePollInterval = TimeSpan.Zero }, "IdlePollInterval" },
+        { Valid with { RetryBaseDelay = TimeSpan.Zero }, "Retry:BaseDelay" },
+        { Valid with { RetryMaxAttempts = 0 }, "Retry:MaxAttempts" }
     };
+
+    private static DeliveryExecutionOptions Valid => DeliveryExecutionOptions.Default;
+
+    [Fact]
+    public void InfrastructureRegistration_AppliesConfiguredRetryCadence()
+    {
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Integrios:Delivery:IdlePollInterval"] = "00:00:00.250",
+            ["Integrios:Delivery:Retry:BaseDelay"] = "00:00:02",
+            ["Integrios:Delivery:Retry:MaxAttempts"] = "5"
+        });
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddIntegriosApplication();
+        services.AddIntegriosInfrastructure(configuration);
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        DeliveryExecutionOptions options = provider.GetRequiredService<DeliveryExecutionOptions>();
+        RetryPolicy policy = provider.GetRequiredService<RetryPolicy>();
+
+        Assert.Equal(TimeSpan.FromMilliseconds(250), options.IdlePollInterval);
+        // The configured policy must win over the default Application registration.
+        Assert.Equal(TimeSpan.FromSeconds(2), policy.BaseDelay);
+        Assert.Equal(5, policy.MaxAttempts);
+        Assert.Equal(TimeSpan.FromSeconds(4), policy.CalculateBackoff(2));
+    }
+
+    [Fact]
+    public void InfrastructureRegistration_NonIntegerMaxAttempts_FailsStartupRegistration()
+    {
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Integrios:Delivery:Retry:MaxAttempts"] = "many"
+        });
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().AddIntegriosInfrastructure(configuration));
+
+        Assert.Contains("Retry:MaxAttempts", exception.Message, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void InfrastructureRegistration_AppliesConfiguredExecutionTimings()

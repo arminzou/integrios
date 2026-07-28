@@ -31,6 +31,14 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       Secrets__qualification-config__shared_secret: ${INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET:-}
       Secrets__qualification-config__config_only: ${INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET:-}
+      # Compressed cadence. The retry, dead-letter, replay, and timeout state machines are
+      # identical to production; only the wall-clock between transitions is shortened, so the
+      # matrix spends its time asserting rather than sleeping. LeaseDuration keeps its production
+      # value because the two-minute lease is itself an acceptance criterion.
+      Integrios__Delivery__HttpTimeout: "00:00:05"
+      Integrios__Delivery__AttemptDeadline: "00:00:15"
+      Integrios__Delivery__IdlePollInterval: "00:00:00.250"
+      Integrios__Delivery__Retry__BaseDelay: "00:00:02"
     ports:
       - "${INTEGRIOS_WORKER_METRICS_PORT}:5299"
 

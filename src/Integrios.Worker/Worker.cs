@@ -4,11 +4,13 @@ using MediatR;
 
 namespace Integrios.Worker;
 
-public sealed class OutboxWorker(IMediator mediator, ILogger<OutboxWorker> logger) : BackgroundService
+public sealed class OutboxWorker(
+    IMediator mediator,
+    ILogger<OutboxWorker> logger,
+    DeliveryExecutionOptions options) : BackgroundService
 {
     private const int FanoutBatchSize = 10;
     private const int DispatchBatchSize = 25;
-    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -22,7 +24,7 @@ public sealed class OutboxWorker(IMediator mediator, ILogger<OutboxWorker> logge
                 var dispatched = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(DispatchBatchSize), stoppingToken);
 
                 if (fannedOut == 0 && dispatched == 0)
-                    await Task.Delay(IdleDelay, stoppingToken);
+                    await Task.Delay(options.IdlePollInterval, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -31,7 +33,7 @@ public sealed class OutboxWorker(IMediator mediator, ILogger<OutboxWorker> logge
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled error in worker loop. Retrying after delay.");
-                await Task.Delay(IdleDelay, stoppingToken);
+                await Task.Delay(options.IdlePollInterval, stoppingToken);
             }
         }
 

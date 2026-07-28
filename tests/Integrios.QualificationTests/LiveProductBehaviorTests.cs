@@ -15,6 +15,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private const string BearerIntegrationId = "22222222-2222-2222-2222-222222222222";
     private const string SourceOnlyIntegrationId = "33333333-3333-3333-3333-333333333333";
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
     [Fact]
     public async Task PackagedSystem_QualifiesLiveProductBehaviorMatrix()
@@ -357,8 +358,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, WebhookIntegrationId, "slow-destination", "http://mocksink:8080/sink/slow-timeout");
         Guid slowSubscription = await CreateSubscriptionAsync(
             tenant, topic, "slow-timeout", slowDestination, "slow.test");
+        // Must outlast the deployment's compressed HttpTimeout so the client, not the sink, ends
+        // the attempt.
         using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
-            "/control/slow-timeout", new { mode = "slow", delayMs = 35000 });
+            "/control/slow-timeout", new { mode = "slow", delayMs = 8000 });
         Assert.Equal(HttpStatusCode.OK, slowMode.StatusCode);
         EventAcceptance slowEvent = await IngestAsync(
             tenant, source, "payments", "slow.test", new { value = 1 });
@@ -739,7 +742,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             {
                 lastException = exception;
             }
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(PollInterval);
         }
         throw new TimeoutException($"Qualification evidence was not ready within {EvidenceTimeout}. {lastException?.Message}");
     }

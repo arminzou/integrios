@@ -23,7 +23,7 @@ public sealed class DeliveryOutcomePolicy(RetryPolicy retryPolicy)
         if (outcome == DeliveryOutcomeKind.Succeeded)
             return new(SubscriptionDeliveryDisposition.Succeeded);
 
-        if (retryCycleAttemptCount >= RetryPolicy.DefaultMaxAttempts)
+        if (retryCycleAttemptCount >= retryPolicy.MaxAttempts)
             return new(SubscriptionDeliveryDisposition.DeadLettered);
 
         var deliverAfter = outcome == DeliveryOutcomeKind.Indeterminate

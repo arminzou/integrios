@@ -24,6 +24,11 @@ public static class DependencyInjection
         deliveryOptions.Validate();
         services.AddSingleton(deliveryOptions);
 
+        // Application registers the default policy so it can stand alone; configuration is only
+        // available here, so the configured instance replaces it rather than racing it.
+        services.Replace(ServiceDescriptor.Singleton(
+            new RetryPolicy(deliveryOptions.RetryBaseDelay, deliveryOptions.RetryMaxAttempts)));
+
         var postgresConnectionString = configuration.GetConnectionString("Postgres");
         if (string.IsNullOrWhiteSpace(postgresConnectionString))
             throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
@@ -71,7 +76,26 @@ public static class DependencyInjection
             ReadDuration(configuration, "Integrios:Delivery:HttpTimeout", defaults.HttpTimeout),
             ReadDuration(configuration, "Integrios:Delivery:AttemptDeadline", defaults.AttemptDeadline),
             ReadDuration(configuration, "Integrios:Delivery:LeaseDuration", defaults.LeaseDuration),
-            ReadDuration(configuration, "Integrios:Delivery:ShutdownGracePeriod", defaults.ShutdownGracePeriod));
+            ReadDuration(configuration, "Integrios:Delivery:ShutdownGracePeriod", defaults.ShutdownGracePeriod))
+        {
+            IdlePollInterval = ReadDuration(
+                configuration, "Integrios:Delivery:IdlePollInterval", defaults.IdlePollInterval),
+            RetryBaseDelay = ReadDuration(
+                configuration, "Integrios:Delivery:Retry:BaseDelay", defaults.RetryBaseDelay),
+            RetryMaxAttempts = ReadInt(
+                configuration, "Integrios:Delivery:Retry:MaxAttempts", defaults.RetryMaxAttempts),
+        };
+    }
+
+    private static int ReadInt(IConfiguration configuration, string key, int fallback)
+    {
+        string? configured = configuration[key];
+        if (string.IsNullOrWhiteSpace(configured))
+            return fallback;
+
+        return int.TryParse(configured, out int parsed)
+            ? parsed
+            : throw new InvalidOperationException($"{key} must be an integer value.");
     }
 
     private static TimeSpan ReadDuration(IConfiguration configuration, string key, TimeSpan fallback)
