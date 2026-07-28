@@ -545,6 +545,45 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task UpdateSubscription_ForTopicOwnedByAnotherTenant_ReturnsNotFound()
+    {
+        var topic = await CreateTopicAsync("payments");
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.OtherTenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
+            new
+            {
+                name = "erp-sink-v2",
+                matchRules = new { event_type = "payment.updated" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                orderIndex = 2
+            }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateSubscription_WhenSubscriptionDoesNotExist_ReturnsNotFoundBeforeDestinationValidation()
+    {
+        var topic = await CreateTopicAsync("payments");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{Guid.NewGuid()}",
+            new
+            {
+                name = "missing-subscription",
+                matchRules = new { event_type = "payment.updated" },
+                destinationConnectionId = Guid.NewGuid(),
+                orderIndex = 2
+            }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private sealed record SubscriptionResponse(
         Guid Id,
         Guid TopicId,

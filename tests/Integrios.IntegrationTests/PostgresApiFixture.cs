@@ -262,11 +262,11 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 INSERT INTO topics (id, tenant_id, name, status)
                 SELECT gen_random_uuid(), ci.tenant_id, 'replay-test-topic', 'active'
                 FROM conn_insert ci
-                RETURNING id
+                RETURNING id, tenant_id
             ),
             sub_insert AS (
-                INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, order_index, status)
-                SELECT gen_random_uuid(), ti.id, 'replay-test-sub',
+                INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
+                SELECT gen_random_uuid(), ti.tenant_id, ti.id, 'replay-test-sub',
                        '{"event_types":["payment.created"]}'::jsonb,
                        ci.id, 0, 'active'
                 FROM topic_insert ti, conn_insert ci

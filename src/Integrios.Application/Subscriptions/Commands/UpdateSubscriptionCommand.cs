@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Abstractions;
+using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using MediatR;
 
@@ -23,6 +24,16 @@ internal sealed class UpdateSubscriptionCommandHandler(
 {
     public async Task<SubscriptionResponse?> Handle(UpdateSubscriptionCommand command, CancellationToken cancellationToken)
     {
+        var existing = await subscriptionRepository.GetByIdAsync(
+            command.TenantId,
+            command.TopicId,
+            command.Id,
+            cancellationToken);
+        if (existing is null || existing.Status == OperationalStatus.Disabled)
+        {
+            return null;
+        }
+
         await EnsureDestinationConnectionIsAllowed(command.TenantId, command.DestinationConnectionId, cancellationToken);
 
         var subscription = await subscriptionRepository.UpdateAsync(
@@ -45,13 +56,15 @@ internal sealed class UpdateSubscriptionCommandHandler(
         var connection = await connectionRepository.GetByIdAsync(tenantId, destinationConnectionId, cancellationToken);
         if (connection is null)
         {
-            return;
+            throw new SubscriptionRequestValidationException(
+                "The specified destination connection does not exist for this tenant.");
         }
 
         Integration? integration = await integrationRepository.GetByIdAsync(connection.IntegrationId, cancellationToken);
         if (integration is null)
         {
-            return;
+            throw new SubscriptionRequestValidationException(
+                "The destination connection references an integration that does not exist.");
         }
 
         if (integration.Direction == IntegrationDirection.Source)

@@ -143,6 +143,59 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
             database, "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_tenants_slug_dns_label'"));
     }
 
+    [Fact]
+    public async Task V25_CrossTenantSubscriptionFailsWithRemediationAndLeavesDataUnchanged()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 24);
+        await ExecuteAsync(
+            database,
+            """
+            INSERT INTO integrations (id, key, name, direction, status)
+            VALUES ('25000000-0000-0000-0000-000000000001', 'v25_webhook', 'V25 Webhook', 'both', 'active');
+
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES
+                ('25000000-0000-0000-0000-000000000002', 'v25-topic-tenant', 'V25 Topic Tenant', 'active'),
+                ('25000000-0000-0000-0000-000000000003', 'v25-connection-tenant', 'V25 Connection Tenant', 'active');
+
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+            VALUES (
+                '25000000-0000-0000-0000-000000000004',
+                '25000000-0000-0000-0000-000000000003',
+                '25000000-0000-0000-0000-000000000001',
+                'v25-destination',
+                '{"url":"https://example.invalid/v25"}',
+                'active');
+
+            INSERT INTO topics (id, tenant_id, name, status)
+            VALUES (
+                '25000000-0000-0000-0000-000000000005',
+                '25000000-0000-0000-0000-000000000002',
+                'v25-topic',
+                'active');
+
+            INSERT INTO subscriptions (id, topic_id, name, match_rules, destination_connection_id, status)
+            VALUES (
+                '25000000-0000-0000-0000-000000000006',
+                '25000000-0000-0000-0000-000000000005',
+                'v25-cross-tenant',
+                '{"event_type":"v25.test"}',
+                '25000000-0000-0000-0000-000000000004',
+                'active');
+            """);
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V25__enforce_subscription_destination_tenant.sql"));
+
+        Assert.Contains("Subscription references a Connection from another Tenant", exception.MessageText, StringComparison.Ordinal);
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "subscriptions",
+            "id = '25000000-0000-0000-0000-000000000006'"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "subscriptions", "tenant_id"));
+    }
+
     private const string V21GraphSql =
         """
         INSERT INTO integrations (id, key, name, direction, status)

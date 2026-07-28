@@ -13,7 +13,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         """
         s.id AS Id,
         s.topic_id AS TopicId,
-        t.tenant_id AS TenantId,
+        s.tenant_id AS TenantId,
         s.name AS Name,
         s.match_rules::text AS MatchRulesJson,
         s.destination_connection_id AS DestinationConnectionId,
@@ -44,6 +44,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                 WITH inserted AS (
                     INSERT INTO subscriptions (
                         id,
+                        tenant_id,
                         topic_id,
                         name,
                         match_rules,
@@ -56,6 +57,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
                         updated_at)
                     SELECT
                         @Id,
+                        t.tenant_id,
                         t.id,
                         @Name,
                         CAST(@MatchRulesJson AS jsonb),

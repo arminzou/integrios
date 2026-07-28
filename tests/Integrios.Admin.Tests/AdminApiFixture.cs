@@ -26,6 +26,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public WebApplicationFactory<Program> WebFactory { get; private set; } = null!;
     public string ConnectionString => container.GetConnectionString();
     public Guid TenantId { get; private set; }
+    public Guid OtherTenantId { get; private set; }
     public Guid SourceConnectionId { get; private set; }
 
     public async Task InitializeAsync()
@@ -62,8 +63,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
     private async Task SeedAsync(NpgsqlConnection connection)
     {
         TenantId = Guid.NewGuid();
+        OtherTenantId = Guid.NewGuid();
         SourceConnectionId = Guid.NewGuid();
-        var otherTenantId = Guid.NewGuid();
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES
@@ -85,7 +86,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
             """, connection);
 
         cmd.Parameters.AddWithValue("TenantId", TenantId);
-        cmd.Parameters.AddWithValue("OtherTenantId", otherTenantId);
+        cmd.Parameters.AddWithValue("OtherTenantId", OtherTenantId);
         cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
         cmd.Parameters.AddWithValue("SourceConnectionId", SourceConnectionId);
         await cmd.ExecuteNonQueryAsync();
