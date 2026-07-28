@@ -47,7 +47,16 @@ Alongside standard ASP.NET Core, HttpClient, and runtime metrics, Integrios emit
 | `integrios_delivery_request_construction_failures_total` | counter | `integration_key` | attempts that could not construct a valid outbound request |
 | `integrios_delivery_stale_finalizations_total` | counter | — | finalization results discarded after delivery ownership was lost |
 | `integrios_delivery_attempt_duration_seconds` | histogram | `result`, `integration_key` | outbound attempt latency |
-| `integrios_outbox_pending_depth` | gauge | — | unprocessed outbox rows; your primary "is the worker keeping up?" signal |
+| `integrios_outbox_pending_depth` | gauge | — | Worker-owned deployment-global count of unprocessed outbox rows; your primary "is the worker keeping up?" signal |
+
+The outbox-depth gauge is exposed only by the Worker. Its value is sampled asynchronously from
+Postgres and may lag by one sampling interval (15 seconds by default), so scraping never waits on a
+database query. In a deployment with multiple Worker replicas, every replica reports the same
+deployment-global value; aggregate them with `max(integrios_outbox_pending_depth)`, never `sum`.
+
+Configure the sampling interval with
+`Integrios__Telemetry__OutboxDepthSampleInterval` (a positive .NET `TimeSpan`, for example
+`00:00:30`).
 
 `http_status_class` is one of `2xx`, `4xx`, `5xx`, `timeout` (the downstream did not respond
 in time), or `error` (a failure with no HTTP response, such as a transform error or a

@@ -18,6 +18,7 @@ try
     builder.Services.AddIntegriosInfrastructure(builder.Configuration);
     builder.Services.AddIntegriosSecretResolution(builder.Configuration);
     builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-worker");
+    builder.Services.AddIntegriosOutboxDepthMetrics(builder.Configuration);
 
     // Only the Worker holds in-flight delivery attempts at shutdown; the shutdown
     // timeout must outlast the attempt deadline so finalization can commit.
