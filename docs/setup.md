@@ -17,12 +17,9 @@ make up   # builds images, starts Postgres, runs migrations, bootstrap, then the
 No configuration is needed: the dev stack carries working defaults. To override any of them,
 create a `.env` file (see the environment variables table below).
 
-Create the local secret mount directory before starting Compose (it may remain empty when the
-quickstart uses unauthenticated connections):
-
-```bash
-mkdir -p secrets
-```
+The checkout includes the `secrets/` mount directory used by the default file-based secret
+provider. Secret files placed there are ignored by Git; the quickstart uses unauthenticated
+connections, so no secret values need to be added to its tracked documentation files.
 
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
 after migrations and before the services start. It creates the built-in `webhook` integration and
@@ -103,18 +100,53 @@ The last command should show a line like:
 
 ### Exploring failure handling
 
-Force the sink to fail or slow down and watch the Worker retry, dead-letter, then replay:
+The retry policy is deployment-wide. By default, the Worker makes three attempts with exponential
+backoff from 30 seconds, so this walkthrough takes about 90 seconds to reach `dead_lettered`.
+
+First, clear earlier receipts, configure the destination to fail, and send a new Event:
 
 ```bash
-# make the destination sink fail; the Worker retries per the subscription policy
+curl -s -X DELETE http://localhost:5054/receipts/acme-erp > /dev/null
 curl -s -X PUT http://localhost:5054/control/acme-erp -H 'Content-Type: application/json' -d '{"mode":"fail"}'
-# reset it back to success
-curl -s -X DELETE http://localhost:5054/control/acme-erp
-# replay an event by id
-curl -s -X POST $INGRESS/events/$EVENT/replay -H "Authorization: ApiKey $TOKEN"
+
+FAIL_EVENT=$(curl -s -X POST $INGRESS/events \
+  -H "Authorization: ApiKey $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"sourceConnectionId\":\"$SRC\",\"topicName\":\"payments\",\"eventType\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_failure\",\"amount\":1200},\"idempotencyKey\":\"demo-failure-$(date +%s)\"}" \
+  | jq -r .eventId)
 ```
 
-The `.http` request collections under each service in `src/` cover these flows in full.
+Wait until all three attempts have failed. The third failed attempt exhausts the retry budget and
+dead-letters this SubscriptionDelivery:
+
+```bash
+until curl -fsS $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
+  | jq -e '[.deliveryAttempts[] | select(.status == "failed")] | length >= 3' > /dev/null; do
+  sleep 5
+done
+
+curl -s $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
+  | jq '.deliveryAttempts'
+```
+
+Reset the sink, discard the failed-request receipts, and replay the same Event. Replay returns
+`202 Accepted` only when it finds a dead-lettered delivery to schedule again:
+
+```bash
+curl -s -X DELETE http://localhost:5054/control/acme-erp
+curl -s -X DELETE http://localhost:5054/receipts/acme-erp > /dev/null
+curl -i -s -X POST $INGRESS/events/$FAIL_EVENT/replay -H "Authorization: ApiKey $TOKEN"
+
+until curl -fsS $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
+  | jq -e 'any(.deliveryAttempts[]; .attemptNumber >= 4 and .status == "succeeded")' > /dev/null; do
+  sleep 2
+done
+
+curl -s http://localhost:5054/receipts/acme-erp | jq
+```
+
+The final receipt proves that replay created a new successful attempt without discarding the three
+failed attempts in the Event's history. The `.http` request collections under each service in
+`src/` cover the same APIs interactively.
 
 ## Rotate the Operator AdminKey
 
