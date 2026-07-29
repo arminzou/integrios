@@ -1,4 +1,4 @@
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Transforms;
 
 public sealed record TransformSpec(string Engine, string Version, string Expression);
 

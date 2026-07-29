@@ -1,4 +1,4 @@
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Secrets;
 using Integrios.Infrastructure.Http.Auth;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

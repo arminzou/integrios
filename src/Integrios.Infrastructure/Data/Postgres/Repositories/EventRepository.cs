@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Abstractions;
 using Integrios.Application.Events;
 using Integrios.Domain.Events;
 using Npgsql;

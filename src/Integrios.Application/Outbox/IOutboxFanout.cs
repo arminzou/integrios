@@ -1,6 +1,6 @@
 using Integrios.Domain.Events;
 
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Outbox;
 
 public interface IOutboxFanout
 {

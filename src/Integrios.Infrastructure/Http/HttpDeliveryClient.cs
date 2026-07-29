@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Text;
-using Integrios.Application.Abstractions;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
 

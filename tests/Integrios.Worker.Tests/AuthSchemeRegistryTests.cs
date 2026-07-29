@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Infrastructure.Http.Auth;
 

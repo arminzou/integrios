@@ -1,6 +1,6 @@
 using Integrios.Domain.Delivery;
 
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Delivery;
 
 public interface IDeliveryClient
 {

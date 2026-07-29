@@ -1,4 +1,3 @@
-using Integrios.Application.Abstractions;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Events;
 using MediatR;

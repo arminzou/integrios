@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Integrios.Application.Abstractions;
 using Integrios.Application.Telemetry;
 using MediatR;
 using Microsoft.Extensions.Logging;

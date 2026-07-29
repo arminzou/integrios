@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Integrios.Application.Abstractions.Auth;
+namespace Integrios.Application.Auth;
 
 public interface IAuthSchemeHandler
 {

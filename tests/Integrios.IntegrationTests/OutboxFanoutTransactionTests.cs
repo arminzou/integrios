@@ -1,4 +1,3 @@
-using Integrios.Application.Abstractions;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
 using Npgsql;

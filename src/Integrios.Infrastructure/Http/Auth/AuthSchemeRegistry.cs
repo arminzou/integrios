@@ -1,4 +1,4 @@
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 
 namespace Integrios.Infrastructure.Http.Auth;

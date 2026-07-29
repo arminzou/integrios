@@ -1,4 +1,4 @@
-using Integrios.Application.Abstractions;
+using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
 
 namespace Integrios.Worker.Tests;

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Integrios.Application.Abstractions.Auth;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using Integrios.Domain.Tenants;

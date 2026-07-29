@@ -1,6 +1,7 @@
 using Integrios.Application;
-using Integrios.Application.Abstractions;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Auth;
+using Integrios.Application.Outbox;
+using Integrios.Application.Transforms;
 using Integrios.Application.AdminKeys;
 using Integrios.Application.ApiKeys;
 using Integrios.Application.Connections;
