@@ -17,7 +17,7 @@ namespace Integrios.Worker.Tests;
 public sealed class HostCompositionRegistrationTests
 {
     [Fact]
-    public void EveryApplicationHandler_IsRegisteredByExactlyOneHost()
+    public void EveryApplicationHandlerImplementation_IsRegisteredByExactlyOneHost()
     {
         using ServiceProvider admin = BuildProvider(
             services => services.AddIntegriosAdminApplication(),
@@ -35,26 +35,28 @@ public sealed class HostCompositionRegistrationTests
             ("Ingress", ingress),
             ("Worker", worker)
         ];
-        Type[] handlerInterfaces = typeof(Integrios.Application.DependencyInjection).Assembly
+        HandlerRegistration[] handlerRegistrations = typeof(Integrios.Application.DependencyInjection).Assembly
             .GetTypes()
             .Where(type => type is { IsClass: true, IsAbstract: false })
-            .SelectMany(type => type.GetInterfaces())
-            .Where(type => type.IsGenericType
-                && type.GetGenericTypeDefinition() == typeof(IRequestHandler<,>))
-            .Distinct()
+            .SelectMany(implementationType => implementationType
+                .GetInterfaces()
+                .Where(IsHandlerInterface)
+                .Select(serviceType => new HandlerRegistration(implementationType, serviceType)))
             .ToArray();
 
-        Assert.NotEmpty(handlerInterfaces);
-        foreach (Type handlerInterface in handlerInterfaces)
+        Assert.NotEmpty(handlerRegistrations);
+        foreach (HandlerRegistration handler in handlerRegistrations)
         {
             string[] owners = hosts
-                .Where(host => host.Provider.GetService(handlerInterface) is not null)
+                .Where(host => host.Provider
+                    .GetServices(handler.ServiceType)
+                    .Any(instance => instance?.GetType() == handler.ImplementationType))
                 .Select(host => host.Name)
                 .ToArray();
 
             Assert.True(
                 owners.Length == 1,
-                $"{handlerInterface} must be registered by exactly one host; found: {string.Join(", ", owners)}.");
+                $"{handler.ImplementationType} as {handler.ServiceType} must be registered by exactly one host; found: {string.Join(", ", owners)}.");
         }
     }
 
@@ -268,7 +270,21 @@ public sealed class HostCompositionRegistrationTests
     private static void AssertOmits<T>(IServiceProvider provider) where T : notnull =>
         Assert.Null(provider.GetService<T>());
 
+    private static bool IsHandlerInterface(Type type)
+    {
+        if (!type.IsGenericType)
+            return false;
+
+        Type genericDefinition = type.GetGenericTypeDefinition();
+        return genericDefinition == typeof(IRequestHandler<,>)
+            || genericDefinition == typeof(IRequestHandler<>)
+            || genericDefinition == typeof(INotificationHandler<>)
+            || genericDefinition == typeof(IStreamRequestHandler<,>);
+    }
+
     private static bool IsOutboxDepthMetricsRegistration(ServiceDescriptor descriptor) =>
         descriptor.ServiceType == typeof(IHostedService)
         && descriptor.ImplementationType?.Name == "OutboxDepthMetrics";
+
+    private sealed record HandlerRegistration(Type ImplementationType, Type ServiceType);
 }
