@@ -136,7 +136,12 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         public string? ValidateExpression(string engine, string version, string expression) => validationError;
 
-        public string Evaluate(string expression, string payloadJson, TransformContext context) => payloadJson;
+        public string Evaluate(
+            string engine,
+            string version,
+            string expression,
+            string payloadJson,
+            TransformContext context) => payloadJson;
     }
 
     private sealed class FakeTopicRepository(Topic topic) : ITopicRepository

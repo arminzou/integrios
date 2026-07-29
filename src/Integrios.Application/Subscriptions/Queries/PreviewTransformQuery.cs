@@ -27,6 +27,8 @@ internal sealed class PreviewTransformQueryHandler(ITransformEvaluator evaluator
         string inputJson = query.SampleInput.ValueKind == JsonValueKind.Undefined
             ? "{}"
             : query.SampleInput.GetRawText();
+        string engine = query.Transform.GetProperty("engine").GetString()!;
+        string version = query.Transform.GetProperty("version").GetString()!;
         TransformContext context = BuildContext(query.SampleContext);
 
         try
@@ -34,7 +36,7 @@ internal sealed class PreviewTransformQueryHandler(ITransformEvaluator evaluator
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new PreviewTransformResult(
                 null,
-                evaluator.Evaluate(expression, inputJson, context)));
+                evaluator.Evaluate(engine, version, expression, inputJson, context)));
         }
         catch (TransformEvaluationException exception)
         {

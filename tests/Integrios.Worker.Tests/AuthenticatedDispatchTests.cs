@@ -506,7 +506,12 @@ public sealed class AuthenticatedDispatchTests
     {
         public string? ValidateExpression(string engine, string version, string expression) => null;
 
-        public string Evaluate(string expression, string payloadJson, TransformContext context)
+        public string Evaluate(
+            string engine,
+            string version,
+            string expression,
+            string payloadJson,
+            TransformContext context)
         {
             _ = expression;
             _ = context;

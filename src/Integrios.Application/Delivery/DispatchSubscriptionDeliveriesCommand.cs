@@ -322,7 +322,12 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             string version = versionEl.GetString() ?? string.Empty;
             string expression = expressionEl.GetString() ?? string.Empty;
             TransformContext context = new(row.EventType, row.TopicName, row.AcceptedAt);
-            string output = transformEvaluator.Evaluate(expression, row.PayloadJson, context);
+            string output = transformEvaluator.Evaluate(
+                engine,
+                version,
+                expression,
+                row.PayloadJson,
+                context);
             return (output, null);
         }
         catch (TransformEvaluationException ex)

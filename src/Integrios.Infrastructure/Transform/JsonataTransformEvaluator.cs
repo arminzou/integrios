@@ -8,11 +8,9 @@ public sealed class JsonataTransformEvaluator : ITransformEvaluator
 {
     public string? ValidateExpression(string engine, string version, string expression)
     {
-        if (!string.Equals(engine, "jsonata", StringComparison.OrdinalIgnoreCase))
-            return $"Unsupported engine '{engine}'. Only 'jsonata' is supported.";
-
-        if (version != "1")
-            return $"Unsupported version '{version}'. Only '1' is supported.";
+        string? unsupportedPair = ValidateEngineVersion(engine, version);
+        if (unsupportedPair is not null)
+            return unsupportedPair;
 
         try
         {
@@ -25,8 +23,17 @@ public sealed class JsonataTransformEvaluator : ITransformEvaluator
         }
     }
 
-    public string Evaluate(string expression, string payloadJson, TransformContext context)
+    public string Evaluate(
+        string engine,
+        string version,
+        string expression,
+        string payloadJson,
+        TransformContext context)
     {
+        string? unsupportedPair = ValidateEngineVersion(engine, version);
+        if (unsupportedPair is not null)
+            throw new TransformEvaluationException(unsupportedPair);
+
         JsonataQuery query;
         try
         {
@@ -64,6 +71,16 @@ public sealed class JsonataTransformEvaluator : ITransformEvaluator
         }
 
         return result.ToFlatString();
+    }
+
+    private static string? ValidateEngineVersion(string engine, string version)
+    {
+        if (!string.Equals(engine, "jsonata", StringComparison.OrdinalIgnoreCase))
+            return $"Unsupported engine '{engine}'. Only 'jsonata' is supported.";
+
+        return version != "1"
+            ? $"Unsupported version '{version}'. Only '1' is supported."
+            : null;
     }
 
     private static string Quoted(string? value) =>
