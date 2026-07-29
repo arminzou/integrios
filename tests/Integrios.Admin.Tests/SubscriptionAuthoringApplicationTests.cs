@@ -134,12 +134,10 @@ public sealed class SubscriptionAuthoringApplicationTests
 
     private sealed class FakeTransformEvaluator(string? validationError) : ITransformEvaluator
     {
-        public string? ValidateExpression(string engine, string version, string expression) => validationError;
+        public string? ValidateExpression(TransformSpec transform) => validationError;
 
         public string Evaluate(
-            string engine,
-            string version,
-            string expression,
+            TransformSpec transform,
             string payloadJson,
             TransformContext context) => payloadJson;
     }

@@ -52,9 +52,9 @@ internal static class TransformConfigValidator
     public static string? Validate(
         JsonElement transform,
         ITransformEvaluator evaluator,
-        out string expression)
+        out TransformSpec? transformSpec)
     {
-        expression = "";
+        transformSpec = null;
 
         if (transform.ValueKind != JsonValueKind.Object)
             return "transform must be an object.";
@@ -73,7 +73,7 @@ internal static class TransformConfigValidator
 
         string engine = engineElement.GetString()!;
         string version = versionElement.GetString()!;
-        expression = expressionElement.GetString()!;
+        string expression = expressionElement.GetString()!;
 
         if (string.IsNullOrWhiteSpace(expression))
             return "transform.expression must not be empty.";
@@ -81,6 +81,7 @@ internal static class TransformConfigValidator
         if (Encoding.UTF8.GetByteCount(expression) > MaxExpressionBytes)
             return "transform.expression must not exceed 64 KiB of UTF-8 text.";
 
-        return evaluator.ValidateExpression(engine, version, expression);
+        transformSpec = new TransformSpec(engine, version, expression);
+        return evaluator.ValidateExpression(transformSpec);
     }
 }

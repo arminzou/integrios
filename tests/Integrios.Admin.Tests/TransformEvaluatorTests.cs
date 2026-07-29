@@ -12,6 +12,8 @@ public class TransformEvaluatorTests
 
     private readonly JsonataTransformEvaluator evaluator = new();
 
+    private static TransformSpec Jsonata(string expression) => new("jsonata", "1", expression);
+
     // --- Binding contract ---
 
     [Fact]
@@ -21,7 +23,7 @@ public class TransformEvaluatorTests
         const string expression =
             "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }";
 
-        var output = evaluator.Evaluate("jsonata", "1", expression, "{\"amount\":1200,\"paymentId\":\"pay_001\"}", Context);
+        var output = evaluator.Evaluate(Jsonata(expression), "{\"amount\":1200,\"paymentId\":\"pay_001\"}", Context);
 
         using var doc = JsonDocument.Parse(output);
         var root = doc.RootElement;
@@ -36,7 +38,7 @@ public class TransformEvaluatorTests
         // Binding-contract guard: `payload.amount` references a non-existent `payload` field
         // under the root, so JSONata yields nothing and omits the key. If the binding ever
         // changes (e.g. wrapping the payload), this test breaks loudly.
-        var output = evaluator.Evaluate("jsonata", "1", "{ \"amount\": payload.amount }", "{\"amount\":1200}", Context);
+        var output = evaluator.Evaluate(Jsonata("{ \"amount\": payload.amount }"), "{\"amount\":1200}", Context);
 
         using var doc = JsonDocument.Parse(output);
         Assert.False(doc.RootElement.TryGetProperty("amount", out _));
@@ -48,7 +50,7 @@ public class TransformEvaluatorTests
         const string expression =
             "{ \"et\": $context.event_type, \"tn\": $context.topic_name, \"at\": $context.accepted_at }";
 
-        var output = evaluator.Evaluate("jsonata", "1", expression, "{}", Context);
+        var output = evaluator.Evaluate(Jsonata(expression), "{}", Context);
 
         using var doc = JsonDocument.Parse(output);
         var root = doc.RootElement;
@@ -62,7 +64,7 @@ public class TransformEvaluatorTests
     {
         var context = new TransformContext("payment.created", null, Context.AcceptedAt);
 
-        var output = evaluator.Evaluate("jsonata", "1", "{ \"type\": $context.event_type }", "{}", context);
+        var output = evaluator.Evaluate(Jsonata("{ \"type\": $context.event_type }"), "{}", context);
 
         using var doc = JsonDocument.Parse(output);
         Assert.Equal("payment.created", doc.RootElement.GetProperty("type").GetString());
@@ -73,13 +75,13 @@ public class TransformEvaluatorTests
     [Fact]
     public void Evaluate_ReturnsScalar_WhenExpressionSelectsAField()
     {
-        Assert.Equal("1200", evaluator.Evaluate("jsonata", "1", "amount", "{\"amount\":1200}", Context));
+        Assert.Equal("1200", evaluator.Evaluate(Jsonata("amount"), "{\"amount\":1200}", Context));
     }
 
     [Fact]
     public void Evaluate_AccessesNestedPayloadFields()
     {
-        Assert.Equal("\"c1\"", evaluator.Evaluate("jsonata", "1", "customer.id", "{\"customer\":{\"id\":\"c1\"}}", Context));
+        Assert.Equal("\"c1\"", evaluator.Evaluate(Jsonata("customer.id"), "{\"customer\":{\"id\":\"c1\"}}", Context));
     }
 
     [Fact]
@@ -87,7 +89,7 @@ public class TransformEvaluatorTests
     {
         // The legitimate counterpart to the wrong-prefix case: referencing a genuinely absent
         // payload field is a valid pattern (optional fields), and the key is simply omitted.
-        var output = evaluator.Evaluate("jsonata", "1", "{ \"note\": memo }", "{\"amount\":1200}", Context);
+        var output = evaluator.Evaluate(Jsonata("{ \"note\": memo }"), "{\"amount\":1200}", Context);
 
         using var doc = JsonDocument.Parse(output);
         Assert.False(doc.RootElement.TryGetProperty("note", out _));
@@ -99,14 +101,14 @@ public class TransformEvaluatorTests
     public void Evaluate_Throws_OnUncompilableExpression()
     {
         Assert.Throws<TransformEvaluationException>(
-            () => evaluator.Evaluate("jsonata", "1", "{ \"x\": ", "{}", Context));
+            () => evaluator.Evaluate(Jsonata("{ \"x\": "), "{}", Context));
     }
 
     [Fact]
     public void Evaluate_Throws_OnUnparseablePayload()
     {
         Assert.Throws<TransformEvaluationException>(
-            () => evaluator.Evaluate("jsonata", "1", "amount", "not-json", Context));
+            () => evaluator.Evaluate(Jsonata("amount"), "not-json", Context));
     }
 
     [Fact]
@@ -114,7 +116,7 @@ public class TransformEvaluatorTests
     {
         // Valid syntax, but adding a number to a string is a runtime type error in JSONata.
         Assert.Throws<TransformEvaluationException>(
-            () => evaluator.Evaluate("jsonata", "1", "amount + $context.event_type", "{\"amount\":1200}", Context));
+            () => evaluator.Evaluate(Jsonata("amount + $context.event_type"), "{\"amount\":1200}", Context));
     }
 
     // --- Static validation ---
@@ -122,9 +124,9 @@ public class TransformEvaluatorTests
     [Fact]
     public void ValidateExpression_AcceptsValid_RejectsBadInput()
     {
-        Assert.Null(evaluator.ValidateExpression("jsonata", "1", "{ \"amount\": amount }"));
-        Assert.NotNull(evaluator.ValidateExpression("jsonata", "1", "{ \"amount\": "));  // syntax error
-        Assert.NotNull(evaluator.ValidateExpression("xslt", "1", "amount"));             // unsupported engine
-        Assert.NotNull(evaluator.ValidateExpression("jsonata", "2", "amount"));          // unsupported version
+        Assert.Null(evaluator.ValidateExpression(Jsonata("{ \"amount\": amount }")));
+        Assert.NotNull(evaluator.ValidateExpression(Jsonata("{ \"amount\": ")));  // syntax error
+        Assert.NotNull(evaluator.ValidateExpression(new TransformSpec("xslt", "1", "amount")));    // unsupported engine
+        Assert.NotNull(evaluator.ValidateExpression(new TransformSpec("jsonata", "2", "amount"))); // unsupported version
     }
 }
