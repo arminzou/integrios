@@ -6,7 +6,7 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Delivery;
 
-public sealed class PostgresSubscriptionDeliveryQueue(
+internal sealed class PostgresSubscriptionDeliveryQueue(
     IDbConnectionFactory connectionFactory,
     DeliveryExecutionOptions options,
     DeliveryOutcomePolicy outcomePolicy) : ISubscriptionDeliveryQueue

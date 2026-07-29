@@ -10,7 +10,7 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Connections;
 
-public sealed class ConnectionRepository(IDbConnectionFactory connectionFactory) : IConnectionRepository
+internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactory) : IConnectionRepository
 {
     private const string ForeignKeyViolation = "23503";
     private const string UniqueViolation = "23505";

@@ -9,7 +9,7 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Tenants;
 
-public sealed class TenantRepository(IDbConnectionFactory connectionFactory) : ITenantRepository
+internal sealed class TenantRepository(IDbConnectionFactory connectionFactory) : ITenantRepository
 {
     // Postgres error code for unique_violation
     private const string UniqueViolation = "23505";

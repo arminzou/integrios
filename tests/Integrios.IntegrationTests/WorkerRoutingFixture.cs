@@ -47,7 +47,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public FakeDeliveryClient DeliveryClient { get; } = new();
     public MutableSecretResolver SecretResolver { get; } = new();
     public string ConnectionString => container.GetConnectionString();
-    public PostgresSubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
+    internal PostgresSubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
 
     private IDbConnectionFactory connectionFactory = null!;
     private IDeadLetterReplay deadLetterReplay = null!;

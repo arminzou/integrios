@@ -135,6 +135,25 @@ public sealed class ProjectArchitectureTests
             StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Infrastructure_ExportsOnlyHostCompositionExtensions()
+    {
+        string[] exportedTypes = Assembly.Load("Integrios.Infrastructure")
+            .GetExportedTypes()
+            .Select(type => type.FullName!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        string[] approvedTypes =
+        [
+            "Integrios.Infrastructure.DependencyInjection",
+            "Integrios.Infrastructure.SecretResolutionDependencyInjection",
+            "Integrios.Infrastructure.Telemetry.TelemetryExtensions"
+        ];
+
+        Assert.Equal(approvedTypes.Order(StringComparer.Ordinal), exportedTypes);
+    }
+
     private static IReadOnlyDictionary<string, Assembly> LoadProductionAssemblies() =>
         ProductionAssemblyNames.ToDictionary(
             name => name,

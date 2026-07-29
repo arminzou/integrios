@@ -7,7 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Integrios.Admin.Tests" />
     <InternalsVisibleTo Include="Integrios.IntegrationTests" />
+    <InternalsVisibleTo Include="Integrios.Worker.Tests" />
   </ItemGroup>
 
   <ItemGroup>
