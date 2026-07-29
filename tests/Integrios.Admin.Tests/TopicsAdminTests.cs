@@ -132,6 +132,48 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
+    public async Task ListTopics_ExactPageHasNoNextCursor()
+    {
+        await PostTopicAsync(new { name = "topic-a" });
+        await PostTopicAsync(new { name = "topic-b" });
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics?limit=2"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Items.Count);
+        Assert.Null(body.NextCursor);
+    }
+
+    [Fact]
+    public async Task ListTopics_ZeroLimit_UsesDefaultPageSize()
+    {
+        await PostTopicAsync(new { name = "zero-limit-a" });
+        await PostTopicAsync(new { name = "zero-limit-b" });
+
+        var defaultedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics?limit=0"));
+        var explicitResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics?limit=20"));
+
+        Assert.Equal(HttpStatusCode.OK, defaultedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, explicitResponse.StatusCode);
+
+        var defaulted = await defaultedResponse.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        var explicitPage = await explicitResponse.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        Assert.NotNull(defaulted);
+        Assert.NotNull(explicitPage);
+        Assert.Equal(2, defaulted.Items.Count);
+        Assert.Equal(explicitPage.Items.Select(topic => topic.Id), defaulted.Items.Select(topic => topic.Id));
+        Assert.Equal(explicitPage.NextCursor, defaulted.NextCursor);
+    }
+
+    [Fact]
     public async Task UpdateTopic_UpdatesDescriptionAndSources_WithoutChangingName()
     {
         var created = await (await PostTopicAsync(new { name = "old-name" }))
@@ -226,6 +268,39 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, patch.StatusCode);
         var error = await patch.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Topic name is required for update.", error.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateTopic_UnknownIdWithMissingName_Returns404()
+    {
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{Guid.NewGuid()}",
+            new { description = "not applied" }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateTopic_DisabledTopicWithMissingName_PreservesValidationError()
+    {
+        var created = await (await PostTopicAsync(new { name = "disabled-required-name" }))
+            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        Assert.NotNull(created);
+
+        var deactivate = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}/deactivate"));
+        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { description = "not applied" }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Topic name is required for update.", error.GetProperty("error").GetString());
     }
 

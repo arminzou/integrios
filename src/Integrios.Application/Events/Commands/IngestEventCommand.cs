@@ -11,14 +11,14 @@ public sealed record IngestEventCommand(Guid TenantId, IngestEventRequest Reques
 
 internal sealed class IngestEventCommandHandler(
     IEventRepository eventRepository,
-    ITopicRepository topicRepository,
+    IIntakeTopicResolver topicResolver,
     IntegriosMetrics metrics,
     ILogger<IngestEventCommandHandler> logger)
     : IRequestHandler<IngestEventCommand, IngestEventResponse>
 {
     public async Task<IngestEventResponse> Handle(IngestEventCommand command, CancellationToken cancellationToken)
     {
-        var topicId = await topicRepository.FindActiveSourceTopicAsync(
+        var topicId = await topicResolver.FindActiveSourceTopicAsync(
                 command.TenantId,
                 command.Request.TopicName,
                 command.Request.SourceConnectionId,

@@ -4,7 +4,8 @@ Repository guidelines for AI agents working in this repo.
 
 Read this file first.
 
-For this repository, private context and deeper guidance live in `.brain/AGENTS.md`.
+For this repository, optional private context and deeper guidance may live in `.brain/AGENTS.md`.
+If it is absent, continue from this public context; its absence is not an error.
 
 ## Project Overview
 
@@ -34,10 +35,10 @@ team points it at their own stack. Licensed under MIT.
 
 ### Service split
 
-The platform is divided into two planes, each a separate ASP.NET service with its own `Program.cs` and port.
+The platform is divided into two planes across three deployable processes.
 
 - **Control plane** (`Integrios.Admin`, port 5150): Operator-owned Tenant lifecycle, connection configuration, topic and subscription management, and policy. Auth may evolve for Operator identities, but never into Tenant-scoped control-plane authority.
-- **Data plane** (`Integrios.Ingress`, port 5231): generic ApiKey-authenticated intake today, Tenant resolution, durable acceptance boundary, and outbox writes. Provider-native source authentication and normalization belong to future Integration capabilities.
+- **Data plane** (`Integrios.Ingress`, port 5231): generic ApiKey-authenticated Event intake plus any curated built-in provider HTTP endpoints, Tenant resolution, source-Connection validation, durable acceptance boundary, and outbox writes. External Event producers remain the universal source path.
 - **Worker** (`Integrios.Worker`): outbox polling, fanout to subscriptions, per-subscription delivery, retry/DLQ/replay.
 
 `Integrios.Worker` reads topic and subscription config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are currently no service-to-service config calls.
@@ -46,13 +47,37 @@ The platform is divided into two planes, each a separate ASP.NET service with it
 
 - `Tenant` is the top-level ownership and isolation boundary, not a control-plane actor.
 - `ApiKey` represents the Integrios-issued machine credential for generic Event intake.
-- `Integration` represents reusable source triggers and/or destination actions for an external system.
-- `Connection` represents a tenant-scoped configured connection.
+- An `Event producer` is an external Operator-controlled application or automation that converts source-system changes into the generic Event contract and calls Integrios with an ApiKey; it is not an Integrios runtime plugin.
+- A `Built-in source adapter` is a platform-supplied HTTP intake module for a popular, stable provider contract; it verifies and normalizes into the same generic Event contract.
+- `Integration` is a deployment-wide, reusable declarative HTTP contract for an external-system class. It may be built in or Operator-authored, is shared across tenants, and carries no tenant data.
+- `Connection` is a Tenant-owned configured instance of one Integration and carries Tenant-specific endpoint configuration, auth selection, and secret references.
 - `Topic` represents a tenant-owned named stream of events; source connections publish to it.
-- `Subscription` represents an independent consumer of a topic with its own filter, destination connection, retry policy, and DLQ scope.
+- `Subscription` represents an independent consumer of a topic with its own filter, transform, versioned HTTP delivery configuration, destination connection, and DLQ scope. Retry policy is currently fixed platform behavior.
 - `Event` represents an accepted, normalized inbound unit of work, tagged with the topic it was published to.
 - `SubscriptionDelivery` tracks the per-(event, subscription) delivery state produced by fanout.
 - `DeliveryAttempt` records each concrete outbound execution against a subscription delivery.
+
+### Integration and HTTP transport model
+
+This is the authoritative source and destination model:
+
+The bullets below describe the finalized product model. The current code has only the built-in
+`webhook` Integration, fixed JSON `POST` delivery to `Connection.config.url`, and open,
+API-key-header, or bearer-token authentication. Do not document target capabilities as shipped
+until their implementation lands.
+
+- Generic HTTP Event intake through external Event producers is universal. An Event producer authenticates with an ApiKey, identifies a configured source Connection, and publishes to an allowed Topic.
+- Integrios may ship a small curated set of built-in provider HTTP source adapters when a stable, popular contract materially reduces repeated security or operational work. Every adapter must normalize into the same Event acceptance seam.
+- Operator-authored Integrations cannot contain executable source code. Do not add runtime plugins, polling adapters, or a broad connector catalog without a new architecture decision.
+- HTTP(S) is the only destination protocol in current scope. Do not introduce non-HTTP destination protocols, a runtime plugin system, or provider-specific execution adapters without a new architecture decision.
+- Integrations are narrow declarative definitions: stable identity, presentation metadata, direction, required Connection fields, supported auth schemes, and optional base-URI constraints. They do not own executable request templates, transforms, routing, retries, or workflow steps.
+- The same Integration is reusable across Tenants. Each Tenant supplies its own Connection configuration and secret references.
+- A destination Connection owns the absolute base URI and authentication. A Subscription owns HTTP method, relative path or path expression, restricted static headers, and JSON-or-no-body behavior.
+- Initial methods are `POST`, `PUT`, `PATCH`, and `DELETE`. Dynamic headers, arbitrary methods, form/multipart/binary bodies, response-driven workflows, and successful-response persistence are out of scope.
+- OAuth 2.0 client credentials belongs to the reusable Connection auth-scheme set; interactive OAuth flows do not.
+- Fanout snapshots versioned HTTP and non-secret Connection configuration plus secret references. The Worker resolves current secret values per attempt. Never persist resolved values in execution snapshots.
+- Destination actions are not part of the current domain model. Multiple external updates are modeled as multiple independent Subscriptions, preserving separate retry, DLQ, and replay behavior.
+- Once referenced by a Connection, an Integration's functional contract is immutable. Breaking contract changes require a new version or definition; presentation metadata may still change.
 
 ### Module boundaries
 
@@ -176,7 +201,7 @@ Examples:
 feat(api): add webhook intake endpoint with tenant resolution
 fix(worker): handle null payload in delivery attempt tracker
 docs: update domain model overview
-chore(db): add initial migration for tenant and connector tables
+chore(db): add initial migration for tenant and integration tables
 ```
 
 ## Agent Notes

@@ -5,7 +5,7 @@ namespace Integrios.Application.Tenants;
 
 public sealed record GetTenantByIdQuery(Guid Id) : IRequest<TenantResponse?>;
 
-public sealed class GetTenantByIdQueryHandler(ITenantRepository repository)
+internal sealed class GetTenantByIdQueryHandler(ITenantRepository repository)
     : IRequestHandler<GetTenantByIdQuery, TenantResponse?>
 {
     public async Task<TenantResponse?> Handle(GetTenantByIdQuery query, CancellationToken cancellationToken)

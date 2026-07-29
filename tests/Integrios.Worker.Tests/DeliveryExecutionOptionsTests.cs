@@ -52,7 +52,7 @@ public sealed class DeliveryExecutionOptionsTests
     private static DeliveryExecutionOptions Valid => DeliveryExecutionOptions.Default;
 
     [Fact]
-    public void InfrastructureRegistration_AppliesConfiguredRetryCadence()
+    public void WorkerInfrastructureRegistration_AppliesConfiguredRetryCadence()
     {
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -63,21 +63,21 @@ public sealed class DeliveryExecutionOptionsTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddIntegriosApplication();
-        services.AddIntegriosInfrastructure(configuration);
+        services.AddIntegriosWorkerInfrastructure(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
         DeliveryExecutionOptions options = provider.GetRequiredService<DeliveryExecutionOptions>();
         RetryPolicy policy = provider.GetRequiredService<RetryPolicy>();
 
         Assert.Equal(TimeSpan.FromMilliseconds(250), options.IdlePollInterval);
-        // The configured policy must win over the default Application registration.
+        // Worker configuration is the only delivery-policy registration.
         Assert.Equal(TimeSpan.FromSeconds(2), policy.BaseDelay);
         Assert.Equal(5, policy.MaxAttempts);
         Assert.Equal(TimeSpan.FromSeconds(4), policy.CalculateBackoff(2));
     }
 
     [Fact]
-    public void InfrastructureRegistration_NonIntegerMaxAttempts_FailsStartupRegistration()
+    public void WorkerInfrastructureRegistration_NonIntegerMaxAttempts_FailsStartupRegistration()
     {
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -85,13 +85,13 @@ public sealed class DeliveryExecutionOptionsTests
         });
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            new ServiceCollection().AddIntegriosInfrastructure(configuration));
+            new ServiceCollection().AddIntegriosWorkerInfrastructure(configuration));
 
         Assert.Contains("Retry:MaxAttempts", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void InfrastructureRegistration_AppliesConfiguredExecutionTimings()
+    public void WorkerInfrastructureRegistration_AppliesConfiguredExecutionTimings()
     {
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -103,7 +103,7 @@ public sealed class DeliveryExecutionOptionsTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddIntegriosApplication();
-        services.AddIntegriosInfrastructure(configuration);
+        services.AddIntegriosWorkerInfrastructure(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
         DeliveryExecutionOptions options = provider.GetRequiredService<DeliveryExecutionOptions>();
@@ -116,13 +116,12 @@ public sealed class DeliveryExecutionOptionsTests
         Assert.Equal(TimeSpan.FromSeconds(44), options.LeaseDuration);
         Assert.Equal(TimeSpan.FromSeconds(33), options.ShutdownGracePeriod);
         Assert.Equal(options.HttpTimeout, deliveryHttpClient.Timeout);
-        // Shared infrastructure must not couple host shutdown to delivery settings;
-        // only the Worker wires ShutdownGracePeriod into HostOptions.
+        // The Worker composition root, not its Infrastructure module, owns shutdown behavior.
         Assert.Equal(new HostOptions().ShutdownTimeout, hostOptions.ShutdownTimeout);
     }
 
     [Fact]
-    public void InfrastructureRegistration_InvalidConfiguredRelationship_FailsStartupRegistration()
+    public void WorkerInfrastructureRegistration_InvalidConfiguredRelationship_FailsStartupRegistration()
     {
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -131,13 +130,13 @@ public sealed class DeliveryExecutionOptionsTests
         });
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            new ServiceCollection().AddIntegriosInfrastructure(configuration));
+            new ServiceCollection().AddIntegriosWorkerInfrastructure(configuration));
 
         Assert.Contains("AttemptDeadline", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task InfrastructureRegistration_DeliveryClientDoesNotFollowRedirects()
+    public async Task WorkerInfrastructureRegistration_DeliveryClientDoesNotFollowRedirects()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -151,7 +150,7 @@ public sealed class DeliveryExecutionOptionsTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddIntegriosApplication();
-        services.AddIntegriosInfrastructure(configuration);
+        services.AddIntegriosWorkerInfrastructure(configuration);
         await using ServiceProvider provider = services.BuildServiceProvider();
         IDeliveryClient deliveryClient = provider.GetRequiredService<IDeliveryClient>();
 

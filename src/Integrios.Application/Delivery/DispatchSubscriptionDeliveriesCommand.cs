@@ -321,8 +321,12 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             string engine = engineEl.GetString() ?? string.Empty;
             string version = versionEl.GetString() ?? string.Empty;
             string expression = expressionEl.GetString() ?? string.Empty;
+            var transform = new TransformSpec(engine, version, expression);
             TransformContext context = new(row.EventType, row.TopicName, row.AcceptedAt);
-            string output = transformEvaluator.Evaluate(expression, row.PayloadJson, context);
+            string output = transformEvaluator.Evaluate(
+                transform,
+                row.PayloadJson,
+                context);
             return (output, null);
         }
         catch (TransformEvaluationException ex)

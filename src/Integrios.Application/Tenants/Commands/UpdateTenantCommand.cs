@@ -10,7 +10,7 @@ public sealed record UpdateTenantCommand(
     string? Environment
 ) : IRequest<TenantResponse?>;
 
-public sealed class UpdateTenantCommandHandler(ITenantRepository repository)
+internal sealed class UpdateTenantCommandHandler(ITenantRepository repository)
     : IRequestHandler<UpdateTenantCommand, TenantResponse?>
 {
     public async Task<TenantResponse?> Handle(UpdateTenantCommand command, CancellationToken cancellationToken)

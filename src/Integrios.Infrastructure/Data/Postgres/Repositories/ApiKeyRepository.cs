@@ -8,48 +8,6 @@ namespace Integrios.Infrastructure.Data;
 
 public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : IApiKeyRepository
 {
-    // Data plane: resolve tenant context from an incoming ApiKey credential
-    public async Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(
-        string keyHash, CancellationToken cancellationToken = default)
-    {
-        const string sql = """
-            SELECT
-                c.id           AS ApiKeyId,
-                c.tenant_id    AS ApiKeyTenantId,
-                c.name         AS ApiKeyName,
-                c.key_prefix   AS ApiKeyKeyPrefix,
-                c.key_hash     AS ApiKeyKeyHash,
-                c.status       AS ApiKeyStatus,
-                c.created_at   AS ApiKeyCreatedAt,
-                c.expires_at   AS ApiKeyExpiresAt,
-                c.last_used_at AS ApiKeyLastUsedAt,
-                c.revoked_at   AS ApiKeyRevokedAt,
-                c.description  AS ApiKeyDescription,
-                t.id           AS TenantId,
-                t.slug         AS TenantSlug,
-                t.name         AS TenantName,
-                t.status       AS TenantStatus,
-                t.environment  AS TenantEnvironment,
-                t.created_at   AS TenantCreatedAt,
-                t.updated_at   AS TenantUpdatedAt,
-                t.description  AS TenantDescription
-            FROM api_keys c
-            JOIN tenants t ON t.id = c.tenant_id
-            WHERE c.key_hash = @KeyHash
-              AND c.status = 'active'
-              AND t.status = 'active'
-              AND (c.expires_at IS NULL OR c.expires_at > now())
-            """;
-
-        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        var row = await connection.QuerySingleOrDefaultAsync<JoinRow>(sql, new { KeyHash = keyHash });
-        if (row is null)
-            return null;
-
-        return (row.ToApiKey(), row.ToTenant());
-    }
-
-    // Admin plane: create a new API key for a tenant
     public async Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken = default)
     {
         const string sql = """
@@ -173,54 +131,4 @@ public sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : I
         };
     }
 
-    // Row type for the data-plane join query (aliased columns)
-    private sealed record JoinRow
-    {
-        public Guid ApiKeyId { get; init; }
-        public Guid ApiKeyTenantId { get; init; }
-        public string ApiKeyName { get; init; } = "";
-        public string ApiKeyKeyPrefix { get; init; } = "";
-        public string ApiKeyKeyHash { get; init; } = "";
-        public string ApiKeyStatus { get; init; } = "";
-        public DateTimeOffset ApiKeyCreatedAt { get; init; }
-        public DateTimeOffset? ApiKeyExpiresAt { get; init; }
-        public DateTimeOffset? ApiKeyLastUsedAt { get; init; }
-        public DateTimeOffset? ApiKeyRevokedAt { get; init; }
-        public string? ApiKeyDescription { get; init; }
-        public Guid TenantId { get; init; }
-        public string TenantSlug { get; init; } = "";
-        public string TenantName { get; init; } = "";
-        public string TenantStatus { get; init; } = "";
-        public string? TenantEnvironment { get; init; }
-        public DateTimeOffset TenantCreatedAt { get; init; }
-        public DateTimeOffset TenantUpdatedAt { get; init; }
-        public string? TenantDescription { get; init; }
-
-        public ApiKey ToApiKey() => new()
-        {
-            Id = ApiKeyId,
-            TenantId = ApiKeyTenantId,
-            Name = ApiKeyName,
-            KeyPrefix = ApiKeyKeyPrefix,
-            KeyHash = ApiKeyKeyHash,
-            Status = Enum.Parse<OperationalStatus>(ApiKeyStatus, ignoreCase: true),
-            CreatedAt = ApiKeyCreatedAt,
-            ExpiresAt = ApiKeyExpiresAt,
-            LastUsedAt = ApiKeyLastUsedAt,
-            RevokedAt = ApiKeyRevokedAt,
-            Description = ApiKeyDescription,
-        };
-
-        public Tenant ToTenant() => new()
-        {
-            Id = TenantId,
-            Slug = TenantSlug,
-            Name = TenantName,
-            Status = Enum.Parse<OperationalStatus>(TenantStatus, ignoreCase: true),
-            Environment = TenantEnvironment,
-            CreatedAt = TenantCreatedAt,
-            UpdatedAt = TenantUpdatedAt,
-            Description = TenantDescription,
-        };
-    }
 }

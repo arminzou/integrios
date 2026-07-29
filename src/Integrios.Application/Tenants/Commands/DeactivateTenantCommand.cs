@@ -5,7 +5,7 @@ namespace Integrios.Application.Tenants;
 
 public sealed record DeactivateTenantCommand(Guid Id) : IRequest<bool>;
 
-public sealed class DeactivateTenantCommandHandler(ITenantRepository repository)
+internal sealed class DeactivateTenantCommandHandler(ITenantRepository repository)
     : IRequestHandler<DeactivateTenantCommand, bool>
 {
     public Task<bool> Handle(DeactivateTenantCommand command, CancellationToken cancellationToken)

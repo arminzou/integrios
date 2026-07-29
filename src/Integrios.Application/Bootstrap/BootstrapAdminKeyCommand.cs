@@ -8,7 +8,7 @@ public sealed record BootstrapAdminKeyCommand(string PublicKey, string? Secret) 
 
 public sealed record BootstrapAdminKeyResult(bool Created, string? GeneratedSecret);
 
-public sealed class BootstrapAdminKeyCommandHandler(IAdminKeyRepository repository)
+internal sealed class BootstrapAdminKeyCommandHandler(IAdminKeyRepository repository)
     : IRequestHandler<BootstrapAdminKeyCommand, BootstrapAdminKeyResult>
 {
     public async Task<BootstrapAdminKeyResult> Handle(BootstrapAdminKeyCommand command, CancellationToken cancellationToken)

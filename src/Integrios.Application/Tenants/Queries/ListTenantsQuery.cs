@@ -5,7 +5,7 @@ namespace Integrios.Application.Tenants;
 
 public sealed record ListTenantsQuery(string? AfterCursor, int Limit) : IRequest<TenantListResponse>;
 
-public sealed class ListTenantsQueryHandler(ITenantRepository repository)
+internal sealed class ListTenantsQueryHandler(ITenantRepository repository)
     : IRequestHandler<ListTenantsQuery, TenantListResponse>
 {
     public async Task<TenantListResponse> Handle(ListTenantsQuery query, CancellationToken cancellationToken)

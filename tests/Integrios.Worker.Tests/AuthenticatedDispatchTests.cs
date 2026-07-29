@@ -444,8 +444,6 @@ public sealed class AuthenticatedDispatchTests
             return Task.FromResult(FinalizationResult);
         }
 
-        public Task<bool> ReplayDeadLetteredAsync(Guid tenantId, Guid eventId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
     }
 
     private static DeliveryFinalizationResult Applied(SubscriptionDeliveryDisposition disposition) =>
@@ -506,11 +504,14 @@ public sealed class AuthenticatedDispatchTests
 
     private sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
     {
-        public string? ValidateExpression(string engine, string version, string expression) => null;
+        public string? ValidateExpression(TransformSpec transform) => null;
 
-        public string Evaluate(string expression, string payloadJson, TransformContext context)
+        public string Evaluate(
+            TransformSpec transform,
+            string payloadJson,
+            TransformContext context)
         {
-            _ = expression;
+            _ = transform;
             _ = context;
             if (error is not null)
             {
