@@ -6,7 +6,7 @@ namespace Integrios.Application.Connections;
 
 public sealed record GetConnectionByIdQuery(Guid TenantId, Guid Id) : IRequest<ConnectionResponse?>;
 
-public sealed class GetConnectionByIdQueryHandler(IConnectionRepository repository)
+internal sealed class GetConnectionByIdQueryHandler(IConnectionRepository repository)
     : IRequestHandler<GetConnectionByIdQuery, ConnectionResponse?>
 {
     public async Task<ConnectionResponse?> Handle(GetConnectionByIdQuery query, CancellationToken cancellationToken)

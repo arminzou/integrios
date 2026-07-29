@@ -6,7 +6,7 @@ namespace Integrios.Application.Integrations;
 
 public sealed record ListIntegrationsQuery(string? AfterCursor, int Limit) : IRequest<IntegrationListResponse>;
 
-public sealed class ListIntegrationsQueryHandler(IIntegrationRepository repository)
+internal sealed class ListIntegrationsQueryHandler(IIntegrationRepository repository)
     : IRequestHandler<ListIntegrationsQuery, IntegrationListResponse>
 {
     public async Task<IntegrationListResponse> Handle(ListIntegrationsQuery query, CancellationToken cancellationToken)

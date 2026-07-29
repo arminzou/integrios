@@ -7,7 +7,7 @@ namespace Integrios.Application.Bootstrap;
 
 public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Integration>>;
 
-public sealed class BootstrapBuiltinsCommandHandler(IIntegrationRepository repository)
+internal sealed class BootstrapBuiltinsCommandHandler(IIntegrationRepository repository)
     : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Integration>>
 {
     public async Task<IReadOnlyList<Integration>> Handle(BootstrapBuiltinsCommand command, CancellationToken cancellationToken)

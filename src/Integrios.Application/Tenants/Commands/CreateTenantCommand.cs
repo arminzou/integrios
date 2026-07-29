@@ -12,7 +12,7 @@ public sealed record CreateTenantCommand(
     string? Description
 ) : IRequest<TenantResponse>;
 
-public sealed class CreateTenantCommandHandler(ITenantRepository repository)
+internal sealed class CreateTenantCommandHandler(ITenantRepository repository)
     : IRequestHandler<CreateTenantCommand, TenantResponse>
 {
     public async Task<TenantResponse> Handle(CreateTenantCommand command, CancellationToken cancellationToken)

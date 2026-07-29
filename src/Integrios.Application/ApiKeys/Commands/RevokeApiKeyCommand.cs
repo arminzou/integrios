@@ -5,7 +5,7 @@ namespace Integrios.Application.ApiKeys;
 
 public sealed record RevokeApiKeyCommand(Guid TenantId, Guid Id) : IRequest<bool>;
 
-public sealed class RevokeApiKeyCommandHandler(IApiKeyRepository repository)
+internal sealed class RevokeApiKeyCommandHandler(IApiKeyRepository repository)
     : IRequestHandler<RevokeApiKeyCommand, bool>
 {
     public Task<bool> Handle(RevokeApiKeyCommand command, CancellationToken cancellationToken)

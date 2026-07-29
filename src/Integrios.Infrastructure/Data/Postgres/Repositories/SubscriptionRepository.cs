@@ -132,6 +132,7 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
         var hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
+        int fetchLimit = limit + 1;
 
         var sql = hasCursor
             ? $"""
@@ -158,14 +159,18 @@ public sealed class SubscriptionRepository(IDbConnectionFactory connectionFactor
         var rows = (await connection.QueryAsync<SubscriptionAdminRow>(
             new CommandDefinition(
                 sql,
-                new { TenantId = tenantId, TopicId = topicId, CursorTime = cursorTime, CursorId = cursorId, Limit = limit },
+                new { TenantId = tenantId, TopicId = topicId, CursorTime = cursorTime, CursorId = cursorId, Limit = fetchLimit },
                 cancellationToken: cancellationToken))).ToList();
 
         if (rows.Count == 0)
             return ([], null);
 
+        bool hasMore = rows.Count > limit;
+        if (hasMore)
+            rows.RemoveAt(rows.Count - 1);
+
         var items = rows.Select(static row => row.ToSubscription()).ToList();
-        var nextCursor = rows.Count == limit
+        var nextCursor = hasMore
             ? PageCursor.Encode(rows[^1].CreatedAt, rows[^1].Id)
             : null;
 

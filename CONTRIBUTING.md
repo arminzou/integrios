@@ -4,8 +4,9 @@ Thanks for your interest. Integrios is an early-stage, open-source integration p
 contributions, issues, and feedback are welcome.
 
 > **Maturity:** this is a preview release. The backend foundation works end to end, but
-> some capabilities (authenticated delivery to real downstream systems, real connectors,
-> an admin UI) are planned and not yet implemented. See the README "Status & Limitations".
+> some capabilities (Operator-authored Integration definitions, richer generic HTTP request
+> configuration, and an Operator admin UI) are planned and not yet implemented. See the README
+> preview note for the current release boundary.
 
 ## Getting set up
 

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Integrios.Application.Abstractions;
 using Integrios.Application.Subscriptions;
 using MediatR;
 
@@ -23,15 +22,8 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid topicId,
         CreateSubscriptionRequest request,
         IMediator mediator,
-        ITransformEvaluator transformEvaluator,
         CancellationToken cancellationToken)
     {
-        var validationError = ValidateMatchRules(request.MatchRules) ?? ValidateTransformConfig(request.Transform, transformEvaluator);
-        if (validationError is not null)
-        {
-            return validationError;
-        }
-
         var response = await mediator.Send(
             new CreateSubscriptionCommand(
                 tenantId,
@@ -79,15 +71,8 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid id,
         UpdateSubscriptionRequest request,
         IMediator mediator,
-        ITransformEvaluator transformEvaluator,
         CancellationToken cancellationToken)
     {
-        var validationError = ValidateMatchRules(request.MatchRules) ?? ValidateTransformConfig(request.Transform, transformEvaluator);
-        if (validationError is not null)
-        {
-            return validationError;
-        }
-
         var response = await mediator.Send(
             new UpdateSubscriptionCommand(
                 tenantId,
@@ -115,54 +100,6 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         return deactivated ? Results.Ok() : Results.NotFound();
     }
 
-    private static IResult? ValidateMatchRules(JsonElement matchRules)
-    {
-        if (matchRules.ValueKind != JsonValueKind.Object)
-        {
-            return InvalidMatchRules();
-        }
-
-        var enumerator = matchRules.EnumerateObject();
-        if (!enumerator.MoveNext())
-        {
-            return InvalidMatchRules();
-        }
-
-        var property = enumerator.Current;
-        if (property.Name != "event_type")
-        {
-            return InvalidMatchRules();
-        }
-
-        if (enumerator.MoveNext())
-        {
-            return InvalidMatchRules();
-        }
-
-        if (property.Value.ValueKind != JsonValueKind.String)
-        {
-            return InvalidMatchRules();
-        }
-
-        return string.IsNullOrWhiteSpace(property.Value.GetString()) ? InvalidMatchRules() : null;
-    }
-
-    private static IResult? ValidateTransformConfig(JsonElement? transform, ITransformEvaluator evaluator)
-    {
-        if (transform is null || transform.Value.ValueKind == JsonValueKind.Null)
-        {
-            return null;
-        }
-
-        var error = TransformConfig.Parse(transform.Value, evaluator, out _);
-        return error is not null ? InvalidTransform(error) : null;
-    }
-
-    private static IResult InvalidMatchRules() =>
-        Results.BadRequest(new { error = "matchRules must be an object with exactly one non-empty string property: event_type" });
-
-    private static IResult InvalidTransform(string reason) =>
-        Results.BadRequest(new { error = reason });
 }
 
 internal sealed record CreateSubscriptionRequest(

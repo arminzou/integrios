@@ -35,7 +35,7 @@ public sealed class TopicsEndpoints : IEndpointGroup
         string? after = null,
         int limit = 20)
     {
-        limit = Math.Clamp(limit, 1, 100);
+        limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         var response = await mediator.Send(new ListTopicsByTenantQuery(tenantId, after, limit), cancellationToken);
         return Results.Ok(response);
     }

@@ -1,116 +1,170 @@
 # Architecture
 
-![Integrios architecture](assets/architecture-diagram.png)
+## Product boundary
 
-## Why this design
+Integrios is an open-source, self-hostable, Operator-run, multi-tenant HTTP integration platform.
+The engineering team running a deployment owns all control-plane configuration. A Tenant is an
+ownership and isolation boundary for configuration and runtime data; it is not a control-plane user.
 
-Webhook-heavy and integration-heavy systems tend to fail in predictable ways:
+Integrios concentrates on one operational problem: durably accept an Event, apply Tenant-aware
+routing and transformation, and reliably deliver it over HTTP while preserving retry, dead-letter,
+replay, and attempt history. It is not a no-code workflow builder, connector marketplace, ETL
+platform, API gateway, or multi-protocol runtime.
 
-- upstream systems retry when they do not get a timely acknowledgment
-- downstream systems become slow, unavailable, or rate-limited
-- naive request/response coupling turns transient failures into data loss or duplicated side effects
+## System shape
 
-Integrios is built around well-established patterns that address those problems directly:
+```mermaid
+flowchart LR
+    Operator[Operator] -->|configures| Admin[Admin<br/>control plane]
+    Producer[External Event producer] -->|generic Event + ApiKey| Ingress[Ingress<br/>data plane]
+    Adapter[Curated built-in<br/>HTTP source adapter] -.->|normalized Event| Ingress
+    Admin --> DB[(PostgreSQL)]
+    Ingress -->|Event + outbox<br/>one transaction| DB
+    DB -->|fanout work| Worker[Worker]
+    Worker -->|generic HTTP delivery| Destinations[HTTP destinations]
+    Worker -->|attempt state,<br/>retry and DLQ| DB
+```
 
-- durable acceptance boundaries to avoid data loss at ingress
-- a transactional outbox to safely bridge write paths and async processing
-- idempotent ingestion and at-least-once delivery semantics
-- explicit retry, dead-letter, and replay paths for failure recovery
-- strict tenant isolation and auditable delivery history
+The built-in source-adapter path is part of the finalized model but is not implemented in the
+current release. External Event producers and generic intake are the universal source path.
 
-## Control plane vs data plane
+## Control plane and data plane
 
-Integrios uses a deliberate split between platform intent and runtime execution.
+Integrios separates platform intent from runtime execution.
 
-**Control plane** (`Integrios.Admin`): Operator-owned Tenant lifecycle and boundaries, Integration definitions and capability contracts, Connection configuration and secret references, Topic and Subscription configuration, and policy concerns like quotas, limits, and governance. Tenants are ownership boundaries, not control-plane users.
+**Control plane** (`Integrios.Admin`): Operator-owned Tenant lifecycle, Integration catalog,
+Connection configuration and secret references, Topic and Subscription authoring, and transform
+preview. Tenants never receive control-plane authority.
 
-**Data plane** (`Integrios.Ingress` for intake, `Integrios.Worker` for delivery): ingress request validation, auth, and tenant resolution; durable acceptance-boundary persistence; outbox-driven asynchronous handoff; routing, transformation, and delivery execution against destination connections; retries, dead-lettering, replay, and delivery tracking; plus tracing, logging, and operational observability.
+**Data plane** (`Integrios.Ingress` and `Integrios.Worker`): request authentication and Tenant
+resolution, source-Connection and Topic validation, durable Event acceptance, fanout, transformation,
+HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
 
-This separation keeps runtime processing paths focused while letting control logic evolve independently.
+The services share PostgreSQL. Admin owns configuration writes; Worker reads the configuration it
+needs directly from PostgreSQL and does not call Admin at runtime.
 
-Generic ApiKey intake is implemented today. Provider-native webhook verification, polling,
-normalization, and provider-specific actions describe the Integration boundary Integrios is
-building toward; individual adapters arrive incrementally rather than changing the common Event
-pipeline.
+## Core model
+
+- **Tenant** is the top-level ownership and isolation boundary.
+- **ApiKey** is an Integrios-issued machine credential for generic Event intake and resolves one
+  Tenant.
+- **Integration** is a deployment-wide reusable declarative HTTP contract for an external-system
+  class. It may be built in or Operator-authored, is shared across Tenants, and contains no Tenant
+  data or Operator-authored executable code.
+- **Connection** is a Tenant-owned configured instance of one Integration. It owns Tenant-specific
+  endpoint configuration, auth selection, and secret references.
+- **Topic** is a Tenant-owned named Event stream. Configured source Connections may publish to it.
+- **Subscription** independently filters a Topic, optionally transforms matching Events, and
+  delivers them through one destination Connection. It owns the versioned HTTP delivery
+  configuration and its own delivery/DLQ scope.
+- **Event** is the accepted durable work item from one source Connection on one Topic.
+- **SubscriptionDelivery** is the per-(Event, Subscription) state and execution snapshot created by
+  fanout.
+- **DeliveryAttempt** records one concrete outbound execution.
+
+The same Integration can back Connections for many Tenants. For example, one deployment-wide
+`klaviyo` Integration can constrain separate Premier Group and Contoso Connections without sharing
+their base URIs, credentials, or runtime data.
+
+## Source model
+
+Generic HTTP Event intake through an external **Event producer** is universal. The Event producer is
+an Operator-controlled application or automation—such as a source-system plugin, Power Automate
+flow, or small service—that:
+
+- owns source-system credentials and provider-specific adaptation
+- converts the source change to the generic Integrios Event contract
+- authenticates to Integrios with an ApiKey
+- identifies a configured source Connection and an allowed Topic
+
+Integrios may later ship a small curated set of built-in provider HTTP source adapters when a
+popular, stable contract would otherwise make every adopter repeat meaningful security or
+operational work. A GitHub adapter, for example, could verify `X-Hub-Signature-256`, use
+`X-GitHub-Delivery` for idempotency, map `X-GitHub-Event` to Event type, handle pings, and retain the
+JSON payload. Every built-in adapter must cross the same durable Event-acceptance seam.
+
+Operator-authored Integrations cannot load runtime code. Polling remains external Event-producer
+behavior. Integrios does not commit to a broad provider catalog or an in-process plugin system.
+
+## Destination model
+
+HTTP(S) is the only destination protocol. One generic HTTP module executes every outbound request;
+there are no provider-specific destination adapters or destination-action domain objects.
+
+In the finalized model:
+
+- a destination Connection owns the absolute base URI, authentication, Tenant-specific non-secret
+  configuration, and secret references
+- a Subscription owns a versioned method (`POST`, `PUT`, `PATCH`, or `DELETE`), a literal relative
+  path or path expression, restricted static headers, and a transformed JSON body or explicit no-body
+- a path can never replace the Connection's scheme, host, or port
+- OAuth 2.0 client credentials is a reusable auth scheme; interactive OAuth flows are out of scope
+- fanout snapshots HTTP configuration, relevant non-secret Connection configuration, and secret
+  references; the Worker resolves current secret values for each attempt
+- any `2xx` response is success; other outcomes follow the fixed retry/DLQ policy
+- successful response bodies do not become persisted workflow state or new Events
+
+Dynamic headers, arbitrary methods, `GET`/`HEAD`/`CONNECT`/`TRACE`, form or multipart data, binary or
+streaming bodies, response-driven workflows, and non-HTTP protocols are out of scope. Updating
+several external entities means creating several independent Subscriptions so each update retains
+its own retry, DLQ, and replay lifecycle.
+
+The current release implements a narrower slice: the built-in `webhook` Integration, fixed JSON
+`POST` delivery to an absolute `Connection.config.url`, and open, API-key-header, or bearer-token
+authentication. Operator-authored Integrations, richer Subscription-owned HTTP configuration,
+OAuth client credentials, and curated built-in source adapters are target capabilities, not shipped
+features.
 
 ## Core processing flow
 
-1. Receive an Event from a custom source through generic intake, or from a provider-native Integration trigger.
-2. Authenticate generic intake with an Integrios ApiKey, or apply the provider's webhook/polling authentication in its Integration.
-3. Resolve the Tenant and source Connection, then normalize provider-native input to the Event contract.
-4. Persist accepted work at the durable acceptance boundary.
-5. Publish through the database + outbox path.
-6. Fan out to matching subscriptions using tenant topic and subscription configuration.
-7. Transform payloads per subscription rules.
-8. Deliver to destination connections.
-9. Track event status and delivery-attempt history.
-10. Retry, dead-letter, or replay when recovery is needed.
+1. An external Event producer sends the generic Event contract to Ingress and authenticates with an
+   ApiKey. A future curated built-in adapter may instead verify and normalize a provider HTTP request.
+2. Ingress resolves the Tenant and validates or derives the active source Connection and its Topic
+   association.
+3. One PostgreSQL transaction writes the canonical Event and its outbox row before Ingress
+   acknowledges acceptance.
+4. Worker fanout reads matching active Subscriptions and creates one SubscriptionDelivery for each.
+5. Each SubscriptionDelivery is claimed independently, transformed, and sent through the generic
+   HTTP delivery module.
+6. Worker records the DeliveryAttempt and advances that delivery to success, retry, or dead letter.
+7. Replay schedules dead-lettered delivery work again without discarding prior attempt history.
 
-## Key platform concepts
+## Durability and delivery semantics
 
-### Durable acceptance boundary
+### Durable acceptance and transactional outbox
 
-`Integrios.Ingress` accepts events and persists them durably before acknowledging the caller. The boundary is a single transaction that writes both:
+The Event and outbox row are committed together. This prevents both “accepted without enqueueing”
+and “enqueued without accepting.” The outbox decouples source response time from downstream
+availability and avoids a database/message-transport dual write.
 
-- the canonical `events` record
-- a corresponding `outbox` record for async processing
+### Idempotency and source provenance
 
-This guarantees the system never "accepts without enqueueing" or "enqueues without accepting."
+Generic callers provide a `sourceConnectionId` and may provide an `idempotencyKey`. Ingress accepts
+the source Connection only when it belongs to the authenticated Tenant, is active, uses a
+source-capable Integration, and may publish to the selected Topic. Repeated submissions with the
+same Tenant-scoped idempotency key resolve to the same accepted Event.
 
-### Transactional outbox
+Provider credentials and webhook secrets are not Integrios ApiKeys. Connections store logical
+secret references; the Operator materializes their values through the deployment's secret provider,
+and Worker resolves them immediately before an attempt without persisting the values.
 
-The outbox is the handoff between synchronous API requests and asynchronous worker execution. It avoids dual-write consistency bugs and lets the worker poll/claim work without coupling upstream latency to downstream reliability.
+### Independent, at-least-once delivery
 
-### Idempotency and de-duplication
+Every matching Subscription gets independent state, retry scheduling, dead-lettering, and replay.
+One failing destination does not block another.
 
-Callers can provide an `idempotencyKey` on `POST /events`. Within a tenant scope, duplicate submissions with the same key resolve to the same accepted event, preventing duplicate downstream side effects from retries, network timeouts, or webhook replays.
+Outbound HTTP delivery is at least once. A process can stop after a destination accepts a request but
+before Integrios records success, so recovery may repeat the logical delivery. Stable Event and
+SubscriptionDelivery identifiers let downstream systems deduplicate; per-attempt identifiers support
+diagnostics. Fenced leases prevent an older Worker from overwriting a newer authoritative result,
+and indeterminate attempts preserve ambiguity rather than reporting a false confirmed failure.
 
-Every accepted event also identifies its source connection. `POST /events` requires a
-`sourceConnectionId`; Ingress accepts it only when the connection belongs to the authenticated
-tenant, is active, uses a source-capable integration, and is associated with the selected topic.
+## Scaling and observability
 
-### Multi-tenant isolation
+Ingress instances are stateless and Worker replicas safely claim disjoint PostgreSQL work with
+`FOR UPDATE SKIP LOCKED`. PostgreSQL is the current durable backbone; another transport should be
+introduced only when measured scale or operational pressure justifies it.
 
-Tenants are first-class ownership boundaries in auth and data access, not backend actors. Integrios ApiKeys resolve generic intake to a Tenant context, while provider-native triggers resolve the same context through their Connection. Event reads and writes remain Tenant-scoped to prevent cross-Tenant exposure.
-
-External provider API keys, OAuth credentials, and webhook secrets are not Integrios ApiKeys. The
-Operator materializes those values through Tenant-scoped Connection secret references; source and
-destination Integration capabilities consume them without persisting resolved values.
-
-### Asynchronous processing and backpressure
-
-Worker execution is decoupled from ingestion, so the intake API stays responsive under load or downstream instability. This allows:
-
-- smoothing bursty traffic
-- isolating slow or failing downstream connections
-- scaling workers independently from intake instances
-
-### Reliability and failure resilience
-
-The platform is built for controlled failure handling:
-
-- retry policies with bounded attempts
-- dead-letter queues for terminal failures
-- replay paths for safe reprocessing
-- just-in-time, fenced leases that make abandoned per-subscription work reclaimable without letting
-  an older worker overwrite a newer result
-- atomic delivery-attempt and current-state transitions inside Postgres
-- append-only, monotonically numbered delivery-attempt history across retry and replay
-
-Outbound HTTP delivery is at least once. A process can stop after a downstream accepts a request but
-before Integrios persists success, so recovery may repeat that logical delivery. Every request
-carries stable Event and SubscriptionDelivery identifiers for downstream deduplication plus a
-per-attempt identifier and number for diagnostics.
-
-### Scalability model
-
-Integrios scales horizontally, and *differently per deployment*, through configuration and preserved seams rather than bundled infrastructure:
-
-- stateless intake instances behind load balancers
-- worker concurrency tuned by queue depth and throughput targets
-- tenant-aware routing and processing partitioning
-- storage-backed durability with clear ownership of consistency boundaries
-- transport behind a port (`IEventBus`): a Postgres outbox/bus by default, with an alternative like Kafka swappable in only when scale justifies it
-- observability split into aggregate Operator telemetry and Operator-facing Tenant-scoped drill-down from the durable model, exported to whatever backend the operating team runs
-
-This supports progressive evolution from single-node operation to larger multi-instance deployments without forking the product for a given team's scale.
+Integrios emits structured logs, metrics, and OTLP-capable traces but bundles no production
+observability backend. Aggregate telemetry remains low-cardinality; Tenant-specific delivery detail
+comes from the durable Event, SubscriptionDelivery, and DeliveryAttempt model.

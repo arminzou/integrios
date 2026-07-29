@@ -45,6 +45,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public ISubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
 
     private IDbConnectionFactory connectionFactory = null!;
+    private IDeadLetterReplay deadLetterReplay = null!;
     private IOutboxFanout outboxFanout = null!;
     private ISubscriptionRepository subscriptionRepository = null!;
     private IEventRepository eventRepository = null!;
@@ -57,6 +58,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
         var dataSource = new NpgsqlDataSourceBuilder(ConnectionString).Build();
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
+        deadLetterReplay = new PostgresDeadLetterReplay(connectionFactory);
         outboxFanout = new PostgresOutboxFanout(connectionFactory);
         subscriptionRepository = new SubscriptionRepository(connectionFactory);
         eventRepository = new EventRepository(connectionFactory);
@@ -69,6 +71,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddIntegriosApplication();
         services.AddSingleton(outboxFanout);
+        services.AddSingleton(deadLetterReplay);
         services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
         services.AddSingleton(deliveryOptions);
         services.AddSingleton(DeliveryQueue);

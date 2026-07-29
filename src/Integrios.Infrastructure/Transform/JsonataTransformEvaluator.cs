@@ -6,17 +6,15 @@ namespace Integrios.Infrastructure.Transform;
 
 public sealed class JsonataTransformEvaluator : ITransformEvaluator
 {
-    public string? ValidateExpression(string engine, string version, string expression)
+    public string? ValidateExpression(TransformSpec transform)
     {
-        if (!string.Equals(engine, "jsonata", StringComparison.OrdinalIgnoreCase))
-            return $"Unsupported engine '{engine}'. Only 'jsonata' is supported.";
-
-        if (version != "1")
-            return $"Unsupported version '{version}'. Only '1' is supported.";
+        string? unsupportedPair = ValidateEngineVersion(transform);
+        if (unsupportedPair is not null)
+            return unsupportedPair;
 
         try
         {
-            _ = new JsonataQuery(expression);
+            _ = new JsonataQuery(transform.Expression);
             return null;
         }
         catch (Exception ex)
@@ -25,12 +23,19 @@ public sealed class JsonataTransformEvaluator : ITransformEvaluator
         }
     }
 
-    public string Evaluate(string expression, string payloadJson, TransformContext context)
+    public string Evaluate(
+        TransformSpec transform,
+        string payloadJson,
+        TransformContext context)
     {
+        string? unsupportedPair = ValidateEngineVersion(transform);
+        if (unsupportedPair is not null)
+            throw new TransformEvaluationException(unsupportedPair);
+
         JsonataQuery query;
         try
         {
-            query = new JsonataQuery(expression);
+            query = new JsonataQuery(transform.Expression);
         }
         catch (Exception ex)
         {
@@ -64,6 +69,16 @@ public sealed class JsonataTransformEvaluator : ITransformEvaluator
         }
 
         return result.ToFlatString();
+    }
+
+    private static string? ValidateEngineVersion(TransformSpec transform)
+    {
+        if (!string.Equals(transform.Engine, "jsonata", StringComparison.OrdinalIgnoreCase))
+            return $"Unsupported engine '{transform.Engine}'. Only 'jsonata' is supported.";
+
+        return transform.Version != "1"
+            ? $"Unsupported version '{transform.Version}'. Only '1' is supported."
+            : null;
     }
 
     private static string Quoted(string? value) =>

@@ -202,13 +202,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage invalidTransform = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody("invalid-transform", transformedDestination, "payment.created", Jsonata("{")));
-        Assert.Equal(HttpStatusCode.BadRequest, invalidTransform.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalidTransform.StatusCode);
 
         string oversizedExpression = new('x', 65537);
         using HttpResponseMessage oversizedTransform = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody("oversized-transform", transformedDestination, "payment.created", Jsonata(oversizedExpression)));
-        Assert.Equal(HttpStatusCode.BadRequest, oversizedTransform.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, oversizedTransform.StatusCode);
 
         Guid transformedSubscription = await CreateSubscriptionAsync(
             tenant, topic, "transformed", transformedDestination, "payment.created", transform);

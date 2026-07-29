@@ -16,7 +16,7 @@ public sealed record UpdateConnectionCommand(
     string? Description
 ) : IRequest<ConnectionResponse?>;
 
-public sealed class UpdateConnectionCommandHandler(
+internal sealed class UpdateConnectionCommandHandler(
     IConnectionRepository repository,
     IIntegrationRepository integrationRepository,
     IAuthSchemeRegistry authSchemeRegistry) : IRequestHandler<UpdateConnectionCommand, ConnectionResponse?>

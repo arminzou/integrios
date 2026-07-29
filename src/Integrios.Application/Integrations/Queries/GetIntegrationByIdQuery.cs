@@ -6,7 +6,7 @@ namespace Integrios.Application.Integrations;
 
 public sealed record GetIntegrationByIdQuery(Guid Id) : IRequest<IntegrationResponse?>;
 
-public sealed class GetIntegrationByIdQueryHandler(IIntegrationRepository repository)
+internal sealed class GetIntegrationByIdQueryHandler(IIntegrationRepository repository)
     : IRequestHandler<GetIntegrationByIdQuery, IntegrationResponse?>
 {
     public async Task<IntegrationResponse?> Handle(GetIntegrationByIdQuery query, CancellationToken cancellationToken)

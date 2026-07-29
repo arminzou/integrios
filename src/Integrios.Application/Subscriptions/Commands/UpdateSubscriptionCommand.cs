@@ -20,10 +20,13 @@ public sealed record UpdateSubscriptionCommand(
 internal sealed class UpdateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     IConnectionRepository connectionRepository,
-    IIntegrationRepository integrationRepository) : IRequestHandler<UpdateSubscriptionCommand, SubscriptionResponse?>
+    IIntegrationRepository integrationRepository,
+    ITransformEvaluator transformEvaluator) : IRequestHandler<UpdateSubscriptionCommand, SubscriptionResponse?>
 {
     public async Task<SubscriptionResponse?> Handle(UpdateSubscriptionCommand command, CancellationToken cancellationToken)
     {
+        SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, transformEvaluator);
+
         var existing = await subscriptionRepository.GetByIdAsync(
             command.TenantId,
             command.TopicId,

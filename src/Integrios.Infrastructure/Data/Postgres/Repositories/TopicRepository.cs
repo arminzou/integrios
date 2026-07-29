@@ -89,6 +89,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
         var hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
+        int fetchLimit = limit + 1;
 
         var sql = hasCursor
             ? $"""
@@ -106,11 +107,15 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         var rows = (await db.QueryAsync<TopicRow>(
             new CommandDefinition(
                 sql,
-                new { TenantId = tenantId, CursorTime = cursorTime, CursorId = cursorId, Limit = limit },
+                new { TenantId = tenantId, CursorTime = cursorTime, CursorId = cursorId, Limit = fetchLimit },
                 cancellationToken: ct))).ToList();
 
         if (rows.Count == 0)
             return ([], null);
+
+        bool hasMore = rows.Count > limit;
+        if (hasMore)
+            rows.RemoveAt(rows.Count - 1);
 
         var topicIds = rows.Select(r => r.Id).ToArray();
         var sourceMap = await LoadSourcesForTopicsAsync(db, topicIds, ct);
@@ -119,7 +124,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
             .Select(r => r.ToTopic(sourceMap.TryGetValue(r.Id, out var s) ? s : []))
             .ToList();
 
-        var nextCursor = rows.Count == limit
+        var nextCursor = hasMore
             ? PageCursor.Encode(rows[^1].CreatedAt, rows[^1].Id)
             : null;
 
@@ -129,6 +134,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
     public async Task<Topic?> UpdateAsync(
         Guid tenantId,
         Guid id,
+        string? name,
         string? description,
         IReadOnlyList<Guid>? sourceConnectionIds,
         CancellationToken ct = default)
@@ -143,16 +149,30 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                     $"""
                     UPDATE topics
                     SET description = @Description, updated_at = now()
-                    WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
+                    WHERE tenant_id = @TenantId AND id = @Id AND name = @Name AND status != 'disabled'
                     RETURNING {SelectColumns}
                     """,
-                    new { TenantId = tenantId, Id = id, Description = description },
+                    new { TenantId = tenantId, Id = id, Name = name, Description = description },
                     tx,
                     cancellationToken: ct));
 
             if (row is null)
             {
+                var existingName = await db.QuerySingleOrDefaultAsync<string?>(
+                    new CommandDefinition(
+                        "SELECT name FROM topics WHERE tenant_id = @TenantId AND id = @Id",
+                        new { TenantId = tenantId, Id = id },
+                        tx,
+                        cancellationToken: ct));
                 await tx.RollbackAsync(ct);
+
+                if (existingName is not null && string.IsNullOrWhiteSpace(name))
+                    throw new TopicRequestValidationException("Topic name is required for update.");
+
+                if (existingName is not null && !string.Equals(existingName, name, StringComparison.Ordinal))
+                    throw new TopicRequestValidationException(
+                        "Topic names are immutable; create a new topic to change the stream identifier.");
+
                 return null;
             }
 
@@ -194,48 +214,6 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                 new { TenantId = tenantId, Id = id },
                 cancellationToken: ct));
         return affected > 0;
-    }
-
-    public async Task<Guid?> FindByNameAsync(Guid tenantId, string name, CancellationToken ct = default)
-    {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        return await db.QuerySingleOrDefaultAsync<Guid?>(
-            new CommandDefinition(
-                "SELECT id FROM topics WHERE tenant_id = @TenantId AND name = @Name AND status = 'active' LIMIT 1",
-                new { TenantId = tenantId, Name = name },
-                cancellationToken: ct));
-    }
-
-    public async Task<Guid?> FindActiveSourceTopicAsync(
-        Guid tenantId,
-        string name,
-        Guid sourceConnectionId,
-        CancellationToken ct = default)
-    {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        return await db.QuerySingleOrDefaultAsync<Guid?>(
-            new CommandDefinition(
-                """
-                SELECT t.id
-                FROM topics t
-                JOIN topic_sources ts
-                  ON ts.tenant_id = t.tenant_id
-                 AND ts.topic_id = t.id
-                JOIN connections c
-                  ON c.tenant_id = ts.tenant_id
-                 AND c.id = ts.connection_id
-                JOIN integrations i ON i.id = c.integration_id
-                WHERE t.tenant_id = @TenantId
-                  AND t.name = @Name
-                  AND t.status = 'active'
-                  AND c.id = @SourceConnectionId
-                  AND c.status = 'active'
-                  AND i.status = 'active'
-                  AND i.direction IN ('source', 'both')
-                LIMIT 1
-                """,
-                new { TenantId = tenantId, Name = name, SourceConnectionId = sourceConnectionId },
-                cancellationToken: ct));
     }
 
     private static async Task InsertSourcesAsync(
