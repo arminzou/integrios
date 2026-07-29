@@ -1,12 +1,12 @@
 namespace Integrios.Application.Abstractions;
 
+public sealed record TransformSpec(string Engine, string Version, string Expression);
+
 public interface ITransformEvaluator
 {
-    string? ValidateExpression(string engine, string version, string expression);
+    string? ValidateExpression(TransformSpec transform);
     string Evaluate(
-        string engine,
-        string version,
-        string expression,
+        TransformSpec transform,
         string payloadJson,
         TransformContext context);
 }

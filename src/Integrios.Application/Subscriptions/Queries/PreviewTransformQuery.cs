@@ -20,15 +20,18 @@ internal sealed class PreviewTransformQueryHandler(ITransformEvaluator evaluator
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        string? error = TransformConfigValidator.Validate(query.Transform, evaluator, out string expression);
+        string? error = TransformConfigValidator.Validate(
+            query.Transform,
+            evaluator,
+            out TransformSpec? transform);
         if (error is not null)
             return Task.FromResult(new PreviewTransformResult(error, null));
+        if (transform is null)
+            throw new InvalidOperationException("Transform validation succeeded without a parsed transform.");
 
         string inputJson = query.SampleInput.ValueKind == JsonValueKind.Undefined
             ? "{}"
             : query.SampleInput.GetRawText();
-        string engine = query.Transform.GetProperty("engine").GetString()!;
-        string version = query.Transform.GetProperty("version").GetString()!;
         TransformContext context = BuildContext(query.SampleContext);
 
         try
@@ -36,7 +39,7 @@ internal sealed class PreviewTransformQueryHandler(ITransformEvaluator evaluator
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new PreviewTransformResult(
                 null,
-                evaluator.Evaluate(engine, version, expression, inputJson, context)));
+                evaluator.Evaluate(transform, inputJson, context)));
         }
         catch (TransformEvaluationException exception)
         {

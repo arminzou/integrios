@@ -504,16 +504,14 @@ public sealed class AuthenticatedDispatchTests
 
     private sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
     {
-        public string? ValidateExpression(string engine, string version, string expression) => null;
+        public string? ValidateExpression(TransformSpec transform) => null;
 
         public string Evaluate(
-            string engine,
-            string version,
-            string expression,
+            TransformSpec transform,
             string payloadJson,
             TransformContext context)
         {
-            _ = expression;
+            _ = transform;
             _ = context;
             if (error is not null)
             {
