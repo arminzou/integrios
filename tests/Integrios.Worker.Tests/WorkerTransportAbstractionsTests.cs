@@ -9,6 +9,7 @@ using Integrios.Application.Telemetry;
 using Integrios.Domain.Delivery;
 using Integrios.Domain.Events;
 using Integrios.Infrastructure.Http.Auth;
+using Integrios.Infrastructure.Transform;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MediatR;
@@ -182,6 +183,40 @@ public sealed class WorkerTransportAbstractionsTests
         Assert.Single(capturedPayloads);
         Assert.Equal(transformedOutput, capturedPayloads[0]);
         Assert.True(Assert.Single(queue.Completions).Succeeded);
+    }
+
+    [Theory]
+    [InlineData("xslt", "1")]
+    [InlineData("jsonata", "2")]
+    public async Task DispatchSubscriptionDeliveriesCommand_RejectsUnsupportedTransformSnapshot(
+        string engine,
+        string version)
+    {
+        string transformJson = JsonSerializer.Serialize(new
+        {
+            engine,
+            version,
+            expression = "amount"
+        });
+        var queue = new FakeSubscriptionDeliveryQueue
+        {
+            ClaimedItems = [MakeWorkItem(payload: "{\"amount\":42}", transform: transformJson)]
+        };
+        var deliveryClient = new FakeDeliveryClient(new DeliveryResult(true, 200));
+        var mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(deliveryClient);
+            services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
+        });
+
+        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+
+        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
+        Assert.False(completion.Succeeded);
+        Assert.Equal(DeliveryFailurePhase.Transform, completion.FailurePhase);
+        Assert.Contains("Unsupported", completion.ErrorMessage);
+        Assert.Empty(deliveryClient.DeliveredUrls);
     }
 
     [Fact]
@@ -716,7 +751,12 @@ public sealed class WorkerTransportAbstractionsTests
     {
         public string? ValidateExpression(string engine, string version, string expression) => null;
 
-        public string Evaluate(string expression, string payloadJson, TransformContext context)
+        public string Evaluate(
+            string engine,
+            string version,
+            string expression,
+            string payloadJson,
+            TransformContext context)
         {
             if (error is not null)
                 throw new TransformEvaluationException(error);
