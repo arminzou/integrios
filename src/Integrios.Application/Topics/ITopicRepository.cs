@@ -1,6 +1,6 @@
 using Integrios.Domain.Topics;
 
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Topics;
 
 public interface ITopicRepository
 {

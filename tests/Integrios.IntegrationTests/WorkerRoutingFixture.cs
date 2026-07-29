@@ -7,6 +7,7 @@ using Integrios.Application.Abstractions.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Application.Events;
 using Integrios.Application.Outbox;
+using Integrios.Application.Subscriptions;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http;
 using Integrios.Infrastructure.Http.Auth;

@@ -1,6 +1,6 @@
 using Integrios.Domain.Integrations;
 
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Integrations;
 
 public interface IIntegrationRepository
 {

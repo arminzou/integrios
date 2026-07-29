@@ -1,4 +1,3 @@
-using Integrios.Application.Abstractions;
 using MediatR;
 
 namespace Integrios.Application.Connections;

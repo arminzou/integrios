@@ -1,4 +1,3 @@
-using Integrios.Application.Abstractions;
 using Integrios.Domain.Integrations;
 using MediatR;
 

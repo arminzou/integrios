@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Abstractions;
+using Integrios.Application.Integrations;
 using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;

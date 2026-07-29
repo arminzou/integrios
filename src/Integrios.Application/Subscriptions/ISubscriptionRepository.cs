@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Domain.Topics;
 
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Subscriptions;
 
 public interface ISubscriptionRepository
 {

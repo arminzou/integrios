@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.Abstractions;
+using Integrios.Application.Tenants;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
