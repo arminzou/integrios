@@ -8,7 +8,7 @@ using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Delivery;
 using Integrios.Domain.Integrations;
-using Integrios.Infrastructure.Http.Auth;
+using Integrios.Infrastructure.Auth;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

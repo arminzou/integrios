@@ -9,10 +9,13 @@ using Integrios.Application.Events;
 using Integrios.Application.Outbox;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Transforms;
+using Integrios.Infrastructure.Auth;
 using Integrios.Infrastructure.Data;
-using Integrios.Infrastructure.Http;
-using Integrios.Infrastructure.Http.Auth;
-using Integrios.Infrastructure.Transport;
+using Integrios.Infrastructure.Delivery;
+using Integrios.Infrastructure.Events;
+using Integrios.Infrastructure.Outbox;
+using Integrios.Infrastructure.Subscriptions;
+using Integrios.Infrastructure.Transforms;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -82,7 +85,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
         services.AddSingleton<ISecretResolver>(_ => SecretResolver);
-        services.AddSingleton<ITransformEvaluator, Integrios.Infrastructure.Transform.JsonataTransformEvaluator>();
+        services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
         services.AddLogging();
         mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
