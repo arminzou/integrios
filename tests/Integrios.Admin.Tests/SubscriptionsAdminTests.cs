@@ -114,6 +114,24 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         Assert.Null(body2.NextCursor);
     }
 
+    [Fact]
+    public async Task ListSubscriptions_ExactPageHasNoNextCursor()
+    {
+        var topic = await CreateTopicAsync("payments");
+        await CreateSubscriptionAsync(topic.Id, "sub-a", "payment.created", orderIndex: 1);
+        await CreateSubscriptionAsync(topic.Id, "sub-b", "payment.updated", orderIndex: 2);
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionListResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Items.Count);
+        Assert.Null(body.NextCursor);
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("{\"event_types\":[\"payment.created\"]}")]

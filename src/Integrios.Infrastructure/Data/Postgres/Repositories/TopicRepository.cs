@@ -89,6 +89,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
         var hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
+        int fetchLimit = limit + 1;
 
         var sql = hasCursor
             ? $"""
@@ -106,11 +107,15 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         var rows = (await db.QueryAsync<TopicRow>(
             new CommandDefinition(
                 sql,
-                new { TenantId = tenantId, CursorTime = cursorTime, CursorId = cursorId, Limit = limit },
+                new { TenantId = tenantId, CursorTime = cursorTime, CursorId = cursorId, Limit = fetchLimit },
                 cancellationToken: ct))).ToList();
 
         if (rows.Count == 0)
             return ([], null);
+
+        bool hasMore = rows.Count > limit;
+        if (hasMore)
+            rows.RemoveAt(rows.Count - 1);
 
         var topicIds = rows.Select(r => r.Id).ToArray();
         var sourceMap = await LoadSourcesForTopicsAsync(db, topicIds, ct);
@@ -119,7 +124,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
             .Select(r => r.ToTopic(sourceMap.TryGetValue(r.Id, out var s) ? s : []))
             .ToList();
 
-        var nextCursor = rows.Count == limit
+        var nextCursor = hasMore
             ? PageCursor.Encode(rows[^1].CreatedAt, rows[^1].Id)
             : null;
 
