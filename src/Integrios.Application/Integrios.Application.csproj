@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Integrios.Admin.Tests" />
+    <InternalsVisibleTo Include="Integrios.IntegrationTests" />
+    <InternalsVisibleTo Include="Integrios.Worker.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="MediatR" Version="12.5.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics" Version="10.0.5" />
