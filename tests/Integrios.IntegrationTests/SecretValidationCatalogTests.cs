@@ -1,5 +1,6 @@
 using Integrios.Domain.Common;
 using Integrios.Infrastructure.Data;
+using Integrios.Infrastructure.Secrets;
 using Npgsql;
 
 namespace Integrios.IntegrationTests;

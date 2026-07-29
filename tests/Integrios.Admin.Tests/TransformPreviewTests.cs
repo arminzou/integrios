@@ -2,7 +2,7 @@ using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Transforms;
 using Integrios.Application.Subscriptions;
-using Integrios.Infrastructure.Transform;
+using Integrios.Infrastructure.Transforms;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 

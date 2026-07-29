@@ -1,6 +1,6 @@
 using System.Net;
 using Integrios.Domain.Delivery;
-using Integrios.Infrastructure.Http;
+using Integrios.Infrastructure.Delivery;
 
 namespace Integrios.Worker.Tests;
 

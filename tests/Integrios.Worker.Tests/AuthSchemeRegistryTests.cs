@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
-using Integrios.Infrastructure.Http.Auth;
+using Integrios.Infrastructure.Auth;
 
 namespace Integrios.Worker.Tests;
 
