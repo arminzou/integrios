@@ -129,6 +129,7 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
     public async Task<Topic?> UpdateAsync(
         Guid tenantId,
         Guid id,
+        string? name,
         string? description,
         IReadOnlyList<Guid>? sourceConnectionIds,
         CancellationToken ct = default)
@@ -143,16 +144,30 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
                     $"""
                     UPDATE topics
                     SET description = @Description, updated_at = now()
-                    WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
+                    WHERE tenant_id = @TenantId AND id = @Id AND name = @Name AND status != 'disabled'
                     RETURNING {SelectColumns}
                     """,
-                    new { TenantId = tenantId, Id = id, Description = description },
+                    new { TenantId = tenantId, Id = id, Name = name, Description = description },
                     tx,
                     cancellationToken: ct));
 
             if (row is null)
             {
+                var existingName = await db.QuerySingleOrDefaultAsync<string?>(
+                    new CommandDefinition(
+                        "SELECT name FROM topics WHERE tenant_id = @TenantId AND id = @Id",
+                        new { TenantId = tenantId, Id = id },
+                        tx,
+                        cancellationToken: ct));
                 await tx.RollbackAsync(ct);
+
+                if (existingName is not null && string.IsNullOrWhiteSpace(name))
+                    throw new TopicRequestValidationException("Topic name is required for update.");
+
+                if (existingName is not null && !string.Equals(existingName, name, StringComparison.Ordinal))
+                    throw new TopicRequestValidationException(
+                        "Topic names are immutable; create a new topic to change the stream identifier.");
+
                 return null;
             }
 

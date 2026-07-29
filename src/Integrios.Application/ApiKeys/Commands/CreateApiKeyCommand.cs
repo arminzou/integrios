@@ -14,7 +14,7 @@ public sealed record CreateApiKeyCommand(
     DateTimeOffset? ExpiresAt
 ) : IRequest<CreateApiKeyResponse>;
 
-public sealed class CreateApiKeyCommandHandler(IApiKeyRepository repository)
+internal sealed class CreateApiKeyCommandHandler(IApiKeyRepository repository)
     : IRequestHandler<CreateApiKeyCommand, CreateApiKeyResponse>
 {
     public async Task<CreateApiKeyResponse> Handle(CreateApiKeyCommand command, CancellationToken cancellationToken)

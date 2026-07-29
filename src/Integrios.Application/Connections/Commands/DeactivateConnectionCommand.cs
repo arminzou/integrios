@@ -5,7 +5,7 @@ namespace Integrios.Application.Connections;
 
 public sealed record DeactivateConnectionCommand(Guid TenantId, Guid Id) : IRequest<bool>;
 
-public sealed class DeactivateConnectionCommandHandler(IConnectionRepository repository)
+internal sealed class DeactivateConnectionCommandHandler(IConnectionRepository repository)
     : IRequestHandler<DeactivateConnectionCommand, bool>
 {
     public async Task<bool> Handle(DeactivateConnectionCommand command, CancellationToken cancellationToken)

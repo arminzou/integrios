@@ -6,7 +6,7 @@ namespace Integrios.Application.ApiKeys;
 
 public sealed record GetApiKeyByIdQuery(Guid TenantId, Guid Id) : IRequest<ApiKeyResponse?>;
 
-public sealed class GetApiKeyByIdQueryHandler(IApiKeyRepository repository)
+internal sealed class GetApiKeyByIdQueryHandler(IApiKeyRepository repository)
     : IRequestHandler<GetApiKeyByIdQuery, ApiKeyResponse?>
 {
     public async Task<ApiKeyResponse?> Handle(GetApiKeyByIdQuery query, CancellationToken cancellationToken)

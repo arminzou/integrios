@@ -10,6 +10,7 @@ public interface ITopicRepository
     Task<Topic?> UpdateAsync(
         Guid tenantId,
         Guid id,
+        string? name,
         string? description,
         IReadOnlyList<Guid>? sourceConnectionIds,
         CancellationToken ct = default);

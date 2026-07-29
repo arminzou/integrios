@@ -9,7 +9,7 @@ public sealed record RotateAdminKeyCommand(string Secret) : IRequest<RotateAdmin
 
 public sealed record RotateAdminKeyResult(string PublicKey);
 
-public sealed class RotateAdminKeyCommandHandler(IAdminKeyRepository repository)
+internal sealed class RotateAdminKeyCommandHandler(IAdminKeyRepository repository)
     : IRequestHandler<RotateAdminKeyCommand, RotateAdminKeyResult>
 {
     public async Task<RotateAdminKeyResult> Handle(RotateAdminKeyCommand command, CancellationToken cancellationToken)
