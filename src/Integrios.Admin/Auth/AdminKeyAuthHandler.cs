@@ -2,7 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
-using Integrios.Application.Abstractions;
+using Integrios.Application.AdminKeys;
 using Integrios.Domain.Tenants;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;

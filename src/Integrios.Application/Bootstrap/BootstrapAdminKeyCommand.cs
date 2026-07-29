@@ -1,4 +1,4 @@
-using Integrios.Application.Abstractions;
+using Integrios.Application.AdminKeys;
 using Integrios.Domain.Tenants;
 using MediatR;
 

@@ -1,9 +1,8 @@
 using System.Data.Common;
 using Dapper;
-using Integrios.Application.Abstractions;
+using Integrios.Application.Topics;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;
-using Integrios.Application.Topics;
 using Integrios.Domain.Common;
 using Integrios.Domain.Topics;
 using Npgsql;

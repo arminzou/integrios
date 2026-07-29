@@ -1,6 +1,6 @@
 using Integrios.Domain.Tenants;
 
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Tenants;
 
 public interface ITenantRepository
 {

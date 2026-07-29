@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Connections;
+using Integrios.Application.Integrations;
 using Integrios.Application.Subscriptions;
+using Integrios.Application.Topics;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using Integrios.Domain.Topics;

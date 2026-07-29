@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Integrios.Application.Abstractions;
 using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using MediatR;

@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.Abstractions;
+using Integrios.Application.AdminKeys;
 using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.Data;

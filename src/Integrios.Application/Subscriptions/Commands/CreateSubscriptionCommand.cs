@@ -1,5 +1,8 @@
 using System.Text.Json;
 using Integrios.Application.Abstractions;
+using Integrios.Application.Connections;
+using Integrios.Application.Integrations;
+using Integrios.Application.Topics;
 using Integrios.Domain.Integrations;
 using MediatR;
 
