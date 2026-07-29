@@ -150,7 +150,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct = default) =>
             Task.FromResult<(IReadOnlyList<Topic>, string?)>(([topic], null));
 
-        public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? description, IReadOnlyList<Guid>? sourceConnectionIds, CancellationToken ct = default) =>
+        public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? name, string? description, IReadOnlyList<Guid>? sourceConnectionIds, CancellationToken ct = default) =>
             Task.FromResult<Topic?>(topic);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>

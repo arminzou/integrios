@@ -16,7 +16,7 @@ public sealed record CreateConnectionCommand(
     string? Environment,
     string? Description) : IRequest<ConnectionResponse>;
 
-public sealed class CreateConnectionCommandHandler(
+internal sealed class CreateConnectionCommandHandler(
     IConnectionRepository repository,
     IIntegrationRepository integrationRepository,
     IAuthSchemeRegistry authSchemeRegistry)
