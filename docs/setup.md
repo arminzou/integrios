@@ -37,14 +37,14 @@ The Worker runs in the background with no HTTP port.
 
 ## Quickstart: your first delivered event
 
-This drives the Admin API to onboard a tenant and a route, sends an event to Ingress, and
+This drives the Admin API to onboard a Tenant and a Subscription, sends an Event to Ingress, and
 watches the Worker deliver it to the bundled MockSink.
 
 ```bash
 ADMIN=http://localhost:5150
 INGRESS=http://localhost:5231
 AUTH="Authorization: AdminKey global_admin_key:admin_bootstrap_secret"
-WEBHOOK=00000000-0000-0000-0000-000000000001   # built-in generic webhook integration
+WEBHOOK=00000000-0000-0000-0000-000000000001   # deployment-wide built-in HTTP Integration
 
 # 1. Create a tenant
 TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: application/json' \
@@ -54,7 +54,7 @@ TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: appli
 TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/api-keys -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name":"acme-ingress"}' | jq -r .token)
 
-# 3. Create source and destination connections (destination points at MockSink)
+# 3. Create Tenant-owned source and destination Connections from the same reusable Integration
 SRC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"integrationId\":\"$WEBHOOK\",\"name\":\"acme-source\",\"config\":{\"url\":\"http://mocksink:8080/sink/acme-source\"},\"environment\":\"production\"}" | jq -r .id)
 DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
@@ -84,6 +84,11 @@ whose Integration direction is `destination` or `both` must include an absolute 
 `config.url` on both create and update. When upgrading a deployment with a legacy
 destination-capable Connection that has no URL, include a valid URL the next time that Connection
 is updated. Source-only Integration configuration remains free-form.
+
+This quickstart reflects the current implementation: Integrations are built-in and read-only, and
+delivery is a JSON `POST` to `config.url`. The finalized product model keeps HTTP as the only
+destination protocol while adding Operator-authored reusable Integration definitions and
+Subscription-owned method, relative-path, restricted-header, and JSON-or-no-body configuration.
 
 Topic update requests must include the Topic's current `name`. The name is its immutable,
 Tenant-scoped stream identifier; changing it requires creating a new Topic. Updates may change the
