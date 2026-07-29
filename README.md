@@ -2,15 +2,22 @@
 
 [![CI](https://github.com/arminzou/integrios/actions/workflows/ci.yml/badge.svg)](https://github.com/arminzou/integrios/actions/workflows/ci.yml)
 
-Integrios is an open-source, self-hostable backend integration platform. It gives engineering teams a durable boundary for receiving events, tenant-aware routing and transformation, and reliable delivery to downstream systems, with retries, dead-lettering, replay, and end-to-end observability. Run it yourself and adapt it to whatever you need to integrate.
+Integrios is an open-source, self-hostable, Operator-run HTTP integration platform. It gives
+engineering teams a durable boundary for accepting events, Tenant-aware routing and transformation,
+and reliable HTTP delivery with retries, dead-lettering, replay, and auditable delivery history.
 
 > [!NOTE]
-> **Early preview, built incrementally.** The backend foundation works end to end and is backend-first (an Operator-facing admin UI is planned). Evaluate it as a self-hostable foundation, not a turnkey production deployment. MIT licensed.
+> **Early preview, built incrementally.** Generic ApiKey-authenticated intake and authenticated JSON
+> `POST` delivery work end to end. Evaluate Integrios as a self-hostable backend foundation, not a
+> turnkey production deployment. MIT licensed.
 >
 > Not yet, but planned:
 >
-> - **Provider-native integrations.** Generic HTTP delivery supports open, API-key-header, and bearer-token authentication; provider-native webhooks, polling, OAuth lifecycle, and actions are still to come.
-> - **No admin UI.** The Operator configures every Tenant and integration through the Admin API.
+> - **Operator-authored Integration definitions and richer generic HTTP delivery.** The finalized
+>   model adds Subscription-owned methods, relative paths, restricted static headers, and optional
+>   JSON bodies without adding provider-specific destination code.
+> - **No admin UI.** The Operator configures every Tenant and its Connections, Topics, and
+>   Subscriptions through the Admin API. Integrations are currently built-in and read-only.
 > - **No Operator RBAC or rate limiting yet.** Tenant isolation is enforced at the data layer; Tenants do not receive control-plane access.
 
 ## Features
@@ -18,7 +25,8 @@ Integrios is an open-source, self-hostable backend integration platform. It give
 - Durable event intake behind a transactional-outbox acceptance boundary, so no accepted event is lost
 - ApiKey-authenticated generic intake with Tenant isolation
 - Topic/subscription routing with optional JSONata payload transforms
-- Reliable async delivery: bounded retries, dead-lettering, and replay
+- Authenticated HTTP JSON delivery using open, API-key-header, or bearer-token authentication
+- Reliable async delivery with bounded retries, dead-lettering, and replay
 - Per-event status and delivery-attempt history
 - Pluggable, vendor-neutral observability (OpenTelemetry metrics, logs, traces); bring your own backend
 - Clean control-plane / data-plane / worker separation; scales horizontally
@@ -26,9 +34,13 @@ Integrios is an open-source, self-hostable backend integration platform. It give
 
 ## Architecture
 
-![Integrios architecture](docs/assets/architecture-diagram.png)
-
 Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, integrations, connections, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingress` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
+
+An **Integration** is a reusable, deployment-wide declarative HTTP contract. A **Connection** is a
+Tenant-owned configured instance of one Integration, so the same Integration can serve many Tenants
+without sharing their endpoints or credentials. Generic external Event producers are the universal
+source path; HTTP(S) is the only destination protocol. Integrios deliberately does not require
+provider-specific destination actions or runtime plugins.
 
 For the full design (processing flow, durability guarantees, and platform concepts), see [docs/architecture.md](docs/architecture.md).
 
@@ -56,16 +68,19 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 | ------------------ | -------------------------------------------------------------------------------- |
 | Language / Runtime | C# / ASP.NET Core (.NET 10)                                                       |
 | Database           | PostgreSQL                                                                        |
-| Event backbone     | PostgreSQL transactional outbox + bus behind `IEventBus` (Kafka swappable when justified) |
+| Event backbone     | PostgreSQL transactional outbox and work queues                                 |
 | Observability      | OpenTelemetry (OTLP-capable); Prometheus + Grafana for local dev; bring your own backend |
 | Deployment         | Docker / Compose; container images on GHCR                                        |
 
 ## Use Cases
 
-- A central ingress hub for webhook-heavy ecosystems (payments, CRM, support, commerce, internal systems)
+- A durable HTTP ingress hub for Event producers around payments, CRM, support, commerce, and internal systems
 - Tenant-scoped fan-out of one event stream to multiple destinations with per-subscription logic
 - Reliable buffering and recovery during downstream outages or rate limiting
 - Auditable event and delivery history for compliance and incident response
+
+Integrios is not a no-code workflow builder, broad connector marketplace, ETL platform, API gateway,
+or multi-protocol integration runtime.
 
 ## Contributing
 
