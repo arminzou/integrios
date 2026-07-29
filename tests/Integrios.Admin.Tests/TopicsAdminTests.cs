@@ -132,6 +132,23 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
+    public async Task ListTopics_ExactPageHasNoNextCursor()
+    {
+        await PostTopicAsync(new { name = "topic-a" });
+        await PostTopicAsync(new { name = "topic-b" });
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics?limit=2"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Items.Count);
+        Assert.Null(body.NextCursor);
+    }
+
+    [Fact]
     public async Task ListTopics_ZeroLimit_UsesDefaultPageSize()
     {
         await PostTopicAsync(new { name = "zero-limit-a" });
