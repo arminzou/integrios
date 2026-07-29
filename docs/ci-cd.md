@@ -4,8 +4,8 @@ Integrios ships one tiered GitHub Actions workflow (`.github/workflows/ci.yml`) 
 as-is or fork and adapt. The tiers keep routine feedback prompt while still making complete
 qualification mandatory before publishing a release:
 
-1. **Pull request**: locked restore, dependency audit, Release build, component
-   tests, and Postgres integration tests. No configuration or secrets are required, so
+1. **Pull request**: locked restore, dependency audit, Release build, architecture and
+   component tests, and Postgres integration tests. No configuration or secrets are required, so
    this runs for fork pull requests too.
 2. **Main**: repeats the pull-request gate, then exercises migration and
    Bootstrap lifecycle behavior plus packaged deployment smoke behavior before publishing

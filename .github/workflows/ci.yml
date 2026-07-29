@@ -35,8 +35,9 @@ jobs:
       - name: Build
         run: dotnet build Integrios.slnx --configuration Release --no-restore
 
-      - name: Test component and Postgres tiers
+      - name: Test architecture, component, and Postgres tiers
         run: |
+          dotnet test tests/Integrios.Architecture.Tests/Integrios.Architecture.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Admin.Tests/Integrios.Admin.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.Tests/Integrios.Worker.Tests.csproj --configuration Release --no-build
@@ -99,11 +100,12 @@ jobs:
           cp global.json evidence/global.json
           cp .github/workflows/ci.yml evidence/ci-workflow.yml
           cat > evidence/commands.txt <<'EOF'
-          # Component/Postgres tests below ran in this workflow run's verify job; see its log.
+          # Architecture/component/Postgres tests below ran in this workflow run's verify job; see its log.
           # The full-suite command below ran in this qualify job; see qualification.log.
           dotnet restore Integrios.slnx --locked-mode
           dotnet list Integrios.slnx package --vulnerable --include-transitive --no-restore
           dotnet build Integrios.slnx --configuration Release --no-restore
+          dotnet test tests/Integrios.Architecture.Tests/Integrios.Architecture.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Admin.Tests/Integrios.Admin.Tests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.Tests/Integrios.Worker.Tests.csproj --configuration Release --no-build
