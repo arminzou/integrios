@@ -1,37 +1,48 @@
+using Integrios.Application.ApiKeys;
+using Integrios.Application.Bootstrap;
+using Integrios.Application.Connections;
+using Integrios.Application.Delivery;
+using Integrios.Application.Events;
+using Integrios.Application.Integrations;
+using Integrios.Application.Outbox;
+using Integrios.Application.Secrets;
+using Integrios.Application.Subscriptions;
 using Integrios.Application.Telemetry;
+using Integrios.Application.Tenants;
+using Integrios.Application.Topics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddIntegriosApplication(this IServiceCollection services)
+    internal static IServiceCollection AddIntegriosApplication(this IServiceCollection services)
         => AddIntegriosApplication(services, static _ => true);
 
     public static IServiceCollection AddIntegriosAdminApplication(this IServiceCollection services)
         => AddIntegriosApplication(services, type => IsInCapability(
             type,
-            "Integrios.Application.ApiKeys",
-            "Integrios.Application.Bootstrap",
-            "Integrios.Application.Connections",
-            "Integrios.Application.Integrations",
-            "Integrios.Application.Subscriptions",
-            "Integrios.Application.Tenants",
-            "Integrios.Application.Topics"));
+            typeof(IApiKeyRepository),
+            typeof(BootstrapBuiltinsCommand),
+            typeof(IConnectionRepository),
+            typeof(IIntegrationRepository),
+            typeof(ISubscriptionRepository),
+            typeof(ITenantRepository),
+            typeof(ITopicRepository)));
 
     public static IServiceCollection AddIntegriosIngressApplication(this IServiceCollection services)
         => AddIntegriosApplication(
             services,
-            type => IsInCapability(type, "Integrios.Application.Events"));
+            type => IsInCapability(type, typeof(IEventRepository)));
 
     public static IServiceCollection AddIntegriosWorkerApplication(this IServiceCollection services)
         => AddIntegriosApplication(
             services,
             type => IsInCapability(
                 type,
-                "Integrios.Application.Delivery",
-                "Integrios.Application.Outbox",
-                "Integrios.Application.Secrets"));
+                typeof(ISubscriptionDeliveryQueue),
+                typeof(IOutboxFanout),
+                typeof(ISecretResolver)));
 
     private static IServiceCollection AddIntegriosApplication(
         IServiceCollection services,
@@ -51,10 +62,11 @@ public static class DependencyInjection
         return services;
     }
 
-    private static bool IsInCapability(Type type, params string[] namespaces) =>
+    private static bool IsInCapability(Type type, params Type[] capabilityAnchors) =>
         type.Namespace is string typeNamespace
-        && namespaces.Any(namespaceName =>
-            typeNamespace.Equals(namespaceName, StringComparison.Ordinal)
-            || typeNamespace.StartsWith(namespaceName + ".", StringComparison.Ordinal));
+        && capabilityAnchors.Any(anchor =>
+            anchor.Namespace is string capabilityNamespace
+            && (typeNamespace.Equals(capabilityNamespace, StringComparison.Ordinal)
+                || typeNamespace.StartsWith(capabilityNamespace + ".", StringComparison.Ordinal)));
 
 }
