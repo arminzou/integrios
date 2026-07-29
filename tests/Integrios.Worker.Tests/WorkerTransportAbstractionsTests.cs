@@ -646,13 +646,6 @@ public sealed class WorkerTransportAbstractionsTests
         public int ClaimCallCount { get; private set; }
         private int claimIndex;
 
-        public Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default)
-        {
-            ClaimCallCount++;
-            Operations?.Add("claim");
-            return Task.FromResult<SubscriptionDeliveryWorkItem?>(claimIndex < ClaimedItems.Count ? ClaimedItems[claimIndex++] : null);
-        }
-
         public Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default)
         {
             ClaimCallCount++;
