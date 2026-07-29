@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Integrios.Infrastructure.Secrets;
 
-public sealed class ConfigurationSecretResolver(IConfiguration configuration) : ISecretResolver
+internal sealed class ConfigurationSecretResolver(IConfiguration configuration) : ISecretResolver
 {
     public string ProviderName => "configuration";
 

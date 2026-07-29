@@ -5,7 +5,7 @@ using Integrios.Domain.Delivery;
 
 namespace Integrios.Infrastructure.Delivery;
 
-public sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
+internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
 {
     public async Task<DeliveryResult> DeliverAsync(
         string url,

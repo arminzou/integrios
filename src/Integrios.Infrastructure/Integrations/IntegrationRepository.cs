@@ -8,7 +8,7 @@ using Integrios.Domain.Integrations;
 
 namespace Integrios.Infrastructure.Integrations;
 
-public sealed class IntegrationRepository(IDbConnectionFactory connectionFactory) : IIntegrationRepository
+internal sealed class IntegrationRepository(IDbConnectionFactory connectionFactory) : IIntegrationRepository
 {
     private const string SelectColumns =
         "id, key, name, direction, supported_auth_schemes::text AS supported_auth_schemes_json, status, description, created_at, updated_at";

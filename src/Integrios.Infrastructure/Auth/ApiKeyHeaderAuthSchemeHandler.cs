@@ -5,7 +5,7 @@ using Integrios.Infrastructure.Secrets;
 
 namespace Integrios.Infrastructure.Auth;
 
-public sealed class ApiKeyHeaderAuthSchemeHandler : IAuthSchemeHandler
+internal sealed class ApiKeyHeaderAuthSchemeHandler : IAuthSchemeHandler
 {
     public string Name => "api_key_header";
     public IReadOnlyList<string> RequiredConfigFields => ["header_name"];

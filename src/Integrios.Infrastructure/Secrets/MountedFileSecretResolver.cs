@@ -2,7 +2,7 @@ using Integrios.Application.Secrets;
 
 namespace Integrios.Infrastructure.Secrets;
 
-public sealed class MountedFileSecretResolver(string root) : ISecretResolver
+internal sealed class MountedFileSecretResolver(string root) : ISecretResolver
 {
     public const string DefaultRoot = "/run/secrets/integrios";
     public string ProviderName => "file";

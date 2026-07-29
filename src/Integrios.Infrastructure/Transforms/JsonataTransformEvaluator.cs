@@ -4,7 +4,7 @@ using Jsonata.Net.Native.Json;
 
 namespace Integrios.Infrastructure.Transforms;
 
-public sealed class JsonataTransformEvaluator : ITransformEvaluator
+internal sealed class JsonataTransformEvaluator : ITransformEvaluator
 {
     public string? ValidateExpression(TransformSpec transform)
     {

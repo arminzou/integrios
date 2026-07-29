@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Events;
 
-public sealed class EventRepository(IDbConnectionFactory connectionFactory) : IEventRepository
+internal sealed class EventRepository(IDbConnectionFactory connectionFactory) : IEventRepository
 {
     public async Task<IngestEventResponse> IngestAsync(
         Guid tenantId,

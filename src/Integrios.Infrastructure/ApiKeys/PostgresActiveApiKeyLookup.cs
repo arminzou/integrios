@@ -6,7 +6,7 @@ using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.ApiKeys;
 
-public sealed class PostgresActiveApiKeyLookup(IDbConnectionFactory connectionFactory)
+internal sealed class PostgresActiveApiKeyLookup(IDbConnectionFactory connectionFactory)
     : IActiveApiKeyLookup
 {
     public async Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(

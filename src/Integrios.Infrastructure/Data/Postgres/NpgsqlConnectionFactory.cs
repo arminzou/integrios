@@ -3,7 +3,7 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Data;
 
-public sealed class NpgsqlConnectionFactory(NpgsqlDataSource dataSource) : IDbConnectionFactory
+internal sealed class NpgsqlConnectionFactory(NpgsqlDataSource dataSource) : IDbConnectionFactory
 {
     public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {

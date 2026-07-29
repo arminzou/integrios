@@ -6,7 +6,7 @@ using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Outbox;
 
-public sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory) : IOutboxFanout
+internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory) : IOutboxFanout
 {
     public async Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken = default)
     {

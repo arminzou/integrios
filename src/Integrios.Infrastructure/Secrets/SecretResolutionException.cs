@@ -2,7 +2,7 @@ using Integrios.Application.Secrets;
 
 namespace Integrios.Infrastructure.Secrets;
 
-public sealed class SecretResolutionException : Exception
+internal sealed class SecretResolutionException : Exception
 {
     public SecretResolutionException(string secretReference, string providerName)
         : base($"Secret '{SafeReference(secretReference)}' could not be resolved using provider '{providerName}'.")

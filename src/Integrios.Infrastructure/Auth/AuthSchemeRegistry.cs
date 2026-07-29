@@ -3,7 +3,7 @@ using Integrios.Application.Delivery;
 
 namespace Integrios.Infrastructure.Auth;
 
-public sealed class AuthSchemeRegistry(IEnumerable<IAuthSchemeHandler> handlers) : IAuthSchemeRegistry
+internal sealed class AuthSchemeRegistry(IEnumerable<IAuthSchemeHandler> handlers) : IAuthSchemeRegistry
 {
     private readonly Dictionary<string, IAuthSchemeHandler> handlersByName =
         handlers.ToDictionary(handler => handler.Name, StringComparer.OrdinalIgnoreCase);

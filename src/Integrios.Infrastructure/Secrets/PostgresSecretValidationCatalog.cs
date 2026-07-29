@@ -8,7 +8,7 @@ using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.Secrets;
 
-public sealed class PostgresSecretValidationCatalog(IDbConnectionFactory connectionFactory)
+internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory connectionFactory)
     : ISecretValidationCatalog
 {
     private const string TenantColumns =

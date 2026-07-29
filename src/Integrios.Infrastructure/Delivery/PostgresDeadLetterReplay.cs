@@ -4,7 +4,7 @@ using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Delivery;
 
-public sealed class PostgresDeadLetterReplay(IDbConnectionFactory connectionFactory) : IDeadLetterReplay
+internal sealed class PostgresDeadLetterReplay(IDbConnectionFactory connectionFactory) : IDeadLetterReplay
 {
     public async Task<bool> ReplayDeadLetteredAsync(
         Guid tenantId,

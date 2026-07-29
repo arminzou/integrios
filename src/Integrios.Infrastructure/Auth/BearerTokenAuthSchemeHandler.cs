@@ -6,7 +6,7 @@ using Integrios.Infrastructure.Secrets;
 
 namespace Integrios.Infrastructure.Auth;
 
-public sealed class BearerTokenAuthSchemeHandler : IAuthSchemeHandler
+internal sealed class BearerTokenAuthSchemeHandler : IAuthSchemeHandler
 {
     public string Name => "bearer_token";
     public IReadOnlyList<string> RequiredConfigFields => [];
