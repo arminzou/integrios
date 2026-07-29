@@ -1,4 +1,3 @@
-using Integrios.Application.Abstractions;
 using Integrios.Application.Delivery;
 
 namespace Integrios.Worker.Tests;

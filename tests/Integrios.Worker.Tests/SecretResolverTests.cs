@@ -1,5 +1,5 @@
 using System.Text;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Secrets;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Http.Auth;
 using Microsoft.Extensions.Configuration;

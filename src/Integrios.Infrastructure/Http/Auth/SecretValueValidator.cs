@@ -1,5 +1,5 @@
 using System.Text;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Secrets;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Tenants;
 

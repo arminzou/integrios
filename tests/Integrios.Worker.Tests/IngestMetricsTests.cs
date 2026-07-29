@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.Application.Abstractions;
 using Integrios.Application.Events;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Events;

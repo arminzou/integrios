@@ -1,10 +1,11 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.Application.Abstractions;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
+using Integrios.Application.Secrets;
 using Integrios.Application.Telemetry;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Delivery;
 using Integrios.Domain.Integrations;
 using Integrios.Infrastructure.Http.Auth;

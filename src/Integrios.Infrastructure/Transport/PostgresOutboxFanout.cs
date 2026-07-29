@@ -1,5 +1,4 @@
 using Dapper;
-using Integrios.Application.Abstractions;
 using Integrios.Application.Outbox;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Events;

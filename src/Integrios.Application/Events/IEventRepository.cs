@@ -1,6 +1,4 @@
-using Integrios.Application.Events;
-
-namespace Integrios.Application.Abstractions;
+namespace Integrios.Application.Events;
 
 public interface IEventRepository
 {

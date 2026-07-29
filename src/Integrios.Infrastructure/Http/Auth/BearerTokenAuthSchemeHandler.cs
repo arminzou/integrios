@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 
 namespace Integrios.Infrastructure.Http.Auth;

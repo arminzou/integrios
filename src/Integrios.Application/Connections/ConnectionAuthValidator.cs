@@ -1,5 +1,6 @@
 using System.Text.Json;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Auth;
+using Integrios.Application.Secrets;
 using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.Connections;

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Integrios.Application.Abstractions.Auth;
+namespace Integrios.Application.Secrets;
 
 public static partial class SecretReferenceName
 {

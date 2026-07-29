@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
-using Integrios.Application.Abstractions;
-using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Auth;
+using Integrios.Application.Secrets;
+using Integrios.Application.Transforms;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Delivery;
 using Integrios.Domain.Integrations;
