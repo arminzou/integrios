@@ -196,48 +196,6 @@ public sealed class TopicRepository(IDbConnectionFactory connectionFactory) : IT
         return affected > 0;
     }
 
-    public async Task<Guid?> FindByNameAsync(Guid tenantId, string name, CancellationToken ct = default)
-    {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        return await db.QuerySingleOrDefaultAsync<Guid?>(
-            new CommandDefinition(
-                "SELECT id FROM topics WHERE tenant_id = @TenantId AND name = @Name AND status = 'active' LIMIT 1",
-                new { TenantId = tenantId, Name = name },
-                cancellationToken: ct));
-    }
-
-    public async Task<Guid?> FindActiveSourceTopicAsync(
-        Guid tenantId,
-        string name,
-        Guid sourceConnectionId,
-        CancellationToken ct = default)
-    {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        return await db.QuerySingleOrDefaultAsync<Guid?>(
-            new CommandDefinition(
-                """
-                SELECT t.id
-                FROM topics t
-                JOIN topic_sources ts
-                  ON ts.tenant_id = t.tenant_id
-                 AND ts.topic_id = t.id
-                JOIN connections c
-                  ON c.tenant_id = ts.tenant_id
-                 AND c.id = ts.connection_id
-                JOIN integrations i ON i.id = c.integration_id
-                WHERE t.tenant_id = @TenantId
-                  AND t.name = @Name
-                  AND t.status = 'active'
-                  AND c.id = @SourceConnectionId
-                  AND c.status = 'active'
-                  AND i.status = 'active'
-                  AND i.direction IN ('source', 'both')
-                LIMIT 1
-                """,
-                new { TenantId = tenantId, Name = name, SourceConnectionId = sourceConnectionId },
-                cancellationToken: ct));
-    }
-
     private static async Task InsertSourcesAsync(
         DbConnection db,
         Guid tenantId,

@@ -444,8 +444,6 @@ public sealed class AuthenticatedDispatchTests
             return Task.FromResult(FinalizationResult);
         }
 
-        public Task<bool> ReplayDeadLetteredAsync(Guid tenantId, Guid eventId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
     }
 
     private static DeliveryFinalizationResult Applied(SubscriptionDeliveryDisposition disposition) =>

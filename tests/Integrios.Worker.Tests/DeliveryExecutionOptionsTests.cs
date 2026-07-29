@@ -70,7 +70,7 @@ public sealed class DeliveryExecutionOptionsTests
         RetryPolicy policy = provider.GetRequiredService<RetryPolicy>();
 
         Assert.Equal(TimeSpan.FromMilliseconds(250), options.IdlePollInterval);
-        // The configured policy must win over the default Application registration.
+        // Worker configuration is the only delivery-policy registration.
         Assert.Equal(TimeSpan.FromSeconds(2), policy.BaseDelay);
         Assert.Equal(5, policy.MaxAttempts);
         Assert.Equal(TimeSpan.FromSeconds(4), policy.CalculateBackoff(2));

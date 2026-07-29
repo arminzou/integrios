@@ -1,4 +1,4 @@
-using Integrios.Application.Abstractions;
+using Integrios.Application.Delivery;
 using MediatR;
 
 namespace Integrios.Application.Events;
@@ -6,9 +6,9 @@ namespace Integrios.Application.Events;
 public sealed record ReplayEventCommand(Guid TenantId, Guid EventId)
     : IRequest<bool>;
 
-internal sealed class ReplayEventCommandHandler(ISubscriptionDeliveryQueue deliveryQueue)
+internal sealed class ReplayEventCommandHandler(IDeadLetterReplay deadLetterReplay)
     : IRequestHandler<ReplayEventCommand, bool>
 {
     public Task<bool> Handle(ReplayEventCommand command, CancellationToken cancellationToken) =>
-        deliveryQueue.ReplayDeadLetteredAsync(command.TenantId, command.EventId, cancellationToken);
+        deadLetterReplay.ReplayDeadLetteredAsync(command.TenantId, command.EventId, cancellationToken);
 }

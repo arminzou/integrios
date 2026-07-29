@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Integrios.Application.Abstractions;
 using Integrios.Application.Abstractions.Auth;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
@@ -27,12 +26,9 @@ public sealed record SecretValidationReport(IReadOnlyList<SecretValidationResult
 public sealed class SecretValidationSelectionException(string message) : Exception(message);
 
 internal sealed class ValidateSecretsCommandHandler(
-    ITenantRepository tenantRepository,
-    IConnectionRepository connectionRepository,
+    ISecretValidationCatalog catalog,
     ISecretResolver secretResolver) : IRequestHandler<ValidateSecretsCommand, SecretValidationReport>
 {
-    private const int PageSize = 100;
-
     public async Task<SecretValidationReport> Handle(
         ValidateSecretsCommand command,
         CancellationToken cancellationToken)
@@ -102,7 +98,7 @@ internal sealed class ValidateSecretsCommandHandler(
     {
         if (command.TenantSlug is not null)
         {
-            Tenant? tenant = await tenantRepository.GetBySlugAsync(command.TenantSlug, cancellationToken);
+            Tenant? tenant = await catalog.FindTenantBySlugAsync(command.TenantSlug, cancellationToken);
             if (tenant is null)
                 throw new SecretValidationSelectionException("The selected Tenant does not exist.");
             if (tenant.Status != OperationalStatus.Active)
@@ -110,17 +106,7 @@ internal sealed class ValidateSecretsCommandHandler(
             return [tenant];
         }
 
-        List<Tenant> tenants = [];
-        string? cursor = null;
-        do
-        {
-            (IReadOnlyList<Tenant> items, string? nextCursor) =
-                await tenantRepository.ListAsync(cursor, PageSize, cancellationToken);
-            tenants.AddRange(items.Where(item => item.Status == OperationalStatus.Active));
-            cursor = nextCursor;
-        } while (cursor is not null);
-
-        return tenants;
+        return await catalog.ListActiveTenantsAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyList<Connection>> SelectConnectionsAsync(
@@ -130,7 +116,7 @@ internal sealed class ValidateSecretsCommandHandler(
     {
         if (connectionId is not null)
         {
-            Connection? connection = await connectionRepository.GetByIdAsync(
+            Connection? connection = await catalog.FindConnectionAsync(
                 tenant.Id,
                 connectionId.Value,
                 cancellationToken);
@@ -139,17 +125,7 @@ internal sealed class ValidateSecretsCommandHandler(
                 : [connection];
         }
 
-        List<Connection> connections = [];
-        string? cursor = null;
-        do
-        {
-            (IReadOnlyList<Connection> items, string? nextCursor) =
-                await connectionRepository.ListByTenantAsync(tenant.Id, cursor, PageSize, cancellationToken);
-            connections.AddRange(items.Where(item => item.Status == OperationalStatus.Active));
-            cursor = nextCursor;
-        } while (cursor is not null);
-
-        return connections;
+        return await catalog.ListActiveConnectionsAsync(tenant.Id, cancellationToken);
     }
 
     private static IEnumerable<string> SecretReferences(Connection connection)

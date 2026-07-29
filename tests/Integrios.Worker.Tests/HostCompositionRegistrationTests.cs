@@ -1,7 +1,10 @@
 using Integrios.Application;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.ApiKeys;
 using Integrios.Application.Delivery;
+using Integrios.Application.Events;
+using Integrios.Application.Secrets;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Telemetry;
 using Microsoft.Extensions.Configuration;
@@ -31,6 +34,10 @@ public sealed class HostCompositionRegistrationTests
         AssertResolves<ITransformEvaluator>(provider);
 
         AssertOmits<IEventRepository>(provider);
+        AssertOmits<IActiveApiKeyLookup>(provider);
+        AssertOmits<IIntakeTopicResolver>(provider);
+        AssertOmits<IDeadLetterReplay>(provider);
+        AssertOmits<ISecretValidationCatalog>(provider);
         AssertOmits<IOutboxFanout>(provider);
         AssertOmits<ISubscriptionDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
@@ -48,21 +55,26 @@ public sealed class HostCompositionRegistrationTests
             services =>
             services.AddIntegriosIngressInfrastructure(BuildConfiguration()));
 
-        AssertResolves<IApiKeyRepository>(provider);
-        AssertResolves<ITopicRepository>(provider);
+        AssertResolves<IActiveApiKeyLookup>(provider);
+        AssertResolves<IIntakeTopicResolver>(provider);
         AssertResolves<IEventRepository>(provider);
-        AssertResolves<ISubscriptionDeliveryQueue>(provider);
+        AssertResolves<IDeadLetterReplay>(provider);
 
         AssertOmits<IAdminKeyRepository>(provider);
+        AssertOmits<IApiKeyRepository>(provider);
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IIntegrationRepository>(provider);
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
         AssertOmits<IOutboxFanout>(provider);
+        AssertOmits<ISubscriptionDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
         AssertOmits<IAuthSchemeRegistry>(provider);
         AssertOmits<ITransformEvaluator>(provider);
         AssertOmits<ISecretResolver>(provider);
+        AssertOmits<DeliveryExecutionOptions>(provider);
+        AssertOmits<RetryPolicy>(provider);
+        AssertOmits<DeliveryOutcomePolicy>(provider);
     }
 
     [Fact]
@@ -73,8 +85,7 @@ public sealed class HostCompositionRegistrationTests
             services =>
             services.AddIntegriosWorkerInfrastructure(BuildConfiguration()));
 
-        AssertResolves<ITenantRepository>(provider);
-        AssertResolves<IConnectionRepository>(provider);
+        AssertResolves<ISecretValidationCatalog>(provider);
         AssertResolves<IOutboxFanout>(provider);
         AssertResolves<ISubscriptionDeliveryQueue>(provider);
         AssertResolves<IDeliveryClient>(provider);
@@ -84,8 +95,13 @@ public sealed class HostCompositionRegistrationTests
 
         AssertOmits<IAdminKeyRepository>(provider);
         AssertOmits<IApiKeyRepository>(provider);
+        AssertOmits<IActiveApiKeyLookup>(provider);
+        AssertOmits<ITenantRepository>(provider);
+        AssertOmits<IConnectionRepository>(provider);
         AssertOmits<IEventRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
+        AssertOmits<IIntakeTopicResolver>(provider);
+        AssertOmits<IDeadLetterReplay>(provider);
         AssertOmits<IIntegrationRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
     }
@@ -103,7 +119,7 @@ public sealed class HostCompositionRegistrationTests
     }
 
     [Fact]
-    public void Ingress_UsesStandaloneDeliveryDefaults_WhileWorkerReplacesThemFromConfiguration()
+    public void Ingress_OmitsDeliveryPolicies_WhileWorkerUsesConfiguredPolicy()
     {
         IConfiguration ingressConfiguration = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -115,11 +131,9 @@ public sealed class HostCompositionRegistrationTests
             services =>
             services.AddIntegriosIngressInfrastructure(ingressConfiguration));
 
-        DeliveryExecutionOptions ingressOptions = ingress.GetRequiredService<DeliveryExecutionOptions>();
-        RetryPolicy ingressPolicy = ingress.GetRequiredService<RetryPolicy>();
-        Assert.Same(DeliveryExecutionOptions.Default, ingressOptions);
-        Assert.Equal(RetryPolicy.DefaultBaseDelay, ingressPolicy.BaseDelay);
-        Assert.Equal(RetryPolicy.DefaultMaxAttempts, ingressPolicy.MaxAttempts);
+        AssertOmits<DeliveryExecutionOptions>(ingress);
+        AssertOmits<RetryPolicy>(ingress);
+        AssertOmits<DeliveryOutcomePolicy>(ingress);
 
         IConfiguration workerConfiguration = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -133,7 +147,6 @@ public sealed class HostCompositionRegistrationTests
 
         DeliveryExecutionOptions workerOptions = worker.GetRequiredService<DeliveryExecutionOptions>();
         RetryPolicy workerPolicy = worker.GetRequiredService<RetryPolicy>();
-        Assert.NotSame(DeliveryExecutionOptions.Default, workerOptions);
         Assert.Equal(TimeSpan.FromSeconds(3), workerOptions.RetryBaseDelay);
         Assert.Equal(7, workerOptions.RetryMaxAttempts);
         Assert.Equal(workerOptions.RetryBaseDelay, workerPolicy.BaseDelay);

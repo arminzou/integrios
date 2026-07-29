@@ -2,7 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
-using Integrios.Application.Abstractions;
+using Integrios.Application.ApiKeys;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -12,7 +12,7 @@ public sealed class ApiKeyAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IApiKeyRepository repository)
+    IActiveApiKeyLookup activeApiKeyLookup)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "ApiKey";
@@ -25,7 +25,7 @@ public sealed class ApiKeyAuthHandler(
         var keyHash = "sha256:" + Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
 
-        var result = await repository.FindActiveByKeyHashAsync(keyHash, Context.RequestAborted);
+        var result = await activeApiKeyLookup.FindActiveByKeyHashAsync(keyHash, Context.RequestAborted);
         if (result is null)
             return AuthenticateResult.Fail("Invalid API key.");
 

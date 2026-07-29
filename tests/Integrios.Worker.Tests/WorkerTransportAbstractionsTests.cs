@@ -650,8 +650,6 @@ public sealed class WorkerTransportAbstractionsTests
             return Task.FromResult(result);
         }
 
-        public Task<bool> ReplayDeadLetteredAsync(Guid tenantId, Guid eventId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
     }
 
     private sealed class FakeDeliveryClient(
