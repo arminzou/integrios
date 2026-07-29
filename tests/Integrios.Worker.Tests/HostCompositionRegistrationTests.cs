@@ -7,6 +7,7 @@ using Integrios.Application.Events;
 using Integrios.Application.Secrets;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Telemetry;
+using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,6 +16,48 @@ namespace Integrios.Worker.Tests;
 
 public sealed class HostCompositionRegistrationTests
 {
+    [Fact]
+    public void EveryApplicationHandler_IsRegisteredByExactlyOneHost()
+    {
+        using ServiceProvider admin = BuildProvider(
+            services => services.AddIntegriosAdminApplication(),
+            services => services.AddIntegriosAdminInfrastructure(BuildConfiguration()));
+        using ServiceProvider ingress = BuildProvider(
+            services => services.AddIntegriosIngressApplication(),
+            services => services.AddIntegriosIngressInfrastructure(BuildConfiguration()));
+        using ServiceProvider worker = BuildProvider(
+            services => services.AddIntegriosWorkerApplication(),
+            services => services.AddIntegriosWorkerInfrastructure(BuildConfiguration()));
+
+        (string Name, IServiceProvider Provider)[] hosts =
+        [
+            ("Admin", admin),
+            ("Ingress", ingress),
+            ("Worker", worker)
+        ];
+        Type[] handlerInterfaces = typeof(Integrios.Application.DependencyInjection).Assembly
+            .GetTypes()
+            .Where(type => type is { IsClass: true, IsAbstract: false })
+            .SelectMany(type => type.GetInterfaces())
+            .Where(type => type.IsGenericType
+                && type.GetGenericTypeDefinition() == typeof(IRequestHandler<,>))
+            .Distinct()
+            .ToArray();
+
+        Assert.NotEmpty(handlerInterfaces);
+        foreach (Type handlerInterface in handlerInterfaces)
+        {
+            string[] owners = hosts
+                .Where(host => host.Provider.GetService(handlerInterface) is not null)
+                .Select(host => host.Name)
+                .ToArray();
+
+            Assert.True(
+                owners.Length == 1,
+                $"{handlerInterface} must be registered by exactly one host; found: {string.Join(", ", owners)}.");
+        }
+    }
+
     [Fact]
     public void Admin_ResolvesOnlyControlPlaneAdapters()
     {
