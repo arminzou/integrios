@@ -80,7 +80,8 @@ public sealed class ProjectArchitectureTests
                 .Descendants("ProjectReference")
                 .Select(element => element.Attribute("Include")?.Value)
                 .Where(include => !string.IsNullOrWhiteSpace(include))
-                .Select(include => Path.GetFileNameWithoutExtension(include!))
+                .Select(include => Path.GetFileNameWithoutExtension(
+                    include!.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)[^1]))
                 .Order(StringComparer.Ordinal)
                 .ToArray();
 
