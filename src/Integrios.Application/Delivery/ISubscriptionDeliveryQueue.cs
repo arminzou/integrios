@@ -4,8 +4,6 @@ namespace Integrios.Application.Delivery;
 
 public interface ISubscriptionDeliveryQueue
 {
-    Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default);
-
     Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
         CancellationToken cancellationToken = default);
 

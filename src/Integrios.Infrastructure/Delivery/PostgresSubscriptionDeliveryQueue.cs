@@ -17,7 +17,7 @@ public sealed class PostgresSubscriptionDeliveryQueue(
         TimeSpan.FromMilliseconds(200)
     ];
 
-    public async Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default)
+    internal async Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
         while (true)
         {

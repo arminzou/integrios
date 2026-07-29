@@ -429,9 +429,6 @@ public sealed class AuthenticatedDispatchTests
         public List<DeliveryFinalizationResult> Finalizations { get; } = [];
         private int claimIndex;
 
-        public Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<SubscriptionDeliveryWorkItem?>(claimIndex < ClaimedItems.Count ? ClaimedItems[claimIndex++] : null);
-
         public Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<SubscriptionDeliveryClaimResult?>(
                 claimIndex < ClaimedItems.Count

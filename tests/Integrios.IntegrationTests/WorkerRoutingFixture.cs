@@ -47,7 +47,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public FakeDeliveryClient DeliveryClient { get; } = new();
     public MutableSecretResolver SecretResolver { get; } = new();
     public string ConnectionString => container.GetConnectionString();
-    public ISubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
+    public PostgresSubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
 
     private IDbConnectionFactory connectionFactory = null!;
     private IDeadLetterReplay deadLetterReplay = null!;
@@ -79,7 +79,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton(deadLetterReplay);
         services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
         services.AddSingleton(deliveryOptions);
-        services.AddSingleton(DeliveryQueue);
+        services.AddSingleton<ISubscriptionDeliveryQueue>(DeliveryQueue);
         services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
