@@ -1,7 +1,5 @@
-using Integrios.Application.Delivery;
 using Integrios.Application.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Integrios.Application;
 
@@ -59,12 +57,4 @@ public static class DependencyInjection
             typeNamespace.Equals(namespaceName, StringComparison.Ordinal)
             || typeNamespace.StartsWith(namespaceName + ".", StringComparison.Ordinal));
 
-    public static IServiceCollection AddIntegriosDeliveryPolicies(this IServiceCollection services)
-    {
-        services.TryAddSingleton(DeliveryExecutionOptions.Default);
-        services.TryAddSingleton<RetryPolicy>();
-        services.TryAddSingleton<DeliveryOutcomePolicy>();
-
-        return services;
-    }
 }

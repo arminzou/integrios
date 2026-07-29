@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Integrios.Application;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.Secrets;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using Integrios.Domain.Tenants;
@@ -148,8 +149,7 @@ public sealed class SecretValidationCliTests
     {
         var services = new ServiceCollection();
         services.AddIntegriosApplication();
-        services.AddSingleton<ITenantRepository>(new FakeTenantRepository(tenants));
-        services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(connections));
+        services.AddSingleton<ISecretValidationCatalog>(new FakeSecretValidationCatalog(tenants, connections));
         services.AddSingleton<ISecretResolver>(new FakeSecretResolver(secrets));
         return services.BuildServiceProvider();
     }
@@ -192,26 +192,22 @@ public sealed class SecretValidationCliTests
                 : throw new InvalidOperationException("missing");
     }
 
-    private sealed class FakeTenantRepository(IReadOnlyList<Tenant> tenants) : ITenantRepository
+    private sealed class FakeSecretValidationCatalog(
+        IReadOnlyList<Tenant> tenants,
+        IReadOnlyList<Connection> connections) : ISecretValidationCatalog
     {
-        public Task<Tenant?> GetBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
+        public Task<Tenant?> FindTenantBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
             Task.FromResult(tenants.SingleOrDefault(item => item.Slug == slug));
-        public Task<(IReadOnlyList<Tenant> Items, string? NextCursor)> ListAsync(string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
-            Task.FromResult((tenants, (string?)null));
-        public Task<Tenant> CreateAsync(Tenant tenant, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<Tenant?> UpdateAsync(Guid id, string name, string? description, string? environment, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
 
-    private sealed class FakeConnectionRepository(IReadOnlyList<Connection> connections) : IConnectionRepository
-    {
-        public Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult(connections.SingleOrDefault(item => item.TenantId == tenantId && item.Id == id));
-        public Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
-            Task.FromResult(((IReadOnlyList<Connection>)connections.Where(item => item.TenantId == tenantId).ToList(), (string?)null));
-        public Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<Connection?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement config, ConnectionAuth? auth, string? environment, string? description, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Tenant>> ListActiveTenantsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Tenant>>(tenants.Where(item => item.Status == OperationalStatus.Active).ToList());
+
+        public Task<Connection?> FindConnectionAsync(Guid tenantId, Guid connectionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(connections.SingleOrDefault(item => item.TenantId == tenantId && item.Id == connectionId));
+
+        public Task<IReadOnlyList<Connection>> ListActiveConnectionsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Connection>>(connections
+                .Where(item => item.TenantId == tenantId && item.Status == OperationalStatus.Active)
+                .ToList());
     }
 }

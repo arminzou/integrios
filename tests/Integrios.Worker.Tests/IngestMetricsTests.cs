@@ -4,7 +4,6 @@ using Integrios.Application.Abstractions;
 using Integrios.Application.Events;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Events;
-using Integrios.Domain.Topics;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -45,7 +44,7 @@ public sealed class IngestMetricsTests
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddProvider(capturing));
         services.AddIntegriosApplication();
-        services.AddSingleton<ITopicRepository>(new FakeTopicRepository());
+        services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
         services.AddSingleton<IEventRepository>(new FakeEventRepository(isDuplicate: false));
         var mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
 
@@ -67,37 +66,14 @@ public sealed class IngestMetricsTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddIntegriosApplication();
-        services.AddSingleton<ITopicRepository>(new FakeTopicRepository());
+        services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
         services.AddSingleton<IEventRepository>(new FakeEventRepository(isDuplicate));
         return services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
-    private sealed class FakeTopicRepository : ITopicRepository
+    private sealed class FakeIntakeTopicResolver : IIntakeTopicResolver
     {
-        public Task<Guid?> FindByNameAsync(Guid tenantId, string name, CancellationToken ct = default)
-            => Task.FromResult<Guid?>(Guid.NewGuid());
-
-        public Task<Topic> CreateAsync(Guid tenantId, string name, string? description, IReadOnlyList<Guid> sourceConnectionIds, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task<Topic?> UpdateAsync(
-            Guid tenantId,
-            Guid id,
-            string? description,
-            IReadOnlyList<Guid>? sourceConnectionIds,
-            CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct = default)
+        public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string topicName, Guid sourceConnectionId, CancellationToken cancellationToken = default)
             => Task.FromResult<Guid?>(Guid.NewGuid());
     }
 

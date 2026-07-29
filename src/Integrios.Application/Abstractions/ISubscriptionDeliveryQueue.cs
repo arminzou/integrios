@@ -12,11 +12,6 @@ public interface ISubscriptionDeliveryQueue
     Task<DeliveryFinalizationResult> FinalizeAsync(
         DeliveryAttemptCompletion completion,
         CancellationToken cancellationToken = default);
-
-    Task<bool> ReplayDeadLetteredAsync(
-        Guid tenantId,
-        Guid eventId,
-        CancellationToken cancellationToken = default);
 }
 
 public abstract record SubscriptionDeliveryClaimResult;

@@ -1,7 +1,10 @@
 using Integrios.Application;
 using Integrios.Application.Abstractions;
 using Integrios.Application.Abstractions.Auth;
+using Integrios.Application.ApiKeys;
 using Integrios.Application.Delivery;
+using Integrios.Application.Events;
+using Integrios.Application.Secrets;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Http.Auth;
 using Integrios.Infrastructure.Http;
@@ -38,11 +41,10 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddIntegriosPostgres(configuration);
-        services.AddIntegriosDeliveryPolicies();
-        services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
-        services.AddSingleton<ITopicRepository, TopicRepository>();
+        services.AddSingleton<IActiveApiKeyLookup, PostgresActiveApiKeyLookup>();
+        services.AddSingleton<IIntakeTopicResolver, PostgresIntakeTopicResolver>();
         services.AddSingleton<IEventRepository, EventRepository>();
-        services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
+        services.AddSingleton<IDeadLetterReplay, PostgresDeadLetterReplay>();
 
         return services;
     }
@@ -52,19 +54,16 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddIntegriosPostgres(configuration);
-        services.AddIntegriosDeliveryPolicies();
 
         DeliveryExecutionOptions deliveryOptions = ReadDeliveryOptions(configuration);
         deliveryOptions.Validate();
-        services.Replace(ServiceDescriptor.Singleton(deliveryOptions));
+        services.AddSingleton(deliveryOptions);
+        services.AddSingleton(new RetryPolicy(
+            deliveryOptions.RetryBaseDelay,
+            deliveryOptions.RetryMaxAttempts));
+        services.AddSingleton<DeliveryOutcomePolicy>();
 
-        // The delivery capability registers a stand-alone default for Ingress replay. Worker owns
-        // delivery configuration, so its configured policy deliberately replaces that default.
-        services.Replace(ServiceDescriptor.Singleton(
-            new RetryPolicy(deliveryOptions.RetryBaseDelay, deliveryOptions.RetryMaxAttempts)));
-
-        services.AddSingleton<ITenantRepository, TenantRepository>();
-        services.AddSingleton<IConnectionRepository, ConnectionRepository>();
+        services.AddSingleton<ISecretValidationCatalog, PostgresSecretValidationCatalog>();
         services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
         services.AddIntegriosConnectionAuthoring();

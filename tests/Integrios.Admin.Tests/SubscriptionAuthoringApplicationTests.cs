@@ -156,11 +156,6 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
             Task.FromResult(true);
 
-        public Task<Guid?> FindByNameAsync(Guid tenantId, string name, CancellationToken ct = default) =>
-            Task.FromResult<Guid?>(topic.Id);
-
-        public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct = default) =>
-            Task.FromResult<Guid?>(topic.Id);
     }
 
     private sealed class FakeConnectionRepository(Connection connection) : IConnectionRepository

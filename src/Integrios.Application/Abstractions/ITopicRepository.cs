@@ -14,6 +14,4 @@ public interface ITopicRepository
         IReadOnlyList<Guid>? sourceConnectionIds,
         CancellationToken ct = default);
     Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default);
-    Task<Guid?> FindByNameAsync(Guid tenantId, string name, CancellationToken ct = default);
-    Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct = default);
 }
