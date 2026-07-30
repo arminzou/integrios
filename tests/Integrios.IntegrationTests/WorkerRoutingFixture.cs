@@ -53,7 +53,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private IDeadLetterReplay deadLetterReplay = null!;
     private IOutboxFanout outboxFanout = null!;
     private ISubscriptionRepository subscriptionRepository = null!;
-    private IEventRepository eventRepository = null!;
+    private ITenantEventLookup eventLookup = null!;
     private IMediator mediator = null!;
 
     public async Task InitializeAsync()
@@ -66,7 +66,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         deadLetterReplay = new PostgresDeadLetterReplay(connectionFactory);
         outboxFanout = new PostgresOutboxFanout(connectionFactory);
         subscriptionRepository = new SubscriptionRepository(connectionFactory);
-        eventRepository = new EventRepository(connectionFactory);
+        eventLookup = new EventRepository(connectionFactory);
         var deliveryOptions = DeliveryExecutionOptions.Default;
         DeliveryQueue = new PostgresSubscriptionDeliveryQueue(
             connectionFactory,
@@ -410,7 +410,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         => mediator.Send(new ReplayEventCommand(TenantId, eventId), cancellationToken);
 
     public Task<GetEventResponse?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default)
-        => eventRepository.GetEventByIdAsync(TenantId, eventId, cancellationToken);
+        => eventLookup.GetByIdAsync(TenantId, eventId, cancellationToken);
 
     private static async Task InsertEventRowAsync(
         NpgsqlConnection connection,

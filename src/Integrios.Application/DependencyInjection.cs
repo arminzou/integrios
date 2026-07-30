@@ -25,7 +25,7 @@ public static class DependencyInjection
             typeof(IApiKeyRepository),
             typeof(BootstrapBuiltinsCommand),
             typeof(IConnectionRepository),
-            typeof(IIntegrationRepository),
+            typeof(IIntegrationCatalog),
             typeof(ISubscriptionRepository),
             typeof(ITenantRepository),
             typeof(ITopicRepository)));
@@ -33,7 +33,7 @@ public static class DependencyInjection
     public static IServiceCollection AddIngressApplicationServices(this IServiceCollection services)
         => AddApplicationServices(
             services,
-            type => IsInCapability(type, typeof(IEventRepository)));
+            type => IsInCapability(type, typeof(IDurableEventAcceptance)));
 
     public static IServiceCollection AddWorkerApplicationServices(this IServiceCollection services)
         => AddApplicationServices(

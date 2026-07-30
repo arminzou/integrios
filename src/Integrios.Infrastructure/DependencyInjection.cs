@@ -40,10 +40,14 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddPostgresServices(configuration);
-        services.AddSingleton<IAdminKeyRepository, AdminKeyRepository>();
+        services.AddSingleton<AdminKeyRepository>();
+        services.AddSingleton<IActiveAdminKeyLookup>(provider => provider.GetRequiredService<AdminKeyRepository>());
+        services.AddSingleton<IAdminKeyLifecycle>(provider => provider.GetRequiredService<AdminKeyRepository>());
         services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
         services.AddSingleton<ITenantRepository, TenantRepository>();
-        services.AddSingleton<IIntegrationRepository, IntegrationRepository>();
+        services.AddSingleton<IntegrationRepository>();
+        services.AddSingleton<IIntegrationCatalog>(provider => provider.GetRequiredService<IntegrationRepository>());
+        services.AddSingleton<IBuiltinIntegrationReconciler>(provider => provider.GetRequiredService<IntegrationRepository>());
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
         services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
@@ -60,7 +64,9 @@ public static class DependencyInjection
         services.AddPostgresServices(configuration);
         services.AddSingleton<IActiveApiKeyLookup, PostgresActiveApiKeyLookup>();
         services.AddSingleton<IIntakeTopicResolver, PostgresIntakeTopicResolver>();
-        services.AddSingleton<IEventRepository, EventRepository>();
+        services.AddSingleton<EventRepository>();
+        services.AddSingleton<IDurableEventAcceptance>(provider => provider.GetRequiredService<EventRepository>());
+        services.AddSingleton<ITenantEventLookup>(provider => provider.GetRequiredService<EventRepository>());
         services.AddSingleton<IDeadLetterReplay, PostgresDeadLetterReplay>();
 
         return services;

@@ -9,7 +9,7 @@ public sealed record RotateAdminKeyCommand(string Secret) : IRequest<RotateAdmin
 
 public sealed record RotateAdminKeyResult(string PublicKey);
 
-internal sealed class RotateAdminKeyCommandHandler(IAdminKeyRepository repository)
+internal sealed class RotateAdminKeyCommandHandler(IAdminKeyLifecycle adminKeyLifecycle)
     : IRequestHandler<RotateAdminKeyCommand, RotateAdminKeyResult>
 {
     public async Task<RotateAdminKeyResult> Handle(RotateAdminKeyCommand command, CancellationToken cancellationToken)
@@ -19,7 +19,7 @@ internal sealed class RotateAdminKeyCommandHandler(IAdminKeyRepository repositor
 
         string publicKey = "admin_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
-        await repository.RotateAsync(new AdminKey
+        await adminKeyLifecycle.RotateAsync(new AdminKey
         {
             Id = Guid.NewGuid(),
             PublicKey = publicKey,

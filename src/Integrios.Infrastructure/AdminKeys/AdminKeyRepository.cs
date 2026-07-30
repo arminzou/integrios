@@ -5,7 +5,8 @@ using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.AdminKeys;
 
-internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory) : IAdminKeyRepository
+internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory)
+    : IActiveAdminKeyLookup, IAdminKeyLifecycle
 {
     public async Task<AdminKey?> FindActiveByPublicKeyAsync(
         string publicKey, CancellationToken cancellationToken = default)

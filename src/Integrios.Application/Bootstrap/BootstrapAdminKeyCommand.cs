@@ -8,12 +8,12 @@ public sealed record BootstrapAdminKeyCommand(string PublicKey, string? Secret) 
 
 public sealed record BootstrapAdminKeyResult(bool Created, string? GeneratedSecret);
 
-internal sealed class BootstrapAdminKeyCommandHandler(IAdminKeyRepository repository)
+internal sealed class BootstrapAdminKeyCommandHandler(IAdminKeyLifecycle adminKeyLifecycle)
     : IRequestHandler<BootstrapAdminKeyCommand, BootstrapAdminKeyResult>
 {
     public async Task<BootstrapAdminKeyResult> Handle(BootstrapAdminKeyCommand command, CancellationToken cancellationToken)
     {
-        if (await repository.HasLiveKeyAsync(cancellationToken))
+        if (await adminKeyLifecycle.HasLiveKeyAsync(cancellationToken))
             return new BootstrapAdminKeyResult(Created: false, GeneratedSecret: null);
 
         // An empty/whitespace secret (e.g. an unset env var interpolated as "") must generate,
@@ -21,7 +21,7 @@ internal sealed class BootstrapAdminKeyCommandHandler(IAdminKeyRepository reposi
         string? generatedSecret = string.IsNullOrWhiteSpace(command.Secret) ? AdminKeySecrets.Generate() : null;
         string secret = generatedSecret ?? command.Secret!;
 
-        await repository.InsertAsync(new AdminKey
+        await adminKeyLifecycle.InsertAsync(new AdminKey
         {
             Id = Guid.NewGuid(),
             PublicKey = command.PublicKey,

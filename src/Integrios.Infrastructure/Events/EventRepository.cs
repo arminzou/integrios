@@ -7,9 +7,10 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class EventRepository(IDbConnectionFactory connectionFactory) : IEventRepository
+internal sealed class EventRepository(IDbConnectionFactory connectionFactory)
+    : IDurableEventAcceptance, ITenantEventLookup
 {
-    public async Task<IngestEventResponse> IngestAsync(
+    public async Task<IngestEventResponse> AcceptAsync(
         Guid tenantId,
         IngestEventRequest request,
         Guid topicId,
@@ -163,7 +164,7 @@ internal sealed class EventRepository(IDbConnectionFactory connectionFactory) : 
         public DateTimeOffset AcceptedAt { get; init; }
     }
 
-    public async Task<GetEventResponse?> GetEventByIdAsync(
+    public async Task<GetEventResponse?> GetByIdAsync(
         Guid tenantId,
         Guid eventId,
         CancellationToken cancellationToken = default)

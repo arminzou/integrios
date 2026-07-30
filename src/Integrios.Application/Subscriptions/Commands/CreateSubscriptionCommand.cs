@@ -22,7 +22,7 @@ internal sealed class CreateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     ITopicRepository topicRepository,
     IConnectionRepository connectionRepository,
-    IIntegrationRepository integrationRepository,
+    IIntegrationCatalog integrationCatalog,
     ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionResponse?>
 {
     public async Task<SubscriptionResponse?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
@@ -60,7 +60,7 @@ internal sealed class CreateSubscriptionCommandHandler(
                 "The specified destination connection does not exist for this tenant.");
         }
 
-        Integration? integration = await integrationRepository.GetByIdAsync(connection.IntegrationId, cancellationToken);
+        Integration? integration = await integrationCatalog.GetByIdAsync(connection.IntegrationId, cancellationToken);
         if (integration is null)
         {
             throw new SubscriptionRequestValidationException(

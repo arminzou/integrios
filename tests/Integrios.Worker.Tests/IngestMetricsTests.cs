@@ -44,7 +44,7 @@ public sealed class IngestMetricsTests
         services.AddLogging(builder => builder.AddProvider(capturing));
         services.AddApplicationServices();
         services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
-        services.AddSingleton<IEventRepository>(new FakeEventRepository(isDuplicate: false));
+        services.AddSingleton<IDurableEventAcceptance>(new FakeEventAcceptance(isDuplicate: false));
         var mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
 
         await mediator.Send(new IngestEventCommand(Guid.NewGuid(), MakeRequest()));
@@ -66,7 +66,7 @@ public sealed class IngestMetricsTests
         services.AddLogging();
         services.AddApplicationServices();
         services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
-        services.AddSingleton<IEventRepository>(new FakeEventRepository(isDuplicate));
+        services.AddSingleton<IDurableEventAcceptance>(new FakeEventAcceptance(isDuplicate));
         return services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
@@ -76,9 +76,9 @@ public sealed class IngestMetricsTests
             => Task.FromResult<Guid?>(Guid.NewGuid());
     }
 
-    private sealed class FakeEventRepository(bool isDuplicate) : IEventRepository
+    private sealed class FakeEventAcceptance(bool isDuplicate) : IDurableEventAcceptance
     {
-        public Task<IngestEventResponse> IngestAsync(Guid tenantId, IngestEventRequest request, Guid topicId, string? traceparent = null, CancellationToken cancellationToken = default)
+        public Task<IngestEventResponse> AcceptAsync(Guid tenantId, IngestEventRequest request, Guid topicId, string? traceparent = null, CancellationToken cancellationToken = default)
             => Task.FromResult(new IngestEventResponse
             {
                 EventId = Guid.NewGuid(),
@@ -87,10 +87,5 @@ public sealed class IngestMetricsTests
                 IsDuplicate = isDuplicate
             });
 
-        public Task<GetEventResponse?> GetEventByIdAsync(Guid tenantId, Guid eventId, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<bool> ReplayEventAsync(Guid tenantId, Guid eventId, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
     }
 }

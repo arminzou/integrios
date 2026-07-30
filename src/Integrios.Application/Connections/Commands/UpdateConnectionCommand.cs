@@ -18,7 +18,7 @@ public sealed record UpdateConnectionCommand(
 
 internal sealed class UpdateConnectionCommandHandler(
     IConnectionRepository repository,
-    IIntegrationRepository integrationRepository,
+    IIntegrationCatalog integrationCatalog,
     IAuthSchemeRegistry authSchemeRegistry) : IRequestHandler<UpdateConnectionCommand, ConnectionResponse?>
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
@@ -31,7 +31,7 @@ internal sealed class UpdateConnectionCommandHandler(
             return null;
         }
 
-        Integration integration = await integrationRepository.GetByIdAsync(existing.IntegrationId, cancellationToken)
+        Integration integration = await integrationCatalog.GetByIdAsync(existing.IntegrationId, cancellationToken)
             ?? throw new ConnectionRequestValidationException("The specified integration does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
