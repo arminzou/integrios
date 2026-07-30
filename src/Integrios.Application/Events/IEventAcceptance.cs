@@ -1,6 +1,6 @@
 namespace Integrios.Application.Events;
 
-public interface IDurableEventAcceptance
+public interface IEventAcceptance
 {
     Task<IngestEventResponse> AcceptAsync(
         Guid tenantId,

@@ -1,17 +1,17 @@
 using Integrios.Application;
-using Integrios.Application.Auth;
-using Integrios.Application.Outbox;
-using Integrios.Application.Transforms;
 using Integrios.Application.AdminKeys;
 using Integrios.Application.ApiKeys;
+using Integrios.Application.Auth;
 using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
 using Integrios.Application.Events;
 using Integrios.Application.Integrations;
+using Integrios.Application.Outbox;
 using Integrios.Application.Secrets;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Tenants;
 using Integrios.Application.Topics;
+using Integrios.Application.Transforms;
 using Integrios.Infrastructure.AdminKeys;
 using Integrios.Infrastructure.ApiKeys;
 using Integrios.Infrastructure.Auth;
@@ -41,7 +41,7 @@ public static class DependencyInjection
     {
         services.AddPostgresServices(configuration);
         services.AddSingleton<AdminKeyRepository>();
-        services.AddSingleton<IActiveAdminKeyLookup>(provider => provider.GetRequiredService<AdminKeyRepository>());
+        services.AddSingleton<IAdminKeyLookup>(provider => provider.GetRequiredService<AdminKeyRepository>());
         services.AddSingleton<IAdminKeyLifecycle>(provider => provider.GetRequiredService<AdminKeyRepository>());
         services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
         services.AddSingleton<ITenantRepository, TenantRepository>();
@@ -63,9 +63,9 @@ public static class DependencyInjection
     {
         services.AddPostgresServices(configuration);
         services.AddSingleton<IActiveApiKeyLookup, PostgresActiveApiKeyLookup>();
-        services.AddSingleton<IIntakeTopicResolver, PostgresIntakeTopicResolver>();
+        services.AddSingleton<ISourceTopicLookup, PostgresIntakeTopicResolver>();
         services.AddSingleton<EventRepository>();
-        services.AddSingleton<IDurableEventAcceptance>(provider => provider.GetRequiredService<EventRepository>());
+        services.AddSingleton<IEventAcceptance>(provider => provider.GetRequiredService<EventRepository>());
         services.AddSingleton<ITenantEventLookup>(provider => provider.GetRequiredService<EventRepository>());
         services.AddSingleton<IDeadLetterReplay, PostgresDeadLetterReplay>();
 
