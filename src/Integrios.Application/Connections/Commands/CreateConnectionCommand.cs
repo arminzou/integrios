@@ -18,7 +18,7 @@ public sealed record CreateConnectionCommand(
 
 internal sealed class CreateConnectionCommandHandler(
     IConnectionRepository repository,
-    IIntegrationRepository integrationRepository,
+    IIntegrationCatalog integrationCatalog,
     IAuthSchemeRegistry authSchemeRegistry)
     : IRequestHandler<CreateConnectionCommand, ConnectionResponse>
 {
@@ -26,7 +26,7 @@ internal sealed class CreateConnectionCommandHandler(
 
     public async Task<ConnectionResponse> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
     {
-        Integration integration = await integrationRepository.GetByIdAsync(command.IntegrationId, cancellationToken)
+        Integration integration = await integrationCatalog.GetByIdAsync(command.IntegrationId, cancellationToken)
             ?? throw new ConnectionRequestValidationException("The specified integration does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;

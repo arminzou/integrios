@@ -7,7 +7,7 @@ namespace Integrios.Application.Bootstrap;
 
 public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Integration>>;
 
-internal sealed class BootstrapBuiltinsCommandHandler(IIntegrationRepository repository)
+internal sealed class BootstrapBuiltinsCommandHandler(IBuiltinIntegrationReconciler integrationReconciler)
     : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Integration>>
 {
     public async Task<IReadOnlyList<Integration>> Handle(BootstrapBuiltinsCommand command, CancellationToken cancellationToken)
@@ -29,7 +29,7 @@ internal sealed class BootstrapBuiltinsCommandHandler(IIntegrationRepository rep
                 UpdatedAt = now,
             };
 
-            reconciled.Add(await repository.UpsertBuiltinAsync(integration, cancellationToken));
+            reconciled.Add(await integrationReconciler.ReconcileAsync(integration, cancellationToken));
         }
 
         return reconciled;

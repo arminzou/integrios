@@ -13,7 +13,7 @@ public sealed class AdminKeyAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IAdminKeyRepository repository)
+    IActiveAdminKeyLookup adminKeyLookup)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "AdminKey";
@@ -23,7 +23,7 @@ public sealed class AdminKeyAuthHandler(
         if (!TryParseHeader(Context, out var publicKey, out var secret))
             return AuthenticateResult.NoResult();
 
-        AdminKey? adminKey = await repository.FindActiveByPublicKeyAsync(publicKey, Context.RequestAborted);
+        AdminKey? adminKey = await adminKeyLookup.FindActiveByPublicKeyAsync(publicKey, Context.RequestAborted);
         if (adminKey is null || !VerifySecret(secret, adminKey.SecretHash))
             return AuthenticateResult.Fail("Invalid admin key or secret.");
 

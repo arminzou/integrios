@@ -8,7 +8,8 @@ using Integrios.Domain.Integrations;
 
 namespace Integrios.Infrastructure.Integrations;
 
-internal sealed class IntegrationRepository(IDbConnectionFactory connectionFactory) : IIntegrationRepository
+internal sealed class IntegrationRepository(IDbConnectionFactory connectionFactory)
+    : IIntegrationCatalog, IBuiltinIntegrationReconciler
 {
     private const string SelectColumns =
         "id, key, name, direction, supported_auth_schemes::text AS supported_auth_schemes_json, status, description, created_at, updated_at";
@@ -76,7 +77,7 @@ internal sealed class IntegrationRepository(IDbConnectionFactory connectionFacto
     }
 
     // Bootstrap: reconcile a platform-owned built-in row by key, overwriting any drift on re-run
-    public async Task<Integration> UpsertBuiltinAsync(Integration integration, CancellationToken cancellationToken = default)
+    public async Task<Integration> ReconcileAsync(Integration integration, CancellationToken cancellationToken = default)
     {
         const string sql = $"""
             INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status, description, created_at, updated_at)

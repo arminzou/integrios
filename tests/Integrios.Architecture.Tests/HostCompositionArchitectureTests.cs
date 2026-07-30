@@ -22,7 +22,8 @@ public sealed class HostCompositionArchitectureTests
 {
     private static readonly IReadOnlyDictionary<Type, Host[]> PortOwners = new Dictionary<Type, Host[]>
     {
-        [typeof(IAdminKeyRepository)] = [Host.Admin],
+        [typeof(IActiveAdminKeyLookup)] = [Host.Admin],
+        [typeof(IAdminKeyLifecycle)] = [Host.Admin],
         [typeof(IApiKeyRepository)] = [Host.Admin],
         [typeof(IActiveApiKeyLookup)] = [Host.Ingress],
         [typeof(IAuthSchemeHandler)] = [Host.Admin, Host.Worker],
@@ -30,8 +31,10 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IConnectionRepository)] = [Host.Admin],
         [typeof(IDeadLetterReplay)] = [Host.Ingress],
         [typeof(IDeliveryClient)] = [Host.Worker],
-        [typeof(IEventRepository)] = [Host.Ingress],
-        [typeof(IIntegrationRepository)] = [Host.Admin],
+        [typeof(IDurableEventAcceptance)] = [Host.Ingress],
+        [typeof(ITenantEventLookup)] = [Host.Ingress],
+        [typeof(IIntegrationCatalog)] = [Host.Admin],
+        [typeof(IBuiltinIntegrationReconciler)] = [Host.Admin],
         [typeof(IIntakeTopicResolver)] = [Host.Ingress],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(ISecretResolver)] = [Host.Worker],
@@ -131,17 +134,20 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddAdminApplicationServices(),
             services => services.AddAdminInfrastructureServices(BuildConfiguration()));
 
-        AssertResolves<IAdminKeyRepository>(provider);
+        AssertResolves<IActiveAdminKeyLookup>(provider);
+        AssertResolves<IAdminKeyLifecycle>(provider);
         AssertResolves<IApiKeyRepository>(provider);
         AssertResolves<ITenantRepository>(provider);
-        AssertResolves<IIntegrationRepository>(provider);
+        AssertResolves<IIntegrationCatalog>(provider);
+        AssertResolves<IBuiltinIntegrationReconciler>(provider);
         AssertResolves<IConnectionRepository>(provider);
         AssertResolves<ITopicRepository>(provider);
         AssertResolves<ISubscriptionRepository>(provider);
         AssertResolves<IAuthSchemeRegistry>(provider);
         AssertResolves<ITransformEvaluator>(provider);
 
-        AssertOmits<IEventRepository>(provider);
+        AssertOmits<IDurableEventAcceptance>(provider);
+        AssertOmits<ITenantEventLookup>(provider);
         AssertOmits<IActiveApiKeyLookup>(provider);
         AssertOmits<IIntakeTopicResolver>(provider);
         AssertOmits<IDeadLetterReplay>(provider);
@@ -164,13 +170,16 @@ public sealed class HostCompositionArchitectureTests
 
         AssertResolves<IActiveApiKeyLookup>(provider);
         AssertResolves<IIntakeTopicResolver>(provider);
-        AssertResolves<IEventRepository>(provider);
+        AssertResolves<IDurableEventAcceptance>(provider);
+        AssertResolves<ITenantEventLookup>(provider);
         AssertResolves<IDeadLetterReplay>(provider);
 
-        AssertOmits<IAdminKeyRepository>(provider);
+        AssertOmits<IActiveAdminKeyLookup>(provider);
+        AssertOmits<IAdminKeyLifecycle>(provider);
         AssertOmits<IApiKeyRepository>(provider);
         AssertOmits<ITenantRepository>(provider);
-        AssertOmits<IIntegrationRepository>(provider);
+        AssertOmits<IIntegrationCatalog>(provider);
+        AssertOmits<IBuiltinIntegrationReconciler>(provider);
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
@@ -203,16 +212,19 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<RetryPolicy>(provider);
         AssertResolves<DeliveryOutcomePolicy>(provider);
 
-        AssertOmits<IAdminKeyRepository>(provider);
+        AssertOmits<IActiveAdminKeyLookup>(provider);
+        AssertOmits<IAdminKeyLifecycle>(provider);
         AssertOmits<IApiKeyRepository>(provider);
         AssertOmits<IActiveApiKeyLookup>(provider);
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IConnectionRepository>(provider);
-        AssertOmits<IEventRepository>(provider);
+        AssertOmits<IDurableEventAcceptance>(provider);
+        AssertOmits<ITenantEventLookup>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<IIntakeTopicResolver>(provider);
         AssertOmits<IDeadLetterReplay>(provider);
-        AssertOmits<IIntegrationRepository>(provider);
+        AssertOmits<IIntegrationCatalog>(provider);
+        AssertOmits<IBuiltinIntegrationReconciler>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
     }
 

@@ -75,7 +75,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             services.AddSingleton<ISubscriptionRepository>(SubscriptionRepository);
             services.AddSingleton<ITopicRepository>(new FakeTopicRepository(Topic()));
             services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(integrationId)));
-            services.AddSingleton<IIntegrationRepository>(new FakeIntegrationRepository(Integration(integrationId, destinationDirection)));
+            services.AddSingleton<IIntegrationCatalog>(new FakeIntegrationCatalog(Integration(integrationId, destinationDirection)));
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator(transformValidationError));
             provider = services.BuildServiceProvider();
             Mediator = provider.GetRequiredService<IMediator>();
@@ -182,16 +182,13 @@ public sealed class SubscriptionAuthoringApplicationTests
             Task.FromResult(true);
     }
 
-    private sealed class FakeIntegrationRepository(Integration integration) : IIntegrationRepository
+    private sealed class FakeIntegrationCatalog(Integration integration) : IIntegrationCatalog
     {
         public Task<Integration?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Integration?>(integration);
 
         public Task<(IReadOnlyList<Integration> Items, string? NextCursor)> ListAsync(string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
             Task.FromResult<(IReadOnlyList<Integration>, string?)>(([integration], null));
-
-        public Task<Integration> UpsertBuiltinAsync(Integration value, CancellationToken cancellationToken = default) =>
-            Task.FromResult(value);
     }
 
     public sealed class FakeSubscriptionRepository : ISubscriptionRepository

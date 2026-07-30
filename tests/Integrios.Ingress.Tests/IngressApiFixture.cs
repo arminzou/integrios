@@ -56,7 +56,8 @@ internal sealed class CustomApiFactory(
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<IActiveApiKeyLookup>(apiKeyRepository);
-            services.AddSingleton<IEventRepository>(eventRepository);
+            services.AddSingleton<IDurableEventAcceptance>(eventRepository);
+            services.AddSingleton<ITenantEventLookup>(eventRepository);
             services.AddSingleton<IIntakeTopicResolver>(topicRepository);
             services.AddSingleton<IDeadLetterReplay>(deliveryQueue);
         });
@@ -78,11 +79,11 @@ public sealed class StubActiveApiKeyLookup : IActiveApiKeyLookup
 
 }
 
-public sealed class StubEventRepository : IEventRepository
+public sealed class StubEventRepository : IDurableEventAcceptance, ITenantEventLookup
 {
     public GetEventResponse? GetEventResult { get; set; }
 
-    public Task<IngestEventResponse> IngestAsync(
+    public Task<IngestEventResponse> AcceptAsync(
         Guid tenantId,
         IngestEventRequest request,
         Guid topicId,
@@ -98,7 +99,7 @@ public sealed class StubEventRepository : IEventRepository
         });
     }
 
-    public Task<GetEventResponse?> GetEventByIdAsync(
+    public Task<GetEventResponse?> GetByIdAsync(
         Guid tenantId,
         Guid eventId,
         CancellationToken cancellationToken = default)

@@ -9,7 +9,7 @@ public sealed record IngestEventCommand(Guid TenantId, IngestEventRequest Reques
     : IRequest<IngestEventResponse>;
 
 internal sealed class IngestEventCommandHandler(
-    IEventRepository eventRepository,
+    IDurableEventAcceptance eventAcceptance,
     IIntakeTopicResolver topicResolver,
     IntegriosMetrics metrics,
     ILogger<IngestEventCommandHandler> logger)
@@ -33,7 +33,7 @@ internal sealed class IngestEventCommandHandler(
         activity?.SetTag("source_connection_id", command.Request.SourceConnectionId);
         activity?.SetTag("idempotency_key", command.Request.IdempotencyKey);
 
-        var response = await eventRepository.IngestAsync(
+        var response = await eventAcceptance.AcceptAsync(
             command.TenantId, command.Request, topicId, activity?.Id, cancellationToken);
 
         activity?.SetTag("event_id", response.EventId);
