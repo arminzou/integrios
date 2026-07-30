@@ -33,7 +33,7 @@ public static class DependencyInjection
     public static IServiceCollection AddIngressApplicationServices(this IServiceCollection services)
         => AddApplicationServices(
             services,
-            type => IsInCapability(type, typeof(IDurableEventAcceptance)));
+            type => IsInCapability(type, typeof(IEventAcceptance)));
 
     public static IServiceCollection AddWorkerApplicationServices(this IServiceCollection services)
         => AddApplicationServices(

@@ -75,7 +75,7 @@ public sealed class HostCompositionRegistrationTests
             services =>
             services.AddAdminInfrastructureServices(BuildConfiguration()));
 
-        AssertResolves<IActiveAdminKeyLookup>(provider);
+        AssertResolves<IAdminKeyLookup>(provider);
         AssertResolves<IAdminKeyLifecycle>(provider);
         AssertResolves<IApiKeyRepository>(provider);
         AssertResolves<ITenantRepository>(provider);
@@ -87,10 +87,10 @@ public sealed class HostCompositionRegistrationTests
         AssertResolves<IAuthSchemeRegistry>(provider);
         AssertResolves<ITransformEvaluator>(provider);
 
-        AssertOmits<IDurableEventAcceptance>(provider);
+        AssertOmits<IEventAcceptance>(provider);
         AssertOmits<ITenantEventLookup>(provider);
         AssertOmits<IActiveApiKeyLookup>(provider);
-        AssertOmits<IIntakeTopicResolver>(provider);
+        AssertOmits<ISourceTopicLookup>(provider);
         AssertOmits<IDeadLetterReplay>(provider);
         AssertOmits<ISecretValidationCatalog>(provider);
         AssertOmits<IOutboxFanout>(provider);
@@ -111,12 +111,12 @@ public sealed class HostCompositionRegistrationTests
             services.AddIngressInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IActiveApiKeyLookup>(provider);
-        AssertResolves<IIntakeTopicResolver>(provider);
-        AssertResolves<IDurableEventAcceptance>(provider);
+        AssertResolves<ISourceTopicLookup>(provider);
+        AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
         AssertResolves<IDeadLetterReplay>(provider);
 
-        AssertOmits<IActiveAdminKeyLookup>(provider);
+        AssertOmits<IAdminKeyLookup>(provider);
         AssertOmits<IAdminKeyLifecycle>(provider);
         AssertOmits<IApiKeyRepository>(provider);
         AssertOmits<ITenantRepository>(provider);
@@ -151,16 +151,16 @@ public sealed class HostCompositionRegistrationTests
         AssertResolves<ITransformEvaluator>(provider);
         AssertResolves<ISecretResolver>(provider);
 
-        AssertOmits<IActiveAdminKeyLookup>(provider);
+        AssertOmits<IAdminKeyLookup>(provider);
         AssertOmits<IAdminKeyLifecycle>(provider);
         AssertOmits<IApiKeyRepository>(provider);
         AssertOmits<IActiveApiKeyLookup>(provider);
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IConnectionRepository>(provider);
-        AssertOmits<IDurableEventAcceptance>(provider);
+        AssertOmits<IEventAcceptance>(provider);
         AssertOmits<ITenantEventLookup>(provider);
         AssertOmits<ITopicRepository>(provider);
-        AssertOmits<IIntakeTopicResolver>(provider);
+        AssertOmits<ISourceTopicLookup>(provider);
         AssertOmits<IDeadLetterReplay>(provider);
         AssertOmits<IIntegrationCatalog>(provider);
         AssertOmits<IBuiltinIntegrationReconciler>(provider);
@@ -228,7 +228,7 @@ public sealed class HostCompositionRegistrationTests
             services =>
             services.AddAdminInfrastructureServices(configuration));
 
-        AssertResolves<IActiveAdminKeyLookup>(provider);
+        AssertResolves<IAdminKeyLookup>(provider);
         AssertResolves<IAdminKeyLifecycle>(provider);
         AssertOmits<DeliveryExecutionOptions>(provider);
     }

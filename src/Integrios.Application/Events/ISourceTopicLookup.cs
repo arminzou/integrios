@@ -1,6 +1,6 @@
 namespace Integrios.Application.Events;
 
-public interface IIntakeTopicResolver
+public interface ISourceTopicLookup
 {
     Task<Guid?> FindActiveSourceTopicAsync(
         Guid tenantId,

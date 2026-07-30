@@ -5,7 +5,7 @@ using Integrios.Infrastructure.Data;
 namespace Integrios.Infrastructure.Events;
 
 internal sealed class PostgresIntakeTopicResolver(IDbConnectionFactory connectionFactory)
-    : IIntakeTopicResolver
+    : ISourceTopicLookup
 {
     public async Task<Guid?> FindActiveSourceTopicAsync(
         Guid tenantId,

@@ -1,12 +1,12 @@
 using Dapper;
 using Integrios.Application.AdminKeys;
-using Integrios.Infrastructure.Data;
 using Integrios.Domain.Tenants;
+using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.AdminKeys;
 
 internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory)
-    : IActiveAdminKeyLookup, IAdminKeyLifecycle
+    : IAdminKeyLookup, IAdminKeyLifecycle
 {
     public async Task<AdminKey?> FindActiveByPublicKeyAsync(
         string publicKey, CancellationToken cancellationToken = default)

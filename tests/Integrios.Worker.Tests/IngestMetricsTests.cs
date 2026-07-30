@@ -43,8 +43,8 @@ public sealed class IngestMetricsTests
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddProvider(capturing));
         services.AddApplicationServices();
-        services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
-        services.AddSingleton<IDurableEventAcceptance>(new FakeEventAcceptance(isDuplicate: false));
+        services.AddSingleton<ISourceTopicLookup>(new FakeIntakeTopicResolver());
+        services.AddSingleton<IEventAcceptance>(new FakeEventAcceptance(isDuplicate: false));
         var mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
 
         await mediator.Send(new IngestEventCommand(Guid.NewGuid(), MakeRequest()));
@@ -65,18 +65,18 @@ public sealed class IngestMetricsTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddApplicationServices();
-        services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
-        services.AddSingleton<IDurableEventAcceptance>(new FakeEventAcceptance(isDuplicate));
+        services.AddSingleton<ISourceTopicLookup>(new FakeIntakeTopicResolver());
+        services.AddSingleton<IEventAcceptance>(new FakeEventAcceptance(isDuplicate));
         return services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
-    private sealed class FakeIntakeTopicResolver : IIntakeTopicResolver
+    private sealed class FakeIntakeTopicResolver : ISourceTopicLookup
     {
         public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string topicName, Guid sourceConnectionId, CancellationToken cancellationToken = default)
             => Task.FromResult<Guid?>(Guid.NewGuid());
     }
 
-    private sealed class FakeEventAcceptance(bool isDuplicate) : IDurableEventAcceptance
+    private sealed class FakeEventAcceptance(bool isDuplicate) : IEventAcceptance
     {
         public Task<IngestEventResponse> AcceptAsync(Guid tenantId, IngestEventRequest request, Guid topicId, string? traceparent = null, CancellationToken cancellationToken = default)
             => Task.FromResult(new IngestEventResponse

@@ -13,7 +13,7 @@ public sealed class AdminKeyAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IActiveAdminKeyLookup adminKeyLookup)
+    IAdminKeyLookup adminKeyLookup)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "AdminKey";

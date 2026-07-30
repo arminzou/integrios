@@ -9,8 +9,8 @@ public sealed record IngestEventCommand(Guid TenantId, IngestEventRequest Reques
     : IRequest<IngestEventResponse>;
 
 internal sealed class IngestEventCommandHandler(
-    IDurableEventAcceptance eventAcceptance,
-    IIntakeTopicResolver topicResolver,
+    IEventAcceptance eventAcceptance,
+    ISourceTopicLookup topicResolver,
     IntegriosMetrics metrics,
     ILogger<IngestEventCommandHandler> logger)
     : IRequestHandler<IngestEventCommand, IngestEventResponse>

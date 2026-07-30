@@ -1,14 +1,14 @@
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Events;
-using Integrios.Infrastructure.Data;
 using Integrios.Domain.Events;
+using Integrios.Infrastructure.Data;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Events;
 
 internal sealed class EventRepository(IDbConnectionFactory connectionFactory)
-    : IDurableEventAcceptance, ITenantEventLookup
+    : IEventAcceptance, ITenantEventLookup
 {
     public async Task<IngestEventResponse> AcceptAsync(
         Guid tenantId,
