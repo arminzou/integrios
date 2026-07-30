@@ -148,26 +148,21 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     public async Task CreateBlockingSecretPipeAsync(string tenantSlug, string reference)
     {
-        if (OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("The packaged resilience matrix requires a POSIX FIFO.");
-
         string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
         Directory.CreateDirectory(tenantDirectory);
         string path = Path.Combine(tenantDirectory, reference);
         File.Delete(path);
 
-        var startInfo = new ProcessStartInfo("mkfifo")
-        {
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        startInfo.ArgumentList.Add(path);
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Could not start mkfifo.");
-        string error = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"Could not create blocking secret pipe: {error}");
+        string containerPath = $"/var/lib/integrios-qualification/secrets/{tenantSlug}/{reference}";
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromSeconds(30),
+            "exec",
+            "--no-TTY",
+            "postgres",
+            "mkfifo",
+            containerPath);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not create blocking secret pipe: {result.Output}");
     }
 
     public async Task ReplaceSecretWithFileAsync(string tenantSlug, string reference, string value)
@@ -596,10 +591,16 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     public async Task<string> ReadTraceArtifactsAsync()
     {
-        string path = Path.Combine(otelArtifactsDirectory, "traces.jsonl");
-        return File.Exists(path)
-            ? await File.ReadAllTextAsync(path)
-            : string.Empty;
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromSeconds(30),
+            "exec",
+            "--no-TTY",
+            "postgres",
+            "cat",
+            "/var/lib/integrios-qualification/otel/traces.jsonl");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not read trace artifacts: {result.Output}");
+        return result.StandardOutput;
     }
 
     public async Task<string> GetServiceLogsAsync(string serviceName)
