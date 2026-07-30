@@ -199,6 +199,10 @@ schemes reject values containing CR or LF, so an accidental trailing newline (fo
 `echo` without `-n`) fails delivery. Files may be symlinks, which makes atomic provider-driven
 rotation practical. Values must be non-empty, contain no NUL, and be at most 64 KiB.
 
+When the Worker runs directly instead of through Compose, its default file root is
+`/run/secrets/integrios` on Linux and `%ProgramData%\Integrios\secrets` on Windows. Set
+`Integrios:Secrets:FileRoot` to an existing absolute directory to override that native default.
+
 The alternative `configuration` backend is selected with
 `Integrios:Secrets:Provider=configuration` (or `INTEGRIOS_SECRETS_PROVIDER=configuration` in
 Compose). It reads `Secrets:<tenant-slug>:<reference>` from the Worker's normal .NET configuration.

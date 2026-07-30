@@ -4,7 +4,13 @@ namespace Integrios.Infrastructure.Secrets;
 
 internal sealed class MountedFileSecretResolver(string root) : ISecretResolver
 {
-    public const string DefaultRoot = "/run/secrets/integrios";
+    public static string DefaultRoot { get; } = OperatingSystem.IsWindows()
+        ? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "Integrios",
+            "secrets")
+        : "/run/secrets/integrios";
+
     public string ProviderName => "file";
 
     public async Task<string> ResolveAsync(

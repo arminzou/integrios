@@ -127,6 +127,8 @@ public sealed class SecretResolverTests : IDisposable
     [Fact]
     public void DependencyInjection_DefaultsToFileAndAcceptsExplicitConfiguration()
     {
+        Assert.True(Path.IsPathFullyQualified(MountedFileSecretResolver.DefaultRoot));
+
         var defaultServices = new ServiceCollection();
         defaultServices.AddSecretResolutionServices(Configuration([]));
         using ServiceProvider defaultProvider = defaultServices.BuildServiceProvider();

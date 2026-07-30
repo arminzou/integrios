@@ -9,6 +9,11 @@ services:
   postgres:
     ports:
       - "${INTEGRIOS_POSTGRES_PORT}:5432"
+    # The qualification harness uses this Linux container to create a real POSIX FIFO and read
+    # collector output without contending with Windows host file-sharing semantics.
+    volumes:
+      - "${INTEGRIOS_SECRETS_DIR}:/var/lib/integrios-qualification/secrets"
+      - "${INTEGRIOS_OTEL_ARTIFACTS_DIR}:/var/lib/integrios-qualification/otel:ro"
 
   bootstrap:
     # These explicit tags are also assigned by the development Compose build. The deployment
