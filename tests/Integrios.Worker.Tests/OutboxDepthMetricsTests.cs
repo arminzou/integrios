@@ -19,7 +19,7 @@ public sealed class OutboxDepthMetricsTests
         services.AddLogging();
         services.AddMetrics();
         services.AddSingleton<IDbConnectionFactory>(connectionFactory);
-        services.AddIntegriosOutboxDepthMetrics(configuration);
+        services.AddOutboxDepthMetricsServices(configuration);
 
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
         using ServiceProvider provider = services.BuildServiceProvider();
@@ -44,7 +44,7 @@ public sealed class OutboxDepthMetricsTests
             .Build();
 
         Assert.Throws<InvalidOperationException>(() =>
-            new ServiceCollection().AddIntegriosOutboxDepthMetrics(configuration));
+            new ServiceCollection().AddOutboxDepthMetricsServices(configuration));
     }
 
     private sealed class CountingConnectionFactory : IDbConnectionFactory

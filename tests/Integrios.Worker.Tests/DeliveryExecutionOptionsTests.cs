@@ -61,8 +61,8 @@ public sealed class DeliveryExecutionOptionsTests
         });
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddIntegriosApplication();
-        services.AddIntegriosWorkerInfrastructure(configuration);
+        services.AddApplicationServices();
+        services.AddWorkerInfrastructureServices(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
         DeliveryExecutionOptions options = provider.GetRequiredService<DeliveryExecutionOptions>();
@@ -84,7 +84,7 @@ public sealed class DeliveryExecutionOptionsTests
         });
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            new ServiceCollection().AddIntegriosWorkerInfrastructure(configuration));
+            new ServiceCollection().AddWorkerInfrastructureServices(configuration));
 
         Assert.Contains("Retry:MaxAttempts", exception.Message, StringComparison.Ordinal);
     }
@@ -101,8 +101,8 @@ public sealed class DeliveryExecutionOptionsTests
         });
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddIntegriosApplication();
-        services.AddIntegriosWorkerInfrastructure(configuration);
+        services.AddApplicationServices();
+        services.AddWorkerInfrastructureServices(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
         DeliveryExecutionOptions options = provider.GetRequiredService<DeliveryExecutionOptions>();
@@ -129,7 +129,7 @@ public sealed class DeliveryExecutionOptionsTests
         });
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            new ServiceCollection().AddIntegriosWorkerInfrastructure(configuration));
+            new ServiceCollection().AddWorkerInfrastructureServices(configuration));
 
         Assert.Contains("AttemptDeadline", exception.Message, StringComparison.Ordinal);
     }
@@ -148,8 +148,8 @@ public sealed class DeliveryExecutionOptionsTests
         IConfiguration configuration = BuildConfiguration([]);
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddIntegriosApplication();
-        services.AddIntegriosWorkerInfrastructure(configuration);
+        services.AddApplicationServices();
+        services.AddWorkerInfrastructureServices(configuration);
         await using ServiceProvider provider = services.BuildServiceProvider();
         IDeliveryClient deliveryClient = provider.GetRequiredService<IDeliveryClient>();
 

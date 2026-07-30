@@ -47,14 +47,14 @@ public sealed class HostCompositionArchitectureTests
     public void EveryApplicationHandler_IsRegisteredByExactlyOneProductionHost()
     {
         using ServiceProvider admin = BuildProvider(
-            services => services.AddIntegriosAdminApplication(),
-            services => services.AddIntegriosAdminInfrastructure(BuildConfiguration()));
+            services => services.AddAdminApplicationServices(),
+            services => services.AddAdminInfrastructureServices(BuildConfiguration()));
         using ServiceProvider ingress = BuildProvider(
-            services => services.AddIntegriosIngressApplication(),
-            services => services.AddIntegriosIngressInfrastructure(BuildConfiguration()));
+            services => services.AddIngressApplicationServices(),
+            services => services.AddIngressInfrastructureServices(BuildConfiguration()));
         using ServiceProvider worker = BuildProvider(
-            services => services.AddIntegriosWorkerApplication(),
-            services => services.AddIntegriosWorkerInfrastructure(BuildConfiguration()));
+            services => services.AddWorkerApplicationServices(),
+            services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
 
         (string Name, IServiceProvider Provider)[] hosts =
         [
@@ -96,14 +96,14 @@ public sealed class HostCompositionArchitectureTests
         Assert.Equal(publicPorts, classifiedPorts);
 
         using ServiceProvider admin = BuildProvider(
-            services => services.AddIntegriosAdminApplication(),
-            services => services.AddIntegriosAdminInfrastructure(BuildConfiguration()));
+            services => services.AddAdminApplicationServices(),
+            services => services.AddAdminInfrastructureServices(BuildConfiguration()));
         using ServiceProvider ingress = BuildProvider(
-            services => services.AddIntegriosIngressApplication(),
-            services => services.AddIntegriosIngressInfrastructure(BuildConfiguration()));
+            services => services.AddIngressApplicationServices(),
+            services => services.AddIngressInfrastructureServices(BuildConfiguration()));
         using ServiceProvider worker = BuildProvider(
-            services => services.AddIntegriosWorkerApplication(),
-            services => services.AddIntegriosWorkerInfrastructure(BuildConfiguration()));
+            services => services.AddWorkerApplicationServices(),
+            services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
 
         (Host Host, IServiceProvider Provider)[] providers =
         [
@@ -128,8 +128,8 @@ public sealed class HostCompositionArchitectureTests
     public void Admin_ResolvesOnlyControlPlanePorts()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIntegriosAdminApplication(),
-            services => services.AddIntegriosAdminInfrastructure(BuildConfiguration()));
+            services => services.AddAdminApplicationServices(),
+            services => services.AddAdminInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IAdminKeyRepository>(provider);
         AssertResolves<IApiKeyRepository>(provider);
@@ -159,8 +159,8 @@ public sealed class HostCompositionArchitectureTests
     public void Ingress_ResolvesOnlyIntakeAndReplayPorts()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIntegriosIngressApplication(),
-            services => services.AddIntegriosIngressInfrastructure(BuildConfiguration()));
+            services => services.AddIngressApplicationServices(),
+            services => services.AddIngressInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IActiveApiKeyLookup>(provider);
         AssertResolves<IIntakeTopicResolver>(provider);
@@ -189,8 +189,8 @@ public sealed class HostCompositionArchitectureTests
     public void Worker_ResolvesOnlyDeliveryAndSecretValidationPorts()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIntegriosWorkerApplication(),
-            services => services.AddIntegriosWorkerInfrastructure(BuildConfiguration()));
+            services => services.AddWorkerApplicationServices(),
+            services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<ISecretValidationCatalog>(provider);
         AssertResolves<IOutboxFanout>(provider);

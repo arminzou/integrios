@@ -8,7 +8,7 @@ namespace Integrios.Infrastructure;
 
 public static class SecretResolutionDependencyInjection
 {
-    public static IServiceCollection AddIntegriosSecretResolution(
+    public static IServiceCollection AddSecretResolutionServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {

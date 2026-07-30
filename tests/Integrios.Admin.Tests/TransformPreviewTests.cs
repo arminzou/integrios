@@ -16,7 +16,7 @@ public sealed class TransformPreviewTests : IDisposable
     public TransformPreviewTests()
     {
         var services = new ServiceCollection();
-        services.AddIntegriosApplication();
+        services.AddApplicationServices();
         services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
         provider = services.BuildServiceProvider();
         mediator = provider.GetRequiredService<IMediator>();

@@ -29,8 +29,8 @@ public static class BootstrapCli
         bool runAdminKey = flags.Length == 0 || flags.Contains("--admin-key");
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddIntegriosAdminApplication();
-        hostBuilder.Services.AddIntegriosAdminInfrastructure(hostBuilder.Configuration);
+        hostBuilder.Services.AddAdminApplicationServices();
+        hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);
 
         using IHost host = hostBuilder.Build();
         IMediator mediator = host.Services.GetRequiredService<IMediator>();

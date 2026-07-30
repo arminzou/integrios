@@ -611,7 +611,7 @@ public sealed class WorkerTransportAbstractionsTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddIntegriosApplication();
+        services.AddApplicationServices();
         services.AddSingleton(DeliveryExecutionOptions.Default);
         services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]));
         services.AddSingleton<ISecretResolver>(new NullSecretResolver());

@@ -146,7 +146,7 @@ public sealed class SecretValidationCliTests
         IReadOnlyDictionary<string, string> secrets)
     {
         var services = new ServiceCollection();
-        services.AddIntegriosApplication();
+        services.AddApplicationServices();
         services.AddSingleton<ISecretValidationCatalog>(new FakeSecretValidationCatalog(tenants, connections));
         services.AddSingleton<ISecretResolver>(new FakeSecretResolver(secrets));
         return services.BuildServiceProvider();

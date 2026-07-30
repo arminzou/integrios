@@ -35,11 +35,11 @@ namespace Integrios.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddIntegriosAdminInfrastructure(
+    public static IServiceCollection AddAdminInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddIntegriosPostgres(configuration);
+        services.AddPostgresServices(configuration);
         services.AddSingleton<IAdminKeyRepository, AdminKeyRepository>();
         services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
         services.AddSingleton<ITenantRepository, TenantRepository>();
@@ -47,16 +47,17 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
         services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
-        services.AddIntegriosConnectionAuthoring();
+        services.AddConnectionAuthServices();
+        services.AddTransformEvaluationServices();
 
         return services;
     }
 
-    public static IServiceCollection AddIntegriosIngressInfrastructure(
+    public static IServiceCollection AddIngressInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddIntegriosPostgres(configuration);
+        services.AddPostgresServices(configuration);
         services.AddSingleton<IActiveApiKeyLookup, PostgresActiveApiKeyLookup>();
         services.AddSingleton<IIntakeTopicResolver, PostgresIntakeTopicResolver>();
         services.AddSingleton<IEventRepository, EventRepository>();
@@ -65,11 +66,11 @@ public static class DependencyInjection
         return services;
     }
 
-    public static IServiceCollection AddIntegriosWorkerInfrastructure(
+    public static IServiceCollection AddWorkerInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddIntegriosPostgres(configuration);
+        services.AddPostgresServices(configuration);
 
         DeliveryExecutionOptions deliveryOptions = ReadDeliveryOptions(configuration);
         deliveryOptions.Validate();
@@ -82,7 +83,8 @@ public static class DependencyInjection
         services.AddSingleton<ISecretValidationCatalog, PostgresSecretValidationCatalog>();
         services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
-        services.AddIntegriosConnectionAuthoring();
+        services.AddConnectionAuthServices();
+        services.AddTransformEvaluationServices();
         services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
@@ -95,7 +97,7 @@ public static class DependencyInjection
         return services;
     }
 
-    private static IServiceCollection AddIntegriosPostgres(
+    private static IServiceCollection AddPostgresServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
@@ -116,11 +118,17 @@ public static class DependencyInjection
         return services;
     }
 
-    private static IServiceCollection AddIntegriosConnectionAuthoring(this IServiceCollection services)
+    private static IServiceCollection AddConnectionAuthServices(this IServiceCollection services)
     {
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
+
+        return services;
+    }
+
+    private static IServiceCollection AddTransformEvaluationServices(this IServiceCollection services)
+    {
         services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
 
         return services;

@@ -16,11 +16,11 @@ namespace Integrios.Application;
 
 public static class DependencyInjection
 {
-    internal static IServiceCollection AddIntegriosApplication(this IServiceCollection services)
-        => AddIntegriosApplication(services, static _ => true);
+    internal static IServiceCollection AddApplicationServices(this IServiceCollection services)
+        => AddApplicationServices(services, static _ => true);
 
-    public static IServiceCollection AddIntegriosAdminApplication(this IServiceCollection services)
-        => AddIntegriosApplication(services, type => IsInCapability(
+    public static IServiceCollection AddAdminApplicationServices(this IServiceCollection services)
+        => AddApplicationServices(services, type => IsInCapability(
             type,
             typeof(IApiKeyRepository),
             typeof(BootstrapBuiltinsCommand),
@@ -30,13 +30,13 @@ public static class DependencyInjection
             typeof(ITenantRepository),
             typeof(ITopicRepository)));
 
-    public static IServiceCollection AddIntegriosIngressApplication(this IServiceCollection services)
-        => AddIntegriosApplication(
+    public static IServiceCollection AddIngressApplicationServices(this IServiceCollection services)
+        => AddApplicationServices(
             services,
             type => IsInCapability(type, typeof(IEventRepository)));
 
-    public static IServiceCollection AddIntegriosWorkerApplication(this IServiceCollection services)
-        => AddIntegriosApplication(
+    public static IServiceCollection AddWorkerApplicationServices(this IServiceCollection services)
+        => AddApplicationServices(
             services,
             type => IsInCapability(
                 type,
@@ -44,7 +44,7 @@ public static class DependencyInjection
                 typeof(IOutboxFanout),
                 typeof(ISecretResolver)));
 
-    private static IServiceCollection AddIntegriosApplication(
+    private static IServiceCollection AddApplicationServices(
         IServiceCollection services,
         Func<Type, bool> handlerFilter)
     {
