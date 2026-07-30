@@ -42,7 +42,7 @@ public sealed class IngestMetricsTests
         var capturing = new CapturingLoggerProvider();
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddProvider(capturing));
-        services.AddIntegriosApplication();
+        services.AddApplicationServices();
         services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
         services.AddSingleton<IEventRepository>(new FakeEventRepository(isDuplicate: false));
         var mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
@@ -64,7 +64,7 @@ public sealed class IngestMetricsTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddIntegriosApplication();
+        services.AddApplicationServices();
         services.AddSingleton<IIntakeTopicResolver>(new FakeIntakeTopicResolver());
         services.AddSingleton<IEventRepository>(new FakeEventRepository(isDuplicate));
         return services.BuildServiceProvider().GetRequiredService<IMediator>();

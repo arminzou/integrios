@@ -71,7 +71,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             SubscriptionRepository = new FakeSubscriptionRepository();
             var integrationId = Guid.NewGuid();
             var services = new ServiceCollection();
-            services.AddIntegriosApplication();
+            services.AddApplicationServices();
             services.AddSingleton<ISubscriptionRepository>(SubscriptionRepository);
             services.AddSingleton<ITopicRepository>(new FakeTopicRepository(Topic()));
             services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(integrationId)));

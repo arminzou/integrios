@@ -22,9 +22,9 @@ builder.Services.AddOpenApi(options =>
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AdminExceptionHandler>();
-builder.Services.AddIntegriosAdminApplication();
-builder.Services.AddIntegriosAdminInfrastructure(builder.Configuration);
-builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-admin");
+builder.Services.AddAdminApplicationServices();
+builder.Services.AddAdminInfrastructureServices(builder.Configuration);
+builder.Services.AddTelemetryServices(builder.Configuration, "integrios-admin");
 
 builder.Services.AddAuthentication(AdminKeyAuthHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, AdminKeyAuthHandler>(AdminKeyAuthHandler.SchemeName, _ => { });

@@ -382,7 +382,7 @@ public sealed class AuthenticatedDispatchTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMetrics();
-        services.AddIntegriosApplication();
+        services.AddApplicationServices();
         services.AddSingleton(DeliveryExecutionOptions.Default);
         registerDoubles(services);
         return services.BuildServiceProvider().GetRequiredService<IMediator>();

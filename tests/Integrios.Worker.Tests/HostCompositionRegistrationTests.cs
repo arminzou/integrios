@@ -27,14 +27,14 @@ public sealed class HostCompositionRegistrationTests
     public void EveryApplicationHandlerImplementation_IsRegisteredByExactlyOneHost()
     {
         using ServiceProvider admin = BuildProvider(
-            services => services.AddIntegriosAdminApplication(),
-            services => services.AddIntegriosAdminInfrastructure(BuildConfiguration()));
+            services => services.AddAdminApplicationServices(),
+            services => services.AddAdminInfrastructureServices(BuildConfiguration()));
         using ServiceProvider ingress = BuildProvider(
-            services => services.AddIntegriosIngressApplication(),
-            services => services.AddIntegriosIngressInfrastructure(BuildConfiguration()));
+            services => services.AddIngressApplicationServices(),
+            services => services.AddIngressInfrastructureServices(BuildConfiguration()));
         using ServiceProvider worker = BuildProvider(
-            services => services.AddIntegriosWorkerApplication(),
-            services => services.AddIntegriosWorkerInfrastructure(BuildConfiguration()));
+            services => services.AddWorkerApplicationServices(),
+            services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
 
         (string Name, IServiceProvider Provider)[] hosts =
         [
@@ -71,9 +71,9 @@ public sealed class HostCompositionRegistrationTests
     public void Admin_ResolvesOnlyControlPlaneAdapters()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIntegriosAdminApplication(),
+            services => services.AddAdminApplicationServices(),
             services =>
-            services.AddIntegriosAdminInfrastructure(BuildConfiguration()));
+            services.AddAdminInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IAdminKeyRepository>(provider);
         AssertResolves<IApiKeyRepository>(provider);
@@ -103,9 +103,9 @@ public sealed class HostCompositionRegistrationTests
     public void Ingress_ResolvesOnlyEventIntakeAndReplayAdapters()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIntegriosIngressApplication(),
+            services => services.AddIngressApplicationServices(),
             services =>
-            services.AddIntegriosIngressInfrastructure(BuildConfiguration()));
+            services.AddIngressInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IActiveApiKeyLookup>(provider);
         AssertResolves<IIntakeTopicResolver>(provider);
@@ -133,9 +133,9 @@ public sealed class HostCompositionRegistrationTests
     public void Worker_ResolvesOnlyDeliveryAndSecretValidationAdapters()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIntegriosWorkerApplication(),
+            services => services.AddWorkerApplicationServices(),
             services =>
-            services.AddIntegriosWorkerInfrastructure(BuildConfiguration()));
+            services.AddWorkerInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<ISecretValidationCatalog>(provider);
         AssertResolves<IOutboxFanout>(provider);
@@ -162,7 +162,7 @@ public sealed class HostCompositionRegistrationTests
     public void ApplicationRegistration_DoesNotProvideDeliveryPolicies()
     {
         using ServiceProvider provider = new ServiceCollection()
-            .AddIntegriosApplication()
+            .AddApplicationServices()
             .BuildServiceProvider();
 
         AssertOmits<DeliveryExecutionOptions>(provider);
@@ -179,9 +179,9 @@ public sealed class HostCompositionRegistrationTests
             ["Integrios:Delivery:Retry:MaxAttempts"] = "not-an-integer"
         });
         using ServiceProvider ingress = BuildProvider(
-            services => services.AddIntegriosIngressApplication(),
+            services => services.AddIngressApplicationServices(),
             services =>
-            services.AddIntegriosIngressInfrastructure(ingressConfiguration));
+            services.AddIngressInfrastructureServices(ingressConfiguration));
 
         AssertOmits<DeliveryExecutionOptions>(ingress);
         AssertOmits<RetryPolicy>(ingress);
@@ -193,9 +193,9 @@ public sealed class HostCompositionRegistrationTests
             ["Integrios:Delivery:Retry:MaxAttempts"] = "7"
         });
         using ServiceProvider worker = BuildProvider(
-            services => services.AddIntegriosWorkerApplication(),
+            services => services.AddWorkerApplicationServices(),
             services =>
-            services.AddIntegriosWorkerInfrastructure(workerConfiguration));
+            services.AddWorkerInfrastructureServices(workerConfiguration));
 
         DeliveryExecutionOptions workerOptions = worker.GetRequiredService<DeliveryExecutionOptions>();
         RetryPolicy workerPolicy = worker.GetRequiredService<RetryPolicy>();
@@ -215,9 +215,9 @@ public sealed class HostCompositionRegistrationTests
         });
 
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIntegriosAdminApplication(),
+            services => services.AddAdminApplicationServices(),
             services =>
-            services.AddIntegriosAdminInfrastructure(configuration));
+            services.AddAdminInfrastructureServices(configuration));
 
         AssertResolves<IAdminKeyRepository>(provider);
         AssertOmits<DeliveryExecutionOptions>(provider);
@@ -228,20 +228,20 @@ public sealed class HostCompositionRegistrationTests
     {
         IConfiguration configuration = BuildConfiguration();
         var admin = new ServiceCollection();
-        admin.AddIntegriosAdminApplication();
-        admin.AddIntegriosAdminInfrastructure(configuration);
-        admin.AddIntegriosTelemetry(configuration, "integrios-admin");
+        admin.AddAdminApplicationServices();
+        admin.AddAdminInfrastructureServices(configuration);
+        admin.AddTelemetryServices(configuration, "integrios-admin");
 
         var ingress = new ServiceCollection();
-        ingress.AddIntegriosIngressApplication();
-        ingress.AddIntegriosIngressInfrastructure(configuration);
-        ingress.AddIntegriosTelemetry(configuration, "integrios-ingress");
+        ingress.AddIngressApplicationServices();
+        ingress.AddIngressInfrastructureServices(configuration);
+        ingress.AddTelemetryServices(configuration, "integrios-ingress");
 
         var worker = new ServiceCollection();
-        worker.AddIntegriosWorkerApplication();
-        worker.AddIntegriosWorkerInfrastructure(configuration);
-        worker.AddIntegriosTelemetry(configuration, "integrios-worker");
-        worker.AddIntegriosOutboxDepthMetrics(configuration);
+        worker.AddWorkerApplicationServices();
+        worker.AddWorkerInfrastructureServices(configuration);
+        worker.AddTelemetryServices(configuration, "integrios-worker");
+        worker.AddOutboxDepthMetricsServices(configuration);
 
         Assert.DoesNotContain(admin, IsOutboxDepthMetricsRegistration);
         Assert.DoesNotContain(ingress, IsOutboxDepthMetricsRegistration);

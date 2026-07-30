@@ -115,7 +115,7 @@ public sealed class SecretResolverTests : IDisposable
             ["Integrios:Secrets:FileRoot"] = root
         });
         var services = new ServiceCollection();
-        services.AddIntegriosSecretResolution(configuration);
+        services.AddSecretResolutionServices(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
         ISecretResolver resolver = provider.GetRequiredService<ISecretResolver>();
@@ -128,12 +128,12 @@ public sealed class SecretResolverTests : IDisposable
     public void DependencyInjection_DefaultsToFileAndAcceptsExplicitConfiguration()
     {
         var defaultServices = new ServiceCollection();
-        defaultServices.AddIntegriosSecretResolution(Configuration([]));
+        defaultServices.AddSecretResolutionServices(Configuration([]));
         using ServiceProvider defaultProvider = defaultServices.BuildServiceProvider();
         Assert.IsType<MountedFileSecretResolver>(defaultProvider.GetRequiredService<ISecretResolver>());
 
         var configurationServices = new ServiceCollection();
-        configurationServices.AddIntegriosSecretResolution(Configuration(new Dictionary<string, string?>
+        configurationServices.AddSecretResolutionServices(Configuration(new Dictionary<string, string?>
         {
             ["Integrios:Secrets:Provider"] = "configuration"
         }));
@@ -145,9 +145,9 @@ public sealed class SecretResolverTests : IDisposable
     public void DependencyInjection_RejectsUnsupportedProviderAndInvalidRoot()
     {
         var services = new ServiceCollection();
-        Assert.Throws<InvalidOperationException>(() => services.AddIntegriosSecretResolution(
+        Assert.Throws<InvalidOperationException>(() => services.AddSecretResolutionServices(
             Configuration(new Dictionary<string, string?> { ["Integrios:Secrets:Provider"] = "vault" })));
-        Assert.Throws<InvalidOperationException>(() => services.AddIntegriosSecretResolution(
+        Assert.Throws<InvalidOperationException>(() => services.AddSecretResolutionServices(
             Configuration(new Dictionary<string, string?>
             {
                 ["Integrios:Secrets:Provider"] = "file",

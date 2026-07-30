@@ -11,9 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<IngressExceptionHandler>();
-builder.Services.AddIntegriosIngressApplication();
-builder.Services.AddIntegriosIngressInfrastructure(builder.Configuration);
-builder.Services.AddIntegriosTelemetry(builder.Configuration, "integrios-ingress");
+builder.Services.AddIngressApplicationServices();
+builder.Services.AddIngressInfrastructureServices(builder.Configuration);
+builder.Services.AddTelemetryServices(builder.Configuration, "integrios-ingress");
 
 builder.Services.AddAuthentication(ApiKeyAuthHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthHandler>(ApiKeyAuthHandler.SchemeName, _ => { });

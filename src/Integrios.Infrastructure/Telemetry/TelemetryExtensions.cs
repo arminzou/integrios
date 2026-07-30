@@ -12,7 +12,7 @@ public static class TelemetryExtensions
 {
     private static readonly TimeSpan DefaultOutboxDepthSampleInterval = TimeSpan.FromSeconds(15);
 
-    public static IServiceCollection AddIntegriosTelemetry(
+    public static IServiceCollection AddTelemetryServices(
         this IServiceCollection services,
         IConfiguration configuration,
         string serviceName)
@@ -57,7 +57,7 @@ public static class TelemetryExtensions
         return services;
     }
 
-    public static IServiceCollection AddIntegriosOutboxDepthMetrics(
+    public static IServiceCollection AddOutboxDepthMetricsServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {

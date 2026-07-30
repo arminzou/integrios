@@ -74,7 +74,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             new DeliveryOutcomePolicy(new RetryPolicy()));
 
         var services = new ServiceCollection();
-        services.AddIntegriosApplication();
+        services.AddApplicationServices();
         services.AddSingleton(outboxFanout);
         services.AddSingleton(deadLetterReplay);
         services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
