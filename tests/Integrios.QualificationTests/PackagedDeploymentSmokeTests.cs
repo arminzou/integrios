@@ -158,12 +158,17 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         string traceId = traceparent.Split('-')[1];
 
         IReadOnlyList<ExportedSpan> traceSpans = [];
+        // Ingress and Worker export through independent batch processors, so delivery spans can
+        // reach the collector before the acceptance span the Ingress emitted seconds earlier.
+        // Wait for the whole causal chain, not just its tail, or the assertions below race the flush.
         await WaitForAsync(async () =>
         {
             traceSpans = ParseSpans(await fixture.ReadTraceArtifactsAsync())
                 .Where(span => span.TraceId == traceId)
                 .ToArray();
-            return traceSpans.Count(span => span.Name == "subscription.deliver") >= 2;
+            return traceSpans.Any(span => span.Name == "IngestEventCommand")
+                && traceSpans.Any(span => span.Name == "outbox.fanout")
+                && traceSpans.Count(span => span.Name == "subscription.deliver") >= 2;
         });
 
         ExportedSpan acceptanceSpan = Assert.Single(traceSpans, span => span.Name == "IngestEventCommand");
