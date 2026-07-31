@@ -42,7 +42,8 @@ services:
       # value because the two-minute lease is itself an acceptance criterion.
       Integrios__Delivery__HttpTimeout: "00:00:05"
       Integrios__Delivery__AttemptDeadline: "00:00:15"
-      Integrios__Delivery__IdlePollInterval: "00:00:00.250"
+      Integrios__Worker__FanoutLoop__IdlePollInterval: "00:00:00.250"
+      Integrios__Worker__DeliveryLoop__IdlePollInterval: "00:00:00.250"
       Integrios__Delivery__Retry__BaseDelay: "00:00:02"
     ports:
       - "${INTEGRIOS_WORKER_METRICS_PORT}:5299"

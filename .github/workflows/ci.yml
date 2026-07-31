@@ -81,10 +81,10 @@ jobs:
             echo 'filter=' >> "$GITHUB_OUTPUT"
           else
             echo 'name=main' >> "$GITHUB_OUTPUT"
-            echo 'minimum_tests=3' >> "$GITHUB_OUTPUT"
-            echo 'minimum_qualification_tests=3' >> "$GITHUB_OUTPUT"
+            echo 'minimum_tests=4' >> "$GITHUB_OUTPUT"
+            echo 'minimum_qualification_tests=4' >> "$GITHUB_OUTPUT"
             echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
-            echo 'filter=FullyQualifiedName~Integrios.QualificationTests.FreshDatabaseLifecycleTests|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.PackagedDeployment_StartsAndExposesDeterministicEvidence' >> "$GITHUB_OUTPUT"
+            echo 'filter=FullyQualifiedName~Integrios.QualificationTests.FreshDatabaseLifecycleTests|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.PackagedDeployment_StartsAndExposesDeterministicEvidence|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.Worker_FansOutNewEventWhileDeliveryAttemptIsBlocked' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Record release inputs

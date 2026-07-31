@@ -78,6 +78,21 @@ invalid selection or startup configuration. It prints no resolved values.
 
 ## Upgrading
 
+Worker scheduling is configured independently for the two durable queues:
+
+| Setting | Default |
+| --- | --- |
+| `Integrios:Worker:FanoutLoop:BatchSize` | `10` |
+| `Integrios:Worker:FanoutLoop:IdlePollInterval` | `00:00:02` |
+| `Integrios:Worker:DeliveryLoop:BatchSize` | `25` |
+| `Integrios:Worker:DeliveryLoop:IdlePollInterval` | `00:00:02` |
+
+If you previously customized
+`Integrios:Delivery:IdlePollInterval`, replace it with
+`Integrios:Worker:FanoutLoop:IdlePollInterval` and/or
+`Integrios:Worker:DeliveryLoop:IdlePollInterval`. The old key is no longer read. The new fanout and
+delivery loop defaults are both two seconds, so deployments that used the old default need no change.
+
 Bump `INTEGRIOS_VERSION` in `.env`, then:
 
 ```bash

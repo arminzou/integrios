@@ -12,4 +12,8 @@
     <ProjectReference Include="..\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Integrios.Worker.Tests" />
+  </ItemGroup>
 </Project>

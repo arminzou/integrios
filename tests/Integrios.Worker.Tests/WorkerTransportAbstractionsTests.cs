@@ -575,7 +575,7 @@ public sealed class WorkerTransportAbstractionsTests
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
     }
 
-    private static SubscriptionDeliveryWorkItem MakeWorkItem(
+    internal static SubscriptionDeliveryWorkItem MakeWorkItem(
         Guid? id = null,
         Guid? eventId = null,
         Guid? subscriptionId = null,
@@ -607,7 +607,7 @@ public sealed class WorkerTransportAbstractionsTests
             null,
             traceparent);
 
-    private static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
+    internal static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -632,7 +632,7 @@ public sealed class WorkerTransportAbstractionsTests
         }
     }
 
-    private sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
+    internal sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
     {
         public IReadOnlyList<SubscriptionDeliveryWorkItem> ClaimedItems { get; init; } = [];
         public IReadOnlyList<SubscriptionDeliveryClaimResult>? ClaimResults { get; init; }
@@ -643,6 +643,7 @@ public sealed class WorkerTransportAbstractionsTests
         public Queue<Exception> FinalizationExceptions { get; init; } = [];
         public bool HonorFinalizationCancellation { get; init; }
         public List<string>? Operations { get; init; }
+        public TaskCompletionSource? FinalizationSignal { get; init; }
         public int ClaimCallCount { get; private set; }
         private int claimIndex;
 
@@ -666,6 +667,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             Completions.Add(completion);
             Operations?.Add("finalize");
+            FinalizationSignal?.TrySetResult();
             if (HonorFinalizationCancellation)
                 cancellationToken.ThrowIfCancellationRequested();
             if (FinalizationExceptions.TryDequeue(out Exception? exception))
@@ -681,7 +683,7 @@ public sealed class WorkerTransportAbstractionsTests
 
     }
 
-    private sealed class FakeDeliveryClient(
+    internal sealed class FakeDeliveryClient(
         DeliveryResult result,
         List<string>? capturedPayloads = null,
         List<string>? operations = null) : IDeliveryClient
@@ -741,7 +743,7 @@ public sealed class WorkerTransportAbstractionsTests
             => throw new InvalidOperationException($"Unexpected secret lookup for '{secretName}'.");
     }
 
-    private sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
+    internal sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
     {
         public string? ValidateExpression(TransformSpec transform) => null;
 
