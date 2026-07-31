@@ -22,7 +22,6 @@ public sealed class DeliveryExecutionOptionsTests
         Assert.Equal(TimeSpan.FromSeconds(45), options.AttemptDeadline);
         Assert.Equal(TimeSpan.FromMinutes(2), options.LeaseDuration);
         Assert.Equal(TimeSpan.FromSeconds(60), options.ShutdownGracePeriod);
-        Assert.Equal(TimeSpan.FromSeconds(2), options.IdlePollInterval);
         Assert.Equal(TimeSpan.FromSeconds(30), options.RetryBaseDelay);
         Assert.Equal(3, options.RetryMaxAttempts);
         options.Validate();
@@ -43,7 +42,6 @@ public sealed class DeliveryExecutionOptionsTests
         { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(60)), "AttemptDeadline" },
         { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(60)), "LeaseDuration" },
         { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(45)), "ShutdownGracePeriod" },
-        { Valid with { IdlePollInterval = TimeSpan.Zero }, "IdlePollInterval" },
         { Valid with { RetryBaseDelay = TimeSpan.Zero }, "Retry:BaseDelay" },
         { Valid with { RetryMaxAttempts = 0 }, "Retry:MaxAttempts" }
     };
@@ -51,11 +49,10 @@ public sealed class DeliveryExecutionOptionsTests
     private static DeliveryExecutionOptions Valid => DeliveryExecutionOptions.Default;
 
     [Fact]
-    public void WorkerInfrastructureRegistration_AppliesConfiguredRetryCadence()
+    public void WorkerInfrastructureRegistration_AppliesConfiguredRetryPolicy()
     {
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Integrios:Delivery:IdlePollInterval"] = "00:00:00.250",
             ["Integrios:Delivery:Retry:BaseDelay"] = "00:00:02",
             ["Integrios:Delivery:Retry:MaxAttempts"] = "5"
         });
@@ -68,7 +65,6 @@ public sealed class DeliveryExecutionOptionsTests
         DeliveryExecutionOptions options = provider.GetRequiredService<DeliveryExecutionOptions>();
         RetryPolicy policy = provider.GetRequiredService<RetryPolicy>();
 
-        Assert.Equal(TimeSpan.FromMilliseconds(250), options.IdlePollInterval);
         // Worker configuration is the only delivery-policy registration.
         Assert.Equal(TimeSpan.FromSeconds(2), policy.BaseDelay);
         Assert.Equal(5, policy.MaxAttempts);

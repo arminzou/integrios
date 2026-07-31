@@ -150,8 +150,6 @@ public static class DependencyInjection
             ReadDuration(configuration, "Integrios:Delivery:LeaseDuration", defaults.LeaseDuration),
             ReadDuration(configuration, "Integrios:Delivery:ShutdownGracePeriod", defaults.ShutdownGracePeriod))
         {
-            IdlePollInterval = ReadDuration(
-                configuration, "Integrios:Delivery:IdlePollInterval", defaults.IdlePollInterval),
             RetryBaseDelay = ReadDuration(
                 configuration, "Integrios:Delivery:Retry:BaseDelay", defaults.RetryBaseDelay),
             RetryMaxAttempts = ReadInt(

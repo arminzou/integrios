@@ -193,6 +193,99 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.DoesNotContain(apiToken, workerLogs, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Worker_FansOutNewEventWhileDeliveryAttemptIsBlocked()
+    {
+        string suffix = Guid.NewGuid().ToString("N")[..10];
+        string tenantSlug = $"loop-{suffix}";
+        string topicName = $"loop-{suffix}";
+        string sinkName = $"loop-{suffix}";
+
+        Guid tenantId = await PostAdminForIdAsync(
+            "/admin/tenants",
+            new { slug = tenantSlug, name = "Worker loop isolation", environment = "production" });
+        string apiToken = await PostAdminForPropertyAsync(
+            $"/admin/tenants/{tenantId}/api-keys",
+            new { name = "loop-isolation-ingress" },
+            "token");
+        Guid sourceConnectionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/connections",
+            new
+            {
+                integrationId = "00000000-0000-0000-0000-000000000001",
+                name = "loop-isolation-source",
+                config = new { url = $"http://mocksink:8080/sink/{sinkName}-source" },
+                environment = "production"
+            });
+        Guid destinationConnectionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/connections",
+            new
+            {
+                integrationId = "00000000-0000-0000-0000-000000000001",
+                name = "loop-isolation-destination",
+                config = new { url = $"http://mocksink:8080/sink/{sinkName}" },
+                environment = "production"
+            });
+        Guid topicId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/topics",
+            new { name = topicName, sourceConnectionIds = new[] { sourceConnectionId } });
+        Guid subscriptionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
+            new
+            {
+                name = "blocked-delivery",
+                matchRules = new { event_type = "delivery.blocked" },
+                destinationConnectionId
+            });
+
+        using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
+            $"/control/{sinkName}",
+            new { mode = "slow", delayMs = 8000 });
+        Assert.Equal(HttpStatusCode.OK, slowMode.StatusCode);
+        Guid? blockedEventId = null;
+
+        try
+        {
+            blockedEventId = await IngestEventAsync(
+                apiToken,
+                sourceConnectionId,
+                topicName,
+                "delivery.blocked",
+                $"blocked-{suffix}");
+            await WaitForAsync(async () =>
+                await fixture.ScalarAsync<long>(
+                    $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'") == 1);
+            Guid blockedAttemptId = await fixture.ScalarAsync<Guid>(
+                $"SELECT da.id FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'");
+
+            Guid independentEventId = await IngestEventAsync(
+                apiToken,
+                sourceConnectionId,
+                topicName,
+                "fanout.independent",
+                $"independent-{suffix}");
+
+            await WaitForAsync(async () =>
+                await fixture.ScalarAsync<long>(
+                    $"SELECT COUNT(*) FROM events e JOIN outbox o ON o.event_id = e.id WHERE e.id = '{independentEventId}' AND e.status = 'unrouted' AND o.processed_at IS NOT NULL AND EXISTS (SELECT 1 FROM delivery_attempts WHERE id = '{blockedAttemptId}' AND status = 'in_progress')") == 1);
+        }
+        finally
+        {
+            using HttpResponseMessage reset = await fixture.MockSinkClient.DeleteAsync($"/control/{sinkName}");
+            Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+            if (blockedEventId is { } eventId)
+            {
+                await WaitForAsync(async () =>
+                    await fixture.ScalarAsync<long>(
+                        $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'in_progress'") == 0);
+            }
+        }
+
+        await WaitForAsync(async () =>
+            await fixture.ScalarAsync<string>(
+                $"SELECT status FROM subscription_deliveries WHERE subscription_id = '{subscriptionId}' ORDER BY created_at DESC LIMIT 1") == "succeeded");
+    }
+
     private async Task<Guid> PostAdminForIdAsync(string path, object body) =>
         Guid.Parse(await PostAdminForPropertyAsync(path, body, "id"));
 
@@ -205,6 +298,32 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.True(response.IsSuccessStatusCode, $"POST {path} returned {(int)response.StatusCode}: {responseBody}");
         using JsonDocument document = JsonDocument.Parse(responseBody);
         return document.RootElement.GetProperty(property).ToString();
+    }
+
+    private async Task<Guid> IngestEventAsync(
+        string apiToken,
+        Guid sourceConnectionId,
+        string topicName,
+        string eventType,
+        string idempotencyKey)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/events")
+        {
+            Content = JsonContent.Create(new
+            {
+                sourceConnectionId,
+                topicName,
+                eventType,
+                payload = new { idempotencyKey },
+                idempotencyKey
+            })
+        };
+        request.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {apiToken}");
+        using HttpResponseMessage response = await fixture.IngressClient.SendAsync(request);
+        string responseBody = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        using JsonDocument document = JsonDocument.Parse(responseBody);
+        return document.RootElement.GetProperty("eventId").GetGuid();
     }
 
     private static async Task WaitForAsync(Func<Task<bool>> condition)
