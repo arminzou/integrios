@@ -457,8 +457,12 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
 
         await using var cmd = new NpgsqlCommand(
             """
-            INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status, description, created_at, updated_at)
-            VALUES (@Id, @Key, @Name, @Direction, @SupportedAuthSchemes::jsonb, 'active', 'test integration', now(), now());
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, description, manifest, created_at, updated_at)
+            VALUES (
+                @Id, @Key, 1, 1, @Name, @Direction,
+                @SupportedAuthSchemes::jsonb, 'active', 'test integration', @Manifest::jsonb, now(), now());
             """,
             connection);
         cmd.Parameters.AddWithValue("Id", id);
@@ -466,6 +470,8 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         cmd.Parameters.AddWithValue("Name", key);
         cmd.Parameters.AddWithValue("Direction", direction);
         cmd.Parameters.AddWithValue("SupportedAuthSchemes", JsonSerializer.Serialize(supportedAuthSchemes));
+        cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
+            key, key, direction, supportedAuthSchemes));
         await cmd.ExecuteNonQueryAsync();
 
         return id;

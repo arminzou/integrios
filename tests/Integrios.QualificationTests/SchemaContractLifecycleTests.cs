@@ -141,4 +141,149 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
         Assert.Equal(0L, await CountColumnsAsync(database, "admin_keys", "tenant_id"));
         Assert.Equal(0L, await CountColumnsAsync(database, "api_keys", "scopes"));
     }
+
+    [Fact]
+    public async Task V26_PreservesLegacyIntegrationIdentityAndMakesFunctionalVersionsImmutable()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 25);
+        await ExecuteAsync(
+            database,
+            """
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES ('26000000-0000-0000-0000-000000000001', 'v26-tenant', 'V26 Tenant', 'active');
+
+            INSERT INTO integrations (
+                id, key, name, direction, supported_auth_schemes, status, description
+            ) VALUES (
+                '26000000-0000-0000-0000-000000000002', 'v26_api', 'V26 API',
+                'destination', '["bearer_token"]'::jsonb, 'active', 'Legacy destination');
+
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+            VALUES (
+                '26000000-0000-0000-0000-000000000003',
+                '26000000-0000-0000-0000-000000000001',
+                '26000000-0000-0000-0000-000000000002',
+                'v26-destination', '{"url":"https://example.test"}'::jsonb, 'active');
+            """);
+
+        await fixture.ExecuteMigrationSqlAsync(database, "V26__version_integration_manifests.sql");
+
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "integrations",
+            """
+            id = '26000000-0000-0000-0000-000000000002'
+            AND key = 'v26_api'
+            AND contract_version = 1
+            AND manifest_schema_version = 1
+            AND manifest->>'direction' = 'destination'
+            AND manifest->'destination_authentication_schemes'->0->>'scheme' = 'bearer_token'
+            """));
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "connections",
+            "integration_id = '26000000-0000-0000-0000-000000000002'"));
+        Assert.Equal(2L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'integrations'
+              AND column_name IN ('contract_version', 'manifest_schema_version')
+              AND column_default IS NULL
+            """));
+
+        var immutable = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => ExecuteAsync(
+            database,
+            """
+            UPDATE integrations
+            SET direction = 'both'
+            WHERE id = '26000000-0000-0000-0000-000000000002';
+            """));
+        Assert.Equal(Npgsql.PostgresErrorCodes.RaiseException, immutable.SqlState);
+
+        var manifestImmutable = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => ExecuteAsync(
+            database,
+            """
+            UPDATE integrations
+            SET manifest = jsonb_set(
+                manifest,
+                '{destination_configuration_schema,additionalProperties}',
+                'false'::jsonb)
+            WHERE id = '26000000-0000-0000-0000-000000000002';
+            """));
+        Assert.Equal(Npgsql.PostgresErrorCodes.RaiseException, manifestImmutable.SqlState);
+
+        await ExecuteAsync(
+            database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, description, manifest)
+            VALUES (
+                '26000000-0000-0000-0000-000000000004', 'v26_api', 2, 1, 'V26 API v2',
+                'destination', '[]'::jsonb, 'active', NULL,
+                '{
+                  "manifest_schema_version":1,
+                  "key":"v26_api",
+                  "contract_version":2,
+                  "direction":"destination",
+                  "destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},
+                  "source_verification_schemes":[],
+                  "destination_authentication_schemes":[],
+                  "presentation":{"name":"V26 API v2","event_types":[],"authoring_presets":[]}
+                }'::jsonb);
+            """);
+
+        Assert.Equal(2L, await CountAsync(database, "integrations", "key = 'v26_api'"));
+    }
+
+    [Fact]
+    public async Task V26_RejectsSourceOnlyLegacyDestinationAuthenticationForRepair()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 25);
+        await ExecuteAsync(
+            database,
+            """
+            INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status)
+            VALUES (
+                '26000000-0000-0000-0000-000000000010', 'v26_invalid_source', 'Invalid Source',
+                'source', '["bearer_token"]'::jsonb, 'active');
+            """);
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V26__version_integration_manifests.sql"));
+
+        Assert.Contains("source-only Integration", exception.MessageText, StringComparison.Ordinal);
+        Assert.Equal(0L, await CountColumnsAsync(database, "integrations", "contract_version"));
+    }
+
+    [Theory]
+    [InlineData("sideways", "[]", "unsupported direction")]
+    [InlineData("destination", "[\"oauth_client_credentials\"]", "unsupported destination authentication scheme")]
+    public async Task V26_RejectsUnsupportedLegacyFunctionalContractsForRepair(
+        string direction,
+        string authenticationSchemes,
+        string expectedMessage)
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 25);
+        await ExecuteAsync(
+            database,
+            $$"""
+            INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status)
+            VALUES (
+                '26000000-0000-0000-0000-000000000011', 'v26_invalid_contract', 'Invalid Contract',
+                '{{direction}}', '{{authenticationSchemes}}'::jsonb, 'active');
+            """);
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V26__version_integration_manifests.sql"));
+
+        Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
+        Assert.Equal(0L, await CountColumnsAsync(database, "integrations", "contract_version"));
+    }
 }

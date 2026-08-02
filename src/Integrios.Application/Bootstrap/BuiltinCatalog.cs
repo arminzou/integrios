@@ -4,11 +4,7 @@ namespace Integrios.Application.Bootstrap;
 
 public sealed record BuiltinIntegration(
     Guid Id,
-    string Key,
-    string Name,
-    IntegrationDirection Direction,
-    IReadOnlyList<string> SupportedAuthSchemes,
-    string? Description);
+    IntegrationManifest Manifest);
 
 public static class BuiltinCatalog
 {
@@ -18,10 +14,25 @@ public static class BuiltinCatalog
     [
         new BuiltinIntegration(
             WebhookId,
-            "webhook",
-            "Webhook",
-            IntegrationDirection.Both,
-            [],
-            "Generic webhook source or destination over HTTP."),
+            new IntegrationManifest
+            {
+                ManifestSchemaVersion = 1,
+                Key = "webhook",
+                ContractVersion = 1,
+                Direction = "both",
+                SourceConfigurationSchema = EmptyObjectSchema(),
+                DestinationConfigurationSchema = EmptyObjectSchema(),
+                SourceVerificationSchemes = [],
+                DestinationAuthenticationSchemes = [],
+                Presentation = new IntegrationPresentationManifest
+                {
+                    Name = "Webhook",
+                    Description = "Generic webhook source or destination over HTTP.",
+                },
+            }),
     ];
+
+    private static System.Text.Json.JsonElement EmptyObjectSchema() =>
+        System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+            """{"type":"object","properties":{},"additionalProperties":true}""");
 }

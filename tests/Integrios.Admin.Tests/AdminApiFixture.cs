@@ -52,7 +52,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await using var truncateCmd = new NpgsqlCommand(
             """
             TRUNCATE TABLE subscription_deliveries, delivery_attempts, outbox, events,
-                subscriptions, topic_sources, topics, connections, api_keys, admin_keys, tenants
+                subscriptions, topic_sources, topics, connections, integrations, api_keys, admin_keys, tenants
             RESTART IDENTITY CASCADE;
             """, connection);
         await truncateCmd.ExecuteNonQueryAsync();
@@ -71,8 +71,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
                 (@TenantId, 'test-tenant', 'Test Tenant', 'active', now(), now()),
                 (@OtherTenantId, 'other-tenant', 'Other Tenant', 'active', now(), now());
 
-            INSERT INTO integrations (id, key, name, direction, status)
-            VALUES (@IntegrationId, 'webhook', 'Webhook', 'both', 'active')
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
+            VALUES (@IntegrationId, 'webhook', 1, 1, 'Webhook', 'both', 'active', @Manifest::jsonb)
             ON CONFLICT (id) DO NOTHING;
 
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
@@ -88,6 +89,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("TenantId", TenantId);
         cmd.Parameters.AddWithValue("OtherTenantId", OtherTenantId);
         cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
+        cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
+            "webhook", "Webhook", "both", description: "Generic webhook source or destination over HTTP."));
         cmd.Parameters.AddWithValue("SourceConnectionId", SourceConnectionId);
         await cmd.ExecuteNonQueryAsync();
     }

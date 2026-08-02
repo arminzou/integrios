@@ -81,7 +81,7 @@ public sealed class HostCompositionRegistrationTests
         AssertResolves<IApiKeyRepository>(provider);
         AssertResolves<ITenantRepository>(provider);
         AssertResolves<IIntegrationCatalog>(provider);
-        AssertResolves<IBuiltinIntegrationReconciler>(provider);
+        AssertResolves<IIntegrationManifestStore>(provider);
         AssertResolves<IConnectionRepository>(provider);
         AssertResolves<ITopicRepository>(provider);
         AssertResolves<ISubscriptionRepository>(provider);
@@ -122,7 +122,7 @@ public sealed class HostCompositionRegistrationTests
         AssertOmits<IApiKeyRepository>(provider);
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IIntegrationCatalog>(provider);
-        AssertOmits<IBuiltinIntegrationReconciler>(provider);
+        AssertOmits<IIntegrationManifestStore>(provider);
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
         AssertOmits<IOutboxFanout>(provider);
@@ -164,7 +164,7 @@ public sealed class HostCompositionRegistrationTests
         AssertOmits<ISourceTopicLookup>(provider);
         AssertOmits<IDeadLetterReplay>(provider);
         AssertOmits<IIntegrationCatalog>(provider);
-        AssertOmits<IBuiltinIntegrationReconciler>(provider);
+        AssertOmits<IIntegrationManifestStore>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
     }
 

@@ -100,9 +100,11 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             );
 
             INSERT INTO integrations (
-                id, key, name, direction, supported_auth_schemes, status, created_at, updated_at
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest, created_at, updated_at
             ) VALUES (
-                @SourceIntegrationId, 'test_source', 'Test Source', 'source', '[]'::jsonb, 'active', now(), now()
+                @SourceIntegrationId, 'test_source', 1, 1, 'Test Source', 'source',
+                '[]'::jsonb, 'active', @SourceManifest::jsonb, now(), now()
             );
             """;
 
@@ -116,6 +118,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         seedCommand.Parameters.AddWithValue("KeyHashA", secretHashA);
         seedCommand.Parameters.AddWithValue("KeyHashB", secretHashB);
         seedCommand.Parameters.AddWithValue("SourceIntegrationId", SourceIntegrationId);
+        seedCommand.Parameters.AddWithValue("SourceManifest", TestIntegrationManifest.Create(
+            "test_source", "Test Source", "source"));
         await seedCommand.ExecuteNonQueryAsync();
     }
 
@@ -175,13 +179,16 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             await using var integrationCommand = new NpgsqlCommand(
                 """
                 INSERT INTO integrations (
-                    id, key, name, direction, supported_auth_schemes, status, created_at, updated_at
-                ) VALUES (@Id, @Key, @Key, @Direction, '[]'::jsonb, 'active', now(), now())
+                    id, key, contract_version, manifest_schema_version, name, direction,
+                    supported_auth_schemes, status, manifest, created_at, updated_at
+                ) VALUES (@Id, @Key, 1, 1, @Key, @Direction, '[]'::jsonb, 'active', @Manifest::jsonb, now(), now())
                 """,
                 connection);
             integrationCommand.Parameters.AddWithValue("Id", integrationId);
-            integrationCommand.Parameters.AddWithValue("Key", $"test_{direction}_{integrationId:N}");
+            string key = $"test_{direction}_{integrationId:N}";
+            integrationCommand.Parameters.AddWithValue("Key", key);
             integrationCommand.Parameters.AddWithValue("Direction", direction);
+            integrationCommand.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(key, key, direction));
             await integrationCommand.ExecuteNonQueryAsync();
         }
 
@@ -246,8 +253,11 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         // Self-contained: seed a minimal connection + topic + subscription, then a dead_lettered delivery.
         await using var cmd = new NpgsqlCommand(
             """
-            INSERT INTO integrations (id, key, name, direction, status)
-            VALUES ('00000000-0000-0000-0000-000000000001', 'webhook', 'Webhook', 'both', 'active')
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
+            VALUES (
+                '00000000-0000-0000-0000-000000000001', 'webhook', 1, 1, 'Webhook', 'both',
+                'active', @WebhookManifest::jsonb)
             ON CONFLICT (id) DO NOTHING;
 
             WITH ev AS (SELECT tenant_id FROM events WHERE id = @EventId),
@@ -280,6 +290,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             FROM sub_insert si;
             """, connection);
         cmd.Parameters.AddWithValue("EventId", eventId);
+        cmd.Parameters.AddWithValue("WebhookManifest", TestIntegrationManifest.Create("webhook", "Webhook", "both"));
         await cmd.ExecuteNonQueryAsync();
     }
 
