@@ -257,15 +257,15 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             INSERT INTO integrations (
                 id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
             VALUES (
-                '00000000-0000-0000-0000-000000000001', 'webhook', 1, 1, 'Webhook', 'both',
-                'active', @WebhookManifest::jsonb)
+                '00000000-0000-0000-0000-000000000001', 'http', 1, 1, 'HTTP', 'both',
+                'active', @HttpManifest::jsonb)
             ON CONFLICT (id) DO NOTHING;
 
             WITH ev AS (SELECT tenant_id FROM events WHERE id = @EventId),
             conn_insert AS (
                 INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
                 SELECT gen_random_uuid(), ev.tenant_id, '00000000-0000-0000-0000-000000000001',
-                       'replay-test-sink', '{"url":"http://test/sink"}'::jsonb, 'active'
+                       'replay-test-sink', '{"base_uri":"http://test/sink"}'::jsonb, 'active'
                 FROM ev
                 RETURNING id, tenant_id
             ),
@@ -287,11 +287,11 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 (event_id, subscription_id, destination_connection_id, destination_url,
                  integration_key, status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
             SELECT @EventId, si.id, si.destination_connection_id, 'http://test/sink',
-                   'webhook', 'dead_lettered', 3, 3, now()
+                   'http', 'dead_lettered', 3, 3, now()
             FROM sub_insert si;
             """, connection);
         cmd.Parameters.AddWithValue("EventId", eventId);
-        cmd.Parameters.AddWithValue("WebhookManifest", TestIntegrationManifest.Create("webhook", "Webhook", "both"));
+        cmd.Parameters.AddWithValue("HttpManifest", TestIntegrationManifest.Create("http", "HTTP", "both"));
         await cmd.ExecuteNonQueryAsync();
     }
 

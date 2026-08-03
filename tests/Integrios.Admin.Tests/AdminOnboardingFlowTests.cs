@@ -12,7 +12,7 @@ namespace Integrios.Admin.Tests;
 public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
-    private static readonly Guid WebhookIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     private readonly AdminApiFixture fixture;
     private HttpClient client = null!;
@@ -156,9 +156,9 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = WebhookIntegrationId,
+                integrationId = HttpIntegrationId,
                 name,
-                config = new { url },
+                config = new { base_uri = url },
                 environment,
                 description = $"Connection {name}"
             }));

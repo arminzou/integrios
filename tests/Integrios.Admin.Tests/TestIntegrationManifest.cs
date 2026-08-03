@@ -12,12 +12,14 @@ internal static class TestIntegrationManifest
         string direction,
         IReadOnlyList<string>? authenticationSchemes = null,
         IReadOnlyList<string>? sourceVerificationSchemes = null,
-        string? description = "test integration")
+        string? description = "test integration",
+        bool? allowUnauthenticated = null,
+        bool? allowUnverified = null)
     {
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
-        JsonElement webhookDestinationSchema = JsonSerializer.Deserialize<JsonElement>(
-            """{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true}""");
+        JsonElement httpDestinationSchema = JsonSerializer.Deserialize<JsonElement>(
+            """{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":true}""");
         var manifest = new IntegrationManifest
         {
             ManifestSchemaVersion = 1,
@@ -26,18 +28,18 @@ internal static class TestIntegrationManifest
             Direction = direction,
             SourceConfigurationSchema = direction is "source" or "both" ? emptySchema : null,
             DestinationConfigurationSchema = direction is "destination" or "both"
-                ? key == "webhook" ? webhookDestinationSchema : emptySchema
+                ? key == "http" ? httpDestinationSchema : emptySchema
                 : null,
             SourceVerification = new IntegrationSourceVerificationManifest
             {
-                AllowUnverified = sourceVerificationSchemes is not { Count: > 0 },
+                AllowUnverified = allowUnverified ?? sourceVerificationSchemes is not { Count: > 0 },
                 Schemes = (sourceVerificationSchemes ?? [])
                     .Select(SourceVerificationScheme)
                     .ToArray(),
             },
             DestinationAuthentication = new IntegrationDestinationAuthenticationManifest
             {
-                AllowUnauthenticated = authenticationSchemes is not { Count: > 0 },
+                AllowUnauthenticated = allowUnauthenticated ?? authenticationSchemes is not { Count: > 0 },
                 Schemes = (authenticationSchemes ?? [])
                     .Select(AuthenticationScheme)
                     .ToArray(),

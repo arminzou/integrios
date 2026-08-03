@@ -23,10 +23,10 @@ public sealed class PopulatedUpgradeLifecycleTests(DatabaseLifecycleFixture fixt
             "id = '17000000-0000-0000-0000-000000000002' AND integration_id = '00000000-0000-0000-0000-000000000001'"));
         Assert.Equal("Drifted Webhook|destination|disabled", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
-            "SELECT name || '|' || direction || '|' || status FROM integrations WHERE key = 'webhook'"));
+            "SELECT name || '|' || direction || '|' || status FROM integrations WHERE key = 'http'"));
         Assert.Equal("destination", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
-            "SELECT manifest->>'direction' FROM integrations WHERE key = 'webhook' AND contract_version = 1"));
+            "SELECT manifest->>'direction' FROM integrations WHERE key = 'http' AND contract_version = 1"));
 
         BootstrapProcessResult bootstrap = await DatabaseLifecycleFixture.RunProductionBootstrapAsync(
             database,
@@ -35,9 +35,11 @@ public sealed class PopulatedUpgradeLifecycleTests(DatabaseLifecycleFixture fixt
         Assert.NotEqual(0, bootstrap.ExitCode);
         Assert.DoesNotContain("v17-upgrade-secret", bootstrap.Output, StringComparison.Ordinal);
         Assert.Contains("different functional contract", bootstrap.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("Drifted Webhook|destination|disabled|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
-            database,
-            "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal(
+            "Drifted Webhook|destination|disabled|[\"api_key_header\", \"bearer_token\"]",
+            await DatabaseLifecycleFixture.ScalarAsync<string>(
+                database,
+                "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'http'"));
         Assert.Equal(1L, await CountAsync(
             database,
             "connections",
@@ -72,8 +74,10 @@ public sealed class PopulatedUpgradeLifecycleTests(DatabaseLifecycleFixture fixt
         Assert.Equal("sha256:1111111111111111111111111111111111111111111111111111111111111111", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT secret_hash FROM admin_keys WHERE public_key = 'global_admin_key'"));
-        Assert.Equal("Webhook|both|active|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
-            database,
-            "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal(
+            "HTTP|both|active|[\"api_key_header\", \"bearer_token\"]",
+            await DatabaseLifecycleFixture.ScalarAsync<string>(
+                database,
+                "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'http'"));
     }
 }

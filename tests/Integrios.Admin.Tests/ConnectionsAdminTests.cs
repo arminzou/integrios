@@ -12,7 +12,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
 {
     private readonly AdminApiFixture fixture;
     private readonly JsonSerializerOptions webJson = new(JsonSerializerDefaults.Web);
-    private static readonly Guid WebhookIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private HttpClient client = default!;
 
     public ConnectionsAdminTests(AdminApiFixture fixture)
@@ -75,7 +75,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId = WebhookIntegrationId,
+                integrationId = HttpIntegrationId,
                 name = "missing-url",
                 config = new { }
             }));
@@ -146,9 +146,9 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{otherTenantId}/connections",
             new
             {
-                integrationId = WebhookIntegrationId,
+                integrationId = HttpIntegrationId,
                 name = "erp-sink",
-                config = new { url = "http://localhost:5054/sink/other" }
+                config = new { base_uri = "http://localhost:5054/sink/other" }
             }));
 
         Assert.Equal(HttpStatusCode.Created, second.StatusCode);
@@ -164,7 +164,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             {
                 integrationId = Guid.NewGuid(),
                 name = "bad-connection",
-                config = new { url = "http://localhost:5054/sink/x" }
+                config = new { base_uri = "http://localhost:5054/sink/x" }
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -291,7 +291,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             {
                 integrationId,
                 name = "erp-auth",
-                config = new { url = "http://localhost:5054/sink/erp-auth" }
+                config = new { base_uri = "http://localhost:5054/sink/erp-auth" }
             }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -309,7 +309,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             new
             {
                 name = "erp-auth",
-                config = new { url = "http://localhost:5054/sink/erp-auth" },
+                config = new { base_uri = "http://localhost:5054/sink/erp-auth" },
                 destination_authentication = new
                 {
                     scheme = "api_key_header",
@@ -328,7 +328,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
     [Fact]
     public async Task UpdateConnection_UnusedInvalidHttpDestination_IsStoredUntilDestinationUse()
     {
-        Guid connectionId = await InsertConnectionAsync(WebhookIntegrationId, "invalid-update");
+        Guid connectionId = await InsertConnectionAsync(HttpIntegrationId, "invalid-update");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -336,7 +336,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             new
             {
                 name = "invalid-update",
-                config = new { url = "ftp://example.test/sink" }
+                config = new { base_uri = "ftp://example.test/sink" }
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -345,7 +345,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
     [Fact]
     public async Task UpdateConnection_UnusedDestinationCapableIntegrationMayOmitConfig()
     {
-        Guid connectionId = await InsertConnectionAsync(WebhookIntegrationId, "omitted-config");
+        Guid connectionId = await InsertConnectionAsync(HttpIntegrationId, "omitted-config");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -391,7 +391,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             new
             {
                 name = "erp-auth",
-                config = new { url = "http://localhost:5054/sink/erp-auth" },
+                config = new { base_uri = "http://localhost:5054/sink/erp-auth" },
                 destination_authentication = new
                 {
                     scheme = "api_key_header",
@@ -443,7 +443,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             new
             {
                 name = created.Name,
-                config = new { url = "http://localhost:5054/sink/in-use-authentication" },
+                config = new { base_uri = "http://localhost:5054/sink/in-use-authentication" },
                 destination_authentication = new
                 {
                     scheme = "api_key_header",
@@ -459,7 +459,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             new
             {
                 name = created.Name,
-                config = new { url = "http://localhost:5054/sink/in-use-authentication" }
+                config = new { base_uri = "http://localhost:5054/sink/in-use-authentication" }
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, updateResponse.StatusCode);
@@ -471,9 +471,9 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId = WebhookIntegrationId,
+                integrationId = HttpIntegrationId,
                 name,
-                config = new { url }
+                config = new { base_uri = url }
             }));
 
     private Task<HttpResponseMessage> PostConnectionWithAuthAsync(
@@ -489,7 +489,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             {
                 integrationId,
                 name,
-                config = new { url = "http://localhost:5054/sink/erp-auth" },
+                config = new { base_uri = "http://localhost:5054/sink/erp-auth" },
                 destination_authentication = new
                 {
                     scheme,
@@ -550,7 +550,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         await using var cmd = new NpgsqlCommand(
             """
             INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"url":"http://localhost:5054/sink/erp-auth"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
+            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"base_uri":"http://localhost:5054/sink/erp-auth"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
             """,
             connection);
         cmd.Parameters.AddWithValue("Id", id);

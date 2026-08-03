@@ -15,7 +15,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string GlobalAdminAuthHeader = $"AdminKey {GlobalAdminPublicKey}:{GlobalAdminSecret}";
     public const string InvalidAdminAuthHeader = "AdminKey legacy_tenant_key:unsupported-secret";
 
-    private static readonly Guid WebhookIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
         .WithDatabase("integrios")
@@ -72,14 +72,17 @@ public sealed class AdminApiFixture : IAsyncLifetime
                 (@OtherTenantId, 'other-tenant', 'Other Tenant', 'active', now(), now());
 
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
-            VALUES (@IntegrationId, 'webhook', 1, 1, 'Webhook', 'both', 'active', @Manifest::jsonb)
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                @IntegrationId, 'http', 1, 1, 'HTTP', 'both',
+                '["api_key_header","bearer_token"]'::jsonb, 'active', @Manifest::jsonb)
             ON CONFLICT (id) DO NOTHING;
 
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
             VALUES (
                 @SourceConnectionId, @TenantId, @IntegrationId, 'source',
-                '{"url":"http://localhost:5054/sink/source"}', 'active');
+                '{"base_uri":"http://localhost:5054/sink/source"}', 'active');
 
             -- Re-seed global bootstrap key (truncated in ResetAsync)
             INSERT INTO admin_keys (public_key, secret_hash, name, created_at)
@@ -90,9 +93,14 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
         cmd.Parameters.AddWithValue("TenantId", TenantId);
         cmd.Parameters.AddWithValue("OtherTenantId", OtherTenantId);
-        cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
+        cmd.Parameters.AddWithValue("IntegrationId", HttpIntegrationId);
         cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
-            "webhook", "Webhook", "both", description: "Generic webhook source or destination over HTTP."));
+            "http",
+            "HTTP",
+            "both",
+            authenticationSchemes: ["api_key_header", "bearer_token"],
+            description: "Generic HTTP source or destination.",
+            allowUnauthenticated: true));
         cmd.Parameters.AddWithValue("SourceConnectionId", SourceConnectionId);
         await cmd.ExecuteNonQueryAsync();
     }

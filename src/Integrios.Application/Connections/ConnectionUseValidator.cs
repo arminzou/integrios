@@ -29,7 +29,7 @@ internal static class ConnectionUseValidator
             throw Invalid("destination", integration);
 
         ValidateConfiguration(connection.Config, integration.Manifest.DestinationConfigurationSchema, "destination");
-        ValidateHttpBaseUri(connection.Config);
+        ValidateDestinationBaseUri(connection.Config);
 
         ConnectionSchemeSelection? selection = RequireSelection(
             connection.DestinationAuthentication,
@@ -129,16 +129,18 @@ internal static class ConnectionUseValidator
             throw new ConnectionRequestValidationException("The Connection's Integration must be active before this relationship can be established.");
     }
 
-    private static void ValidateHttpBaseUri(JsonElement config)
+    private static void ValidateDestinationBaseUri(JsonElement config)
     {
         if (config.ValueKind != JsonValueKind.Object
-            || !config.TryGetProperty("url", out JsonElement urlElement)
-            || urlElement.ValueKind != JsonValueKind.String
-            || !Uri.TryCreate(urlElement.GetString(), UriKind.Absolute, out Uri? uri)
-            || uri.Scheme is not ("http" or "https"))
+            || !config.TryGetProperty("base_uri", out JsonElement baseUriElement)
+            || baseUriElement.ValueKind != JsonValueKind.String
+            || !Uri.TryCreate(baseUriElement.GetString(), UriKind.Absolute, out Uri? uri)
+            || uri.Scheme is not ("http" or "https")
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
         {
             throw new ConnectionRequestValidationException(
-                "Connection destination config must contain an absolute HTTP or HTTPS 'url'.");
+                "Connection destination config must contain an absolute HTTP or HTTPS 'base_uri' with no query string or fragment.");
         }
     }
 }

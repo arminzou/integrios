@@ -143,6 +143,6 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         // while integration_key stays populated from the inner-joined integration.
         var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
         Assert.True(string.IsNullOrEmpty(snapshot.DestinationUrl));
-        Assert.Equal("webhook", snapshot.IntegrationKey);
+        Assert.Equal("http", snapshot.IntegrationKey);
     }
 }
