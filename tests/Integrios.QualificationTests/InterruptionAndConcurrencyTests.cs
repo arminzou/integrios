@@ -8,6 +8,7 @@ namespace Integrios.QualificationTests;
 
 [Collection(PackagedDeploymentCollection.Name)]
 [Trait("Category", "ResilienceQualification")]
+[Trait("Tier", "deep")]
 public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fixture)
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);

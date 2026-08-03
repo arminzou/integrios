@@ -13,6 +13,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
 
     [Fact]
+    [Trait("Tier", "smoke")]
     public async Task PackagedDeployment_StartsAndExposesDeterministicEvidence()
     {
         await AssertHealthyAsync(fixture.AdminClient);
@@ -67,6 +68,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     }
 
     [Fact]
+    [Trait("Tier", "deep")]
     public async Task OperatorObservability_ExposesMetricsLogsAndContinuousRetryTrace()
     {
         string suffix = Guid.NewGuid().ToString("N")[..10];
@@ -199,6 +201,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     }
 
     [Fact]
+    [Trait("Tier", "smoke")]
     public async Task Worker_FansOutNewEventWhileDeliveryAttemptIsBlocked()
     {
         string suffix = Guid.NewGuid().ToString("N")[..10];
