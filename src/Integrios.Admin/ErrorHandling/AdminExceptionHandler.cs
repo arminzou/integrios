@@ -1,5 +1,6 @@
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Connections;
+using Integrios.Application.Integrations;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Tenants;
 using Integrios.Application.Topics;
@@ -19,6 +20,8 @@ public sealed class AdminExceptionHandler : IExceptionHandler
             DuplicateResourceException => (StatusCodes.Status409Conflict, exception.Message),
             TenantRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             ConnectionRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            IntegrationManifestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            IntegrationVersionConflictException => (StatusCodes.Status409Conflict, exception.Message),
             TopicRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             SubscriptionRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             BadHttpRequestException badRequest => (badRequest.StatusCode, "The request body is invalid."),

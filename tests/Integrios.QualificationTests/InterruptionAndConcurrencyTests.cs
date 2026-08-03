@@ -402,15 +402,24 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     }
 
     private async Task InstallQualificationIntegrationAsync() => await fixture.ExecuteAsync($$"""
-        INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status, description)
+        INSERT INTO integrations (
+            id, key, contract_version, manifest_schema_version, name, direction,
+            supported_auth_schemes, status, description, manifest)
         VALUES (
             '{{ApiKeyIntegrationId}}',
             'qualification_resilience_api_key',
+            1,
+            1,
             'Qualification resilience API key',
             'destination',
             '["api_key_header"]',
             'active',
-            'Qualification-only resilience integration')
+            'Qualification-only resilience integration',
+            '{{TestIntegrationManifest.Create(
+                "qualification_resilience_api_key",
+                "Qualification resilience API key",
+                "destination",
+                "api_key_header")}}'::jsonb)
         ON CONFLICT (id) DO NOTHING;
         """);
 

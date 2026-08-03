@@ -8,7 +8,7 @@ public sealed class PopulatedUpgradeLifecycleTests(DatabaseLifecycleFixture fixt
     : IClassFixture<DatabaseLifecycleFixture>
 {
     [Fact]
-    public async Task PopulatedV17Database_UpgradesAndReconcilesReferencedBuiltin()
+    public async Task PopulatedV17Database_UpgradesWithoutReinterpretingReferencedIntegration()
     {
         QualificationDatabase database = await fixture.CreateDatabaseAsync();
         await fixture.RunFlywayAsync(database, "migrate", target: 17);
@@ -24,14 +24,18 @@ public sealed class PopulatedUpgradeLifecycleTests(DatabaseLifecycleFixture fixt
         Assert.Equal("Drifted Webhook|destination|disabled", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT name || '|' || direction || '|' || status FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal("destination", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database,
+            "SELECT manifest->>'direction' FROM integrations WHERE key = 'webhook' AND contract_version = 1"));
 
         BootstrapProcessResult bootstrap = await DatabaseLifecycleFixture.RunProductionBootstrapAsync(
             database,
             "v17-upgrade-secret");
 
-        Assert.Equal(0, bootstrap.ExitCode);
+        Assert.NotEqual(0, bootstrap.ExitCode);
         Assert.DoesNotContain("v17-upgrade-secret", bootstrap.Output, StringComparison.Ordinal);
-        Assert.Equal("Webhook|both|active|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
+        Assert.Contains("different functional contract", bootstrap.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Drifted Webhook|destination|disabled|[]", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT name || '|' || direction || '|' || status || '|' || supported_auth_schemes::text FROM integrations WHERE key = 'webhook'"));
         Assert.Equal(1L, await CountAsync(

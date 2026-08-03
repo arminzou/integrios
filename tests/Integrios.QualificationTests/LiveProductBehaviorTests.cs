@@ -532,11 +532,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     }
 
     private async Task InstallQualificationIntegrationsAsync() => await fixture.ExecuteAsync($$"""
-        INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status, description)
+        INSERT INTO integrations (
+            id, key, contract_version, manifest_schema_version, name, direction,
+            supported_auth_schemes, status, description, manifest)
         VALUES
-            ('{{ApiKeyIntegrationId}}', 'qualification_api_key', 'Qualification API key', 'destination', '["api_key_header"]', 'active', 'Qualification-only integration'),
-            ('{{BearerIntegrationId}}', 'qualification_bearer', 'Qualification bearer', 'destination', '["bearer_token"]', 'active', 'Qualification-only integration'),
-            ('{{SourceOnlyIntegrationId}}', 'qualification_source', 'Qualification source', 'source', '[]', 'active', 'Qualification-only integration')
+            ('{{ApiKeyIntegrationId}}', 'qualification_api_key', 1, 1, 'Qualification API key', 'destination', '["api_key_header"]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_api_key", "Qualification API key", "destination", "api_key_header")}}'::jsonb),
+            ('{{BearerIntegrationId}}', 'qualification_bearer', 1, 1, 'Qualification bearer', 'destination', '["bearer_token"]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_bearer", "Qualification bearer", "destination", "bearer_token")}}'::jsonb),
+            ('{{SourceOnlyIntegrationId}}', 'qualification_source', 1, 1, 'Qualification source', 'source', '[]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_source", "Qualification source", "source")}}'::jsonb)
         ON CONFLICT (id) DO NOTHING;
         """);
 

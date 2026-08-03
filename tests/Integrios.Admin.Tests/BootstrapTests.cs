@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
+using Integrios.Application.Integrations;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using Integrios.Infrastructure;
@@ -48,7 +49,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     }
 
     [Fact]
-    public async Task BootstrapBuiltins_IsIdempotent_AndReconcilesDrift()
+    public async Task BootstrapBuiltins_IsIdempotent_AndReconcilesPresentationAndStatusDrift()
     {
         IReadOnlyList<Integration> first = await mediator.Send(new BootstrapBuiltinsCommand());
         Integration webhook = Assert.Single(first, i => i.Key == "webhook");
@@ -56,7 +57,17 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Assert.Equal(IntegrationDirection.Both, webhook.Direction);
         Assert.Empty(webhook.SupportedAuthSchemes);
 
-        await ExecuteAsync("UPDATE integrations SET name = 'Drifted', status = 'disabled' WHERE key = 'webhook'");
+        await ExecuteAsync("""
+            UPDATE integrations
+            SET name = 'Drifted',
+                description = 'Drifted description',
+                status = 'disabled',
+                manifest = jsonb_set(
+                    jsonb_set(manifest, '{presentation,name}', '"Drifted"'),
+                    '{presentation,description}',
+                    '"Drifted description"')
+            WHERE key = 'webhook' AND contract_version = 1
+            """);
 
         IReadOnlyList<Integration> second = await mediator.Send(new BootstrapBuiltinsCommand());
         Integration reconciled = Assert.Single(second);
@@ -64,6 +75,28 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Assert.Equal(OperationalStatus.Active, reconciled.Status);
 
         Assert.Equal(1, await CountAsync("integrations", "key = 'webhook'"));
+    }
+
+    [Fact]
+    public async Task BootstrapBuiltins_RejectsUnexpectedWellKnownIdentity()
+    {
+        await ExecuteAsync("DELETE FROM connections");
+        await ExecuteAsync("DELETE FROM integrations");
+        Guid unexpectedId = Guid.NewGuid();
+        string manifest = TestIntegrationManifest.Create(
+            "webhook", "Webhook", "both", description: "Generic webhook source or destination over HTTP.");
+        await ExecuteAsync($$"""
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, description, manifest)
+            VALUES (
+                '{{unexpectedId}}', 'webhook', 1, 1, 'Webhook', 'both', '[]'::jsonb, 'active',
+                'Generic webhook source or destination over HTTP.', '{{manifest}}'::jsonb)
+            """);
+
+        var exception = await Assert.ThrowsAsync<IntegrationVersionConflictException>(
+            () => mediator.Send(new BootstrapBuiltinsCommand()));
+        Assert.Contains("unexpected id", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
