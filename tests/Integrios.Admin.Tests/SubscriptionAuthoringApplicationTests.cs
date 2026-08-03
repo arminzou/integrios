@@ -147,6 +147,8 @@ public sealed class SubscriptionAuthoringApplicationTests
                 DestinationConfigurationSchema = direction is IntegrationDirection.Destination or IntegrationDirection.Both
                     ? Json("""{"type":"object","properties":{},"additionalProperties":true}""")
                     : null,
+                SourceVerification = new IntegrationSourceVerificationManifest { AllowUnverified = true },
+                DestinationAuthentication = new IntegrationDestinationAuthenticationManifest { AllowUnauthenticated = true },
                 Presentation = new IntegrationPresentationManifest { Name = "Test Integration" },
             },
             CreatedAt = DateTimeOffset.UtcNow,

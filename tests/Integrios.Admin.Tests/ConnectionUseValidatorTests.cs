@@ -109,8 +109,16 @@ public sealed class ConnectionUseValidatorTests
             Direction = direction,
             SourceConfigurationSchema = direction is "source" or "both" ? sourceSchema ?? emptySchema : null,
             DestinationConfigurationSchema = direction is "destination" or "both" ? destinationSchema : null,
-            SourceVerificationSchemes = sourceSchemes ?? [],
-            DestinationAuthenticationSchemes = destinationSchemes ?? [],
+            SourceVerification = new IntegrationSourceVerificationManifest
+            {
+                AllowUnverified = sourceSchemes is not { Count: > 0 },
+                Schemes = sourceSchemes ?? [],
+            },
+            DestinationAuthentication = new IntegrationDestinationAuthenticationManifest
+            {
+                AllowUnauthenticated = destinationSchemes is not { Count: > 0 },
+                Schemes = destinationSchemes ?? [],
+            },
             Presentation = new IntegrationPresentationManifest { Name = "Provider" },
         };
         return new Integration
@@ -121,7 +129,7 @@ public sealed class ConnectionUseValidatorTests
             ManifestSchemaVersion = 1,
             Name = "Provider",
             Direction = Enum.Parse<IntegrationDirection>(direction, true),
-            SupportedAuthSchemes = manifest.DestinationAuthenticationSchemes.Select(s => s.Scheme).ToArray(),
+            SupportedAuthSchemes = manifest.DestinationAuthentication.Schemes.Select(s => s.Scheme).ToArray(),
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

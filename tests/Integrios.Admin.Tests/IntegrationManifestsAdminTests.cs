@@ -38,7 +38,7 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
         IntegrationResponse created = (await createdResponse.Content.ReadFromJsonAsync<IntegrationResponse>(webJson))!;
         Assert.Equal(1, created.ContractVersion);
         Assert.Equal("example_api", created.Manifest.GetProperty("key").GetString());
-        JsonElement storedSchemes = created.Manifest.GetProperty("destination_authentication_schemes");
+        JsonElement storedSchemes = created.Manifest.GetProperty("destination_authentication").GetProperty("schemes");
         Assert.Equal(2, storedSchemes.GetArrayLength());
         Assert.Equal("api_key_header", storedSchemes[0].GetProperty("scheme").GetString());
         Assert.Equal("bearer_token", storedSchemes[1].GetProperty("scheme").GetString());
@@ -178,11 +178,14 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
             "required":["base_uri"],
             "additionalProperties":false
           },
-          "source_verification_schemes":[],
-          "destination_authentication_schemes":[
-            {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]},
-            {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]}
-          ],
+          "source_verification":{"allow_unverified":true,"schemes":[]},
+          "destination_authentication":{
+            "allow_unauthenticated":false,
+            "schemes":[
+              {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]},
+              {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]}
+            ]
+          },
           "presentation":{"name":"{{{name}}}","event_types":[],"authoring_presets":[]}
         }
         """);
@@ -190,11 +193,14 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
     private static JsonElement Reordered(JsonElement manifest) => Json($$$"""
         {
           "presentation":{{{manifest.GetProperty("presentation").GetRawText()}}},
-          "destination_authentication_schemes":[
-            {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]},
-            {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}
-          ],
-          "source_verification_schemes":[],
+          "destination_authentication":{
+            "allow_unauthenticated":false,
+            "schemes":[
+              {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]},
+              {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}
+            ]
+          },
+          "source_verification":{"allow_unverified":true,"schemes":[]},
           "destination_configuration_schema":{{{manifest.GetProperty("destination_configuration_schema").GetRawText()}}},
           "direction":"destination",
           "contract_version":1,

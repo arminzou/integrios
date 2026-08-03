@@ -27,17 +27,20 @@ public sealed class IntegrationManifestParserTests
                 "required": ["base_uri"],
                 "additionalProperties": false
               },
-              "source_verification_schemes": [],
-              "destination_authentication_schemes": [
-                { "scheme": "bearer_token", "required_config": [], "required_secret_refs": ["token"] }
-              ],
+              "source_verification": { "allow_unverified": true, "schemes": [] },
+              "destination_authentication": {
+                "allow_unauthenticated": false,
+                "schemes": [
+                  { "scheme": "bearer_token", "required_config": [], "required_secret_refs": ["token"] }
+                ]
+              },
               "presentation": { "name": "Example API", "event_types": [], "authoring_presets": [] }
             }
             """));
 
         Assert.Equal("example_api", manifest.Key);
         Assert.Equal(2, manifest.ContractVersion);
-        Assert.Equal("bearer_token", Assert.Single(manifest.DestinationAuthenticationSchemes).Scheme);
+        Assert.Equal("bearer_token", Assert.Single(manifest.DestinationAuthentication.Schemes).Scheme);
     }
 
     [Theory]
@@ -104,8 +107,8 @@ public sealed class IntegrationManifestParserTests
     public void Parse_RejectsUnknownOrMisdeclaredPlatformScheme()
     {
         string json = ValidManifest().Replace(
-            "\"destination_authentication_schemes\": []",
-            "\"destination_authentication_schemes\": [{\"scheme\":\"bearer_token\",\"required_config\":[],\"required_secret_refs\":[]}]",
+            "\"destination_authentication\": { \"allow_unauthenticated\": true, \"schemes\": [] }",
+            "\"destination_authentication\": { \"allow_unauthenticated\": true, \"schemes\": [{\"scheme\":\"bearer_token\",\"required_config\":[],\"required_secret_refs\":[]}] }",
             StringComparison.Ordinal);
 
         var exception = Assert.Throws<IntegrationManifestValidationException>(
@@ -225,7 +228,7 @@ public sealed class IntegrationManifestParserTests
             [
                 "built_in_source_adapter",
                 "contract_version",
-                "destination_authentication_schemes",
+                "destination_authentication",
                 "destination_configuration_schema",
                 "direction",
                 "http_outcome",
@@ -233,7 +236,7 @@ public sealed class IntegrationManifestParserTests
                 "manifest_schema_version",
                 "presentation",
                 "source_configuration_schema",
-                "source_verification_schemes",
+                "source_verification",
             ],
             stored.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
@@ -241,8 +244,12 @@ public sealed class IntegrationManifestParserTests
             stored.GetProperty("presentation").EnumerateObject()
                 .Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
+            ["allow_unauthenticated", "schemes"],
+            stored.GetProperty("destination_authentication").EnumerateObject()
+                .Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
             ["required_config", "required_secret_refs", "scheme"],
-            stored.GetProperty("destination_authentication_schemes")[0].EnumerateObject()
+            stored.GetProperty("destination_authentication").GetProperty("schemes")[0].EnumerateObject()
                 .Select(property => property.Name).Order(StringComparer.Ordinal));
 
         IntegrationManifest rehydrated =
@@ -263,8 +270,8 @@ public sealed class IntegrationManifestParserTests
             "required": ["base_uri"],
             "additionalProperties": false
           },
-          "source_verification_schemes": [],
-          "destination_authentication_schemes": [],
+          "source_verification": { "allow_unverified": true, "schemes": [] },
+          "destination_authentication": { "allow_unauthenticated": true, "schemes": [] },
           "presentation": { "name": "Example API", "event_types": [], "authoring_presets": [] }
         }
         """;
@@ -284,8 +291,8 @@ public sealed class IntegrationManifestParserTests
             "required":{{{required}}},
             "additionalProperties":false
           },
-          "source_verification_schemes":[],
-          "destination_authentication_schemes":{{{schemes}}},
+          "source_verification":{"allow_unverified":true,"schemes":[]},
+          "destination_authentication":{"allow_unauthenticated":false,"schemes":{{{schemes}}}},
           "presentation":{"name":"Set API","event_types":[],"authoring_presets":[]}
         }
         """;
@@ -315,13 +322,19 @@ public sealed class IntegrationManifestParserTests
             "required":["base_uri","region"],
             "additionalProperties":false
           },
-          "source_verification_schemes":[
-            {"scheme":"github_hmac_sha256","required_config":[],"required_secret_refs":["webhook_secret"]}
-          ],
-          "destination_authentication_schemes":[
-            {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]},
-            {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}
-          ],
+          "source_verification":{
+            "allow_unverified":false,
+            "schemes":[
+              {"scheme":"github_hmac_sha256","required_config":[],"required_secret_refs":["webhook_secret"]}
+            ]
+          },
+          "destination_authentication":{
+            "allow_unauthenticated":false,
+            "schemes":[
+              {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]},
+              {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}
+            ]
+          },
           "built_in_source_adapter":"github",
           "http_outcome":{
             "evaluator":"json_boolean",

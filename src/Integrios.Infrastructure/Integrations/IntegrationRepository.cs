@@ -153,7 +153,7 @@ internal sealed class IntegrationRepository(IDbConnectionFactory connectionFacto
             manifest.Presentation.Name,
             Direction = manifest.Direction,
             SupportedAuthSchemes = JsonSerializer.Serialize(
-                manifest.DestinationAuthenticationSchemes.Select(scheme => scheme.Scheme)),
+                manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)),
             manifest.Presentation.Description,
             Manifest = manifestJson.GetRawText(),
             Status = OperationalStatus.Active.ToString().ToLowerInvariant(),

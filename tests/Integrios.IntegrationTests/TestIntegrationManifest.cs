@@ -18,8 +18,8 @@ internal static class TestIntegrationManifest
             Direction = direction,
             SourceConfigurationSchema = direction is "source" or "both" ? schema : null,
             DestinationConfigurationSchema = direction is "destination" or "both" ? schema : null,
-            SourceVerificationSchemes = [],
-            DestinationAuthenticationSchemes = [],
+            SourceVerification = new IntegrationSourceVerificationManifest { AllowUnverified = true },
+            DestinationAuthentication = new IntegrationDestinationAuthenticationManifest { AllowUnauthenticated = true },
             Presentation = new IntegrationPresentationManifest { Name = name },
         }).GetRawText();
     }

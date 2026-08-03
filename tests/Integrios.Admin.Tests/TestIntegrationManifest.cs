@@ -28,12 +28,20 @@ internal static class TestIntegrationManifest
             DestinationConfigurationSchema = direction is "destination" or "both"
                 ? key == "webhook" ? webhookDestinationSchema : emptySchema
                 : null,
-            SourceVerificationSchemes = (sourceVerificationSchemes ?? [])
-                .Select(SourceVerificationScheme)
-                .ToArray(),
-            DestinationAuthenticationSchemes = (authenticationSchemes ?? [])
-                .Select(AuthenticationScheme)
-                .ToArray(),
+            SourceVerification = new IntegrationSourceVerificationManifest
+            {
+                AllowUnverified = sourceVerificationSchemes is not { Count: > 0 },
+                Schemes = (sourceVerificationSchemes ?? [])
+                    .Select(SourceVerificationScheme)
+                    .ToArray(),
+            },
+            DestinationAuthentication = new IntegrationDestinationAuthenticationManifest
+            {
+                AllowUnauthenticated = authenticationSchemes is not { Count: > 0 },
+                Schemes = (authenticationSchemes ?? [])
+                    .Select(AuthenticationScheme)
+                    .ToArray(),
+            },
             Presentation = new IntegrationPresentationManifest
             {
                 Name = name,
