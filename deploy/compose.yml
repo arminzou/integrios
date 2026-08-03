@@ -35,7 +35,7 @@ services:
   # Idempotent one-shot: creates the built-in catalog and, only if no live deployment-wide AdminKey
   # exists, the first admin key. Production fails closed unless the Operator supplies a secret.
   bootstrap:
-    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.1.0}
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.2.0}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -46,7 +46,7 @@ services:
     command: ["bootstrap"]
 
   ingress:
-    image: ghcr.io/arminzou/integrios/ingress:${INTEGRIOS_VERSION:-0.1.0}
+    image: ghcr.io/arminzou/integrios/ingress:${INTEGRIOS_VERSION:-0.2.0}
     restart: unless-stopped
     depends_on:
       bootstrap:
@@ -57,7 +57,7 @@ services:
       - "${INTEGRIOS_INGRESS_PORT:-5231}:8080"
 
   admin:
-    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.1.0}
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.2.0}
     restart: unless-stopped
     depends_on:
       bootstrap:
@@ -68,7 +68,7 @@ services:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
 
   worker:
-    image: ghcr.io/arminzou/integrios/worker:${INTEGRIOS_VERSION:-0.1.0}
+    image: ghcr.io/arminzou/integrios/worker:${INTEGRIOS_VERSION:-0.2.0}
     restart: unless-stopped
     depends_on:
       bootstrap:
