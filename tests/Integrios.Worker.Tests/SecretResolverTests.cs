@@ -210,6 +210,21 @@ public sealed class SecretResolverTests : IDisposable
         Assert.Null(provider.GetService<IDestinationAuthenticationSecretResolver>());
     }
 
+    [Fact]
+    public async Task SourceVerificationFile_UsesTheSourcePortAndSharedFileBehavior()
+    {
+        WriteSecret("tenant-a", "webhook_secret", "source-file-value");
+        var resolver = new SourceVerificationMountedFileSecretResolver(root);
+
+        string value = await resolver.ResolveAsync(
+            new TenantSecretScope(Guid.NewGuid(), "tenant-a"),
+            "webhook_secret");
+
+        Assert.Equal("source-file-value", value);
+        Assert.IsAssignableFrom<ISourceVerificationSecretResolver>(resolver);
+        Assert.IsNotAssignableFrom<IDestinationAuthenticationSecretResolver>(resolver);
+    }
+
     public void Dispose() => Directory.Delete(root, recursive: true);
 
     private string TenantDirectory(string slug)
