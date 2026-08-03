@@ -4,6 +4,7 @@ using Integrios.Application.Connections;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
+using Integrios.Application.Auth;
 using MediatR;
 
 namespace Integrios.Application.Subscriptions;
@@ -22,7 +23,9 @@ public sealed record UpdateSubscriptionCommand(
 internal sealed class UpdateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     IConnectionRepository connectionRepository,
+    IConnectionAuthoringLock authoringLock,
     IIntegrationCatalog integrationCatalog,
+    IAuthSchemeRegistry authSchemeRegistry,
     ITransformEvaluator transformEvaluator) : IRequestHandler<UpdateSubscriptionCommand, SubscriptionResponse?>
 {
     public async Task<SubscriptionResponse?> Handle(UpdateSubscriptionCommand command, CancellationToken cancellationToken)
@@ -39,6 +42,9 @@ internal sealed class UpdateSubscriptionCommandHandler(
             return null;
         }
 
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            [command.DestinationConnectionId],
+            cancellationToken);
         await EnsureDestinationConnectionIsAllowed(command.TenantId, command.DestinationConnectionId, cancellationToken);
 
         var subscription = await subscriptionRepository.UpdateAsync(
@@ -72,10 +78,13 @@ internal sealed class UpdateSubscriptionCommandHandler(
                 "The destination connection references an integration that does not exist.");
         }
 
-        if (integration.Direction == IntegrationDirection.Source)
+        try
         {
-            throw new SubscriptionRequestValidationException(
-                "The destination connection must use an integration whose direction is destination or both.");
+            ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, authSchemeRegistry);
+        }
+        catch (ConnectionRequestValidationException exception)
+        {
+            throw new SubscriptionRequestValidationException(exception.Message);
         }
     }
 }

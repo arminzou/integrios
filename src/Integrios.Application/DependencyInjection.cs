@@ -42,7 +42,7 @@ public static class DependencyInjection
                 type,
                 typeof(ISubscriptionDeliveryQueue),
                 typeof(IOutboxFanout),
-                typeof(ISecretResolver)));
+                typeof(IDestinationAuthenticationSecretResolver)));
 
     private static IServiceCollection AddApplicationServices(
         IServiceCollection services,

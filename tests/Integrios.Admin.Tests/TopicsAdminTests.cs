@@ -283,6 +283,21 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
+    public async Task UpdateTopic_UnknownIdWithInvalidSourceConnection_Returns404()
+    {
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{Guid.NewGuid()}",
+            new
+            {
+                name = "not-found",
+                source_connection_ids = new[] { Guid.NewGuid() }
+            }));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdateTopic_DisabledTopicWithMissingName_PreservesValidationError()
     {
         var created = await (await PostTopicAsync(new { name = "disabled-required-name" }))
@@ -342,6 +357,54 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     }
 
     [Fact]
+    public async Task CreateTopic_DestinationOnlySourceConnection_Returns422()
+    {
+        Guid connectionId = await InsertConnectionAsync("topic_destination_only", "destination");
+
+        var response = await PostTopicAsync(new
+        {
+            name = "invalid-source-use",
+            sourceConnectionIds = new[] { connectionId }
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateTopic_MissingSourceVerification_Returns422()
+    {
+        Guid connectionId = await InsertConnectionAsync(
+            "topic_source_verification_required",
+            "source",
+            requireSourceVerification: true);
+
+        var response = await PostTopicAsync(new
+        {
+            name = "missing-source-verification",
+            sourceConnectionIds = new[] { connectionId }
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateTopic_WithDeactivatedSourceConnection_Returns422()
+    {
+        Guid connectionId = await InsertConnectionAsync(
+            "topic_deactivated_source",
+            "source",
+            status: "disabled");
+
+        var response = await PostTopicAsync(new
+        {
+            name = "deactivated-source",
+            sourceConnectionIds = new[] { connectionId }
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateTopic_UnknownCredential_Returns401()
     {
         var response = await client.SendAsync(TenantRequest(
@@ -366,6 +429,45 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
 
     private Task<HttpResponseMessage> PostTopicAsync(object body) =>
         client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", body));
+
+    private async Task<Guid> InsertConnectionAsync(
+        string key,
+        string direction,
+        bool requireSourceVerification = false,
+        string status = "active")
+    {
+        Guid integrationId = Guid.NewGuid();
+        Guid connectionId = Guid.NewGuid();
+        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (@IntegrationId, @Key, 1, 1, @Key, @Direction, '[]'::jsonb, 'active', @Manifest::jsonb);
+
+            INSERT INTO connections (
+                id, tenant_id, integration_id, name, config,
+                source_verification, destination_authentication, status)
+            VALUES (@ConnectionId, @TenantId, @IntegrationId, @Key, '{}'::jsonb, NULL, NULL, @Status);
+            """,
+            connection);
+        command.Parameters.AddWithValue("IntegrationId", integrationId);
+        command.Parameters.AddWithValue("ConnectionId", connectionId);
+        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
+        command.Parameters.AddWithValue("Key", key);
+        command.Parameters.AddWithValue("Direction", direction);
+        command.Parameters.AddWithValue("Status", status);
+        command.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
+            key,
+            key,
+            direction,
+            sourceVerificationSchemes: requireSourceVerification ? ["github_hmac_sha256"] : []));
+        await command.ExecuteNonQueryAsync();
+        return connectionId;
+    }
 
     private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)
     {

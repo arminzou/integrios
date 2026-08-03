@@ -12,7 +12,7 @@ services:
     # The qualification harness uses this Linux container to create a real POSIX FIFO and read
     # collector output without contending with Windows host file-sharing semantics.
     volumes:
-      - "${INTEGRIOS_SECRETS_DIR}:/var/lib/integrios-qualification/secrets"
+      - "${INTEGRIOS_DESTINATION_SECRETS_DIR}:/var/lib/integrios-qualification/secrets"
       - "${INTEGRIOS_OTEL_ARTIFACTS_DIR}:/var/lib/integrios-qualification/otel:ro"
 
   bootstrap:
@@ -34,8 +34,8 @@ services:
     image: ${INTEGRIOS_WORKER_IMAGE}
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      Secrets__qualification-config__shared_secret: ${INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET:-}
-      Secrets__qualification-config__config_only: ${INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET:-}
+      DestinationSecrets__qualification-config__shared_secret: ${INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET:-}
+      DestinationSecrets__qualification-config__config_only: ${INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET:-}
       # Compressed cadence. The retry, dead-letter, replay, and timeout state machines are
       # identical to production; only the wall-clock between transitions is shortened, so the
       # matrix spends its time asserting rather than sleeping. LeaseDuration keeps its production

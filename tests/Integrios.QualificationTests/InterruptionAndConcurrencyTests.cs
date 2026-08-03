@@ -375,7 +375,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
                 integrationId = authReference is null ? WebhookIntegrationId : ApiKeyIntegrationId,
                 name = "resilience-destination",
                 config = new { url = $"http://mocksink:8080/sink/{name}" },
-                auth,
+                destination_authentication = auth,
                 environment = "production"
             });
         Guid topicId = await PostAdminForIdAsync(

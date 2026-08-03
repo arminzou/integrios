@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using DotNet.Testcontainers.Builders;
 using Integrios.Infrastructure.Data;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -321,6 +322,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {

@@ -614,7 +614,7 @@ public sealed class WorkerTransportAbstractionsTests
         services.AddApplicationServices();
         services.AddSingleton(DeliveryExecutionOptions.Default);
         services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]));
-        services.AddSingleton<ISecretResolver>(new NullSecretResolver());
+        services.AddSingleton<IDestinationAuthenticationSecretResolver>(new NullSecretResolver());
         registerTestDoubles(services);
         return services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
@@ -735,7 +735,7 @@ public sealed class WorkerTransportAbstractionsTests
         }
     }
 
-    private sealed class NullSecretResolver : ISecretResolver
+    private sealed class NullSecretResolver : IDestinationAuthenticationSecretResolver
     {
         public string ProviderName => "test";
 

@@ -16,6 +16,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly string projectName = $"integrios-q-{Guid.NewGuid():N}"[..25];
     private readonly string otelArtifactsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-otel-{Guid.NewGuid():N}");
     private readonly string secretsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-secrets-{Guid.NewGuid():N}");
+    private readonly string sourceVerificationSecretsDirectory = Path.Combine(
+        Path.GetTempPath(),
+        $"integrios-source-secrets-{Guid.NewGuid():N}");
     private readonly Dictionary<string, string> environment;
     private IReadOnlyList<string> composeFiles;
 
@@ -29,6 +32,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     {
         Directory.CreateDirectory(otelArtifactsDirectory);
         Directory.CreateDirectory(secretsDirectory);
+        Directory.CreateDirectory(sourceVerificationSecretsDirectory);
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(
@@ -47,7 +51,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.QualificationTests", "otel-collector.qualification.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
-            ["INTEGRIOS_SECRETS_DIR"] = secretsDirectory,
+            ["INTEGRIOS_DESTINATION_SECRETS_DIR"] = secretsDirectory,
+            ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceVerificationSecretsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "qualification_postgres",
             ["INTEGRIOS_BOOTSTRAP_ADMIN_SECRET"] = "qualification-admin-secret",
@@ -115,6 +120,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             await RemoveImagesBestEffortAsync();
             Directory.Delete(otelArtifactsDirectory, recursive: true);
             Directory.Delete(secretsDirectory, recursive: true);
+            Directory.Delete(sourceVerificationSecretsDirectory, recursive: true);
         }
     }
 
@@ -196,7 +202,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         string? configurationSharedSecret = null,
         string? configurationOnlySecret = null)
     {
-        environment["INTEGRIOS_SECRETS_PROVIDER"] = provider;
+        environment["INTEGRIOS_DESTINATION_SECRETS_PROVIDER"] = provider;
         environment["INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET"] = configurationSharedSecret ?? string.Empty;
         environment["INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET"] = configurationOnlySecret ?? string.Empty;
 

@@ -178,10 +178,12 @@ a working local value. Create a `.env` at the repo root only to override.
 | `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
 | `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`  | `admin_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the admin credential |
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
-| `INTEGRIOS_SECRETS_PROVIDER`        | `file`                   | Worker                      | Selects `file` or `configuration` secret resolution |
-| `INTEGRIOS_SECRETS_DIR`             | `./secrets`              | Worker                      | Host directory mounted read-only for the file backend |
+| `INTEGRIOS_DESTINATION_SECRETS_PROVIDER` | `file` | Worker | Selects `file` or `configuration` destination-authentication secret resolution |
+| `INTEGRIOS_DESTINATION_SECRETS_DIR` | `./secrets/destination` | Worker | Host directory mounted read-only for destination-authentication values |
+| `INTEGRIOS_SOURCE_SECRETS_PROVIDER` | `file` | Ingress | Selects `file` or `configuration` source-verification secret resolution |
+| `INTEGRIOS_SOURCE_SECRETS_DIR` | `./secrets/source` | Ingress | Host directory mounted read-only for source-verification values |
 
-## Delivery secrets
+## Destination-authentication secrets
 
 Connections store logical secret references, never resolved values. The Worker resolves each
 reference immediately before each delivery attempt. This means retries and replay use the current
@@ -190,31 +192,34 @@ value after rotation.
 The default `file` backend reads one exact UTF-8 value from:
 
 ```text
-./secrets/<tenant-slug>/<reference>
+./secrets/destination/<tenant-slug>/<reference>
 ```
 
 For example, reference `erp_api_key` for tenant `acme` is mounted into the Worker as
-`/run/secrets/integrios/acme/erp_api_key`. Values are not trimmed, and the header-based auth
+`/run/secrets/integrios/destination/acme/erp_api_key`. Values are not trimmed, and the header-based auth
 schemes reject values containing CR or LF, so an accidental trailing newline (for example from
 `echo` without `-n`) fails delivery. Files may be symlinks, which makes atomic provider-driven
 rotation practical. Values must be non-empty, contain no NUL, and be at most 64 KiB.
 
 When the Worker runs directly instead of through Compose, its default file root is
-`/run/secrets/integrios` on Linux and `%ProgramData%\Integrios\secrets` on Windows. Set
-`Integrios:Secrets:FileRoot` to an existing absolute directory to override that native default.
+`/run/secrets/integrios/destination` on Linux and
+`%ProgramData%\Integrios\secrets\destination` on Windows. Set
+`Integrios:DestinationSecrets:FileRoot` to an existing absolute directory to override that native
+default. The directory must exist when Worker starts.
 
 The alternative `configuration` backend is selected with
-`Integrios:Secrets:Provider=configuration` (or `INTEGRIOS_SECRETS_PROVIDER=configuration` in
-Compose). It reads `Secrets:<tenant-slug>:<reference>` from the Worker's normal .NET configuration.
+`Integrios:DestinationSecrets:Provider=configuration` (or
+`INTEGRIOS_DESTINATION_SECRETS_PROVIDER=configuration` in Compose). It reads
+`DestinationSecrets:<tenant-slug>:<reference>` from the Worker's normal .NET configuration.
 For local Development, the Worker enables .NET User Secrets:
 
 ```bash
-dotnet user-secrets --project src/Integrios.Worker set "Secrets:acme:erp_api_key" "secret-value"
-Integrios__Secrets__Provider=configuration dotnet run --project src/Integrios.Worker
+dotnet user-secrets --project src/Integrios.Worker set "DestinationSecrets:acme:erp_api_key" "secret-value"
+Integrios__DestinationSecrets__Provider=configuration dotnet run --project src/Integrios.Worker
 ```
 
 Any .NET configuration provider can supply the same key (for example appsettings, environment
-variables using `Secrets__acme__erp_api_key`, or a provider added in your own build). Only the
+variables using `DestinationSecrets__acme__erp_api_key`, or a provider added in your own build). Only the
 selected backend is consulted; there is no file/configuration fallback.
 
 Validate resolution without making deliveries:
@@ -228,6 +233,13 @@ docker compose run --rm worker secrets validate --tenant acme --connection <conn
 Validation prints references and resolution status, never values. Tenant slugs are lowercase DNS
 labels up to 63 characters. References are flat lowercase names up to 63 characters using letters,
 digits, and underscores, and must begin with a letter or digit.
+
+Ingress has a separate source-verification secret capability for built-in source adapters. Its file
+backend uses `/run/secrets/integrios/source/<tenant-slug>/<reference>` and its configuration backend
+reads `SourceSecrets:<tenant-slug>:<reference>`. When Ingress runs directly, the default Windows
+root is `%ProgramData%\Integrios\secrets\source`; the selected directory must exist at startup.
+Ingress cannot
+resolve the Worker's destination-authentication namespace, and Admin resolves neither namespace.
 
 ## Useful commands
 

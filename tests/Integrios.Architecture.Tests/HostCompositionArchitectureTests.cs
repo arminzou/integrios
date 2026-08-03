@@ -29,6 +29,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IAuthSchemeHandler)] = [Host.Admin, Host.Worker],
         [typeof(IAuthSchemeRegistry)] = [Host.Admin, Host.Worker],
         [typeof(IConnectionRepository)] = [Host.Admin],
+        [typeof(IConnectionAuthoringLock)] = [Host.Admin],
         [typeof(IDeadLetterReplay)] = [Host.Ingress],
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingress],
@@ -37,7 +38,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IIntegrationManifestStore)] = [Host.Admin],
         [typeof(ISourceTopicLookup)] = [Host.Ingress],
         [typeof(IOutboxFanout)] = [Host.Worker],
-        [typeof(ISecretResolver)] = [Host.Worker],
+        [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
+        [typeof(ISourceVerificationSecretResolver)] = [Host.Ingress],
         [typeof(ISecretValidationCatalog)] = [Host.Worker],
         [typeof(ISubscriptionDeliveryQueue)] = [Host.Worker],
         [typeof(ISubscriptionRepository)] = [Host.Admin],
@@ -141,6 +143,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IIntegrationCatalog>(provider);
         AssertResolves<IIntegrationManifestStore>(provider);
         AssertResolves<IConnectionRepository>(provider);
+        AssertResolves<IConnectionAuthoringLock>(provider);
         AssertResolves<ITopicRepository>(provider);
         AssertResolves<ISubscriptionRepository>(provider);
         AssertResolves<IAuthSchemeRegistry>(provider);
@@ -155,7 +158,8 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IOutboxFanout>(provider);
         AssertOmits<ISubscriptionDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
-        AssertOmits<ISecretResolver>(provider);
+        AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
+        AssertOmits<ISourceVerificationSecretResolver>(provider);
         AssertOmits<DeliveryExecutionOptions>(provider);
         AssertOmits<RetryPolicy>(provider);
         AssertOmits<DeliveryOutcomePolicy>(provider);
@@ -188,7 +192,8 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IDeliveryClient>(provider);
         AssertOmits<IAuthSchemeRegistry>(provider);
         AssertOmits<ITransformEvaluator>(provider);
-        AssertOmits<ISecretResolver>(provider);
+        AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
+        AssertResolves<ISourceVerificationSecretResolver>(provider);
         AssertOmits<DeliveryExecutionOptions>(provider);
         AssertOmits<RetryPolicy>(provider);
         AssertOmits<DeliveryOutcomePolicy>(provider);
@@ -207,7 +212,8 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IDeliveryClient>(provider);
         AssertResolves<IAuthSchemeRegistry>(provider);
         AssertResolves<ITransformEvaluator>(provider);
-        AssertResolves<ISecretResolver>(provider);
+        AssertResolves<IDestinationAuthenticationSecretResolver>(provider);
+        AssertOmits<ISourceVerificationSecretResolver>(provider);
         AssertResolves<DeliveryExecutionOptions>(provider);
         AssertResolves<RetryPolicy>(provider);
         AssertResolves<DeliveryOutcomePolicy>(provider);

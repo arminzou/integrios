@@ -30,7 +30,8 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
                 request.IntegrationId,
                 request.Name,
                 request.Config,
-                request.Auth?.ToInput(),
+                request.SourceVerification?.ToInput(),
+                request.DestinationAuthentication?.ToInput(),
                 request.Environment,
                 request.Description),
             cancellationToken);
@@ -75,7 +76,8 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
                 id,
                 request.Name,
                 request.Config,
-                request.Auth?.ToInput(),
+                request.SourceVerification?.ToInput(),
+                request.DestinationAuthentication?.ToInput(),
                 request.Environment,
                 request.Description),
             cancellationToken);
@@ -98,23 +100,25 @@ internal sealed record CreateConnectionRequest(
     Guid IntegrationId,
     string Name,
     JsonElement Config,
-    ConnectionAuthRequest? Auth,
+    [property: JsonPropertyName("source_verification")] ConnectionSchemeSelectionRequest? SourceVerification,
+    [property: JsonPropertyName("destination_authentication")] ConnectionSchemeSelectionRequest? DestinationAuthentication,
     string? Environment,
     string? Description);
 
 internal sealed record UpdateConnectionRequest(
     string Name,
     JsonElement Config,
-    ConnectionAuthRequest? Auth,
+    [property: JsonPropertyName("source_verification")] ConnectionSchemeSelectionRequest? SourceVerification,
+    [property: JsonPropertyName("destination_authentication")] ConnectionSchemeSelectionRequest? DestinationAuthentication,
     string? Environment,
     string? Description);
 
-internal sealed record ConnectionAuthRequest(
+internal sealed record ConnectionSchemeSelectionRequest(
     string Scheme,
     JsonElement Config,
     [property: JsonPropertyName("secret_refs")] JsonElement SecretRefs)
 {
-    public ConnectionAuthInput ToInput() => new()
+    public ConnectionSchemeSelectionInput ToInput() => new()
     {
         Scheme = Scheme,
         Config = Config,

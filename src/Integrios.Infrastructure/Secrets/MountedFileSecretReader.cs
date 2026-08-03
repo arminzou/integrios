@@ -2,23 +2,16 @@ using Integrios.Application.Secrets;
 
 namespace Integrios.Infrastructure.Secrets;
 
-internal sealed class MountedFileSecretResolver(string root) : ISecretResolver
+internal static class MountedFileSecretReader
 {
-    public static string DefaultRoot { get; } = OperatingSystem.IsWindows()
-        ? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "Integrios",
-            "secrets")
-        : "/run/secrets/integrios";
-
-    public string ProviderName => "file";
-
-    public async Task<string> ResolveAsync(
+    public static async Task<string> ReadAsync(
+        string root,
         TenantSecretScope tenant,
         string secretReference,
-        CancellationToken cancellationToken = default)
+        string providerName,
+        CancellationToken cancellationToken)
     {
-        SecretValueValidator.ValidateScope(tenant, secretReference, ProviderName);
+        SecretValueValidator.ValidateScope(tenant, secretReference, providerName);
         string path = Path.Combine(root, tenant.Slug, secretReference);
 
         try
@@ -42,10 +35,10 @@ internal sealed class MountedFileSecretResolver(string root) : ISecretResolver
             }
 
             if (total == 0 || total > SecretValueValidator.MaxBytes)
-                throw new SecretResolutionException(secretReference, ProviderName);
+                throw new SecretResolutionException(secretReference, providerName);
 
             string value = SecretValueValidator.StrictUtf8.GetString(bytes, 0, total);
-            return SecretValueValidator.ValidateText(value, secretReference, ProviderName);
+            return SecretValueValidator.ValidateText(value, secretReference, providerName);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -57,7 +50,7 @@ internal sealed class MountedFileSecretResolver(string root) : ISecretResolver
         }
         catch
         {
-            throw new SecretResolutionException(secretReference, ProviderName);
+            throw new SecretResolutionException(secretReference, providerName);
         }
     }
 }

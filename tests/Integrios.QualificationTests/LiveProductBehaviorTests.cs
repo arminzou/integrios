@@ -314,12 +314,20 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage relative = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/connections",
             ConnectionBody(WebhookIntegrationId, "relative-url", "/relative"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, relative.StatusCode);
+        JsonElement relativeBody = await AssertJsonAsync(relative, HttpStatusCode.Created);
+        using HttpResponseMessage relativeRejected = await PostAdminAsync(
+            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
+            SubscriptionBody("relative-url", relativeBody.GetProperty("id").GetGuid(), "relative.test"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, relativeRejected.StatusCode);
 
         using HttpResponseMessage ftp = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/connections",
             ConnectionBody(WebhookIntegrationId, "ftp-url", "ftp://example.test/file"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, ftp.StatusCode);
+        JsonElement ftpBody = await AssertJsonAsync(ftp, HttpStatusCode.Created);
+        using HttpResponseMessage ftpRejected = await PostAdminAsync(
+            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
+            SubscriptionBody("ftp-url", ftpBody.GetProperty("id").GetGuid(), "ftp.test"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, ftpRejected.StatusCode);
 
         using HttpResponseMessage privateDestination = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/connections",
@@ -452,8 +460,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         ComposeResult configCli = await fixture.RunWorkerCommandAsync(
             new Dictionary<string, string?>
             {
-                ["Integrios__Secrets__Provider"] = "configuration",
-                ["Secrets__qualification-config__shared_secret"] = "configuration-value"
+                ["Integrios__DestinationSecrets__Provider"] = "configuration",
+                ["DestinationSecrets__qualification-config__shared_secret"] = "configuration-value"
             },
             "secrets", "validate", "--tenant", configuration.Slug);
         Assert.Equal(1, configCli.ExitCode);
@@ -466,13 +474,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await AssertMissingSecretFailsAsync(configuration, "line-break", "line_break", "request_construction");
 
         ComposeResult fileCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?> { ["Integrios__Secrets__Provider"] = "file" },
+            new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
             "secrets", "validate", "--tenant", fileA.Slug);
         Assert.Equal(0, fileCli.ExitCode);
         Assert.DoesNotContain("file-a-value", fileCli.Output, StringComparison.Ordinal);
 
         ComposeResult fullDeploymentCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?> { ["Integrios__Secrets__Provider"] = "file" },
+            new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
             "secrets", "validate", "--all");
         Assert.Equal(1, fullDeploymentCli.ExitCode);
         Assert.DoesNotContain("file-a-value", fullDeploymentCli.Output, StringComparison.Ordinal);
@@ -510,7 +518,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         const string probes = "api-key-value|bearer-token-value|file-a-value|file-b-value|rotation-v1|rotation-v2|configuration-value|configuration-only-value|file-only-value|unsafe";
         Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM connections WHERE config::text ~ '{probes}' OR COALESCE(auth::text, '') ~ '{probes}'"));
+            $"SELECT COUNT(*) FROM connections WHERE config::text ~ '{probes}' OR COALESCE(source_verification::text, '') ~ '{probes}' OR COALESCE(destination_authentication::text, '') ~ '{probes}'"));
         Assert.Equal(0L, await fixture.ScalarAsync<long>(
             $"SELECT COUNT(*) FROM delivery_attempts WHERE COALESCE(error_message, '') ~ '{probes}'"));
 
@@ -797,7 +805,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         integrationId,
         name,
         config = new { url },
-        auth,
+        destination_authentication = auth,
         environment = "production"
     };
 

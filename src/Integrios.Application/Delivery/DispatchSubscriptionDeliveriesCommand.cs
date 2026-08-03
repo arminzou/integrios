@@ -19,7 +19,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     IDeliveryClient deliveryClient,
     ITransformEvaluator transformEvaluator,
     IAuthSchemeRegistry authSchemeRegistry,
-    ISecretResolver secretResolver,
+    IDestinationAuthenticationSecretResolver secretResolver,
     DeliveryExecutionOptions executionOptions,
     IntegriosMetrics metrics,
     ILogger<DispatchSubscriptionDeliveriesCommandHandler> logger) : IRequestHandler<DispatchSubscriptionDeliveriesCommand, int>
@@ -192,7 +192,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         CancellationToken cancellationToken)
     {
         IAuthSchemeHandler? handler = null;
-        ConnectionAuth? destinationAuth = null;
+        ConnectionSchemeSelection? destinationAuth = null;
         Dictionary<string, string> secrets = [];
         string? resolvingReference = null;
 
@@ -200,7 +200,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         {
             try
             {
-                destinationAuth = JsonSerializer.Deserialize<ConnectionAuth>(row.DestinationAuthJson)
+                destinationAuth = JsonSerializer.Deserialize<ConnectionSchemeSelection>(row.DestinationAuthJson)
                     ?? throw new DeliveryConfigurationException("Destination auth snapshot is invalid.");
                 handler = authSchemeRegistry.GetRequired(destinationAuth.Scheme);
             }

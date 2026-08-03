@@ -1,0 +1,164 @@
+using System.Text.Json;
+using Integrios.Application.Auth;
+using Integrios.Application.Secrets;
+using Integrios.Domain.Integrations;
+
+namespace Integrios.Application.Connections;
+
+internal static partial class ConnectionSchemeSelectionValidator
+{
+    private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
+    private static readonly string[] ReservedDeliveryHeaders =
+    [
+        "Integrios-Event-Id",
+        "Integrios-Delivery-Id",
+        "Integrios-Attempt-Id",
+        "Integrios-Attempt-Number"
+    ];
+
+    public static ConnectionSchemeSelection? ValidateSource(
+        Integration integration,
+        ConnectionSchemeSelectionInput? selection)
+    {
+        EnsureDirection(integration, source: true, selection);
+        return Validate(
+            integration,
+            selection,
+            integration.Manifest.SourceVerificationSchemes,
+            "source verification",
+            handler: null);
+    }
+
+    public static ConnectionSchemeSelection? ValidateDestination(
+        Integration integration,
+        ConnectionSchemeSelectionInput? selection,
+        IAuthSchemeRegistry registry)
+    {
+        EnsureDirection(integration, source: false, selection);
+        IAuthSchemeHandler? handler = null;
+        if (selection is not null && !registry.TryGet(selection.Scheme, out handler))
+            throw new ConnectionRequestValidationException(
+                $"Destination authentication scheme '{selection.Scheme}' is not implemented.");
+
+        return Validate(
+            integration,
+            selection,
+            integration.Manifest.DestinationAuthenticationSchemes,
+            "destination authentication",
+            handler);
+    }
+
+    private static ConnectionSchemeSelection? Validate(
+        Integration integration,
+        ConnectionSchemeSelectionInput? selection,
+        IReadOnlyList<IntegrationSchemeManifest> supportedSchemes,
+        string capability,
+        IAuthSchemeHandler? handler)
+    {
+        if (selection is null)
+            return null;
+
+        IntegrationSchemeManifest? declared = supportedSchemes.SingleOrDefault(
+            scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
+        if (declared is null)
+        {
+            throw new ConnectionRequestValidationException(
+                $"{capability} scheme '{selection.Scheme}' is not supported by integration '{integration.Key}'.");
+        }
+
+        JsonElement config = NormalizeObject(selection.Config);
+        JsonElement secretRefs = NormalizeObject(selection.SecretRefs);
+
+        EnsureRequiredFields(config, declared.RequiredConfig, capability, "config");
+        EnsureRequiredFields(secretRefs, declared.RequiredSecretRefs, capability, "secret_refs");
+        if (handler is not null)
+            EnsureReservedHeadersAreNotConfigured(handler.Name, config);
+        EnsureSecretReferencesAreSafe(secretRefs);
+
+        return new ConnectionSchemeSelection
+        {
+            Scheme = declared.Scheme,
+            Config = config,
+            SecretRefs = secretRefs
+        };
+    }
+
+    private static void EnsureDirection(
+        Integration integration,
+        bool source,
+        ConnectionSchemeSelectionInput? selection)
+    {
+        if (selection is null)
+            return;
+
+        bool capable = source
+            ? integration.Direction is IntegrationDirection.Source or IntegrationDirection.Both
+            : integration.Direction is IntegrationDirection.Destination or IntegrationDirection.Both;
+        if (!capable)
+        {
+            throw new ConnectionRequestValidationException(
+                $"Integration '{integration.Key}' does not permit {(source ? "source verification" : "destination authentication")}.");
+        }
+    }
+
+    private static void EnsureReservedHeadersAreNotConfigured(string scheme, JsonElement config)
+    {
+        if (!scheme.Equals("api_key_header", StringComparison.OrdinalIgnoreCase)
+            || !config.TryGetProperty("header_name", out JsonElement headerElement)
+            || headerElement.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        string headerName = headerElement.GetString() ?? string.Empty;
+        if (ReservedDeliveryHeaders.Contains(headerName, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ConnectionRequestValidationException(
+                $"Header '{headerName}' is reserved for Integrios delivery identity metadata.");
+        }
+    }
+
+    private static JsonElement NormalizeObject(JsonElement value)
+    {
+        return value.ValueKind == JsonValueKind.Undefined ? EmptyObject : value;
+    }
+
+    private static void EnsureRequiredFields(
+        JsonElement value,
+        IReadOnlyList<string> requiredFields,
+        string capability,
+        string sectionName)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            throw new ConnectionRequestValidationException($"{capability} {sectionName} must be a JSON object.");
+        }
+
+        foreach (string field in requiredFields)
+        {
+            if (!value.TryGetProperty(field, out JsonElement property) || property.ValueKind == JsonValueKind.Null)
+            {
+                throw new ConnectionRequestValidationException($"{capability} {sectionName} field '{field}' is required.");
+            }
+        }
+    }
+
+    private static void EnsureSecretReferencesAreSafe(JsonElement secretRefs)
+    {
+        foreach (JsonProperty property in secretRefs.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.String)
+            {
+                throw new ConnectionRequestValidationException(
+                    $"Secret reference '{property.Name}' must be a lowercase snake_case string.");
+            }
+
+            string value = property.Value.GetString() ?? "";
+            if (!SecretReferenceName.IsValid(value))
+            {
+                throw new ConnectionRequestValidationException(
+                    $"Secret reference '{property.Name}' must be a lowercase logical name of 1 to 63 characters.");
+            }
+        }
+    }
+}
