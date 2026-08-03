@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application;
+using Integrios.Application.Auth;
 using Integrios.Application.Transforms;
 using Integrios.Application.Connections;
 using Integrios.Application.Integrations;
@@ -47,7 +48,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         var exception = await Assert.ThrowsAsync<SubscriptionRequestValidationException>(() =>
             harness.Mediator.Send(harness.Command()));
 
-        Assert.Contains("direction is destination or both", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("direction permits destination use", exception.Message, StringComparison.Ordinal);
         Assert.Equal(0, harness.SubscriptionRepository.CreateCalls);
     }
 
@@ -75,7 +76,9 @@ public sealed class SubscriptionAuthoringApplicationTests
             services.AddSingleton<ISubscriptionRepository>(SubscriptionRepository);
             services.AddSingleton<ITopicRepository>(new FakeTopicRepository(Topic()));
             services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(integrationId)));
+            services.AddSingleton<IConnectionAuthoringLock>(new NoOpConnectionAuthoringLock());
             services.AddSingleton<IIntegrationCatalog>(new FakeIntegrationCatalog(Integration(integrationId, destinationDirection)));
+            services.AddSingleton<IAuthSchemeRegistry>(new EmptyAuthSchemeRegistry());
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator(transformValidationError));
             provider = services.BuildServiceProvider();
             Mediator = provider.GetRequiredService<IMediator>();
@@ -161,6 +164,31 @@ public sealed class SubscriptionAuthoringApplicationTests
             TransformContext context) => payloadJson;
     }
 
+    private sealed class EmptyAuthSchemeRegistry : IAuthSchemeRegistry
+    {
+        public IAuthSchemeHandler GetRequired(string scheme) =>
+            throw new InvalidOperationException($"Unexpected scheme '{scheme}'.");
+
+        public bool TryGet(string scheme, out IAuthSchemeHandler handler)
+        {
+            handler = null!;
+            return false;
+        }
+    }
+
+    private sealed class NoOpConnectionAuthoringLock : IConnectionAuthoringLock
+    {
+        public Task<IAsyncDisposable> AcquireAsync(
+            IEnumerable<Guid> connectionIds,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IAsyncDisposable>(new NoOpLease());
+
+        private sealed class NoOpLease : IAsyncDisposable
+        {
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
     private sealed class FakeTopicRepository(Topic topic) : ITopicRepository
     {
         public Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
@@ -191,7 +219,10 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
             Task.FromResult<(IReadOnlyList<Connection>, string?)>(([connection], null));
 
-        public Task<Connection?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement config, ConnectionAuth? auth, string? environment, string? description, CancellationToken cancellationToken = default) =>
+        public Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ConnectionUsage(false, false));
+
+        public Task<Connection?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement config, ConnectionSchemeSelection? sourceVerification, ConnectionSchemeSelection? destinationAuthentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Connection?>(connection);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
 using Integrios.Application.Integrations;
@@ -56,6 +57,9 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Assert.Equal(BuiltinCatalog.WebhookId, webhook.Id);
         Assert.Equal(IntegrationDirection.Both, webhook.Direction);
         Assert.Empty(webhook.SupportedAuthSchemes);
+        JsonElement destinationSchema = webhook.Manifest.DestinationConfigurationSchema!.Value;
+        Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("url").GetProperty("format").GetString());
+        Assert.Equal("url", destinationSchema.GetProperty("required")[0].GetString());
 
         await ExecuteAsync("""
             UPDATE integrations

@@ -15,7 +15,7 @@ try
 
     builder.Services.AddWorkerApplicationServices();
     builder.Services.AddWorkerInfrastructureServices(builder.Configuration);
-    builder.Services.AddSecretResolutionServices(builder.Configuration);
+    builder.Services.AddDestinationAuthenticationSecretResolutionServices(builder.Configuration);
     builder.Services.AddTelemetryServices(builder.Configuration, "integrios-worker");
     builder.Services.AddOutboxDepthMetricsServices(builder.Configuration);
 

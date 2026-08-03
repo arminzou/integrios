@@ -339,7 +339,7 @@ Content-Type: application/json
   "config": {
     "url": "{{sinkBase}}/sink/acme-erp-auth"
   },
-  "auth": {
+  "destination_authentication": {
     "scheme": "api_key_header",
     "config": {
       "header_name": "X-Api-Key"
@@ -363,7 +363,7 @@ Content-Type: application/json
   "config": {
     "url": "{{sinkBase}}/sink/acme-erp-auth"
   },
-  "auth": {
+  "destination_authentication": {
     "scheme": "api_key_header",
     "config": {
       "header_name": "X-Partner-Key"

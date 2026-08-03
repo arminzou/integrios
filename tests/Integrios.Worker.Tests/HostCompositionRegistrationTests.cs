@@ -97,7 +97,8 @@ public sealed class HostCompositionRegistrationTests
         AssertOmits<IOutboxFanout>(provider);
         AssertOmits<ISubscriptionDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
-        AssertOmits<ISecretResolver>(provider);
+        AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
+        AssertOmits<ISourceVerificationSecretResolver>(provider);
         AssertOmits<DeliveryExecutionOptions>(provider);
         AssertOmits<RetryPolicy>(provider);
         AssertOmits<DeliveryOutcomePolicy>(provider);
@@ -130,7 +131,8 @@ public sealed class HostCompositionRegistrationTests
         AssertOmits<IDeliveryClient>(provider);
         AssertOmits<IAuthSchemeRegistry>(provider);
         AssertOmits<ITransformEvaluator>(provider);
-        AssertOmits<ISecretResolver>(provider);
+        AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
+        AssertResolves<ISourceVerificationSecretResolver>(provider);
         AssertOmits<DeliveryExecutionOptions>(provider);
         AssertOmits<RetryPolicy>(provider);
         AssertOmits<DeliveryOutcomePolicy>(provider);
@@ -150,7 +152,8 @@ public sealed class HostCompositionRegistrationTests
         AssertResolves<IDeliveryClient>(provider);
         AssertResolves<IAuthSchemeRegistry>(provider);
         AssertResolves<ITransformEvaluator>(provider);
-        AssertResolves<ISecretResolver>(provider);
+        AssertResolves<IDestinationAuthenticationSecretResolver>(provider);
+        AssertOmits<ISourceVerificationSecretResolver>(provider);
 
         AssertOmits<IAdminKeyLookup>(provider);
         AssertOmits<IAdminKeyLifecycle>(provider);

@@ -16,15 +16,23 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
     private const string UniqueViolation = "23505";
     private const string SelectColumns = """
         id, tenant_id, integration_id, name,
-        config::text AS ConfigJson, auth::text AS AuthJson,
+        config::text AS ConfigJson,
+        source_verification::text AS SourceVerificationJson,
+        destination_authentication::text AS DestinationAuthenticationJson,
         status, environment, description, created_at, updated_at
         """;
 
     public async Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken = default)
     {
         const string sql = $"""
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, auth, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, @Config::jsonb, @Auth::jsonb, @Status, @Environment, @Description, @CreatedAt, @UpdatedAt)
+            INSERT INTO connections (
+                id, tenant_id, integration_id, name, config,
+                source_verification, destination_authentication,
+                status, environment, description, created_at, updated_at)
+            VALUES (
+                @Id, @TenantId, @IntegrationId, @Name, @Config::jsonb,
+                @SourceVerification::jsonb, @DestinationAuthentication::jsonb,
+                @Status, @Environment, @Description, @CreatedAt, @UpdatedAt)
             RETURNING {SelectColumns};
             """;
 
@@ -42,7 +50,8 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
                         connection.IntegrationId,
                         connection.Name,
                         Config = JsonSerializer.Serialize(connection.Config),
-                        Auth = connection.Auth is null ? null : JsonSerializer.Serialize(connection.Auth),
+                        SourceVerification = Serialize(connection.SourceVerification),
+                        DestinationAuthentication = Serialize(connection.DestinationAuthentication),
                         Status = connection.Status.ToString().ToLowerInvariant(),
                         connection.Environment,
                         connection.Description,
@@ -61,6 +70,33 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
         {
             throw new DuplicateResourceException($"A connection named '{connection.Name}' already exists for this tenant.", ex);
         }
+    }
+
+    public async Task<ConnectionUsage> GetUsageAsync(
+        Guid tenantId,
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT
+                EXISTS (
+                    SELECT 1
+                    FROM topic_sources ts
+                    JOIN topics t ON t.tenant_id = ts.tenant_id AND t.id = ts.topic_id
+                    WHERE ts.tenant_id = @TenantId
+                      AND ts.connection_id = @Id
+                      AND t.status = 'active') AS Source,
+                EXISTS (
+                    SELECT 1
+                    FROM subscriptions s
+                    WHERE s.tenant_id = @TenantId
+                      AND s.destination_connection_id = @Id
+                      AND s.status = 'active') AS Destination
+            """;
+
+        await using var db = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        return await db.QuerySingleAsync<ConnectionUsage>(
+            new CommandDefinition(sql, new { TenantId = tenantId, Id = id }, cancellationToken: cancellationToken));
     }
 
     public async Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
@@ -134,7 +170,8 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
         Guid id,
         string name,
         JsonElement config,
-        ConnectionAuth? auth,
+        ConnectionSchemeSelection? sourceVerification,
+        ConnectionSchemeSelection? destinationAuthentication,
         string? environment,
         string? description,
         CancellationToken cancellationToken = default)
@@ -143,13 +180,13 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
             UPDATE connections
             SET name = @Name,
                 config = @Config::jsonb,
-                auth = @Auth::jsonb,
+                source_verification = @SourceVerification::jsonb,
+                destination_authentication = @DestinationAuthentication::jsonb,
                 environment = @Environment,
                 description = @Description,
                 updated_at = now()
             WHERE tenant_id = @TenantId
               AND id = @Id
-              AND status != 'disabled'
             RETURNING {SelectColumns};
             """;
 
@@ -166,7 +203,8 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
                         Id = id,
                         Name = name,
                         Config = JsonSerializer.Serialize(config),
-                        Auth = auth is null ? null : JsonSerializer.Serialize(auth),
+                        SourceVerification = Serialize(sourceVerification),
+                        DestinationAuthentication = Serialize(destinationAuthentication),
                         Environment = environment,
                         Description = description,
                     },
@@ -205,7 +243,8 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
         public Guid IntegrationId { get; init; }
         public string Name { get; init; } = "";
         public string ConfigJson { get; init; } = "{}";
-        public string? AuthJson { get; init; }
+        public string? SourceVerificationJson { get; init; }
+        public string? DestinationAuthenticationJson { get; init; }
         public string Status { get; init; } = "";
         public string? Environment { get; init; }
         public string? Description { get; init; }
@@ -219,7 +258,8 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
             IntegrationId = IntegrationId,
             Name = Name,
             Config = JsonSerializer.Deserialize<JsonElement>(ConfigJson),
-            Auth = AuthJson is null ? null : JsonSerializer.Deserialize<ConnectionAuth>(AuthJson),
+            SourceVerification = Deserialize(SourceVerificationJson),
+            DestinationAuthentication = Deserialize(DestinationAuthenticationJson),
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             Environment = Environment,
             Description = Description,
@@ -227,4 +267,10 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
             UpdatedAt = UpdatedAt,
         };
     }
+
+    private static string? Serialize(ConnectionSchemeSelection? selection) =>
+        selection is null ? null : JsonSerializer.Serialize(selection);
+
+    private static ConnectionSchemeSelection? Deserialize(string? json) =>
+        json is null ? null : JsonSerializer.Deserialize<ConnectionSchemeSelection>(json);
 }

@@ -56,12 +56,16 @@ services:
       dockerfile: docker/Dockerfile
       args:
         PROJECT: Integrios.Ingress
+        MOUNT_ROOT: /run/secrets/integrios/source
     image: ${INTEGRIOS_INGRESS_IMAGE:-integrios-ingress:dev}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      Integrios__SourceSecrets__Provider: ${INTEGRIOS_SOURCE_SECRETS_PROVIDER:-file}
+    volumes:
+      - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/source}:/run/secrets/integrios/source:ro
     ports:
       - "${INTEGRIOS_INGRESS_PORT:-5231}:8080"
 
@@ -86,7 +90,7 @@ services:
       dockerfile: docker/Dockerfile
       args:
         PROJECT: Integrios.Worker
-        MOUNT_ROOT: /run/secrets/integrios
+        MOUNT_ROOT: /run/secrets/integrios/destination
         HTTP_PORT: "5299"
     image: ${INTEGRIOS_WORKER_IMAGE:-integrios-worker:dev}
     depends_on:
@@ -94,9 +98,9 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
-      Integrios__Secrets__Provider: ${INTEGRIOS_SECRETS_PROVIDER:-file}
+      Integrios__DestinationSecrets__Provider: ${INTEGRIOS_DESTINATION_SECRETS_PROVIDER:-file}
     volumes:
-      - ${INTEGRIOS_SECRETS_DIR:-./secrets}:/run/secrets/integrios:ro
+      - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destination}:/run/secrets/integrios/destination:ro
 
   mocksink:
     build:

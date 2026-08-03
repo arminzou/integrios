@@ -18,6 +18,7 @@ public sealed class AdminExceptionHandler : IExceptionHandler
         (int StatusCode, string Message)? error = exception switch
         {
             DuplicateResourceException => (StatusCodes.Status409Conflict, exception.Message),
+            ConnectionAuthoringConflictException => (StatusCodes.Status409Conflict, exception.Message),
             TenantRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             ConnectionRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             IntegrationManifestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),

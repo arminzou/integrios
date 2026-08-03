@@ -21,7 +21,7 @@ public static class BuiltinCatalog
                 ContractVersion = 1,
                 Direction = "both",
                 SourceConfigurationSchema = EmptyObjectSchema(),
-                DestinationConfigurationSchema = EmptyObjectSchema(),
+                DestinationConfigurationSchema = WebhookDestinationSchema(),
                 SourceVerificationSchemes = [],
                 DestinationAuthenticationSchemes = [],
                 Presentation = new IntegrationPresentationManifest
@@ -35,4 +35,8 @@ public static class BuiltinCatalog
     private static System.Text.Json.JsonElement EmptyObjectSchema() =>
         System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
+
+    private static System.Text.Json.JsonElement WebhookDestinationSchema() =>
+        System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+            """{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true}""");
 }

@@ -97,6 +97,29 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
     }
 
     [Fact]
+    public async Task CreateSubscription_MissingDestinationAuthentication_Returns422()
+    {
+        var topic = await CreateTopicAsync("payments");
+        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+            "authentication_required_sink",
+            "destination",
+            authenticationSchemes: ["bearer_token"]);
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "missing-authentication",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId,
+                orderIndex = 10
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdateSubscription_SourceOnlyDestinationConnection_Returns422()
     {
         var topic = await CreateTopicAsync("payments");
@@ -218,7 +241,8 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
     private async Task<Guid> InsertConnectionWithDirectionAsync(
         string key,
         string direction,
-        Guid? tenantId = null)
+        Guid? tenantId = null,
+        string[]? authenticationSchemes = null)
     {
         Guid integrationId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
@@ -233,7 +257,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
                 supported_auth_schemes, status, description, manifest, created_at, updated_at)
             VALUES (
                 @Id, @Key, 1, 1, @Name, @Direction,
-                '[]'::jsonb, 'active', 'test integration', @Manifest::jsonb, now(), now());
+                @SupportedAuthSchemes::jsonb, 'active', 'test integration', @Manifest::jsonb, now(), now());
             """,
             connection))
         {
@@ -241,14 +265,19 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             integrationCmd.Parameters.AddWithValue("Key", key);
             integrationCmd.Parameters.AddWithValue("Name", key);
             integrationCmd.Parameters.AddWithValue("Direction", direction);
-            integrationCmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(key, key, direction));
+            integrationCmd.Parameters.AddWithValue("SupportedAuthSchemes", JsonSerializer.Serialize(authenticationSchemes ?? []));
+            integrationCmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
+                key,
+                key,
+                direction,
+                authenticationSchemes));
             await integrationCmd.ExecuteNonQueryAsync();
         }
 
         await using (var connectionCmd = new NpgsqlCommand(
             """
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, auth, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"url":"http://localhost:5054/sink/custom"}'::jsonb, NULL, 'active', NULL, NULL, now(), now());
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
+            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"url":"http://localhost:5054/sink/custom"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
             """,
             connection))
         {

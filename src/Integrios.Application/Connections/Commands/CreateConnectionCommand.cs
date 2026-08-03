@@ -12,7 +12,8 @@ public sealed record CreateConnectionCommand(
     Guid IntegrationId,
     string Name,
     JsonElement Config,
-    ConnectionAuthInput? Auth,
+    ConnectionSchemeSelectionInput? SourceVerification,
+    ConnectionSchemeSelectionInput? DestinationAuthentication,
     string? Environment,
     string? Description) : IRequest<ConnectionResponse>;
 
@@ -30,8 +31,6 @@ internal sealed class CreateConnectionCommandHandler(
             ?? throw new ConnectionRequestValidationException("The specified integration does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
-        ConnectionConfigValidator.ValidateDestination(integration, config);
-
         var connection = new Connection
         {
             Id = Guid.NewGuid(),
@@ -39,7 +38,13 @@ internal sealed class CreateConnectionCommandHandler(
             IntegrationId = command.IntegrationId,
             Name = command.Name,
             Config = config,
-            Auth = ConnectionAuthValidator.Validate(integration, command.Auth, authSchemeRegistry),
+            SourceVerification = ConnectionSchemeSelectionValidator.ValidateSource(
+                integration,
+                command.SourceVerification),
+            DestinationAuthentication = ConnectionSchemeSelectionValidator.ValidateDestination(
+                integration,
+                command.DestinationAuthentication,
+                authSchemeRegistry),
             Status = OperationalStatus.Active,
             Environment = command.Environment,
             Description = command.Description,

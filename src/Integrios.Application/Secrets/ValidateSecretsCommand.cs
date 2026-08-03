@@ -26,7 +26,7 @@ public sealed class SecretValidationSelectionException(string message) : Excepti
 
 internal sealed class ValidateSecretsCommandHandler(
     ISecretValidationCatalog catalog,
-    ISecretResolver secretResolver) : IRequestHandler<ValidateSecretsCommand, SecretValidationReport>
+    IDestinationAuthenticationSecretResolver secretResolver) : IRequestHandler<ValidateSecretsCommand, SecretValidationReport>
 {
     public async Task<SecretValidationReport> Handle(
         ValidateSecretsCommand command,
@@ -129,7 +129,7 @@ internal sealed class ValidateSecretsCommandHandler(
 
     private static IEnumerable<string> SecretReferences(Connection connection)
     {
-        JsonElement references = connection.Auth?.SecretRefs ?? default;
+        JsonElement references = connection.DestinationAuthentication?.SecretRefs ?? default;
         if (references.ValueKind != JsonValueKind.Object)
             yield break;
 

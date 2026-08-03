@@ -77,7 +77,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
             ON CONFLICT (id) DO NOTHING;
 
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
-            VALUES (@SourceConnectionId, @TenantId, @IntegrationId, 'source', '{}', 'active');
+            VALUES (
+                @SourceConnectionId, @TenantId, @IntegrationId, 'source',
+                '{"url":"http://localhost:5054/sink/source"}', 'active');
 
             -- Re-seed global bootstrap key (truncated in ResetAsync)
             INSERT INTO admin_keys (public_key, secret_hash, name, created_at)

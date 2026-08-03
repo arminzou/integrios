@@ -13,6 +13,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<IngressExceptionHandler>();
 builder.Services.AddIngressApplicationServices();
 builder.Services.AddIngressInfrastructureServices(builder.Configuration);
+builder.Services.AddSourceVerificationSecretResolutionServices(builder.Configuration);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-ingress");
 
 builder.Services.AddAuthentication(ApiKeyAuthHandler.SchemeName)

@@ -52,7 +52,9 @@ needs directly from PostgreSQL and does not call Admin at runtime.
   class. It may be built in or Operator-authored, is shared across Tenants, and contains no Tenant
   data or Operator-authored executable code.
 - **Connection** is a Tenant-owned configured instance of one Integration. It owns Tenant-specific
-  endpoint configuration, auth selection, and secret references.
+  endpoint configuration plus separate source-verification and destination-authentication
+  selections and secret references. Its source and destination roles are derived from Topic and
+  Subscription relationships rather than persisted independently.
 - **Topic** is a Tenant-owned named Event stream. Configured source Connections may publish to it.
 - **Subscription** independently filters a Topic, optionally transforms matching Events, and
   delivers them through one destination Connection. It owns the versioned HTTP delivery

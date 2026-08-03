@@ -46,6 +46,7 @@ internal sealed class CustomApiFactory(
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
         builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
