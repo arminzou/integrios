@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.Bootstrap;
@@ -32,11 +33,11 @@ public static class BuiltinCatalog
             }),
     ];
 
-    private static System.Text.Json.JsonElement EmptyObjectSchema() =>
-        System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+    private static JsonElement EmptyObjectSchema() =>
+        JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
 
-    private static System.Text.Json.JsonElement WebhookDestinationSchema() =>
-        System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+    private static JsonElement WebhookDestinationSchema() =>
+        JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true}""");
 }

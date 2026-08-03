@@ -18,7 +18,7 @@ public static partial class IntegrationManifestParser
         "destination_configuration_schema",
         "source_verification",
         "destination_authentication",
-        "built_in_source_adapter",
+        "source_adapter",
         "http_outcome",
         "presentation",
     ];
@@ -26,6 +26,7 @@ public static partial class IntegrationManifestParser
     public static IntegrationManifest Parse(
         JsonElement document,
         IAuthSchemeRegistry authenticationSchemes,
+        ISourceAdapterRegistry sourceAdapters,
         IntegrationManifestApplyAuthority authority)
     {
         if (document.ValueKind != JsonValueKind.Object)
@@ -44,7 +45,7 @@ public static partial class IntegrationManifestParser
             throw Invalid($"The Integration manifest is invalid: {exception.Message}");
         }
 
-        Validate(manifest, document, authenticationSchemes, authority);
+        Validate(manifest, document, authenticationSchemes, sourceAdapters, authority);
         return Canonicalize(manifest);
     }
 
@@ -81,6 +82,7 @@ public static partial class IntegrationManifestParser
         IntegrationManifest manifest,
         JsonElement document,
         IAuthSchemeRegistry authenticationSchemes,
+        ISourceAdapterRegistry sourceAdapters,
         IntegrationManifestApplyAuthority authority)
     {
         if (manifest.ManifestSchemaVersion != 1)
@@ -117,7 +119,7 @@ public static partial class IntegrationManifestParser
 
         ValidateSchemes(manifest.SourceVerification.Schemes, "source_verification.schemes");
         ValidateSchemes(manifest.DestinationAuthentication.Schemes, "destination_authentication.schemes");
-        ValidatePlatformSchemes(manifest, authenticationSchemes, authority);
+        ValidatePlatformSchemes(manifest, authenticationSchemes);
         if (!sourceCapable && manifest.SourceVerification.Schemes.Count > 0)
             throw Invalid("source_verification.schemes requires a source-capable direction.");
         if (!destinationCapable && manifest.DestinationAuthentication.Schemes.Count > 0)
@@ -135,12 +137,54 @@ public static partial class IntegrationManifestParser
             throw Invalid("destination_authentication must declare a scheme or set allow_unauthenticated to true.");
         }
 
-        if (manifest.BuiltInSourceAdapter is not null)
+        if (manifest.SourceAdapter is IntegrationSourceAdapterManifest sourceAdapterManifest)
         {
-            if (authority.Mode != IntegrationManifestApplyMode.Bootstrap)
-                throw Invalid("built_in_source_adapter may be selected only by Bootstrap.");
-            if (!sourceCapable || manifest.BuiltInSourceAdapter != "github")
-                throw Invalid("built_in_source_adapter requires a source-capable direction and a lower snake_case value.");
+            if (!document.TryGetProperty("source_adapter", out JsonElement sourceAdapterDocument)
+                || sourceAdapterDocument.ValueKind != JsonValueKind.Object)
+            {
+                throw Invalid("source_adapter must be an object.");
+            }
+            RejectUnknownProperties(
+                sourceAdapterDocument,
+                new HashSet<string>(["key", "contract_version", "config"]),
+                "source_adapter");
+            if (string.IsNullOrWhiteSpace(sourceAdapterManifest.Key)
+                || !IntegrationKeyPattern().IsMatch(sourceAdapterManifest.Key))
+            {
+                throw Invalid("source_adapter.key must use lower snake_case and start with a letter.");
+            }
+            if (sourceAdapterManifest.ContractVersion < 1)
+                throw Invalid("source_adapter.contract_version must be a positive integer.");
+            if (!sourceAdapterDocument.TryGetProperty("config", out JsonElement configDocument)
+                || configDocument.ValueKind != JsonValueKind.Object)
+            {
+                throw Invalid("source_adapter.config is required and must be an object.");
+            }
+            if (!sourceCapable)
+                throw Invalid("source_adapter requires a source-capable direction.");
+
+            if (!sourceAdapters.TryGet(
+                    sourceAdapterManifest.Key, sourceAdapterManifest.ContractVersion, out SourceAdapterRegistration registration))
+            {
+                throw Invalid(
+                    $"source_adapter '{sourceAdapterManifest.Key}' version {sourceAdapterManifest.ContractVersion} is not registered.");
+            }
+            if (authority.Mode != IntegrationManifestApplyMode.Bootstrap && !registration.AuthoringSafe)
+                throw Invalid($"source_adapter '{sourceAdapterManifest.Key}' may be selected only by Bootstrap.");
+            registration.ValidateConfig(sourceAdapterManifest.Config);
+
+            var declaredSchemes = new HashSet<string>(
+                manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme), StringComparer.Ordinal);
+            if (!declaredSchemes.SetEquals(registration.CompatibleSourceVerificationSchemes))
+            {
+                throw Invalid(
+                    $"source_adapter '{sourceAdapterManifest.Key}' requires source_verification.schemes to declare exactly: "
+                    + string.Join(", ", registration.CompatibleSourceVerificationSchemes) + ".");
+            }
+        }
+        else if (manifest.SourceVerification.Schemes.Count > 0)
+        {
+            throw Invalid("source_verification.schemes requires a source_adapter selection.");
         }
 
         if (manifest.HttpOutcome is JsonElement outcome)
@@ -161,21 +205,13 @@ public static partial class IntegrationManifestParser
 
     private static void ValidatePlatformSchemes(
         IntegrationManifest manifest,
-        IAuthSchemeRegistry authenticationSchemes,
-        IntegrationManifestApplyAuthority authority)
+        IAuthSchemeRegistry authenticationSchemes)
     {
-        if (authority.Mode != IntegrationManifestApplyMode.Bootstrap
-            && manifest.SourceVerification.Schemes.Count > 0)
-        {
-            throw Invalid(
-                "Operator-authored manifests cannot declare source verification schemes without a compiled built-in source adapter.");
-        }
-
         foreach (IntegrationSchemeManifest scheme in manifest.SourceVerification.Schemes)
         {
-            if (scheme.Scheme != "github_hmac_sha256"
+            if (scheme.Scheme != "hmac_sha256"
                 || scheme.RequiredConfig.Count != 0
-                || !SetEquals(scheme.RequiredSecretRefs, ["webhook_secret"]))
+                || !SetEquals(scheme.RequiredSecretRefs, ["secret"]))
             {
                 throw Invalid($"Source verification scheme '{scheme.Scheme}' is not a supported platform contract.");
             }
@@ -374,6 +410,9 @@ public static partial class IntegrationManifestParser
             EventTypes = manifest.Presentation.EventTypes.ToArray(),
             AuthoringPresets = manifest.Presentation.AuthoringPresets.Select(preset => preset.Clone()).ToArray(),
         },
+        SourceAdapter = manifest.SourceAdapter is IntegrationSourceAdapterManifest adapter
+            ? adapter with { Config = adapter.Config.Clone() }
+            : null,
         HttpOutcome = manifest.HttpOutcome?.Clone(),
     };
 
