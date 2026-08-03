@@ -37,7 +37,9 @@ services:
     # see deploy/ for the production reference.
     build:
       context: .
-      dockerfile: docker/Admin.Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        PROJECT: Integrios.Admin
     image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
     depends_on:
       migrate:
@@ -51,7 +53,9 @@ services:
   ingress:
     build:
       context: .
-      dockerfile: docker/Ingress.Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        PROJECT: Integrios.Ingress
     image: ${INTEGRIOS_INGRESS_IMAGE:-integrios-ingress:dev}
     depends_on:
       bootstrap:
@@ -64,7 +68,9 @@ services:
   admin:
     build:
       context: .
-      dockerfile: docker/Admin.Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        PROJECT: Integrios.Admin
     image: ${INTEGRIOS_ADMIN_IMAGE:-integrios-admin:dev}
     depends_on:
       bootstrap:
@@ -77,7 +83,11 @@ services:
   worker:
     build:
       context: .
-      dockerfile: docker/Worker.Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        PROJECT: Integrios.Worker
+        MOUNT_ROOT: /run/secrets/integrios
+        HTTP_PORT: "5299"
     image: ${INTEGRIOS_WORKER_IMAGE:-integrios-worker:dev}
     depends_on:
       bootstrap:
@@ -91,7 +101,9 @@ services:
   mocksink:
     build:
       context: .
-      dockerfile: docker/MockSink.Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        PROJECT: Integrios.MockSink
     image: ${INTEGRIOS_MOCKSINK_IMAGE:-integrios-mocksink:dev}
     ports:
       - "${INTEGRIOS_MOCKSINK_PORT:-5054}:8080"
