@@ -44,7 +44,6 @@ jobs:
           dotnet test tests/Integrios.IntegrationTests/Integrios.IntegrationTests.csproj --configuration Release --no-build
 
   qualify:
-    if: github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -67,24 +66,28 @@ jobs:
         id: tier
         shell: bash
         run: |
+          # Tiers select on the Tier trait the tests carry, never on test class names:
+          #   database - Flyway and Postgres only, no service images, cheap enough to gate every PR
+          #   smoke    - packaged deployment, fast enough for every merge to main
+          #   deep     - packaged deployment, slow or timing-sensitive
+          # TierTraitContractTests fails when a test declares no tier, so a new test is covered
+          # by construction and this selector does not change when tests are added.
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
             echo 'name=nightly' >> "$GITHUB_OUTPUT"
-            echo 'minimum_tests=7' >> "$GITHUB_OUTPUT"
-            echo 'minimum_qualification_tests=7' >> "$GITHUB_OUTPUT"
             echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
-            echo 'filter=FullyQualifiedName~Integrios.QualificationTests.PopulatedUpgradeLifecycleTests|FullyQualifiedName~Integrios.QualificationTests.InterruptionAndConcurrencyTests|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.OperatorObservability_ExposesMetricsLogsAndContinuousRetryTrace' >> "$GITHUB_OUTPUT"
+            echo 'filter=' >> "$GITHUB_OUTPUT"
           elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' || "$GITHUB_REF" == refs/tags/v* ]]; then
             echo 'name=release' >> "$GITHUB_OUTPUT"
-            echo 'minimum_tests=1' >> "$GITHUB_OUTPUT"
-            echo 'minimum_qualification_tests=18' >> "$GITHUB_OUTPUT"
             echo 'target=Integrios.slnx' >> "$GITHUB_OUTPUT"
             echo 'filter=' >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+            echo 'name=database' >> "$GITHUB_OUTPUT"
+            echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
+            echo 'filter=Tier=database' >> "$GITHUB_OUTPUT"
           else
             echo 'name=main' >> "$GITHUB_OUTPUT"
-            echo 'minimum_tests=4' >> "$GITHUB_OUTPUT"
-            echo 'minimum_qualification_tests=4' >> "$GITHUB_OUTPUT"
             echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
-            echo 'filter=FullyQualifiedName~Integrios.QualificationTests.FreshDatabaseLifecycleTests|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.PackagedDeployment_StartsAndExposesDeterministicEvidence|FullyQualifiedName=Integrios.QualificationTests.PackagedDeploymentSmokeTests.Worker_FansOutNewEventWhileDeliveryAttemptIsBlocked' >> "$GITHUB_OUTPUT"
+            echo 'filter=Tier=database|Tier=smoke' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Record release inputs
@@ -119,8 +122,6 @@ jobs:
           TIER: ${{ steps.tier.outputs.name }}
           TARGET: ${{ steps.tier.outputs.target }}
           FILTER: ${{ steps.tier.outputs.filter }}
-          MINIMUM_TESTS: ${{ steps.tier.outputs.minimum_tests }}
-          MINIMUM_QUALIFICATION_TESTS: ${{ steps.tier.outputs.minimum_qualification_tests }}
         run: |
           set -o pipefail
           mkdir -p evidence/test-results
@@ -133,14 +134,16 @@ jobs:
           printf '\n' >> evidence/selected-command.txt
           "${command[@]}" 2>&1 | tee evidence/qualification.log
 
-          python3 - "$TIER" "$MINIMUM_TESTS" "$MINIMUM_QUALIFICATION_TESTS" <<'PY'
+          python3 - "$TIER" <<'PY'
           import glob
           import sys
           import xml.etree.ElementTree as ET
 
+          # Expected test counts are deliberately not asserted here. A hand-maintained floor
+          # decays every time a test is added, and the invariant it was guarding - that no test
+          # escapes tier selection - is now enforced by TierTraitContractTests. What remains is
+          # a presence check that catches a filter matching nothing.
           tier = sys.argv[1]
-          minimum = int(sys.argv[2])
-          minimum_qualification = int(sys.argv[3])
           total = 0
           not_executed = 0
           qualification_results = 0
@@ -168,18 +171,16 @@ jobs:
                   f'tier={tier}\n'
                   f'trx_files={len(files)}\n'
                   f'total_tests={total}\n'
-                  f'minimum_tests={minimum}\n'
                   f'qualification_tests={qualification_results}\n'
-                  f'minimum_qualification_tests={minimum_qualification}\n'
                   f'not_executed={not_executed}\n'
               )
 
-          if not files or total < minimum:
-              raise SystemExit(f'{tier} qualification selected {total} tests; expected at least {minimum}')
-          if qualification_results < minimum_qualification:
+          if not files or total < 1:
+              raise SystemExit(f'{tier} qualification selected no tests; the tier filter matched nothing')
+          if qualification_results < 1:
               raise SystemExit(
-                  f'{tier} qualification executed {qualification_results} qualification-project tests; '
-                  f'expected at least {minimum_qualification}'
+                  f'{tier} qualification executed no tests from the qualification project; '
+                  'the tier filter matched nothing'
               )
           if not_executed:
               raise SystemExit(f'{tier} qualification reported {not_executed} skipped or unexecuted tests')

@@ -3,6 +3,7 @@ using static Integrios.QualificationTests.DatabaseLifecycleAssertions;
 namespace Integrios.QualificationTests;
 
 [Trait("Category", "Qualification")]
+[Trait("Tier", "database")]
 public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixture)
     : IClassFixture<DatabaseLifecycleFixture>
 {

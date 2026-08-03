@@ -5,18 +5,36 @@ as-is or fork and adapt. The tiers keep routine feedback prompt while still maki
 qualification mandatory before publishing a release:
 
 1. **Pull request**: locked restore, dependency audit, Release build, architecture and
-   component tests, and Postgres integration tests. No configuration or secrets are required, so
-   this runs for fork pull requests too.
-2. **Main**: repeats the pull-request gate, then exercises migration and
-   Bootstrap lifecycle behavior plus packaged deployment smoke behavior before publishing
-   commit, `main`, and `latest` images.
-3. **Nightly**: exercises representative populated-database upgrades,
-   concurrent and interrupted Worker behavior, and observability export on the configured
-   schedule.
+   component tests, Postgres integration tests, and the `database` qualification tier. No
+   configuration or secrets are required, so this runs for fork pull requests too.
+2. **Main**: repeats the pull-request gate, then adds the `smoke` qualification tier before
+   publishing commit, `main`, and `latest` images.
+3. **Nightly**: runs the complete qualification project on the configured schedule, including
+   the `deep` tier that main does not gate on.
 4. **Release**: runs the complete test matrix before publishing images.
    A `v*` tag, or an explicit manual run from `main`, triggers it.
 5. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
    Kubernetes, etc.) lives in your own infrastructure, not in this repo.
+
+## Qualification tiers
+
+Qualification tests declare what they cost with a `Tier` trait, and the workflow selects on that
+trait rather than on test class names. Tier names describe the test, not the schedule, so the
+mapping from cost to schedule stays in one place:
+
+| Tier | What it needs | Runs in |
+|---|---|---|
+| `database` | Flyway and Postgres only; no service images | pull request, main, nightly, release |
+| `smoke` | packaged deployment, fast enough to gate a merge | main, nightly, release |
+| `deep` | packaged deployment, slow or timing-sensitive | nightly, release |
+
+Migrations are gated on every pull request because a schema contract is immutable once released:
+finding a defect at a `v*` tag means burning a version rather than fixing a branch.
+
+`TierTraitContractTests` fails when a test declares no tier or an unrecognized one, so a new test
+cannot silently escape selection. Adding tests therefore never requires editing the workflow;
+introducing a genuinely new cost category does, and the guard test forces that decision to be
+explicit.
 
 ## What the default pipeline does
 

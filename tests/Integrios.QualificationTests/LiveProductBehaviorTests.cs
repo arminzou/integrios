@@ -8,6 +8,7 @@ namespace Integrios.QualificationTests;
 
 [Collection(PackagedDeploymentCollection.Name)]
 [Trait("Category", "Qualification")]
+[Trait("Tier", "smoke")]
 public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 {
     private const string WebhookIntegrationId = "00000000-0000-0000-0000-000000000001";
