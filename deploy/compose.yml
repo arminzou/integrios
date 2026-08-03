@@ -53,9 +53,9 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      Integrios__SourceVerificationSecrets__Provider: ${INTEGRIOS_SOURCE_VERIFICATION_SECRETS_PROVIDER:-file}
+      Integrios__SourceSecrets__Provider: ${INTEGRIOS_SOURCE_SECRETS_PROVIDER:-file}
     volumes:
-      - ${INTEGRIOS_SOURCE_VERIFICATION_SECRETS_DIR:-./source-verification-secrets}:/run/secrets/integrios-source-verification:ro
+      - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/source}:/run/secrets/integrios/source:ro
     ports:
       - "${INTEGRIOS_INGRESS_PORT:-5231}:8080"
 
@@ -78,9 +78,9 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      Integrios__Secrets__Provider: ${INTEGRIOS_SECRETS_PROVIDER:-file}
+      Integrios__DestinationSecrets__Provider: ${INTEGRIOS_DESTINATION_SECRETS_PROVIDER:-file}
     volumes:
-      - ${INTEGRIOS_SECRETS_DIR:-./secrets}:/run/secrets/integrios:ro
+      - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destination}:/run/secrets/integrios/destination:ro
 
 volumes:
   postgres_data:

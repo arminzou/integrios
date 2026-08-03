@@ -460,8 +460,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         ComposeResult configCli = await fixture.RunWorkerCommandAsync(
             new Dictionary<string, string?>
             {
-                ["Integrios__Secrets__Provider"] = "configuration",
-                ["Secrets__qualification-config__shared_secret"] = "configuration-value"
+                ["Integrios__DestinationSecrets__Provider"] = "configuration",
+                ["DestinationSecrets__qualification-config__shared_secret"] = "configuration-value"
             },
             "secrets", "validate", "--tenant", configuration.Slug);
         Assert.Equal(1, configCli.ExitCode);
@@ -474,13 +474,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await AssertMissingSecretFailsAsync(configuration, "line-break", "line_break", "request_construction");
 
         ComposeResult fileCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?> { ["Integrios__Secrets__Provider"] = "file" },
+            new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
             "secrets", "validate", "--tenant", fileA.Slug);
         Assert.Equal(0, fileCli.ExitCode);
         Assert.DoesNotContain("file-a-value", fileCli.Output, StringComparison.Ordinal);
 
         ComposeResult fullDeploymentCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?> { ["Integrios__Secrets__Provider"] = "file" },
+            new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
             "secrets", "validate", "--all");
         Assert.Equal(1, fullDeploymentCli.ExitCode);
         Assert.DoesNotContain("file-a-value", fullDeploymentCli.Output, StringComparison.Ordinal);

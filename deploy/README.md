@@ -44,13 +44,14 @@ docker compose run --rm \
 Rotation atomically revokes the previous live key and creates its replacement. The command prints
 only the replacement public identifier; it never generates or outputs the replacement secret.
 
-## Delivery secrets
+## Directional Connection secrets
 
-The Worker defaults to the `file` backend. For every connection secret reference, it reads the
-current value from the host directory configured by `INTEGRIOS_SECRETS_DIR`, mounted read-only at:
+The Worker defaults to the `file` backend. For every destination-authentication secret reference,
+it reads the current value from the host directory configured by
+`INTEGRIOS_DESTINATION_SECRETS_DIR`, mounted read-only at:
 
 ```text
-/run/secrets/integrios/<tenant-slug>/<reference>
+/run/secrets/integrios/destination/<tenant-slug>/<reference>
 ```
 
 Create one file per logical reference. File contents are exact UTF-8 and are not trimmed; values
@@ -60,10 +61,10 @@ values containing CR or LF, so an accidental trailing newline (for example from 
 attempt performs a fresh read, so rotate a file or symlink atomically and subsequent retries and
 replays see the new value.
 
-Set `INTEGRIOS_SECRETS_PROVIDER=configuration` to use the Worker's .NET configuration instead.
-That backend reads `Secrets:<tenant-slug>:<reference>`. In your owned Compose file, supply those
+Set `INTEGRIOS_DESTINATION_SECRETS_PROVIDER=configuration` to use the Worker's .NET configuration
+instead. That backend reads `DestinationSecrets:<tenant-slug>:<reference>`. In your owned Compose file, supply those
 keys through the .NET provider you choose—for example an added configuration package/source or
-environment keys such as `Secrets__acme__erp_api_key`. The Worker consults exactly one selected
+environment keys such as `DestinationSecrets__acme__erp_api_key`. The Worker consults exactly one selected
 backend and never falls back between configuration and files.
 
 Check the configured references before traffic or after rotation:
@@ -77,9 +78,9 @@ docker compose run --rm worker secrets validate --tenant acme --connection <conn
 The command exits `0` when all selected references resolve, `1` when any do not, and `2` for an
 invalid selection or startup configuration. It prints no resolved values.
 
-Ingress source-verification values use the separate `INTEGRIOS_SOURCE_VERIFICATION_SECRETS_DIR`
-mount at `/run/secrets/integrios-source-verification`. With the configuration backend, Ingress reads
-`SourceVerificationSecrets:<tenant-slug>:<reference>`. Admin resolves no secret values, Ingress has
+Ingress source-verification values use the separate `INTEGRIOS_SOURCE_SECRETS_DIR` mount at
+`/run/secrets/integrios/source`. With the configuration backend, Ingress reads
+`SourceSecrets:<tenant-slug>:<reference>`. Admin resolves no secret values, Ingress has
 no access to destination-authentication values, and Worker has no access to source-verification
 values.
 

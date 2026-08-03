@@ -5,8 +5,8 @@ namespace Integrios.Infrastructure.Secrets;
 internal sealed class SourceVerificationMountedFileSecretResolver(string root) : ISourceVerificationSecretResolver
 {
     public static string DefaultRoot { get; } = OperatingSystem.IsWindows()
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Integrios", "source-verification-secrets")
-        : "/run/secrets/integrios-source-verification";
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Integrios", "secrets", "source")
+        : "/run/secrets/integrios/source";
 
     public string ProviderName => "file";
 

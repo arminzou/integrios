@@ -51,8 +51,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.QualificationTests", "otel-collector.qualification.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
-            ["INTEGRIOS_SECRETS_DIR"] = secretsDirectory,
-            ["INTEGRIOS_SOURCE_VERIFICATION_SECRETS_DIR"] = sourceVerificationSecretsDirectory,
+            ["INTEGRIOS_DESTINATION_SECRETS_DIR"] = secretsDirectory,
+            ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceVerificationSecretsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "qualification_postgres",
             ["INTEGRIOS_BOOTSTRAP_ADMIN_SECRET"] = "qualification-admin-secret",
@@ -202,7 +202,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         string? configurationSharedSecret = null,
         string? configurationOnlySecret = null)
     {
-        environment["INTEGRIOS_SECRETS_PROVIDER"] = provider;
+        environment["INTEGRIOS_DESTINATION_SECRETS_PROVIDER"] = provider;
         environment["INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET"] = configurationSharedSecret ?? string.Empty;
         environment["INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET"] = configurationOnlySecret ?? string.Empty;
 

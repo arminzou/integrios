@@ -114,7 +114,7 @@ public sealed class SecretValidationCliTests
         startInfo.ArgumentList.Add("validate");
         startInfo.ArgumentList.Add("--all");
         startInfo.Environment["ConnectionStrings__Postgres"] = "Host=localhost;Database=integrios;Username=test;Password=test";
-        startInfo.Environment["Integrios__Secrets__Provider"] = "unsupported";
+        startInfo.Environment["Integrios__DestinationSecrets__Provider"] = "unsupported";
 
         using Process process = Process.Start(startInfo)!;
         string standardError = await process.StandardError.ReadToEndAsync();

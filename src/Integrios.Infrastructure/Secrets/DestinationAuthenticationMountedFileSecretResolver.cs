@@ -2,14 +2,16 @@ using Integrios.Application.Secrets;
 
 namespace Integrios.Infrastructure.Secrets;
 
-internal sealed class MountedFileSecretResolver(string root) : IDestinationAuthenticationSecretResolver
+internal sealed class DestinationAuthenticationMountedFileSecretResolver(string root)
+    : IDestinationAuthenticationSecretResolver
 {
     public static string DefaultRoot { get; } = OperatingSystem.IsWindows()
         ? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "Integrios",
-            "secrets")
-        : "/run/secrets/integrios";
+            "secrets",
+            "destination")
+        : "/run/secrets/integrios/destination";
 
     public string ProviderName => "file";
 

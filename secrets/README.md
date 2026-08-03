@@ -1,25 +1,11 @@
-# Local delivery secrets
+# Local directional secrets
 
-This directory is mounted read-only into the Worker for local development when the default
-file-based secret provider is selected. Do not commit secret values.
+This parent directory separates the source-verification values available to Ingress from the
+destination-authentication values available to Worker. Each process receives only its own child
+directory as a read-only mount. Do not commit secret values.
 
-Store each value at:
+- [`source/`](./source/README.md) contains source-verification values for Ingress.
+- [`destination/`](./destination/README.md) contains destination-authentication values for Worker.
 
-```text
-secrets/<tenant-slug>/<reference>
-```
-
-For example, create the `erp_api_key` reference for the `acme` Tenant without adding a trailing
-newline:
-
-```bash
-mkdir -p secrets/acme
-printf %s 'secret-value' > secrets/acme/erp_api_key
-```
-
-File contents are used exactly as written and are not trimmed. Values must be non-empty, contain
-no NUL character, and be no larger than 64 KiB. Header-based authentication also rejects carriage
-returns and line feeds. Secret files and Tenant subdirectories are ignored by Git.
-
-See [`docs/setup.md`](../docs/setup.md#delivery-secrets) for provider configuration, validation,
-and rotation guidance.
+Tenant directories and secret files below either child are ignored by Git. The tracked scaffolding
+keeps Docker from creating the mount roots as root-owned directories on first use.

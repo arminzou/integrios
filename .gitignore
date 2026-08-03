@@ -18,5 +18,13 @@ Thumbs.db
 secrets/*
 !secrets/.gitkeep
 !secrets/README.md
+!secrets/source/
+secrets/source/*
+!secrets/source/.gitkeep
+!secrets/source/README.md
+!secrets/destination/
+secrets/destination/*
+!secrets/destination/.gitkeep
+!secrets/destination/README.md
 *.lscache
 archive

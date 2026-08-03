@@ -3,7 +3,8 @@ using Microsoft.Extensions.Configuration;
 
 namespace Integrios.Infrastructure.Secrets;
 
-internal sealed class ConfigurationSecretResolver(IConfiguration configuration) : IDestinationAuthenticationSecretResolver
+internal sealed class DestinationAuthenticationConfigurationSecretResolver(IConfiguration configuration)
+    : IDestinationAuthenticationSecretResolver
 {
     public string ProviderName => "configuration";
 
@@ -15,7 +16,7 @@ internal sealed class ConfigurationSecretResolver(IConfiguration configuration) 
         cancellationToken.ThrowIfCancellationRequested();
         SecretValueValidator.ValidateScope(tenant, secretReference, ProviderName);
 
-        string? value = configuration[$"Secrets:{tenant.Slug}:{secretReference}"];
+        string? value = configuration[$"DestinationSecrets:{tenant.Slug}:{secretReference}"];
         return Task.FromResult(SecretValueValidator.ValidateText(value, secretReference, ProviderName));
     }
 }

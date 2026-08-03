@@ -249,14 +249,14 @@ jobs:
           - name: ingress
             project: Integrios.Ingress
             build-args: |
-              MOUNT_ROOT=/run/secrets/integrios-source-verification
+              MOUNT_ROOT=/run/secrets/integrios/source
           - name: admin
             project: Integrios.Admin
             build-args: ''
           - name: worker
             project: Integrios.Worker
             build-args: |
-              MOUNT_ROOT=/run/secrets/integrios
+              MOUNT_ROOT=/run/secrets/integrios/destination
               HTTP_PORT=5299
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

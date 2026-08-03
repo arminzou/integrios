@@ -12,7 +12,7 @@ internal sealed class SourceVerificationConfigurationSecretResolver(IConfigurati
     {
         cancellationToken.ThrowIfCancellationRequested();
         SecretValueValidator.ValidateScope(tenant, secretReference, ProviderName);
-        string? value = configuration[$"SourceVerificationSecrets:{tenant.Slug}:{secretReference}"];
+        string? value = configuration[$"SourceSecrets:{tenant.Slug}:{secretReference}"];
         return Task.FromResult(SecretValueValidator.ValidateText(value, secretReference, ProviderName));
     }
 }

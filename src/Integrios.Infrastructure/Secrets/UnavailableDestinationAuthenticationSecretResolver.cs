@@ -2,7 +2,8 @@ using Integrios.Application.Secrets;
 
 namespace Integrios.Infrastructure.Secrets;
 
-internal sealed class UnavailableSecretResolver : IDestinationAuthenticationSecretResolver
+internal sealed class UnavailableDestinationAuthenticationSecretResolver
+    : IDestinationAuthenticationSecretResolver
 {
     public string ProviderName => "unavailable";
 
@@ -10,5 +11,6 @@ internal sealed class UnavailableSecretResolver : IDestinationAuthenticationSecr
         TenantSecretScope tenant,
         string secretReference,
         CancellationToken cancellationToken = default) =>
-        throw new InvalidOperationException("Secret resolution is available only in the Worker process.");
+        throw new InvalidOperationException(
+            "Destination-authentication secret resolution is available only in the Worker process.");
 }

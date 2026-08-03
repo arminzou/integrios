@@ -93,7 +93,7 @@ public static class DependencyInjection
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
         services.AddDestinationAuthenticationServices();
         services.AddTransformEvaluationServices();
-        services.TryAddSingleton<IDestinationAuthenticationSecretResolver, UnavailableSecretResolver>();
+        services.TryAddSingleton<IDestinationAuthenticationSecretResolver, UnavailableDestinationAuthenticationSecretResolver>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
             client.Timeout = deliveryOptions.HttpTimeout;

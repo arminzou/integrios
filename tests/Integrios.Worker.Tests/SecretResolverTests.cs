@@ -18,7 +18,7 @@ public sealed class SecretResolverTests : IDisposable
     {
         WriteSecret("tenant-a", "api_key", "first\n");
         WriteSecret("tenant-b", "api_key", "second");
-        var resolver = new MountedFileSecretResolver(root);
+        var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
 
         string tenantA = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key");
         string tenantB = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key");
@@ -31,7 +31,7 @@ public sealed class SecretResolverTests : IDisposable
     public async Task FileResolver_ReadsEveryLookupSoRotationIsVisible()
     {
         WriteSecret("tenant-a", "api_key", "before");
-        var resolver = new MountedFileSecretResolver(root);
+        var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
         TenantSecretScope tenant = new(Guid.NewGuid(), "tenant-a");
 
         Assert.Equal("before", await resolver.ResolveAsync(tenant, "api_key"));
@@ -47,7 +47,7 @@ public sealed class SecretResolverTests : IDisposable
         File.WriteAllText(target, "linked-secret");
         File.CreateSymbolicLink(Path.Combine(tenantDirectory, "api_key"), target);
 
-        var resolver = new MountedFileSecretResolver(root);
+        var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
 
         Assert.Equal("linked-secret", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
     }
@@ -69,7 +69,7 @@ public sealed class SecretResolverTests : IDisposable
             case "invalid_utf8": File.WriteAllBytes(path, [0xff, 0xfe]); break;
         }
 
-        var resolver = new MountedFileSecretResolver(root);
+        var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
         SecretResolutionException error = await Assert.ThrowsAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
 
@@ -84,7 +84,7 @@ public sealed class SecretResolverTests : IDisposable
     [InlineData("UPPER")]
     public async Task FileResolver_RejectsInvalidReferenceBeforeReading(string reference)
     {
-        var resolver = new MountedFileSecretResolver(root);
+        var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
         SecretResolutionException error = await Assert.ThrowsAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), reference));
         Assert.Equal("invalid", error.SecretReference);
@@ -96,13 +96,26 @@ public sealed class SecretResolverTests : IDisposable
     {
         IConfiguration configuration = Configuration(new Dictionary<string, string?>
         {
-            ["Secrets:tenant-a:api_key"] = "first",
-            ["Secrets:tenant-b:api_key"] = "second"
+            ["DestinationSecrets:tenant-a:api_key"] = "first",
+            ["DestinationSecrets:tenant-b:api_key"] = "second"
         });
-        var resolver = new ConfigurationSecretResolver(configuration);
+        var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
 
         Assert.Equal("first", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
         Assert.Equal("second", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key"));
+    }
+
+    [Fact]
+    public async Task ConfigurationResolver_DoesNotReadTheLegacyUnqualifiedNamespace()
+    {
+        IConfiguration configuration = Configuration(new Dictionary<string, string?>
+        {
+            ["Secrets:tenant-a:api_key"] = "legacy-value"
+        });
+        var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
+
+        await Assert.ThrowsAsync<SecretResolutionException>(
+            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
     }
 
     [Fact]
@@ -111,49 +124,67 @@ public sealed class SecretResolverTests : IDisposable
         WriteSecret("tenant-a", "api_key", "file-value");
         IConfiguration configuration = Configuration(new Dictionary<string, string?>
         {
-            ["Integrios:Secrets:Provider"] = "configuration",
-            ["Integrios:Secrets:FileRoot"] = root
+            ["Integrios:DestinationSecrets:Provider"] = "configuration",
+            ["Integrios:DestinationSecrets:FileRoot"] = root
         });
         var services = new ServiceCollection();
-        services.AddSecretResolutionServices(configuration);
+        services.AddDestinationAuthenticationSecretResolutionServices(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
         IDestinationAuthenticationSecretResolver resolver = provider.GetRequiredService<IDestinationAuthenticationSecretResolver>();
-        Assert.IsType<ConfigurationSecretResolver>(resolver);
+        Assert.IsType<DestinationAuthenticationConfigurationSecretResolver>(resolver);
         await Assert.ThrowsAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
     }
 
     [Fact]
-    public void DependencyInjection_DefaultsToFileAndAcceptsExplicitConfiguration()
+    public void DependencyInjection_UsesFileAndAcceptsExplicitConfiguration()
     {
-        Assert.True(Path.IsPathFullyQualified(MountedFileSecretResolver.DefaultRoot));
+        Assert.True(Path.IsPathFullyQualified(DestinationAuthenticationMountedFileSecretResolver.DefaultRoot));
+        Assert.True(Path.IsPathFullyQualified(SourceVerificationMountedFileSecretResolver.DefaultRoot));
+        Assert.EndsWith(
+            Path.Combine("secrets", "destination"),
+            DestinationAuthenticationMountedFileSecretResolver.DefaultRoot,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith(
+            Path.Combine("secrets", "source"),
+            SourceVerificationMountedFileSecretResolver.DefaultRoot,
+            StringComparison.OrdinalIgnoreCase);
 
         var defaultServices = new ServiceCollection();
-        defaultServices.AddSecretResolutionServices(Configuration([]));
+        defaultServices.AddDestinationAuthenticationSecretResolutionServices(Configuration(
+            new Dictionary<string, string?> { ["Integrios:DestinationSecrets:FileRoot"] = root }));
         using ServiceProvider defaultProvider = defaultServices.BuildServiceProvider();
-        Assert.IsType<MountedFileSecretResolver>(defaultProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
+        Assert.IsType<DestinationAuthenticationMountedFileSecretResolver>(
+            defaultProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
 
         var configurationServices = new ServiceCollection();
-        configurationServices.AddSecretResolutionServices(Configuration(new Dictionary<string, string?>
+        configurationServices.AddDestinationAuthenticationSecretResolutionServices(Configuration(new Dictionary<string, string?>
         {
-            ["Integrios:Secrets:Provider"] = "configuration"
+            ["Integrios:DestinationSecrets:Provider"] = "configuration"
         }));
         using ServiceProvider configurationProvider = configurationServices.BuildServiceProvider();
-        Assert.IsType<ConfigurationSecretResolver>(configurationProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
+        Assert.IsType<DestinationAuthenticationConfigurationSecretResolver>(
+            configurationProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
     }
 
     [Fact]
     public void DependencyInjection_RejectsUnsupportedProviderAndInvalidRoot()
     {
         var services = new ServiceCollection();
-        Assert.Throws<InvalidOperationException>(() => services.AddSecretResolutionServices(
-            Configuration(new Dictionary<string, string?> { ["Integrios:Secrets:Provider"] = "vault" })));
-        Assert.Throws<InvalidOperationException>(() => services.AddSecretResolutionServices(
+        Assert.Throws<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
+            Configuration(new Dictionary<string, string?> { ["Integrios:DestinationSecrets:Provider"] = "vault" })));
+        Assert.Throws<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
             Configuration(new Dictionary<string, string?>
             {
-                ["Integrios:Secrets:Provider"] = "file",
-                ["Integrios:Secrets:FileRoot"] = "relative"
+                ["Integrios:DestinationSecrets:Provider"] = "file",
+                ["Integrios:DestinationSecrets:FileRoot"] = "relative"
+            })));
+        Assert.Throws<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
+            Configuration(new Dictionary<string, string?>
+            {
+                ["Integrios:DestinationSecrets:Provider"] = "file",
+                ["Integrios:DestinationSecrets:FileRoot"] = Path.Combine(root, "missing")
             })));
     }
 
@@ -162,9 +193,9 @@ public sealed class SecretResolverTests : IDisposable
     {
         IConfiguration configuration = Configuration(new Dictionary<string, string?>
         {
-            ["Integrios:SourceVerificationSecrets:Provider"] = "configuration",
-            ["SourceVerificationSecrets:tenant-a:webhook_secret"] = "source-value",
-            ["Secrets:tenant-a:webhook_secret"] = "destination-value",
+            ["Integrios:SourceSecrets:Provider"] = "configuration",
+            ["SourceSecrets:tenant-a:webhook_secret"] = "source-value",
+            ["DestinationSecrets:tenant-a:webhook_secret"] = "destination-value",
         });
         var services = new ServiceCollection();
         services.AddSourceVerificationSecretResolutionServices(configuration);
