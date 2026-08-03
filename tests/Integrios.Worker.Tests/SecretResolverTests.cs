@@ -142,14 +142,22 @@ public sealed class SecretResolverTests : IDisposable
     {
         Assert.True(Path.IsPathFullyQualified(DestinationAuthenticationMountedFileSecretResolver.DefaultRoot));
         Assert.True(Path.IsPathFullyQualified(SourceVerificationMountedFileSecretResolver.DefaultRoot));
-        Assert.EndsWith(
-            Path.Combine("secrets", "destination"),
-            DestinationAuthenticationMountedFileSecretResolver.DefaultRoot,
-            StringComparison.OrdinalIgnoreCase);
-        Assert.EndsWith(
-            Path.Combine("secrets", "source"),
-            SourceVerificationMountedFileSecretResolver.DefaultRoot,
-            StringComparison.OrdinalIgnoreCase);
+        string expectedDestinationRoot = OperatingSystem.IsWindows()
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Integrios",
+                "secrets",
+                "destination")
+            : "/run/secrets/integrios/destination";
+        string expectedSourceRoot = OperatingSystem.IsWindows()
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Integrios",
+                "secrets",
+                "source")
+            : "/run/secrets/integrios/source";
+        Assert.Equal(expectedDestinationRoot, DestinationAuthenticationMountedFileSecretResolver.DefaultRoot);
+        Assert.Equal(expectedSourceRoot, SourceVerificationMountedFileSecretResolver.DefaultRoot);
 
         var defaultServices = new ServiceCollection();
         defaultServices.AddDestinationAuthenticationSecretResolutionServices(Configuration(
