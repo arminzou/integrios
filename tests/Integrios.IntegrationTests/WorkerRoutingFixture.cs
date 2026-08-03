@@ -351,23 +351,33 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     {
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
+        // An Integration key is immutable functional identity, so moving the Connection to a
+        // different Integration is how its effective key changes. Renaming the row in place is
+        // rejected by the database.
         await using var cmd = new NpgsqlCommand(
             """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
+            VALUES (
+                @NewIntegrationId, @IntegrationKey, 1, 1, @IntegrationKey, 'both', 'active', @Manifest::jsonb)
+            ON CONFLICT (key, contract_version) DO NOTHING;
+
             UPDATE connections
             SET config = jsonb_build_object('url', @DestinationUrl),
-                auth = @DestinationAuthJson::jsonb
+                auth = @DestinationAuthJson::jsonb,
+                integration_id = (
+                    SELECT id FROM integrations WHERE key = @IntegrationKey AND contract_version = 1)
             WHERE id = @LedgerConnectionId;
-
-            UPDATE integrations
-            SET key = @IntegrationKey
-            WHERE id = @IntegrationId;
             """,
             connection);
         cmd.Parameters.AddWithValue("DestinationUrl", destinationUrl);
         cmd.Parameters.AddWithValue("DestinationAuthJson", destinationAuthJson ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("LedgerConnectionId", LedgerConnectionId);
         cmd.Parameters.AddWithValue("IntegrationKey", integrationKey);
-        cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
+        cmd.Parameters.AddWithValue("NewIntegrationId", Guid.NewGuid());
+        cmd.Parameters.AddWithValue(
+            "Manifest",
+            TestIntegrationManifest.Create(integrationKey, integrationKey, "both"));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -445,8 +455,10 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             SHA256.HashData(Encoding.UTF8.GetBytes(TenantToken))).ToLowerInvariant();
 
         await using var cmd = new NpgsqlCommand("""
-            INSERT INTO integrations (id, key, name, direction, status)
-            VALUES (@IntegrationId, 'webhook', 'Webhook', 'both', 'active');
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
+            VALUES (
+                @IntegrationId, 'webhook', 1, 1, 'Webhook', 'both', 'active', @Manifest::jsonb);
 
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES
@@ -482,6 +494,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             """, connection);
 
         cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
+        cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create("webhook", "Webhook", "both"));
         cmd.Parameters.AddWithValue("TenantId", TenantId);
         cmd.Parameters.AddWithValue("OrphanTenantId", OrphanTenantId);
         cmd.Parameters.AddWithValue("ApiKeyId", Guid.NewGuid());

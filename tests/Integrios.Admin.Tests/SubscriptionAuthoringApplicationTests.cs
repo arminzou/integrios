@@ -126,10 +126,26 @@ public sealed class SubscriptionAuthoringApplicationTests
         {
             Id = integrationId,
             Key = "test_integration",
+            ContractVersion = 1,
+            ManifestSchemaVersion = 1,
             Name = "Test Integration",
             Direction = direction,
             SupportedAuthSchemes = [],
             Status = OperationalStatus.Active,
+            Manifest = new IntegrationManifest
+            {
+                ManifestSchemaVersion = 1,
+                Key = "test_integration",
+                ContractVersion = 1,
+                Direction = direction.ToString().ToLowerInvariant(),
+                SourceConfigurationSchema = direction is IntegrationDirection.Source or IntegrationDirection.Both
+                    ? Json("""{"type":"object","properties":{},"additionalProperties":true}""")
+                    : null,
+                DestinationConfigurationSchema = direction is IntegrationDirection.Destination or IntegrationDirection.Both
+                    ? Json("""{"type":"object","properties":{},"additionalProperties":true}""")
+                    : null,
+                Presentation = new IntegrationPresentationManifest { Name = "Test Integration" },
+            },
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };

@@ -1,5 +1,5 @@
 using Integrios.Application.Integrations;
-using Integrios.Domain.Common;
+using Integrios.Application.Auth;
 using Integrios.Domain.Integrations;
 using MediatR;
 
@@ -7,7 +7,9 @@ namespace Integrios.Application.Bootstrap;
 
 public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Integration>>;
 
-internal sealed class BootstrapBuiltinsCommandHandler(IBuiltinIntegrationReconciler integrationReconciler)
+internal sealed class BootstrapBuiltinsCommandHandler(
+    IIntegrationManifestStore manifestStore,
+    IAuthSchemeRegistry authenticationSchemes)
     : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Integration>>
 {
     public async Task<IReadOnlyList<Integration>> Handle(BootstrapBuiltinsCommand command, CancellationToken cancellationToken)
@@ -15,21 +17,17 @@ internal sealed class BootstrapBuiltinsCommandHandler(IBuiltinIntegrationReconci
         var reconciled = new List<Integration>();
         foreach (BuiltinIntegration builtin in BuiltinCatalog.All)
         {
-            DateTimeOffset now = DateTimeOffset.UtcNow;
-            var integration = new Integration
-            {
-                Id = builtin.Id,
-                Key = builtin.Key,
-                Name = builtin.Name,
-                Direction = builtin.Direction,
-                SupportedAuthSchemes = builtin.SupportedAuthSchemes,
-                Status = OperationalStatus.Active,
-                Description = builtin.Description,
-                CreatedAt = now,
-                UpdatedAt = now,
-            };
-
-            reconciled.Add(await integrationReconciler.ReconcileAsync(integration, cancellationToken));
+            IntegrationManifestApplyAuthority authority =
+                IntegrationManifestApplyAuthority.Bootstrap(builtin.Id);
+            IntegrationManifest manifest = IntegrationManifestParser.Parse(
+                IntegrationManifestParser.ToJson(builtin.Manifest),
+                authenticationSchemes,
+                authority);
+            IntegrationManifestStoreResult result = await manifestStore.ApplyAsync(
+                manifest,
+                authority,
+                cancellationToken);
+            reconciled.Add(result.Integration);
         }
 
         return reconciled;

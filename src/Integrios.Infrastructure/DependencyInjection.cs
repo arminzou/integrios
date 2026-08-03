@@ -47,7 +47,7 @@ public static class DependencyInjection
         services.AddSingleton<ITenantRepository, TenantRepository>();
         services.AddSingleton<IntegrationRepository>();
         services.AddSingleton<IIntegrationCatalog>(provider => provider.GetRequiredService<IntegrationRepository>());
-        services.AddSingleton<IBuiltinIntegrationReconciler>(provider => provider.GetRequiredService<IntegrationRepository>());
+        services.AddSingleton<IIntegrationManifestStore>(provider => provider.GetRequiredService<IntegrationRepository>());
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
         services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();

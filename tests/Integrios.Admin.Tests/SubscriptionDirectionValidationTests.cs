@@ -228,8 +228,12 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
 
         await using (var integrationCmd = new NpgsqlCommand(
             """
-            INSERT INTO integrations (id, key, name, direction, supported_auth_schemes, status, description, created_at, updated_at)
-            VALUES (@Id, @Key, @Name, @Direction, '[]'::jsonb, 'active', 'test integration', now(), now());
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, description, manifest, created_at, updated_at)
+            VALUES (
+                @Id, @Key, 1, 1, @Name, @Direction,
+                '[]'::jsonb, 'active', 'test integration', @Manifest::jsonb, now(), now());
             """,
             connection))
         {
@@ -237,6 +241,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             integrationCmd.Parameters.AddWithValue("Key", key);
             integrationCmd.Parameters.AddWithValue("Name", key);
             integrationCmd.Parameters.AddWithValue("Direction", direction);
+            integrationCmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(key, key, direction));
             await integrationCmd.ExecuteNonQueryAsync();
         }
 
