@@ -53,13 +53,13 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     public async Task BootstrapBuiltins_IsIdempotent_AndReconcilesPresentationAndStatusDrift()
     {
         IReadOnlyList<Integration> first = await mediator.Send(new BootstrapBuiltinsCommand());
-        Integration webhook = Assert.Single(first, i => i.Key == "webhook");
-        Assert.Equal(BuiltinCatalog.WebhookId, webhook.Id);
-        Assert.Equal(IntegrationDirection.Both, webhook.Direction);
-        Assert.Empty(webhook.SupportedAuthSchemes);
-        JsonElement destinationSchema = webhook.Manifest.DestinationConfigurationSchema!.Value;
-        Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("url").GetProperty("format").GetString());
-        Assert.Equal("url", destinationSchema.GetProperty("required")[0].GetString());
+        Integration http = Assert.Single(first, i => i.Key == "http");
+        Assert.Equal(BuiltinCatalog.HttpId, http.Id);
+        Assert.Equal(IntegrationDirection.Both, http.Direction);
+        Assert.Equal(["api_key_header", "bearer_token"], http.SupportedAuthSchemes.Order(StringComparer.Ordinal));
+        JsonElement destinationSchema = http.Manifest.DestinationConfigurationSchema!.Value;
+        Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString());
+        Assert.Equal("base_uri", destinationSchema.GetProperty("required")[0].GetString());
 
         await ExecuteAsync("""
             UPDATE integrations
@@ -70,15 +70,15 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
                     jsonb_set(manifest, '{presentation,name}', '"Drifted"'),
                     '{presentation,description}',
                     '"Drifted description"')
-            WHERE key = 'webhook' AND contract_version = 1
+            WHERE key = 'http' AND contract_version = 1
             """);
 
         IReadOnlyList<Integration> second = await mediator.Send(new BootstrapBuiltinsCommand());
         Integration reconciled = Assert.Single(second);
-        Assert.Equal("Webhook", reconciled.Name);
+        Assert.Equal("HTTP", reconciled.Name);
         Assert.Equal(OperationalStatus.Active, reconciled.Status);
 
-        Assert.Equal(1, await CountAsync("integrations", "key = 'webhook'"));
+        Assert.Equal(1, await CountAsync("integrations", "key = 'http'"));
     }
 
     [Fact]
@@ -88,14 +88,14 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         await ExecuteAsync("DELETE FROM integrations");
         Guid unexpectedId = Guid.NewGuid();
         string manifest = TestIntegrationManifest.Create(
-            "webhook", "Webhook", "both", description: "Generic webhook source or destination over HTTP.");
+            "http", "HTTP", "both", description: "Generic HTTP source or destination.");
         await ExecuteAsync($$"""
             INSERT INTO integrations (
                 id, key, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, description, manifest)
             VALUES (
-                '{{unexpectedId}}', 'webhook', 1, 1, 'Webhook', 'both', '[]'::jsonb, 'active',
-                'Generic webhook source or destination over HTTP.', '{{manifest}}'::jsonb)
+                '{{unexpectedId}}', 'http', 1, 1, 'HTTP', 'both', '[]'::jsonb, 'active',
+                'Generic HTTP source or destination.', '{{manifest}}'::jsonb)
             """);
 
         var exception = await Assert.ThrowsAsync<IntegrationVersionConflictException>(
@@ -192,7 +192,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
             new BootstrapAdminKeyCommand("global_admin_key", "admin_bootstrap_secret"));
         Assert.True(keyResult.Created);
 
-        Assert.Equal(1, await CountAsync("integrations", "key = 'webhook'"));
+        Assert.Equal(1, await CountAsync("integrations", "key = 'http'"));
 
         string? secretHash = await ScalarAsync<string>(
             "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL");

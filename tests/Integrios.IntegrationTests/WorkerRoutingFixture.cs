@@ -29,7 +29,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public const string LedgerSinkUrl = "http://test-sink/ledger";
     public const string RiskSinkUrl = "http://test-sink/risk";
 
-    private static readonly Guid WebhookIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private static readonly Guid TenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000001");
     private static readonly Guid OrphanTenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000009");
     private static readonly Guid SourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
@@ -363,7 +363,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             ON CONFLICT (key, contract_version) DO NOTHING;
 
             UPDATE connections
-            SET config = jsonb_build_object('url', @DestinationUrl),
+            SET config = jsonb_build_object('base_uri', @DestinationUrl),
                 destination_authentication = @DestinationAuthJson::jsonb,
                 integration_id = (
                     SELECT id FROM integrations WHERE key = @IntegrationKey AND contract_version = 1)
@@ -458,7 +458,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             INSERT INTO integrations (
                 id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
             VALUES (
-                @IntegrationId, 'webhook', 1, 1, 'Webhook', 'both', 'active', @Manifest::jsonb);
+                @IntegrationId, 'http', 1, 1, 'HTTP', 'both', 'active', @Manifest::jsonb);
 
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES
@@ -493,8 +493,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                  @RiskConnectionId, 1, 'active');
             """, connection);
 
-        cmd.Parameters.AddWithValue("IntegrationId", WebhookIntegrationId);
-        cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create("webhook", "Webhook", "both"));
+        cmd.Parameters.AddWithValue("IntegrationId", HttpIntegrationId);
+        cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create("http", "HTTP", "both"));
         cmd.Parameters.AddWithValue("TenantId", TenantId);
         cmd.Parameters.AddWithValue("OrphanTenantId", OrphanTenantId);
         cmd.Parameters.AddWithValue("ApiKeyId", Guid.NewGuid());
@@ -504,8 +504,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("OrphanSourceConnectionId", OrphanSourceConnectionId);
         cmd.Parameters.AddWithValue("LedgerConnectionId", LedgerConnectionId);
         cmd.Parameters.AddWithValue("RiskConnectionId", RiskConnectionId);
-        cmd.Parameters.AddWithValue("LedgerConfig", $"{{\"url\":\"{LedgerSinkUrl}\"}}");
-        cmd.Parameters.AddWithValue("RiskConfig", $"{{\"url\":\"{RiskSinkUrl}\"}}");
+        cmd.Parameters.AddWithValue("LedgerConfig", $"{{\"base_uri\":\"{LedgerSinkUrl}\"}}");
+        cmd.Parameters.AddWithValue("RiskConfig", $"{{\"base_uri\":\"{RiskSinkUrl}\"}}");
         cmd.Parameters.AddWithValue("TopicId", TopicId);
         cmd.Parameters.AddWithValue("LedgerSubscriptionId", Guid.NewGuid());
         cmd.Parameters.AddWithValue("RiskSubscriptionId", Guid.NewGuid());

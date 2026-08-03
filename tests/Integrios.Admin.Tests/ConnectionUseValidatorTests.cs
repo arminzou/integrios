@@ -19,7 +19,7 @@ public sealed class ConnectionUseValidatorTests
             sourceSchemes: [Scheme("github_hmac_sha256", secrets: ["webhook_secret"])],
             destinationSchemes: [Scheme("bearer_token", secrets: ["token"])]);
         Connection connection = ConnectionFor(
-            Json("""{"workspace":"acme","url":"https://example.test/hook"}"""),
+            Json("""{"workspace":"acme","base_uri":"https://example.test/hook"}"""),
             source: Selection("github_hmac_sha256", "webhook_secret", "github_webhook_secret"),
             destination: Selection("bearer_token", "token", "slack_token"));
 
@@ -33,7 +33,7 @@ public sealed class ConnectionUseValidatorTests
         Integration integration = IntegrationFor(
             "destination",
             destinationSchemes: [Scheme("bearer_token", secrets: ["token"])]);
-        Connection connection = ConnectionFor(Json("""{"url":"https://example.test/hook"}"""));
+        Connection connection = ConnectionFor(Json("""{"base_uri":"https://example.test/hook"}"""));
 
         ConnectionRequestValidationException exception = Assert.Throws<ConnectionRequestValidationException>(
             () => ConnectionUseValidator.ValidateDestinationReadiness(connection, integration, AuthenticationSchemes));
@@ -60,7 +60,7 @@ public sealed class ConnectionUseValidatorTests
     {
         Integration integration = IntegrationFor("destination");
         Connection connection = ConnectionFor(
-            Json("""{"url":"https://example.test/hook"}"""),
+            Json("""{"base_uri":"https://example.test/hook"}"""),
             status: OperationalStatus.Disabled);
 
         ConnectionUseValidator.ValidateDestinationReadiness(connection, integration, AuthenticationSchemes);
@@ -71,7 +71,7 @@ public sealed class ConnectionUseValidatorTests
     {
         Integration integration = IntegrationFor("destination");
         Connection connection = ConnectionFor(
-            Json("""{"url":"https://example.test/hook"}"""),
+            Json("""{"base_uri":"https://example.test/hook"}"""),
             status: OperationalStatus.Disabled);
 
         ConnectionRequestValidationException exception = Assert.Throws<ConnectionRequestValidationException>(
@@ -84,13 +84,13 @@ public sealed class ConnectionUseValidatorTests
     public void DestinationUse_RejectsNonHttpBaseUriWithoutInspectingIntegrationKey()
     {
         Integration integration = IntegrationFor("destination");
-        Connection connection = ConnectionFor(Json("""{"url":"ftp://example.test/hook"}"""));
+        Connection connection = ConnectionFor(Json("""{"base_uri":"ftp://example.test/hook"}"""));
 
         ConnectionRequestValidationException exception = Assert.Throws<ConnectionRequestValidationException>(
             () => ConnectionUseValidator.ValidateDestinationReadiness(connection, integration, AuthenticationSchemes));
 
         Assert.Contains("HTTP or HTTPS", exception.Message, StringComparison.Ordinal);
-        Assert.NotEqual("webhook", integration.Key);
+        Assert.NotEqual("http", integration.Key);
     }
 
     private static Integration IntegrationFor(
@@ -100,7 +100,7 @@ public sealed class ConnectionUseValidatorTests
         IReadOnlyList<IntegrationSchemeManifest>? destinationSchemes = null)
     {
         JsonElement emptySchema = Json("""{"type":"object","properties":{},"additionalProperties":true}""");
-        JsonElement destinationSchema = Json("""{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true}""");
+        JsonElement destinationSchema = Json("""{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":true}""");
         var manifest = new IntegrationManifest
         {
             ManifestSchemaVersion = 1,

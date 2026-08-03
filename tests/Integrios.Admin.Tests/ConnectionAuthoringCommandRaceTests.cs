@@ -49,7 +49,7 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
                 fixture.TenantId,
                 connectionId,
                 "race-destination",
-                Json("""{"url":"https://example.test/race"}"""),
+                Json("""{"base_uri":"https://example.test/race"}"""),
                 null,
                 null,
                 null,
@@ -113,7 +113,7 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
                 source_verification, destination_authentication, status)
             VALUES (
                 @ConnectionId, @TenantId, @IntegrationId, 'race-destination',
-                '{"url":"https://example.test/race"}'::jsonb, NULL,
+                '{"base_uri":"https://example.test/race"}'::jsonb, NULL,
                 '{"scheme":"api_key_header","config":{"header_name":"X-Api-Key"},"secret_refs":{"api_key":"race_api_key"}}'::jsonb,
                 'active');
 

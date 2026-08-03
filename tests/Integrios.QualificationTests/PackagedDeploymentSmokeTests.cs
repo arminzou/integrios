@@ -21,7 +21,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         await AssertHealthyAsync(fixture.MockSinkClient);
 
         Assert.Equal(1L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM integrations WHERE key = 'webhook' AND status = 'active'"));
+            "SELECT COUNT(*) FROM integrations WHERE key = 'http' AND status = 'active'"));
         Assert.Equal(1L, await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM admin_keys WHERE revoked_at IS NULL"));
 
@@ -89,7 +89,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             {
                 integrationId = "00000000-0000-0000-0000-000000000001",
                 name = "qualification-source",
-                config = new { url = $"http://mocksink:8080/sink/{sinkName}-source" },
+                config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
                 environment = "production"
             });
         Guid destinationConnectionId = await PostAdminForIdAsync(
@@ -98,7 +98,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             {
                 integrationId = "00000000-0000-0000-0000-000000000001",
                 name = "qualification-destination",
-                config = new { url = $"http://mocksink:8080/sink/{sinkName}" },
+                config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"
             });
         Guid topicId = await PostAdminForIdAsync(
@@ -222,7 +222,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             {
                 integrationId = "00000000-0000-0000-0000-000000000001",
                 name = "loop-isolation-source",
-                config = new { url = $"http://mocksink:8080/sink/{sinkName}-source" },
+                config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
                 environment = "production"
             });
         Guid destinationConnectionId = await PostAdminForIdAsync(
@@ -231,7 +231,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             {
                 integrationId = "00000000-0000-0000-0000-000000000001",
                 name = "loop-isolation-destination",
-                config = new { url = $"http://mocksink:8080/sink/{sinkName}" },
+                config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"
             });
         Guid topicId = await PostAdminForIdAsync(
