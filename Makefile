@@ -18,25 +18,13 @@ down:
 logs:
 	docker compose logs -f
 
-# --- Standalone Flyway targets (local Postgres, no compose) ---
+# --- Database migrations through the Compose network ---
 
 db-migrate:
-	docker run --rm \
-		--network host \
-		-e FLYWAY_USER=$(POSTGRES_USER) \
-		-e FLYWAY_PASSWORD=$(POSTGRES_PASSWORD) \
-		-v ./db/migrations:/flyway/sql \
-		-v ./db/flyway.toml:/flyway/conf/flyway.toml \
-		flyway/flyway migrate
+	docker compose run --rm migrate migrate
 
 db-info:
-	docker run --rm \
-		--network host \
-		-e FLYWAY_USER=$(POSTGRES_USER) \
-		-e FLYWAY_PASSWORD=$(POSTGRES_PASSWORD) \
-		-v ./db/migrations:/flyway/sql \
-		-v ./db/flyway.toml:/flyway/conf/flyway.toml \
-		flyway/flyway info
+	docker compose run --rm migrate info
 
 # --- Admin bootstrap ---
 # DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET are exported above
