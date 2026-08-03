@@ -271,6 +271,28 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
         Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task V29_RejectsIntegrationMissingLegacySchemeArrays()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 28);
+        await ExecuteAsync(database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                '29100000-0000-0000-0000-000000000001', 'v29_drifted', 1, 1, 'V29 Drifted', 'destination',
+                '[]'::jsonb, 'active',
+                '{"manifest_schema_version":1,"key":"v29_drifted","contract_version":1,"direction":"destination","destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_authentication_schemes":[],"presentation":{"name":"V29 Drifted","event_types":[],"authoring_presets":[]}}'::jsonb);
+            """);
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V29__require_explicit_verification_permissions.sql"));
+
+        Assert.Contains("missing the legacy scheme arrays", exception.MessageText, StringComparison.Ordinal);
+    }
+
     private const string V21GraphSql =
         """
         INSERT INTO integrations (id, key, name, direction, status)

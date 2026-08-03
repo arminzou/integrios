@@ -24,7 +24,7 @@ internal static partial class ConnectionSchemeSelectionValidator
         return Validate(
             integration,
             selection,
-            integration.Manifest.SourceVerificationSchemes,
+            integration.Manifest.SourceVerification.Schemes,
             "source verification",
             handler: null);
     }
@@ -43,7 +43,7 @@ internal static partial class ConnectionSchemeSelectionValidator
         return Validate(
             integration,
             selection,
-            integration.Manifest.DestinationAuthenticationSchemes,
+            integration.Manifest.DestinationAuthentication.Schemes,
             "destination authentication",
             handler);
     }

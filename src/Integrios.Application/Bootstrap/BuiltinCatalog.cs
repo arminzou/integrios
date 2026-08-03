@@ -22,8 +22,8 @@ public static class BuiltinCatalog
                 Direction = "both",
                 SourceConfigurationSchema = EmptyObjectSchema(),
                 DestinationConfigurationSchema = WebhookDestinationSchema(),
-                SourceVerificationSchemes = [],
-                DestinationAuthenticationSchemes = [],
+                SourceVerification = new IntegrationSourceVerificationManifest { AllowUnverified = true },
+                DestinationAuthentication = new IntegrationDestinationAuthenticationManifest { AllowUnauthenticated = true },
                 Presentation = new IntegrationPresentationManifest
                 {
                     Name = "Webhook",

@@ -333,6 +333,43 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
             "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'integrations'::regclass AND tgname = 'integrations_reject_functional_update' AND tgenabled = 'O'"));
     }
 
+    [Fact]
+    public async Task V29_WrapsExistingSchemeArraysWithExplicitPermissionFlags()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 28);
+        await ExecuteAsync(database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES
+                ('29000000-0000-0000-0000-000000000001', 'v29_open', 1, 1, 'V29 Open', 'both',
+                 '[]'::jsonb, 'active',
+                 '{"manifest_schema_version":1,"key":"v29_open","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[],"presentation":{"name":"V29 Open","event_types":[],"authoring_presets":[]}}'::jsonb),
+                ('29000000-0000-0000-0000-000000000002', 'v29_authenticated', 1, 1, 'V29 Authenticated', 'destination',
+                 '["bearer_token"]'::jsonb, 'active',
+                 '{"manifest_schema_version":1,"key":"v29_authenticated","contract_version":1,"direction":"destination","destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[{"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}],"presentation":{"name":"V29 Authenticated","event_types":[],"authoring_presets":[]}}'::jsonb);
+            """);
+
+        await fixture.ExecuteMigrationSqlAsync(database, "V29__require_explicit_verification_permissions.sql");
+
+        Assert.True(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT manifest->'source_verification'->>'allow_unverified' = 'true' FROM integrations WHERE key = 'v29_open'"));
+        Assert.True(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT manifest->'destination_authentication'->>'allow_unauthenticated' = 'true' FROM integrations WHERE key = 'v29_open'"));
+
+        Assert.False(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT manifest->'destination_authentication'->>'allow_unauthenticated' = 'true' FROM integrations WHERE key = 'v29_authenticated'"));
+        Assert.Equal("bearer_token", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT manifest->'destination_authentication'->'schemes'->0->>'scheme' FROM integrations WHERE key = 'v29_authenticated'"));
+
+        Assert.Equal(0L, await DatabaseLifecycleFixture.ScalarAsync<long>(database,
+            "SELECT COUNT(*) FROM integrations WHERE manifest ? 'source_verification_schemes' OR manifest ? 'destination_authentication_schemes'"));
+        Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(database,
+            "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'integrations'::regclass AND tgname = 'integrations_reject_functional_update' AND tgenabled = 'O'"));
+    }
+
     private const string V27GraphSql =
         """
         INSERT INTO tenants (id, slug, name, status)

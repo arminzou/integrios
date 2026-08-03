@@ -16,8 +16,8 @@ public static partial class IntegrationManifestParser
         "direction",
         "source_configuration_schema",
         "destination_configuration_schema",
-        "source_verification_schemes",
-        "destination_authentication_schemes",
+        "source_verification",
+        "destination_authentication",
         "built_in_source_adapter",
         "http_outcome",
         "presentation",
@@ -89,13 +89,17 @@ public static partial class IntegrationManifestParser
             throw Invalid("key must use lower snake_case and start with a letter.");
         if (manifest.ContractVersion < 1)
             throw Invalid("contract_version must be a positive integer.");
-        if (!document.TryGetProperty("source_verification_schemes", out JsonElement sourceSchemes)
-            || !document.TryGetProperty("destination_authentication_schemes", out JsonElement destinationSchemes))
+        if (!document.TryGetProperty("source_verification", out JsonElement sourceVerificationDocument)
+            || !document.TryGetProperty("destination_authentication", out JsonElement destinationAuthenticationDocument))
         {
-            throw Invalid("source_verification_schemes and destination_authentication_schemes are required.");
+            throw Invalid("source_verification and destination_authentication are required.");
         }
-        ValidateSchemeDocuments(sourceSchemes, "source_verification_schemes");
-        ValidateSchemeDocuments(destinationSchemes, "destination_authentication_schemes");
+        ValidatePermissionDocument(
+            sourceVerificationDocument, "source_verification", "allow_unverified", out JsonElement sourceSchemes);
+        ValidatePermissionDocument(
+            destinationAuthenticationDocument, "destination_authentication", "allow_unauthenticated", out JsonElement destinationSchemes);
+        ValidateSchemeDocuments(sourceSchemes, "source_verification.schemes");
+        ValidateSchemeDocuments(destinationSchemes, "destination_authentication.schemes");
 
         IntegrationDirection direction = manifest.Direction switch
         {
@@ -111,13 +115,25 @@ public static partial class IntegrationManifestParser
         ValidateDirectionalSchema(document, "source_configuration_schema", sourceCapable);
         ValidateDirectionalSchema(document, "destination_configuration_schema", destinationCapable);
 
-        ValidateSchemes(manifest.SourceVerificationSchemes, "source_verification_schemes");
-        ValidateSchemes(manifest.DestinationAuthenticationSchemes, "destination_authentication_schemes");
+        ValidateSchemes(manifest.SourceVerification.Schemes, "source_verification.schemes");
+        ValidateSchemes(manifest.DestinationAuthentication.Schemes, "destination_authentication.schemes");
         ValidatePlatformSchemes(manifest, authenticationSchemes, authority);
-        if (!sourceCapable && manifest.SourceVerificationSchemes.Count > 0)
-            throw Invalid("source_verification_schemes requires a source-capable direction.");
-        if (!destinationCapable && manifest.DestinationAuthenticationSchemes.Count > 0)
-            throw Invalid("destination_authentication_schemes requires a destination-capable direction.");
+        if (!sourceCapable && manifest.SourceVerification.Schemes.Count > 0)
+            throw Invalid("source_verification.schemes requires a source-capable direction.");
+        if (!destinationCapable && manifest.DestinationAuthentication.Schemes.Count > 0)
+            throw Invalid("destination_authentication.schemes requires a destination-capable direction.");
+        if (sourceCapable
+            && manifest.SourceVerification.Schemes.Count == 0
+            && !manifest.SourceVerification.AllowUnverified)
+        {
+            throw Invalid("source_verification must declare a scheme or set allow_unverified to true.");
+        }
+        if (destinationCapable
+            && manifest.DestinationAuthentication.Schemes.Count == 0
+            && !manifest.DestinationAuthentication.AllowUnauthenticated)
+        {
+            throw Invalid("destination_authentication must declare a scheme or set allow_unauthenticated to true.");
+        }
 
         if (manifest.BuiltInSourceAdapter is not null)
         {
@@ -149,13 +165,13 @@ public static partial class IntegrationManifestParser
         IntegrationManifestApplyAuthority authority)
     {
         if (authority.Mode != IntegrationManifestApplyMode.Bootstrap
-            && manifest.SourceVerificationSchemes.Count > 0)
+            && manifest.SourceVerification.Schemes.Count > 0)
         {
             throw Invalid(
                 "Operator-authored manifests cannot declare source verification schemes without a compiled built-in source adapter.");
         }
 
-        foreach (IntegrationSchemeManifest scheme in manifest.SourceVerificationSchemes)
+        foreach (IntegrationSchemeManifest scheme in manifest.SourceVerification.Schemes)
         {
             if (scheme.Scheme != "github_hmac_sha256"
                 || scheme.RequiredConfig.Count != 0
@@ -165,7 +181,7 @@ public static partial class IntegrationManifestParser
             }
         }
 
-        foreach (IntegrationSchemeManifest scheme in manifest.DestinationAuthenticationSchemes)
+        foreach (IntegrationSchemeManifest scheme in manifest.DestinationAuthentication.Schemes)
         {
             if (!authenticationSchemes.TryGet(scheme.Scheme, out IAuthSchemeHandler handler)
                 || !SetEquals(scheme.RequiredConfig, handler.RequiredConfigFields)
@@ -207,6 +223,24 @@ public static partial class IntegrationManifestParser
             ValidateFieldNames(scheme.RequiredConfig, $"{fieldName}.{scheme.Scheme}.required_config");
             ValidateFieldNames(scheme.RequiredSecretRefs, $"{fieldName}.{scheme.Scheme}.required_secret_refs");
         }
+    }
+
+    private static void ValidatePermissionDocument(
+        JsonElement document,
+        string fieldName,
+        string permissionProperty,
+        out JsonElement schemes)
+    {
+        if (document.ValueKind != JsonValueKind.Object)
+            throw Invalid($"{fieldName} must be an object.");
+        RejectUnknownProperties(document, new HashSet<string>([permissionProperty, "schemes"]), fieldName);
+        if (!document.TryGetProperty(permissionProperty, out JsonElement permission)
+            || permission.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            throw Invalid($"{fieldName}.{permissionProperty} is required and must be a boolean.");
+        }
+        if (!document.TryGetProperty("schemes", out schemes) || schemes.ValueKind != JsonValueKind.Array)
+            throw Invalid($"{fieldName}.schemes is required and must be an array.");
     }
 
     private static void ValidateSchemeDocuments(JsonElement schemes, string fieldName)
@@ -327,8 +361,14 @@ public static partial class IntegrationManifestParser
         DestinationConfigurationSchema = manifest.DestinationConfigurationSchema is JsonElement destinationSchema
             ? CanonicalizeSchema(destinationSchema)
             : null,
-        SourceVerificationSchemes = CanonicalizeSchemes(manifest.SourceVerificationSchemes),
-        DestinationAuthenticationSchemes = CanonicalizeSchemes(manifest.DestinationAuthenticationSchemes),
+        SourceVerification = manifest.SourceVerification with
+        {
+            Schemes = CanonicalizeSchemes(manifest.SourceVerification.Schemes),
+        },
+        DestinationAuthentication = manifest.DestinationAuthentication with
+        {
+            Schemes = CanonicalizeSchemes(manifest.DestinationAuthentication.Schemes),
+        },
         Presentation = manifest.Presentation with
         {
             EventTypes = manifest.Presentation.EventTypes.ToArray(),

@@ -15,7 +15,8 @@ internal static class ConnectionUseValidator
         ValidateConfiguration(connection.Config, integration.Manifest.SourceConfigurationSchema, "source");
         RequireSelection(
             connection.SourceVerification,
-            integration.Manifest.SourceVerificationSchemes,
+            integration.Manifest.SourceVerification.Schemes,
+            integration.Manifest.SourceVerification.AllowUnverified,
             "source verification");
     }
 
@@ -32,7 +33,8 @@ internal static class ConnectionUseValidator
 
         ConnectionSchemeSelection? selection = RequireSelection(
             connection.DestinationAuthentication,
-            integration.Manifest.DestinationAuthenticationSchemes,
+            integration.Manifest.DestinationAuthentication.Schemes,
+            integration.Manifest.DestinationAuthentication.AllowUnauthenticated,
             "destination authentication");
         if (selection is not null && !registry.TryGet(selection.Scheme, out _))
         {
@@ -59,19 +61,20 @@ internal static class ConnectionUseValidator
     private static ConnectionSchemeSelection? RequireSelection(
         ConnectionSchemeSelection? selection,
         IReadOnlyList<IntegrationSchemeManifest> supportedSchemes,
+        bool allowAbsent,
         string use)
     {
-        if (supportedSchemes.Count == 0)
+        if (selection is null)
         {
-            if (selection is not null)
+            if (!allowAbsent)
                 throw new ConnectionRequestValidationException(
-                    $"This Integration does not support a {use} selection.");
+                    $"The Connection requires a {use} selection before it can serve this use.");
             return null;
         }
 
-        if (selection is null)
+        if (supportedSchemes.Count == 0)
             throw new ConnectionRequestValidationException(
-                $"The Connection requires a {use} selection before it can serve this use.");
+                $"This Integration does not support a {use} selection.");
 
         IntegrationSchemeManifest? declaration = supportedSchemes.SingleOrDefault(
             scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));

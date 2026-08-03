@@ -25,11 +25,11 @@ public sealed record IntegrationManifest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? DestinationConfigurationSchema { get; init; }
 
-    [JsonPropertyName("source_verification_schemes")]
-    public IReadOnlyList<IntegrationSchemeManifest> SourceVerificationSchemes { get; init; } = [];
+    [JsonPropertyName("source_verification")]
+    public required IntegrationSourceVerificationManifest SourceVerification { get; init; }
 
-    [JsonPropertyName("destination_authentication_schemes")]
-    public IReadOnlyList<IntegrationSchemeManifest> DestinationAuthenticationSchemes { get; init; } = [];
+    [JsonPropertyName("destination_authentication")]
+    public required IntegrationDestinationAuthenticationManifest DestinationAuthentication { get; init; }
 
     [JsonPropertyName("built_in_source_adapter")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -41,6 +41,24 @@ public sealed record IntegrationManifest
 
     [JsonPropertyName("presentation")]
     public required IntegrationPresentationManifest Presentation { get; init; }
+}
+
+public sealed record IntegrationSourceVerificationManifest
+{
+    [JsonPropertyName("allow_unverified")]
+    public required bool AllowUnverified { get; init; }
+
+    [JsonPropertyName("schemes")]
+    public IReadOnlyList<IntegrationSchemeManifest> Schemes { get; init; } = [];
+}
+
+public sealed record IntegrationDestinationAuthenticationManifest
+{
+    [JsonPropertyName("allow_unauthenticated")]
+    public required bool AllowUnauthenticated { get; init; }
+
+    [JsonPropertyName("schemes")]
+    public IReadOnlyList<IntegrationSchemeManifest> Schemes { get; init; } = [];
 }
 
 public sealed record IntegrationSchemeManifest
