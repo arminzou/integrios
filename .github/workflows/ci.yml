@@ -227,12 +227,20 @@ jobs:
       fail-fast: false
       matrix:
         service:
+          # One Dockerfile builds every image; the host is selected by build argument, so each
+          # published image still contains only its own service. Keep these arguments in step
+          # with the same services in compose.yml.
           - name: ingress
-            dockerfile: docker/Ingress.Dockerfile
+            project: Integrios.Ingress
+            build-args: ''
           - name: admin
-            dockerfile: docker/Admin.Dockerfile
+            project: Integrios.Admin
+            build-args: ''
           - name: worker
-            dockerfile: docker/Worker.Dockerfile
+            project: Integrios.Worker
+            build-args: |
+              MOUNT_ROOT=/run/secrets/integrios
+              HTTP_PORT=5299
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -263,7 +271,10 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
-          file: ${{ matrix.service.dockerfile }}
+          file: docker/Dockerfile
+          build-args: |
+            PROJECT=${{ matrix.service.project }}
+            ${{ matrix.service.build-args }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
