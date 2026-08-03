@@ -251,8 +251,8 @@ make logs    # tail all service logs
 
 ## Migrations
 
-Migrations run automatically during `make up` via the `migrate` service. To run them manually
-against a local Postgres on `localhost:5432`:
+Migrations run automatically during `make up` via the `migrate` service. To run the same pinned
+Flyway service manually through the Compose network (starting its Postgres dependency if needed):
 
 ```bash
 make db-migrate
