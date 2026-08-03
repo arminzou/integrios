@@ -4,6 +4,7 @@ using Integrios.Application.Connections;
 using Integrios.Application.Integrations;
 using Integrios.Application.Topics;
 using Integrios.Domain.Integrations;
+using Integrios.Application.Auth;
 using MediatR;
 
 namespace Integrios.Application.Subscriptions;
@@ -22,7 +23,9 @@ internal sealed class CreateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     ITopicRepository topicRepository,
     IConnectionRepository connectionRepository,
+    IConnectionAuthoringLock authoringLock,
     IIntegrationCatalog integrationCatalog,
+    IAuthSchemeRegistry authSchemeRegistry,
     ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionResponse?>
 {
     public async Task<SubscriptionResponse?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
@@ -35,6 +38,9 @@ internal sealed class CreateSubscriptionCommandHandler(
             return null;
         }
 
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            [command.DestinationConnectionId],
+            cancellationToken);
         await EnsureDestinationConnectionIsAllowed(command.TenantId, command.DestinationConnectionId, cancellationToken);
 
         var subscription = await subscriptionRepository.CreateAsync(
@@ -67,10 +73,13 @@ internal sealed class CreateSubscriptionCommandHandler(
                 "The destination connection references an integration that does not exist.");
         }
 
-        if (integration.Direction == IntegrationDirection.Source)
+        try
         {
-            throw new SubscriptionRequestValidationException(
-                "The destination connection must use an integration whose direction is destination or both.");
+            ConnectionRoleValidator.ValidateDestination(connection, integration, authSchemeRegistry);
+        }
+        catch (ConnectionRequestValidationException exception)
+        {
+            throw new SubscriptionRequestValidationException(exception.Message);
         }
     }
 }

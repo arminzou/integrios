@@ -103,7 +103,7 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                     s.transform_config::text AS TransformConfigJson,
                     c.config->>'url' AS DestinationUrl,
                     i.key AS IntegrationKey,
-                    c.auth::text AS DestinationAuthJson
+                    c.destination_authentication::text AS DestinationAuthJson
                 FROM subscriptions s
                 JOIN connections c ON c.id = s.destination_connection_id
                 JOIN integrations i ON i.id = c.integration_id

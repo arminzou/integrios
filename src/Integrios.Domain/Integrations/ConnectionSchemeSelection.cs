@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Integrios.Domain.Integrations;
 
-public sealed record ConnectionAuth
+public sealed record ConnectionSchemeSelection
 {
     [JsonPropertyName("scheme")]
     public required string Scheme { get; init; }

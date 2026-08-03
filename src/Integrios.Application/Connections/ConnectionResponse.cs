@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.Connections;
@@ -10,7 +11,10 @@ public sealed record ConnectionResponse
     public required Guid IntegrationId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
-    public ConnectionAuthResponse? Auth { get; init; }
+    [JsonPropertyName("source_verification")]
+    public ConnectionSchemeSelectionResponse? SourceVerification { get; init; }
+    [JsonPropertyName("destination_authentication")]
+    public ConnectionSchemeSelectionResponse? DestinationAuthentication { get; init; }
     public required string Status { get; init; }
     public string? Environment { get; init; }
     public string? Description { get; init; }
@@ -24,7 +28,8 @@ public sealed record ConnectionResponse
         IntegrationId = connection.IntegrationId,
         Name = connection.Name,
         Config = connection.Config,
-        Auth = ConnectionAuthResponse.From(connection.Auth),
+        SourceVerification = ConnectionSchemeSelectionResponse.From(connection.SourceVerification),
+        DestinationAuthentication = ConnectionSchemeSelectionResponse.From(connection.DestinationAuthentication),
         Status = connection.Status.ToString().ToLowerInvariant(),
         Environment = connection.Environment,
         Description = connection.Description,
@@ -33,18 +38,18 @@ public sealed record ConnectionResponse
     };
 }
 
-public sealed record ConnectionAuthResponse
+public sealed record ConnectionSchemeSelectionResponse
 {
     public required string Scheme { get; init; }
     public required JsonElement Config { get; init; }
 
-    public static ConnectionAuthResponse? From(ConnectionAuth? auth) =>
-        auth is null
+    public static ConnectionSchemeSelectionResponse? From(ConnectionSchemeSelection? selection) =>
+        selection is null
             ? null
-            : new ConnectionAuthResponse
+            : new ConnectionSchemeSelectionResponse
             {
-                Scheme = auth.Scheme,
-                Config = auth.Config
+                Scheme = selection.Scheme,
+                Config = selection.Config
             };
 }
 

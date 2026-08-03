@@ -248,7 +248,8 @@ jobs:
           # with the same services in compose.yml.
           - name: ingress
             project: Integrios.Ingress
-            build-args: ''
+            build-args: |
+              MOUNT_ROOT=/run/secrets/integrios-source-verification
           - name: admin
             project: Integrios.Admin
             build-args: ''

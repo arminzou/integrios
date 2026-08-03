@@ -84,7 +84,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
-        services.AddSingleton<ISecretResolver>(_ => SecretResolver);
+        services.AddSingleton<IDestinationAuthenticationSecretResolver>(_ => SecretResolver);
         services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
         services.AddLogging();
         mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
@@ -364,7 +364,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
             UPDATE connections
             SET config = jsonb_build_object('url', @DestinationUrl),
-                auth = @DestinationAuthJson::jsonb,
+                destination_authentication = @DestinationAuthJson::jsonb,
                 integration_id = (
                     SELECT id FROM integrations WHERE key = @IntegrationKey AND contract_version = 1)
             WHERE id = @LedgerConnectionId;
@@ -610,7 +610,7 @@ public sealed class FakeDeliveryClient : IDeliveryClient
 
 public sealed record DeliveryCall(string Url, string Payload, IReadOnlyDictionary<string, string> Headers);
 
-public sealed class MutableSecretResolver : ISecretResolver
+public sealed class MutableSecretResolver : IDestinationAuthenticationSecretResolver
 {
     private readonly Dictionary<string, string> values = new(StringComparer.Ordinal);
     public string ProviderName => "test";

@@ -16,7 +16,9 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
 
     private const string ConnectionColumns = """
         id, tenant_id, integration_id, name,
-        config::text AS ConfigJson, auth::text AS AuthJson,
+        config::text AS ConfigJson,
+        source_verification::text AS SourceVerificationJson,
+        destination_authentication::text AS DestinationAuthenticationJson,
         status, environment, description, created_at, updated_at
         """;
 
@@ -120,7 +122,8 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
         public Guid IntegrationId { get; init; }
         public string Name { get; init; } = "";
         public string ConfigJson { get; init; } = "{}";
-        public string? AuthJson { get; init; }
+        public string? SourceVerificationJson { get; init; }
+        public string? DestinationAuthenticationJson { get; init; }
         public string Status { get; init; } = "";
         public string? Environment { get; init; }
         public string? Description { get; init; }
@@ -134,7 +137,12 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
             IntegrationId = IntegrationId,
             Name = Name,
             Config = JsonSerializer.Deserialize<JsonElement>(ConfigJson),
-            Auth = AuthJson is null ? null : JsonSerializer.Deserialize<ConnectionAuth>(AuthJson),
+            SourceVerification = SourceVerificationJson is null
+                ? null
+                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(SourceVerificationJson),
+            DestinationAuthentication = DestinationAuthenticationJson is null
+                ? null
+                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(DestinationAuthenticationJson),
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             Environment = Environment,
             Description = Description,

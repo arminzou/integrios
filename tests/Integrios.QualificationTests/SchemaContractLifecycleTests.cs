@@ -286,4 +286,62 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
         Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
         Assert.Equal(0L, await CountColumnsAsync(database, "integrations", "contract_version"));
     }
+
+    [Fact]
+    public async Task V27_MigratesDestinationAuthenticationAndPreservesRoleDerivedConnections()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 26);
+        await ExecuteAsync(database, V27GraphSql);
+
+        await fixture.ExecuteMigrationSqlAsync(database, "V27__directional_connection_credentials.sql");
+
+        Assert.Equal(0L, await CountColumnsAsync(database, "connections", "auth"));
+        Assert.Equal(2L, await DatabaseLifecycleFixture.ScalarAsync<long>(database,
+            "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'connections' AND column_name IN ('source_verification', 'destination_authentication')"));
+        Assert.Equal("bearer_token", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT destination_authentication->>'scheme' FROM connections WHERE name = 'v27-destination'"));
+        Assert.Equal(1L, await CountAsync(database, "connections",
+            "name = 'v27-both-open' AND source_verification IS NULL AND destination_authentication IS NULL"));
+    }
+
+    private const string V27GraphSql =
+        """
+        INSERT INTO tenants (id, slug, name, status)
+        VALUES ('27000000-0000-0000-0000-000000000001', 'v27-tenant', 'V27 Tenant', 'active');
+
+        INSERT INTO integrations (
+            id, key, contract_version, manifest_schema_version, name, direction,
+            supported_auth_schemes, status, manifest)
+        VALUES
+            ('27000000-0000-0000-0000-000000000002', 'v27_destination', 1, 1,
+             'V27 Destination', 'destination', '["bearer_token"]'::jsonb, 'active',
+             '{"manifest_schema_version":1,"key":"v27_destination","contract_version":1,"direction":"destination","destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[{"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}],"presentation":{"name":"V27 Destination","event_types":[],"authoring_presets":[]}}'::jsonb),
+            ('27000000-0000-0000-0000-000000000003', 'v27_both', 1, 1,
+             'V27 Both', 'both', '[]'::jsonb, 'active',
+             '{"manifest_schema_version":1,"key":"v27_both","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[],"presentation":{"name":"V27 Both","event_types":[],"authoring_presets":[]}}'::jsonb);
+
+        INSERT INTO connections (id, tenant_id, integration_id, name, config, auth, status)
+        VALUES
+            ('27000000-0000-0000-0000-000000000004', '27000000-0000-0000-0000-000000000001',
+             '27000000-0000-0000-0000-000000000002', 'v27-destination', '{}',
+             '{"scheme":"bearer_token","config":{},"secret_refs":{"token":"slack_token"}}', 'active'),
+            ('27000000-0000-0000-0000-000000000005', '27000000-0000-0000-0000-000000000001',
+             '27000000-0000-0000-0000-000000000003', 'v27-both-open', '{}', NULL, 'active');
+
+        INSERT INTO topics (id, tenant_id, name, status)
+        VALUES ('27000000-0000-0000-0000-000000000006', '27000000-0000-0000-0000-000000000001', 'v27-topic', 'active');
+
+        INSERT INTO topic_sources (tenant_id, topic_id, connection_id)
+        VALUES ('27000000-0000-0000-0000-000000000001', '27000000-0000-0000-0000-000000000006', '27000000-0000-0000-0000-000000000005');
+
+        INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, status)
+        VALUES
+            ('27000000-0000-0000-0000-000000000007', '27000000-0000-0000-0000-000000000001',
+             '27000000-0000-0000-0000-000000000006', 'v27-destination-subscription', '{}',
+             '27000000-0000-0000-0000-000000000004', 'active'),
+            ('27000000-0000-0000-0000-000000000008', '27000000-0000-0000-0000-000000000001',
+             '27000000-0000-0000-0000-000000000006', 'v27-both-subscription', '{}',
+             '27000000-0000-0000-0000-000000000005', 'active');
+        """;
 }

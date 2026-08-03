@@ -197,6 +197,43 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
         Assert.Equal(0L, await CountColumnsAsync(database, "subscriptions", "tenant_id"));
     }
 
+    [Theory]
+    [InlineData("both", "used in both source and destination roles")]
+    [InlineData("source", "reinterpret legacy destination authentication as source verification")]
+    [InlineData("unused", "cannot infer a role for unused legacy Connection auth")]
+    [InlineData("malformed_destination", "malformed or unsupported legacy destination authentication")]
+    public async Task V27_AmbiguousLegacyAuthenticationFailsWithRepairGuidance(
+        string use,
+        string expectedMessage)
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 26);
+        await ExecuteAsync(database, V27GuardGraphSql);
+
+        if (use is "source" or "both")
+        {
+            await ExecuteAsync(database,
+                "INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES ('27100000-0000-0000-0000-000000000001', '27100000-0000-0000-0000-000000000004', '27100000-0000-0000-0000-000000000003')");
+        }
+        if (use is "both" or "malformed_destination")
+        {
+            await ExecuteAsync(database,
+                "INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, status) VALUES ('27100000-0000-0000-0000-000000000005', '27100000-0000-0000-0000-000000000001', '27100000-0000-0000-0000-000000000004', 'v27-subscription', '{}', '27100000-0000-0000-0000-000000000003', 'active')");
+        }
+        if (use == "malformed_destination")
+        {
+            await ExecuteAsync(database,
+                "UPDATE connections SET auth = '{\"scheme\":\"bearer_token\",\"secret_refs\":{\"token\":\"guard_token\"}}'::jsonb WHERE id = '27100000-0000-0000-0000-000000000003'");
+        }
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V27__directional_connection_credentials.sql"));
+
+        Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
+        Assert.Equal(1L, await CountColumnsAsync(database, "connections", "auth"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "connections", "source_verification"));
+    }
+
     private const string V21GraphSql =
         """
         INSERT INTO integrations (id, key, name, direction, status)
@@ -239,5 +276,28 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
             '{}',
             'fanned_out',
             now());
+        """;
+
+    private const string V27GuardGraphSql =
+        """
+        INSERT INTO tenants (id, slug, name, status)
+        VALUES ('27100000-0000-0000-0000-000000000001', 'v27-guard', 'V27 Guard', 'active');
+
+        INSERT INTO integrations (
+            id, key, contract_version, manifest_schema_version, name, direction,
+            supported_auth_schemes, status, manifest)
+        VALUES (
+            '27100000-0000-0000-0000-000000000002', 'v27_guard', 1, 1,
+            'V27 Guard', 'both', '["bearer_token"]'::jsonb, 'active',
+            '{"manifest_schema_version":1,"key":"v27_guard","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[{"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}],"presentation":{"name":"V27 Guard","event_types":[],"authoring_presets":[]}}'::jsonb);
+
+        INSERT INTO connections (id, tenant_id, integration_id, name, config, auth, status)
+        VALUES (
+            '27100000-0000-0000-0000-000000000003', '27100000-0000-0000-0000-000000000001',
+            '27100000-0000-0000-0000-000000000002', 'v27-guard', '{}',
+            '{"scheme":"bearer_token","config":{},"secret_refs":{"token":"guard_token"}}', 'active');
+
+        INSERT INTO topics (id, tenant_id, name, status)
+        VALUES ('27100000-0000-0000-0000-000000000004', '27100000-0000-0000-0000-000000000001', 'v27-guard-topic', 'active');
         """;
 }

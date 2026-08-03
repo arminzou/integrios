@@ -11,6 +11,7 @@ internal static class TestIntegrationManifest
         string name,
         string direction,
         IReadOnlyList<string>? authenticationSchemes = null,
+        IReadOnlyList<string>? sourceVerificationSchemes = null,
         string? description = "test integration")
     {
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
@@ -23,7 +24,9 @@ internal static class TestIntegrationManifest
             Direction = direction,
             SourceConfigurationSchema = direction is "source" or "both" ? emptySchema : null,
             DestinationConfigurationSchema = direction is "destination" or "both" ? emptySchema : null,
-            SourceVerificationSchemes = [],
+            SourceVerificationSchemes = (sourceVerificationSchemes ?? [])
+                .Select(SourceVerificationScheme)
+                .ToArray(),
             DestinationAuthenticationSchemes = (authenticationSchemes ?? [])
                 .Select(AuthenticationScheme)
                 .ToArray(),
@@ -48,6 +51,16 @@ internal static class TestIntegrationManifest
         {
             Scheme = scheme,
             RequiredSecretRefs = ["token"],
+        },
+        _ => new IntegrationSchemeManifest { Scheme = scheme },
+    };
+
+    private static IntegrationSchemeManifest SourceVerificationScheme(string scheme) => scheme switch
+    {
+        "github_hmac_sha256" => new IntegrationSchemeManifest
+        {
+            Scheme = scheme,
+            RequiredSecretRefs = ["webhook_secret"],
         },
         _ => new IntegrationSchemeManifest { Scheme = scheme },
     };

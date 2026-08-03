@@ -37,7 +37,7 @@ public sealed class AuthenticatedDispatchTests
                 MakeWorkItem(
                     id: deliveryId,
                     tenantId: tenantId,
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
                         Config = ApiKeyConfig,
@@ -54,7 +54,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(secretResolver);
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(secretResolver);
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
@@ -78,7 +78,7 @@ public sealed class AuthenticatedDispatchTests
             ClaimedItems =
             [
                 MakeWorkItem(
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
                         Config = ApiKeyConfig,
@@ -93,7 +93,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -118,7 +118,7 @@ public sealed class AuthenticatedDispatchTests
             [
                 MakeWorkItem(
                     integrationKey: integrationKey,
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
                         Config = ApiKeyConfig,
@@ -134,7 +134,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -165,7 +165,7 @@ public sealed class AuthenticatedDispatchTests
             ClaimedItems =
             [
                 MakeWorkItem(
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "leaky_scheme",
                         Config = EmptyObject,
@@ -180,7 +180,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new LeakyAuthSchemeHandler()]));
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_token"] = resolvedSecret }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_token"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -206,7 +206,7 @@ public sealed class AuthenticatedDispatchTests
                 MakeWorkItem(
                     id: deliveryId,
                     integrationKey: integrationKey,
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
                         Config = ApiKeyConfig,
@@ -222,7 +222,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -248,7 +248,7 @@ public sealed class AuthenticatedDispatchTests
             [
                 MakeWorkItem(
                     id: deliveryId,
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
                         Config = ApiKeyConfig,
@@ -264,7 +264,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
@@ -290,7 +290,7 @@ public sealed class AuthenticatedDispatchTests
                     attemptId: attemptId,
                     attemptNumber: attemptNumber,
                     eventId: eventId,
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
                         Config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"Integrios-Event-Id"}"""),
@@ -305,7 +305,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "cannot-overwrite" }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "cannot-overwrite" }));
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -325,7 +325,7 @@ public sealed class AuthenticatedDispatchTests
             ClaimedItems =
             [
                 MakeWorkItem(
-                    auth: new ConnectionAuth
+                    auth: new ConnectionSchemeSelection
                     {
                         Scheme = "unsupported",
                         Config = JsonSerializer.Deserialize<JsonElement>("{}"),
@@ -340,7 +340,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -366,7 +366,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<ISecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -400,7 +400,7 @@ public sealed class AuthenticatedDispatchTests
         Guid? destinationConnectionId = null,
         Guid? tenantId = null,
         string integrationKey = "erp_system",
-        ConnectionAuth? auth = null,
+        ConnectionSchemeSelection? auth = null,
         string? authJson = null)
         => new(
             id ?? Guid.NewGuid(),
@@ -480,7 +480,7 @@ public sealed class AuthenticatedDispatchTests
         }
     }
 
-    private sealed class FakeSecretResolver(IReadOnlyDictionary<string, string> values) : ISecretResolver
+    private sealed class FakeSecretResolver(IReadOnlyDictionary<string, string> values) : IDestinationAuthenticationSecretResolver
     {
         public string ProviderName => "test";
         public List<string> RequestedSecretNames { get; } = [];

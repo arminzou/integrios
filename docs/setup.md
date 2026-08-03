@@ -180,6 +180,8 @@ a working local value. Create a `.env` at the repo root only to override.
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
 | `INTEGRIOS_SECRETS_PROVIDER`        | `file`                   | Worker                      | Selects `file` or `configuration` secret resolution |
 | `INTEGRIOS_SECRETS_DIR`             | `./secrets`              | Worker                      | Host directory mounted read-only for the file backend |
+| `INTEGRIOS_SOURCE_VERIFICATION_SECRETS_PROVIDER` | `file` | Ingress | Selects `file` or `configuration` source-verification resolution |
+| `INTEGRIOS_SOURCE_VERIFICATION_SECRETS_DIR` | `./source-verification-secrets` | Ingress | Separate read-only host directory for source-verification values |
 
 ## Delivery secrets
 
@@ -228,6 +230,11 @@ docker compose run --rm worker secrets validate --tenant acme --connection <conn
 Validation prints references and resolution status, never values. Tenant slugs are lowercase DNS
 labels up to 63 characters. References are flat lowercase names up to 63 characters using letters,
 digits, and underscores, and must begin with a letter or digit.
+
+Ingress has a separate source-verification secret capability for built-in source adapters. Its file
+backend uses `/run/secrets/integrios-source-verification/<tenant-slug>/<reference>` and its
+configuration backend reads `SourceVerificationSecrets:<tenant-slug>:<reference>`. Ingress cannot
+resolve the Worker's destination-authentication namespace, and Admin resolves neither namespace.
 
 ## Useful commands
 

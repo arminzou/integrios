@@ -56,12 +56,16 @@ services:
       dockerfile: docker/Dockerfile
       args:
         PROJECT: Integrios.Ingress
+        MOUNT_ROOT: /run/secrets/integrios-source-verification
     image: ${INTEGRIOS_INGRESS_IMAGE:-integrios-ingress:dev}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      Integrios__SourceVerificationSecrets__Provider: ${INTEGRIOS_SOURCE_VERIFICATION_SECRETS_PROVIDER:-file}
+    volumes:
+      - ${INTEGRIOS_SOURCE_VERIFICATION_SECRETS_DIR:-./source-verification-secrets}:/run/secrets/integrios-source-verification:ro
     ports:
       - "${INTEGRIOS_INGRESS_PORT:-5231}:8080"
 

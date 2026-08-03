@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.Connections;
+using Integrios.Application.Topics;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 
@@ -39,7 +40,8 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         Assert.Equal(fixture.TenantId, body!.TenantId);
         Assert.Equal("erp-sink", body.Name);
         Assert.Equal("active", body.Status);
-        Assert.Null(body.Auth);
+        Assert.Null(body.SourceVerification);
+        Assert.Null(body.DestinationAuthentication);
     }
 
     [Theory]
@@ -58,15 +60,15 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
     [InlineData("ftp://example.test/sink")]
     [InlineData("file:///tmp/sink")]
     [InlineData("not a url")]
-    public async Task CreateConnection_InvalidHttpDestination_Returns422(string url)
+    public async Task CreateConnection_UnusedInvalidHttpDestination_IsStoredUntilDestinationUse(string url)
     {
         var response = await PostConnectionAsync($"invalid-{Guid.NewGuid():N}", url);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]
-    public async Task CreateConnection_MissingDestinationUrl_Returns422()
+    public async Task CreateConnection_UnusedMissingDestinationUrl_IsStoredUntilDestinationUse()
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -78,7 +80,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
                 config = new { }
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]
@@ -117,9 +119,9 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<ConnectionResponse>(webJson);
         Assert.NotNull(body);
-        Assert.NotNull(body!.Auth);
-        Assert.Equal("api_key_header", body.Auth!.Scheme);
-        Assert.Equal("X-Api-Key", body.Auth.Config.GetProperty("header_name").GetString());
+        Assert.NotNull(body!.DestinationAuthentication);
+        Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
+        Assert.Equal("X-Api-Key", body.DestinationAuthentication.Config.GetProperty("header_name").GetString());
     }
 
     [Fact]
@@ -278,7 +280,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
     }
 
     [Fact]
-    public async Task CreateConnection_NoAuthRejected_WhenIntegrationIsNotOpen()
+    public async Task CreateConnection_UnusedConnectionMayOmitDestinationAuthentication()
     {
         Guid integrationId = await InsertIntegrationAsync("closed_auth_sink", ["api_key_header"]);
 
@@ -292,7 +294,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
                 config = new { url = "http://localhost:5054/sink/erp-auth" }
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]
@@ -308,7 +310,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             {
                 name = "erp-auth",
                 config = new { url = "http://localhost:5054/sink/erp-auth" },
-                auth = new
+                destination_authentication = new
                 {
                     scheme = "api_key_header",
                     config = new { header_name = "X-Api-Key" },
@@ -319,12 +321,12 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<ConnectionResponse>(webJson);
         Assert.NotNull(body);
-        Assert.NotNull(body!.Auth);
-        Assert.Equal("api_key_header", body.Auth!.Scheme);
+        Assert.NotNull(body!.DestinationAuthentication);
+        Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
     }
 
     [Fact]
-    public async Task UpdateConnection_InvalidHttpDestination_Returns422()
+    public async Task UpdateConnection_UnusedInvalidHttpDestination_IsStoredUntilDestinationUse()
     {
         Guid connectionId = await InsertConnectionAsync(WebhookIntegrationId, "invalid-update");
 
@@ -337,11 +339,11 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
                 config = new { url = "ftp://example.test/sink" }
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
-    public async Task UpdateConnection_DestinationCapableIntegration_OmittedConfigReturns422()
+    public async Task UpdateConnection_UnusedDestinationCapableIntegrationMayOmitConfig()
     {
         Guid connectionId = await InsertConnectionAsync(WebhookIntegrationId, "omitted-config");
 
@@ -353,7 +355,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
                 name = "omitted-config"
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -390,7 +392,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             {
                 name = "erp-auth",
                 config = new { url = "http://localhost:5054/sink/erp-auth" },
-                auth = new
+                destination_authentication = new
                 {
                     scheme = "api_key_header",
                     config = new { header_name = "INTEGRIOS-ATTEMPT-ID" },
@@ -399,6 +401,47 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateConnection_CannotRemoveAuthenticationRequiredByActiveSubscription()
+    {
+        Guid integrationId = await InsertIntegrationAsync("in_use_authentication_sink", ["api_key_header"]);
+        HttpResponseMessage createdResponse = await PostConnectionWithAuthAsync(
+            integrationId,
+            "in-use-authentication",
+            "api_key_header",
+            new { header_name = "X-Api-Key" },
+            new { api_key = "erp_api_key" });
+        ConnectionResponse created = (await createdResponse.Content.ReadFromJsonAsync<ConnectionResponse>(webJson))!;
+
+        HttpResponseMessage topicResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics",
+            new { name = "in-use-authentication-topic" }));
+        TopicResponse topic = (await topicResponse.Content.ReadFromJsonAsync<TopicResponse>(webJson))!;
+        HttpResponseMessage subscriptionResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "in-use-authentication-subscription",
+                matchRules = new { event_type = "test.event" },
+                destinationConnectionId = created.Id,
+                orderIndex = 0
+            }));
+        Assert.Equal(HttpStatusCode.Created, subscriptionResponse.StatusCode);
+
+        HttpResponseMessage updateResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/connections/{created.Id}",
+            new
+            {
+                name = created.Name,
+                config = new { url = "http://localhost:5054/sink/in-use-authentication" }
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, updateResponse.StatusCode);
     }
 
     private Task<HttpResponseMessage> PostConnectionAsync(string name, string url) =>
@@ -426,7 +469,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
                 integrationId,
                 name,
                 config = new { url = "http://localhost:5054/sink/erp-auth" },
-                auth = new
+                destination_authentication = new
                 {
                     scheme,
                     config = authConfig,
@@ -485,8 +528,8 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
 
         await using var cmd = new NpgsqlCommand(
             """
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, auth, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"url":"http://localhost:5054/sink/erp-auth"}'::jsonb, NULL, 'active', NULL, NULL, now(), now());
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
+            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"url":"http://localhost:5054/sink/erp-auth"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
             """,
             connection);
         cmd.Parameters.AddWithValue("Id", id);

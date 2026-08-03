@@ -148,7 +148,7 @@ public sealed class SecretValidationCliTests
         var services = new ServiceCollection();
         services.AddApplicationServices();
         services.AddSingleton<ISecretValidationCatalog>(new FakeSecretValidationCatalog(tenants, connections));
-        services.AddSingleton<ISecretResolver>(new FakeSecretResolver(secrets));
+        services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(secrets));
         return services.BuildServiceProvider();
     }
 
@@ -169,7 +169,7 @@ public sealed class SecretValidationCliTests
         IntegrationId = Guid.NewGuid(),
         Name = "Destination",
         Config = JsonSerializer.Deserialize<JsonElement>("{}"),
-        Auth = new ConnectionAuth
+        DestinationAuthentication = new ConnectionSchemeSelection
         {
             Scheme = "bearer",
             Config = JsonSerializer.Deserialize<JsonElement>("{}"),
@@ -180,7 +180,7 @@ public sealed class SecretValidationCliTests
         UpdatedAt = DateTimeOffset.UtcNow
     };
 
-    private sealed class FakeSecretResolver(IReadOnlyDictionary<string, string> values) : ISecretResolver
+    private sealed class FakeSecretResolver(IReadOnlyDictionary<string, string> values) : IDestinationAuthenticationSecretResolver
     {
         public string ProviderName => "test";
 

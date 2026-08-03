@@ -49,9 +49,10 @@ public static class DependencyInjection
         services.AddSingleton<IIntegrationCatalog>(provider => provider.GetRequiredService<IntegrationRepository>());
         services.AddSingleton<IIntegrationManifestStore>(provider => provider.GetRequiredService<IntegrationRepository>());
         services.AddSingleton<IConnectionRepository, ConnectionRepository>();
+        services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
         services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
-        services.AddConnectionAuthServices();
+        services.AddDestinationAuthenticationServices();
         services.AddTransformEvaluationServices();
 
         return services;
@@ -68,6 +69,7 @@ public static class DependencyInjection
         services.AddSingleton<IEventAcceptance>(provider => provider.GetRequiredService<EventRepository>());
         services.AddSingleton<ITenantEventLookup>(provider => provider.GetRequiredService<EventRepository>());
         services.AddSingleton<IDeadLetterReplay, PostgresDeadLetterReplay>();
+        services.TryAddSingleton<ISourceVerificationSecretResolver, UnavailableSourceVerificationSecretResolver>();
 
         return services;
     }
@@ -89,9 +91,9 @@ public static class DependencyInjection
         services.AddSingleton<ISecretValidationCatalog, PostgresSecretValidationCatalog>();
         services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
-        services.AddConnectionAuthServices();
+        services.AddDestinationAuthenticationServices();
         services.AddTransformEvaluationServices();
-        services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
+        services.TryAddSingleton<IDestinationAuthenticationSecretResolver, UnavailableSecretResolver>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
         {
             client.Timeout = deliveryOptions.HttpTimeout;
@@ -124,7 +126,7 @@ public static class DependencyInjection
         return services;
     }
 
-    private static IServiceCollection AddConnectionAuthServices(this IServiceCollection services)
+    private static IServiceCollection AddDestinationAuthenticationServices(this IServiceCollection services)
     {
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();

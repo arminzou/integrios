@@ -77,6 +77,12 @@ docker compose run --rm worker secrets validate --tenant acme --connection <conn
 The command exits `0` when all selected references resolve, `1` when any do not, and `2` for an
 invalid selection or startup configuration. It prints no resolved values.
 
+Ingress source-verification values use the separate `INTEGRIOS_SOURCE_VERIFICATION_SECRETS_DIR`
+mount at `/run/secrets/integrios-source-verification`. With the configuration backend, Ingress reads
+`SourceVerificationSecrets:<tenant-slug>:<reference>`. Admin resolves no secret values, Ingress has
+no access to destination-authentication values, and Worker has no access to source-verification
+values.
+
 ## Upgrading
 
 Worker scheduling is configured independently for the two durable queues:

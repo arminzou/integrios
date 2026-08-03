@@ -2,7 +2,7 @@ using Integrios.Application.Secrets;
 
 namespace Integrios.Infrastructure.Secrets;
 
-internal sealed class UnavailableSecretResolver : ISecretResolver
+internal sealed class UnavailableSecretResolver : IDestinationAuthenticationSecretResolver
 {
     public string ProviderName => "unavailable";
 

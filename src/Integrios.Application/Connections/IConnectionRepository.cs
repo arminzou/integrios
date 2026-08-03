@@ -8,6 +8,18 @@ public interface IConnectionRepository
     Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken = default);
     Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default);
     Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default);
-    Task<Connection?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement config, ConnectionAuth? auth, string? environment, string? description, CancellationToken cancellationToken = default);
+    Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default);
+    Task<Connection?> UpdateAsync(
+        Guid tenantId,
+        Guid id,
+        string name,
+        JsonElement config,
+        ConnectionSchemeSelection? sourceVerification,
+        ConnectionSchemeSelection? destinationAuthentication,
+        string? environment,
+        string? description,
+        CancellationToken cancellationToken = default);
     Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default);
 }
+
+public sealed record ConnectionUsage(bool Source, bool Destination);

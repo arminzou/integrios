@@ -118,7 +118,7 @@ public sealed class SecretResolverTests : IDisposable
         services.AddSecretResolutionServices(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
-        ISecretResolver resolver = provider.GetRequiredService<ISecretResolver>();
+        IDestinationAuthenticationSecretResolver resolver = provider.GetRequiredService<IDestinationAuthenticationSecretResolver>();
         Assert.IsType<ConfigurationSecretResolver>(resolver);
         await Assert.ThrowsAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
@@ -132,7 +132,7 @@ public sealed class SecretResolverTests : IDisposable
         var defaultServices = new ServiceCollection();
         defaultServices.AddSecretResolutionServices(Configuration([]));
         using ServiceProvider defaultProvider = defaultServices.BuildServiceProvider();
-        Assert.IsType<MountedFileSecretResolver>(defaultProvider.GetRequiredService<ISecretResolver>());
+        Assert.IsType<MountedFileSecretResolver>(defaultProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
 
         var configurationServices = new ServiceCollection();
         configurationServices.AddSecretResolutionServices(Configuration(new Dictionary<string, string?>
@@ -140,7 +140,7 @@ public sealed class SecretResolverTests : IDisposable
             ["Integrios:Secrets:Provider"] = "configuration"
         }));
         using ServiceProvider configurationProvider = configurationServices.BuildServiceProvider();
-        Assert.IsType<ConfigurationSecretResolver>(configurationProvider.GetRequiredService<ISecretResolver>());
+        Assert.IsType<ConfigurationSecretResolver>(configurationProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
     }
 
     [Fact]
@@ -155,6 +155,28 @@ public sealed class SecretResolverTests : IDisposable
                 ["Integrios:Secrets:Provider"] = "file",
                 ["Integrios:Secrets:FileRoot"] = "relative"
             })));
+    }
+
+    [Fact]
+    public async Task SourceVerificationConfiguration_UsesAnIsolatedNamespaceAndPort()
+    {
+        IConfiguration configuration = Configuration(new Dictionary<string, string?>
+        {
+            ["Integrios:SourceVerificationSecrets:Provider"] = "configuration",
+            ["SourceVerificationSecrets:tenant-a:webhook_secret"] = "source-value",
+            ["Secrets:tenant-a:webhook_secret"] = "destination-value",
+        });
+        var services = new ServiceCollection();
+        services.AddSourceVerificationSecretResolutionServices(configuration);
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        ISourceVerificationSecretResolver resolver =
+            provider.GetRequiredService<ISourceVerificationSecretResolver>();
+
+        Assert.Equal("source-value", await resolver.ResolveAsync(
+            new TenantSecretScope(Guid.NewGuid(), "tenant-a"),
+            "webhook_secret"));
+        Assert.Null(provider.GetService<IDestinationAuthenticationSecretResolver>());
     }
 
     public void Dispose() => Directory.Delete(root, recursive: true);
