@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddSingleton<ITopicRepository, TopicRepository>();
         services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
         services.AddDestinationAuthenticationServices();
+        services.AddSourceAdapterServices();
         services.AddTransformEvaluationServices();
 
         return services;
@@ -131,6 +132,13 @@ public static class DependencyInjection
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
+
+        return services;
+    }
+
+    private static IServiceCollection AddSourceAdapterServices(this IServiceCollection services)
+    {
+        services.AddSingleton<ISourceAdapterRegistry, SourceAdapterRegistry>();
 
         return services;
     }

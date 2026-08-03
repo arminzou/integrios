@@ -31,9 +31,9 @@ public sealed record IntegrationManifest
     [JsonPropertyName("destination_authentication")]
     public required IntegrationDestinationAuthenticationManifest DestinationAuthentication { get; init; }
 
-    [JsonPropertyName("built_in_source_adapter")]
+    [JsonPropertyName("source_adapter")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? BuiltInSourceAdapter { get; init; }
+    public IntegrationSourceAdapterManifest? SourceAdapter { get; init; }
 
     [JsonPropertyName("http_outcome")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -59,6 +59,18 @@ public sealed record IntegrationDestinationAuthenticationManifest
 
     [JsonPropertyName("schemes")]
     public IReadOnlyList<IntegrationSchemeManifest> Schemes { get; init; } = [];
+}
+
+public sealed record IntegrationSourceAdapterManifest
+{
+    [JsonPropertyName("key")]
+    public required string Key { get; init; }
+
+    [JsonPropertyName("contract_version")]
+    public required int ContractVersion { get; init; }
+
+    [JsonPropertyName("config")]
+    public JsonElement Config { get; init; }
 }
 
 public sealed record IntegrationSchemeManifest

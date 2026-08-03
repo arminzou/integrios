@@ -16,7 +16,8 @@ public sealed record ApplyIntegrationManifestCommand(
 
 internal sealed class ApplyIntegrationManifestCommandHandler(
     IIntegrationManifestStore store,
-    IAuthSchemeRegistry authenticationSchemes)
+    IAuthSchemeRegistry authenticationSchemes,
+    ISourceAdapterRegistry sourceAdapters)
     : IRequestHandler<ApplyIntegrationManifestCommand, ApplyIntegrationManifestResult>
 {
     public async Task<ApplyIntegrationManifestResult> Handle(
@@ -27,6 +28,7 @@ internal sealed class ApplyIntegrationManifestCommandHandler(
         IntegrationManifest manifest = IntegrationManifestParser.Parse(
             command.Document,
             authenticationSchemes,
+            sourceAdapters,
             authority);
 
         if (!string.Equals(command.Key, manifest.Key, StringComparison.Ordinal)

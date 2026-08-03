@@ -104,16 +104,18 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
     }
 
     [Fact]
-    public async Task Apply_RejectsRouteIdentityMismatchAndBuiltInAdapterSelection()
+    public async Task Apply_RejectsRouteIdentityMismatchAndUnregisteredSourceAdapterSelection()
     {
         HttpResponseMessage identityMismatch = await ApplyAsync(2, Manifest(contractVersion: 1, name: "Example API"));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, identityMismatch.StatusCode);
 
-        JsonElement builtInAdapter = Json(Manifest(1, "Example API").GetRawText().Replace(
+        JsonElement unregisteredAdapter = Json(Manifest(1, "Example API").GetRawText().Replace(
             "\"direction\":\"destination\"",
-            "\"direction\":\"both\",\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true},\"built_in_source_adapter\":\"github\"",
+            "\"direction\":\"both\","
+            + "\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true},"
+            + "\"source_adapter\":{\"key\":\"nonexistent_adapter\",\"contract_version\":1,\"config\":{}}",
             StringComparison.Ordinal));
-        HttpResponseMessage adapterResponse = await ApplyAsync(1, builtInAdapter);
+        HttpResponseMessage adapterResponse = await ApplyAsync(1, unregisteredAdapter);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, adapterResponse.StatusCode);
     }
 

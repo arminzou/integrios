@@ -36,6 +36,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ITenantEventLookup)] = [Host.Ingress],
         [typeof(IIntegrationCatalog)] = [Host.Admin],
         [typeof(IIntegrationManifestStore)] = [Host.Admin],
+        [typeof(ISourceAdapterRegistry)] = [Host.Admin],
         [typeof(ISourceTopicLookup)] = [Host.Ingress],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
@@ -142,6 +143,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ITenantRepository>(provider);
         AssertResolves<IIntegrationCatalog>(provider);
         AssertResolves<IIntegrationManifestStore>(provider);
+        AssertResolves<ISourceAdapterRegistry>(provider);
         AssertResolves<IConnectionRepository>(provider);
         AssertResolves<IConnectionAuthoringLock>(provider);
         AssertResolves<ITopicRepository>(provider);
@@ -184,6 +186,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IIntegrationCatalog>(provider);
         AssertOmits<IIntegrationManifestStore>(provider);
+        AssertOmits<ISourceAdapterRegistry>(provider);
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
@@ -231,6 +234,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IDeadLetterReplay>(provider);
         AssertOmits<IIntegrationCatalog>(provider);
         AssertOmits<IIntegrationManifestStore>(provider);
+        AssertOmits<ISourceAdapterRegistry>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
     }
 
