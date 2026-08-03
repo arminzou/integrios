@@ -187,7 +187,6 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
                 updated_at = now()
             WHERE tenant_id = @TenantId
               AND id = @Id
-              AND status != 'disabled'
             RETURNING {SelectColumns};
             """;
 

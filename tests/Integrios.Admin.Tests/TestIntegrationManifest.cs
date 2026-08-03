@@ -16,6 +16,8 @@ internal static class TestIntegrationManifest
     {
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
+        JsonElement webhookDestinationSchema = JsonSerializer.Deserialize<JsonElement>(
+            """{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true}""");
         var manifest = new IntegrationManifest
         {
             ManifestSchemaVersion = 1,
@@ -23,7 +25,9 @@ internal static class TestIntegrationManifest
             ContractVersion = 1,
             Direction = direction,
             SourceConfigurationSchema = direction is "source" or "both" ? emptySchema : null,
-            DestinationConfigurationSchema = direction is "destination" or "both" ? emptySchema : null,
+            DestinationConfigurationSchema = direction is "destination" or "both"
+                ? key == "webhook" ? webhookDestinationSchema : emptySchema
+                : null,
             SourceVerificationSchemes = (sourceVerificationSchemes ?? [])
                 .Select(SourceVerificationScheme)
                 .ToArray(),

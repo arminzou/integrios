@@ -14,6 +14,7 @@ public sealed class AdminExceptionHandlerTests
     public static TheoryData<Exception, int> ExpectedExceptions => new()
     {
         { new DuplicateResourceException("duplicate"), StatusCodes.Status409Conflict },
+        { new ConnectionAuthoringConflictException(), StatusCodes.Status409Conflict },
         { new TenantRequestValidationException("invalid tenant"), StatusCodes.Status422UnprocessableEntity },
         { new ConnectionRequestValidationException("invalid connection"), StatusCodes.Status422UnprocessableEntity },
         { new TopicRequestValidationException("invalid topic"), StatusCodes.Status422UnprocessableEntity },

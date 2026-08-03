@@ -404,7 +404,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
     }
 
     [Fact]
-    public async Task UpdateConnection_CannotRemoveAuthenticationRequiredByActiveSubscription()
+    public async Task DeactivatedConnection_CanRotateButCannotRemoveAuthenticationRequiredByActiveSubscription()
     {
         Guid integrationId = await InsertIntegrationAsync("in_use_authentication_sink", ["api_key_header"]);
         HttpResponseMessage createdResponse = await PostConnectionWithAuthAsync(
@@ -431,6 +431,27 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
                 orderIndex = 0
             }));
         Assert.Equal(HttpStatusCode.Created, subscriptionResponse.StatusCode);
+
+        HttpResponseMessage deactivateResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/connections/{created.Id}/deactivate"));
+        Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
+
+        HttpResponseMessage rotateResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/connections/{created.Id}",
+            new
+            {
+                name = created.Name,
+                config = new { url = "http://localhost:5054/sink/in-use-authentication" },
+                destination_authentication = new
+                {
+                    scheme = "api_key_header",
+                    config = new { header_name = "X-Rotated-Key" },
+                    secret_refs = new { api_key = "rotated_erp_api_key" }
+                }
+            }));
+        Assert.Equal(HttpStatusCode.OK, rotateResponse.StatusCode);
 
         HttpResponseMessage updateResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,

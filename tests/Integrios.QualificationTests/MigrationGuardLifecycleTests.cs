@@ -198,9 +198,10 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
     }
 
     [Theory]
-    [InlineData("both", "used in both source and destination roles")]
+    [InlineData("both", "used as both a source and a destination")]
     [InlineData("source", "reinterpret legacy destination authentication as source verification")]
-    [InlineData("unused", "cannot infer a role for unused legacy Connection auth")]
+    [InlineData("unused", "cannot infer a use for unused legacy Connection auth")]
+    [InlineData("disabled_destination", "cannot infer a use for unused legacy Connection auth")]
     [InlineData("malformed_destination", "malformed or unsupported legacy destination authentication")]
     public async Task V27_AmbiguousLegacyAuthenticationFailsWithRepairGuidance(
         string use,
@@ -215,10 +216,10 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
             await ExecuteAsync(database,
                 "INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES ('27100000-0000-0000-0000-000000000001', '27100000-0000-0000-0000-000000000004', '27100000-0000-0000-0000-000000000003')");
         }
-        if (use is "both" or "malformed_destination")
+        if (use is "both" or "malformed_destination" or "disabled_destination")
         {
             await ExecuteAsync(database,
-                "INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, status) VALUES ('27100000-0000-0000-0000-000000000005', '27100000-0000-0000-0000-000000000001', '27100000-0000-0000-0000-000000000004', 'v27-subscription', '{}', '27100000-0000-0000-0000-000000000003', 'active')");
+                $"INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, status) VALUES ('27100000-0000-0000-0000-000000000005', '27100000-0000-0000-0000-000000000001', '27100000-0000-0000-0000-000000000004', 'v27-subscription', '{{}}', '27100000-0000-0000-0000-000000000003', '{(use == "disabled_destination" ? "disabled" : "active")}')");
         }
         if (use == "malformed_destination")
         {
@@ -232,6 +233,42 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
         Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
         Assert.Equal(1L, await CountColumnsAsync(database, "connections", "auth"));
         Assert.Equal(0L, await CountColumnsAsync(database, "connections", "source_verification"));
+    }
+
+    [Theory]
+    [InlineData("unexpected_id", "unexpected id")]
+    [InlineData("well_known_id_drift", "well-known webhook Integration id assigned to an unexpected contract")]
+    [InlineData("schema_drift", "destination schema has drifted")]
+    public async Task V28_RejectsUnexpectedWebhookV1Representation(
+        string scenario,
+        string expectedMessage)
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 27);
+        string id = scenario == "unexpected_id"
+            ? "28000000-0000-0000-0000-000000000001"
+            : "00000000-0000-0000-0000-000000000001";
+        string key = scenario == "well_known_id_drift" ? "not_webhook" : "webhook";
+        string destinationSchema = scenario == "schema_drift"
+            ? "{\"type\":\"object\",\"properties\":{\"endpoint\":{\"type\":\"string\"}},\"additionalProperties\":true}"
+            : "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true}";
+        string insert = """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                'WEBHOOK_ID', 'WEBHOOK_KEY', 1, 1, 'Webhook', 'both', '[]'::jsonb, 'active',
+                '{"manifest_schema_version":1,"key":"WEBHOOK_KEY","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":DESTINATION_SCHEMA,"source_verification_schemes":[],"destination_authentication_schemes":[],"presentation":{"name":"Webhook","event_types":[],"authoring_presets":[]}}'::jsonb);
+            """
+            .Replace("WEBHOOK_ID", id, StringComparison.Ordinal)
+            .Replace("WEBHOOK_KEY", key, StringComparison.Ordinal)
+            .Replace("DESTINATION_SCHEMA", destinationSchema, StringComparison.Ordinal);
+        await ExecuteAsync(database, insert);
+
+        Npgsql.PostgresException exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V28__repair_webhook_v1_destination_schema.sql"));
+
+        Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
     }
 
     private const string V21GraphSql =

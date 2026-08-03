@@ -363,7 +363,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
 
         var response = await PostTopicAsync(new
         {
-            name = "invalid-source-role",
+            name = "invalid-source-use",
             sourceConnectionIds = new[] { connectionId }
         });
 
@@ -381,6 +381,23 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var response = await PostTopicAsync(new
         {
             name = "missing-source-verification",
+            sourceConnectionIds = new[] { connectionId }
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateTopic_WithDeactivatedSourceConnection_Returns422()
+    {
+        Guid connectionId = await InsertConnectionAsync(
+            "topic_deactivated_source",
+            "source",
+            status: "disabled");
+
+        var response = await PostTopicAsync(new
+        {
+            name = "deactivated-source",
             sourceConnectionIds = new[] { connectionId }
         });
 
@@ -416,7 +433,8 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     private async Task<Guid> InsertConnectionAsync(
         string key,
         string direction,
-        bool requireSourceVerification = false)
+        bool requireSourceVerification = false,
+        string status = "active")
     {
         Guid integrationId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
@@ -433,7 +451,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             INSERT INTO connections (
                 id, tenant_id, integration_id, name, config,
                 source_verification, destination_authentication, status)
-            VALUES (@ConnectionId, @TenantId, @IntegrationId, @Key, '{}'::jsonb, NULL, NULL, 'active');
+            VALUES (@ConnectionId, @TenantId, @IntegrationId, @Key, '{}'::jsonb, NULL, NULL, @Status);
             """,
             connection);
         command.Parameters.AddWithValue("IntegrationId", integrationId);
@@ -441,6 +459,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         command.Parameters.AddWithValue("TenantId", fixture.TenantId);
         command.Parameters.AddWithValue("Key", key);
         command.Parameters.AddWithValue("Direction", direction);
+        command.Parameters.AddWithValue("Status", status);
         command.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
             key,
             key,

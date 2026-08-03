@@ -288,7 +288,7 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
     }
 
     [Fact]
-    public async Task V27_MigratesDestinationAuthenticationAndPreservesRoleDerivedConnections()
+    public async Task V27_MigratesDestinationAuthenticationAndPreservesActiveUseDerivedConnections()
     {
         QualificationDatabase database = await fixture.CreateDatabaseAsync();
         await fixture.RunFlywayAsync(database, "migrate", target: 26);
@@ -303,6 +303,34 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
             "SELECT destination_authentication->>'scheme' FROM connections WHERE name = 'v27-destination'"));
         Assert.Equal(1L, await CountAsync(database, "connections",
             "name = 'v27-both-open' AND source_verification IS NULL AND destination_authentication IS NULL"));
+    }
+
+    [Fact]
+    public async Task V28_RepairsOnlyTheWebhookV1DestinationSchema()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 27);
+        await ExecuteAsync(database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                '00000000-0000-0000-0000-000000000001', 'webhook', 1, 1, 'Webhook', 'both',
+                '[]'::jsonb, 'active',
+                '{"manifest_schema_version":1,"key":"webhook","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[],"presentation":{"name":"Webhook","event_types":[],"authoring_presets":[]}}'::jsonb);
+            """);
+
+        await fixture.ExecuteMigrationSqlAsync(database, "V28__repair_webhook_v1_destination_schema.sql");
+
+        Assert.Equal(1, await DatabaseLifecycleFixture.ScalarAsync<int>(database,
+            "SELECT contract_version FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal("uri", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT manifest->'destination_configuration_schema'->'properties'->'url'->>'format' FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal("url", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT manifest->'destination_configuration_schema'->'required'->>0 FROM integrations WHERE key = 'webhook'"));
+        Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(database,
+            "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'integrations'::regclass AND tgname = 'integrations_reject_functional_update' AND tgenabled = 'O'"));
     }
 
     private const string V27GraphSql =
@@ -330,10 +358,14 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
              '27000000-0000-0000-0000-000000000003', 'v27-both-open', '{}', NULL, 'active');
 
         INSERT INTO topics (id, tenant_id, name, status)
-        VALUES ('27000000-0000-0000-0000-000000000006', '27000000-0000-0000-0000-000000000001', 'v27-topic', 'active');
+        VALUES
+            ('27000000-0000-0000-0000-000000000006', '27000000-0000-0000-0000-000000000001', 'v27-topic', 'active'),
+            ('27000000-0000-0000-0000-000000000009', '27000000-0000-0000-0000-000000000001', 'v27-disabled-topic', 'disabled');
 
         INSERT INTO topic_sources (tenant_id, topic_id, connection_id)
-        VALUES ('27000000-0000-0000-0000-000000000001', '27000000-0000-0000-0000-000000000006', '27000000-0000-0000-0000-000000000005');
+        VALUES
+            ('27000000-0000-0000-0000-000000000001', '27000000-0000-0000-0000-000000000006', '27000000-0000-0000-0000-000000000005'),
+            ('27000000-0000-0000-0000-000000000001', '27000000-0000-0000-0000-000000000009', '27000000-0000-0000-0000-000000000004');
 
         INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, status)
         VALUES

@@ -75,7 +75,7 @@ internal sealed class CreateSubscriptionCommandHandler(
 
         try
         {
-            ConnectionRoleValidator.ValidateDestination(connection, integration, authSchemeRegistry);
+            ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, authSchemeRegistry);
         }
         catch (ConnectionRequestValidationException exception)
         {

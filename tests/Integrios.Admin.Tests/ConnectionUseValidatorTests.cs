@@ -6,25 +6,25 @@ using Integrios.Infrastructure.Auth;
 
 namespace Integrios.Admin.Tests;
 
-public sealed class ConnectionRoleValidatorTests
+public sealed class ConnectionUseValidatorTests
 {
     private static readonly AuthSchemeRegistry AuthenticationSchemes = new(
         [new BearerTokenAuthSchemeHandler(), new ApiKeyHeaderAuthSchemeHandler()]);
 
     [Fact]
-    public void BothCapableConnection_CanBeReadyForBothRolesWithoutPersistedDirection()
+    public void BothCapableConnection_CanBeReadyForBothUsesWithoutPersistedDirection()
     {
         Integration integration = IntegrationFor(
             "both",
             sourceSchemes: [Scheme("github_hmac_sha256", secrets: ["webhook_secret"])],
             destinationSchemes: [Scheme("bearer_token", secrets: ["token"])]);
         Connection connection = ConnectionFor(
-            Json("""{"workspace":"acme"}"""),
+            Json("""{"workspace":"acme","url":"https://example.test/hook"}"""),
             source: Selection("github_hmac_sha256", "webhook_secret", "github_webhook_secret"),
             destination: Selection("bearer_token", "token", "slack_token"));
 
-        ConnectionRoleValidator.ValidateSource(connection, integration);
-        ConnectionRoleValidator.ValidateDestination(connection, integration, AuthenticationSchemes);
+        ConnectionUseValidator.ValidateSourceReadiness(connection, integration);
+        ConnectionUseValidator.ValidateDestinationReadiness(connection, integration, AuthenticationSchemes);
     }
 
     [Fact]
@@ -33,10 +33,10 @@ public sealed class ConnectionRoleValidatorTests
         Integration integration = IntegrationFor(
             "destination",
             destinationSchemes: [Scheme("bearer_token", secrets: ["token"])]);
-        Connection connection = ConnectionFor(Json("{}"));
+        Connection connection = ConnectionFor(Json("""{"url":"https://example.test/hook"}"""));
 
         ConnectionRequestValidationException exception = Assert.Throws<ConnectionRequestValidationException>(
-            () => ConnectionRoleValidator.ValidateDestination(connection, integration, AuthenticationSchemes));
+            () => ConnectionUseValidator.ValidateDestinationReadiness(connection, integration, AuthenticationSchemes));
 
         Assert.Contains("requires a destination authentication selection", exception.Message, StringComparison.Ordinal);
     }
@@ -50,9 +50,47 @@ public sealed class ConnectionRoleValidatorTests
         Connection connection = ConnectionFor(Json("""{"unexpected":true}"""));
 
         ConnectionRequestValidationException exception = Assert.Throws<ConnectionRequestValidationException>(
-            () => ConnectionRoleValidator.ValidateSource(connection, integration));
+            () => ConnectionUseValidator.ValidateSourceReadiness(connection, integration));
 
         Assert.Contains("field 'repository' is required", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DeactivatedConnection_CanStillBeValidatedForReadiness()
+    {
+        Integration integration = IntegrationFor("destination");
+        Connection connection = ConnectionFor(
+            Json("""{"url":"https://example.test/hook"}"""),
+            status: OperationalStatus.Disabled);
+
+        ConnectionUseValidator.ValidateDestinationReadiness(connection, integration, AuthenticationSchemes);
+    }
+
+    [Fact]
+    public void DeactivatedConnection_CannotEstablishNewUse()
+    {
+        Integration integration = IntegrationFor("destination");
+        Connection connection = ConnectionFor(
+            Json("""{"url":"https://example.test/hook"}"""),
+            status: OperationalStatus.Disabled);
+
+        ConnectionRequestValidationException exception = Assert.Throws<ConnectionRequestValidationException>(
+            () => ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, AuthenticationSchemes));
+
+        Assert.Contains("must be active", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DestinationUse_RejectsNonHttpBaseUriWithoutInspectingIntegrationKey()
+    {
+        Integration integration = IntegrationFor("destination");
+        Connection connection = ConnectionFor(Json("""{"url":"ftp://example.test/hook"}"""));
+
+        ConnectionRequestValidationException exception = Assert.Throws<ConnectionRequestValidationException>(
+            () => ConnectionUseValidator.ValidateDestinationReadiness(connection, integration, AuthenticationSchemes));
+
+        Assert.Contains("HTTP or HTTPS", exception.Message, StringComparison.Ordinal);
+        Assert.NotEqual("webhook", integration.Key);
     }
 
     private static Integration IntegrationFor(
@@ -62,6 +100,7 @@ public sealed class ConnectionRoleValidatorTests
         IReadOnlyList<IntegrationSchemeManifest>? destinationSchemes = null)
     {
         JsonElement emptySchema = Json("""{"type":"object","properties":{},"additionalProperties":true}""");
+        JsonElement destinationSchema = Json("""{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true}""");
         var manifest = new IntegrationManifest
         {
             ManifestSchemaVersion = 1,
@@ -69,7 +108,7 @@ public sealed class ConnectionRoleValidatorTests
             ContractVersion = 1,
             Direction = direction,
             SourceConfigurationSchema = direction is "source" or "both" ? sourceSchema ?? emptySchema : null,
-            DestinationConfigurationSchema = direction is "destination" or "both" ? emptySchema : null,
+            DestinationConfigurationSchema = direction is "destination" or "both" ? destinationSchema : null,
             SourceVerificationSchemes = sourceSchemes ?? [],
             DestinationAuthenticationSchemes = destinationSchemes ?? [],
             Presentation = new IntegrationPresentationManifest { Name = "Provider" },
@@ -93,7 +132,8 @@ public sealed class ConnectionRoleValidatorTests
     private static Connection ConnectionFor(
         JsonElement config,
         ConnectionSchemeSelection? source = null,
-        ConnectionSchemeSelection? destination = null) => new()
+        ConnectionSchemeSelection? destination = null,
+        OperationalStatus status = OperationalStatus.Active) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = Guid.NewGuid(),
@@ -102,7 +142,7 @@ public sealed class ConnectionRoleValidatorTests
         Config = config,
         SourceVerification = source,
         DestinationAuthentication = destination,
-        Status = OperationalStatus.Active,
+        Status = status,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };

@@ -80,7 +80,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
 
         try
         {
-            ConnectionRoleValidator.ValidateDestination(connection, integration, authSchemeRegistry);
+            ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, authSchemeRegistry);
         }
         catch (ConnectionRequestValidationException exception)
         {

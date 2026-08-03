@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.Topics;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Npgsql;
 
 namespace Integrios.Admin.Tests;
 
@@ -65,6 +66,26 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         Assert.Equal(10, body.OrderIndex);
         Assert.Equal("active", body.Status);
         Assert.Equal("payment.created", body.MatchRules.GetProperty("event_type").GetString());
+    }
+
+    [Fact]
+    public async Task CreateSubscription_WithDeactivatedConnection_ReturnsUnprocessableEntity()
+    {
+        var topic = await CreateTopicAsync("deactivated-destination");
+        await SetConnectionStatusAsync(fixture.SourceConnectionId, "disabled");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
+            new
+            {
+                name = "disabled-destination",
+                matchRules = new { event_type = "payment.created" },
+                destinationConnectionId = fixture.SourceConnectionId,
+                orderIndex = 0
+            }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact]
@@ -280,6 +301,18 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         if (body is not null)
             msg.Content = JsonContent.Create(body);
         return msg;
+    }
+
+    private async Task SetConnectionStatusAsync(Guid connectionId, string status)
+    {
+        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "UPDATE connections SET status = @Status WHERE id = @Id",
+            connection);
+        command.Parameters.AddWithValue("Status", status);
+        command.Parameters.AddWithValue("Id", connectionId);
+        await command.ExecuteNonQueryAsync();
     }
 
     [Fact]

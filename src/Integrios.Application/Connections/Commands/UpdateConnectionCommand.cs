@@ -54,9 +54,9 @@ internal sealed class UpdateConnectionCommandHandler(
         };
         ConnectionUsage usage = await repository.GetUsageAsync(command.TenantId, command.Id, cancellationToken);
         if (usage.Source)
-            ConnectionRoleValidator.ValidateSource(proposed, integration);
+            ConnectionUseValidator.ValidateSourceReadiness(proposed, integration);
         if (usage.Destination)
-            ConnectionRoleValidator.ValidateDestination(proposed, integration, authSchemeRegistry);
+            ConnectionUseValidator.ValidateDestinationReadiness(proposed, integration, authSchemeRegistry);
 
         Connection? updated = await repository.UpdateAsync(
             command.TenantId,

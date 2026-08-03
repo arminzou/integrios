@@ -50,7 +50,7 @@ The platform is divided into two planes across three deployable processes.
 - An `Event producer` is an external Operator-controlled application or automation that converts source-system changes into the generic Event contract and calls Integrios with an ApiKey; it is not an Integrios runtime plugin.
 - A `Built-in source adapter` is a platform-supplied HTTP intake module for a popular, stable provider contract; it verifies and normalizes into the same generic Event contract.
 - `Integration` is a deployment-wide, reusable declarative HTTP contract for an external-system class. It may be built in or Operator-authored, is shared across tenants, and carries no tenant data.
-- `Connection` is a Tenant-owned configured instance of one Integration and carries Tenant-specific endpoint configuration, auth selection, and secret references.
+- `Connection` is a Tenant-owned configured instance of one Integration and carries Tenant-specific endpoint configuration plus separate source-verification and destination-authentication selections and secret references. Its current uses are relationship-derived, never persisted on the Connection.
 - `Topic` represents a tenant-owned named stream of events; source connections publish to it.
 - `Subscription` represents an independent consumer of a topic with its own filter, transform, versioned HTTP delivery configuration, destination connection, and DLQ scope. Retry policy is currently fixed platform behavior.
 - `Event` represents an accepted, normalized inbound unit of work, tagged with the topic it was published to.
@@ -63,8 +63,9 @@ This is the authoritative source and destination model:
 
 The bullets below describe the finalized product model. The current code has only the built-in
 `webhook` Integration, fixed JSON `POST` delivery to `Connection.config.url`, and open,
-API-key-header, or bearer-token authentication. Do not document target capabilities as shipped
-until their implementation lands.
+API-key-header, or bearer-token destination authentication. Connections already persist separate
+`source_verification` and `destination_authentication` envelopes. Do not document target
+capabilities as shipped until their implementation lands.
 
 - Generic HTTP Event intake through external Event producers is universal. An Event producer authenticates with an ApiKey, identifies a configured source Connection, and publishes to an allowed Topic.
 - Integrios may ship a small curated set of built-in provider HTTP source adapters when a stable, popular contract materially reduces repeated security or operational work. Every adapter must normalize into the same Event acceptance seam.
@@ -72,6 +73,7 @@ until their implementation lands.
 - HTTP(S) is the only destination protocol in current scope. Do not introduce non-HTTP destination protocols, a runtime plugin system, or provider-specific execution adapters without a new architecture decision.
 - Integrations are narrow declarative definitions: stable identity, presentation metadata, direction, required Connection fields, supported auth schemes, and optional base-URI constraints. They do not own executable request templates, transforms, routing, retries, or workflow steps.
 - The same Integration is reusable across Tenants. Each Tenant supplies its own Connection configuration and secret references.
+- A Connection's use is derived from active relationships: a source association with an active Topic is a source use, and an active Subscription reference is a destination use. Disabled relationships do not contribute a use. Do not call this a Connection role, capability, or direction.
 - A destination Connection owns the absolute base URI and authentication. A Subscription owns HTTP method, relative path or path expression, restricted static headers, and JSON-or-no-body behavior.
 - Initial methods are `POST`, `PUT`, `PATCH`, and `DELETE`. Dynamic headers, arbitrary methods, form/multipart/binary bodies, response-driven workflows, and successful-response persistence are out of scope.
 - OAuth 2.0 client credentials belongs to the reusable Connection auth-scheme set; interactive OAuth flows do not.

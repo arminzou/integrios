@@ -59,7 +59,7 @@ internal sealed class UpdateTopicCommandHandler(
                     "A source Connection references an Integration that does not exist.");
             try
             {
-                ConnectionRoleValidator.ValidateSource(connection, integration);
+                ConnectionUseValidator.ValidateSourceAuthoring(connection, integration);
             }
             catch (ConnectionRequestValidationException exception)
             {

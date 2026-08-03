@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using Dapper;
 using Integrios.Application.Connections;
@@ -10,6 +11,8 @@ namespace Integrios.Infrastructure.Connections;
 internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory connectionFactory)
     : IConnectionAuthoringLock
 {
+    private static readonly TimeSpan AcquisitionBudget = TimeSpan.FromSeconds(2);
+
     public async Task<IAsyncDisposable> AcquireAsync(
         IEnumerable<Guid> connectionIds,
         CancellationToken cancellationToken = default)
@@ -22,18 +25,43 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
         DbConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         var acquiredKeys = new List<long>(keys.Length);
 
+        var elapsed = Stopwatch.StartNew();
         try
         {
-            foreach (long key in keys)
+            while (true)
             {
-                await connection.ExecuteAsync(new CommandDefinition(
-                    "SELECT pg_advisory_lock(@Key)",
-                    new { Key = key },
-                    cancellationToken: cancellationToken));
-                acquiredKeys.Add(key);
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                bool acquiredAll = true;
+                foreach (long key in keys)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    bool acquired = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+                        "SELECT pg_try_advisory_lock(@Key)",
+                        new { Key = key },
+                        cancellationToken: cancellationToken));
+                    if (!acquired)
+                    {
+                        acquiredAll = false;
+                        break;
+                    }
 
-            return new ConnectionAuthoringLease(connection, acquiredKeys);
+                    acquiredKeys.Add(key);
+                }
+
+                if (acquiredAll)
+                    return new ConnectionAuthoringLease(connection, acquiredKeys);
+
+                await UnlockAsync(connection, acquiredKeys);
+                acquiredKeys.Clear();
+                TimeSpan remaining = AcquisitionBudget - elapsed.Elapsed;
+                if (remaining <= TimeSpan.Zero)
+                    throw new ConnectionAuthoringConflictException();
+
+                TimeSpan delay = TimeSpan.FromMilliseconds(Random.Shared.Next(20, 76));
+                if (delay > remaining)
+                    delay = remaining;
+                await Task.Delay(delay, cancellationToken);
+            }
         }
         catch
         {
