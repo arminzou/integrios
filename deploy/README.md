@@ -10,7 +10,8 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 
 ```bash
 cp .env.example .env
-# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_VERSION, and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
+# edit .env: set POSTGRES_PASSWORD and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
+# The image version needs no edit: compose.yml defaults to the release this checkout ships.
 mkdir -p secrets
 docker compose up -d
 ```
@@ -93,7 +94,10 @@ If you previously customized
 `Integrios:Worker:DeliveryLoop:IdlePollInterval`. The old key is no longer read. The new fanout and
 delivery loop defaults are both two seconds, so deployments that used the old default need no change.
 
-Bump `INTEGRIOS_VERSION` in `.env`, then:
+Pull the `deploy/` directory for the release you are moving to — its `compose.yml` already
+defaults to that version — or set `INTEGRIOS_VERSION` in `.env` to pin one explicitly. All three
+services resolve from that single value, so they always upgrade as a matched set. Never point it
+at a mutable tag such as `latest`, which tracks unreleased commits on the default branch. Then:
 
 ```bash
 docker compose pull

@@ -90,6 +90,22 @@ jobs:
             echo 'filter=Tier=database|Tier=smoke' >> "$GITHUB_OUTPUT"
           fi
 
+      # The deployment reference defaults to a version so a fresh clone deploys without editing
+      # anything. That default is only trustworthy if it cannot fall behind, so a release may not
+      # be cut while it disagrees with the tag being published. Bump it, commit, then tag.
+      - name: Check the deployment default matches the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          defaults=$(grep -oP 'INTEGRIOS_VERSION:-\K[^}]+' deploy/compose.yml | sort -u)
+          if [[ "$(wc -l <<<"$defaults")" -ne 1 || "$defaults" != "$tag" ]]; then
+            echo "deploy/compose.yml defaults to [${defaults//$'\n'/, }] but this release is ${tag}." >&2
+            echo "Update the default in deploy/compose.yml, commit, and re-tag." >&2
+            exit 1
+          fi
+          echo "deployment default ${defaults} matches release ${tag}"
+
       - name: Record release inputs
         if: steps.tier.outputs.name == 'release'
         shell: bash
