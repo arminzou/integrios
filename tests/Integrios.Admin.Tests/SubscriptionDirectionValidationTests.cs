@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.Topics;
+using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 
@@ -198,7 +198,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
         Assert.Equal("fk_subscriptions_destination_connection_tenant", exception.ConstraintName);
     }
 
-    private async Task<TopicResponse> CreateTopicAsync(string name)
+    private async Task<AdminTopicResponse> CreateTopicAsync(string name)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -206,7 +206,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new { name }));
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<TopicResponse>(WebJson))!;
+        return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson))!;
     }
 
     private async Task<SubscriptionResponse> CreateSubscriptionAsync(Guid topicId, string name, string eventType)

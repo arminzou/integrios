@@ -12,16 +12,16 @@ public sealed record UpdateTopicCommand(
     string? Name,
     string? Description,
     IReadOnlyList<Guid>? SourceConnectionIds)
-    : IRequest<TopicResponse?>;
+    : IRequest<TopicDto?>;
 
 internal sealed class UpdateTopicCommandHandler(
     ITopicRepository topicRepository,
     IConnectionRepository connectionRepository,
     IConnectionAuthoringLock authoringLock,
     IIntegrationCatalog integrationCatalog)
-    : IRequestHandler<UpdateTopicCommand, TopicResponse?>
+    : IRequestHandler<UpdateTopicCommand, TopicDto?>
 {
-    public async Task<TopicResponse?> Handle(UpdateTopicCommand command, CancellationToken cancellationToken)
+    public async Task<TopicDto?> Handle(UpdateTopicCommand command, CancellationToken cancellationToken)
     {
         var existing = await topicRepository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
         if (existing is null)
@@ -41,7 +41,7 @@ internal sealed class UpdateTopicCommandHandler(
             command.SourceConnectionIds,
             cancellationToken);
 
-        return topic is null ? null : TopicResponse.From(topic);
+        return topic is null ? null : TopicDto.From(topic);
     }
 
     private async Task ValidateSourceConnections(

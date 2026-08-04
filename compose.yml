@@ -81,6 +81,8 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      DOTNET_ENVIRONMENT: Development
+      Integrios__PublicIngressBaseUri: ${INTEGRIOS_PUBLIC_INGRESS_BASE_URI:-http://localhost:5231}
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
 

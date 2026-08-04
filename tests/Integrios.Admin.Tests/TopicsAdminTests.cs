@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.Topics;
+using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 
@@ -47,14 +47,14 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
 
-        var body = await response.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal(fixture.TenantId, body.TenantId);
         Assert.Equal("payments", body.Name);
         Assert.Equal("Payment events stream", body.Description);
         Assert.Equal("active", body.Status);
         Assert.NotEqual(default, body.Id);
-        Assert.Empty(body.SourceConnectionIds);
+        Assert.Empty(body.Sources);
     }
 
     [Fact]
@@ -68,10 +68,156 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(body);
-        Assert.Single(body.SourceConnectionIds);
-        Assert.Equal(fixture.SourceConnectionId, body.SourceConnectionIds[0]);
+        var source = Assert.Single(body.Sources);
+        Assert.Equal(fixture.SourceConnectionId, source.ConnectionId);
+        Assert.Null(source.Endpoint);
+    }
+
+    [Fact]
+    public async Task AdapterBackedSourceEndpoint_IsStableInactivatedAndNeverDerivedFromRequestHeaders()
+    {
+        Guid sourceConnectionId = await InsertAdapterBackedSourceConnectionAsync();
+        var createRequest = AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics",
+            new { name = "github-events", sourceConnectionIds = new[] { sourceConnectionId } });
+        createRequest.Headers.Host = "attacker.example";
+        createRequest.Headers.TryAddWithoutValidation("Forwarded", "host=forwarded.example;proto=http");
+        createRequest.Headers.TryAddWithoutValidation("X-Forwarded-Host", "forwarded.example");
+        createRequest.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "http");
+
+        var createdResponse = await client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        var created = await createdResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(created);
+        AdminTopicSourceResponse initialSource = Assert.Single(created.Sources);
+        Assert.NotNull(initialSource.Endpoint);
+        AdminSourceEndpointResponse initial = initialSource.Endpoint;
+        Assert.Equal($"/webhooks/github/{initial.Id}", initial.CallbackPath);
+        Assert.Equal(
+            $"https://ingress.example.test/proxy/integrios/webhooks/github/{initial.Id}",
+            initial.CallbackUrl);
+
+        var unchangedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new
+            {
+                name = created.Name,
+                description = "unchanged association",
+                sourceConnectionIds = new[] { sourceConnectionId }
+            }));
+        Assert.Equal(HttpStatusCode.OK, unchangedResponse.StatusCode);
+        var unchanged = await unchangedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(unchanged);
+        Assert.Equal(initial.Id, Assert.Single(unchanged.Sources).Endpoint!.Id);
+
+        Guid eventId = Guid.NewGuid();
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var insertEvent = new NpgsqlCommand(
+                """
+                INSERT INTO events (
+                    id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
+                VALUES (
+                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', '{}'::jsonb, 'accepted')
+                """,
+                connection);
+            insertEvent.Parameters.AddWithValue("Id", eventId);
+            insertEvent.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            insertEvent.Parameters.AddWithValue("TopicId", created.Id);
+            insertEvent.Parameters.AddWithValue("SourceConnectionId", sourceConnectionId);
+            await insertEvent.ExecuteNonQueryAsync();
+        }
+
+        var removedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { name = created.Name, sourceConnectionIds = Array.Empty<Guid>() }));
+        Assert.Equal(HttpStatusCode.OK, removedResponse.StatusCode);
+        var removed = await removedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(removed);
+        Assert.Empty(removed.Sources);
+
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var inactivated = new NpgsqlCommand(
+                """
+                SELECT
+                    (SELECT status FROM topic_sources
+                     WHERE tenant_id = @TenantId AND topic_id = @TopicId AND connection_id = @ConnectionId),
+                    (SELECT status FROM source_endpoints WHERE id = @EndpointId),
+                    EXISTS (SELECT 1 FROM events WHERE id = @EventId)
+                """,
+                connection);
+            inactivated.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            inactivated.Parameters.AddWithValue("TopicId", created.Id);
+            inactivated.Parameters.AddWithValue("ConnectionId", sourceConnectionId);
+            inactivated.Parameters.AddWithValue("EndpointId", initial.Id);
+            inactivated.Parameters.AddWithValue("EventId", eventId);
+            await using var reader = await inactivated.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("inactive", reader.GetString(0));
+            Assert.Equal("inactive", reader.GetString(1));
+            Assert.True(reader.GetBoolean(2));
+        }
+
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var insertInactiveEvent = new NpgsqlCommand(
+                """
+                INSERT INTO events (
+                    id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
+                VALUES (
+                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', '{}'::jsonb, 'accepted')
+                """,
+                connection);
+            insertInactiveEvent.Parameters.AddWithValue("Id", Guid.NewGuid());
+            insertInactiveEvent.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            insertInactiveEvent.Parameters.AddWithValue("TopicId", created.Id);
+            insertInactiveEvent.Parameters.AddWithValue("SourceConnectionId", sourceConnectionId);
+            PostgresException exception = await Assert.ThrowsAsync<PostgresException>(
+                () => insertInactiveEvent.ExecuteNonQueryAsync());
+            Assert.Equal("fk_events_topic_source_active", exception.ConstraintName);
+        }
+
+        var recreatedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { name = created.Name, sourceConnectionIds = new[] { sourceConnectionId } }));
+        Assert.Equal(HttpStatusCode.OK, recreatedResponse.StatusCode);
+        var recreated = await recreatedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(recreated);
+        AdminSourceEndpointResponse replacement = Assert.Single(recreated.Sources).Endpoint!;
+        Assert.NotEqual(initial.Id, replacement.Id);
+
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var endpointHistory = new NpgsqlCommand(
+                """
+                SELECT status
+                FROM source_endpoints
+                WHERE tenant_id = @TenantId
+                  AND topic_id = @TopicId
+                  AND connection_id = @ConnectionId
+                ORDER BY status
+                """,
+                connection);
+            endpointHistory.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            endpointHistory.Parameters.AddWithValue("TopicId", created.Id);
+            endpointHistory.Parameters.AddWithValue("ConnectionId", sourceConnectionId);
+            await using var reader = await endpointHistory.ExecuteReaderAsync();
+            var statuses = new List<string>();
+            while (await reader.ReadAsync())
+                statuses.Add(reader.GetString(0));
+            Assert.Equal(["active", "inactive"], statuses);
+        }
     }
 
     [Fact]
@@ -81,18 +227,67 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         {
             name = "inventory",
             sourceConnectionIds = new[] { fixture.SourceConnectionId }
-        })).Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
 
         Assert.NotNull(created);
 
         var get = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-        var body = await get.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal(created.Id, body.Id);
-        Assert.Single(body.SourceConnectionIds);
-        Assert.Equal(fixture.SourceConnectionId, body.SourceConnectionIds[0]);
+        var source = Assert.Single(body.Sources);
+        Assert.Equal(fixture.SourceConnectionId, source.ConnectionId);
+    }
+
+    [Fact]
+    public async Task GetTopicById_ReturnsTopicWithoutSources()
+    {
+        var created = await (await PostTopicAsync(new { name = "no-sources" }))
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(created);
+
+        var get = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
+
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Empty(body.Sources);
+    }
+
+    [Fact]
+    public async Task GetTopicById_ReturnsMixedSourcesWithCorrelatedEndpoints()
+    {
+        Guid adapterBackedConnectionId = await InsertAdapterBackedSourceConnectionAsync();
+        var created = await (await PostTopicAsync(new
+        {
+            name = "mixed-sources",
+            sourceConnectionIds = new[] { fixture.SourceConnectionId, adapterBackedConnectionId }
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(created);
+
+        var get = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
+
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Sources.Count);
+
+        AdminTopicSourceResponse genericSource = Assert.Single(
+            body.Sources,
+            source => source.ConnectionId == fixture.SourceConnectionId);
+        Assert.Null(genericSource.Endpoint);
+
+        AdminTopicSourceResponse adapterBackedSource = Assert.Single(
+            body.Sources,
+            source => source.ConnectionId == adapterBackedConnectionId);
+        Assert.NotNull(adapterBackedSource.Endpoint);
+        Assert.StartsWith("/webhooks/github/", adapterBackedSource.Endpoint.CallbackPath, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -112,7 +307,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var page1 = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics?limit=2"));
         Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
 
-        var body1 = await page1.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        var body1 = await page1.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
         Assert.NotNull(body1);
         Assert.Equal(2, body1.Items.Count);
         Assert.NotNull(body1.NextCursor);
@@ -120,7 +315,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var page2 = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics?limit=2&after={Uri.EscapeDataString(body1.NextCursor!)}"));
         Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
 
-        var body2 = await page2.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        var body2 = await page2.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
         Assert.NotNull(body2);
         Assert.Single(body2.Items);
         Assert.Null(body2.NextCursor);
@@ -129,6 +324,82 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         Assert.Contains("topic-a", allNames);
         Assert.Contains("topic-b", allNames);
         Assert.Contains("topic-c", allNames);
+    }
+
+    [Fact]
+    public async Task ListTopics_ReturnsMixedSourcesWithCorrelatedEndpoints()
+    {
+        Guid adapterBackedConnectionId = await InsertAdapterBackedSourceConnectionAsync();
+        await PostTopicAsync(new
+        {
+            name = "mixed-list-sources",
+            sourceConnectionIds = new[] { fixture.SourceConnectionId, adapterBackedConnectionId }
+        });
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        Assert.NotNull(body);
+        AdminTopicResponse topic = Assert.Single(body.Items, item => item.Name == "mixed-list-sources");
+        Assert.Equal(2, topic.Sources.Count);
+
+        AdminTopicSourceResponse genericSource = Assert.Single(
+            topic.Sources,
+            source => source.ConnectionId == fixture.SourceConnectionId);
+        Assert.Null(genericSource.Endpoint);
+
+        AdminTopicSourceResponse adapterBackedSource = Assert.Single(
+            topic.Sources,
+            source => source.ConnectionId == adapterBackedConnectionId);
+        Assert.NotNull(adapterBackedSource.Endpoint);
+        Assert.StartsWith("/webhooks/github/", adapterBackedSource.Endpoint.CallbackPath, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TopicSources_HaveSameDeterministicOrderAcrossCreateGetAndList()
+    {
+        var lowerConnectionId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var higherConnectionId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        await InsertConnectionAsync("ordered_source_lower", "source", connectionId: lowerConnectionId);
+        await InsertConnectionAsync("ordered_source_higher", "source", connectionId: higherConnectionId);
+
+        Guid[] expectedOrder = [lowerConnectionId, higherConnectionId];
+        var created = await (await PostTopicAsync(new
+        {
+            name = "ordered-sources",
+            sourceConnectionIds = expectedOrder.Reverse().ToArray()
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(created);
+        Assert.Equal(expectedOrder, created.Sources.Select(source => source.ConnectionId));
+
+        var getResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var fetched = await getResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(fetched);
+        Assert.Equal(expectedOrder, fetched.Sources.Select(source => source.ConnectionId));
+
+        var updateResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { name = created.Name, description = "order unchanged" }));
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(updated);
+        Assert.Equal(expectedOrder, updated.Sources.Select(source => source.ConnectionId));
+
+        var listResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/topics"));
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var page = await listResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        Assert.NotNull(page);
+        AdminTopicResponse listed = Assert.Single(page.Items, item => item.Id == created.Id);
+        Assert.Equal(expectedOrder, listed.Sources.Select(source => source.ConnectionId));
     }
 
     [Fact]
@@ -142,7 +413,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics?limit=2"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal(2, body.Items.Count);
         Assert.Null(body.NextCursor);
@@ -164,8 +435,8 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         Assert.Equal(HttpStatusCode.OK, defaultedResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, explicitResponse.StatusCode);
 
-        var defaulted = await defaultedResponse.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
-        var explicitPage = await explicitResponse.Content.ReadFromJsonAsync<TopicListResponse>(WebJson);
+        var defaulted = await defaultedResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        var explicitPage = await explicitResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
         Assert.NotNull(defaulted);
         Assert.NotNull(explicitPage);
         Assert.Equal(2, defaulted.Items.Count);
@@ -177,7 +448,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task UpdateTopic_UpdatesDescriptionAndSources_WithoutChangingName()
     {
         var created = await (await PostTopicAsync(new { name = "old-name" }))
-            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -191,12 +462,12 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             }));
         Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
 
-        var body = await patch.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var body = await patch.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal("old-name", body.Name);
         Assert.Equal("updated", body.Description);
-        Assert.Single(body.SourceConnectionIds);
-        Assert.Equal(fixture.SourceConnectionId, body.SourceConnectionIds[0]);
+        var source = Assert.Single(body.Sources);
+        Assert.Equal(fixture.SourceConnectionId, source.ConnectionId);
     }
 
     [Fact]
@@ -207,7 +478,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             name = "atomic-update",
             description = "original",
             sourceConnectionIds = new[] { fixture.SourceConnectionId }
-        })).Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -225,17 +496,17 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var get = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
-        var body = await get.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal("original", body.Description);
-        Assert.Equal([fixture.SourceConnectionId], body.SourceConnectionIds);
+        Assert.Equal([fixture.SourceConnectionId], body.Sources.Select(s => s.ConnectionId));
     }
 
     [Fact]
     public async Task UpdateTopic_ChangingName_Returns422AndPreservesName()
     {
         var created = await (await PostTopicAsync(new { name = "immutable-name" }))
-            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -248,7 +519,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var get = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
-        var body = await get.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal("immutable-name", body.Name);
         Assert.Null(body.Description);
@@ -258,7 +529,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task UpdateTopic_MissingName_Returns422WithRequiredFieldError()
     {
         var created = await (await PostTopicAsync(new { name = "required-name" }))
-            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -301,7 +572,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task UpdateTopic_DisabledTopicWithMissingName_PreservesValidationError()
     {
         var created = await (await PostTopicAsync(new { name = "disabled-required-name" }))
-            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(created);
 
         var deactivate = await client.SendAsync(AdminRequest(
@@ -323,7 +594,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task DeactivateTopic_Returns200_AndStatusBecomesInactive()
     {
         var created = await (await PostTopicAsync(new { name = "to-deactivate" }))
-            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(created);
 
         var deactivate = await client.SendAsync(AdminRequest(
@@ -334,7 +605,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var get = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-        var body = await get.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(body);
         Assert.Equal("disabled", body.Status);
     }
@@ -419,7 +690,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task GetTopic_GlobalKey_CanAccessAnyTenant()
     {
         var created = await (await PostTopicAsync(new { name = "global-visible" }))
-            .Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(created);
 
         // Confirm it is accessible with the deployment-wide key (which PostTopicAsync uses).
@@ -434,10 +705,11 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         string key,
         string direction,
         bool requireSourceVerification = false,
-        string status = "active")
+        string status = "active",
+        Guid? connectionId = null)
     {
         Guid integrationId = Guid.NewGuid();
-        Guid connectionId = Guid.NewGuid();
+        Guid resolvedConnectionId = connectionId ?? Guid.NewGuid();
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
         await connection.OpenAsync();
 
@@ -455,7 +727,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             """,
             connection);
         command.Parameters.AddWithValue("IntegrationId", integrationId);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
+        command.Parameters.AddWithValue("ConnectionId", resolvedConnectionId);
         command.Parameters.AddWithValue("TenantId", fixture.TenantId);
         command.Parameters.AddWithValue("Key", key);
         command.Parameters.AddWithValue("Direction", direction);
@@ -465,6 +737,45 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             key,
             direction,
             sourceVerificationSchemes: requireSourceVerification ? ["github_hmac_sha256"] : []));
+        await command.ExecuteNonQueryAsync();
+        return resolvedConnectionId;
+    }
+
+    private async Task<Guid> InsertAdapterBackedSourceConnectionAsync()
+    {
+        Guid integrationId = Guid.NewGuid();
+        Guid connectionId = Guid.NewGuid();
+        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                @IntegrationId, 'github', 1, 1, 'GitHub', 'source', '[]'::jsonb, 'active', @Manifest::jsonb);
+
+            INSERT INTO connections (
+                id, tenant_id, integration_id, name, config,
+                source_verification, destination_authentication, status)
+            VALUES (
+                @ConnectionId, @TenantId, @IntegrationId, 'github-source', '{}'::jsonb,
+                '{"scheme":"hmac_sha256","config":{},"secret_refs":{"secret":"github_webhook_secret"}}'::jsonb,
+                NULL,
+                'active');
+            """,
+            connection);
+        command.Parameters.AddWithValue("IntegrationId", integrationId);
+        command.Parameters.AddWithValue("ConnectionId", connectionId);
+        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
+        command.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
+            "github",
+            "GitHub",
+            "source",
+            sourceVerificationSchemes: ["hmac_sha256"],
+            allowUnverified: false,
+            verifiedWebhookSourceAdapter: true));
         await command.ExecuteNonQueryAsync();
         return connectionId;
     }

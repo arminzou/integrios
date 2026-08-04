@@ -56,6 +56,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "qualification_postgres",
             ["INTEGRIOS_BOOTSTRAP_ADMIN_SECRET"] = "qualification-admin-secret",
+            ["INTEGRIOS_PUBLIC_INGRESS_BASE_URI"] = "https://qualification.example.test",
             ["INTEGRIOS_BOOTSTRAP_IMAGE"] = $"{projectName}-bootstrap",
             ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
             ["INTEGRIOS_INGRESS_IMAGE"] = $"{projectName}-ingress",
