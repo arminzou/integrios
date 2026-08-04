@@ -487,6 +487,21 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
 
         await fixture.RunFlywayAsync(database, "migrate", target: 31);
 
+        await ExecuteAsync(
+            database,
+            """
+            -- Preserve the existing MATCH SIMPLE behavior for legacy Events that have source
+            -- provenance but no Topic. Worker still classifies these rows as unrouted.
+            INSERT INTO events (
+                id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
+            VALUES (
+                '31000000-0000-0000-0000-000000000009',
+                '31000000-0000-0000-0000-000000000001',
+                NULL,
+                '31000000-0000-0000-0000-000000000004',
+                'legacy.unrouted', '{}'::jsonb, 'accepted');
+            """);
+
         Assert.Equal(2L, await CountAsync(database, "topic_sources", "status = 'active' AND retired_at IS NULL"));
         Assert.Equal(1L, await CountAsync(
             database,
@@ -503,6 +518,10 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
             database,
             "events",
             "id = '31000000-0000-0000-0000-000000000008'"));
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "events",
+            "id = '31000000-0000-0000-0000-000000000009' AND topic_id IS NULL"));
         Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database,
             "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'events'::regclass AND tgname = 'trg_events_require_active_topic_source' AND tgenabled = 'O'"));

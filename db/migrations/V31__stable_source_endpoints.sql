@@ -13,7 +13,7 @@ ALTER TABLE topic_sources
 CREATE FUNCTION events_require_active_topic_source()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NOT EXISTS (
+    IF NEW.topic_id IS NOT NULL AND NOT EXISTS (
         SELECT 1
         FROM topic_sources ts
         WHERE ts.tenant_id = NEW.tenant_id
