@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.Connections;
-using Integrios.Application.Topics;
+using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 
@@ -419,7 +419,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics",
             new { name = "in-use-authentication-topic" }));
-        TopicResponse topic = (await topicResponse.Content.ReadFromJsonAsync<TopicResponse>(webJson))!;
+        AdminTopicResponse topic = (await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(webJson))!;
         HttpResponseMessage subscriptionResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",

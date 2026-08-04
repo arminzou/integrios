@@ -10,16 +10,16 @@ public sealed record CreateTopicCommand(
     string Name,
     string? Description,
     IReadOnlyList<Guid> SourceConnectionIds)
-    : IRequest<TopicResponse>;
+    : IRequest<TopicDto>;
 
 internal sealed class CreateTopicCommandHandler(
     ITopicRepository topicRepository,
     IConnectionRepository connectionRepository,
     IConnectionAuthoringLock authoringLock,
     IIntegrationCatalog integrationCatalog)
-    : IRequestHandler<CreateTopicCommand, TopicResponse>
+    : IRequestHandler<CreateTopicCommand, TopicDto>
 {
-    public async Task<TopicResponse> Handle(CreateTopicCommand command, CancellationToken cancellationToken)
+    public async Task<TopicDto> Handle(CreateTopicCommand command, CancellationToken cancellationToken)
     {
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
             command.SourceConnectionIds,
@@ -31,7 +31,7 @@ internal sealed class CreateTopicCommandHandler(
             command.Description,
             command.SourceConnectionIds,
             cancellationToken);
-        return TopicResponse.From(topic);
+        return TopicDto.From(topic);
     }
 
     private async Task ValidateSourceConnections(

@@ -1,3 +1,4 @@
+using Integrios.Admin;
 using Integrios.Admin.Auth;
 using Integrios.Admin.AdminKeys;
 using Integrios.Admin.Bootstrap;
@@ -15,6 +16,10 @@ if (args is ["admin-key", ..])
     return await AdminKeyCli.RunAsync(args);
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSingleton(PublicIngressBaseUri.Parse(
+    builder.Configuration[PublicIngressBaseUri.ConfigurationKey],
+    builder.Environment.IsDevelopment()));
 
 builder.Services.AddOpenApi(options =>
 {

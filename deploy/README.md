@@ -10,7 +10,7 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 
 ```bash
 cp .env.example .env
-# edit .env: set POSTGRES_PASSWORD and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
+# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_BOOTSTRAP_ADMIN_SECRET, and INTEGRIOS_PUBLIC_INGRESS_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
 mkdir -p secrets
 docker compose up -d

@@ -107,7 +107,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             Id = topicId,
             TenantId = tenantId,
             Name = "payments",
-            SourceConnectionIds = [],
+            Sources = [],
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.Topics;
+using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 
@@ -256,7 +256,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         Assert.Equal("disabled", body.Status);
     }
 
-    private async Task<TopicResponse> CreateTopicAsync(string name)
+    private async Task<AdminTopicResponse> CreateTopicAsync(string name)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -264,7 +264,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new { name }));
 
         response.EnsureSuccessStatusCode();
-        var topic = await response.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var topic = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         return topic!;
     }
 

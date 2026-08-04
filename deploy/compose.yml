@@ -67,6 +67,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Integrios__PublicIngressBaseUri: ${INTEGRIOS_PUBLIC_INGRESS_BASE_URI}
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
 

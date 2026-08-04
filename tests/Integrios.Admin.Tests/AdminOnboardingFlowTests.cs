@@ -4,7 +4,7 @@ using System.Text.Json;
 using Integrios.Application.ApiKeys;
 using Integrios.Application.Connections;
 using Integrios.Application.Tenants;
-using Integrios.Application.Topics;
+using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.Admin.Tests;
@@ -93,9 +93,9 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
         Assert.Equal(HttpStatusCode.Created, topicResponse.StatusCode);
 
-        var topic = await topicResponse.Content.ReadFromJsonAsync<TopicResponse>(WebJson);
+        var topic = await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
         Assert.NotNull(topic);
-        Assert.Equal([sourceConnection.Id], topic.SourceConnectionIds);
+        Assert.Equal([sourceConnection.Id], topic.Sources.Select(s => s.ConnectionId));
 
         var subscriptionResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
