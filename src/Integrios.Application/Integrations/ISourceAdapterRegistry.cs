@@ -6,6 +6,7 @@ public sealed record SourceAdapterRegistration(
     string Key,
     int ContractVersion,
     bool AuthoringSafe,
+    bool AllowsUnverifiedUse,
     IReadOnlyList<string> CompatibleSourceVerificationSchemes,
     Action<JsonElement> ValidateConfig);
 

@@ -328,9 +328,13 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
     }
 
     [Theory]
-    [InlineData("https://example.test/hook?token=abc")]
-    [InlineData("https://example.test/hook#section")]
-    public async Task V30_RejectsConnectionUrlCarryingQueryStringOrFragment(string url)
+    [InlineData("https://example.test/hook?token=abc", false, "query string or fragment")]
+    [InlineData("https://example.test/hook#section", false, "query string or fragment")]
+    [InlineData("https://example.test/hook", true, "fields other than url")]
+    public async Task V30_RejectsConnectionConfigThatCannotEnterClosedBaseUriContract(
+        string url,
+        bool includeAdditionalField,
+        string expectedMessage)
     {
         QualificationDatabase database = await fixture.CreateDatabaseAsync();
         await fixture.RunFlywayAsync(database, "migrate", target: 29);
@@ -347,6 +351,9 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
             INSERT INTO tenants (id, slug, name, status)
             VALUES ('30100000-0000-0000-0000-000000000001', 'v30-guard', 'V30 Guard', 'active');
             """);
+        string config = includeAdditionalField
+            ? $$"""{"url":"{{url}}","legacy":"value"}"""
+            : $$"""{"url":"{{url}}"}""";
         await ExecuteAsync(
             database,
             $$"""
@@ -356,14 +363,14 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
                 '30100000-0000-0000-0000-000000000001',
                 '00000000-0000-0000-0000-000000000001',
                 'v30-guard-destination',
-                '{"url":"{{url}}"}',
+                '{{config}}',
                 'active');
             """);
 
         Npgsql.PostgresException exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
             fixture.ExecuteMigrationSqlAsync(database, "V30__cut_over_webhook_to_http_with_base_uri.sql"));
 
-        Assert.Contains("query string or fragment", exception.MessageText, StringComparison.Ordinal);
+        Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
         Assert.Equal(url, await DatabaseLifecycleFixture.ScalarAsync<string>(
             database, "SELECT config->>'url' FROM connections WHERE id = '30100000-0000-0000-0000-000000000002'"));
     }

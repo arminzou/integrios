@@ -41,6 +41,17 @@ BEGIN
     IF offending_connection IS NOT NULL THEN
         RAISE EXCEPTION 'V30 cannot migrate Connection % because its destination url carries a query string or fragment; repair it to an equivalent base_uri manually', offending_connection;
     END IF;
+
+    SELECT id INTO offending_connection
+    FROM connections
+    WHERE integration_id = http_id
+      AND config ? 'url'
+      AND config - 'url' <> '{}'::jsonb
+    LIMIT 1;
+
+    IF offending_connection IS NOT NULL THEN
+        RAISE EXCEPTION 'V30 cannot migrate Connection % because its destination config contains fields other than url; repair it to the closed base_uri contract manually', offending_connection;
+    END IF;
 END
 $$;
 
@@ -56,7 +67,7 @@ SET key = 'http',
                 '{key}',
                 '"http"'::jsonb),
             '{destination_configuration_schema}',
-            '{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":true}'::jsonb),
+            '{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":false}'::jsonb),
         '{destination_authentication}',
         '{"allow_unauthenticated":true,"schemes":[{"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]},{"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}]}'::jsonb)
 WHERE id = '00000000-0000-0000-0000-000000000001'

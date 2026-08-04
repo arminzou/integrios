@@ -23,6 +23,7 @@ internal sealed class SourceAdapterRegistry : ISourceAdapterRegistry
         Key: "verified_webhook",
         ContractVersion: 1,
         AuthoringSafe: true,
+        AllowsUnverifiedUse: false,
         CompatibleSourceVerificationSchemes: ["hmac_sha256"],
         ValidateConfig: ValidateVerifiedWebhookConfig);
 
@@ -53,14 +54,23 @@ internal sealed class SourceAdapterRegistry : ISourceAdapterRegistry
 
     private static void RequireHeaderName(JsonElement config, string property)
     {
-        if (!config.TryGetProperty(property, out JsonElement value)
-            || value.ValueKind != JsonValueKind.String
-            || string.IsNullOrWhiteSpace(value.GetString())
-            || value.GetString()!.Length > MaxHeaderNameLength)
+        string? headerName = config.TryGetProperty(property, out JsonElement value)
+            && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        if (string.IsNullOrEmpty(headerName)
+            || headerName.Length > MaxHeaderNameLength
+            || !headerName.All(IsHttpTokenCharacter))
         {
-            throw Invalid($"source_adapter.config.{property} is required and must be a non-empty header name.");
+            throw Invalid($"source_adapter.config.{property} is required and must be a valid HTTP header name.");
         }
     }
+
+    private static bool IsHttpTokenCharacter(char value) =>
+        value is >= '0' and <= '9'
+            or >= 'A' and <= 'Z'
+            or >= 'a' and <= 'z'
+        || "!#$%&'*+-.^_`|~".Contains(value, StringComparison.Ordinal);
 
     private static void RequireEncoding(JsonElement config)
     {
