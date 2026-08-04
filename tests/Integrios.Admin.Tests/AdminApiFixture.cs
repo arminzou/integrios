@@ -52,7 +52,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await using var truncateCmd = new NpgsqlCommand(
             """
             TRUNCATE TABLE subscription_deliveries, delivery_attempts, outbox, events,
-                subscriptions, topic_sources, topics, connections, integrations, api_keys, admin_keys, tenants
+                subscriptions, source_endpoints, topic_sources, topics, connections, integrations,
+                api_keys, admin_keys, tenants
             RESTART IDENTITY CASCADE;
             """, connection);
         await truncateCmd.ExecuteNonQueryAsync();
@@ -119,9 +120,13 @@ public sealed class AdminApiFixture : IAsyncLifetime
             {
                 services.RemoveAll<NpgsqlDataSource>();
                 services.RemoveAll<IDbConnectionFactory>();
+                services.RemoveAll<PublicIngressUri>();
 
                 services.AddSingleton(_ => new NpgsqlDataSourceBuilder(ConnectionString).Build());
                 services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
+                services.AddSingleton(PublicIngressUri.Parse(
+                    "https://ingress.example.test/proxy/integrios",
+                    allowHttp: false));
             });
         });
     }

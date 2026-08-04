@@ -85,6 +85,7 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
                     JOIN topics t ON t.tenant_id = ts.tenant_id AND t.id = ts.topic_id
                     WHERE ts.tenant_id = @TenantId
                       AND ts.connection_id = @Id
+                      AND ts.status = 'active'
                       AND t.status = 'active') AS Source,
                 EXISTS (
                     SELECT 1

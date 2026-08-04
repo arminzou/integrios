@@ -29,7 +29,9 @@ internal sealed class UpdateTopicCommandHandler(
 
         await using IAsyncDisposable? lease = command.SourceConnectionIds is null
             ? null
-            : await authoringLock.AcquireAsync(command.SourceConnectionIds, cancellationToken);
+            : await authoringLock.AcquireAsync(
+                existing.SourceConnectionIds.Concat(command.SourceConnectionIds).Distinct().ToArray(),
+                cancellationToken);
         if (command.SourceConnectionIds is not null)
             await ValidateSourceConnections(command.TenantId, command.SourceConnectionIds, cancellationToken);
 

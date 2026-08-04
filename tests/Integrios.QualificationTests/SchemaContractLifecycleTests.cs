@@ -424,6 +424,90 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
             database, "connections", "id = '30000000-0000-0000-0000-000000000003' AND config = '{}'::jsonb"));
     }
 
+    [Fact]
+    public async Task V31_BackfillsAdapterAssociationsAndPreservesHistoricalEventForeignKeys()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 30);
+        await ExecuteAsync(
+            database,
+            """
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES ('31000000-0000-0000-0000-000000000001', 'v31-tenant', 'V31 Tenant', 'active');
+
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES
+                (
+                    '31000000-0000-0000-0000-000000000002', 'github', 1, 1,
+                    'GitHub', 'source', '[]'::jsonb, 'active',
+                    '{"manifest_schema_version":1,"key":"github","contract_version":1,"direction":"source","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":false},"source_verification":{"allow_unverified":false,"schemes":[{"scheme":"hmac_sha256","required_config":[],"required_secret_refs":["secret"]}]},"destination_authentication":{"allow_unauthenticated":true,"schemes":[]},"source_adapter":{"key":"verified_webhook","contract_version":1,"config":{}},"presentation":{"name":"GitHub","event_types":[],"authoring_presets":[]}}'::jsonb
+                ),
+                (
+                    '31000000-0000-0000-0000-000000000003', 'generic_source', 1, 1,
+                    'Generic Source', 'source', '[]'::jsonb, 'active',
+                    '{"manifest_schema_version":1,"key":"generic_source","contract_version":1,"direction":"source","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":false},"source_verification":{"allow_unverified":true,"schemes":[]},"destination_authentication":{"allow_unauthenticated":true,"schemes":[]},"presentation":{"name":"Generic Source","event_types":[],"authoring_presets":[]}}'::jsonb
+                );
+
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+            VALUES
+                (
+                    '31000000-0000-0000-0000-000000000004',
+                    '31000000-0000-0000-0000-000000000001',
+                    '31000000-0000-0000-0000-000000000002',
+                    'github-source', '{}'::jsonb, 'active'
+                ),
+                (
+                    '31000000-0000-0000-0000-000000000005',
+                    '31000000-0000-0000-0000-000000000001',
+                    '31000000-0000-0000-0000-000000000003',
+                    'generic-source', '{}'::jsonb, 'active'
+                );
+
+            INSERT INTO topics (id, tenant_id, name, status)
+            VALUES
+                ('31000000-0000-0000-0000-000000000006', '31000000-0000-0000-0000-000000000001', 'adapter-events', 'active'),
+                ('31000000-0000-0000-0000-000000000007', '31000000-0000-0000-0000-000000000001', 'generic-events', 'active');
+
+            INSERT INTO topic_sources (tenant_id, topic_id, connection_id)
+            VALUES
+                ('31000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000006', '31000000-0000-0000-0000-000000000004'),
+                ('31000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000007', '31000000-0000-0000-0000-000000000005');
+
+            INSERT INTO events (
+                id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
+            VALUES (
+                '31000000-0000-0000-0000-000000000008',
+                '31000000-0000-0000-0000-000000000001',
+                '31000000-0000-0000-0000-000000000006',
+                '31000000-0000-0000-0000-000000000004',
+                'github.push', '{}'::jsonb, 'accepted');
+            """);
+
+        await fixture.RunFlywayAsync(database, "migrate", target: 31);
+
+        Assert.Equal(2L, await CountAsync(database, "topic_sources", "status = 'active' AND retired_at IS NULL"));
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "source_endpoints",
+            "topic_id = '31000000-0000-0000-0000-000000000006' AND status = 'active'"));
+        Assert.Equal(0L, await CountAsync(
+            database,
+            "source_endpoints",
+            "topic_id = '31000000-0000-0000-0000-000000000007'"));
+        Assert.True(await DatabaseLifecycleFixture.ScalarAsync<bool>(
+            database,
+            "SELECT callback_path = '/webhooks/github/' || id::text FROM source_endpoints WHERE topic_id = '31000000-0000-0000-0000-000000000006'"));
+        Assert.Equal(1L, await CountAsync(
+            database,
+            "events",
+            "id = '31000000-0000-0000-0000-000000000008'"));
+        Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database,
+            "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'events'::regclass AND tgname = 'trg_events_require_active_topic_source' AND tgenabled = 'O'"));
+    }
+
     private const string V27GraphSql =
         """
         INSERT INTO tenants (id, slug, name, status)

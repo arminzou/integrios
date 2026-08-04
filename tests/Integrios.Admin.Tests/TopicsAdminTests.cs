@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Integrios.Admin.Endpoints;
 using Integrios.Application.Topics;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
@@ -72,6 +73,152 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         Assert.NotNull(body);
         Assert.Single(body.SourceConnectionIds);
         Assert.Equal(fixture.SourceConnectionId, body.SourceConnectionIds[0]);
+        Assert.Empty(body.SourceEndpoints);
+    }
+
+    [Fact]
+    public async Task AdapterBackedSourceEndpoint_IsStableRetiredAndNeverDerivedFromRequestHeaders()
+    {
+        Guid sourceConnectionId = await InsertAdapterBackedSourceConnectionAsync();
+        var createRequest = AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics",
+            new { name = "github-events", sourceConnectionIds = new[] { sourceConnectionId } });
+        createRequest.Headers.Host = "attacker.example";
+        createRequest.Headers.TryAddWithoutValidation("Forwarded", "host=forwarded.example;proto=http");
+        createRequest.Headers.TryAddWithoutValidation("X-Forwarded-Host", "forwarded.example");
+        createRequest.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "http");
+
+        var createdResponse = await client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        var created = await createdResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(created);
+        AdminSourceEndpointResponse initial = Assert.Single(created.SourceEndpoints);
+        Assert.Equal(sourceConnectionId, initial.SourceConnectionId);
+        Assert.Equal($"/webhooks/github/{initial.Id}", initial.CallbackPath);
+        Assert.Equal(
+            $"https://ingress.example.test/proxy/integrios/webhooks/github/{initial.Id}",
+            initial.CallbackUrl);
+
+        var unchangedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new
+            {
+                name = created.Name,
+                description = "unchanged association",
+                sourceConnectionIds = new[] { sourceConnectionId }
+            }));
+        Assert.Equal(HttpStatusCode.OK, unchangedResponse.StatusCode);
+        var unchanged = await unchangedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(unchanged);
+        Assert.Equal(initial.Id, Assert.Single(unchanged.SourceEndpoints).Id);
+
+        Guid eventId = Guid.NewGuid();
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var insertEvent = new NpgsqlCommand(
+                """
+                INSERT INTO events (
+                    id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
+                VALUES (
+                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', '{}'::jsonb, 'accepted')
+                """,
+                connection);
+            insertEvent.Parameters.AddWithValue("Id", eventId);
+            insertEvent.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            insertEvent.Parameters.AddWithValue("TopicId", created.Id);
+            insertEvent.Parameters.AddWithValue("SourceConnectionId", sourceConnectionId);
+            await insertEvent.ExecuteNonQueryAsync();
+        }
+
+        var removedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { name = created.Name, sourceConnectionIds = Array.Empty<Guid>() }));
+        Assert.Equal(HttpStatusCode.OK, removedResponse.StatusCode);
+        var removed = await removedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(removed);
+        Assert.Empty(removed.SourceConnectionIds);
+        Assert.Empty(removed.SourceEndpoints);
+
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var retired = new NpgsqlCommand(
+                """
+                SELECT
+                    (SELECT status FROM topic_sources
+                     WHERE tenant_id = @TenantId AND topic_id = @TopicId AND connection_id = @ConnectionId),
+                    (SELECT status FROM source_endpoints WHERE id = @EndpointId),
+                    EXISTS (SELECT 1 FROM events WHERE id = @EventId)
+                """,
+                connection);
+            retired.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            retired.Parameters.AddWithValue("TopicId", created.Id);
+            retired.Parameters.AddWithValue("ConnectionId", sourceConnectionId);
+            retired.Parameters.AddWithValue("EndpointId", initial.Id);
+            retired.Parameters.AddWithValue("EventId", eventId);
+            await using var reader = await retired.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("retired", reader.GetString(0));
+            Assert.Equal("retired", reader.GetString(1));
+            Assert.True(reader.GetBoolean(2));
+        }
+
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var insertRetiredEvent = new NpgsqlCommand(
+                """
+                INSERT INTO events (
+                    id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
+                VALUES (
+                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', '{}'::jsonb, 'accepted')
+                """,
+                connection);
+            insertRetiredEvent.Parameters.AddWithValue("Id", Guid.NewGuid());
+            insertRetiredEvent.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            insertRetiredEvent.Parameters.AddWithValue("TopicId", created.Id);
+            insertRetiredEvent.Parameters.AddWithValue("SourceConnectionId", sourceConnectionId);
+            PostgresException exception = await Assert.ThrowsAsync<PostgresException>(
+                () => insertRetiredEvent.ExecuteNonQueryAsync());
+            Assert.Equal("fk_events_topic_source_active", exception.ConstraintName);
+        }
+
+        var recreatedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Patch,
+            $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
+            new { name = created.Name, sourceConnectionIds = new[] { sourceConnectionId } }));
+        Assert.Equal(HttpStatusCode.OK, recreatedResponse.StatusCode);
+        var recreated = await recreatedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        Assert.NotNull(recreated);
+        AdminSourceEndpointResponse replacement = Assert.Single(recreated.SourceEndpoints);
+        Assert.NotEqual(initial.Id, replacement.Id);
+
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var endpointHistory = new NpgsqlCommand(
+                """
+                SELECT status
+                FROM source_endpoints
+                WHERE tenant_id = @TenantId
+                  AND topic_id = @TopicId
+                  AND connection_id = @ConnectionId
+                ORDER BY status
+                """,
+                connection);
+            endpointHistory.Parameters.AddWithValue("TenantId", fixture.TenantId);
+            endpointHistory.Parameters.AddWithValue("TopicId", created.Id);
+            endpointHistory.Parameters.AddWithValue("ConnectionId", sourceConnectionId);
+            await using var reader = await endpointHistory.ExecuteReaderAsync();
+            var statuses = new List<string>();
+            while (await reader.ReadAsync())
+                statuses.Add(reader.GetString(0));
+            Assert.Equal(["active", "retired"], statuses);
+        }
     }
 
     [Fact]
@@ -465,6 +612,45 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             key,
             direction,
             sourceVerificationSchemes: requireSourceVerification ? ["github_hmac_sha256"] : []));
+        await command.ExecuteNonQueryAsync();
+        return connectionId;
+    }
+
+    private async Task<Guid> InsertAdapterBackedSourceConnectionAsync()
+    {
+        Guid integrationId = Guid.NewGuid();
+        Guid connectionId = Guid.NewGuid();
+        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                @IntegrationId, 'github', 1, 1, 'GitHub', 'source', '[]'::jsonb, 'active', @Manifest::jsonb);
+
+            INSERT INTO connections (
+                id, tenant_id, integration_id, name, config,
+                source_verification, destination_authentication, status)
+            VALUES (
+                @ConnectionId, @TenantId, @IntegrationId, 'github-source', '{}'::jsonb,
+                '{"scheme":"hmac_sha256","config":{},"secret_refs":{"secret":"github_webhook_secret"}}'::jsonb,
+                NULL,
+                'active');
+            """,
+            connection);
+        command.Parameters.AddWithValue("IntegrationId", integrationId);
+        command.Parameters.AddWithValue("ConnectionId", connectionId);
+        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
+        command.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
+            "github",
+            "GitHub",
+            "source",
+            sourceVerificationSchemes: ["hmac_sha256"],
+            allowUnverified: false,
+            verifiedWebhookSourceAdapter: true));
         await command.ExecuteNonQueryAsync();
         return connectionId;
     }

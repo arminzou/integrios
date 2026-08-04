@@ -10,7 +10,8 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 
 ```bash
 cp .env.example .env
-# edit .env: set POSTGRES_PASSWORD and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
+# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_BOOTSTRAP_ADMIN_SECRET,
+# and INTEGRIOS_PUBLIC_INGRESS_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
 mkdir -p secrets
 docker compose up -d
@@ -19,6 +20,14 @@ docker compose up -d
 Startup order is enforced by `depends_on`: `postgres` becomes healthy, then `migrate` runs the
 Flyway migrations to completion, then `bootstrap` runs its one-shot, then `ingress`, `admin`,
 and `worker` start.
+
+## Public Ingress identity
+
+Set `INTEGRIOS_PUBLIC_INGRESS_BASE_URI` to the externally reachable HTTPS origin used for provider
+callbacks. Include the externally visible reverse-proxy path prefix when one exists, for example
+`https://integrations.example.com/integrios`. Admin appends stable source-endpoint callback paths to
+this trusted value; it never infers callback hosts or schemes from `Host`, `Forwarded`, or
+`X-Forwarded-*` request headers. Only the explicit Development environment permits an HTTP base.
 
 ## Bootstrap semantics
 

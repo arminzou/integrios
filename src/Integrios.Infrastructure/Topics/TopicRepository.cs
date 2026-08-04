@@ -46,9 +46,10 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
                     cancellationToken: ct));
 
             await InsertSourcesAsync(db, tenantId, id, sourceConnectionIds, tx, ct);
+            var endpoints = await LoadSourceEndpointsAsync(db, id, tx, ct);
             await tx.CommitAsync(ct);
 
-            return row.ToTopic(sourceConnectionIds);
+            return row.ToTopic(sourceConnectionIds.Distinct().ToList(), endpoints);
         }
         catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
         {
@@ -77,7 +78,8 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
             return null;
 
         var sources = await LoadSourcesAsync(db, id, null, ct);
-        return row.ToTopic(sources);
+        var endpoints = await LoadSourceEndpointsAsync(db, id, null, ct);
+        return row.ToTopic(sources, endpoints);
     }
 
     public async Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(
@@ -119,9 +121,12 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
 
         var topicIds = rows.Select(r => r.Id).ToArray();
         var sourceMap = await LoadSourcesForTopicsAsync(db, topicIds, ct);
+        var endpointMap = await LoadSourceEndpointsForTopicsAsync(db, topicIds, ct);
 
         var items = rows
-            .Select(r => r.ToTopic(sourceMap.TryGetValue(r.Id, out var s) ? s : []))
+            .Select(r => r.ToTopic(
+                sourceMap.TryGetValue(r.Id, out var s) ? s : [],
+                endpointMap.TryGetValue(r.Id, out var e) ? e : []))
             .ToList();
 
         var nextCursor = hasMore
@@ -178,19 +183,15 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
 
             if (sourceConnectionIds is not null)
             {
-                await db.ExecuteAsync(
-                    new CommandDefinition(
-                        "DELETE FROM topic_sources WHERE tenant_id = @TenantId AND topic_id = @TopicId",
-                        new { TenantId = tenantId, TopicId = id },
-                        tx,
-                        cancellationToken: ct));
-
-                await InsertSourcesAsync(db, tenantId, id, sourceConnectionIds, tx, ct);
+                Guid[] desiredConnectionIds = sourceConnectionIds.Distinct().ToArray();
+                await RetireRemovedSourcesAsync(db, tenantId, id, desiredConnectionIds, tx, ct);
+                await InsertSourcesAsync(db, tenantId, id, desiredConnectionIds, tx, ct);
             }
 
             var sources = await LoadSourcesAsync(db, id, tx, ct);
+            var endpoints = await LoadSourceEndpointsAsync(db, id, tx, ct);
             await tx.CommitAsync(ct);
-            return row.ToTopic(sources);
+            return row.ToTopic(sources, endpoints);
         }
         catch (PostgresException ex) when (
             ex.SqlState == ForeignKeyViolation
@@ -226,13 +227,89 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
     {
         foreach (var cid in connectionIds)
         {
+            Guid endpointId = Guid.NewGuid();
             await db.ExecuteAsync(
                 new CommandDefinition(
-                    "INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @ConnectionId) ON CONFLICT DO NOTHING",
-                    new { TenantId = tenantId, TopicId = topicId, ConnectionId = cid },
+                    """
+                    WITH activated AS (
+                        INSERT INTO topic_sources (
+                            tenant_id, topic_id, connection_id, status, retired_at)
+                        VALUES (@TenantId, @TopicId, @ConnectionId, 'active', NULL)
+                        ON CONFLICT (tenant_id, topic_id, connection_id) DO UPDATE
+                        SET status = 'active', retired_at = NULL
+                        WHERE topic_sources.status = 'retired'
+                        RETURNING tenant_id, topic_id, connection_id
+                    )
+                    INSERT INTO source_endpoints (
+                        id, tenant_id, topic_id, connection_id, callback_path, status)
+                    SELECT
+                        @EndpointId,
+                        activated.tenant_id,
+                        activated.topic_id,
+                        activated.connection_id,
+                        '/webhooks/' || integrations.key || '/' || @EndpointId::text,
+                        'active'
+                    FROM activated
+                    JOIN connections
+                      ON connections.tenant_id = activated.tenant_id
+                     AND connections.id = activated.connection_id
+                    JOIN integrations ON integrations.id = connections.integration_id
+                    WHERE jsonb_typeof(integrations.manifest->'source_adapter') = 'object'
+                    """,
+                    new
+                    {
+                        TenantId = tenantId,
+                        TopicId = topicId,
+                        ConnectionId = cid,
+                        EndpointId = endpointId,
+                    },
                     tx,
                     cancellationToken: ct));
         }
+    }
+
+    private static async Task RetireRemovedSourcesAsync(
+        DbConnection db,
+        Guid tenantId,
+        Guid topicId,
+        Guid[] desiredConnectionIds,
+        DbTransaction tx,
+        CancellationToken ct)
+    {
+        var parameters = new
+        {
+            TenantId = tenantId,
+            TopicId = topicId,
+            ConnectionIds = desiredConnectionIds,
+        };
+
+        await db.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE source_endpoints
+                SET status = 'retired', retired_at = now()
+                WHERE tenant_id = @TenantId
+                  AND topic_id = @TopicId
+                  AND status = 'active'
+                  AND NOT (connection_id = ANY(@ConnectionIds))
+                """,
+                parameters,
+                tx,
+                cancellationToken: ct));
+
+        await db.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE topic_sources
+                SET status = 'retired', retired_at = now()
+                WHERE tenant_id = @TenantId
+                  AND topic_id = @TopicId
+                  AND status = 'active'
+                  AND NOT (connection_id = ANY(@ConnectionIds))
+                """,
+                parameters,
+                tx,
+                cancellationToken: ct));
     }
 
     private static async Task<IReadOnlyList<Guid>> LoadSourcesAsync(
@@ -243,7 +320,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
     {
         var ids = await db.QueryAsync<Guid>(
             new CommandDefinition(
-                "SELECT connection_id FROM topic_sources WHERE topic_id = @TopicId ORDER BY created_at",
+                "SELECT connection_id FROM topic_sources WHERE topic_id = @TopicId AND status = 'active' ORDER BY created_at",
                 new { TopicId = topicId },
                 tx,
                 cancellationToken: ct));
@@ -257,7 +334,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
     {
         var rows = await db.QueryAsync<SourceRow>(
             new CommandDefinition(
-                "SELECT topic_id AS TopicId, connection_id AS ConnectionId FROM topic_sources WHERE topic_id = ANY(@TopicIds) ORDER BY topic_id, created_at",
+                "SELECT topic_id AS TopicId, connection_id AS ConnectionId FROM topic_sources WHERE topic_id = ANY(@TopicIds) AND status = 'active' ORDER BY topic_id, created_at",
                 new { TopicIds = topicIds },
                 cancellationToken: ct));
 
@@ -271,10 +348,90 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         return map;
     }
 
+    private static async Task<IReadOnlyList<SourceEndpoint>> LoadSourceEndpointsAsync(
+        DbConnection db,
+        Guid topicId,
+        DbTransaction? tx,
+        CancellationToken ct)
+    {
+        var rows = await db.QueryAsync<SourceEndpointRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    id AS Id,
+                    tenant_id AS TenantId,
+                    topic_id AS TopicId,
+                    connection_id AS ConnectionId,
+                    callback_path AS CallbackPath,
+                    created_at AS CreatedAt
+                FROM source_endpoints
+                WHERE topic_id = @TopicId
+                  AND status = 'active'
+                ORDER BY created_at, id
+                """,
+                new { TopicId = topicId },
+                tx,
+                cancellationToken: ct));
+        return rows.Select(static row => row.ToSourceEndpoint()).ToList();
+    }
+
+    private static async Task<Dictionary<Guid, List<SourceEndpoint>>> LoadSourceEndpointsForTopicsAsync(
+        DbConnection db,
+        Guid[] topicIds,
+        CancellationToken ct)
+    {
+        var rows = await db.QueryAsync<SourceEndpointRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    id AS Id,
+                    tenant_id AS TenantId,
+                    topic_id AS TopicId,
+                    connection_id AS ConnectionId,
+                    callback_path AS CallbackPath,
+                    created_at AS CreatedAt
+                FROM source_endpoints
+                WHERE topic_id = ANY(@TopicIds)
+                  AND status = 'active'
+                ORDER BY topic_id, created_at, id
+                """,
+                new { TopicIds = topicIds },
+                cancellationToken: ct));
+
+        var map = new Dictionary<Guid, List<SourceEndpoint>>();
+        foreach (SourceEndpointRow row in rows)
+        {
+            if (!map.TryGetValue(row.TopicId, out List<SourceEndpoint>? endpoints))
+                map[row.TopicId] = endpoints = [];
+            endpoints.Add(row.ToSourceEndpoint());
+        }
+        return map;
+    }
+
     private sealed record SourceRow
     {
         public Guid TopicId { get; init; }
         public Guid ConnectionId { get; init; }
+    }
+
+    private sealed record SourceEndpointRow
+    {
+        public Guid Id { get; init; }
+        public Guid TenantId { get; init; }
+        public Guid TopicId { get; init; }
+        public Guid ConnectionId { get; init; }
+        public string CallbackPath { get; init; } = "";
+        public DateTimeOffset CreatedAt { get; init; }
+
+        public SourceEndpoint ToSourceEndpoint() => new()
+        {
+            Id = Id,
+            TenantId = TenantId,
+            TopicId = TopicId,
+            ConnectionId = ConnectionId,
+            CallbackPath = CallbackPath,
+            CreatedAt = CreatedAt,
+        };
     }
 
     private sealed record TopicRow
@@ -287,12 +444,15 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         public DateTimeOffset CreatedAt { get; init; }
         public DateTimeOffset UpdatedAt { get; init; }
 
-        public Topic ToTopic(IReadOnlyList<Guid> sourceConnectionIds) => new()
+        public Topic ToTopic(
+            IReadOnlyList<Guid> sourceConnectionIds,
+            IReadOnlyList<SourceEndpoint> sourceEndpoints) => new()
         {
             Id = Id,
             TenantId = TenantId,
             Name = Name,
             SourceConnectionIds = sourceConnectionIds,
+            SourceEndpoints = sourceEndpoints,
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             Description = Description,
             CreatedAt = CreatedAt,

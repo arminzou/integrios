@@ -14,7 +14,8 @@ internal static class TestIntegrationManifest
         IReadOnlyList<string>? sourceVerificationSchemes = null,
         string? description = "test integration",
         bool? allowUnauthenticated = null,
-        bool? allowUnverified = null)
+        bool? allowUnverified = null,
+        bool verifiedWebhookSourceAdapter = false)
     {
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
@@ -44,6 +45,24 @@ internal static class TestIntegrationManifest
                     .Select(AuthenticationScheme)
                     .ToArray(),
             },
+            SourceAdapter = verifiedWebhookSourceAdapter
+                ? new IntegrationSourceAdapterManifest
+                {
+                    Key = "verified_webhook",
+                    ContractVersion = 1,
+                    Config = JsonSerializer.Deserialize<JsonElement>(
+                        """
+                        {
+                          "signature_header": "X-Hub-Signature-256",
+                          "signature_encoding": "hex",
+                          "signature_prefix": "sha256=",
+                          "delivery_id_header": "X-GitHub-Delivery",
+                          "event_type_header": "X-GitHub-Event",
+                          "event_type_action_field": "action"
+                        }
+                        """),
+                }
+                : null,
             Presentation = new IntegrationPresentationManifest
             {
                 Name = name,
@@ -75,6 +94,11 @@ internal static class TestIntegrationManifest
         {
             Scheme = scheme,
             RequiredSecretRefs = ["webhook_secret"],
+        },
+        "hmac_sha256" => new IntegrationSchemeManifest
+        {
+            Scheme = scheme,
+            RequiredSecretRefs = ["secret"],
         },
         _ => new IntegrationSchemeManifest { Scheme = scheme },
     };

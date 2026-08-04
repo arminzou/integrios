@@ -46,6 +46,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             ["INTEGRIOS_POSTGRES_PORT"] = postgresPort.ToString(),
             ["INTEGRIOS_INGRESS_PORT"] = ingressPort.ToString(),
+            ["INTEGRIOS_PUBLIC_INGRESS_BASE_URI"] = $"https://localhost:{ingressPort}",
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
             ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
