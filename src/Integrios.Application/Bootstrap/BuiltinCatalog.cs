@@ -56,5 +56,5 @@ public static class BuiltinCatalog
 
     private static JsonElement HttpDestinationSchema() =>
         JsonSerializer.Deserialize<JsonElement>(
-            """{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":true}""");
+            """{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":false}""");
 }

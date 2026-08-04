@@ -19,7 +19,7 @@ internal static class TestIntegrationManifest
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
         JsonElement httpDestinationSchema = JsonSerializer.Deserialize<JsonElement>(
-            """{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":true}""");
+            """{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"}},"required":["base_uri"],"additionalProperties":false}""");
         var manifest = new IntegrationManifest
         {
             ManifestSchemaVersion = 1,

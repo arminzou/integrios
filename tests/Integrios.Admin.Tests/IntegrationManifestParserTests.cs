@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Integrios.Application.Auth;
+using Integrios.Application.Bootstrap;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Integrations;
 
@@ -135,6 +136,39 @@ public sealed class IntegrationManifestParserTests
 
         Assert.Equal("verified_webhook", manifest.SourceAdapter!.Key);
         Assert.Equal("hmac_sha256", Assert.Single(manifest.SourceVerification.Schemes).Scheme);
+    }
+
+    [Fact]
+    public void Parse_RejectsVerifiedWebhookThatAllowsUnverifiedUse()
+    {
+        string json = ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")
+            .Replace("\"allow_unverified\": false", "\"allow_unverified\": true", StringComparison.Ordinal);
+
+        var exception = Assert.Throws<IntegrationManifestValidationException>(
+            () => Parse(Json(json)));
+
+        Assert.Contains("does not allow unverified use", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_RejectsSourceAdapterConfigWithInvalidHttpHeaderName()
+    {
+        string json = MaximalManifest()
+            .Replace("X-Hub-Signature-256", "bad header", StringComparison.Ordinal);
+
+        var exception = Assert.Throws<IntegrationManifestValidationException>(
+            () => ParseWithRealSourceAdapterRegistry(Json(json)));
+
+        Assert.Contains("valid HTTP header name", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuiltinHttpDestinationSchema_RejectsUnknownConfiguration()
+    {
+        BuiltinIntegration http = Assert.Single(BuiltinCatalog.All);
+        JsonElement schema = http.Manifest.DestinationConfigurationSchema!.Value;
+
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
     }
 
     [Fact]
@@ -466,6 +500,13 @@ public sealed class IntegrationManifestParserTests
             new FakeSourceAdapterRegistry(),
             IntegrationManifestApplyAuthority.Operator);
 
+    private static IntegrationManifest ParseWithRealSourceAdapterRegistry(JsonElement document) =>
+        IntegrationManifestParser.Parse(
+            document,
+            new FakeAuthSchemeRegistry(),
+            new Integrios.Infrastructure.Integrations.SourceAdapterRegistry(),
+            IntegrationManifestApplyAuthority.Operator);
+
     private sealed class FakeAuthSchemeRegistry : IAuthSchemeRegistry
     {
         private static readonly IReadOnlyDictionary<string, IAuthSchemeHandler> Handlers =
@@ -501,9 +542,11 @@ public sealed class IntegrationManifestParserTests
             new Dictionary<(string, int), SourceAdapterRegistration>
             {
                 [("verified_webhook", 1)] = new(
-                    "verified_webhook", 1, AuthoringSafe: true, ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
+                    "verified_webhook", 1, AuthoringSafe: true, AllowsUnverifiedUse: false,
+                    ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
                 [("github_native", 1)] = new(
-                    "github_native", 1, AuthoringSafe: false, ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
+                    "github_native", 1, AuthoringSafe: false, AllowsUnverifiedUse: false,
+                    ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
             };
 
         public bool TryGet(string key, int contractVersion, out SourceAdapterRegistration registration) =>

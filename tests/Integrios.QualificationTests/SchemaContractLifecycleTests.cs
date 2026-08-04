@@ -405,6 +405,8 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
             "SELECT manifest->'destination_configuration_schema'->'properties'->'base_uri'->>'format' FROM integrations WHERE key = 'http'"));
         Assert.Equal("base_uri", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
             "SELECT manifest->'destination_configuration_schema'->'required'->>0 FROM integrations WHERE key = 'http'"));
+        Assert.False(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT (manifest->'destination_configuration_schema'->>'additionalProperties')::boolean FROM integrations WHERE key = 'http'"));
         Assert.Equal("http", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
             "SELECT manifest->>'key' FROM integrations WHERE key = 'http'"));
         Assert.Equal(2, await DatabaseLifecycleFixture.ScalarAsync<int>(database,

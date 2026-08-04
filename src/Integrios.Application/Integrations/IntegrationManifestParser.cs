@@ -181,6 +181,8 @@ public static partial class IntegrationManifestParser
                     $"source_adapter '{sourceAdapterManifest.Key}' requires source_verification.schemes to declare exactly: "
                     + string.Join(", ", registration.CompatibleSourceVerificationSchemes) + ".");
             }
+            if (manifest.SourceVerification.AllowUnverified && !registration.AllowsUnverifiedUse)
+                throw Invalid($"source_adapter '{sourceAdapterManifest.Key}' does not allow unverified use.");
         }
         else if (manifest.SourceVerification.Schemes.Count > 0)
         {
