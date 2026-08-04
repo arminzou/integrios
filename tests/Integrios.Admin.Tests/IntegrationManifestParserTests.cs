@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Integrios.Application.Auth;
+using Integrios.Application.Bootstrap;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Integrations;
 
@@ -27,17 +28,20 @@ public sealed class IntegrationManifestParserTests
                 "required": ["base_uri"],
                 "additionalProperties": false
               },
-              "source_verification_schemes": [],
-              "destination_authentication_schemes": [
-                { "scheme": "bearer_token", "required_config": [], "required_secret_refs": ["token"] }
-              ],
+              "source_verification": { "allow_unverified": true, "schemes": [] },
+              "destination_authentication": {
+                "allow_unauthenticated": false,
+                "schemes": [
+                  { "scheme": "bearer_token", "required_config": [], "required_secret_refs": ["token"] }
+                ]
+              },
               "presentation": { "name": "Example API", "event_types": [], "authoring_presets": [] }
             }
             """));
 
         Assert.Equal("example_api", manifest.Key);
         Assert.Equal(2, manifest.ContractVersion);
-        Assert.Equal("bearer_token", Assert.Single(manifest.DestinationAuthenticationSchemes).Scheme);
+        Assert.Equal("bearer_token", Assert.Single(manifest.DestinationAuthentication.Schemes).Scheme);
     }
 
     [Theory]
@@ -104,8 +108,8 @@ public sealed class IntegrationManifestParserTests
     public void Parse_RejectsUnknownOrMisdeclaredPlatformScheme()
     {
         string json = ValidManifest().Replace(
-            "\"destination_authentication_schemes\": []",
-            "\"destination_authentication_schemes\": [{\"scheme\":\"bearer_token\",\"required_config\":[],\"required_secret_refs\":[]}]",
+            "\"destination_authentication\": { \"allow_unauthenticated\": true, \"schemes\": [] }",
+            "\"destination_authentication\": { \"allow_unauthenticated\": true, \"schemes\": [{\"scheme\":\"bearer_token\",\"required_config\":[],\"required_secret_refs\":[]}] }",
             StringComparison.Ordinal);
 
         var exception = Assert.Throws<IntegrationManifestValidationException>(
@@ -115,20 +119,136 @@ public sealed class IntegrationManifestParserTests
     }
 
     [Fact]
-    public void Parse_RejectsBuiltInAdapterForOperatorPublication()
+    public void Parse_RejectsSourceAdapterSelectionForOperatorWhenNotAuthoringSafe()
     {
-        string json = ValidManifest()
-            .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
-            .Replace(
-                "\"destination_configuration_schema\"",
-                "\"source_configuration_schema\": { \"type\": \"object\", \"properties\": {}, \"additionalProperties\": true }, \"built_in_source_adapter\": \"github\", \"destination_configuration_schema\"",
-                StringComparison.Ordinal);
+        string json = ManifestWithSourceAdapter("github_native", schemeName: "hmac_sha256");
 
         var exception = Assert.Throws<IntegrationManifestValidationException>(
             () => Parse(Json(json)));
 
         Assert.Contains("only by Bootstrap", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Parse_AcceptsOperatorAuthoringSafeSourceAdapterSelection()
+    {
+        var manifest = Parse(Json(ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")));
+
+        Assert.Equal("verified_webhook", manifest.SourceAdapter!.Key);
+        Assert.Equal("hmac_sha256", Assert.Single(manifest.SourceVerification.Schemes).Scheme);
+    }
+
+    [Fact]
+    public void Parse_RejectsVerifiedWebhookThatAllowsUnverifiedUse()
+    {
+        string json = ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")
+            .Replace("\"allow_unverified\": false", "\"allow_unverified\": true", StringComparison.Ordinal);
+
+        var exception = Assert.Throws<IntegrationManifestValidationException>(
+            () => Parse(Json(json)));
+
+        Assert.Contains("does not allow unverified use", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_RejectsSourceAdapterConfigWithInvalidHttpHeaderName()
+    {
+        string json = MaximalManifest()
+            .Replace("X-Hub-Signature-256", "bad header", StringComparison.Ordinal);
+
+        var exception = Assert.Throws<IntegrationManifestValidationException>(
+            () => ParseWithRealSourceAdapterRegistry(Json(json)));
+
+        Assert.Contains("valid HTTP header name", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuiltinHttpDestinationSchema_RejectsUnknownConfiguration()
+    {
+        BuiltinIntegration http = Assert.Single(BuiltinCatalog.All);
+        JsonElement schema = http.Manifest.DestinationConfigurationSchema!.Value;
+
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+    }
+
+    [Fact]
+    public void Parse_RejectsUnknownSourceAdapter()
+    {
+        string json = ManifestWithSourceAdapter("nonexistent_adapter", schemeName: "hmac_sha256");
+
+        var exception = Assert.Throws<IntegrationManifestValidationException>(
+            () => Parse(Json(json)));
+
+        Assert.Contains("is not registered", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_RejectsSourceVerificationSchemesWithoutSourceAdapter()
+    {
+        string json = ValidManifest()
+            .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
+            .Replace(
+                "\"destination_configuration_schema\"",
+                "\"source_configuration_schema\": { \"type\": \"object\", \"properties\": {}, \"additionalProperties\": true }, \"destination_configuration_schema\"",
+                StringComparison.Ordinal)
+            .Replace(
+                "\"source_verification\": { \"allow_unverified\": true, \"schemes\": [] }",
+                "\"source_verification\": { \"allow_unverified\": false, \"schemes\": [{\"scheme\":\"hmac_sha256\",\"required_config\":[],\"required_secret_refs\":[\"secret\"]}] }",
+                StringComparison.Ordinal);
+
+        var exception = Assert.Throws<IntegrationManifestValidationException>(
+            () => Parse(Json(json)));
+
+        Assert.Contains("requires a source_adapter selection", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_RejectsSourceAdapterWithIncompatibleVerificationSchemes()
+    {
+        string json = ValidManifest()
+            .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
+            .Replace(
+                "\"destination_configuration_schema\"",
+                "\"source_configuration_schema\": { \"type\": \"object\", \"properties\": {}, \"additionalProperties\": true }, \"destination_configuration_schema\"",
+                StringComparison.Ordinal)
+            .Replace(
+                "\"source_verification\": { \"allow_unverified\": true, \"schemes\": [] }",
+                """
+                "source_verification": { "allow_unverified": true, "schemes": [] },
+                "source_adapter": {
+                  "key": "verified_webhook",
+                  "contract_version": 1,
+                  "config": { "signature_header": "X-Hub-Signature-256" }
+                }
+                """,
+                StringComparison.Ordinal);
+
+        var exception = Assert.Throws<IntegrationManifestValidationException>(
+            () => Parse(Json(json)));
+
+        Assert.Contains("requires source_verification.schemes to declare exactly", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static string ManifestWithSourceAdapter(string adapterKey, string schemeName) => ValidManifest()
+        .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
+        .Replace(
+            "\"destination_configuration_schema\"",
+            "\"source_configuration_schema\": { \"type\": \"object\", \"properties\": {}, \"additionalProperties\": true }, \"destination_configuration_schema\"",
+            StringComparison.Ordinal)
+        .Replace(
+            "\"source_verification\": { \"allow_unverified\": true, \"schemes\": [] }",
+            $$"""
+            "source_verification": {
+              "allow_unverified": false,
+              "schemes": [{"scheme":"{{schemeName}}","required_config":[],"required_secret_refs":["secret"]}]
+            },
+            "source_adapter": {
+              "key": "{{adapterKey}}",
+              "contract_version": 1,
+              "config": { "signature_header": "X-Hub-Signature-256" }
+            }
+            """,
+            StringComparison.Ordinal);
 
     [Fact]
     public void FunctionalDocument_ExcludesPresentationAndIsOrderInsensitive()
@@ -223,17 +343,17 @@ public sealed class IntegrationManifestParserTests
         // populated below, keeping the round trip exercised over the whole contract.
         Assert.Equal(
             [
-                "built_in_source_adapter",
                 "contract_version",
-                "destination_authentication_schemes",
+                "destination_authentication",
                 "destination_configuration_schema",
                 "direction",
                 "http_outcome",
                 "key",
                 "manifest_schema_version",
                 "presentation",
+                "source_adapter",
                 "source_configuration_schema",
-                "source_verification_schemes",
+                "source_verification",
             ],
             stored.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
@@ -241,8 +361,16 @@ public sealed class IntegrationManifestParserTests
             stored.GetProperty("presentation").EnumerateObject()
                 .Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
+            ["allow_unauthenticated", "schemes"],
+            stored.GetProperty("destination_authentication").EnumerateObject()
+                .Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
             ["required_config", "required_secret_refs", "scheme"],
-            stored.GetProperty("destination_authentication_schemes")[0].EnumerateObject()
+            stored.GetProperty("destination_authentication").GetProperty("schemes")[0].EnumerateObject()
+                .Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["config", "contract_version", "key"],
+            stored.GetProperty("source_adapter").EnumerateObject()
                 .Select(property => property.Name).Order(StringComparer.Ordinal));
 
         IntegrationManifest rehydrated =
@@ -263,8 +391,8 @@ public sealed class IntegrationManifestParserTests
             "required": ["base_uri"],
             "additionalProperties": false
           },
-          "source_verification_schemes": [],
-          "destination_authentication_schemes": [],
+          "source_verification": { "allow_unverified": true, "schemes": [] },
+          "destination_authentication": { "allow_unauthenticated": true, "schemes": [] },
           "presentation": { "name": "Example API", "event_types": [], "authoring_presets": [] }
         }
         """;
@@ -284,8 +412,8 @@ public sealed class IntegrationManifestParserTests
             "required":{{{required}}},
             "additionalProperties":false
           },
-          "source_verification_schemes":[],
-          "destination_authentication_schemes":{{{schemes}}},
+          "source_verification":{"allow_unverified":true,"schemes":[]},
+          "destination_authentication":{"allow_unauthenticated":false,"schemes":{{{schemes}}}},
           "presentation":{"name":"Set API","event_types":[],"authoring_presets":[]}
         }
         """;
@@ -315,14 +443,31 @@ public sealed class IntegrationManifestParserTests
             "required":["base_uri","region"],
             "additionalProperties":false
           },
-          "source_verification_schemes":[
-            {"scheme":"github_hmac_sha256","required_config":[],"required_secret_refs":["webhook_secret"]}
-          ],
-          "destination_authentication_schemes":[
-            {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]},
-            {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}
-          ],
-          "built_in_source_adapter":"github",
+          "source_verification":{
+            "allow_unverified":false,
+            "schemes":[
+              {"scheme":"hmac_sha256","required_config":[],"required_secret_refs":["secret"]}
+            ]
+          },
+          "destination_authentication":{
+            "allow_unauthenticated":false,
+            "schemes":[
+              {"scheme":"api_key_header","required_config":["header_name"],"required_secret_refs":["api_key"]},
+              {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}
+            ]
+          },
+          "source_adapter":{
+            "key":"verified_webhook",
+            "contract_version":1,
+            "config":{
+              "signature_header":"X-Hub-Signature-256",
+              "signature_encoding":"hex",
+              "signature_prefix":"sha256=",
+              "delivery_id_header":"X-GitHub-Delivery",
+              "event_type_header":"X-GitHub-Event",
+              "event_type_action_field":"action"
+            }
+          },
           "http_outcome":{
             "evaluator":"json_boolean",
             "field":"ok",
@@ -345,12 +490,21 @@ public sealed class IntegrationManifestParserTests
         IntegrationManifestParser.Parse(
             document,
             new FakeAuthSchemeRegistry(),
+            new FakeSourceAdapterRegistry(),
             IntegrationManifestApplyAuthority.Bootstrap(Guid.NewGuid()));
 
     private static IntegrationManifest Parse(JsonElement document) =>
         IntegrationManifestParser.Parse(
             document,
             new FakeAuthSchemeRegistry(),
+            new FakeSourceAdapterRegistry(),
+            IntegrationManifestApplyAuthority.Operator);
+
+    private static IntegrationManifest ParseWithRealSourceAdapterRegistry(JsonElement document) =>
+        IntegrationManifestParser.Parse(
+            document,
+            new FakeAuthSchemeRegistry(),
+            new Integrios.Infrastructure.Integrations.SourceAdapterRegistry(),
             IntegrationManifestApplyAuthority.Operator);
 
     private sealed class FakeAuthSchemeRegistry : IAuthSchemeRegistry
@@ -380,5 +534,28 @@ public sealed class IntegrationManifestParserTests
             HttpRequestMessage request,
             JsonElement config,
             IReadOnlyDictionary<string, string> secrets) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeSourceAdapterRegistry : ISourceAdapterRegistry
+    {
+        private static readonly IReadOnlyDictionary<(string Key, int ContractVersion), SourceAdapterRegistration> Registrations =
+            new Dictionary<(string, int), SourceAdapterRegistration>
+            {
+                [("verified_webhook", 1)] = new(
+                    "verified_webhook", 1, AuthoringSafe: true, AllowsUnverifiedUse: false,
+                    ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
+                [("github_native", 1)] = new(
+                    "github_native", 1, AuthoringSafe: false, AllowsUnverifiedUse: false,
+                    ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
+            };
+
+        public bool TryGet(string key, int contractVersion, out SourceAdapterRegistration registration) =>
+            Registrations.TryGetValue((key, contractVersion), out registration!);
+
+        private static void RequireObjectConfig(JsonElement config)
+        {
+            if (config.ValueKind != JsonValueKind.Object)
+                throw new IntegrationManifestValidationException("source_adapter.config must be an object.");
+        }
     }
 }

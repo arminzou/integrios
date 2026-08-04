@@ -9,7 +9,8 @@ public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Integrati
 
 internal sealed class BootstrapBuiltinsCommandHandler(
     IIntegrationManifestStore manifestStore,
-    IAuthSchemeRegistry authenticationSchemes)
+    IAuthSchemeRegistry authenticationSchemes,
+    ISourceAdapterRegistry sourceAdapters)
     : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Integration>>
 {
     public async Task<IReadOnlyList<Integration>> Handle(BootstrapBuiltinsCommand command, CancellationToken cancellationToken)
@@ -22,6 +23,7 @@ internal sealed class BootstrapBuiltinsCommandHandler(
             IntegrationManifest manifest = IntegrationManifestParser.Parse(
                 IntegrationManifestParser.ToJson(builtin.Manifest),
                 authenticationSchemes,
+                sourceAdapters,
                 authority);
             IntegrationManifestStoreResult result = await manifestStore.ApplyAsync(
                 manifest,

@@ -333,6 +333,97 @@ public sealed class SchemaContractLifecycleTests(DatabaseLifecycleFixture fixtur
             "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'integrations'::regclass AND tgname = 'integrations_reject_functional_update' AND tgenabled = 'O'"));
     }
 
+    [Fact]
+    public async Task V29_WrapsExistingSchemeArraysWithExplicitPermissionFlags()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 28);
+        await ExecuteAsync(database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES
+                ('29000000-0000-0000-0000-000000000001', 'v29_open', 1, 1, 'V29 Open', 'both',
+                 '[]'::jsonb, 'active',
+                 '{"manifest_schema_version":1,"key":"v29_open","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[],"presentation":{"name":"V29 Open","event_types":[],"authoring_presets":[]}}'::jsonb),
+                ('29000000-0000-0000-0000-000000000002', 'v29_authenticated', 1, 1, 'V29 Authenticated', 'destination',
+                 '["bearer_token"]'::jsonb, 'active',
+                 '{"manifest_schema_version":1,"key":"v29_authenticated","contract_version":1,"direction":"destination","destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"source_verification_schemes":[],"destination_authentication_schemes":[{"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}],"presentation":{"name":"V29 Authenticated","event_types":[],"authoring_presets":[]}}'::jsonb);
+            """);
+
+        await fixture.ExecuteMigrationSqlAsync(database, "V29__require_explicit_verification_permissions.sql");
+
+        Assert.True(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT manifest->'source_verification'->>'allow_unverified' = 'true' FROM integrations WHERE key = 'v29_open'"));
+        Assert.True(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT manifest->'destination_authentication'->>'allow_unauthenticated' = 'true' FROM integrations WHERE key = 'v29_open'"));
+
+        Assert.False(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT manifest->'destination_authentication'->>'allow_unauthenticated' = 'true' FROM integrations WHERE key = 'v29_authenticated'"));
+        Assert.Equal("bearer_token", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT manifest->'destination_authentication'->'schemes'->0->>'scheme' FROM integrations WHERE key = 'v29_authenticated'"));
+
+        Assert.Equal(0L, await DatabaseLifecycleFixture.ScalarAsync<long>(database,
+            "SELECT COUNT(*) FROM integrations WHERE manifest ? 'source_verification_schemes' OR manifest ? 'destination_authentication_schemes'"));
+        Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(database,
+            "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'integrations'::regclass AND tgname = 'integrations_reject_functional_update' AND tgenabled = 'O'"));
+    }
+
+    [Fact]
+    public async Task V30_RenamesWebhookToHttpAndMigratesConnectionUrlsToBaseUri()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 29);
+        await ExecuteAsync(database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                '00000000-0000-0000-0000-000000000001', 'webhook', 1, 1, 'Webhook', 'both',
+                '[]'::jsonb, 'active',
+                '{"manifest_schema_version":1,"key":"webhook","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true},"source_verification":{"allow_unverified":true,"schemes":[]},"destination_authentication":{"allow_unauthenticated":true,"schemes":[]},"presentation":{"name":"Webhook","event_types":[],"authoring_presets":[]}}'::jsonb);
+
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES ('30000000-0000-0000-0000-000000000001', 'v30-tenant', 'V30 Tenant', 'active');
+
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+            VALUES
+                ('30000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001',
+                 '00000000-0000-0000-0000-000000000001', 'v30-destination',
+                 '{"url":"https://example.test/hook"}', 'active'),
+                ('30000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001',
+                 '00000000-0000-0000-0000-000000000001', 'v30-source-only', '{}', 'active');
+            """);
+
+        await fixture.ExecuteMigrationSqlAsync(database, "V30__cut_over_webhook_to_http_with_base_uri.sql");
+
+        Assert.Equal(1L, await CountAsync(database, "integrations", "id = '00000000-0000-0000-0000-000000000001' AND key = 'http'"));
+        Assert.Equal(0L, await CountAsync(database, "integrations", "key = 'webhook'"));
+        Assert.Equal("uri", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT manifest->'destination_configuration_schema'->'properties'->'base_uri'->>'format' FROM integrations WHERE key = 'http'"));
+        Assert.Equal("base_uri", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT manifest->'destination_configuration_schema'->'required'->>0 FROM integrations WHERE key = 'http'"));
+        Assert.False(await DatabaseLifecycleFixture.ScalarAsync<bool>(database,
+            "SELECT (manifest->'destination_configuration_schema'->>'additionalProperties')::boolean FROM integrations WHERE key = 'http'"));
+        Assert.Equal("http", await DatabaseLifecycleFixture.ScalarAsync<string>(database,
+            "SELECT manifest->>'key' FROM integrations WHERE key = 'http'"));
+        Assert.Equal(2, await DatabaseLifecycleFixture.ScalarAsync<int>(database,
+            "SELECT jsonb_array_length(manifest->'destination_authentication'->'schemes') FROM integrations WHERE key = 'http'"));
+        Assert.Equal(2, await DatabaseLifecycleFixture.ScalarAsync<int>(database,
+            "SELECT jsonb_array_length(supported_auth_schemes) FROM integrations WHERE key = 'http'"));
+        Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(database,
+            "SELECT COUNT(*) FROM pg_trigger WHERE tgrelid = 'integrations'::regclass AND tgname = 'integrations_reject_functional_update' AND tgenabled = 'O'"));
+
+        Assert.Equal("https://example.test/hook", await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database, "SELECT config->>'base_uri' FROM connections WHERE id = '30000000-0000-0000-0000-000000000002'"));
+        Assert.Equal(0L, await CountAsync(
+            database, "connections", "id = '30000000-0000-0000-0000-000000000002' AND config ? 'url'"));
+        Assert.Equal(1L, await CountAsync(
+            database, "connections", "id = '30000000-0000-0000-0000-000000000003' AND config = '{}'::jsonb"));
+    }
+
     private const string V27GraphSql =
         """
         INSERT INTO tenants (id, slug, name, status)

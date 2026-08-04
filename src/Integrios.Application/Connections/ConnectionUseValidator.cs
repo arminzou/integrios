@@ -15,7 +15,8 @@ internal static class ConnectionUseValidator
         ValidateConfiguration(connection.Config, integration.Manifest.SourceConfigurationSchema, "source");
         RequireSelection(
             connection.SourceVerification,
-            integration.Manifest.SourceVerificationSchemes,
+            integration.Manifest.SourceVerification.Schemes,
+            integration.Manifest.SourceVerification.AllowUnverified,
             "source verification");
     }
 
@@ -28,11 +29,12 @@ internal static class ConnectionUseValidator
             throw Invalid("destination", integration);
 
         ValidateConfiguration(connection.Config, integration.Manifest.DestinationConfigurationSchema, "destination");
-        ValidateHttpBaseUri(connection.Config);
+        ValidateDestinationBaseUri(connection.Config);
 
         ConnectionSchemeSelection? selection = RequireSelection(
             connection.DestinationAuthentication,
-            integration.Manifest.DestinationAuthenticationSchemes,
+            integration.Manifest.DestinationAuthentication.Schemes,
+            integration.Manifest.DestinationAuthentication.AllowUnauthenticated,
             "destination authentication");
         if (selection is not null && !registry.TryGet(selection.Scheme, out _))
         {
@@ -59,19 +61,20 @@ internal static class ConnectionUseValidator
     private static ConnectionSchemeSelection? RequireSelection(
         ConnectionSchemeSelection? selection,
         IReadOnlyList<IntegrationSchemeManifest> supportedSchemes,
+        bool allowAbsent,
         string use)
     {
-        if (supportedSchemes.Count == 0)
+        if (selection is null)
         {
-            if (selection is not null)
+            if (!allowAbsent)
                 throw new ConnectionRequestValidationException(
-                    $"This Integration does not support a {use} selection.");
+                    $"The Connection requires a {use} selection before it can serve this use.");
             return null;
         }
 
-        if (selection is null)
+        if (supportedSchemes.Count == 0)
             throw new ConnectionRequestValidationException(
-                $"The Connection requires a {use} selection before it can serve this use.");
+                $"This Integration does not support a {use} selection.");
 
         IntegrationSchemeManifest? declaration = supportedSchemes.SingleOrDefault(
             scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
@@ -126,16 +129,18 @@ internal static class ConnectionUseValidator
             throw new ConnectionRequestValidationException("The Connection's Integration must be active before this relationship can be established.");
     }
 
-    private static void ValidateHttpBaseUri(JsonElement config)
+    private static void ValidateDestinationBaseUri(JsonElement config)
     {
         if (config.ValueKind != JsonValueKind.Object
-            || !config.TryGetProperty("url", out JsonElement urlElement)
-            || urlElement.ValueKind != JsonValueKind.String
-            || !Uri.TryCreate(urlElement.GetString(), UriKind.Absolute, out Uri? uri)
-            || uri.Scheme is not ("http" or "https"))
+            || !config.TryGetProperty("base_uri", out JsonElement baseUriElement)
+            || baseUriElement.ValueKind != JsonValueKind.String
+            || !Uri.TryCreate(baseUriElement.GetString(), UriKind.Absolute, out Uri? uri)
+            || uri.Scheme is not ("http" or "https")
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
         {
             throw new ConnectionRequestValidationException(
-                "Connection destination config must contain an absolute HTTP or HTTPS 'url'.");
+                "Connection destination config must contain an absolute HTTP or HTTPS 'base_uri' with no query string or fragment.");
         }
     }
 }

@@ -277,7 +277,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
         await using (var connectionCmd = new NpgsqlCommand(
             """
             INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"url":"http://localhost:5054/sink/custom"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
+            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"base_uri":"http://localhost:5054/sink/custom"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
             """,
             connection))
         {

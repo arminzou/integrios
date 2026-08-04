@@ -439,7 +439,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private async Task AssertBootstrapStateAsync()
     {
         long builtins = await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM integrations WHERE key = 'webhook' AND status = 'active'");
+            "SELECT COUNT(*) FROM integrations WHERE key = 'http' AND status = 'active'");
         long liveAdminKeys = await ScalarAsync<long>(
             "SELECT COUNT(*) FROM admin_keys WHERE revoked_at IS NULL");
         if (builtins != 1 || liveAdminKeys != 1)

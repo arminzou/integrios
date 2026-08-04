@@ -271,6 +271,110 @@ public sealed class MigrationGuardLifecycleTests(DatabaseLifecycleFixture fixtur
         Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task V29_RejectsIntegrationMissingLegacySchemeArrays()
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 28);
+        await ExecuteAsync(database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                '29100000-0000-0000-0000-000000000001', 'v29_drifted', 1, 1, 'V29 Drifted', 'destination',
+                '[]'::jsonb, 'active',
+                '{"manifest_schema_version":1,"key":"v29_drifted","contract_version":1,"direction":"destination","destination_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_authentication_schemes":[],"presentation":{"name":"V29 Drifted","event_types":[],"authoring_presets":[]}}'::jsonb);
+            """);
+
+        var exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V29__require_explicit_verification_permissions.sql"));
+
+        Assert.Contains("missing the legacy scheme arrays", exception.MessageText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("unexpected_id", "unexpected id")]
+    [InlineData("well_known_id_drift", "well-known http Integration id assigned to an unexpected contract")]
+    [InlineData("schema_drift", "manifest has drifted")]
+    public async Task V30_RejectsUnexpectedWebhookV1Representation(string scenario, string expectedMessage)
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 29);
+        string id = scenario == "unexpected_id"
+            ? "30000000-0000-0000-0000-000000000001"
+            : "00000000-0000-0000-0000-000000000001";
+        string key = scenario == "well_known_id_drift" ? "not_webhook" : "webhook";
+        string destinationSchema = scenario == "schema_drift"
+            ? "{\"type\":\"object\",\"properties\":{\"endpoint\":{\"type\":\"string\"}},\"additionalProperties\":true}"
+            : "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\",\"format\":\"uri\"}},\"required\":[\"url\"],\"additionalProperties\":true}";
+        string insert = """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                'WEBHOOK_ID', 'WEBHOOK_KEY', 1, 1, 'Webhook', 'both', '[]'::jsonb, 'active',
+                '{"manifest_schema_version":1,"key":"WEBHOOK_KEY","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":DESTINATION_SCHEMA,"source_verification":{"allow_unverified":true,"schemes":[]},"destination_authentication":{"allow_unauthenticated":true,"schemes":[]},"presentation":{"name":"Webhook","event_types":[],"authoring_presets":[]}}'::jsonb);
+            """
+            .Replace("WEBHOOK_ID", id, StringComparison.Ordinal)
+            .Replace("WEBHOOK_KEY", key, StringComparison.Ordinal)
+            .Replace("DESTINATION_SCHEMA", destinationSchema, StringComparison.Ordinal);
+        await ExecuteAsync(database, insert);
+
+        Npgsql.PostgresException exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V30__cut_over_webhook_to_http_with_base_uri.sql"));
+
+        Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("https://example.test/hook?token=abc", false, "query string or fragment")]
+    [InlineData("https://example.test/hook#section", false, "query string or fragment")]
+    [InlineData("https://example.test/hook", true, "fields other than url")]
+    public async Task V30_RejectsConnectionConfigThatCannotEnterClosedBaseUriContract(
+        string url,
+        bool includeAdditionalField,
+        string expectedMessage)
+    {
+        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        await fixture.RunFlywayAsync(database, "migrate", target: 29);
+        await ExecuteAsync(database,
+            """
+            INSERT INTO integrations (
+                id, key, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                '00000000-0000-0000-0000-000000000001', 'webhook', 1, 1, 'Webhook', 'both',
+                '[]'::jsonb, 'active',
+                '{"manifest_schema_version":1,"key":"webhook","contract_version":1,"direction":"both","source_configuration_schema":{"type":"object","properties":{},"additionalProperties":true},"destination_configuration_schema":{"type":"object","properties":{"url":{"type":"string","format":"uri"}},"required":["url"],"additionalProperties":true},"source_verification":{"allow_unverified":true,"schemes":[]},"destination_authentication":{"allow_unauthenticated":true,"schemes":[]},"presentation":{"name":"Webhook","event_types":[],"authoring_presets":[]}}'::jsonb);
+
+            INSERT INTO tenants (id, slug, name, status)
+            VALUES ('30100000-0000-0000-0000-000000000001', 'v30-guard', 'V30 Guard', 'active');
+            """);
+        string config = includeAdditionalField
+            ? $$"""{"url":"{{url}}","legacy":"value"}"""
+            : $$"""{"url":"{{url}}"}""";
+        await ExecuteAsync(
+            database,
+            $$"""
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+            VALUES (
+                '30100000-0000-0000-0000-000000000002',
+                '30100000-0000-0000-0000-000000000001',
+                '00000000-0000-0000-0000-000000000001',
+                'v30-guard-destination',
+                '{{config}}',
+                'active');
+            """);
+
+        Npgsql.PostgresException exception = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            fixture.ExecuteMigrationSqlAsync(database, "V30__cut_over_webhook_to_http_with_base_uri.sql"));
+
+        Assert.Contains(expectedMessage, exception.MessageText, StringComparison.Ordinal);
+        Assert.Equal(url, await DatabaseLifecycleFixture.ScalarAsync<string>(
+            database, "SELECT config->>'url' FROM connections WHERE id = '30100000-0000-0000-0000-000000000002'"));
+    }
+
     private const string V21GraphSql =
         """
         INSERT INTO integrations (id, key, name, direction, status)
