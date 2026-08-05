@@ -21,7 +21,7 @@ public sealed class ApiKeysEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        CreateApiKeyResponse response = await mediator.Send(
+        CreateApiKeyResult response = await mediator.Send(
             new CreateApiKeyCommand(tenantId, request.Name, request.Description, request.ExpiresAt),
             cancellationToken);
         return Results.Created($"/admin/tenants/{tenantId}/api-keys/{response.ApiKey.Id}", response);
@@ -35,7 +35,7 @@ public sealed class ApiKeysEndpoints : IEndpointGroup
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        ApiKeyListResponse response = await mediator.Send(
+        ApiKeyListDto response = await mediator.Send(
             new ListApiKeysByTenantQuery(tenantId, after, limit), cancellationToken);
         return Results.Ok(response);
     }
@@ -46,7 +46,7 @@ public sealed class ApiKeysEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        ApiKeyResponse? response = await mediator.Send(new GetApiKeyByIdQuery(tenantId, id), cancellationToken);
+        ApiKeyDto? response = await mediator.Send(new GetApiKeyByIdQuery(tenantId, id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 

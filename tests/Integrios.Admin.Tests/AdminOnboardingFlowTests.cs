@@ -65,7 +65,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
         Assert.Equal(HttpStatusCode.Created, apiKeyResponse.StatusCode);
 
-        var apiKey = await apiKeyResponse.Content.ReadFromJsonAsync<CreateApiKeyResponse>(WebJson);
+        var apiKey = await apiKeyResponse.Content.ReadFromJsonAsync<CreateApiKeyResult>(WebJson);
         Assert.NotNull(apiKey);
         Assert.False(string.IsNullOrWhiteSpace(apiKey.Token));
         Assert.Equal("acme-ingress", apiKey.ApiKey.Name);

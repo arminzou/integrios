@@ -2,7 +2,7 @@ using Integrios.Domain.Tenants;
 
 namespace Integrios.Application.ApiKeys;
 
-public sealed record ApiKeyResponse
+public sealed record ApiKeyDto
 {
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
@@ -14,7 +14,7 @@ public sealed record ApiKeyResponse
     public DateTimeOffset? ExpiresAt { get; init; }
     public DateTimeOffset? LastUsedAt { get; init; }
 
-    public static ApiKeyResponse From(ApiKey key) => new()
+    public static ApiKeyDto From(ApiKey key) => new()
     {
         Id = key.Id,
         TenantId = key.TenantId,
@@ -26,17 +26,4 @@ public sealed record ApiKeyResponse
         ExpiresAt = key.ExpiresAt,
         LastUsedAt = key.LastUsedAt,
     };
-}
-
-// Returned only on create — carries the plaintext token once.
-public sealed record CreateApiKeyResponse
-{
-    public required ApiKeyResponse ApiKey { get; init; }
-    public required string Token { get; init; }
-}
-
-public sealed record ApiKeyListResponse
-{
-    public required IReadOnlyList<ApiKeyResponse> Items { get; init; }
-    public string? NextCursor { get; init; }
 }
