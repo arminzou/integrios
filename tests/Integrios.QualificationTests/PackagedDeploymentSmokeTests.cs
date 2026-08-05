@@ -114,7 +114,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             {
                 name = "qualification-retry",
                 match_rules = new { event_type = "payment.created" },
-                destinationConnectionId
+                destination_connection_id = destinationConnectionId
             });
 
         using HttpResponseMessage failMode = await fixture.MockSinkClient.PutAsJsonAsync(
@@ -236,14 +236,14 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name = topicName, sourceConnectionIds = new[] { sourceConnectionId } });
+            new { name = topicName, source_connection_ids = new[] { sourceConnectionId } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
                 name = "blocked-delivery",
                 match_rules = new { event_type = "delivery.blocked" },
-                destinationConnectionId
+                destination_connection_id = destinationConnectionId
             });
 
         using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
