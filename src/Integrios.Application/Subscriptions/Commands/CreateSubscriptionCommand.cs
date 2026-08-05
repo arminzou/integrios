@@ -17,7 +17,7 @@ public sealed record CreateSubscriptionCommand(
     Guid DestinationConnectionId,
     JsonElement? TransformConfig,
     int OrderIndex,
-    string? Description) : IRequest<SubscriptionResponse?>;
+    string? Description) : IRequest<SubscriptionDto?>;
 
 internal sealed class CreateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
@@ -26,9 +26,9 @@ internal sealed class CreateSubscriptionCommandHandler(
     IConnectionAuthoringLock authoringLock,
     IIntegrationCatalog integrationCatalog,
     IAuthSchemeRegistry authSchemeRegistry,
-    ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionResponse?>
+    ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionDto?>
 {
-    public async Task<SubscriptionResponse?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
+    public async Task<SubscriptionDto?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
     {
         SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, transformEvaluator);
 
@@ -54,7 +54,7 @@ internal sealed class CreateSubscriptionCommandHandler(
             command.Description,
             cancellationToken);
 
-        return subscription is null ? null : SubscriptionResponse.From(subscription);
+        return subscription is null ? null : SubscriptionDto.From(subscription);
     }
 
     private async Task EnsureDestinationConnectionIsAllowed(Guid tenantId, Guid destinationConnectionId, CancellationToken cancellationToken)

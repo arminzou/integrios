@@ -209,7 +209,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
         return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson))!;
     }
 
-    private async Task<SubscriptionResponse> CreateSubscriptionAsync(Guid topicId, string name, string eventType)
+    private async Task<SubscriptionDto> CreateSubscriptionAsync(Guid topicId, string name, string eventType)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -223,7 +223,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             }));
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson))!;
+        return (await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson))!;
     }
 
     private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)
@@ -291,7 +291,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
         return connectionId;
     }
 
-    private sealed record SubscriptionResponse(
+    private sealed record SubscriptionDto(
         Guid Id,
         Guid TopicId,
         Guid TenantId,

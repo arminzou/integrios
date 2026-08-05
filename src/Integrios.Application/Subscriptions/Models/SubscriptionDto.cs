@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Integrios.Application.Subscriptions;
 
-public sealed record SubscriptionResponse(
+public sealed record SubscriptionDto(
     Guid Id,
     Guid TopicId,
     Guid TenantId,
@@ -17,7 +17,7 @@ public sealed record SubscriptionResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
-    public static SubscriptionResponse From(Subscription subscription) => new(
+    public static SubscriptionDto From(Subscription subscription) => new(
         subscription.Id,
         subscription.TopicId,
         subscription.TenantId,
@@ -31,5 +31,3 @@ public sealed record SubscriptionResponse(
         subscription.CreatedAt,
         subscription.UpdatedAt);
 }
-
-public sealed record SubscriptionListResponse(IReadOnlyList<SubscriptionResponse> Items, string? NextCursor);

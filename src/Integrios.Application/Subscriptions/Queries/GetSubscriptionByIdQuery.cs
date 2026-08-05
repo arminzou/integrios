@@ -2,14 +2,14 @@ using MediatR;
 
 namespace Integrios.Application.Subscriptions;
 
-public sealed record GetSubscriptionByIdQuery(Guid TenantId, Guid TopicId, Guid Id) : IRequest<SubscriptionResponse?>;
+public sealed record GetSubscriptionByIdQuery(Guid TenantId, Guid TopicId, Guid Id) : IRequest<SubscriptionDto?>;
 
 internal sealed class GetSubscriptionByIdQueryHandler(ISubscriptionRepository subscriptionRepository)
-    : IRequestHandler<GetSubscriptionByIdQuery, SubscriptionResponse?>
+    : IRequestHandler<GetSubscriptionByIdQuery, SubscriptionDto?>
 {
-    public async Task<SubscriptionResponse?> Handle(GetSubscriptionByIdQuery query, CancellationToken cancellationToken)
+    public async Task<SubscriptionDto?> Handle(GetSubscriptionByIdQuery query, CancellationToken cancellationToken)
     {
         var subscription = await subscriptionRepository.GetByIdAsync(query.TenantId, query.TopicId, query.Id, cancellationToken);
-        return subscription is null ? null : SubscriptionResponse.From(subscription);
+        return subscription is null ? null : SubscriptionDto.From(subscription);
     }
 }
