@@ -11,7 +11,7 @@ internal sealed class PostgresActiveApiKeyLookup(IDbConnectionFactory connection
 {
     public async Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(
         string keyHash,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT

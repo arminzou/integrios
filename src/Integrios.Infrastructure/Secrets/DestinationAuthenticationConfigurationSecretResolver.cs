@@ -11,7 +11,7 @@ internal sealed class DestinationAuthenticationConfigurationSecretResolver(IConf
     public Task<string> ResolveAsync(
         TenantSecretScope tenant,
         string secretReference,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         SecretValueValidator.ValidateScope(tenant, secretReference, ProviderName);

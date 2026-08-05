@@ -45,16 +45,16 @@ public sealed class SecretValidationCatalogTests : IClassFixture<PostgresApiFixt
         await using NpgsqlDataSource dataSource = new NpgsqlDataSourceBuilder(fixture.ConnectionString).Build();
         var catalog = new PostgresSecretValidationCatalog(new NpgsqlConnectionFactory(dataSource));
 
-        var selectedTenant = await catalog.FindTenantBySlugAsync("test-tenant-b");
+        var selectedTenant = await catalog.FindTenantBySlugAsync("test-tenant-b", CancellationToken.None);
         Assert.NotNull(selectedTenant);
         Assert.Equal(OperationalStatus.Disabled, selectedTenant.Status);
-        Assert.DoesNotContain(await catalog.ListActiveTenantsAsync(), tenant => tenant.Id == fixture.TenantBId);
+        Assert.DoesNotContain(await catalog.ListActiveTenantsAsync(CancellationToken.None), tenant => tenant.Id == fixture.TenantBId);
 
-        var selectedConnection = await catalog.FindConnectionAsync(fixture.TenantAId, disabledConnectionId);
+        var selectedConnection = await catalog.FindConnectionAsync(fixture.TenantAId, disabledConnectionId, CancellationToken.None);
         Assert.NotNull(selectedConnection);
         Assert.Equal(OperationalStatus.Disabled, selectedConnection.Status);
 
-        var activeConnections = await catalog.ListActiveConnectionsAsync(fixture.TenantAId);
+        var activeConnections = await catalog.ListActiveConnectionsAsync(fixture.TenantAId, CancellationToken.None);
         Assert.Contains(activeConnections, connection => connection.Id == activeConnectionId);
         Assert.DoesNotContain(activeConnections, connection => connection.Id == disabledConnectionId);
     }

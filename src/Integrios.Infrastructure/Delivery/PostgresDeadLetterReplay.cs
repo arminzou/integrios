@@ -9,7 +9,7 @@ internal sealed class PostgresDeadLetterReplay(IDbConnectionFactory connectionFa
     public async Task<bool> ReplayDeadLetteredAsync(
         Guid tenantId,
         Guid eventId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 

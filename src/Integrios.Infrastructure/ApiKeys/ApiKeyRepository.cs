@@ -9,7 +9,7 @@ namespace Integrios.Infrastructure.ApiKeys;
 
 internal sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : IApiKeyRepository
 {
-    public async Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken = default)
+    public async Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken)
     {
         const string sql = """
             INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, status, description, created_at, expires_at)
@@ -34,7 +34,7 @@ internal sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) :
     }
 
     // Admin plane: get one key scoped to a tenant
-    public async Task<ApiKey?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
+    public async Task<ApiKey?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT id, tenant_id, name, key_prefix, key_hash, status, description, created_at, expires_at, last_used_at, revoked_at
@@ -49,7 +49,7 @@ internal sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) :
 
     // Admin plane: list keys for a tenant with cursor-based pagination
     public async Task<(IReadOnlyList<ApiKey> Items, string? NextCursor)> ListByTenantAsync(
-        Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default)
+        Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
@@ -88,7 +88,7 @@ internal sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) :
     }
 
     // Admin plane: revoke a key (tenant-scoped — cross-tenant revoke is impossible)
-    public async Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE api_keys

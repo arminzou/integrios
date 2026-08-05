@@ -8,7 +8,7 @@ namespace Integrios.Infrastructure.Outbox;
 
 internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory) : IOutboxFanout
 {
-    public async Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken = default)
+    public async Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);

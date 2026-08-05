@@ -22,7 +22,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
 
-        SubscriptionDeliveryWorkItem? claimed = await fixture.DeliveryQueue.ClaimNextAsync();
+        SubscriptionDeliveryWorkItem? claimed = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
 
         Assert.NotNull(claimed);
         Assert.Equal(deliveryId, claimed.Id);
@@ -49,8 +49,8 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
 
         SubscriptionDeliveryWorkItem?[] claims = await Task.WhenAll(
-            fixture.DeliveryQueue.ClaimNextAsync(),
-            fixture.DeliveryQueue.ClaimNextAsync());
+            fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None),
+            fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
 
         SubscriptionDeliveryWorkItem claimed = Assert.Single(claims, claim => claim is not null)!;
         Assert.Equal(deliveryId, claimed.Id);
@@ -80,7 +80,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
 
         try
         {
-            await Assert.ThrowsAsync<PostgresException>(() => fixture.DeliveryQueue.ClaimNextAsync());
+            await Assert.ThrowsAsync<PostgresException>(() => fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
         }
         finally
         {
@@ -104,7 +104,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
         SubscriptionDeliveryWorkItem claimed = Assert.IsType<SubscriptionDeliveryWorkItem>(
-            await fixture.DeliveryQueue.ClaimNextAsync());
+            await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
         await ExecuteSqlAsync(
             """
             CREATE FUNCTION test_fail_delivery_finalization() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -121,7 +121,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         try
         {
             await Assert.ThrowsAsync<PostgresException>(() =>
-                fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(claimed)));
+                fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(claimed), CancellationToken.None));
         }
         finally
         {
@@ -146,12 +146,12 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
     public async Task ExpiredLease_ReclaimsWithNewFenceAndRejectsStaleFinalization()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        SubscriptionDeliveryWorkItem? firstClaim = await fixture.DeliveryQueue.ClaimNextAsync();
+        SubscriptionDeliveryWorkItem? firstClaim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
         Assert.NotNull(firstClaim);
         SubscriptionDeliveryWorkItem first = firstClaim;
         await fixture.ForceLeaseExpiredAsync(deliveryId);
 
-        SubscriptionDeliveryWorkItem? secondClaim = await fixture.DeliveryQueue.ClaimNextAsync();
+        SubscriptionDeliveryWorkItem? secondClaim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
         Assert.NotNull(secondClaim);
         SubscriptionDeliveryWorkItem second = secondClaim;
 
@@ -161,7 +161,8 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         Assert.Equal(["indeterminate", "in_progress"], attemptsAfterReclaim.Select(attempt => attempt.Status));
 
         DeliveryFinalizationResult staleResult = await fixture.DeliveryQueue.FinalizeAsync(
-            SuccessfulCompletion(first));
+            SuccessfulCompletion(first),
+            CancellationToken.None);
 
         Assert.Equal(DeliveryFinalizationStatus.OwnershipLost, staleResult.Status);
         SubscriptionDeliveryState stillOwned = await fixture.GetSubscriptionDeliveryAsync(deliveryId);
@@ -169,7 +170,8 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         Assert.Equal(second.AttemptId, stillOwned.ActiveAttemptId);
 
         DeliveryFinalizationResult activeResult = await fixture.DeliveryQueue.FinalizeAsync(
-            SuccessfulCompletion(second));
+            SuccessfulCompletion(second),
+            CancellationToken.None);
         Assert.Equal(DeliveryFinalizationStatus.Applied, activeResult.Status);
         Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, activeResult.Disposition);
 
@@ -187,7 +189,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         const long advisoryLockKey = 8_931_047_221;
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
         SubscriptionDeliveryWorkItem first = Assert.IsType<SubscriptionDeliveryWorkItem>(
-            await fixture.DeliveryQueue.ClaimNextAsync());
+            await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
         await fixture.ForceLeaseExpiredAsync(deliveryId);
 
         string blockedStatus = finalizationWins ? "succeeded" : "indeterminate";
@@ -203,20 +205,20 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         try
         {
             if (finalizationWins)
-                finalizationTask = fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(first));
+                finalizationTask = fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(first), CancellationToken.None);
             else
-                reclaimTask = fixture.DeliveryQueue.ClaimNextAsync();
+                reclaimTask = fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
 
             await WaitForRaceBarrierAsync();
 
             if (finalizationWins)
             {
-                reclaimTask = fixture.DeliveryQueue.ClaimNextAsync();
+                reclaimTask = fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
                 Assert.Null(await reclaimTask);
             }
             else
             {
-                finalizationTask = fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(first));
+                finalizationTask = fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(first), CancellationToken.None);
                 await WaitForBlockedFinalizationAsync();
             }
 
@@ -266,7 +268,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
 
         for (int expectedAttempt = 1; expectedAttempt <= RetryPolicy.DefaultMaxAttempts; expectedAttempt++)
         {
-            SubscriptionDeliveryWorkItem? claim = await fixture.DeliveryQueue.ClaimNextAsync();
+            SubscriptionDeliveryWorkItem? claim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
             Assert.NotNull(claim);
             SubscriptionDeliveryWorkItem claimed = claim;
             Assert.Equal(expectedAttempt, claimed.AttemptNumber);
@@ -274,11 +276,11 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         }
 
         var recovery = Assert.IsType<RecoveredSubscriptionDeliveryDeadLetter>(
-            await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync());
+            await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None));
         Assert.Equal(deliveryId, recovery.DeliveryId);
         Assert.Equal(RetryPolicy.DefaultMaxAttempts, recovery.AttemptNumber);
         Assert.NotEqual(Guid.Empty, recovery.AttemptId);
-        Assert.Null(await fixture.DeliveryQueue.ClaimNextAsync());
+        Assert.Null(await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
 
         SubscriptionDeliveryState delivery = await fixture.GetSubscriptionDeliveryAsync(deliveryId);
         Assert.Equal("dead_lettered", delivery.Status);
@@ -301,7 +303,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         for (int attemptNumber = 1; attemptNumber <= RetryPolicy.DefaultMaxAttempts; attemptNumber++)
         {
             SubscriptionDeliveryWorkItem claimed = Assert.IsType<SubscriptionDeliveryWorkItem>(
-                await fixture.DeliveryQueue.ClaimNextAsync());
+                await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
             Assert.Equal(exhaustedDeliveryId, claimed.Id);
             await fixture.ForceLeaseExpiredAsync(exhaustedDeliveryId);
         }
@@ -309,7 +311,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         Guid pendingDeliveryId = await fixture.FanoutSingleDeliveryAsync();
 
         SubscriptionDeliveryWorkItem next = Assert.IsType<SubscriptionDeliveryWorkItem>(
-            await fixture.DeliveryQueue.ClaimNextAsync());
+            await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
 
         Assert.Equal(pendingDeliveryId, next.Id);
         Assert.Equal("dead_lettered", (await fixture.GetSubscriptionDeliveryAsync(exhaustedDeliveryId)).Status);
@@ -364,11 +366,11 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
 
         for (int expectedAttempt = 1; expectedAttempt <= RetryPolicy.DefaultMaxAttempts; expectedAttempt++)
         {
-            SubscriptionDeliveryWorkItem? claim = await fixture.DeliveryQueue.ClaimNextAsync();
+            SubscriptionDeliveryWorkItem? claim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
             Assert.NotNull(claim);
             SubscriptionDeliveryWorkItem claimed = claim;
             Assert.Equal(expectedAttempt, claimed.AttemptNumber);
-            DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(FailedHttpCompletion(claimed));
+            DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(FailedHttpCompletion(claimed), CancellationToken.None);
             Assert.Equal(DeliveryFinalizationStatus.Applied, result.Status);
 
             if (expectedAttempt < RetryPolicy.DefaultMaxAttempts)
@@ -380,7 +382,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         Assert.Equal(RetryPolicy.DefaultMaxAttempts, replayed.LifetimeAttemptCount);
         Assert.Equal(0, replayed.RetryCycleAttemptCount);
 
-        SubscriptionDeliveryWorkItem? replayedClaim = await fixture.DeliveryQueue.ClaimNextAsync();
+        SubscriptionDeliveryWorkItem? replayedClaim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
         Assert.NotNull(replayedClaim);
         SubscriptionDeliveryWorkItem replayClaim = replayedClaim;
         Assert.Equal(4, replayClaim.AttemptNumber);

@@ -5,11 +5,11 @@ namespace Integrios.Application.Delivery;
 public interface ISubscriptionDeliveryQueue
 {
     Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
     Task<DeliveryFinalizationResult> FinalizeAsync(
         DeliveryAttemptCompletion completion,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }
 
 public abstract record SubscriptionDeliveryClaimResult;

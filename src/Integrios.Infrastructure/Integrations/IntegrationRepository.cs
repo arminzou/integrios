@@ -14,7 +14,7 @@ internal sealed class IntegrationRepository(IDbConnectionFactory connectionFacto
     private const string SelectColumns =
         "id, key, contract_version, manifest_schema_version, name, direction, supported_auth_schemes::text AS supported_auth_schemes_json, status, description, manifest::text AS manifest_json, created_at, updated_at";
 
-    public async Task<Integration?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<Integration?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = $"""
             SELECT {SelectColumns}
@@ -33,7 +33,7 @@ internal sealed class IntegrationRepository(IDbConnectionFactory connectionFacto
     public async Task<Integration?> GetByVersionAsync(
         string key,
         int contractVersion,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         const string sql = $"""
             SELECT {SelectColumns}
@@ -53,7 +53,7 @@ internal sealed class IntegrationRepository(IDbConnectionFactory connectionFacto
     public async Task<(IReadOnlyList<Integration> Items, string? NextCursor)> ListAsync(
         string? afterCursor,
         int limit,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
@@ -99,7 +99,7 @@ internal sealed class IntegrationRepository(IDbConnectionFactory connectionFacto
     public async Task<IntegrationManifestStoreResult> ApplyAsync(
         IntegrationManifest manifest,
         IntegrationManifestApplyAuthority authority,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         const string insertSql = $"""
             INSERT INTO integrations (

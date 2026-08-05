@@ -10,8 +10,8 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
     public async Task<DeliveryResult> DeliverAsync(
         string url,
         string payloadJson,
-        Action<HttpRequestMessage>? decorate = null,
-        CancellationToken cancellationToken = default)
+        Action<HttpRequestMessage>? decorate,
+        CancellationToken cancellationToken)
     {
         if (!OutboundHttpDestination.TryParse(url, out Uri? destination))
         {

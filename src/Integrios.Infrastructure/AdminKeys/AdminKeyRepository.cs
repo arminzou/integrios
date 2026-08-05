@@ -9,7 +9,7 @@ internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory)
     : IAdminKeyLookup, IAdminKeyLifecycle
 {
     public async Task<AdminKey?> FindActiveByPublicKeyAsync(
-        string publicKey, CancellationToken cancellationToken = default)
+        string publicKey, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT
@@ -30,7 +30,7 @@ internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory)
     }
 
     // Bootstrap: does a live deployment-wide admin key already exist?
-    public async Task<bool> HasLiveKeyAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> HasLiveKeyAsync(CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT EXISTS (
@@ -43,7 +43,7 @@ internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory)
     }
 
     // Bootstrap: insert the first admin key row
-    public async Task<AdminKey> InsertAsync(AdminKey adminKey, CancellationToken cancellationToken = default)
+    public async Task<AdminKey> InsertAsync(AdminKey adminKey, CancellationToken cancellationToken)
     {
         const string sql = """
             INSERT INTO admin_keys (id, public_key, secret_hash, name, created_at)
@@ -73,7 +73,7 @@ internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory)
     }
 
     // Rotate the live deployment-wide admin key: revoke the current one (if any), insert newKey.
-    public async Task<AdminKey> RotateAsync(AdminKey newKey, CancellationToken cancellationToken = default)
+    public async Task<AdminKey> RotateAsync(AdminKey newKey, CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);

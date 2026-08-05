@@ -6,5 +6,5 @@ public interface IActiveApiKeyLookup
 {
     Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(
         string keyHash,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }

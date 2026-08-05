@@ -11,7 +11,7 @@ internal sealed class PostgresIntakeTopicResolver(IDbConnectionFactory connectio
         Guid tenantId,
         string topicName,
         Guid sourceConnectionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         return await connection.QuerySingleOrDefaultAsync<Guid?>(

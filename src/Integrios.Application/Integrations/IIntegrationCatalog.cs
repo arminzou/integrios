@@ -6,10 +6,10 @@ public interface IIntegrationCatalog
 {
     Task<Integration?> GetByIdAsync(
         Guid id,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
     Task<(IReadOnlyList<Integration> Items, string? NextCursor)> ListAsync(
         string? afterCursor,
         int limit,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }

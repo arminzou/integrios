@@ -20,8 +20,8 @@ public sealed class SecretResolverTests : IDisposable
         WriteSecret("tenant-b", "api_key", "second");
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
 
-        string tenantA = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key");
-        string tenantB = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key");
+        string tenantA = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None);
+        string tenantB = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key", CancellationToken.None);
 
         Assert.Equal("first\n", tenantA);
         Assert.Equal("second", tenantB);
@@ -34,9 +34,9 @@ public sealed class SecretResolverTests : IDisposable
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
         TenantSecretScope tenant = new(Guid.NewGuid(), "tenant-a");
 
-        Assert.Equal("before", await resolver.ResolveAsync(tenant, "api_key"));
+        Assert.Equal("before", await resolver.ResolveAsync(tenant, "api_key", CancellationToken.None));
         WriteSecret("tenant-a", "api_key", "after");
-        Assert.Equal("after", await resolver.ResolveAsync(tenant, "api_key"));
+        Assert.Equal("after", await resolver.ResolveAsync(tenant, "api_key", CancellationToken.None));
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class SecretResolverTests : IDisposable
 
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
 
-        Assert.Equal("linked-secret", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
+        Assert.Equal("linked-secret", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
     }
 
     [Theory]
@@ -71,7 +71,7 @@ public sealed class SecretResolverTests : IDisposable
 
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
         SecretResolutionException error = await Assert.ThrowsAsync<SecretResolutionException>(
-            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
+            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
 
         Assert.Equal("api_key", error.SecretReference);
         Assert.Equal("file", error.ProviderName);
@@ -86,7 +86,7 @@ public sealed class SecretResolverTests : IDisposable
     {
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
         SecretResolutionException error = await Assert.ThrowsAsync<SecretResolutionException>(
-            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), reference));
+            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), reference, CancellationToken.None));
         Assert.Equal("invalid", error.SecretReference);
         Assert.DoesNotContain(reference, error.Message, StringComparison.Ordinal);
     }
@@ -101,8 +101,8 @@ public sealed class SecretResolverTests : IDisposable
         });
         var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
 
-        Assert.Equal("first", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
-        Assert.Equal("second", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key"));
+        Assert.Equal("first", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
+        Assert.Equal("second", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key", CancellationToken.None));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class SecretResolverTests : IDisposable
         var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
 
         await Assert.ThrowsAsync<SecretResolutionException>(
-            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
+            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public sealed class SecretResolverTests : IDisposable
         IDestinationAuthenticationSecretResolver resolver = provider.GetRequiredService<IDestinationAuthenticationSecretResolver>();
         Assert.IsType<DestinationAuthenticationConfigurationSecretResolver>(resolver);
         await Assert.ThrowsAsync<SecretResolutionException>(
-            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key"));
+            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
     }
 
     [Fact]
@@ -214,7 +214,8 @@ public sealed class SecretResolverTests : IDisposable
 
         Assert.Equal("source-value", await resolver.ResolveAsync(
             new TenantSecretScope(Guid.NewGuid(), "tenant-a"),
-            "webhook_secret"));
+            "webhook_secret",
+            CancellationToken.None));
         Assert.Null(provider.GetService<IDestinationAuthenticationSecretResolver>());
     }
 
@@ -226,7 +227,8 @@ public sealed class SecretResolverTests : IDisposable
 
         string value = await resolver.ResolveAsync(
             new TenantSecretScope(Guid.NewGuid(), "tenant-a"),
-            "webhook_secret");
+            "webhook_secret",
+            CancellationToken.None);
 
         Assert.Equal("source-file-value", value);
         Assert.IsAssignableFrom<ISourceVerificationSecretResolver>(resolver);

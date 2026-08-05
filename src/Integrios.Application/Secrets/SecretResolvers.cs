@@ -7,7 +7,7 @@ public interface IDestinationAuthenticationSecretResolver
     Task<string> ResolveAsync(
         TenantSecretScope tenant,
         string secretReference,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }
 
 public interface ISourceVerificationSecretResolver
@@ -17,7 +17,7 @@ public interface ISourceVerificationSecretResolver
     Task<string> ResolveAsync(
         TenantSecretScope tenant,
         string secretReference,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }
 
 public sealed record TenantSecretScope(Guid Id, string Slug);

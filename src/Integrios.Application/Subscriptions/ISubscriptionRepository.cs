@@ -14,16 +14,16 @@ public interface ISubscriptionRepository
         JsonElement? transformConfig,
         int orderIndex,
         string? description,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
-    Task<Subscription?> GetByIdAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default);
+    Task<Subscription?> GetByIdAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken);
 
     Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(
         Guid tenantId,
         Guid topicId,
         string? afterCursor,
         int limit,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
     Task<Subscription?> UpdateAsync(
         Guid tenantId,
@@ -35,7 +35,7 @@ public interface ISubscriptionRepository
         JsonElement? transformConfig,
         int orderIndex,
         string? description,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
-    Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default);
+    Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken);
 }

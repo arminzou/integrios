@@ -7,17 +7,17 @@ public interface ISecretValidationCatalog
 {
     Task<Tenant?> FindTenantBySlugAsync(
         string slug,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Tenant>> ListActiveTenantsAsync(
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
     Task<Connection?> FindConnectionAsync(
         Guid tenantId,
         Guid connectionId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Connection>> ListActiveConnectionsAsync(
         Guid tenantId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }

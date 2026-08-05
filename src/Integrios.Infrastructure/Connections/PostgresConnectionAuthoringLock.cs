@@ -15,7 +15,7 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
 
     public async Task<IAsyncDisposable> AcquireAsync(
         IEnumerable<Guid> connectionIds,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         long[] keys = connectionIds
             .Distinct()

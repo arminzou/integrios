@@ -35,7 +35,7 @@ internal sealed class SubscriptionRepository(IDbConnectionFactory connectionFact
         JsonElement? transformConfig,
         int orderIndex,
         string? description,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 
@@ -102,7 +102,7 @@ internal sealed class SubscriptionRepository(IDbConnectionFactory connectionFact
         Guid tenantId,
         Guid topicId,
         Guid id,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 
@@ -128,7 +128,7 @@ internal sealed class SubscriptionRepository(IDbConnectionFactory connectionFact
         Guid topicId,
         string? afterCursor,
         int limit,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
@@ -188,7 +188,7 @@ internal sealed class SubscriptionRepository(IDbConnectionFactory connectionFact
         JsonElement? transformConfig,
         int orderIndex,
         string? description,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 
@@ -236,7 +236,7 @@ internal sealed class SubscriptionRepository(IDbConnectionFactory connectionFact
         return row?.ToSubscription();
     }
 
-    public async Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         var affected = await connection.ExecuteAsync(
