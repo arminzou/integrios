@@ -24,7 +24,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        ConnectionResponse response = await mediator.Send(
+        ConnectionDto response = await mediator.Send(
             new CreateConnectionCommand(
                 tenantId,
                 request.IntegrationId,
@@ -47,7 +47,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        ConnectionListResponse response = await mediator.Send(
+        ConnectionListDto response = await mediator.Send(
             new ListConnectionsByTenantQuery(tenantId, after, limit),
             cancellationToken);
         return Results.Ok(response);
@@ -59,7 +59,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        ConnectionResponse? response = await mediator.Send(new GetConnectionByIdQuery(tenantId, id), cancellationToken);
+        ConnectionDto? response = await mediator.Send(new GetConnectionByIdQuery(tenantId, id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
@@ -70,7 +70,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        ConnectionResponse? response = await mediator.Send(
+        ConnectionDto? response = await mediator.Send(
             new UpdateConnectionCommand(
                 tenantId,
                 id,

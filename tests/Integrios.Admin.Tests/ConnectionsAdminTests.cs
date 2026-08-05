@@ -35,7 +35,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
-        var body = await response.Content.ReadFromJsonAsync<ConnectionResponse>(webJson);
+        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(webJson);
         Assert.NotNull(body);
         Assert.Equal(fixture.TenantId, body!.TenantId);
         Assert.Equal("erp-sink", body.Name);
@@ -117,7 +117,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             new { api_key = "erp_api_key" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ConnectionResponse>(webJson);
+        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(webJson);
         Assert.NotNull(body);
         Assert.NotNull(body!.DestinationAuthentication);
         Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
@@ -319,7 +319,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ConnectionResponse>(webJson);
+        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(webJson);
         Assert.NotNull(body);
         Assert.NotNull(body!.DestinationAuthentication);
         Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
@@ -413,7 +413,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             "api_key_header",
             new { header_name = "X-Api-Key" },
             new { api_key = "erp_api_key" });
-        ConnectionResponse created = (await createdResponse.Content.ReadFromJsonAsync<ConnectionResponse>(webJson))!;
+        ConnectionDto created = (await createdResponse.Content.ReadFromJsonAsync<ConnectionDto>(webJson))!;
 
         HttpResponseMessage topicResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,

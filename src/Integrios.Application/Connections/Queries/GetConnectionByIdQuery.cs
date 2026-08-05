@@ -3,14 +3,14 @@ using MediatR;
 
 namespace Integrios.Application.Connections;
 
-public sealed record GetConnectionByIdQuery(Guid TenantId, Guid Id) : IRequest<ConnectionResponse?>;
+public sealed record GetConnectionByIdQuery(Guid TenantId, Guid Id) : IRequest<ConnectionDto?>;
 
 internal sealed class GetConnectionByIdQueryHandler(IConnectionRepository repository)
-    : IRequestHandler<GetConnectionByIdQuery, ConnectionResponse?>
+    : IRequestHandler<GetConnectionByIdQuery, ConnectionDto?>
 {
-    public async Task<ConnectionResponse?> Handle(GetConnectionByIdQuery query, CancellationToken cancellationToken)
+    public async Task<ConnectionDto?> Handle(GetConnectionByIdQuery query, CancellationToken cancellationToken)
     {
         Connection? connection = await repository.GetByIdAsync(query.TenantId, query.Id, cancellationToken);
-        return connection is null ? null : ConnectionResponse.From(connection);
+        return connection is null ? null : ConnectionDto.From(connection);
     }
 }
