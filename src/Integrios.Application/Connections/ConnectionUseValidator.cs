@@ -38,7 +38,7 @@ internal static class ConnectionUseValidator
             "destination authentication");
         if (selection is not null && !registry.TryGet(selection.Scheme, out _))
         {
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"Destination authentication scheme '{selection.Scheme}' is not implemented.");
         }
     }
@@ -67,19 +67,19 @@ internal static class ConnectionUseValidator
         if (selection is null)
         {
             if (!allowAbsent)
-                throw new ConnectionRequestValidationException(
+                throw new ConnectionValidationException(
                     $"The Connection requires a {use} selection before it can serve this use.");
             return null;
         }
 
         if (supportedSchemes.Count == 0)
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"This Integration does not support a {use} selection.");
 
         IntegrationSchemeManifest? declaration = supportedSchemes.SingleOrDefault(
             scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
         if (declaration is null)
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"{use} scheme '{selection.Scheme}' is not supported by this Integration.");
 
         ValidateRequiredFields(selection.Config, declaration.RequiredConfig, use, "config");
@@ -94,18 +94,18 @@ internal static class ConnectionUseValidator
         string section)
     {
         if (value.ValueKind != JsonValueKind.Object)
-            throw new ConnectionRequestValidationException($"{use} {section} must be a JSON object.");
+            throw new ConnectionValidationException($"{use} {section} must be a JSON object.");
         foreach (string field in required)
         {
             if (!value.TryGetProperty(field, out JsonElement property) || property.ValueKind == JsonValueKind.Null)
-                throw new ConnectionRequestValidationException($"{use} {section} field '{field}' is required.");
+                throw new ConnectionValidationException($"{use} {section} field '{field}' is required.");
         }
     }
 
     private static void ValidateConfiguration(JsonElement config, JsonElement? schema, string use)
     {
         if (schema is not JsonElement declaredSchema)
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"The Integration does not declare a {use} Connection configuration schema.");
 
         try
@@ -114,19 +114,19 @@ internal static class ConnectionUseValidator
         }
         catch (ConnectionConfigurationValidationException exception)
         {
-            throw new ConnectionRequestValidationException(exception.Message);
+            throw new ConnectionValidationException(exception.Message);
         }
     }
 
-    private static ConnectionRequestValidationException Invalid(string use, Integration integration) =>
+    private static ConnectionValidationException Invalid(string use, Integration integration) =>
         new($"The Connection must use an Integration whose direction permits {use} use; '{integration.Key}' does not.");
 
     private static void EnsureActive(Connection connection, Integration integration)
     {
         if (connection.Status != OperationalStatus.Active)
-            throw new ConnectionRequestValidationException("The Connection must be active before this relationship can be established.");
+            throw new ConnectionValidationException("The Connection must be active before this relationship can be established.");
         if (integration.Status != OperationalStatus.Active)
-            throw new ConnectionRequestValidationException("The Connection's Integration must be active before this relationship can be established.");
+            throw new ConnectionValidationException("The Connection's Integration must be active before this relationship can be established.");
     }
 
     private static void ValidateDestinationBaseUri(JsonElement config)
@@ -139,7 +139,7 @@ internal static class ConnectionUseValidator
             || !string.IsNullOrEmpty(uri.Query)
             || !string.IsNullOrEmpty(uri.Fragment))
         {
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 "Connection destination config must contain an absolute HTTP or HTTPS 'base_uri' with no query string or fragment.");
         }
     }

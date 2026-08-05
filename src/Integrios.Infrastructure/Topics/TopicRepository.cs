@@ -58,7 +58,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
             ex.SqlState == ForeignKeyViolation
             && ex.ConstraintName == SourceConnectionTenantConstraint)
         {
-            throw new TopicRequestValidationException(
+            throw new TopicValidationException(
                 "Every source connection must exist in the same tenant as the topic.", ex);
         }
     }
@@ -256,7 +256,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
             ex.SqlState == ForeignKeyViolation
             && ex.ConstraintName == SourceConnectionTenantConstraint)
         {
-            throw new TopicRequestValidationException(
+            throw new TopicValidationException(
                 "Every source connection must exist in the same tenant as the topic.", ex);
         }
     }
@@ -278,11 +278,11 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         await tx.RollbackAsync(ct);
 
         if (existingName is not null && string.IsNullOrWhiteSpace(requestedName))
-            throw new TopicRequestValidationException("Topic name is required for update.");
+            throw new TopicValidationException("Topic name is required for update.");
 
         if (existingName is not null && !string.Equals(existingName, requestedName, StringComparison.Ordinal))
         {
-            throw new TopicRequestValidationException(
+            throw new TopicValidationException(
                 "Topic names are immutable; create a new topic to change the stream identifier.");
         }
 

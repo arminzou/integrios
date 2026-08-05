@@ -52,18 +52,18 @@ internal sealed class UpdateTopicCommandHandler(
         foreach (Guid connectionId in connectionIds.Distinct())
         {
             Connection connection = await connectionRepository.GetByIdAsync(tenantId, connectionId, cancellationToken)
-                ?? throw new TopicRequestValidationException(
+                ?? throw new TopicValidationException(
                     "Every source Connection must exist in the same Tenant as the Topic.");
             Integration integration = await integrationCatalog.GetByIdAsync(connection.IntegrationId, cancellationToken)
-                ?? throw new TopicRequestValidationException(
+                ?? throw new TopicValidationException(
                     "A source Connection references an Integration that does not exist.");
             try
             {
                 ConnectionUseValidator.ValidateSourceAuthoring(connection, integration);
             }
-            catch (ConnectionRequestValidationException exception)
+            catch (ConnectionValidationException exception)
             {
-                throw new TopicRequestValidationException(exception.Message, exception);
+                throw new TopicValidationException(exception.Message, exception);
             }
         }
     }

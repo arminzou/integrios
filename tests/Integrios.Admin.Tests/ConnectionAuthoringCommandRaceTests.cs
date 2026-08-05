@@ -72,7 +72,7 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
         Assert.Single(outcomes, outcome => outcome.Succeeded);
         CommandOutcome failure = Assert.Single(outcomes, outcome => !outcome.Succeeded);
         Assert.True(
-            failure.Exception is ConnectionRequestValidationException or SubscriptionRequestValidationException,
+            failure.Exception is ConnectionValidationException or SubscriptionValidationException,
             failure.Exception?.ToString());
 
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
