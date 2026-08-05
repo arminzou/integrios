@@ -86,7 +86,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             $"/admin/tenants/{primary.Id}/api-keys",
             new { name = "revocation-check" });
         JsonElement spareKey = await AssertJsonAsync(spareKeyResponse, HttpStatusCode.Created);
-        Guid spareKeyId = spareKey.GetProperty("apiKey").GetProperty("id").GetGuid();
+        Guid spareKeyId = spareKey.GetProperty("api_key").GetProperty("id").GetGuid();
         var spareContext = new TenantContext(primary.Id, primary.Slug, spareKeyId, spareKey.GetProperty("token").GetString()!);
         using HttpResponseMessage revoke = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/api-keys/{spareKeyId}/revoke",
@@ -116,7 +116,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         using HttpResponseMessage duplicateTopic = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/topics",
-            new { name = "payments", sourceConnectionIds = new[] { validSource } });
+            new { name = "payments", source_connection_ids = new[] { validSource } });
         Assert.Equal(HttpStatusCode.Conflict, duplicateTopic.StatusCode);
 
         Guid isolatedSource = await CreateConnectionAsync(isolated, HttpIntegrationId, "isolated-source", "http://mocksink:8080/sink/isolated-source");
@@ -562,11 +562,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             $"/admin/tenants/{id}/api-keys",
             new { name = "qualification-ingress" });
         JsonElement apiKeyBody = await AssertJsonAsync(apiKey, HttpStatusCode.Created);
-        Assert.False(apiKeyBody.GetProperty("apiKey").TryGetProperty("scopes", out _));
+        Assert.False(apiKeyBody.GetProperty("api_key").TryGetProperty("scopes", out _));
         return new TenantContext(
             id,
             slug,
-            apiKeyBody.GetProperty("apiKey").GetProperty("id").GetGuid(),
+            apiKeyBody.GetProperty("api_key").GetProperty("id").GetGuid(),
             apiKeyBody.GetProperty("token").GetString()!);
     }
 
@@ -587,7 +587,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics",
-            new { name, sourceConnectionIds = sources });
+            new { name, source_connection_ids = sources });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
@@ -663,16 +663,16 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             "/events",
             new
             {
-                sourceConnectionId,
-                topicName,
-                eventType,
+                source_connection_id = sourceConnectionId,
+                topic_name = topicName,
+                event_type = eventType,
                 payload,
-                idempotencyKey = idempotencyKey ?? $"qualification-{Guid.NewGuid():N}"
+                idempotency_key = idempotencyKey ?? $"qualification-{Guid.NewGuid():N}"
             });
         JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Accepted);
         return new EventAcceptance(
-            body.GetProperty("eventId").GetGuid(),
-            body.GetProperty("alreadyAccepted").GetBoolean());
+            body.GetProperty("event_id").GetGuid(),
+            body.GetProperty("already_accepted").GetBoolean());
     }
 
     private async Task AssertAcceptanceRejectedAsync(TenantContext tenant, Guid sourceConnectionId, string topicName)
@@ -683,11 +683,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             "/events",
             new
             {
-                sourceConnectionId,
-                topicName,
-                eventType = "rejected.test",
+                source_connection_id = sourceConnectionId,
+                topic_name = topicName,
+                event_type = "rejected.test",
                 payload = new { rejected = true },
-                idempotencyKey = $"qualification-{Guid.NewGuid():N}"
+                idempotency_key = $"qualification-{Guid.NewGuid():N}"
             });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -802,7 +802,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
     private static object ConnectionBody(string integrationId, string name, string url, object? auth = null) => new
     {
-        integrationId,
+        integration_id = integrationId,
         name,
         config = new { base_uri = url },
         destination_authentication = auth,
@@ -812,10 +812,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private static object SubscriptionBody(string name, Guid destinationConnectionId, string eventType, object? transform = null) => new
     {
         name,
-        matchRules = new { event_type = eventType },
-        destinationConnectionId,
+        match_rules = new { event_type = eventType },
+        destination_connection_id = destinationConnectionId,
         transform,
-        orderIndex = 10
+        order_index = 10
     };
 
     private static object ApiKeyAuth(string secretReference) => new

@@ -87,7 +87,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = "00000000-0000-0000-0000-000000000001",
+                integration_id = "00000000-0000-0000-0000-000000000001",
                 name = "qualification-source",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
                 environment = "production"
@@ -96,7 +96,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = "00000000-0000-0000-0000-000000000001",
+                integration_id = "00000000-0000-0000-0000-000000000001",
                 name = "qualification-destination",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"
@@ -106,14 +106,14 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new
             {
                 name = $"payments-{suffix}",
-                sourceConnectionIds = new[] { sourceConnectionId }
+                source_connection_ids = new[] { sourceConnectionId }
             });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
                 name = "qualification-retry",
-                matchRules = new { event_type = "payment.created" },
+                match_rules = new { event_type = "payment.created" },
                 destinationConnectionId
             });
 
@@ -126,11 +126,11 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         {
             Content = JsonContent.Create(new
             {
-                sourceConnectionId,
-                topicName = $"payments-{suffix}",
-                eventType = "payment.created",
+                source_connection_id = sourceConnectionId,
+                topic_name = $"payments-{suffix}",
+                event_type = "payment.created",
                 payload = new { paymentId = $"pay-{suffix}", amount = 1200 },
-                idempotencyKey = $"qualification-{suffix}"
+                idempotency_key = $"qualification-{suffix}"
             })
         };
         ingest.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {apiToken}");
@@ -138,7 +138,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         string acceptedBody = await accepted.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
         using JsonDocument acceptedDocument = JsonDocument.Parse(acceptedBody);
-        Guid eventId = acceptedDocument.RootElement.GetProperty("eventId").GetGuid();
+        Guid eventId = acceptedDocument.RootElement.GetProperty("event_id").GetGuid();
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<long>(
@@ -220,7 +220,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = "00000000-0000-0000-0000-000000000001",
+                integration_id = "00000000-0000-0000-0000-000000000001",
                 name = "loop-isolation-source",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
                 environment = "production"
@@ -229,7 +229,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = "00000000-0000-0000-0000-000000000001",
+                integration_id = "00000000-0000-0000-0000-000000000001",
                 name = "loop-isolation-destination",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"
@@ -242,7 +242,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new
             {
                 name = "blocked-delivery",
-                matchRules = new { event_type = "delivery.blocked" },
+                match_rules = new { event_type = "delivery.blocked" },
                 destinationConnectionId
             });
 
@@ -319,11 +319,11 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         {
             Content = JsonContent.Create(new
             {
-                sourceConnectionId,
-                topicName,
-                eventType,
+                source_connection_id = sourceConnectionId,
+                topic_name = topicName,
+                event_type = eventType,
                 payload = new { idempotencyKey },
-                idempotencyKey
+                idempotency_key = idempotencyKey
             })
         };
         request.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {apiToken}");
@@ -331,7 +331,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         string responseBody = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         using JsonDocument document = JsonDocument.Parse(responseBody);
-        return document.RootElement.GetProperty("eventId").GetGuid();
+        return document.RootElement.GetProperty("event_id").GetGuid();
     }
 
     private static async Task WaitForAsync(Func<Task<bool>> condition)
