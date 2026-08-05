@@ -309,6 +309,21 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
+    [Fact]
+    public async Task PostEvents_WithRetiredSourceAssociation_Returns422()
+    {
+        var sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "retired-source");
+        await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
+        await fixture.RetireSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
+        var request = BuildRequest("idem-retired") with { SourceConnectionId = sourceConnectionId };
+
+        var response = await PostEventAsync(request);
+
+        // A retired association is a tombstone, so intake must reject it the same way it rejects
+        // one that never existed — not resolve the Topic and fail on the database trigger.
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
     private IngestEventRequest BuildRequest(string idempotencyKey)
     {
         return new IngestEventRequest

@@ -263,21 +263,11 @@ public sealed class ProjectArchitectureTests
             .ToArray();
         Assert.Equal(["Microsoft.NETCore.App"], frameworkReferences);
 
-        HashSet<string> approvedResolvedPackages =
-        [
-            "MediatR",
-            "MediatR.Contracts",
-            "Microsoft.Extensions.Configuration",
-            "Microsoft.Extensions.Configuration.Abstractions",
-            "Microsoft.Extensions.Configuration.Binder",
-            "Microsoft.Extensions.DependencyInjection.Abstractions",
-            "Microsoft.Extensions.Diagnostics",
-            "Microsoft.Extensions.Diagnostics.Abstractions",
-            "Microsoft.Extensions.Logging.Abstractions",
-            "Microsoft.Extensions.Options",
-            "Microsoft.Extensions.Options.ConfigurationExtensions",
-            "Microsoft.Extensions.Primitives"
-        ];
+        // The transitive graph is checked for what may not appear rather than pinned exactly: the
+        // rule is that Application never acquires a web, database, or transform dependency, even
+        // second-hand. An exact list would also fail on a patch bump that adds an unrelated
+        // transitive package, which tells us nothing about the rule.
+        string[] forbiddenPrefixes = ["Microsoft.AspNetCore", "Npgsql", "Dapper", "Jsonata"];
         string[] resolvedPackages = root.GetProperty("libraries")
             .EnumerateObject()
             .Where(property => property.Value.GetProperty("type").GetString() == "package")
@@ -286,6 +276,14 @@ public sealed class ProjectArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(approvedResolvedPackages.Order(StringComparer.Ordinal), resolvedPackages);
+        string[] violations = resolvedPackages
+            .Where(package => forbiddenPrefixes.Any(
+                prefix => package.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "Integrios.Application must not resolve a web, database, or transform package, directly "
+            + $"or transitively. Found: {string.Join(", ", violations)}");
     }
 }
