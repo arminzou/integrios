@@ -137,6 +137,27 @@ public sealed class ProjectArchitectureTests
     }
 
     [Fact]
+    public void SourceTree_DeclaresNoJsonPropertyNameAttributes()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string attributeName = string.Concat("JsonProperty", "Name");
+
+        string[] offenders = Directory
+            .EnumerateFiles(Path.Combine(repositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsGeneratedPath(path))
+            // Any mention at all, so a fully-qualified or aliased usage cannot slip past.
+            .Where(path => File.ReadAllText(path).Contains(attributeName, StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(repositoryRoot, path))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            "JSON casing is a policy set once per host, never a per-field decision. Types stored as "
+            + "JSON carry their own serializer options instead. Found: " + string.Join(", ", offenders));
+    }
+
+    [Fact]
     public void Infrastructure_ExportsOnlyHostCompositionExtensions()
     {
         string[] exportedTypes = Assembly.Load("Integrios.Infrastructure")

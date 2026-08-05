@@ -1,14 +1,17 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Integrios.Domain.Integrations;
 
 public sealed record ConnectionSchemeSelection
 {
-    [JsonPropertyName("scheme")]
+    // The stored form of this type is part of its contract: it round-trips through the
+    // connections.source_verification and connections.destination_authentication jsonb columns,
+    // which no HTTP host naming policy reaches. Every call site that reads or writes those
+    // columns must serialize with these options.
+    public static readonly JsonSerializerOptions StoredJson =
+        new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+
     public required string Scheme { get; init; }
-    [JsonPropertyName("config")]
     public required JsonElement Config { get; init; }
-    [JsonPropertyName("secret_refs")]
     public required JsonElement SecretRefs { get; init; }
 }

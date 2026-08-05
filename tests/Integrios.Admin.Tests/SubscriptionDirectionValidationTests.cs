@@ -4,12 +4,12 @@ using System.Text.Json;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Admin.Tests;
 
 public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     private readonly AdminApiFixture fixture;
     private HttpClient client = null!;
@@ -43,9 +43,9 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
+                match_rules = new { event_type = "payment.created" },
                 destinationConnectionId,
-                orderIndex = 10
+                order_index = 10
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -65,9 +65,9 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
+                match_rules = new { event_type = "payment.created" },
                 destinationConnectionId,
-                orderIndex = 10
+                order_index = 10
             }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -88,9 +88,9 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new
             {
                 name = "cross-tenant-sink",
-                matchRules = new { event_type = "payment.created" },
+                match_rules = new { event_type = "payment.created" },
                 destinationConnectionId,
-                orderIndex = 10
+                order_index = 10
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -111,9 +111,9 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new
             {
                 name = "missing-authentication",
-                matchRules = new { event_type = "payment.created" },
+                match_rules = new { event_type = "payment.created" },
                 destinationConnectionId,
-                orderIndex = 10
+                order_index = 10
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -132,9 +132,9 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new
             {
                 name = "erp-sink-v2",
-                matchRules = new { event_type = "payment.updated" },
+                match_rules = new { event_type = "payment.updated" },
                 destinationConnectionId,
-                orderIndex = 25
+                order_index = 25
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -156,9 +156,9 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new
             {
                 name = "cross-tenant-sink",
-                matchRules = new { event_type = "payment.updated" },
+                match_rules = new { event_type = "payment.updated" },
                 destinationConnectionId,
-                orderIndex = 25
+                order_index = 25
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -206,7 +206,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new { name }));
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson))!;
+        return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;
     }
 
     private async Task<SubscriptionDto> CreateSubscriptionAsync(Guid topicId, string name, string eventType)
@@ -217,13 +217,13 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             new
             {
                 name,
-                matchRules = new { event_type = eventType },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 10
+                match_rules = new { event_type = eventType },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 10
             }));
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson))!;
+        return (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!;
     }
 
     private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)

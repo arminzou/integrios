@@ -269,8 +269,8 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
     }
 
     private static string? Serialize(ConnectionSchemeSelection? selection) =>
-        selection is null ? null : JsonSerializer.Serialize(selection);
+        selection is null ? null : JsonSerializer.Serialize(selection, ConnectionSchemeSelection.StoredJson);
 
     private static ConnectionSchemeSelection? Deserialize(string? json) =>
-        json is null ? null : JsonSerializer.Deserialize<ConnectionSchemeSelection>(json);
+        json is null ? null : JsonSerializer.Deserialize<ConnectionSchemeSelection>(json, ConnectionSchemeSelection.StoredJson);
 }

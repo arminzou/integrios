@@ -4,12 +4,12 @@ using System.Text.Json;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Admin.Tests;
 
 public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     private readonly AdminApiFixture fixture;
     private HttpClient client = null!;
@@ -45,9 +45,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 10,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 10,
                 description = "Primary ERP delivery"
             }));
 
@@ -55,9 +55,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         var responseJson = await response.Content.ReadAsStringAsync();
         using var responseDocument = JsonDocument.Parse(responseJson);
-        Assert.False(responseDocument.RootElement.TryGetProperty("dlqEnabled", out _));
+        Assert.False(responseDocument.RootElement.TryGetProperty("dlq_enabled", out _));
 
-        var body = JsonSerializer.Deserialize<SubscriptionDto>(responseJson, WebJson);
+        var body = JsonSerializer.Deserialize<SubscriptionDto>(responseJson, HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(topic.Id, body.TopicId);
         Assert.Equal(fixture.TenantId, body.TenantId);
@@ -80,9 +80,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "disabled-destination",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 0
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 0
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -100,7 +100,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(created.Id, body.Id);
         Assert.Equal("erp-sink", body.Name);
@@ -119,7 +119,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2"));
         Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
 
-        var body1 = await page1.Content.ReadFromJsonAsync<SubscriptionListDto>(WebJson);
+        var body1 = await page1.Content.ReadFromJsonAsync<SubscriptionListDto>(HostJson.Options);
         Assert.NotNull(body1);
         Assert.Equal(2, body1.Items.Count);
         Assert.NotNull(body1.NextCursor);
@@ -129,7 +129,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2&after={Uri.EscapeDataString(body1.NextCursor!)}"));
         Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
 
-        var body2 = await page2.Content.ReadFromJsonAsync<SubscriptionListDto>(WebJson);
+        var body2 = await page2.Content.ReadFromJsonAsync<SubscriptionListDto>(HostJson.Options);
         Assert.NotNull(body2);
         Assert.Single(body2.Items);
         Assert.Null(body2.NextCursor);
@@ -147,7 +147,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionListDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionListDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(2, body.Items.Count);
         Assert.Null(body.NextCursor);
@@ -169,9 +169,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = JsonDocument.Parse(matchRulesJson).RootElement,
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 10,
+                match_rules = JsonDocument.Parse(matchRulesJson).RootElement,
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 10,
                 description = "Primary ERP delivery"
             });
 
@@ -197,9 +197,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink-v2",
-                matchRules = JsonDocument.Parse(matchRulesJson).RootElement,
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 25,
+                match_rules = JsonDocument.Parse(matchRulesJson).RootElement,
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 25,
                 description = "Updated ERP delivery"
             });
 
@@ -220,15 +220,15 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink-v2",
-                matchRules = new { event_type = "payment.updated" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 25,
+                match_rules = new { event_type = "payment.updated" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 25,
                 description = "Updated ERP delivery"
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("erp-sink-v2", body.Name);
         Assert.Equal(25, body.OrderIndex);
@@ -251,7 +251,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-        var body = await get.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("disabled", body.Status);
     }
@@ -264,7 +264,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new { name }));
 
         response.EnsureSuccessStatusCode();
-        var topic = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var topic = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         return topic!;
     }
 
@@ -282,15 +282,15 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name,
-                matchRules = new { event_type = eventType },
-                destinationConnectionId = fixture.SourceConnectionId,
+                match_rules = new { event_type = eventType },
+                destination_connection_id = fixture.SourceConnectionId,
                 orderIndex,
                 description,
                 transform
             }));
 
         response.EnsureSuccessStatusCode();
-        var subscription = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var subscription = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         return subscription!;
     }
 
@@ -328,15 +328,15 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 1,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 1,
                 transform = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.NotNull(body.TransformConfig);
         Assert.Equal("jsonata", body.TransformConfig.Value.GetProperty("engine").GetString());
@@ -355,15 +355,15 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 1,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 1,
                 transform = (object?)null
             }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Null(body.TransformConfig);
     }
@@ -383,15 +383,15 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 10,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 10,
                 transform = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.NotNull(body.TransformConfig);
         Assert.Equal("$.amount * 2", body.TransformConfig.Value.GetProperty("expression").GetString());
@@ -411,15 +411,15 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 10,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 10,
                 transform = (object?)null
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Null(body.TransformConfig);
     }
@@ -437,9 +437,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 1,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 1,
                 transform = transformElement
             }));
 
@@ -459,9 +459,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 1,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 1,
                 transform = transformElement
             }));
 
@@ -481,9 +481,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 1,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 1,
                 transform = transformElement
             }));
 
@@ -502,9 +502,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 1,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 1,
                 transform = transformElement
             }));
 
@@ -521,9 +521,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "oversized-transform",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 10,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 10,
                 transform = new
                 {
                     engine = "jsonata",
@@ -545,11 +545,11 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 transform = new { engine = "jsonata", version = "1" },
-                sampleInput = new { amount = 42 }
+                sample_input = new { amount = 42 }
             }));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(WebJson);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
         Assert.Contains("expression", body.GetProperty("error").GetString());
     }
 
@@ -567,11 +567,11 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                     version = "1",
                     expression = "amount + $context.event_type"
                 },
-                sampleInput = new { amount = 42 }
+                sample_input = new { amount = 42 }
             }));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(WebJson);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("error").GetString()));
     }
 
@@ -591,9 +591,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 10
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 10
             }));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -627,9 +627,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 1
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 1
             }));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -647,9 +647,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "erp-sink-v2",
-                matchRules = new { event_type = "payment.updated" },
-                destinationConnectionId = fixture.SourceConnectionId,
-                orderIndex = 2
+                match_rules = new { event_type = "payment.updated" },
+                destination_connection_id = fixture.SourceConnectionId,
+                order_index = 2
             }));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -666,9 +666,9 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             new
             {
                 name = "missing-subscription",
-                matchRules = new { event_type = "payment.updated" },
-                destinationConnectionId = Guid.NewGuid(),
-                orderIndex = 2
+                match_rules = new { event_type = "payment.updated" },
+                destination_connection_id = Guid.NewGuid(),
+                order_index = 2
             }));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);

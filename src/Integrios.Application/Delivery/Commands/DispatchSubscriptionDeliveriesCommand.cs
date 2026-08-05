@@ -200,7 +200,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         {
             try
             {
-                destinationAuth = JsonSerializer.Deserialize<ConnectionSchemeSelection>(row.DestinationAuthJson)
+                destinationAuth = JsonSerializer.Deserialize<ConnectionSchemeSelection>(row.DestinationAuthJson, ConnectionSchemeSelection.StoredJson)
                     ?? throw new DeliveryConfigurationException("Destination auth snapshot is invalid.");
                 handler = authSchemeRegistry.GetRequired(destinationAuth.Scheme);
             }

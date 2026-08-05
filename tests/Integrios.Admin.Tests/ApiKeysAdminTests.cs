@@ -3,12 +3,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.ApiKeys;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Admin.Tests;
 
 public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     private readonly AdminApiFixture fixture;
     private HttpClient client = null!;
@@ -43,7 +43,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
 
-        var body = await response.Content.ReadFromJsonAsync<CreateApiKeyResult>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<CreateApiKeyResult>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("ingest-key", body.ApiKey.Name);
         Assert.Equal(fixture.TenantId, body.ApiKey.TenantId);
@@ -64,7 +64,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.False(body.RootElement.GetProperty("apiKey").TryGetProperty("scopes", out _));
+        Assert.False(body.RootElement.GetProperty("api_key").TryGetProperty("scopes", out _));
     }
 
     // Get
@@ -79,7 +79,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
             $"/admin/tenants/{fixture.TenantId}/api-keys/{created.ApiKey.Id}"));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<ApiKeyDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<ApiKeyDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(created.ApiKey.Id, body.Id);
         Assert.Equal("get-test-key", body.Name);
@@ -119,7 +119,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
             $"/admin/tenants/{fixture.TenantId}/api-keys"));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<ApiKeyListDto>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<ApiKeyListDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.True(body.Items.Count >= 2);
         Assert.All(body.Items, k => Assert.StartsWith("intg_", k.KeyPrefix, StringComparison.Ordinal));
@@ -137,7 +137,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
             $"/admin/tenants/{fixture.TenantId}/api-keys?limit=2"));
         Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
 
-        var body1 = await page1.Content.ReadFromJsonAsync<ApiKeyListDto>(WebJson);
+        var body1 = await page1.Content.ReadFromJsonAsync<ApiKeyListDto>(HostJson.Options);
         Assert.NotNull(body1);
         Assert.Equal(2, body1.Items.Count);
         Assert.NotNull(body1.NextCursor);
@@ -147,7 +147,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
             $"/admin/tenants/{fixture.TenantId}/api-keys?limit=2&after={Uri.EscapeDataString(body1.NextCursor!)}"));
         Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
 
-        var body2 = await page2.Content.ReadFromJsonAsync<ApiKeyListDto>(WebJson);
+        var body2 = await page2.Content.ReadFromJsonAsync<ApiKeyListDto>(HostJson.Options);
         Assert.NotNull(body2);
         Assert.True(body2.Items.Count >= 1);
 
@@ -173,7 +173,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
             $"/admin/tenants/{fixture.TenantId}/api-keys/{created.ApiKey.Id}"));
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var body = await getResponse.Content.ReadFromJsonAsync<ApiKeyDto>(WebJson);
+        var body = await getResponse.Content.ReadFromJsonAsync<ApiKeyDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("disabled", body.Status);
     }
@@ -217,7 +217,7 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
     {
         var response = await PostApiKeyAsync(name);
         response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<CreateApiKeyResult>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<CreateApiKeyResult>(HostJson.Options);
         return body!;
     }
 

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Integrios.Application.Connections;
 using MediatR;
 
@@ -100,23 +99,23 @@ internal sealed record CreateConnectionRequest(
     Guid IntegrationId,
     string Name,
     JsonElement Config,
-    [property: JsonPropertyName("source_verification")] ConnectionSchemeSelectionRequest? SourceVerification,
-    [property: JsonPropertyName("destination_authentication")] ConnectionSchemeSelectionRequest? DestinationAuthentication,
+    ConnectionSchemeSelectionRequest? SourceVerification,
+    ConnectionSchemeSelectionRequest? DestinationAuthentication,
     string? Environment,
     string? Description);
 
 internal sealed record UpdateConnectionRequest(
     string Name,
     JsonElement Config,
-    [property: JsonPropertyName("source_verification")] ConnectionSchemeSelectionRequest? SourceVerification,
-    [property: JsonPropertyName("destination_authentication")] ConnectionSchemeSelectionRequest? DestinationAuthentication,
+    ConnectionSchemeSelectionRequest? SourceVerification,
+    ConnectionSchemeSelectionRequest? DestinationAuthentication,
     string? Environment,
     string? Description);
 
 internal sealed record ConnectionSchemeSelectionRequest(
     string Scheme,
     JsonElement Config,
-    [property: JsonPropertyName("secret_refs")] JsonElement SecretRefs)
+    JsonElement SecretRefs)
 {
     public ConnectionSchemeSelectionInput ToInput() => new()
     {

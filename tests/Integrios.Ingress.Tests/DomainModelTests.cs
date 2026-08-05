@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Events;
+using Integrios.Tests.Shared;
 using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using Integrios.Ingress.Endpoints;
@@ -11,13 +12,14 @@ public sealed class DomainModelTests
     [Fact]
     public void IngestEventRequest_RoundTrips_WithPayloadMetadataAndIdempotency()
     {
-        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        // Envelope keys are snake_case by host policy; payload and metadata are passthrough
+        // JsonElements, so their producer's own casing survives untouched.
         var json = """
             {
-              "sourceEventId": "evt_123",
-              "sourceConnectionId": "6fd3608d-b34b-4cf8-a5fd-401c8d95f149",
-              "topicName": "payments",
-              "eventType": "payment.created",
+              "source_event_id": "evt_123",
+              "source_connection_id": "6fd3608d-b34b-4cf8-a5fd-401c8d95f149",
+              "topic_name": "payments",
+              "event_type": "payment.created",
               "payload": {
                 "paymentId": "pay_456",
                 "amount": 1200
@@ -26,11 +28,11 @@ public sealed class DomainModelTests
                 "traceId": "trace-1",
                 "source": "demo-swiftpay"
               },
-              "idempotencyKey": "idem-abc"
+              "idempotency_key": "idem-abc"
             }
             """;
 
-        var request = JsonSerializer.Deserialize<IngestEventRequest>(json, jsonOptions);
+        var request = JsonSerializer.Deserialize<IngestEventRequest>(json, HostJson.Options);
 
         Assert.NotNull(request);
         Assert.Equal("evt_123", request.SourceEventId);

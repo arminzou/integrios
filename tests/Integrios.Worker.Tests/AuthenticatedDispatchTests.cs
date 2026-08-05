@@ -418,7 +418,7 @@ public sealed class AuthenticatedDispatchTests
             DateTimeOffset.UtcNow,
             null,
             integrationKey,
-            authJson ?? (auth is null ? null : JsonSerializer.Serialize(auth)),
+            authJson ?? (auth is null ? null : JsonSerializer.Serialize(auth, ConnectionSchemeSelection.StoredJson)),
             null);
 
     private sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue

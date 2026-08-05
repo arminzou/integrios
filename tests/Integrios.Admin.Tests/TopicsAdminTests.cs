@@ -4,13 +4,13 @@ using System.Text.Json;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Admin.Tests;
 
 public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     // Matches ASP.NET Core's camelCase defaults for positional record deserialization.
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     private readonly AdminApiFixture fixture;
     private HttpClient client = null!;
@@ -47,7 +47,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
 
-        var body = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(fixture.TenantId, body.TenantId);
         Assert.Equal("payments", body.Name);
@@ -63,12 +63,12 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var response = await PostTopicAsync(new
         {
             name = "orders",
-            sourceConnectionIds = new[] { fixture.SourceConnectionId }
+            source_connection_ids = new[] { fixture.SourceConnectionId }
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         var source = Assert.Single(body.Sources);
         Assert.Equal(fixture.SourceConnectionId, source.ConnectionId);
@@ -90,7 +90,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
 
         var createdResponse = await client.SendAsync(createRequest);
         Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
-        var created = await createdResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var created = await createdResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
         AdminTopicSourceResponse initialSource = Assert.Single(created.Sources);
         Assert.NotNull(initialSource.Endpoint);
@@ -107,10 +107,10 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             {
                 name = created.Name,
                 description = "unchanged association",
-                sourceConnectionIds = new[] { sourceConnectionId }
+                source_connection_ids = new[] { sourceConnectionId }
             }));
         Assert.Equal(HttpStatusCode.OK, unchangedResponse.StatusCode);
-        var unchanged = await unchangedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var unchanged = await unchangedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(unchanged);
         Assert.Equal(initial.Id, Assert.Single(unchanged.Sources).Endpoint!.Id);
 
@@ -138,7 +138,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
             new { name = created.Name, sourceConnectionIds = Array.Empty<Guid>() }));
         Assert.Equal(HttpStatusCode.OK, removedResponse.StatusCode);
-        var removed = await removedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var removed = await removedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(removed);
         Assert.Empty(removed.Sources);
 
@@ -191,7 +191,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
             new { name = created.Name, sourceConnectionIds = new[] { sourceConnectionId } }));
         Assert.Equal(HttpStatusCode.OK, recreatedResponse.StatusCode);
-        var recreated = await recreatedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var recreated = await recreatedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(recreated);
         AdminSourceEndpointResponse replacement = Assert.Single(recreated.Sources).Endpoint!;
         Assert.NotEqual(initial.Id, replacement.Id);
@@ -226,15 +226,15 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var created = await (await PostTopicAsync(new
         {
             name = "inventory",
-            sourceConnectionIds = new[] { fixture.SourceConnectionId }
-        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            source_connection_ids = new[] { fixture.SourceConnectionId }
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
 
         Assert.NotNull(created);
 
         var get = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(created.Id, body.Id);
         var source = Assert.Single(body.Sources);
@@ -245,7 +245,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task GetTopicById_ReturnsTopicWithoutSources()
     {
         var created = await (await PostTopicAsync(new { name = "no-sources" }))
-            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var get = await client.SendAsync(AdminRequest(
@@ -253,7 +253,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
 
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
-        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Empty(body.Sources);
     }
@@ -265,8 +265,8 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var created = await (await PostTopicAsync(new
         {
             name = "mixed-sources",
-            sourceConnectionIds = new[] { fixture.SourceConnectionId, adapterBackedConnectionId }
-        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            source_connection_ids = new[] { fixture.SourceConnectionId, adapterBackedConnectionId }
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var get = await client.SendAsync(AdminRequest(
@@ -274,7 +274,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
 
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
-        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(2, body.Sources.Count);
 
@@ -307,7 +307,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var page1 = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics?limit=2"));
         Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
 
-        var body1 = await page1.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        var body1 = await page1.Content.ReadFromJsonAsync<AdminTopicListResponse>(HostJson.Options);
         Assert.NotNull(body1);
         Assert.Equal(2, body1.Items.Count);
         Assert.NotNull(body1.NextCursor);
@@ -315,7 +315,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var page2 = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics?limit=2&after={Uri.EscapeDataString(body1.NextCursor!)}"));
         Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
 
-        var body2 = await page2.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        var body2 = await page2.Content.ReadFromJsonAsync<AdminTopicListResponse>(HostJson.Options);
         Assert.NotNull(body2);
         Assert.Single(body2.Items);
         Assert.Null(body2.NextCursor);
@@ -333,7 +333,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         await PostTopicAsync(new
         {
             name = "mixed-list-sources",
-            sourceConnectionIds = new[] { fixture.SourceConnectionId, adapterBackedConnectionId }
+            source_connection_ids = new[] { fixture.SourceConnectionId, adapterBackedConnectionId }
         });
 
         var response = await client.SendAsync(AdminRequest(
@@ -341,7 +341,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicListResponse>(HostJson.Options);
         Assert.NotNull(body);
         AdminTopicResponse topic = Assert.Single(body.Items, item => item.Name == "mixed-list-sources");
         Assert.Equal(2, topic.Sources.Count);
@@ -370,8 +370,8 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var created = await (await PostTopicAsync(new
         {
             name = "ordered-sources",
-            sourceConnectionIds = expectedOrder.Reverse().ToArray()
-        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            source_connection_ids = expectedOrder.Reverse().ToArray()
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
         Assert.Equal(expectedOrder, created.Sources.Select(source => source.ConnectionId));
 
@@ -379,7 +379,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
-        var fetched = await getResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var fetched = await getResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(fetched);
         Assert.Equal(expectedOrder, fetched.Sources.Select(source => source.ConnectionId));
 
@@ -388,7 +388,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
             new { name = created.Name, description = "order unchanged" }));
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
-        var updated = await updateResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(updated);
         Assert.Equal(expectedOrder, updated.Sources.Select(source => source.ConnectionId));
 
@@ -396,7 +396,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics"));
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
-        var page = await listResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        var page = await listResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(HostJson.Options);
         Assert.NotNull(page);
         AdminTopicResponse listed = Assert.Single(page.Items, item => item.Id == created.Id);
         Assert.Equal(expectedOrder, listed.Sources.Select(source => source.ConnectionId));
@@ -413,7 +413,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             $"/admin/tenants/{fixture.TenantId}/topics?limit=2"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<AdminTopicListResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(2, body.Items.Count);
         Assert.Null(body.NextCursor);
@@ -435,8 +435,8 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         Assert.Equal(HttpStatusCode.OK, defaultedResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, explicitResponse.StatusCode);
 
-        var defaulted = await defaultedResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
-        var explicitPage = await explicitResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(WebJson);
+        var defaulted = await defaultedResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(HostJson.Options);
+        var explicitPage = await explicitResponse.Content.ReadFromJsonAsync<AdminTopicListResponse>(HostJson.Options);
         Assert.NotNull(defaulted);
         Assert.NotNull(explicitPage);
         Assert.Equal(2, defaulted.Items.Count);
@@ -448,7 +448,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task UpdateTopic_UpdatesDescriptionAndSources_WithoutChangingName()
     {
         var created = await (await PostTopicAsync(new { name = "old-name" }))
-            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -458,11 +458,11 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             {
                 name = "old-name",
                 description = "updated",
-                sourceConnectionIds = new[] { fixture.SourceConnectionId }
+                source_connection_ids = new[] { fixture.SourceConnectionId }
             }));
         Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
 
-        var body = await patch.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await patch.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("old-name", body.Name);
         Assert.Equal("updated", body.Description);
@@ -477,8 +477,8 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         {
             name = "atomic-update",
             description = "original",
-            sourceConnectionIds = new[] { fixture.SourceConnectionId }
-        })).Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            source_connection_ids = new[] { fixture.SourceConnectionId }
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -488,7 +488,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             {
                 name = "atomic-update",
                 description = "must roll back",
-                sourceConnectionIds = new[] { Guid.NewGuid() }
+                source_connection_ids = new[] { Guid.NewGuid() }
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, patch.StatusCode);
@@ -496,7 +496,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var get = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
-        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("original", body.Description);
         Assert.Equal([fixture.SourceConnectionId], body.Sources.Select(s => s.ConnectionId));
@@ -506,7 +506,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task UpdateTopic_ChangingName_Returns422AndPreservesName()
     {
         var created = await (await PostTopicAsync(new { name = "immutable-name" }))
-            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -519,7 +519,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var get = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
-        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("immutable-name", body.Name);
         Assert.Null(body.Description);
@@ -529,7 +529,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task UpdateTopic_MissingName_Returns422WithRequiredFieldError()
     {
         var created = await (await PostTopicAsync(new { name = "required-name" }))
-            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var patch = await client.SendAsync(AdminRequest(
@@ -572,7 +572,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task UpdateTopic_DisabledTopicWithMissingName_PreservesValidationError()
     {
         var created = await (await PostTopicAsync(new { name = "disabled-required-name" }))
-            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var deactivate = await client.SendAsync(AdminRequest(
@@ -594,7 +594,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task DeactivateTopic_Returns200_AndStatusBecomesInactive()
     {
         var created = await (await PostTopicAsync(new { name = "to-deactivate" }))
-            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         var deactivate = await client.SendAsync(AdminRequest(
@@ -605,7 +605,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var get = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal("disabled", body.Status);
     }
@@ -635,7 +635,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var response = await PostTopicAsync(new
         {
             name = "invalid-source-use",
-            sourceConnectionIds = new[] { connectionId }
+            source_connection_ids = new[] { connectionId }
         });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -652,7 +652,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var response = await PostTopicAsync(new
         {
             name = "missing-source-verification",
-            sourceConnectionIds = new[] { connectionId }
+            source_connection_ids = new[] { connectionId }
         });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -669,7 +669,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var response = await PostTopicAsync(new
         {
             name = "deactivated-source",
-            sourceConnectionIds = new[] { connectionId }
+            source_connection_ids = new[] { connectionId }
         });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -690,7 +690,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
     public async Task GetTopic_GlobalKey_CanAccessAnyTenant()
     {
         var created = await (await PostTopicAsync(new { name = "global-visible" }))
-            .Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+            .Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(created);
 
         // Confirm it is accessible with the deployment-wide key (which PostTopicAsync uses).

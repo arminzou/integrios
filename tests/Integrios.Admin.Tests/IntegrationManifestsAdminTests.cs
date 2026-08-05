@@ -4,13 +4,13 @@ using System.Text.Json;
 using Integrios.Application.Integrations;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Admin.Tests;
 
 public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     private readonly AdminApiFixture fixture;
-    private readonly JsonSerializerOptions webJson = new(JsonSerializerDefaults.Web);
     private HttpClient client = null!;
 
     public IntegrationManifestsAdminTests(AdminApiFixture fixture)
@@ -35,7 +35,7 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
         Assert.Equal(
             "/admin/integrations/example_api/versions/1",
             createdResponse.Headers.Location?.OriginalString);
-        IntegrationDto created = (await createdResponse.Content.ReadFromJsonAsync<IntegrationDto>(webJson))!;
+        IntegrationDto created = (await createdResponse.Content.ReadFromJsonAsync<IntegrationDto>(HostJson.Options))!;
         Assert.Equal(1, created.ContractVersion);
         Assert.Equal("example_api", created.Manifest.GetProperty("key").GetString());
         JsonElement storedSchemes = created.Manifest.GetProperty("destination_authentication").GetProperty("schemes");
@@ -48,20 +48,20 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
 
         HttpResponseMessage unchangedResponse = await ApplyAsync(1, Reordered(version1));
         Assert.Equal(HttpStatusCode.OK, unchangedResponse.StatusCode);
-        IntegrationDto unchanged = (await unchangedResponse.Content.ReadFromJsonAsync<IntegrationDto>(webJson))!;
+        IntegrationDto unchanged = (await unchangedResponse.Content.ReadFromJsonAsync<IntegrationDto>(HostJson.Options))!;
         Assert.Equal(created.Id, unchanged.Id);
         Assert.Equal(created.UpdatedAt, unchanged.UpdatedAt);
 
         JsonElement renamedManifest = Manifest(contractVersion: 1, name: "Improved API");
         HttpResponseMessage renamedResponse = await ApplyAsync(1, renamedManifest);
         Assert.Equal(HttpStatusCode.OK, renamedResponse.StatusCode);
-        IntegrationDto renamed = (await renamedResponse.Content.ReadFromJsonAsync<IntegrationDto>(webJson))!;
+        IntegrationDto renamed = (await renamedResponse.Content.ReadFromJsonAsync<IntegrationDto>(HostJson.Options))!;
         Assert.Equal(created.Id, renamed.Id);
         Assert.Equal("Improved API", renamed.Name);
 
         await ExecuteAsync("UPDATE integrations SET status = 'disabled' WHERE id = @Id", created.Id);
         HttpResponseMessage disabledNoOpResponse = await ApplyAsync(1, renamedManifest);
-        IntegrationDto disabledNoOp = (await disabledNoOpResponse.Content.ReadFromJsonAsync<IntegrationDto>(webJson))!;
+        IntegrationDto disabledNoOp = (await disabledNoOpResponse.Content.ReadFromJsonAsync<IntegrationDto>(HostJson.Options))!;
         Assert.Equal("disabled", disabledNoOp.Status);
 
         JsonElement functionalChange = Json(renamedManifest.GetRawText().Replace(
@@ -83,7 +83,7 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
         JsonElement version2 = Manifest(contractVersion: 2, name: "Example API v2");
         HttpResponseMessage version2Response = await ApplyAsync(2, version2);
         Assert.Equal(HttpStatusCode.Created, version2Response.StatusCode);
-        IntegrationDto createdV2 = (await version2Response.Content.ReadFromJsonAsync<IntegrationDto>(webJson))!;
+        IntegrationDto createdV2 = (await version2Response.Content.ReadFromJsonAsync<IntegrationDto>(HostJson.Options))!;
         Assert.NotEqual(created.Id, createdV2.Id);
 
         Assert.Equal(2L, await CountAsync(
@@ -92,7 +92,7 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
 
         using HttpResponseMessage listResponse = await SendAsync(HttpMethod.Get, "/admin/integrations");
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
-        IntegrationListDto list = (await listResponse.Content.ReadFromJsonAsync<IntegrationListDto>(webJson))!;
+        IntegrationListDto list = (await listResponse.Content.ReadFromJsonAsync<IntegrationListDto>(HostJson.Options))!;
         Assert.Contains(list.Items, item =>
             item.Id == created.Id &&
             item.ContractVersion == 1 &&
@@ -136,7 +136,7 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
             HttpMethod.Get,
             $"/admin/integrations/example_api/versions/{contractVersion}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return await response.Content.ReadFromJsonAsync<IntegrationDto>(webJson);
+        return await response.Content.ReadFromJsonAsync<IntegrationDto>(HostJson.Options);
     }
 
     private Task<HttpResponseMessage> ApplyAsync(int contractVersion, JsonElement manifest) =>
