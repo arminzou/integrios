@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using Npgsql;
 
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
 public sealed class PackagedDeploymentFixture : IAsyncLifetime
 {
@@ -49,7 +49,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
             ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
-            ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.QualificationTests", "otel-collector.qualification.yaml"),
+            ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "otel-collector.acceptance.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
             ["INTEGRIOS_DESTINATION_SECRETS_DIR"] = secretsDirectory,
             ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceVerificationSecretsDirectory,
@@ -94,7 +94,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             composeFiles =
             [
                 Path.Combine(repoRoot, "deploy", "compose.yml"),
-                Path.Combine(repoRoot, "tests", "Integrios.QualificationTests", "compose.deploy.qualification.yml"),
+                Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "compose.acceptance.yml"),
             ];
             await StartDeploymentAsync(buildImages: false);
         }

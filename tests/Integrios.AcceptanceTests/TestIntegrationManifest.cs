@@ -2,7 +2,7 @@ using System.Text.Json;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Integrations;
 
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
 internal static class TestIntegrationManifest
 {

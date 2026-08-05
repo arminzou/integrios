@@ -4,11 +4,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Npgsql;
 
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
 [Collection(PackagedDeploymentCollection.Name)]
 [Trait("Category", "ResilienceQualification")]
-[Trait("Tier", "deep")]
 public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fixture)
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);

@@ -7,7 +7,7 @@ using DotNet.Testcontainers.Networks;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
 public sealed class DatabaseLifecycleFixture : IAsyncLifetime
 {
@@ -67,10 +67,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         return new QualificationDatabase(databaseName, connectionString);
     }
 
-    public async Task<string> RunFlywayAsync(
-        QualificationDatabase database,
-        string command,
-        int? target = null)
+    public async Task<string> RunFlywayAsync(QualificationDatabase database, string command)
     {
         var builder = new ContainerBuilder("flyway/flyway:10.22.0")
             .WithNetwork(network)
@@ -86,9 +83,6 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
                     .WithMode(WaitStrategyMode.OneShot)
                     .WithTimeout(TimeSpan.FromMinutes(2))));
 
-        if (target is not null)
-            builder = builder.WithEnvironment("FLYWAY_TARGET", target.Value.ToString());
-
         await using IContainer flyway = builder.Build();
         await flyway.StartAsync();
 
@@ -100,27 +94,6 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             throw new InvalidOperationException($"Flyway {command} exited with {exitCode}:{Environment.NewLine}{output}");
 
         return output;
-    }
-
-    public static async Task ExecuteFixtureAsync(QualificationDatabase database, string fixtureName)
-    {
-        string path = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixtureName);
-        string sql = await File.ReadAllTextAsync(path);
-
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        await command.ExecuteNonQueryAsync();
-    }
-
-    public async Task ExecuteMigrationSqlAsync(QualificationDatabase database, string migrationName)
-    {
-        string sql = await File.ReadAllTextAsync(Path.Combine(migrationsDirectory, migrationName));
-
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        await command.ExecuteNonQueryAsync();
     }
 
     public static async Task<T> ScalarAsync<T>(QualificationDatabase database, string sql)

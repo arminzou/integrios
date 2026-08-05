@@ -1,10 +1,9 @@
-using static Integrios.QualificationTests.DatabaseLifecycleAssertions;
+using static Integrios.AcceptanceTests.DatabaseLifecycleAssertions;
 
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
 [Trait("Category", "Qualification")]
-[Trait("Tier", "database")]
-public sealed class FreshDatabaseLifecycleTests(DatabaseLifecycleFixture fixture)
+public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
     : IClassFixture<DatabaseLifecycleFixture>
 {
     [Fact]
