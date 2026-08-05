@@ -57,7 +57,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         using var responseDocument = JsonDocument.Parse(responseJson);
         Assert.False(responseDocument.RootElement.TryGetProperty("dlqEnabled", out _));
 
-        var body = JsonSerializer.Deserialize<SubscriptionResponse>(responseJson, WebJson);
+        var body = JsonSerializer.Deserialize<SubscriptionDto>(responseJson, WebJson);
         Assert.NotNull(body);
         Assert.Equal(topic.Id, body.TopicId);
         Assert.Equal(fixture.TenantId, body.TenantId);
@@ -100,7 +100,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(body);
         Assert.Equal(created.Id, body.Id);
         Assert.Equal("erp-sink", body.Name);
@@ -119,7 +119,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2"));
         Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
 
-        var body1 = await page1.Content.ReadFromJsonAsync<SubscriptionListResponse>(WebJson);
+        var body1 = await page1.Content.ReadFromJsonAsync<SubscriptionListDto>(WebJson);
         Assert.NotNull(body1);
         Assert.Equal(2, body1.Items.Count);
         Assert.NotNull(body1.NextCursor);
@@ -129,7 +129,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2&after={Uri.EscapeDataString(body1.NextCursor!)}"));
         Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
 
-        var body2 = await page2.Content.ReadFromJsonAsync<SubscriptionListResponse>(WebJson);
+        var body2 = await page2.Content.ReadFromJsonAsync<SubscriptionListDto>(WebJson);
         Assert.NotNull(body2);
         Assert.Single(body2.Items);
         Assert.Null(body2.NextCursor);
@@ -147,7 +147,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionListResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionListDto>(WebJson);
         Assert.NotNull(body);
         Assert.Equal(2, body.Items.Count);
         Assert.Null(body.NextCursor);
@@ -228,7 +228,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(body);
         Assert.Equal("erp-sink-v2", body.Name);
         Assert.Equal(25, body.OrderIndex);
@@ -251,7 +251,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-        var body = await get.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var body = await get.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(body);
         Assert.Equal("disabled", body.Status);
     }
@@ -268,7 +268,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         return topic!;
     }
 
-    private async Task<SubscriptionResponse> CreateSubscriptionAsync(
+    private async Task<SubscriptionDto> CreateSubscriptionAsync(
         Guid topicId,
         string name,
         string eventType,
@@ -290,7 +290,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
             }));
 
         response.EnsureSuccessStatusCode();
-        var subscription = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var subscription = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         return subscription!;
     }
 
@@ -336,7 +336,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(body);
         Assert.NotNull(body.TransformConfig);
         Assert.Equal("jsonata", body.TransformConfig.Value.GetProperty("engine").GetString());
@@ -363,7 +363,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(body);
         Assert.Null(body.TransformConfig);
     }
@@ -391,7 +391,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(body);
         Assert.NotNull(body.TransformConfig);
         Assert.Equal("$.amount * 2", body.TransformConfig.Value.GetProperty("expression").GetString());
@@ -419,7 +419,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(body);
         Assert.Null(body.TransformConfig);
     }
@@ -674,7 +674,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private sealed record SubscriptionResponse(
+    private sealed record SubscriptionDto(
         Guid Id,
         Guid TopicId,
         Guid TenantId,
@@ -688,7 +688,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
         DateTimeOffset CreatedAt,
         DateTimeOffset UpdatedAt);
 
-    private sealed record SubscriptionListResponse(
-        IReadOnlyList<SubscriptionResponse> Items,
+    private sealed record SubscriptionListDto(
+        IReadOnlyList<SubscriptionDto> Items,
         string? NextCursor);
 }

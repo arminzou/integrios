@@ -2,12 +2,12 @@ using MediatR;
 
 namespace Integrios.Application.Subscriptions;
 
-public sealed record ListSubscriptionsByTopicQuery(Guid TenantId, Guid TopicId, string? AfterCursor, int Limit) : IRequest<SubscriptionListResponse>;
+public sealed record ListSubscriptionsByTopicQuery(Guid TenantId, Guid TopicId, string? AfterCursor, int Limit) : IRequest<SubscriptionListDto>;
 
 internal sealed class ListSubscriptionsByTopicQueryHandler(ISubscriptionRepository subscriptionRepository)
-    : IRequestHandler<ListSubscriptionsByTopicQuery, SubscriptionListResponse>
+    : IRequestHandler<ListSubscriptionsByTopicQuery, SubscriptionListDto>
 {
-    public async Task<SubscriptionListResponse> Handle(ListSubscriptionsByTopicQuery query, CancellationToken cancellationToken)
+    public async Task<SubscriptionListDto> Handle(ListSubscriptionsByTopicQuery query, CancellationToken cancellationToken)
     {
         var (items, nextCursor) = await subscriptionRepository.ListByTopicAsync(
             query.TenantId,
@@ -16,6 +16,6 @@ internal sealed class ListSubscriptionsByTopicQueryHandler(ISubscriptionReposito
             query.Limit,
             cancellationToken);
 
-        return new SubscriptionListResponse(items.Select(SubscriptionResponse.From).ToList(), nextCursor);
+        return new SubscriptionListDto(items.Select(SubscriptionDto.From).ToList(), nextCursor);
     }
 }

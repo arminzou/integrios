@@ -110,7 +110,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
         Assert.Equal(HttpStatusCode.Created, subscriptionResponse.StatusCode);
 
-        var subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionResponse>(WebJson);
+        var subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
         Assert.NotNull(subscription);
         Assert.Equal(destinationConnection.Id, subscription.DestinationConnectionId);
 
@@ -177,7 +177,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
         return msg;
     }
 
-    private sealed record SubscriptionResponse(
+    private sealed record SubscriptionDto(
         Guid Id,
         Guid TopicId,
         Guid TenantId,
