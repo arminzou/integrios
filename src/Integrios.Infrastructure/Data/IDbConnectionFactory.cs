@@ -4,5 +4,5 @@ namespace Integrios.Infrastructure.Data;
 
 internal interface IDbConnectionFactory
 {
-    ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default);
+    ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken);
 }

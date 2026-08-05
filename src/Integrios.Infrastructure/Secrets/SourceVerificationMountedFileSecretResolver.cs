@@ -13,6 +13,6 @@ internal sealed class SourceVerificationMountedFileSecretResolver(string root) :
     public Task<string> ResolveAsync(
         TenantSecretScope tenant,
         string secretReference,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken) =>
         MountedFileSecretReader.ReadAsync(root, tenant, secretReference, ProviderName, cancellationToken);
 }

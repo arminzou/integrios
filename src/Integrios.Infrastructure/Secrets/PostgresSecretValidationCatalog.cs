@@ -24,7 +24,7 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
 
     public async Task<Tenant?> FindTenantBySlugAsync(
         string slug,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         TenantRow? row = await connection.QuerySingleOrDefaultAsync<TenantRow>(
@@ -37,7 +37,7 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
     }
 
     public async Task<IReadOnlyList<Tenant>> ListActiveTenantsAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         IEnumerable<TenantRow> rows = await connection.QueryAsync<TenantRow>(
@@ -56,7 +56,7 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
     public async Task<Connection?> FindConnectionAsync(
         Guid tenantId,
         Guid connectionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         ConnectionRow? row = await connection.QuerySingleOrDefaultAsync<ConnectionRow>(
@@ -74,7 +74,7 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
 
     public async Task<IReadOnlyList<Connection>> ListActiveConnectionsAsync(
         Guid tenantId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         IEnumerable<ConnectionRow> rows = await connection.QueryAsync<ConnectionRow>(

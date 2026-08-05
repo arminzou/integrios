@@ -18,6 +18,6 @@ internal sealed class DestinationAuthenticationMountedFileSecretResolver(string 
     public Task<string> ResolveAsync(
         TenantSecretScope tenant,
         string secretReference,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken) =>
         MountedFileSecretReader.ReadAsync(root, tenant, secretReference, ProviderName, cancellationToken);
 }

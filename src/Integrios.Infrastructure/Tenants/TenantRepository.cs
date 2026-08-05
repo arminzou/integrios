@@ -14,7 +14,7 @@ internal sealed class TenantRepository(IDbConnectionFactory connectionFactory) :
     // Postgres error code for unique_violation
     private const string UniqueViolation = "23505";
 
-    public async Task<Tenant> CreateAsync(Tenant tenant, CancellationToken cancellationToken = default)
+    public async Task<Tenant> CreateAsync(Tenant tenant, CancellationToken cancellationToken)
     {
         const string sql = """
             INSERT INTO tenants (id, slug, name, status, environment, description, created_at, updated_at)
@@ -44,7 +44,7 @@ internal sealed class TenantRepository(IDbConnectionFactory connectionFactory) :
         }
     }
 
-    public async Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT id, slug, name, status, environment, description, created_at, updated_at
@@ -58,7 +58,7 @@ internal sealed class TenantRepository(IDbConnectionFactory connectionFactory) :
     }
 
     public async Task<(IReadOnlyList<Tenant> Items, string? NextCursor)> ListAsync(
-        string? afterCursor, int limit, CancellationToken cancellationToken = default)
+        string? afterCursor, int limit, CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
@@ -98,7 +98,7 @@ internal sealed class TenantRepository(IDbConnectionFactory connectionFactory) :
 
     public async Task<Tenant?> UpdateAsync(
         Guid id, string name, string? description, string? environment,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE tenants
@@ -118,7 +118,7 @@ internal sealed class TenantRepository(IDbConnectionFactory connectionFactory) :
         return row?.ToTenant();
     }
 
-    public async Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE tenants

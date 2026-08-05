@@ -10,7 +10,7 @@ internal sealed class UnavailableDestinationAuthenticationSecretResolver
     public Task<string> ResolveAsync(
         TenantSecretScope tenant,
         string secretReference,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken) =>
         throw new InvalidOperationException(
             "Destination-authentication secret resolution is available only in the Worker process.");
 }

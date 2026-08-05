@@ -8,7 +8,7 @@ internal sealed class SourceVerificationConfigurationSecretResolver(IConfigurati
 {
     public string ProviderName => "configuration";
 
-    public Task<string> ResolveAsync(TenantSecretScope tenant, string secretReference, CancellationToken cancellationToken = default)
+    public Task<string> ResolveAsync(TenantSecretScope tenant, string secretReference, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         SecretValueValidator.ValidateScope(tenant, secretReference, ProviderName);

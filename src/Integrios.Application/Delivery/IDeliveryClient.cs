@@ -7,8 +7,8 @@ public interface IDeliveryClient
     Task<DeliveryResult> DeliverAsync(
         string url,
         string payloadJson,
-        Action<HttpRequestMessage>? decorate = null,
-        CancellationToken cancellationToken = default);
+        Action<HttpRequestMessage>? decorate,
+        CancellationToken cancellationToken);
 }
 
 public record DeliveryResult(

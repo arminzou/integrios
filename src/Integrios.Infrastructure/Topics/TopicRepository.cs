@@ -24,7 +24,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         string name,
         string? description,
         IReadOnlyList<Guid> sourceConnectionIds,
-        CancellationToken ct = default)
+        CancellationToken ct)
     {
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -63,7 +63,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         }
     }
 
-    public async Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default)
+    public async Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct)
     {
         await using var db = await connectionFactory.OpenConnectionAsync(ct);
 
@@ -115,7 +115,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         Guid tenantId,
         string? afterCursor,
         int limit,
-        CancellationToken ct = default)
+        CancellationToken ct)
     {
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
@@ -168,7 +168,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         string? name,
         string? description,
         IReadOnlyList<Guid>? sourceConnectionIds,
-        CancellationToken ct = default)
+        CancellationToken ct)
     {
         await using var db = await connectionFactory.OpenConnectionAsync(ct);
         await using var tx = await db.BeginTransactionAsync(ct);
@@ -289,7 +289,7 @@ internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : 
         return null;
     }
 
-    public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default)
+    public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct)
     {
         await using var db = await connectionFactory.OpenConnectionAsync(ct);
         var affected = await db.ExecuteAsync(

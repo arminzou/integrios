@@ -144,7 +144,7 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
         async Task<int> DeliverUntilEmptyAsync()
         {
             int total = 0;
-            while (await fixture.DeliveryQueue.ClaimNextAsync() is { } claimed)
+            while (await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None) is { } claimed)
             {
                 DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(
                     new DeliveryAttemptCompletion(
@@ -155,7 +155,8 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
                         claimed.PayloadJson,
                         200,
                         null,
-                        null));
+                        null),
+                    CancellationToken.None);
                 Assert.Equal(DeliveryFinalizationStatus.Applied, result.Status);
                 Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, result.Disposition);
                 total++;

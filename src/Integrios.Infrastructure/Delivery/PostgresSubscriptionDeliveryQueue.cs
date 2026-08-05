@@ -17,7 +17,7 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
         TimeSpan.FromMilliseconds(200)
     ];
 
-    internal async Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken = default)
+    internal async Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -37,7 +37,7 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
     }
 
     public async Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -215,7 +215,7 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
 
     public async Task<DeliveryFinalizationResult> FinalizeAsync(
         DeliveryAttemptCompletion completion,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         ValidateCompletion(completion);
 

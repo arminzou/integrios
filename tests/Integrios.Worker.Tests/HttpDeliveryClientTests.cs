@@ -16,7 +16,7 @@ public sealed class HttpDeliveryClientTests
         });
 
         var client = new HttpDeliveryClient(new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(100) });
-        var result = await client.DeliverAsync("https://downstream.example", "{}");
+        var result = await client.DeliverAsync("https://downstream.example", "{}", decorate: null, CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.True(result.IsTimeout);
@@ -34,7 +34,7 @@ public sealed class HttpDeliveryClientTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
-        var result = await client.DeliverAsync("https://downstream.example", "{}", cancellationToken: cts.Token);
+        var result = await client.DeliverAsync("https://downstream.example", "{}", decorate: null, cts.Token);
 
         Assert.False(result.Succeeded);
         Assert.False(result.IsTimeout);
@@ -48,7 +48,7 @@ public sealed class HttpDeliveryClientTests
         var handler = new StubHandler((_, _) => throw new HttpRequestException(diagnostic));
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
-        var result = await client.DeliverAsync("https://downstream.example", "{}");
+        var result = await client.DeliverAsync("https://downstream.example", "{}", decorate: null, CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Equal(DeliveryFailurePhase.Http, result.FailurePhase);
@@ -69,7 +69,8 @@ public sealed class HttpDeliveryClientTests
         var result = await client.DeliverAsync(
             "https://downstream.example",
             "{}",
-            request => request.Headers.TryAddWithoutValidation("X-Api-Key", sensitiveValue));
+            request => request.Headers.TryAddWithoutValidation("X-Api-Key", sensitiveValue),
+            CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Equal(DeliveryFailurePhase.Http, result.FailurePhase);
@@ -92,7 +93,8 @@ public sealed class HttpDeliveryClientTests
         var result = await client.DeliverAsync(
             "https://downstream.example",
             "{}",
-            request => request.Headers.TryAddWithoutValidation("X-Api-Key", "secret"));
+            request => request.Headers.TryAddWithoutValidation("X-Api-Key", "secret"),
+            CancellationToken.None);
 
         Assert.True(result.Succeeded);
         Assert.NotNull(captured);
@@ -111,7 +113,7 @@ public sealed class HttpDeliveryClientTests
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
-        var result = await client.DeliverAsync(url, "{}");
+        var result = await client.DeliverAsync(url, "{}", decorate: null, CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Equal(0, result.StatusCode);

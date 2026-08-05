@@ -5,10 +5,10 @@ namespace Integrios.Application.Connections;
 
 public interface IConnectionRepository
 {
-    Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken = default);
-    Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default);
-    Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default);
-    Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default);
+    Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken);
+    Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
+    Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken);
+    Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
     Task<Connection?> UpdateAsync(
         Guid tenantId,
         Guid id,
@@ -18,8 +18,8 @@ public interface IConnectionRepository
         ConnectionSchemeSelection? destinationAuthentication,
         string? environment,
         string? description,
-        CancellationToken cancellationToken = default);
-    Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
+    Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
 }
 
 public sealed record ConnectionUsage(bool Source, bool Destination);

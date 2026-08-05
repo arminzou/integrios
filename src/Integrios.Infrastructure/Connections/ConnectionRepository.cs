@@ -22,7 +22,7 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
         status, environment, description, created_at, updated_at
         """;
 
-    public async Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken = default)
+    public async Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken)
     {
         const string sql = $"""
             INSERT INTO connections (
@@ -75,7 +75,7 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
     public async Task<ConnectionUsage> GetUsageAsync(
         Guid tenantId,
         Guid id,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT
@@ -99,7 +99,7 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
             new CommandDefinition(sql, new { TenantId = tenantId, Id = id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
+    public async Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken)
     {
         const string sql = $"""
             SELECT {SelectColumns}
@@ -120,7 +120,7 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
         Guid tenantId,
         string? afterCursor,
         int limit,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
@@ -174,7 +174,7 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
         ConnectionSchemeSelection? destinationAuthentication,
         string? environment,
         string? description,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         const string sql = $"""
             UPDATE connections
@@ -218,7 +218,7 @@ internal sealed class ConnectionRepository(IDbConnectionFactory connectionFactor
         }
     }
 
-    public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE connections

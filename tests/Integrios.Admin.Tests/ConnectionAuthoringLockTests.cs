@@ -21,14 +21,14 @@ public sealed class ConnectionAuthoringLockTests : IClassFixture<AdminApiFixture
         var authoringLock = scope.ServiceProvider.GetRequiredService<IConnectionAuthoringLock>();
         Guid connectionId = Guid.NewGuid();
 
-        IAsyncDisposable firstLease = await authoringLock.AcquireAsync([connectionId]);
+        IAsyncDisposable firstLease = await authoringLock.AcquireAsync([connectionId], CancellationToken.None);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         await Assert.ThrowsAsync<ConnectionAuthoringConflictException>(
-            () => authoringLock.AcquireAsync([connectionId]));
+            () => authoringLock.AcquireAsync([connectionId], CancellationToken.None));
         Assert.InRange(stopwatch.Elapsed, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
 
         await firstLease.DisposeAsync();
-        IAsyncDisposable secondLease = await authoringLock.AcquireAsync([connectionId]);
+        IAsyncDisposable secondLease = await authoringLock.AcquireAsync([connectionId], CancellationToken.None);
         await secondLease.DisposeAsync();
     }
 
@@ -39,7 +39,7 @@ public sealed class ConnectionAuthoringLockTests : IClassFixture<AdminApiFixture
         var authoringLock = scope.ServiceProvider.GetRequiredService<IConnectionAuthoringLock>();
         Guid connectionId = Guid.NewGuid();
 
-        await using IAsyncDisposable firstLease = await authoringLock.AcquireAsync([connectionId]);
+        await using IAsyncDisposable firstLease = await authoringLock.AcquireAsync([connectionId], CancellationToken.None);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -58,11 +58,11 @@ public sealed class ConnectionAuthoringLockTests : IClassFixture<AdminApiFixture
         Guid firstId = ids[0];
         Guid secondId = ids[1];
 
-        await using IAsyncDisposable heldLease = await authoringLock.AcquireAsync([secondId]);
+        await using IAsyncDisposable heldLease = await authoringLock.AcquireAsync([secondId], CancellationToken.None);
         await Assert.ThrowsAsync<ConnectionAuthoringConflictException>(
-            () => authoringLock.AcquireAsync([firstId, secondId]));
+            () => authoringLock.AcquireAsync([firstId, secondId], CancellationToken.None));
 
-        await using IAsyncDisposable firstOnlyLease = await authoringLock.AcquireAsync([firstId]);
+        await using IAsyncDisposable firstOnlyLease = await authoringLock.AcquireAsync([firstId], CancellationToken.None);
     }
 
     private static long AdvisoryKey(Guid id)

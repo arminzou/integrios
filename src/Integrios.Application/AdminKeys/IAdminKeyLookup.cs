@@ -6,5 +6,5 @@ public interface IAdminKeyLookup
 {
     Task<AdminKey?> FindActiveByPublicKeyAsync(
         string publicKey,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }

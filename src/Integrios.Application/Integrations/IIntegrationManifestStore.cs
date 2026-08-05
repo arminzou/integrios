@@ -51,10 +51,10 @@ public interface IIntegrationManifestStore
     Task<Integration?> GetByVersionAsync(
         string key,
         int contractVersion,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 
     Task<IntegrationManifestStoreResult> ApplyAsync(
         IntegrationManifest manifest,
         IntegrationManifestApplyAuthority authority,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }

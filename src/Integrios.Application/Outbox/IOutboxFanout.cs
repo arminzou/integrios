@@ -4,7 +4,7 @@ namespace Integrios.Application.Outbox;
 
 public interface IOutboxFanout
 {
-    Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken = default);
+    Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken);
 }
 
 public sealed record OutboxFanoutResult(
