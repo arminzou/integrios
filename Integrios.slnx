@@ -8,11 +8,15 @@
     <Project Path="src/Integrios.Worker/Integrios.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Integrios.Architecture.Tests/Integrios.Architecture.Tests.csproj" />
-    <Project Path="tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj" />
-    <Project Path="tests/Integrios.IntegrationTests/Integrios.IntegrationTests.csproj" />
-    <Project Path="tests/Integrios.Worker.Tests/Integrios.Worker.Tests.csproj" />
-    <Project Path="tests/Integrios.Admin.Tests/Integrios.Admin.Tests.csproj" />
+    <Project Path="tests/Integrios.ArchitectureTests/Integrios.ArchitectureTests.csproj" />
+    <Project Path="tests/Integrios.Domain.UnitTests/Integrios.Domain.UnitTests.csproj" />
+    <Project Path="tests/Integrios.Application.UnitTests/Integrios.Application.UnitTests.csproj" />
+    <Project Path="tests/Integrios.Infrastructure.UnitTests/Integrios.Infrastructure.UnitTests.csproj" />
+    <Project Path="tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj" />
+    <Project Path="tests/Integrios.Ingress.UnitTests/Integrios.Ingress.UnitTests.csproj" />
+    <Project Path="tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj" />
+    <Project Path="tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj" />
+    <Project Path="tests/Integrios.Infrastructure.IntegrationTests/Integrios.Infrastructure.IntegrationTests.csproj" />
     <Project Path="tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj" />
   </Folder>
 </Solution>

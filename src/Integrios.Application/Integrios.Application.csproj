@@ -7,9 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Integrios.Admin.Tests" />
-    <InternalsVisibleTo Include="Integrios.IntegrationTests" />
-    <InternalsVisibleTo Include="Integrios.Worker.Tests" />
+    <InternalsVisibleTo Include="Integrios.Application.FunctionalTests" />
+    <InternalsVisibleTo Include="Integrios.Infrastructure.IntegrationTests" />
+    <InternalsVisibleTo Include="Integrios.Worker.UnitTests" />
+    <InternalsVisibleTo Include="Integrios.Application.UnitTests" />
+    <InternalsVisibleTo Include="Integrios.Admin.UnitTests" />
+    <InternalsVisibleTo Include="Integrios.Ingress.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>
