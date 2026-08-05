@@ -34,6 +34,37 @@ public sealed class ApplicationArchitectureTests
     }
 
     [Fact]
+    public void ApplicationTypes_AreNeverNamedResponse()
+    {
+        string[] responseTypes = ApplicationAssembly.GetTypes()
+            .Select(type => type.Name)
+            .Where(name => name.EndsWith("Response", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            responseTypes.Length == 0,
+            "A response is a transport contract owned by a host. Application projects persisted "
+            + $"state as *Dto and describes outcomes as *Result or *Report. Found: {string.Join(", ", responseTypes)}");
+    }
+
+    [Fact]
+    public void ApplicationExceptions_CarryNoTransportVocabulary()
+    {
+        string[] transportNamedExceptions = ApplicationAssembly.GetTypes()
+            .Where(type => typeof(Exception).IsAssignableFrom(type))
+            .Select(type => type.Name)
+            .Where(name => name.Contains("Request", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            transportNamedExceptions.Length == 0,
+            "Application does not know that requests exist, so its exception names cannot say so. "
+            + $"Found: {string.Join(", ", transportNamedExceptions)}");
+    }
+
+    [Fact]
     public void MediatRHandlers_AreInternal()
     {
         HandlerRegistration[] handlers = HandlerRegistrations().ToArray();
