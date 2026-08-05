@@ -14,6 +14,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Integrios.Worker.Tests" />
+    <InternalsVisibleTo Include="Integrios.Worker.UnitTests" />
   </ItemGroup>
 </Project>
