@@ -354,7 +354,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = HttpIntegrationId,
+                integration_id = HttpIntegrationId,
                 name = "resilience-source",
                 config = new { base_uri = $"http://mocksink:8080/sink/{name}-source" },
                 environment = "production"
@@ -372,7 +372,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = authReference is null ? HttpIntegrationId : ApiKeyIntegrationId,
+                integration_id = authReference is null ? HttpIntegrationId : ApiKeyIntegrationId,
                 name = "resilience-destination",
                 config = new { base_uri = $"http://mocksink:8080/sink/{name}" },
                 destination_authentication = auth,
@@ -380,14 +380,14 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name, sourceConnectionIds = new[] { sourceConnectionId } });
+            new { name, source_connection_ids = new[] { sourceConnectionId } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
                 name = "resilience-subscription",
-                matchRules = new { event_type = $"{name}.test" },
-                destinationConnectionId
+                match_rules = new { event_type = $"{name}.test" },
+                destination_connection_id = destinationConnectionId
             });
 
         return new Pipeline(
@@ -432,11 +432,11 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         {
             Content = JsonContent.Create(new
             {
-                sourceConnectionId = pipeline.SourceConnectionId,
-                topicName = pipeline.TopicName,
-                eventType = pipeline.EventType,
+                source_connection_id = pipeline.SourceConnectionId,
+                topic_name = pipeline.TopicName,
+                event_type = pipeline.EventType,
                 payload,
-                idempotencyKey = idempotencyKey ?? $"resilience-{Guid.NewGuid():N}"
+                idempotency_key = idempotencyKey ?? $"resilience-{Guid.NewGuid():N}"
             })
         };
         request.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {pipeline.ApiToken}");
@@ -444,7 +444,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         string body = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         using JsonDocument document = JsonDocument.Parse(body);
-        return document.RootElement.GetProperty("eventId").GetGuid();
+        return document.RootElement.GetProperty("event_id").GetGuid();
     }
 
     private async Task<Guid> PostAdminForIdAsync(string path, object body) =>
