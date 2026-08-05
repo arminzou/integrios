@@ -6,5 +6,5 @@ public interface ISourceTopicLookup
         Guid tenantId,
         string topicName,
         Guid sourceConnectionId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }

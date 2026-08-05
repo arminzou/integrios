@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.Events;
 using Integrios.Domain.Events;
+using Integrios.Ingress.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 
@@ -51,9 +52,9 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
 
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(body);
-        Assert.False(body.IsDuplicate);
+        Assert.False(body.AlreadyAccepted);
         Assert.Equal(EventStatus.Accepted, body.Status);
 
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
@@ -77,13 +78,13 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(postBody);
 
         var getResponse = await GetEventAsync(postBody.EventId);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var getBody = await getResponse.Content.ReadFromJsonAsync<GetEventResponse>();
+        var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>();
         Assert.NotNull(getBody);
         Assert.Equal(postBody.EventId, getBody.EventId);
         Assert.Equal(EventStatus.Accepted, getBody.Status);
@@ -97,7 +98,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(postBody);
 
         await fixture.ForceEventStatusAsync(postBody.EventId, "fanned_out");
@@ -105,7 +106,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var getResponse = await GetEventAsync(postBody.EventId);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var getBody = await getResponse.Content.ReadFromJsonAsync<GetEventResponse>();
+        var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>();
         Assert.NotNull(getBody);
         Assert.Equal(EventStatus.FannedOut, getBody.Status);
 
@@ -128,7 +129,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(postBody);
 
         var getResponseForTenantB = await GetEventAsync(postBody.EventId, tenantBAuthHeaderValue);
@@ -142,15 +143,15 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         var firstResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, firstResponse.StatusCode);
-        var firstBody = await firstResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var firstBody = await firstResponse.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(firstBody);
-        Assert.False(firstBody.IsDuplicate);
+        Assert.False(firstBody.AlreadyAccepted);
 
         var secondResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, secondResponse.StatusCode);
-        var secondBody = await secondResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var secondBody = await secondResponse.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(secondBody);
-        Assert.True(secondBody.IsDuplicate);
+        Assert.True(secondBody.AlreadyAccepted);
         Assert.Equal(firstBody.EventId, secondBody.EventId);
 
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
@@ -173,7 +174,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var response = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(body);
 
         var writtenTenantId = await fixture.GetEventTenantIdAsync(body.EventId);
@@ -187,7 +188,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var body = await postResponse.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var body = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(body);
 
         await fixture.ForceDeadLetteredDeliveryAsync(body.EventId);
@@ -237,7 +238,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var response = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResponse>();
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>();
         Assert.NotNull(body);
 
         var storedTopicId = await fixture.GetEventTopicIdAsync(body.EventId);

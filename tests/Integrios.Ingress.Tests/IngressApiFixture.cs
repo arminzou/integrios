@@ -14,20 +14,21 @@ namespace Integrios.Ingress.Tests;
 public sealed class ApiTestAppFixture : IDisposable
 {
     public StubActiveApiKeyLookup ApiKeyRepository { get; } = new();
-    public StubEventRepository EventRepository { get; } = new();
+    public StubEventAcceptance EventAcceptance { get; } = new();
+    public StubTenantEventLookup EventLookup { get; } = new();
     public StubDeadLetterReplay DeliveryQueue { get; } = new();
     public StubIntakeTopicResolver TopicRepository { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
     public ApiTestAppFixture()
     {
-        Factory = new CustomApiFactory(ApiKeyRepository, EventRepository, TopicRepository, DeliveryQueue);
+        Factory = new CustomApiFactory(ApiKeyRepository, EventAcceptance, EventLookup, TopicRepository, DeliveryQueue);
     }
 
     public void Reset()
     {
         ApiKeyRepository.Result = null;
-        EventRepository.GetEventResult = null;
+        EventLookup.GetEventResult = null;
         DeliveryQueue.ReplayResult = false;
         TopicRepository.ResolvedTopicId = Guid.NewGuid();
     }
@@ -40,7 +41,8 @@ public sealed class ApiTestAppFixture : IDisposable
 
 internal sealed class CustomApiFactory(
     StubActiveApiKeyLookup apiKeyRepository,
-    StubEventRepository eventRepository,
+    StubEventAcceptance eventAcceptance,
+    StubTenantEventLookup eventLookup,
     StubIntakeTopicResolver topicRepository,
     StubDeadLetterReplay deliveryQueue) : WebApplicationFactory<Program>
 {
@@ -57,8 +59,8 @@ internal sealed class CustomApiFactory(
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<IActiveApiKeyLookup>(apiKeyRepository);
-            services.AddSingleton<IEventAcceptance>(eventRepository);
-            services.AddSingleton<ITenantEventLookup>(eventRepository);
+            services.AddSingleton<IEventAcceptance>(eventAcceptance);
+            services.AddSingleton<ITenantEventLookup>(eventLookup);
             services.AddSingleton<ISourceTopicLookup>(topicRepository);
             services.AddSingleton<IDeadLetterReplay>(deliveryQueue);
         });
@@ -80,34 +82,34 @@ public sealed class StubActiveApiKeyLookup : IActiveApiKeyLookup
 
 }
 
-public sealed class StubEventRepository : IEventAcceptance, ITenantEventLookup
+public sealed class StubEventAcceptance : IEventAcceptance
 {
-    public GetEventResponse? GetEventResult { get; set; }
-
-    public Task<IngestEventResponse> AcceptAsync(
-        Guid tenantId,
-        IngestEventRequest request,
-        Guid topicId,
-        string? traceparent = null,
-        CancellationToken cancellationToken = default)
+    public Task<EventAcceptance> AcceptAsync(
+        EventSubmission submission,
+        string? traceparent,
+        CancellationToken cancellationToken)
     {
-        return Task.FromResult(new IngestEventResponse
+        return Task.FromResult(new EventAcceptance
         {
             EventId = Guid.NewGuid(),
             Status = EventStatus.Accepted,
             AcceptedAt = DateTimeOffset.UtcNow,
-            IsDuplicate = false
+            AlreadyAccepted = false
         });
     }
+}
 
-    public Task<GetEventResponse?> GetByIdAsync(
+public sealed class StubTenantEventLookup : ITenantEventLookup
+{
+    public EventDto? GetEventResult { get; set; }
+
+    public Task<EventDto?> GetByIdAsync(
         Guid tenantId,
         Guid eventId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         return Task.FromResult(GetEventResult);
     }
-
 }
 
 public sealed class StubDeadLetterReplay : IDeadLetterReplay
@@ -125,6 +127,6 @@ public sealed class StubIntakeTopicResolver : ISourceTopicLookup
 {
     public Guid? ResolvedTopicId { get; set; } = Guid.NewGuid();
 
-    public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct = default)
+    public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct)
         => Task.FromResult(ResolvedTopicId);
 }

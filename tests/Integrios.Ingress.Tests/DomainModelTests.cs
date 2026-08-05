@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Integrios.Application.Events;
 using Integrios.Domain.Common;
-using Integrios.Domain.Events;
 using Integrios.Domain.Tenants;
+using Integrios.Ingress.Endpoints;
 
 namespace Integrios.Ingress.Tests;
 
@@ -40,35 +40,6 @@ public sealed class DomainModelTests
         Assert.Equal(1200, request.Payload.GetProperty("amount").GetInt32());
         Assert.Equal("trace-1", request.Metadata?.GetProperty("traceId").GetString());
         Assert.Equal("idem-abc", request.IdempotencyKey);
-    }
-
-    [Fact]
-    public void Event_CanRepresent_AcceptedInboundWork()
-    {
-        var acceptedAt = DateTimeOffset.UtcNow;
-        var payload = JsonDocument.Parse("""{"paymentId":"pay_456","amount":1200}""").RootElement.Clone();
-        var metadata = JsonDocument.Parse("""{"source":"demo-swiftpay","traceId":"trace-1"}""").RootElement.Clone();
-
-        var @event = new Event
-        {
-            Id = Guid.NewGuid(),
-            TenantId = Guid.NewGuid(),
-            TopicId = Guid.NewGuid(),
-            SourceConnectionId = Guid.NewGuid(),
-            EventType = "payment.created",
-            Payload = payload,
-            Metadata = metadata,
-            SourceEventId = "evt_123",
-            IdempotencyKey = "idem-abc",
-            Status = EventStatus.Accepted,
-            AcceptedAt = acceptedAt
-        };
-
-        Assert.Equal(EventStatus.Accepted, @event.Status);
-        Assert.Equal("payment.created", @event.EventType);
-        Assert.Equal("pay_456", @event.Payload.GetProperty("paymentId").GetString());
-        Assert.Equal("demo-swiftpay", @event.Metadata?.GetProperty("source").GetString());
-        Assert.Equal("idem-abc", @event.IdempotencyKey);
     }
 
     [Fact]

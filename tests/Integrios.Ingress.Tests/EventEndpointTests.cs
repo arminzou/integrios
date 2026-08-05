@@ -32,7 +32,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
     {
         (var apiKey, var tenant) = ApiKeyAuthHandlerTests.BuildValidApiKey(ApiKeyAuthHandlerTests.TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
-        fixture.EventRepository.GetEventResult = null;
+        fixture.EventLookup.GetEventResult = null;
 
         HttpResponseMessage response = await GetEventAsync(Guid.NewGuid(), $"ApiKey {ApiKeyAuthHandlerTests.TestToken}");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -45,26 +45,50 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
 
         Guid eventId = Guid.NewGuid();
-        GetEventResponse expected = new()
+        Guid attemptId = Guid.NewGuid();
+        EventDto expected = new()
         {
             EventId = eventId,
             Status = EventStatus.Accepted,
             AcceptedAt = DateTimeOffset.UtcNow,
             ProcessedAt = null,
-            FailedAt = null
+            FailedAt = null,
+            DeliveryAttempts =
+            [
+                new DeliveryAttemptDto
+                {
+                    AttemptId = attemptId,
+                    SubscriptionDeliveryId = Guid.NewGuid(),
+                    SubscriptionId = Guid.NewGuid(),
+                    DestinationConnectionId = Guid.NewGuid(),
+                    AttemptNumber = 1,
+                    Status = "succeeded",
+                    ResponseStatusCode = 200,
+                    StartedAt = DateTimeOffset.UtcNow,
+                    CompletedAt = DateTimeOffset.UtcNow
+                }
+            ]
         };
-        fixture.EventRepository.GetEventResult = expected;
+        fixture.EventLookup.GetEventResult = expected;
 
         HttpResponseMessage response = await GetEventAsync(eventId, $"ApiKey {ApiKeyAuthHandlerTests.TestToken}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        GetEventResponse? body = await response.Content.ReadFromJsonAsync<GetEventResponse>();
+        EventDto? body = await response.Content.ReadFromJsonAsync<EventDto>();
         Assert.NotNull(body);
         Assert.Equal(expected.EventId, body.EventId);
         Assert.Equal(expected.Status, body.Status);
         Assert.Equal(expected.AcceptedAt, body.AcceptedAt);
         Assert.Equal(expected.ProcessedAt, body.ProcessedAt);
         Assert.Equal(expected.FailedAt, body.FailedAt);
+        DeliveryAttemptDto attempt = Assert.Single(body.DeliveryAttempts);
+        Assert.Equal(attemptId, attempt.AttemptId);
+        Assert.Equal(expected.DeliveryAttempts[0].SubscriptionDeliveryId, attempt.SubscriptionDeliveryId);
+        Assert.Equal(expected.DeliveryAttempts[0].SubscriptionId, attempt.SubscriptionId);
+        Assert.Equal(expected.DeliveryAttempts[0].DestinationConnectionId, attempt.DestinationConnectionId);
+        Assert.Equal(1, attempt.AttemptNumber);
+        Assert.Equal("succeeded", attempt.Status);
+        Assert.Equal(200, attempt.ResponseStatusCode);
     }
 
     [Fact]

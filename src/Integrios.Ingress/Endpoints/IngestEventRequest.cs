@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Integrios.Application.Events;
+namespace Integrios.Ingress.Endpoints;
 
 public sealed record IngestEventRequest
 {

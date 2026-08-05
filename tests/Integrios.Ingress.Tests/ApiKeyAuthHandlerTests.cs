@@ -6,6 +6,7 @@ using System.Text.Json;
 using Integrios.Application.Events;
 using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
+using Integrios.Ingress.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.Ingress.Tests;
