@@ -3,7 +3,7 @@ using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.Integrations;
 
-public sealed record IntegrationResponse
+public sealed record IntegrationDto
 {
     public required Guid Id { get; init; }
     public required string Key { get; init; }
@@ -18,7 +18,7 @@ public sealed record IntegrationResponse
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }
 
-    public static IntegrationResponse From(Integration integration) => new()
+    public static IntegrationDto From(Integration integration) => new()
     {
         Id = integration.Id,
         Key = integration.Key,
@@ -33,10 +33,4 @@ public sealed record IntegrationResponse
         CreatedAt = integration.CreatedAt,
         UpdatedAt = integration.UpdatedAt,
     };
-}
-
-public sealed record IntegrationListResponse
-{
-    public required IReadOnlyList<IntegrationResponse> Items { get; init; }
-    public string? NextCursor { get; init; }
 }

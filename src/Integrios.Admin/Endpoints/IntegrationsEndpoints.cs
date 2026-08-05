@@ -26,7 +26,7 @@ public sealed class IntegrationsEndpoints : IEndpointGroup
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        IntegrationListResponse response = await mediator.Send(new ListIntegrationsQuery(after, limit), cancellationToken);
+        IntegrationListDto response = await mediator.Send(new ListIntegrationsQuery(after, limit), cancellationToken);
         return Results.Ok(response);
     }
 
@@ -35,7 +35,7 @@ public sealed class IntegrationsEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        IntegrationResponse? response = await mediator.Send(new GetIntegrationByIdQuery(id), cancellationToken);
+        IntegrationDto? response = await mediator.Send(new GetIntegrationByIdQuery(id), cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
@@ -45,7 +45,7 @@ public sealed class IntegrationsEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        IntegrationResponse? response = await mediator.Send(
+        IntegrationDto? response = await mediator.Send(
             new GetIntegrationByVersionQuery(key, contractVersion),
             cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
