@@ -44,7 +44,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destinationConnectionId,
+                destination_connection_id = destinationConnectionId,
                 order_index = 10
             }));
 
@@ -66,7 +66,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destinationConnectionId,
+                destination_connection_id = destinationConnectionId,
                 order_index = 10
             }));
 
@@ -89,7 +89,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             {
                 name = "cross-tenant-sink",
                 match_rules = new { event_type = "payment.created" },
-                destinationConnectionId,
+                destination_connection_id = destinationConnectionId,
                 order_index = 10
             }));
 
@@ -112,7 +112,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             {
                 name = "missing-authentication",
                 match_rules = new { event_type = "payment.created" },
-                destinationConnectionId,
+                destination_connection_id = destinationConnectionId,
                 order_index = 10
             }));
 
@@ -133,7 +133,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             {
                 name = "erp-sink-v2",
                 match_rules = new { event_type = "payment.updated" },
-                destinationConnectionId,
+                destination_connection_id = destinationConnectionId,
                 order_index = 25
             }));
 
@@ -157,7 +157,7 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
             {
                 name = "cross-tenant-sink",
                 match_rules = new { event_type = "payment.updated" },
-                destinationConnectionId,
+                destination_connection_id = destinationConnectionId,
                 order_index = 25
             }));
 
