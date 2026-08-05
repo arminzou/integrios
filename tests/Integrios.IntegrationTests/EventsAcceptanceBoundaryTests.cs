@@ -6,6 +6,7 @@ using Integrios.Domain.Events;
 using Integrios.Ingress.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
+using Integrios.Tests.Shared;
 
 namespace Integrios.IntegrationTests;
 
@@ -52,7 +53,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
 
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>();
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(body);
         Assert.False(body.AlreadyAccepted);
         Assert.Equal(EventStatus.Accepted, body.Status);
@@ -78,13 +79,13 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(postBody);
 
         var getResponse = await GetEventAsync(postBody.EventId);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>();
+        var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
         Assert.NotNull(getBody);
         Assert.Equal(postBody.EventId, getBody.EventId);
         Assert.Equal(EventStatus.Accepted, getBody.Status);
@@ -98,7 +99,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(postBody);
 
         await fixture.ForceEventStatusAsync(postBody.EventId, "fanned_out");
@@ -106,7 +107,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var getResponse = await GetEventAsync(postBody.EventId);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>();
+        var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
         Assert.NotNull(getBody);
         Assert.Equal(EventStatus.FannedOut, getBody.Status);
 
@@ -129,7 +130,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
+        var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(postBody);
 
         var getResponseForTenantB = await GetEventAsync(postBody.EventId, tenantBAuthHeaderValue);
@@ -143,13 +144,13 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         var firstResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, firstResponse.StatusCode);
-        var firstBody = await firstResponse.Content.ReadFromJsonAsync<IngestEventResult>();
+        var firstBody = await firstResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(firstBody);
         Assert.False(firstBody.AlreadyAccepted);
 
         var secondResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, secondResponse.StatusCode);
-        var secondBody = await secondResponse.Content.ReadFromJsonAsync<IngestEventResult>();
+        var secondBody = await secondResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(secondBody);
         Assert.True(secondBody.AlreadyAccepted);
         Assert.Equal(firstBody.EventId, secondBody.EventId);
@@ -174,7 +175,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var response = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>();
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(body);
 
         var writtenTenantId = await fixture.GetEventTenantIdAsync(body.EventId);
@@ -188,7 +189,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postResponse = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
-        var body = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>();
+        var body = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(body);
 
         await fixture.ForceDeadLetteredDeliveryAsync(body.EventId);
@@ -238,7 +239,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var response = await PostEventAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>();
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(body);
 
         var storedTopicId = await fixture.GetEventTopicIdAsync(body.EventId);
@@ -326,7 +327,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     {
         var message = new HttpRequestMessage(HttpMethod.Post, "/events")
         {
-            Content = JsonContent.Create(request)
+            Content = JsonContent.Create(request, options: HostJson.Options)
         };
         message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
         return client.SendAsync(message);

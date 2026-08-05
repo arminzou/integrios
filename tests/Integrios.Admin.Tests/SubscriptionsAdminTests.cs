@@ -284,7 +284,7 @@ public sealed class SubscriptionsAdminTests : IClassFixture<AdminApiFixture>, IA
                 name,
                 match_rules = new { event_type = eventType },
                 destination_connection_id = fixture.SourceConnectionId,
-                orderIndex,
+                order_index = orderIndex,
                 description,
                 transform
             }));

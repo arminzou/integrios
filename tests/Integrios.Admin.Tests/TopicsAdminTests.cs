@@ -82,7 +82,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var createRequest = AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics",
-            new { name = "github-events", sourceConnectionIds = new[] { sourceConnectionId } });
+            new { name = "github-events", source_connection_ids = new[] { sourceConnectionId } });
         createRequest.Headers.Host = "attacker.example";
         createRequest.Headers.TryAddWithoutValidation("Forwarded", "host=forwarded.example;proto=http");
         createRequest.Headers.TryAddWithoutValidation("X-Forwarded-Host", "forwarded.example");
@@ -136,7 +136,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var removedResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
-            new { name = created.Name, sourceConnectionIds = Array.Empty<Guid>() }));
+            new { name = created.Name, source_connection_ids = Array.Empty<Guid>() }));
         Assert.Equal(HttpStatusCode.OK, removedResponse.StatusCode);
         var removed = await removedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(removed);
@@ -189,7 +189,7 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
         var recreatedResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
             $"/admin/tenants/{fixture.TenantId}/topics/{created.Id}",
-            new { name = created.Name, sourceConnectionIds = new[] { sourceConnectionId } }));
+            new { name = created.Name, source_connection_ids = new[] { sourceConnectionId } }));
         Assert.Equal(HttpStatusCode.OK, recreatedResponse.StatusCode);
         var recreated = await recreatedResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(recreated);

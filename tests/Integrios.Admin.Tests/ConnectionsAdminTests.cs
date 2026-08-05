@@ -96,7 +96,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId,
+                integration_id = integrationId,
                 name = "source-without-url",
                 config = new { source_name = "orders" }
             }));
@@ -289,7 +289,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId,
+                integration_id = integrationId,
                 name = "erp-auth",
                 config = new { base_uri = "http://localhost:5054/sink/erp-auth" }
             }));
@@ -487,7 +487,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId,
+                integration_id = integrationId,
                 name,
                 config = new { base_uri = "http://localhost:5054/sink/erp-auth" },
                 destination_authentication = new
