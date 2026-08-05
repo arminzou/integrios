@@ -6,7 +6,7 @@ using MediatR;
 namespace Integrios.Application.Integrations;
 
 public sealed record ApplyIntegrationManifestResult(
-    IntegrationResponse Integration,
+    IntegrationDto Integration,
     IntegrationManifestApplyOutcome Outcome);
 
 public sealed record ApplyIntegrationManifestCommand(
@@ -44,7 +44,7 @@ internal sealed class ApplyIntegrationManifestCommandHandler(
             cancellationToken);
 
         return new ApplyIntegrationManifestResult(
-            IntegrationResponse.From(applied.Integration),
+            IntegrationDto.From(applied.Integration),
             applied.Outcome);
     }
 }
