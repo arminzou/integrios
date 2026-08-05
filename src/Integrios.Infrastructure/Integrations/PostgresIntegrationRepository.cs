@@ -8,7 +8,7 @@ using Integrios.Domain.Integrations;
 
 namespace Integrios.Infrastructure.Integrations;
 
-internal sealed class IntegrationRepository(IDbConnectionFactory connectionFactory)
+internal sealed class PostgresIntegrationRepository(IDbConnectionFactory connectionFactory)
     : IIntegrationCatalog, IIntegrationManifestStore
 {
     private const string SelectColumns =

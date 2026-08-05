@@ -65,7 +65,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
         deadLetterReplay = new PostgresDeadLetterReplay(connectionFactory);
         outboxFanout = new PostgresOutboxFanout(connectionFactory);
-        subscriptionRepository = new SubscriptionRepository(connectionFactory);
+        subscriptionRepository = new PostgresSubscriptionRepository(connectionFactory);
         eventLookup = new PostgresTenantEventLookup(connectionFactory);
         var deliveryOptions = DeliveryExecutionOptions.Default;
         DeliveryQueue = new PostgresSubscriptionDeliveryQueue(
@@ -482,7 +482,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             VALUES (@TenantId, @TopicId, @SourceConnectionId);
 
             -- Intentionally uses the pre-v2.1 event_types[] array shape to cover the
-            -- compat read path in SubscriptionRepository.
+            -- compat read path in PostgresSubscriptionRepository.
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES
                 (@LedgerSubscriptionId, @TenantId, @TopicId, 'to-ledger',

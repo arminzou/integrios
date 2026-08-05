@@ -40,18 +40,18 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddPostgresServices(configuration);
-        services.AddSingleton<AdminKeyRepository>();
-        services.AddSingleton<IAdminKeyLookup>(provider => provider.GetRequiredService<AdminKeyRepository>());
-        services.AddSingleton<IAdminKeyLifecycle>(provider => provider.GetRequiredService<AdminKeyRepository>());
-        services.AddSingleton<IApiKeyRepository, ApiKeyRepository>();
-        services.AddSingleton<ITenantRepository, TenantRepository>();
-        services.AddSingleton<IntegrationRepository>();
-        services.AddSingleton<IIntegrationCatalog>(provider => provider.GetRequiredService<IntegrationRepository>());
-        services.AddSingleton<IIntegrationManifestStore>(provider => provider.GetRequiredService<IntegrationRepository>());
-        services.AddSingleton<IConnectionRepository, ConnectionRepository>();
+        services.AddSingleton<PostgresAdminKeyRepository>();
+        services.AddSingleton<IAdminKeyLookup>(provider => provider.GetRequiredService<PostgresAdminKeyRepository>());
+        services.AddSingleton<IAdminKeyLifecycle>(provider => provider.GetRequiredService<PostgresAdminKeyRepository>());
+        services.AddSingleton<IApiKeyRepository, PostgresApiKeyRepository>();
+        services.AddSingleton<ITenantRepository, PostgresTenantRepository>();
+        services.AddSingleton<PostgresIntegrationRepository>();
+        services.AddSingleton<IIntegrationCatalog>(provider => provider.GetRequiredService<PostgresIntegrationRepository>());
+        services.AddSingleton<IIntegrationManifestStore>(provider => provider.GetRequiredService<PostgresIntegrationRepository>());
+        services.AddSingleton<IConnectionRepository, PostgresConnectionRepository>();
         services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
-        services.AddSingleton<ITopicRepository, TopicRepository>();
-        services.AddSingleton<ISubscriptionRepository, SubscriptionRepository>();
+        services.AddSingleton<ITopicRepository, PostgresTopicRepository>();
+        services.AddSingleton<ISubscriptionRepository, PostgresSubscriptionRepository>();
         services.AddDestinationAuthenticationServices();
         services.AddSourceAdapterServices();
         services.AddTransformEvaluationServices();

@@ -8,7 +8,7 @@ using Integrios.Domain.Topics;
 
 namespace Integrios.Infrastructure.Subscriptions;
 
-internal sealed class SubscriptionRepository(IDbConnectionFactory connectionFactory) : ISubscriptionRepository
+internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connectionFactory) : ISubscriptionRepository
 {
     private const string AdminSelectColumns =
         """
