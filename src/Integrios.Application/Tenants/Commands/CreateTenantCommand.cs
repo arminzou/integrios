@@ -9,12 +9,12 @@ public sealed record CreateTenantCommand(
     string Name,
     string? Environment,
     string? Description
-) : IRequest<TenantResponse>;
+) : IRequest<TenantDto>;
 
 internal sealed class CreateTenantCommandHandler(ITenantRepository repository)
-    : IRequestHandler<CreateTenantCommand, TenantResponse>
+    : IRequestHandler<CreateTenantCommand, TenantDto>
 {
-    public async Task<TenantResponse> Handle(CreateTenantCommand command, CancellationToken cancellationToken)
+    public async Task<TenantDto> Handle(CreateTenantCommand command, CancellationToken cancellationToken)
     {
         if (!TenantSlug.IsValid(command.Slug))
         {
@@ -36,6 +36,6 @@ internal sealed class CreateTenantCommandHandler(ITenantRepository repository)
         };
 
         var created = await repository.CreateAsync(tenant, cancellationToken);
-        return TenantResponse.From(created);
+        return TenantDto.From(created);
     }
 }

@@ -2,17 +2,17 @@ using MediatR;
 
 namespace Integrios.Application.Tenants;
 
-public sealed record ListTenantsQuery(string? AfterCursor, int Limit) : IRequest<TenantListResponse>;
+public sealed record ListTenantsQuery(string? AfterCursor, int Limit) : IRequest<TenantListDto>;
 
 internal sealed class ListTenantsQueryHandler(ITenantRepository repository)
-    : IRequestHandler<ListTenantsQuery, TenantListResponse>
+    : IRequestHandler<ListTenantsQuery, TenantListDto>
 {
-    public async Task<TenantListResponse> Handle(ListTenantsQuery query, CancellationToken cancellationToken)
+    public async Task<TenantListDto> Handle(ListTenantsQuery query, CancellationToken cancellationToken)
     {
         var (items, nextCursor) = await repository.ListAsync(query.AfterCursor, query.Limit, cancellationToken);
-        return new TenantListResponse
+        return new TenantListDto
         {
-            Items = items.Select(TenantResponse.From).ToList(),
+            Items = items.Select(TenantDto.From).ToList(),
             NextCursor = nextCursor,
         };
     }
