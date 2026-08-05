@@ -52,7 +52,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
         Assert.Equal(HttpStatusCode.Created, tenantResponse.StatusCode);
 
-        var tenant = await tenantResponse.Content.ReadFromJsonAsync<TenantResponse>(WebJson);
+        var tenant = await tenantResponse.Content.ReadFromJsonAsync<TenantDto>(WebJson);
         Assert.NotNull(tenant);
 
         var apiKeyResponse = await client.SendAsync(AdminRequest(

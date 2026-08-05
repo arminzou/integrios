@@ -7,16 +7,16 @@ public sealed record UpdateTenantCommand(
     string Name,
     string? Description,
     string? Environment
-) : IRequest<TenantResponse?>;
+) : IRequest<TenantDto?>;
 
 internal sealed class UpdateTenantCommandHandler(ITenantRepository repository)
-    : IRequestHandler<UpdateTenantCommand, TenantResponse?>
+    : IRequestHandler<UpdateTenantCommand, TenantDto?>
 {
-    public async Task<TenantResponse?> Handle(UpdateTenantCommand command, CancellationToken cancellationToken)
+    public async Task<TenantDto?> Handle(UpdateTenantCommand command, CancellationToken cancellationToken)
     {
         var tenant = await repository.UpdateAsync(
             command.Id, command.Name, command.Description, command.Environment, cancellationToken);
 
-        return tenant is null ? null : TenantResponse.From(tenant);
+        return tenant is null ? null : TenantDto.From(tenant);
     }
 }
