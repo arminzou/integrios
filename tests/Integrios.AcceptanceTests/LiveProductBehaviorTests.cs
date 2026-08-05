@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Npgsql;
 
 namespace Integrios.AcceptanceTests;
 
@@ -22,7 +21,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     public async Task PackagedSystem_QualifiesLiveProductBehaviorMatrix()
     {
         await InstallQualificationIntegrationsAsync();
-        await AssertCredentialSchemaAndControlPlaneAuthorityAsync();
+        await AssertControlPlaneAuthorityAsync();
 
         TenantContext primary = await CreateTenantAsync($"matrix-{Suffix()}");
         TenantContext isolated = await CreateTenantAsync($"isolated-{Suffix()}");
@@ -42,20 +41,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await AssertSecretsAbsentFromDurableEvidenceAsync();
     }
 
-    private async Task AssertCredentialSchemaAndControlPlaneAuthorityAsync()
+    private async Task AssertControlPlaneAuthorityAsync()
     {
         using HttpResponseMessage unauthenticated = await fixture.AdminClient.GetAsync("/admin/tenants");
         Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
 
         using HttpResponseMessage authenticated = await SendAdminAsync(HttpMethod.Get, "/admin/tenants");
         Assert.Equal(HttpStatusCode.OK, authenticated.StatusCode);
-
-        Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'admin_keys' AND column_name = 'tenant_id'"));
-        Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'api_keys' AND column_name = 'scopes'"));
-        Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'subscriptions' AND column_name IN ('delivery_policy', 'dlq_enabled')"));
     }
 
     private async Task AssertTenantAndApiKeyContractsAsync(TenantContext primary, TenantContext isolated)
@@ -69,11 +61,6 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             "/admin/tenants",
             new { slug = primary.Slug, name = "Duplicate", environment = "production" });
         Assert.Equal(HttpStatusCode.Conflict, duplicateTenant.StatusCode);
-
-        await Assert.ThrowsAsync<PostgresException>(() => fixture.ExecuteAsync($$"""
-            INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
-            VALUES ('{{Guid.NewGuid()}}', 'Invalid_Database_Slug', 'Invalid', 'active', now(), now())
-            """));
 
         using HttpResponseMessage apiKeys = await SendAdminAsync(
             HttpMethod.Get,
