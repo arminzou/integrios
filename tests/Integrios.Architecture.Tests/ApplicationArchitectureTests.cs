@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using MediatR;
 
 namespace Integrios.Architecture.Tests;
@@ -36,8 +37,7 @@ public sealed class ApplicationArchitectureTests
     [Fact]
     public void ApplicationTypes_AreNeverNamedResponse()
     {
-        string[] responseTypes = ApplicationAssembly.GetTypes()
-            .Select(type => type.Name)
+        string[] responseTypes = AuthoredApplicationTypeNames()
             .Where(name => name.EndsWith("Response", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -49,19 +49,20 @@ public sealed class ApplicationArchitectureTests
     }
 
     [Fact]
-    public void ApplicationExceptions_CarryNoTransportVocabulary()
+    public void ApplicationTypes_CarryNoRequestVocabulary()
     {
-        string[] transportNamedExceptions = ApplicationAssembly.GetTypes()
-            .Where(type => typeof(Exception).IsAssignableFrom(type))
-            .Select(type => type.Name)
+        // Contains rather than EndsWith, so this covers the wire record itself, the exception
+        // names that used to say RequestValidation, and anything like a *RequestValidator.
+        string[] requestTypes = AuthoredApplicationTypeNames()
             .Where(name => name.Contains("Request", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
         Assert.True(
-            transportNamedExceptions.Length == 0,
-            "Application does not know that requests exist, so its exception names cannot say so. "
-            + $"Found: {string.Join(", ", transportNamedExceptions)}");
+            requestTypes.Length == 0,
+            "A request is a transport contract owned by a host: route values are authoritative and "
+            + "wire deserialization ignores C# nullability, so untrusted input becomes trusted in "
+            + $"exactly one place. Application does not know requests exist. Found: {string.Join(", ", requestTypes)}");
     }
 
     [Fact]
@@ -74,6 +75,13 @@ public sealed class ApplicationArchitectureTests
             handler.ImplementationType.IsNotPublic,
             $"{handler.ImplementationType.FullName} must remain internal."));
     }
+
+    // Async state machines and closures inherit the name of the method they were generated for,
+    // so a method like BuildRequestDecoratorAsync would otherwise read as a banned type name.
+    private static IEnumerable<string> AuthoredApplicationTypeNames() =>
+        ApplicationAssembly.GetTypes()
+            .Where(type => !type.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+            .Select(type => type.Name);
 
     internal static Assembly ApplicationAssembly => Assembly.Load("Integrios.Application");
 

@@ -139,12 +139,24 @@ internal sealed class PostgresEventAcceptance(IDbConnectionFactory connectionFac
                 AlreadyAccepted = true
             };
         }
+        catch (PostgresException ex) when (IsRetiredTopicSource(ex))
+        {
+            // The source was retired between resolving the Topic and this insert. The trigger is
+            // the authority, so a lost race answers the producer the same way the read path does.
+            await transaction.RollbackAsync(cancellationToken);
+            throw new EventAcceptanceException(
+                "The source Connection is not actively associated with the requested Topic.");
+        }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
     }
+
+    private static bool IsRetiredTopicSource(PostgresException ex) =>
+        ex.SqlState == PostgresErrorCodes.ForeignKeyViolation
+        && string.Equals(ex.ConstraintName, "fk_events_topic_source_active", StringComparison.Ordinal);
 
     private static bool IsIdempotencyConflict(PostgresException ex, string? idempotencyKey)
     {

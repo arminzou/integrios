@@ -225,6 +225,27 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
+    // Removing a source from a Topic retires the association rather than deleting it, because the
+    // row is a tombstone that historical Event foreign keys still point at.
+    public async Task RetireSourceAsync(Guid tenantId, Guid topicId, Guid connectionId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            UPDATE topic_sources
+            SET status = 'inactive', inactive_at = now()
+            WHERE tenant_id = @TenantId
+              AND topic_id = @TopicId
+              AND connection_id = @ConnectionId
+            """,
+            connection);
+        command.Parameters.AddWithValue("TenantId", tenantId);
+        command.Parameters.AddWithValue("TopicId", topicId);
+        command.Parameters.AddWithValue("ConnectionId", connectionId);
+        await command.ExecuteNonQueryAsync();
+    }
+
     public async Task<Guid?> GetEventSourceConnectionIdAsync(Guid eventId)
     {
         await using var connection = new NpgsqlConnection(ConnectionString);

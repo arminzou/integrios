@@ -29,6 +29,7 @@ internal sealed class PostgresIntakeTopicResolver(IDbConnectionFactory connectio
                 WHERE t.tenant_id = @TenantId
                   AND t.name = @TopicName
                   AND t.status = 'active'
+                  AND ts.status = 'active'
                   AND c.id = @SourceConnectionId
                   AND c.status = 'active'
                   AND i.status = 'active'
