@@ -67,14 +67,14 @@ internal sealed class UpdateSubscriptionCommandHandler(
         var connection = await connectionRepository.GetByIdAsync(tenantId, destinationConnectionId, cancellationToken);
         if (connection is null)
         {
-            throw new SubscriptionRequestValidationException(
+            throw new SubscriptionValidationException(
                 "The specified destination connection does not exist for this tenant.");
         }
 
         Integration? integration = await integrationCatalog.GetByIdAsync(connection.IntegrationId, cancellationToken);
         if (integration is null)
         {
-            throw new SubscriptionRequestValidationException(
+            throw new SubscriptionValidationException(
                 "The destination connection references an integration that does not exist.");
         }
 
@@ -82,9 +82,9 @@ internal sealed class UpdateSubscriptionCommandHandler(
         {
             ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, authSchemeRegistry);
         }
-        catch (ConnectionRequestValidationException exception)
+        catch (ConnectionValidationException exception)
         {
-            throw new SubscriptionRequestValidationException(exception.Message);
+            throw new SubscriptionValidationException(exception.Message);
         }
     }
 }

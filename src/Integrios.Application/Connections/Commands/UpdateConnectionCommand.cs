@@ -35,7 +35,7 @@ internal sealed class UpdateConnectionCommandHandler(
         }
 
         Integration integration = await integrationCatalog.GetByIdAsync(existing.IntegrationId, cancellationToken)
-            ?? throw new ConnectionRequestValidationException("The specified integration does not exist.");
+            ?? throw new ConnectionValidationException("The specified integration does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
         ConnectionSchemeSelection? sourceVerification = ConnectionSchemeSelectionValidator.ValidateSource(

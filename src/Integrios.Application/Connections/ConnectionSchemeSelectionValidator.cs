@@ -37,7 +37,7 @@ internal static partial class ConnectionSchemeSelectionValidator
         EnsureDirection(integration, source: false, selection);
         IAuthSchemeHandler? handler = null;
         if (selection is not null && !registry.TryGet(selection.Scheme, out handler))
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"Destination authentication scheme '{selection.Scheme}' is not implemented.");
 
         return Validate(
@@ -62,7 +62,7 @@ internal static partial class ConnectionSchemeSelectionValidator
             scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
         if (declared is null)
         {
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"{capability} scheme '{selection.Scheme}' is not supported by integration '{integration.Key}'.");
         }
 
@@ -96,7 +96,7 @@ internal static partial class ConnectionSchemeSelectionValidator
             : integration.Direction is IntegrationDirection.Destination or IntegrationDirection.Both;
         if (!capable)
         {
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"Integration '{integration.Key}' does not permit {(source ? "source verification" : "destination authentication")}.");
         }
     }
@@ -113,7 +113,7 @@ internal static partial class ConnectionSchemeSelectionValidator
         string headerName = headerElement.GetString() ?? string.Empty;
         if (ReservedDeliveryHeaders.Contains(headerName, StringComparer.OrdinalIgnoreCase))
         {
-            throw new ConnectionRequestValidationException(
+            throw new ConnectionValidationException(
                 $"Header '{headerName}' is reserved for Integrios delivery identity metadata.");
         }
     }
@@ -131,14 +131,14 @@ internal static partial class ConnectionSchemeSelectionValidator
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
-            throw new ConnectionRequestValidationException($"{capability} {sectionName} must be a JSON object.");
+            throw new ConnectionValidationException($"{capability} {sectionName} must be a JSON object.");
         }
 
         foreach (string field in requiredFields)
         {
             if (!value.TryGetProperty(field, out JsonElement property) || property.ValueKind == JsonValueKind.Null)
             {
-                throw new ConnectionRequestValidationException($"{capability} {sectionName} field '{field}' is required.");
+                throw new ConnectionValidationException($"{capability} {sectionName} field '{field}' is required.");
             }
         }
     }
@@ -149,14 +149,14 @@ internal static partial class ConnectionSchemeSelectionValidator
         {
             if (property.Value.ValueKind != JsonValueKind.String)
             {
-                throw new ConnectionRequestValidationException(
+                throw new ConnectionValidationException(
                     $"Secret reference '{property.Name}' must be a lowercase snake_case string.");
             }
 
             string value = property.Value.GetString() ?? "";
             if (!SecretReferenceName.IsValid(value))
             {
-                throw new ConnectionRequestValidationException(
+                throw new ConnectionValidationException(
                     $"Secret reference '{property.Name}' must be a lowercase logical name of 1 to 63 characters.");
             }
         }

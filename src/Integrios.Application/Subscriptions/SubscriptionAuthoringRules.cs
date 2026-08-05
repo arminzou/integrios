@@ -15,7 +15,7 @@ internal static class SubscriptionAuthoringRules
         ITransformEvaluator transformEvaluator)
     {
         if (!HasValidMatchRulesShape(matchRules))
-            throw new SubscriptionRequestValidationException(InvalidMatchRulesMessage);
+            throw new SubscriptionValidationException(InvalidMatchRulesMessage);
 
         if (transformConfig is null || transformConfig.Value.ValueKind == JsonValueKind.Null)
             return;
@@ -25,7 +25,7 @@ internal static class SubscriptionAuthoringRules
             transformEvaluator,
             out _);
         if (error is not null)
-            throw new SubscriptionRequestValidationException(error);
+            throw new SubscriptionValidationException(error);
     }
 
     private static bool HasValidMatchRulesShape(JsonElement matchRules)

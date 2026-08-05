@@ -21,7 +21,7 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         await using AuthoringHarness harness = new();
 
-        var exception = await Assert.ThrowsAsync<SubscriptionRequestValidationException>(() =>
+        var exception = await Assert.ThrowsAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command(matchRules: Json("{}"))));
 
         Assert.Contains("matchRules", exception.Message, StringComparison.Ordinal);
@@ -33,7 +33,7 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         await using AuthoringHarness harness = new(transformValidationError: "invalid transform expression");
 
-        var exception = await Assert.ThrowsAsync<SubscriptionRequestValidationException>(() =>
+        var exception = await Assert.ThrowsAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command(transformConfig: ValidTransform())));
 
         Assert.Equal("invalid transform expression", exception.Message);
@@ -45,7 +45,7 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         await using AuthoringHarness harness = new(destinationDirection: IntegrationDirection.Source);
 
-        var exception = await Assert.ThrowsAsync<SubscriptionRequestValidationException>(() =>
+        var exception = await Assert.ThrowsAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command()));
 
         Assert.Contains("direction permits destination use", exception.Message, StringComparison.Ordinal);

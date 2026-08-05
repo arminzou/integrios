@@ -15,10 +15,10 @@ public sealed class AdminExceptionHandlerTests
     {
         { new DuplicateResourceException("duplicate"), StatusCodes.Status409Conflict },
         { new ConnectionAuthoringConflictException(), StatusCodes.Status409Conflict },
-        { new TenantRequestValidationException("invalid tenant"), StatusCodes.Status422UnprocessableEntity },
-        { new ConnectionRequestValidationException("invalid connection"), StatusCodes.Status422UnprocessableEntity },
-        { new TopicRequestValidationException("invalid topic"), StatusCodes.Status422UnprocessableEntity },
-        { new SubscriptionRequestValidationException("invalid subscription"), StatusCodes.Status422UnprocessableEntity },
+        { new TenantValidationException("invalid tenant"), StatusCodes.Status422UnprocessableEntity },
+        { new ConnectionValidationException("invalid connection"), StatusCodes.Status422UnprocessableEntity },
+        { new TopicValidationException("invalid topic"), StatusCodes.Status422UnprocessableEntity },
+        { new SubscriptionValidationException("invalid subscription"), StatusCodes.Status422UnprocessableEntity },
         { new BadHttpRequestException("binding details"), StatusCodes.Status400BadRequest }
     };
 

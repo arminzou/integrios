@@ -18,7 +18,7 @@ internal sealed class CreateTenantCommandHandler(ITenantRepository repository)
     {
         if (!TenantSlug.IsValid(command.Slug))
         {
-            throw new TenantRequestValidationException(
+            throw new TenantValidationException(
                 "Tenant slug must be a lowercase DNS label of 1 to 63 characters.");
         }
 

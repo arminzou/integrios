@@ -19,12 +19,12 @@ public sealed class AdminExceptionHandler : IExceptionHandler
         {
             DuplicateResourceException => (StatusCodes.Status409Conflict, exception.Message),
             ConnectionAuthoringConflictException => (StatusCodes.Status409Conflict, exception.Message),
-            TenantRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            ConnectionRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            TenantValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            ConnectionValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             IntegrationManifestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             IntegrationVersionConflictException => (StatusCodes.Status409Conflict, exception.Message),
-            TopicRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            SubscriptionRequestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            TopicValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            SubscriptionValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             BadHttpRequestException badRequest => (badRequest.StatusCode, "The request body is invalid."),
             _ => null
         };
