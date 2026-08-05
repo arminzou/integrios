@@ -99,7 +99,13 @@ public sealed class HostCompositionArchitectureTests
             .OrderBy(type => type.FullName, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(publicPorts, classifiedPorts);
+        string[] unclassified = publicPorts.Except(classifiedPorts).Select(type => type.FullName!).ToArray();
+        string[] retired = classifiedPorts.Except(publicPorts).Select(type => type.FullName!).ToArray();
+
+        Assert.True(
+            unclassified.Length == 0 && retired.Length == 0,
+            "Every public Application port must appear in PortOwners with its exact host set, so a "
+            + $"new port cannot silently escape ownership review. {ProjectArchitectureTests.DescribeSetDiff(unclassified, retired)}");
 
         using ServiceProvider admin = BuildProvider(
             services => services.AddAdminApplicationServices(),
