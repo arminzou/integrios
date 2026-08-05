@@ -15,17 +15,17 @@ public sealed record CreateConnectionCommand(
     ConnectionSchemeSelectionInput? SourceVerification,
     ConnectionSchemeSelectionInput? DestinationAuthentication,
     string? Environment,
-    string? Description) : IRequest<ConnectionResponse>;
+    string? Description) : IRequest<ConnectionDto>;
 
 internal sealed class CreateConnectionCommandHandler(
     IConnectionRepository repository,
     IIntegrationCatalog integrationCatalog,
     IAuthSchemeRegistry authSchemeRegistry)
-    : IRequestHandler<CreateConnectionCommand, ConnectionResponse>
+    : IRequestHandler<CreateConnectionCommand, ConnectionDto>
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
 
-    public async Task<ConnectionResponse> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
+    public async Task<ConnectionDto> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
     {
         Integration integration = await integrationCatalog.GetByIdAsync(command.IntegrationId, cancellationToken)
             ?? throw new ConnectionRequestValidationException("The specified integration does not exist.");
@@ -53,6 +53,6 @@ internal sealed class CreateConnectionCommandHandler(
         };
 
         Connection created = await repository.CreateAsync(connection, cancellationToken);
-        return ConnectionResponse.From(created);
+        return ConnectionDto.From(created);
     }
 }

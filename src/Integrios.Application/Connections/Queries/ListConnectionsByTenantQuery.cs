@@ -3,19 +3,19 @@ using MediatR;
 
 namespace Integrios.Application.Connections;
 
-public sealed record ListConnectionsByTenantQuery(Guid TenantId, string? AfterCursor, int Limit) : IRequest<ConnectionListResponse>;
+public sealed record ListConnectionsByTenantQuery(Guid TenantId, string? AfterCursor, int Limit) : IRequest<ConnectionListDto>;
 
 internal sealed class ListConnectionsByTenantQueryHandler(IConnectionRepository repository)
-    : IRequestHandler<ListConnectionsByTenantQuery, ConnectionListResponse>
+    : IRequestHandler<ListConnectionsByTenantQuery, ConnectionListDto>
 {
-    public async Task<ConnectionListResponse> Handle(ListConnectionsByTenantQuery query, CancellationToken cancellationToken)
+    public async Task<ConnectionListDto> Handle(ListConnectionsByTenantQuery query, CancellationToken cancellationToken)
     {
         (IReadOnlyList<Connection> items, string? nextCursor) = await repository.ListByTenantAsync(
             query.TenantId, query.AfterCursor, query.Limit, cancellationToken);
 
-        return new ConnectionListResponse
+        return new ConnectionListDto
         {
-            Items = items.Select(ConnectionResponse.From).ToList(),
+            Items = items.Select(ConnectionDto.From).ToList(),
             NextCursor = nextCursor,
         };
     }

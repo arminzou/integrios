@@ -149,7 +149,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    private async Task<ConnectionResponse> CreateConnectionAsync(Guid tenantId, string name, string url, string environment)
+    private async Task<ConnectionDto> CreateConnectionAsync(Guid tenantId, string name, string url, string environment)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -164,7 +164,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
 
         response.EnsureSuccessStatusCode();
-        var connection = await response.Content.ReadFromJsonAsync<ConnectionResponse>(WebJson);
+        var connection = await response.Content.ReadFromJsonAsync<ConnectionDto>(WebJson);
         return connection!;
     }
 

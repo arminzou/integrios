@@ -15,17 +15,17 @@ public sealed record UpdateConnectionCommand(
     ConnectionSchemeSelectionInput? DestinationAuthentication,
     string? Environment,
     string? Description
-) : IRequest<ConnectionResponse?>;
+) : IRequest<ConnectionDto?>;
 
 internal sealed class UpdateConnectionCommandHandler(
     IConnectionRepository repository,
     IConnectionAuthoringLock authoringLock,
     IIntegrationCatalog integrationCatalog,
-    IAuthSchemeRegistry authSchemeRegistry) : IRequestHandler<UpdateConnectionCommand, ConnectionResponse?>
+    IAuthSchemeRegistry authSchemeRegistry) : IRequestHandler<UpdateConnectionCommand, ConnectionDto?>
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
 
-    public async Task<ConnectionResponse?> Handle(UpdateConnectionCommand command, CancellationToken cancellationToken)
+    public async Task<ConnectionDto?> Handle(UpdateConnectionCommand command, CancellationToken cancellationToken)
     {
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync([command.Id], cancellationToken);
         Connection? existing = await repository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
@@ -69,6 +69,6 @@ internal sealed class UpdateConnectionCommandHandler(
             command.Description,
             cancellationToken);
 
-        return updated is null ? null : ConnectionResponse.From(updated);
+        return updated is null ? null : ConnectionDto.From(updated);
     }
 }
