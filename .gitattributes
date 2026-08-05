@@ -1,0 +1,12 @@
+# Line endings are normalized to LF in the repository and checked out as LF on
+# every platform. The repo is built and tested on native Windows and Linux, and
+# the same sources run inside Linux containers, where a stray CR turns a shebang
+# into "bad interpreter" and a Makefile recipe into a silent failure.
+#
+# .editorconfig already asks editors for LF, but it cannot reach scripts,
+# code generation, or a contributor whose Git for Windows install defaulted to
+# core.autocrlf=true. This file travels with the repository, so it binds every
+# clone and CI alike.
+* text=auto eol=lf
+
+*.png binary
