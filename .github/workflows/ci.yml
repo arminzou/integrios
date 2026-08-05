@@ -45,6 +45,7 @@ jobs:
 
   qualify:
     needs: verify
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -62,32 +63,22 @@ jobs:
       - name: Restore
         run: dotnet restore Integrios.slnx --locked-mode
 
-      - name: Select qualification tier
+      - name: Select acceptance run
         id: tier
         shell: bash
         run: |
-          # Tiers select on the Tier trait the tests carry, never on test class names:
-          #   database - Flyway and Postgres only, no service images, cheap enough to gate every PR
-          #   smoke    - packaged deployment, fast enough for every merge to main
-          #   deep     - packaged deployment, slow or timing-sensitive
-          # TierTraitContractTests fails when a test declares no tier, so a new test is covered
-          # by construction and this selector does not change when tests are added.
+          # The qualify job itself does not run on pull_request (see the job-level `if`); PRs
+          # stop at the functional tier. What remains distinguishes only release, which runs the
+          # whole solution, from main and nightly, which run the acceptance project whole.
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
             echo 'name=nightly' >> "$GITHUB_OUTPUT"
-            echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
-            echo 'filter=' >> "$GITHUB_OUTPUT"
+            echo 'target=tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj' >> "$GITHUB_OUTPUT"
           elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' || "$GITHUB_REF" == refs/tags/v* ]]; then
             echo 'name=release' >> "$GITHUB_OUTPUT"
             echo 'target=Integrios.slnx' >> "$GITHUB_OUTPUT"
-            echo 'filter=' >> "$GITHUB_OUTPUT"
-          elif [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
-            echo 'name=database' >> "$GITHUB_OUTPUT"
-            echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
-            echo 'filter=Tier=database' >> "$GITHUB_OUTPUT"
           else
             echo 'name=main' >> "$GITHUB_OUTPUT"
-            echo 'target=tests/Integrios.QualificationTests/Integrios.QualificationTests.csproj' >> "$GITHUB_OUTPUT"
-            echo 'filter=Tier=database|Tier=smoke' >> "$GITHUB_OUTPUT"
+            echo 'target=tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj' >> "$GITHUB_OUTPUT"
           fi
 
       # The deployment reference defaults to a version so a fresh clone deploys without editing
@@ -120,7 +111,7 @@ jobs:
           cp .github/workflows/ci.yml evidence/ci-workflow.yml
           cat > evidence/commands.txt <<'EOF'
           # Architecture/component/Postgres tests below ran in this workflow run's verify job; see its log.
-          # The full-suite command below ran in this qualify job; see qualification.log.
+          # The full-suite command below ran in this qualify job; see acceptance.log.
           dotnet restore Integrios.slnx --locked-mode
           dotnet list Integrios.slnx package --vulnerable --include-transitive --no-restore
           dotnet build Integrios.slnx --configuration Release --no-restore
@@ -132,23 +123,19 @@ jobs:
           dotnet test Integrios.slnx --configuration Release --no-restore
           EOF
 
-      - name: Run selected qualification tier
+      - name: Run acceptance tests
         shell: bash
         env:
           TIER: ${{ steps.tier.outputs.name }}
           TARGET: ${{ steps.tier.outputs.target }}
-          FILTER: ${{ steps.tier.outputs.filter }}
         run: |
           set -o pipefail
           mkdir -p evidence/test-results
           command=(dotnet test "$TARGET" --configuration Release --no-restore --logger trx --results-directory evidence/test-results)
-          if [[ -n "$FILTER" ]]; then
-            command+=(--filter "$FILTER")
-          fi
 
           printf '%q ' "${command[@]}" > evidence/selected-command.txt
           printf '\n' >> evidence/selected-command.txt
-          "${command[@]}" 2>&1 | tee evidence/qualification.log
+          "${command[@]}" 2>&1 | tee evidence/acceptance.log
 
           python3 - "$TIER" <<'PY'
           import glob
@@ -156,13 +143,12 @@ jobs:
           import xml.etree.ElementTree as ET
 
           # Expected test counts are deliberately not asserted here. A hand-maintained floor
-          # decays every time a test is added, and the invariant it was guarding - that no test
-          # escapes tier selection - is now enforced by TierTraitContractTests. What remains is
-          # a presence check that catches a filter matching nothing.
+          # decays every time a test is added. What remains is a presence check that catches the
+          # target resolving to no tests.
           tier = sys.argv[1]
           total = 0
           not_executed = 0
-          qualification_results = 0
+          acceptance_results = 0
           files = glob.glob('evidence/test-results/**/*.trx', recursive=True)
           for path in files:
               root = ET.parse(path).getroot()
@@ -171,15 +157,15 @@ jobs:
                   total += int(counters.attrib.get('total', '0'))
                   not_executed += int(counters.attrib.get('notExecuted', '0'))
 
-              qualification_ids = {
+              acceptance_ids = {
                   test.attrib['id']
                   for test in root.findall('.//{*}UnitTest')
-                  if test.attrib.get('storage', '').replace('\\', '/').lower().endswith('/integrios.qualificationtests.dll')
+                  if test.attrib.get('storage', '').replace('\\', '/').lower().endswith('/integrios.acceptancetests.dll')
               }
-              qualification_results += sum(
+              acceptance_results += sum(
                   1
                   for result in root.findall('.//{*}UnitTestResult')
-                  if result.attrib.get('testId') in qualification_ids
+                  if result.attrib.get('testId') in acceptance_ids
               )
 
           with open('evidence/test-counts.txt', 'w', encoding='utf-8') as output:
@@ -187,19 +173,19 @@ jobs:
                   f'tier={tier}\n'
                   f'trx_files={len(files)}\n'
                   f'total_tests={total}\n'
-                  f'qualification_tests={qualification_results}\n'
+                  f'acceptance_tests={acceptance_results}\n'
                   f'not_executed={not_executed}\n'
               )
 
           if not files or total < 1:
-              raise SystemExit(f'{tier} qualification selected no tests; the tier filter matched nothing')
-          if qualification_results < 1:
+              raise SystemExit(f'{tier} run selected no tests; the target resolved to nothing')
+          if acceptance_results < 1:
               raise SystemExit(
-                  f'{tier} qualification executed no tests from the qualification project; '
-                  'the tier filter matched nothing'
+                  f'{tier} run executed no tests from the acceptance project; '
+                  'the target resolved to nothing'
               )
           if not_executed:
-              raise SystemExit(f'{tier} qualification reported {not_executed} skipped or unexecuted tests')
+              raise SystemExit(f'{tier} run reported {not_executed} skipped or unexecuted tests')
           PY
 
       - name: Record resolved external image digests
@@ -212,7 +198,7 @@ jobs:
               awk '$1 == "image:" { print $2 }' \
                 compose.yml \
                 deploy/compose.yml \
-                tests/Integrios.QualificationTests/compose.deploy.qualification.yml
+                tests/Integrios.AcceptanceTests/compose.acceptance.yml
             } | grep -v '\${' | sort -u
           )
 
@@ -222,11 +208,11 @@ jobs:
             printf '%s@sha256:%s\n' "$image" "$digest" >> evidence/external-image-digests.txt
           done
 
-      - name: Upload qualification evidence
+      - name: Upload acceptance evidence
         if: always() && steps.tier.outputs.name == 'release'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: release-qualification-${{ github.run_id }}
+          name: release-acceptance-${{ github.run_id }}
           path: evidence
           if-no-files-found: error
           overwrite: true
@@ -332,10 +318,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
-      - name: Download qualification evidence
+      - name: Download acceptance evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: release-qualification-${{ github.run_id }}
+          name: release-acceptance-${{ github.run_id }}
           path: release-evidence
 
       - name: Download image digests

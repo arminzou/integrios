@@ -2,10 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Npgsql;
 
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
-// Shared by the database lifecycle test classes. Those classes are split so xUnit can run them as
-// parallel collections; the helpers they have in common live here rather than being duplicated.
 internal static class DatabaseLifecycleAssertions
 {
     public static async Task ExecuteAsync(QualificationDatabase database, string sql)

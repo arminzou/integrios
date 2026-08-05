@@ -1,4 +1,4 @@
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class PackagedDeploymentCollection : ICollectionFixture<PackagedDeploymentFixture>

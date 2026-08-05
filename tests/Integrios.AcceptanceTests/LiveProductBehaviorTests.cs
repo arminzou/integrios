@@ -4,11 +4,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Npgsql;
 
-namespace Integrios.QualificationTests;
+namespace Integrios.AcceptanceTests;
 
 [Collection(PackagedDeploymentCollection.Name)]
 [Trait("Category", "Qualification")]
-[Trait("Tier", "smoke")]
 public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 {
     private const string HttpIntegrationId = "00000000-0000-0000-0000-000000000001";
