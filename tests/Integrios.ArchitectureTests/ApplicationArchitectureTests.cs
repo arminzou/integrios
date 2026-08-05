@@ -66,6 +66,83 @@ public sealed class ApplicationArchitectureTests
     }
 
     [Fact]
+    public void Application_NeverDeclaresGenericResultWrapper()
+    {
+        string[] offenders = ApplicationAssembly.GetTypes()
+            .Where(type => type.IsGenericTypeDefinition)
+            .Where(type => GenericNameWithoutArity(type) == "Result")
+            .Select(type => type.FullName!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            "Rule 2: never introduce a generic success-or-failure Result<T> wrapper; every operation "
+            + $"gets a specific *Result type. Found: {string.Join(", ", offenders)}");
+    }
+
+    [Fact]
+    public void PortInterfaces_DeclareNoDefaultParameterValues()
+    {
+        string[] offenders = ApplicationAssembly.GetExportedTypes()
+            .Where(type => type.IsInterface)
+            .SelectMany(type => type.GetMethods())
+            .SelectMany(method => method.GetParameters()
+                .Where(parameter => parameter.HasDefaultValue)
+                .Select(parameter => $"{method.DeclaringType!.FullName}.{method.Name}({parameter.Name})"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            "Rule 8: port interfaces declare no default parameter values; every call site passes "
+            + $"CancellationToken explicitly. Found: {string.Join(", ", offenders)}");
+    }
+
+    [Fact]
+    public void ApplicationPortSignatures_ReferenceOnlyDomainApplicationOrBcl()
+    {
+        Assembly domainAssembly = Assembly.Load("Integrios.Domain");
+
+        string[] offenders = ApplicationAssembly.GetExportedTypes()
+            .Where(type => type.IsInterface)
+            .SelectMany(type => type.GetMethods())
+            .SelectMany(method => method.GetParameters()
+                .Select(parameter => parameter.ParameterType)
+                .Append(method.ReturnType)
+                .Where(signatureType => !IsApprovedSignatureType(signatureType, domainAssembly))
+                .Select(signatureType => $"{method.DeclaringType!.FullName}.{method.Name}: {signatureType}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            "No exported Application port signature may reference a type outside Domain, Application, "
+            + $"or the BCL; a fake implementation must compile with zero packages installed. Found: {string.Join(", ", offenders)}");
+    }
+
+    private static bool IsApprovedSignatureType(Type type, Assembly domainAssembly)
+    {
+        if (type.IsGenericType)
+            return type.GetGenericArguments().All(argument => IsApprovedSignatureType(argument, domainAssembly));
+        if (type.IsArray)
+            return IsApprovedSignatureType(type.GetElementType()!, domainAssembly);
+        if (type.IsByRef || type == typeof(void))
+            return true;
+
+        Assembly assembly = type.Assembly;
+        return assembly == domainAssembly
+            || assembly == ApplicationAssembly
+            || assembly == typeof(object).Assembly
+            || (assembly.GetName().Name?.StartsWith("System.", StringComparison.Ordinal) ?? false);
+    }
+
+    private static string GenericNameWithoutArity(Type type) =>
+        type.Name.Contains('`', StringComparison.Ordinal)
+            ? type.Name[..type.Name.IndexOf('`')]
+            : type.Name;
+
+    [Fact]
     public void MediatRHandlers_AreInternal()
     {
         HandlerRegistration[] handlers = HandlerRegistrations().ToArray();

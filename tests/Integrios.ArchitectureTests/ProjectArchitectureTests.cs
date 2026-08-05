@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Xml.Linq;
 
@@ -111,29 +112,41 @@ public sealed class ProjectArchitectureTests
     }
 
     [Fact]
-    public void SourceTree_HasNoRetiredApplicationBuckets()
+    public void SourceTree_HasNoGenericContractBuckets()
     {
         string repositoryRoot = FindRepositoryRoot();
-        string applicationRoot = Path.Combine(repositoryRoot, "src", "Integrios.Application");
+        string srcRoot = Path.Combine(repositoryRoot, "src");
+        string[] bannedDirectoryNames = ["Contracts", "Interfaces", "Abstractions"];
 
-        Assert.False(Directory.Exists(Path.Combine(applicationRoot, "Abstractions")));
-        Assert.False(Directory.Exists(Path.Combine(applicationRoot, "Common", "Interfaces")));
-
-        string[] sourceFiles = Directory
-            .EnumerateFiles(repositoryRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(path => IsUnder(path, Path.Combine(repositoryRoot, "src"))
-                || IsUnder(path, Path.Combine(repositoryRoot, "tests")))
+        string[] offenders = Directory
+            .EnumerateDirectories(srcRoot, "*", SearchOption.AllDirectories)
             .Where(path => !IsGeneratedPath(path))
+            .Where(path => bannedDirectoryNames.Contains(Path.GetFileName(path), StringComparer.Ordinal))
+            .Select(path => Path.GetRelativePath(repositoryRoot, path))
+            .Order(StringComparer.Ordinal)
             .ToArray();
 
-        string retiredAbstractionsNamespace = string.Concat("Integrios.Application.", "Abstractions");
-        string retiredCommonInterfacesNamespace = string.Concat("Integrios.Application.Common.", "Interfaces");
-        Assert.DoesNotContain(sourceFiles, path => File.ReadAllText(path).Contains(
-            retiredAbstractionsNamespace,
-            StringComparison.Ordinal));
-        Assert.DoesNotContain(sourceFiles, path => File.ReadAllText(path).Contains(
-            retiredCommonInterfacesNamespace,
-            StringComparison.Ordinal));
+        Assert.True(
+            offenders.Length == 0,
+            ".brain/AGENTS.md:28 bans generic Contracts/, Interfaces/, or Abstractions/ buckets "
+            + $"anywhere in src/; namespaces stay feature-based, not directory-mirrored. Found: {string.Join(", ", offenders)}");
+    }
+
+    [Fact]
+    public void ProductionTypes_NeverUseServiceSuffix()
+    {
+        string[] offenders = ProductionAssemblyNames
+            .SelectMany(name => Assembly.Load(name).GetTypes())
+            .Where(type => !type.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+            .Select(type => type.FullName!)
+            .Where(name => name.EndsWith("Service", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            "Rule 6: a port names the capability, an implementation names its vendor; *Service is "
+            + $"banned as the suffix that means nothing. Found: {string.Join(", ", offenders)}");
     }
 
     [Fact]
@@ -173,7 +186,41 @@ public sealed class ProjectArchitectureTests
             "Integrios.Infrastructure.Telemetry.TelemetryExtensions"
         ];
 
-        Assert.Equal(approvedTypes.Order(StringComparer.Ordinal), exportedTypes);
+        string[] unapproved = exportedTypes.Except(approvedTypes, StringComparer.Ordinal).ToArray();
+        string[] missing = approvedTypes.Except(exportedTypes, StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            unapproved.Length == 0 && missing.Length == 0,
+            "Integrios.Infrastructure may export only host-composition DI extensions; any other "
+            + $"public type leaks an implementation detail across the layer boundary. {DescribeSetDiff(unapproved, missing)}");
+    }
+
+    internal static string DescribeSetDiff(IReadOnlyCollection<string> unapproved, IReadOnlyCollection<string> missing)
+    {
+        var parts = new List<string>();
+        if (unapproved.Count > 0)
+            parts.Add($"Unapproved: {string.Join(", ", unapproved)}.");
+        if (missing.Count > 0)
+            parts.Add($"Missing: {string.Join(", ", missing)}.");
+        return string.Join(" ", parts);
+    }
+
+    [Fact]
+    public void DomainTypes_NeverUseReservedCapabilitySuffixes()
+    {
+        string[] bannedSuffixes = ["Details", "Info", "Data"];
+        string[] offenders = Assembly.Load("Integrios.Domain")
+            .GetTypes()
+            .Where(type => !type.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false))
+            .Select(type => type.Name)
+            .Where(name => bannedSuffixes.Any(suffix => name.EndsWith(suffix, StringComparison.Ordinal)))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            "Rule 5: capability values carry semantic ubiquitous-language names, never *Details, "
+            + $"*Info, or *Data. Found: {string.Join(", ", offenders)}");
     }
 
     private static IReadOnlyDictionary<string, Assembly> LoadProductionAssemblies() =>
