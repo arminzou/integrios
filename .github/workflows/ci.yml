@@ -45,7 +45,6 @@ jobs:
           dotnet test tests/Integrios.Ingress.UnitTests/Integrios.Ingress.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Infrastructure.IntegrationTests/Integrios.Infrastructure.IntegrationTests.csproj --configuration Release --no-build
 
   qualify:
     needs: verify
@@ -127,7 +126,6 @@ jobs:
           dotnet test tests/Integrios.Ingress.UnitTests/Integrios.Ingress.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Infrastructure.IntegrationTests/Integrios.Infrastructure.IntegrationTests.csproj --configuration Release --no-build
           dotnet test Integrios.slnx --configuration Release --no-restore
           EOF
 
