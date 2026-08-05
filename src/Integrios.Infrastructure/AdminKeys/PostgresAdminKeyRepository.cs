@@ -5,7 +5,7 @@ using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.AdminKeys;
 
-internal sealed class AdminKeyRepository(IDbConnectionFactory connectionFactory)
+internal sealed class PostgresAdminKeyRepository(IDbConnectionFactory connectionFactory)
     : IAdminKeyLookup, IAdminKeyLifecycle
 {
     public async Task<AdminKey?> FindActiveByPublicKeyAsync(

@@ -7,7 +7,7 @@ using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.ApiKeys;
 
-internal sealed class ApiKeyRepository(IDbConnectionFactory connectionFactory) : IApiKeyRepository
+internal sealed class PostgresApiKeyRepository(IDbConnectionFactory connectionFactory) : IApiKeyRepository
 {
     public async Task<ApiKey> CreateAsync(ApiKey apiKey, CancellationToken cancellationToken)
     {

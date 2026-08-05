@@ -10,7 +10,7 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Topics;
 
-internal sealed class TopicRepository(IDbConnectionFactory connectionFactory) : ITopicRepository
+internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFactory) : ITopicRepository
 {
     private const string ForeignKeyViolation = "23503";
     private const string SourceConnectionTenantConstraint = "fk_topic_sources_connection_tenant";
