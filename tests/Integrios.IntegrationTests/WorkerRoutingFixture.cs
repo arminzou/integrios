@@ -66,7 +66,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         deadLetterReplay = new PostgresDeadLetterReplay(connectionFactory);
         outboxFanout = new PostgresOutboxFanout(connectionFactory);
         subscriptionRepository = new SubscriptionRepository(connectionFactory);
-        eventLookup = new EventRepository(connectionFactory);
+        eventLookup = new PostgresTenantEventLookup(connectionFactory);
         var deliveryOptions = DeliveryExecutionOptions.Default;
         DeliveryQueue = new PostgresSubscriptionDeliveryQueue(
             connectionFactory,
@@ -419,7 +419,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default)
         => mediator.Send(new ReplayEventCommand(TenantId, eventId), cancellationToken);
 
-    public Task<GetEventResponse?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default)
+    public Task<EventDto?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default)
         => eventLookup.GetByIdAsync(TenantId, eventId, cancellationToken);
 
     private static async Task InsertEventRowAsync(

@@ -2,17 +2,17 @@ using Integrios.Domain.Events;
 
 namespace Integrios.Application.Events;
 
-public sealed record GetEventResponse
+public sealed record EventDto
 {
     public required Guid EventId { get; init; }
     public required EventStatus Status { get; init; }
     public required DateTimeOffset AcceptedAt { get; init; }
     public DateTimeOffset? ProcessedAt { get; init; }
     public DateTimeOffset? FailedAt { get; init; }
-    public IReadOnlyList<DeliveryAttemptSummary> DeliveryAttempts { get; init; } = [];
+    public IReadOnlyList<DeliveryAttemptDto> DeliveryAttempts { get; init; } = [];
 }
 
-public sealed record DeliveryAttemptSummary
+public sealed record DeliveryAttemptDto
 {
     public required Guid AttemptId { get; init; }
     public required Guid SubscriptionDeliveryId { get; init; }

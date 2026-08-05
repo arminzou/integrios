@@ -1,0 +1,108 @@
+using Dapper;
+using Integrios.Application.Events;
+using Integrios.Domain.Events;
+using Integrios.Infrastructure.Data;
+
+namespace Integrios.Infrastructure.Events;
+
+internal sealed class PostgresTenantEventLookup(IDbConnectionFactory connectionFactory)
+    : ITenantEventLookup
+{
+    public async Task<EventDto?> GetByIdAsync(
+        Guid tenantId,
+        Guid eventId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        var row = await connection.QuerySingleOrDefaultAsync<EventByIdRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    id           AS Id,
+                    status       AS Status,
+                    accepted_at  AS AcceptedAt,
+                    processed_at AS ProcessedAt,
+                    failed_at    AS FailedAt
+                FROM events
+                WHERE tenant_id = @TenantId
+                  AND id = @EventId
+                LIMIT 1;
+                """,
+                new { TenantId = tenantId, EventId = eventId },
+                cancellationToken: cancellationToken));
+
+        if (row is null)
+            return null;
+
+        var attempts = await connection.QueryAsync<DeliveryAttemptRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    da.id                        AS AttemptId,
+                    sd.id                        AS SubscriptionDeliveryId,
+                    sd.subscription_id           AS SubscriptionId,
+                    sd.destination_connection_id AS DestinationConnectionId,
+                    da.attempt_number            AS AttemptNumber,
+                    da.status                    AS Status,
+                    da.failure_phase             AS FailurePhase,
+                    da.response_status_code      AS ResponseStatusCode,
+                    da.error_message             AS ErrorMessage,
+                    da.started_at                AS StartedAt,
+                    da.completed_at              AS CompletedAt
+                FROM delivery_attempts da
+                JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id
+                WHERE sd.event_id = @EventId
+                ORDER BY sd.id, da.attempt_number, da.started_at;
+                """,
+                new { EventId = eventId },
+                cancellationToken: cancellationToken));
+
+        return new EventDto
+        {
+            EventId = row.Id,
+            Status = EventStatusMap.FromDbValue(row.Status),
+            AcceptedAt = row.AcceptedAt,
+            ProcessedAt = row.ProcessedAt,
+            FailedAt = row.FailedAt,
+            DeliveryAttempts = attempts.Select(a => new DeliveryAttemptDto
+            {
+                AttemptId = a.AttemptId,
+                SubscriptionDeliveryId = a.SubscriptionDeliveryId,
+                SubscriptionId = a.SubscriptionId,
+                DestinationConnectionId = a.DestinationConnectionId,
+                AttemptNumber = a.AttemptNumber,
+                Status = a.Status,
+                FailurePhase = a.FailurePhase,
+                ResponseStatusCode = a.ResponseStatusCode,
+                ErrorMessage = a.ErrorMessage,
+                StartedAt = a.StartedAt,
+                CompletedAt = a.CompletedAt
+            }).ToList()
+        };
+    }
+
+    private sealed record EventByIdRow
+    {
+        public Guid Id { get; init; }
+        public string Status { get; init; } = "";
+        public DateTimeOffset AcceptedAt { get; init; }
+        public DateTimeOffset? ProcessedAt { get; init; }
+        public DateTimeOffset? FailedAt { get; init; }
+    }
+
+    private sealed record DeliveryAttemptRow
+    {
+        public Guid AttemptId { get; init; }
+        public Guid SubscriptionDeliveryId { get; init; }
+        public Guid SubscriptionId { get; init; }
+        public Guid DestinationConnectionId { get; init; }
+        public int AttemptNumber { get; init; }
+        public string Status { get; init; } = "";
+        public string? FailurePhase { get; init; }
+        public int? ResponseStatusCode { get; init; }
+        public string? ErrorMessage { get; init; }
+        public DateTimeOffset StartedAt { get; init; }
+        public DateTimeOffset? CompletedAt { get; init; }
+    }
+}

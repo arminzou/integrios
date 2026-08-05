@@ -165,8 +165,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             new { value = 999 },
             "duplicate-matrix");
         Assert.Equal(first.Id, duplicate.Id);
-        Assert.False(first.IsDuplicate);
-        Assert.True(duplicate.IsDuplicate);
+        Assert.False(first.AlreadyAccepted);
+        Assert.True(duplicate.AlreadyAccepted);
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>($"SELECT status FROM events WHERE id = '{first.Id}'") == "unrouted");
@@ -672,7 +672,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Accepted);
         return new EventAcceptance(
             body.GetProperty("eventId").GetGuid(),
-            body.GetProperty("isDuplicate").GetBoolean());
+            body.GetProperty("alreadyAccepted").GetBoolean());
     }
 
     private async Task AssertAcceptanceRejectedAsync(TenantContext tenant, Guid sourceConnectionId, string topicName)
@@ -836,5 +836,5 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private static string Suffix() => Guid.NewGuid().ToString("N")[..10];
 
     private sealed record TenantContext(Guid Id, string Slug, Guid ApiKeyId, string ApiToken);
-    private sealed record EventAcceptance(Guid Id, bool IsDuplicate);
+    private sealed record EventAcceptance(Guid Id, bool AlreadyAccepted);
 }

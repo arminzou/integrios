@@ -66,9 +66,8 @@ public static class DependencyInjection
         services.AddPostgresServices(configuration);
         services.AddSingleton<IActiveApiKeyLookup, PostgresActiveApiKeyLookup>();
         services.AddSingleton<ISourceTopicLookup, PostgresIntakeTopicResolver>();
-        services.AddSingleton<EventRepository>();
-        services.AddSingleton<IEventAcceptance>(provider => provider.GetRequiredService<EventRepository>());
-        services.AddSingleton<ITenantEventLookup>(provider => provider.GetRequiredService<EventRepository>());
+        services.AddSingleton<IEventAcceptance, PostgresEventAcceptance>();
+        services.AddSingleton<ITenantEventLookup, PostgresTenantEventLookup>();
         services.AddSingleton<IDeadLetterReplay, PostgresDeadLetterReplay>();
         services.TryAddSingleton<ISourceVerificationSecretResolver, UnavailableSourceVerificationSecretResolver>();
 
