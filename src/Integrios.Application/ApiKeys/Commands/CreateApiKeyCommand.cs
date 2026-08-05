@@ -11,12 +11,12 @@ public sealed record CreateApiKeyCommand(
     string Name,
     string? Description,
     DateTimeOffset? ExpiresAt
-) : IRequest<CreateApiKeyResponse>;
+) : IRequest<CreateApiKeyResult>;
 
 internal sealed class CreateApiKeyCommandHandler(IApiKeyRepository repository)
-    : IRequestHandler<CreateApiKeyCommand, CreateApiKeyResponse>
+    : IRequestHandler<CreateApiKeyCommand, CreateApiKeyResult>
 {
-    public async Task<CreateApiKeyResponse> Handle(CreateApiKeyCommand command, CancellationToken cancellationToken)
+    public async Task<CreateApiKeyResult> Handle(CreateApiKeyCommand command, CancellationToken cancellationToken)
     {
         var rawKey = "intg_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var keyPrefix = rawKey[..12]; // display hint: "intg_3f8a2c1d" (non-secret, first 12 chars)
@@ -37,9 +37,9 @@ internal sealed class CreateApiKeyCommandHandler(IApiKeyRepository repository)
         };
 
         ApiKey created = await repository.CreateAsync(apiKey, cancellationToken);
-        return new CreateApiKeyResponse
+        return new CreateApiKeyResult
         {
-            ApiKey = ApiKeyResponse.From(created),
+            ApiKey = ApiKeyDto.From(created),
             Token = rawKey,
         };
     }
