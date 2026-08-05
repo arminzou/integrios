@@ -123,19 +123,28 @@ public sealed class ApplicationArchitectureTests
 
     private static bool IsApprovedSignatureType(Type type, Assembly domainAssembly)
     {
-        if (type.IsGenericType)
-            return type.GetGenericArguments().All(argument => IsApprovedSignatureType(argument, domainAssembly));
-        if (type.IsArray)
+        if (type.IsByRef || type.IsArray)
             return IsApprovedSignatureType(type.GetElementType()!, domainAssembly);
-        if (type.IsByRef || type == typeof(void))
+        if (type == typeof(void) || type.IsGenericParameter)
             return true;
 
-        Assembly assembly = type.Assembly;
-        return assembly == domainAssembly
-            || assembly == ApplicationAssembly
-            || assembly == typeof(object).Assembly
-            || (assembly.GetName().Name?.StartsWith("System.", StringComparison.Ordinal) ?? false);
+        // A generic type must be approved on its own definition as well as its arguments. Checking
+        // only the arguments lets a package type through whenever they happen to be approved, so
+        // MediatR.IRequestHandler<SomeCommand, SomeDto> would read as clean.
+        if (type.IsGenericType)
+        {
+            return IsApprovedAssembly(type.GetGenericTypeDefinition().Assembly, domainAssembly)
+                && type.GetGenericArguments().All(argument => IsApprovedSignatureType(argument, domainAssembly));
+        }
+
+        return IsApprovedAssembly(type.Assembly, domainAssembly);
     }
+
+    private static bool IsApprovedAssembly(Assembly assembly, Assembly domainAssembly) =>
+        assembly == domainAssembly
+        || assembly == ApplicationAssembly
+        || assembly == typeof(object).Assembly
+        || (assembly.GetName().Name?.StartsWith("System.", StringComparison.Ordinal) ?? false);
 
     private static string GenericNameWithoutArity(Type type) =>
         type.Name.Contains('`', StringComparison.Ordinal)
