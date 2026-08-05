@@ -6,6 +6,7 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using Integrios.Domain.Tenants;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 
 namespace Integrios.Worker.UnitTests;
 
@@ -148,7 +149,7 @@ public sealed class SecretValidationCliTests
         var services = new ServiceCollection();
         services.AddApplicationServices();
         services.AddSingleton<ISecretValidationCatalog>(new FakeSecretValidationCatalog(tenants, connections));
-        services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(secrets));
+        services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(secrets));
         return services.BuildServiceProvider();
     }
 
@@ -180,14 +181,20 @@ public sealed class SecretValidationCliTests
         UpdatedAt = DateTimeOffset.UtcNow
     };
 
-    private sealed class FakeSecretResolver(IReadOnlyDictionary<string, string> values) : IDestinationAuthenticationSecretResolver
+    private static IDestinationAuthenticationSecretResolver CreateSecretResolver(IReadOnlyDictionary<string, string> values)
     {
-        public string ProviderName => "test";
-
-        public Task<string> ResolveAsync(TenantSecretScope tenant, string secretReference, CancellationToken cancellationToken = default) =>
-            values.TryGetValue($"{tenant.Slug}/{secretReference}", out string? value)
-                ? Task.FromResult(value)
-                : throw new InvalidOperationException("missing");
+        var resolver = Substitute.For<IDestinationAuthenticationSecretResolver>();
+        resolver.ProviderName.Returns("test");
+        resolver.ResolveAsync(Arg.Any<TenantSecretScope>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var tenant = callInfo.ArgAt<TenantSecretScope>(0);
+                string secretReference = callInfo.ArgAt<string>(1);
+                return values.TryGetValue($"{tenant.Slug}/{secretReference}", out string? value)
+                    ? Task.FromResult(value)
+                    : throw new InvalidOperationException("missing");
+            });
+        return resolver;
     }
 
     private sealed class FakeSecretValidationCatalog(

@@ -19,10 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Shared\HostJson.cs" Link="HostJson.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
@@ -34,6 +30,7 @@
     <ProjectReference Include="..\..\src\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
+    <ProjectReference Include="..\Integrios.Tests.Shared\Integrios.Tests.Shared.csproj" />
   </ItemGroup>
 
 </Project>

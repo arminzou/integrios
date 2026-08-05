@@ -80,7 +80,7 @@ public sealed class WorkerLoopTests
             services.AddSingleton<IDeliveryClient>(
                 new WorkerTransportAbstractionsTests.FakeDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<Integrios.Application.Transforms.ITransformEvaluator>(
-                new WorkerTransportAbstractionsTests.FakeTransformEvaluator());
+                WorkerTransportAbstractionsTests.CreateTransformEvaluator());
         });
 
         Task<int> RunFanout(CancellationToken _) =>
@@ -191,7 +191,7 @@ public sealed class WorkerLoopTests
             services.AddSingleton<ISubscriptionDeliveryQueue>(deliveryQueue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(
-                new WorkerTransportAbstractionsTests.FakeTransformEvaluator());
+                WorkerTransportAbstractionsTests.CreateTransformEvaluator());
         });
         IConfiguration configuration = new ConfigurationBuilder().Build();
         using IHost host = Host.CreateDefaultBuilder()

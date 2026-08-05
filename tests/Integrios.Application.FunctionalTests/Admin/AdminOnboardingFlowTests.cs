@@ -10,7 +10,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
-public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
+public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
@@ -166,15 +166,6 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
         response.EnsureSuccessStatusCode();
         var connection = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
         return connection!;
-    }
-
-    private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)
-    {
-        var msg = new HttpRequestMessage(method, url);
-        msg.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.GlobalAdminAuthHeader);
-        if (body is not null)
-            msg.Content = JsonContent.Create(body);
-        return msg;
     }
 
     private sealed record SubscriptionDto(

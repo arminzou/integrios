@@ -2,9 +2,9 @@ using System.Text.Json;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Integrations;
 
-namespace Integrios.Application.FunctionalTests.Admin;
+namespace Integrios.Tests.Shared;
 
-internal static class TestIntegrationManifest
+public static class TestIntegrationManifest
 {
     public static string Create(
         string key,

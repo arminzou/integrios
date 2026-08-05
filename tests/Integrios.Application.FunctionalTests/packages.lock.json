@@ -660,6 +660,13 @@
           "Microsoft.AspNetCore.OpenApi": "[10.0.5, )",
           "Microsoft.OpenApi": "[2.7.5, )"
         }
+      },
+      "integrios.tests.shared": {
+        "type": "Project",
+        "dependencies": {
+          "Integrios.Application": "[1.0.0, )",
+          "Integrios.Domain": "[1.0.0, )"
+        }
       }
     }
   }

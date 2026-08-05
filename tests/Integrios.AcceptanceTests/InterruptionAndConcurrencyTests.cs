@@ -1,3 +1,4 @@
+using Integrios.Tests.Shared;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
@@ -418,7 +419,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
                 "qualification_resilience_api_key",
                 "Qualification resilience API key",
                 "destination",
-                "api_key_header")}}'::jsonb)
+                ["api_key_header"])}}'::jsonb)
         ON CONFLICT (id) DO NOTHING;
         """);
 

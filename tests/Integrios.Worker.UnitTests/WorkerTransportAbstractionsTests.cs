@@ -14,6 +14,7 @@ using Integrios.Infrastructure.Transforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MediatR;
+using NSubstitute;
 
 namespace Integrios.Worker.UnitTests;
 
@@ -81,7 +82,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         var processedCount = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -111,7 +112,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(true, 200), operations: operations));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         int processedCount = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(2));
@@ -142,7 +143,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -171,7 +172,7 @@ public sealed class WorkerTransportAbstractionsTests
 
         var capturedPayloads = new List<string>();
         var deliveryClient = new FakeDeliveryClient(new DeliveryResult(true, 200, null), capturedPayloads);
-        var evaluator = new FakeTransformEvaluator(transformedOutput);
+        var evaluator = CreateTransformEvaluator(transformedOutput);
         var mediator = BuildMediator(services =>
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
@@ -236,7 +237,7 @@ public sealed class WorkerTransportAbstractionsTests
         };
 
         var deliveryClient = new FakeDeliveryClient(new DeliveryResult(true, 200, null));
-        var evaluator = new FakeTransformEvaluator(error: "evaluation failed");
+        var evaluator = CreateTransformEvaluator(error: "evaluation failed");
         var mediator = BuildMediator(services =>
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
@@ -267,7 +268,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(true, 200, null)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -305,7 +306,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(false, statusCode, "boom", isTimeout)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -336,7 +337,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(false, 500, "boom")));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -373,7 +374,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -426,7 +427,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(true, 200, null)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<ILoggerProvider>(capturing);
         });
 
@@ -451,7 +452,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(new DeliveryResult(true, 200, null)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<ILoggerProvider>(capturing);
         });
 
@@ -488,7 +489,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<ILoggerProvider>(capturing);
         });
 
@@ -521,7 +522,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         int processed = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(2));
@@ -551,7 +552,7 @@ public sealed class WorkerTransportAbstractionsTests
                 TimeSpan.FromSeconds(1)));
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         int processed = await mediator.Send(new DispatchSubscriptionDeliveriesCommand(2));
@@ -569,7 +570,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new FakeDeliveryClient(result));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -743,18 +744,18 @@ public sealed class WorkerTransportAbstractionsTests
             => throw new InvalidOperationException($"Unexpected secret lookup for '{secretName}'.");
     }
 
-    internal sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
+    internal static ITransformEvaluator CreateTransformEvaluator(string? output = null, string? error = null)
     {
-        public string? ValidateExpression(TransformSpec transform) => null;
+        var evaluator = Substitute.For<ITransformEvaluator>();
+        evaluator.ValidateExpression(Arg.Any<TransformSpec>()).Returns((string?)null);
+        evaluator.Evaluate(Arg.Any<TransformSpec>(), Arg.Any<string>(), Arg.Any<TransformContext>())
+            .Returns(callInfo =>
+            {
+                if (error is not null)
+                    throw new TransformEvaluationException(error);
 
-        public string Evaluate(
-            TransformSpec transform,
-            string payloadJson,
-            TransformContext context)
-        {
-            if (error is not null)
-                throw new TransformEvaluationException(error);
-            return output ?? payloadJson;
-        }
+                return output ?? callInfo.ArgAt<string>(1);
+            });
+        return evaluator;
     }
 }

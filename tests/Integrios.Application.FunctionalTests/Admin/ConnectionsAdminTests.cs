@@ -9,7 +9,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
-public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
+public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     private readonly AdminApiFixture fixture;
     private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
@@ -497,18 +497,6 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
                     secret_refs = secretRefs
                 }
             }));
-
-    private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)
-    {
-        var msg = new HttpRequestMessage(method, url);
-        msg.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.GlobalAdminAuthHeader);
-        if (body is not null)
-        {
-            msg.Content = JsonContent.Create(body);
-        }
-
-        return msg;
-    }
 
     private async Task<Guid> InsertIntegrationAsync(
         string key,

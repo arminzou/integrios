@@ -1,3 +1,4 @@
+using Integrios.Tests.Shared;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
@@ -543,8 +544,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             id, key, contract_version, manifest_schema_version, name, direction,
             supported_auth_schemes, status, description, manifest)
         VALUES
-            ('{{ApiKeyIntegrationId}}', 'qualification_api_key', 1, 1, 'Qualification API key', 'destination', '["api_key_header"]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_api_key", "Qualification API key", "destination", "api_key_header")}}'::jsonb),
-            ('{{BearerIntegrationId}}', 'qualification_bearer', 1, 1, 'Qualification bearer', 'destination', '["bearer_token"]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_bearer", "Qualification bearer", "destination", "bearer_token")}}'::jsonb),
+            ('{{ApiKeyIntegrationId}}', 'qualification_api_key', 1, 1, 'Qualification API key', 'destination', '["api_key_header"]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_api_key", "Qualification API key", "destination", ["api_key_header"])}}'::jsonb),
+            ('{{BearerIntegrationId}}', 'qualification_bearer', 1, 1, 'Qualification bearer', 'destination', '["bearer_token"]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_bearer", "Qualification bearer", "destination", ["bearer_token"])}}'::jsonb),
             ('{{SourceOnlyIntegrationId}}', 'qualification_source', 1, 1, 'Qualification source', 'source', '[]', 'active', 'Qualification-only integration', '{{TestIntegrationManifest.Create("qualification_source", "Qualification source", "source")}}'::jsonb)
         ON CONFLICT (id) DO NOTHING;
         """);
