@@ -6,12 +6,12 @@ using Integrios.Application.Connections;
 using Integrios.Application.Tenants;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Admin.Tests;
 
 public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
     private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     private readonly AdminApiFixture fixture;
@@ -52,7 +52,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
         Assert.Equal(HttpStatusCode.Created, tenantResponse.StatusCode);
 
-        var tenant = await tenantResponse.Content.ReadFromJsonAsync<TenantDto>(WebJson);
+        var tenant = await tenantResponse.Content.ReadFromJsonAsync<TenantDto>(HostJson.Options);
         Assert.NotNull(tenant);
 
         var apiKeyResponse = await client.SendAsync(AdminRequest(
@@ -65,7 +65,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
         Assert.Equal(HttpStatusCode.Created, apiKeyResponse.StatusCode);
 
-        var apiKey = await apiKeyResponse.Content.ReadFromJsonAsync<CreateApiKeyResult>(WebJson);
+        var apiKey = await apiKeyResponse.Content.ReadFromJsonAsync<CreateApiKeyResult>(HostJson.Options);
         Assert.NotNull(apiKey);
         Assert.False(string.IsNullOrWhiteSpace(apiKey.Token));
         Assert.Equal("acme-ingress", apiKey.ApiKey.Name);
@@ -89,11 +89,11 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             {
                 name = "payments",
                 description = "Payment events",
-                sourceConnectionIds = new[] { sourceConnection.Id }
+                source_connection_ids = new[] { sourceConnection.Id }
             }));
         Assert.Equal(HttpStatusCode.Created, topicResponse.StatusCode);
 
-        var topic = await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(WebJson);
+        var topic = await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(topic);
         Assert.Equal([sourceConnection.Id], topic.Sources.Select(s => s.ConnectionId));
 
@@ -103,14 +103,14 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             new
             {
                 name = "acme-erp-subscription",
-                matchRules = new { event_type = "payment.created" },
-                destinationConnectionId = destinationConnection.Id,
-                orderIndex = 10,
+                match_rules = new { event_type = "payment.created" },
+                destination_connection_id = destinationConnection.Id,
+                order_index = 10,
                 description = "ERP sink"
             }));
         Assert.Equal(HttpStatusCode.Created, subscriptionResponse.StatusCode);
 
-        var subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionDto>(WebJson);
+        var subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(subscription);
         Assert.Equal(destinationConnection.Id, subscription.DestinationConnectionId);
 
@@ -156,7 +156,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integrationId = HttpIntegrationId,
+                integration_id = HttpIntegrationId,
                 name,
                 config = new { base_uri = url },
                 environment,
@@ -164,7 +164,7 @@ public sealed class AdminOnboardingFlowTests : IClassFixture<AdminApiFixture>, I
             }));
 
         response.EnsureSuccessStatusCode();
-        var connection = await response.Content.ReadFromJsonAsync<ConnectionDto>(WebJson);
+        var connection = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
         return connection!;
     }
 

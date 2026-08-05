@@ -7,6 +7,7 @@ using Integrios.Application.Events;
 using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using Integrios.Ingress.Endpoints;
+using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.Ingress.Tests;
@@ -126,7 +127,7 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
 
         HttpRequestMessage message = new(HttpMethod.Post, "/events")
         {
-            Content = JsonContent.Create(request)
+            Content = JsonContent.Create(request, options: HostJson.Options)
         };
         if (authHeader is not null)
             message.Headers.TryAddWithoutValidation("Authorization", authHeader);

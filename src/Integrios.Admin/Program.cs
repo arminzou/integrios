@@ -9,6 +9,7 @@ using Integrios.Application;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Telemetry;
 using Microsoft.AspNetCore.Authentication;
+using System.Text.Json;
 
 if (args is ["bootstrap", ..])
     return await BootstrapCli.RunAsync(args);
@@ -20,6 +21,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton(PublicIngressBaseUri.Parse(
     builder.Configuration[PublicIngressBaseUri.ConfigurationKey],
     builder.Environment.IsDevelopment()));
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 
 builder.Services.AddOpenApi(options =>
 {

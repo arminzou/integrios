@@ -139,10 +139,10 @@ internal sealed class PostgresSecretValidationCatalog(IDbConnectionFactory conne
             Config = JsonSerializer.Deserialize<JsonElement>(ConfigJson),
             SourceVerification = SourceVerificationJson is null
                 ? null
-                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(SourceVerificationJson),
+                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(SourceVerificationJson, ConnectionSchemeSelection.StoredJson),
             DestinationAuthentication = DestinationAuthenticationJson is null
                 ? null
-                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(DestinationAuthenticationJson),
+                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(DestinationAuthenticationJson, ConnectionSchemeSelection.StoredJson),
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             Environment = Environment,
             Description = Description,

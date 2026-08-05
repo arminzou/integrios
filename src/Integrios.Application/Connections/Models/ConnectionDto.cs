@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.Connections;
@@ -11,9 +10,7 @@ public sealed record ConnectionDto
     public required Guid IntegrationId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
-    [JsonPropertyName("source_verification")]
     public ConnectionSchemeSelectionDto? SourceVerification { get; init; }
-    [JsonPropertyName("destination_authentication")]
     public ConnectionSchemeSelectionDto? DestinationAuthentication { get; init; }
     public required string Status { get; init; }
     public string? Environment { get; init; }

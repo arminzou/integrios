@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Integrios.Application.Events;
 using Integrios.Domain.Events;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Ingress.Tests;
 
@@ -74,7 +75,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
         HttpResponseMessage response = await GetEventAsync(eventId, $"ApiKey {ApiKeyAuthHandlerTests.TestToken}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        EventDto? body = await response.Content.ReadFromJsonAsync<EventDto>();
+        EventDto? body = await response.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(expected.EventId, body.EventId);
         Assert.Equal(expected.Status, body.Status);
@@ -99,8 +100,8 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
 
         var response = await client.SendAsync(AuthorizedRequest(new
         {
-            topicName = "payments",
-            eventType = "payment.created",
+            topic_name = "payments",
+            event_type = "payment.created",
             payload = new { amount = 42 }
         }));
 
@@ -116,9 +117,9 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
 
         var response = await client.SendAsync(AuthorizedRequest(new
         {
-            sourceConnectionId = Guid.NewGuid(),
-            topicName = "payments",
-            eventType = "payment.created",
+            source_connection_id = Guid.NewGuid(),
+            topic_name = "payments",
+            event_type = "payment.created",
             payload = new { amount = 42 }
         }));
 

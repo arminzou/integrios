@@ -5,8 +5,12 @@ using Integrios.Ingress.Auth;
 using Integrios.Ingress.Endpoints;
 using Integrios.Ingress.ErrorHandling;
 using Microsoft.AspNetCore.Authentication;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();

@@ -5,13 +5,13 @@ using Integrios.Application.Connections;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Admin.Tests;
 
 public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     private readonly AdminApiFixture fixture;
-    private readonly JsonSerializerOptions webJson = new(JsonSerializerDefaults.Web);
     private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private HttpClient client = default!;
 
@@ -35,7 +35,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
-        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(webJson);
+        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.Equal(fixture.TenantId, body!.TenantId);
         Assert.Equal("erp-sink", body.Name);
@@ -75,7 +75,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId = HttpIntegrationId,
+                integration_id = HttpIntegrationId,
                 name = "missing-url",
                 config = new { }
             }));
@@ -117,7 +117,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             new { api_key = "erp_api_key" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(webJson);
+        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.NotNull(body!.DestinationAuthentication);
         Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
@@ -146,7 +146,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{otherTenantId}/connections",
             new
             {
-                integrationId = HttpIntegrationId,
+                integration_id = HttpIntegrationId,
                 name = "erp-sink",
                 config = new { base_uri = "http://localhost:5054/sink/other" }
             }));
@@ -162,7 +162,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId = Guid.NewGuid(),
+                integration_id = Guid.NewGuid(),
                 name = "bad-connection",
                 config = new { base_uri = "http://localhost:5054/sink/x" }
             }));
@@ -319,7 +319,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(webJson);
+        var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
         Assert.NotNull(body);
         Assert.NotNull(body!.DestinationAuthentication);
         Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
@@ -413,22 +413,22 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             "api_key_header",
             new { header_name = "X-Api-Key" },
             new { api_key = "erp_api_key" });
-        ConnectionDto created = (await createdResponse.Content.ReadFromJsonAsync<ConnectionDto>(webJson))!;
+        ConnectionDto created = (await createdResponse.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options))!;
 
         HttpResponseMessage topicResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics",
             new { name = "in-use-authentication-topic" }));
-        AdminTopicResponse topic = (await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(webJson))!;
+        AdminTopicResponse topic = (await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;
         HttpResponseMessage subscriptionResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions",
             new
             {
                 name = "in-use-authentication-subscription",
-                matchRules = new { event_type = "test.event" },
-                destinationConnectionId = created.Id,
-                orderIndex = 0
+                match_rules = new { event_type = "test.event" },
+                destination_connection_id = created.Id,
+                order_index = 0
             }));
         Assert.Equal(HttpStatusCode.Created, subscriptionResponse.StatusCode);
 
@@ -471,7 +471,7 @@ public sealed class ConnectionsAdminTests : IClassFixture<AdminApiFixture>, IAsy
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integrationId = HttpIntegrationId,
+                integration_id = HttpIntegrationId,
                 name,
                 config = new { base_uri = url }
             }));

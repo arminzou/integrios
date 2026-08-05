@@ -7,7 +7,10 @@ namespace Integrios.Application.Integrations;
 
 public static partial class IntegrationManifestParser
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    // Manifest keys are Operator-authored and stored verbatim in the integrations.manifest column,
+    // so this naming policy is a persistence contract, not a presentation choice.
+    private static readonly JsonSerializerOptions SerializerOptions =
+        new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
     private static readonly HashSet<string> TopLevelProperties =
     [
         "manifest_schema_version",
