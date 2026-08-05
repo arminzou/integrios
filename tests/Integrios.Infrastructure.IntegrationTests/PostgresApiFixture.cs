@@ -1,3 +1,4 @@
+using Integrios.Tests.Shared;
 using System.Security.Cryptography;
 using System.Text;
 using Npgsql;

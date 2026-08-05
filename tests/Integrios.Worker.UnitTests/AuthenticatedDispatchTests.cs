@@ -12,6 +12,7 @@ using Integrios.Infrastructure.Auth;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 
 namespace Integrios.Worker.UnitTests;
 
@@ -46,13 +47,13 @@ public sealed class AuthenticatedDispatchTests
             ]
         };
         var deliveryClient = new CapturingDeliveryClient(new DeliveryResult(true, 200));
-        var secretResolver = new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "secret-value" });
+        var secretResolver = CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "secret-value" });
 
         IMediator mediator = BuildMediator(services =>
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(secretResolver);
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
@@ -60,9 +61,10 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
 
-        Assert.Equal(["erp_api_key"], secretResolver.RequestedSecretNames);
-        Assert.Equal(tenantId, Assert.Single(secretResolver.RequestedScopes).Id);
-        Assert.Equal("test-tenant", Assert.Single(secretResolver.RequestedScopes).Slug);
+        await secretResolver.Received(1).ResolveAsync(
+            Arg.Is<TenantSecretScope>(scope => scope.Id == tenantId && scope.Slug == "test-tenant"),
+            "erp_api_key",
+            Arg.Any<CancellationToken>());
         Assert.True(deliveryClient.Headers.TryGetValue("X-Api-Key", out string? headerValue));
         Assert.Equal("secret-value", headerValue);
         Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, Assert.Single(queue.Finalizations).Disposition);
@@ -91,9 +93,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -132,9 +134,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -178,9 +180,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new LeakyAuthSchemeHandler()]));
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_token"] = resolvedSecret }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_token"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -220,9 +222,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -262,9 +264,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
@@ -303,9 +305,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "cannot-overwrite" }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "cannot-overwrite" }));
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -338,9 +340,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -364,9 +366,9 @@ public sealed class AuthenticatedDispatchTests
         {
             services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(new FakeSecretResolver(new Dictionary<string, string>()));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
         });
 
         await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
@@ -480,43 +482,34 @@ public sealed class AuthenticatedDispatchTests
         }
     }
 
-    private sealed class FakeSecretResolver(IReadOnlyDictionary<string, string> values) : IDestinationAuthenticationSecretResolver
+    private static IDestinationAuthenticationSecretResolver CreateSecretResolver(IReadOnlyDictionary<string, string> values)
     {
-        public string ProviderName => "test";
-        public List<string> RequestedSecretNames { get; } = [];
-        public List<TenantSecretScope> RequestedScopes { get; } = [];
-
-        public Task<string> ResolveAsync(TenantSecretScope tenant, string secretName, CancellationToken cancellationToken = default)
-        {
-            RequestedScopes.Add(tenant);
-            RequestedSecretNames.Add(secretName);
-
-            if (values.TryGetValue(secretName, out string? value))
+        var resolver = Substitute.For<IDestinationAuthenticationSecretResolver>();
+        resolver.ProviderName.Returns("test");
+        resolver.ResolveAsync(Arg.Any<TenantSecretScope>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
             {
-                return Task.FromResult(value);
-            }
+                string secretName = callInfo.ArgAt<string>(1);
+                if (values.TryGetValue(secretName, out string? value))
+                    return Task.FromResult(value);
 
-            throw new InvalidOperationException($"Secret reference '{secretName}' was not found.");
-        }
+                throw new InvalidOperationException($"Secret reference '{secretName}' was not found.");
+            });
+        return resolver;
     }
 
-    private sealed class FakeTransformEvaluator(string? output = null, string? error = null) : ITransformEvaluator
+    private static ITransformEvaluator CreateTransformEvaluator(string? output = null, string? error = null)
     {
-        public string? ValidateExpression(TransformSpec transform) => null;
-
-        public string Evaluate(
-            TransformSpec transform,
-            string payloadJson,
-            TransformContext context)
-        {
-            _ = transform;
-            _ = context;
-            if (error is not null)
+        var evaluator = Substitute.For<ITransformEvaluator>();
+        evaluator.ValidateExpression(Arg.Any<TransformSpec>()).Returns((string?)null);
+        evaluator.Evaluate(Arg.Any<TransformSpec>(), Arg.Any<string>(), Arg.Any<TransformContext>())
+            .Returns(callInfo =>
             {
-                throw new TransformEvaluationException(error);
-            }
+                if (error is not null)
+                    throw new TransformEvaluationException(error);
 
-            return output ?? payloadJson;
-        }
+                return output ?? callInfo.ArgAt<string>(1);
+            });
+        return evaluator;
     }
 }

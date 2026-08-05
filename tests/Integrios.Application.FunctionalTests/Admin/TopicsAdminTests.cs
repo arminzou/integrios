@@ -8,7 +8,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
-public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
+public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     // Matches ASP.NET Core's camelCase defaults for positional record deserialization.
 
@@ -778,15 +778,6 @@ public sealed class TopicsAdminTests : IClassFixture<AdminApiFixture>, IAsyncLif
             verifiedWebhookSourceAdapter: true));
         await command.ExecuteNonQueryAsync();
         return connectionId;
-    }
-
-    private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)
-    {
-        var msg = new HttpRequestMessage(method, url);
-        msg.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.GlobalAdminAuthHeader);
-        if (body is not null)
-            msg.Content = JsonContent.Create(body);
-        return msg;
     }
 
     private HttpRequestMessage TenantRequest(HttpMethod method, string url, object? body, string authHeader)

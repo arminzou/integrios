@@ -11,6 +11,7 @@ using Integrios.Domain.Integrations;
 using Integrios.Domain.Topics;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 
 namespace Integrios.Application.UnitTests;
 
@@ -79,7 +80,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             services.AddSingleton<IConnectionAuthoringLock>(new NoOpConnectionAuthoringLock());
             services.AddSingleton<IIntegrationCatalog>(new FakeIntegrationCatalog(Integration(integrationId, destinationDirection)));
             services.AddSingleton<IAuthSchemeRegistry>(new EmptyAuthSchemeRegistry());
-            services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator(transformValidationError));
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator(transformValidationError));
             provider = services.BuildServiceProvider();
             Mediator = provider.GetRequiredService<IMediator>();
         }
@@ -156,14 +157,13 @@ public sealed class SubscriptionAuthoringApplicationTests
         };
     }
 
-    private sealed class FakeTransformEvaluator(string? validationError) : ITransformEvaluator
+    private static ITransformEvaluator CreateTransformEvaluator(string? validationError)
     {
-        public string? ValidateExpression(TransformSpec transform) => validationError;
-
-        public string Evaluate(
-            TransformSpec transform,
-            string payloadJson,
-            TransformContext context) => payloadJson;
+        var evaluator = Substitute.For<ITransformEvaluator>();
+        evaluator.ValidateExpression(Arg.Any<TransformSpec>()).Returns(validationError);
+        evaluator.Evaluate(Arg.Any<TransformSpec>(), Arg.Any<string>(), Arg.Any<TransformContext>())
+            .Returns(callInfo => callInfo.ArgAt<string>(1));
+        return evaluator;
     }
 
     private sealed class EmptyAuthSchemeRegistry : IAuthSchemeRegistry

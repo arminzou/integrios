@@ -1,3 +1,4 @@
+using Integrios.Tests.Shared;
 using Integrios.Admin;
 using Integrios.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc.Testing;

@@ -7,7 +7,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
-public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
+public sealed class ApiKeysAdminTests : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
 
     private readonly AdminApiFixture fixture;
@@ -219,15 +219,6 @@ public sealed class ApiKeysAdminTests : IClassFixture<AdminApiFixture>, IAsyncLi
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<CreateApiKeyResult>(HostJson.Options);
         return body!;
-    }
-
-    private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)
-    {
-        var msg = new HttpRequestMessage(method, url);
-        msg.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.GlobalAdminAuthHeader);
-        if (body is not null)
-            msg.Content = JsonContent.Create(body);
-        return msg;
     }
 
     private static HttpRequestMessage InvalidAdminRequest(HttpMethod method, string url, object? body = null)

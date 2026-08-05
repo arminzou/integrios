@@ -8,7 +8,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
-public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminApiFixture>, IAsyncLifetime
+public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
 
     private readonly AdminApiFixture fixture;
@@ -224,18 +224,6 @@ public sealed class SubscriptionDirectionValidationTests : IClassFixture<AdminAp
 
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!;
-    }
-
-    private HttpRequestMessage AdminRequest(HttpMethod method, string url, object? body = null)
-    {
-        var msg = new HttpRequestMessage(method, url);
-        msg.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.GlobalAdminAuthHeader);
-        if (body is not null)
-        {
-            msg.Content = JsonContent.Create(body);
-        }
-
-        return msg;
     }
 
     private async Task<Guid> InsertConnectionWithDirectionAsync(
