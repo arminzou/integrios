@@ -3,7 +3,7 @@ using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
 using Npgsql;
 
-namespace Integrios.Infrastructure.IntegrationTests;
+namespace Integrios.Application.FunctionalTests.Infrastructure;
 
 public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
     : IClassFixture<PostgresApiFixture>, IAsyncLifetime

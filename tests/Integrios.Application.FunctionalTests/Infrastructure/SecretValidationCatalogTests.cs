@@ -3,7 +3,7 @@ using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Secrets;
 using Npgsql;
 
-namespace Integrios.Infrastructure.IntegrationTests;
+namespace Integrios.Application.FunctionalTests.Infrastructure;
 
 public sealed class SecretValidationCatalogTests : IClassFixture<PostgresApiFixture>, IAsyncLifetime
 {

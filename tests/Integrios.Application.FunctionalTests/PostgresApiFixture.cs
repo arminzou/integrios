@@ -13,7 +13,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
-namespace Integrios.Application.FunctionalTests.Ingress;
+// Shared by the Ingress/ tests that drive the host and the Infrastructure/ tests that construct an
+// adapter directly, so it sits above both rather than inside either.
+namespace Integrios.Application.FunctionalTests;
 
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
