@@ -19,10 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Domain\Integrios.Domain.csproj" />
-    <ProjectReference Include="..\..\src\Integrios.Ingress\Integrios.Ingress.csproj" />
-    <ProjectReference Include="..\Integrios.Tests.Shared\Integrios.Tests.Shared.csproj" />
   </ItemGroup>
 
 </Project>
