@@ -27,24 +27,6 @@ public static class EndpointGroupExtensions
         return builder.MapPost(pattern, handler).WithName(handler.Method.Name);
     }
 
-    public static RouteHandlerBuilder MapPut(this IEndpointRouteBuilder builder, Delegate handler, [StringSyntax("Route")] string pattern)
-    {
-        GuardAnonymous(handler);
-        return builder.MapPut(pattern, handler).WithName(handler.Method.Name);
-    }
-
-    public static RouteHandlerBuilder MapPatch(this IEndpointRouteBuilder builder, Delegate handler, [StringSyntax("Route")] string pattern)
-    {
-        GuardAnonymous(handler);
-        return builder.MapPatch(pattern, handler).WithName(handler.Method.Name);
-    }
-
-    public static RouteHandlerBuilder MapDelete(this IEndpointRouteBuilder builder, Delegate handler, [StringSyntax("Route")] string pattern)
-    {
-        GuardAnonymous(handler);
-        return builder.MapDelete(pattern, handler).WithName(handler.Method.Name);
-    }
-
     private static void GuardAnonymous(Delegate handler)
     {
         if (handler.Method.Name.StartsWith('<'))
