@@ -1,4 +1,5 @@
 using System.Net;
+using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
 using Integrios.Infrastructure.Delivery;
 
@@ -16,7 +17,7 @@ public sealed class HttpDeliveryClientTests
         });
 
         var client = new HttpDeliveryClient(new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(100) });
-        var result = await client.DeliverAsync("https://downstream.example", "{}", decorate: null, CancellationToken.None);
+        var result = await client.DeliverAsync(Request("https://downstream.example"), CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.True(result.IsTimeout);
@@ -34,7 +35,7 @@ public sealed class HttpDeliveryClientTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
-        var result = await client.DeliverAsync("https://downstream.example", "{}", decorate: null, cts.Token);
+        var result = await client.DeliverAsync(Request("https://downstream.example"), cts.Token);
 
         Assert.False(result.Succeeded);
         Assert.False(result.IsTimeout);
@@ -48,7 +49,7 @@ public sealed class HttpDeliveryClientTests
         var handler = new StubHandler((_, _) => throw new HttpRequestException(diagnostic));
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
-        var result = await client.DeliverAsync("https://downstream.example", "{}", decorate: null, CancellationToken.None);
+        var result = await client.DeliverAsync(Request("https://downstream.example"), CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Equal(DeliveryFailurePhase.Http, result.FailurePhase);
@@ -67,9 +68,7 @@ public sealed class HttpDeliveryClientTests
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
         var result = await client.DeliverAsync(
-            "https://downstream.example",
-            "{}",
-            request => request.Headers.TryAddWithoutValidation("X-Api-Key", sensitiveValue),
+            Request("https://downstream.example", ("X-Api-Key", sensitiveValue)),
             CancellationToken.None);
 
         Assert.False(result.Succeeded);
@@ -91,9 +90,7 @@ public sealed class HttpDeliveryClientTests
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
         var result = await client.DeliverAsync(
-            "https://downstream.example",
-            "{}",
-            request => request.Headers.TryAddWithoutValidation("X-Api-Key", "secret"),
+            Request("https://downstream.example", ("X-Api-Key", "secret")),
             CancellationToken.None);
 
         Assert.True(result.Succeeded);
@@ -113,12 +110,15 @@ public sealed class HttpDeliveryClientTests
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
         var client = new HttpDeliveryClient(new HttpClient(handler));
 
-        var result = await client.DeliverAsync(url, "{}", decorate: null, CancellationToken.None);
+        var result = await client.DeliverAsync(Request(url), CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Equal(0, result.StatusCode);
         Assert.Equal(DeliveryFailurePhase.RequestConstruction, result.FailurePhase);
     }
+
+    private static OutboundHttpMessage Request(string uri, params (string Name, string Value)[] headers) =>
+        new("POST", uri, headers.ToDictionary(h => h.Name, h => h.Value, StringComparer.OrdinalIgnoreCase), "{}");
 
     private sealed class StubHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder) : HttpMessageHandler
     {

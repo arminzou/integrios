@@ -1,7 +1,11 @@
+using System.Text.Json;
 using Dapper;
+using Integrios.Application.Delivery;
 using Integrios.Application.Outbox;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Events;
+using Integrios.Domain.Integrations;
+using Integrios.Domain.Topics;
 using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Outbox;
@@ -101,7 +105,8 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                     s.order_index AS OrderIndex,
                     s.match_rules::text AS MatchRulesJson,
                     s.transform_config::text AS TransformConfigJson,
-                    c.config->>'base_uri' AS DestinationUrl,
+                    s.http_delivery::text AS HttpDeliveryJson,
+                    COALESCE(c.config->>'base_uri', '') AS DestinationUrl,
                     i.key AS IntegrationKey,
                     c.destination_authentication::text AS DestinationAuthJson
                 FROM subscriptions s
@@ -121,10 +126,27 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                 row.OrderIndex,
                 row.MatchRulesJson,
                 row.TransformConfigJson,
-                row.DestinationUrl,
                 row.IntegrationKey,
-                row.DestinationAuthJson))
+                BuildHttpExecutionSnapshotJson(row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson)))
             .ToList();
+    }
+
+    // Fanout correlates the base_uri, request shape, and destination authentication a delivery
+    // will be dispatched and retried with, so a later Subscription or Connection edit cannot
+    // change an in-flight delivery's request out from under it.
+    private static string BuildHttpExecutionSnapshotJson(string destinationUrl, string httpDeliveryJson, string? destinationAuthJson)
+    {
+        var snapshot = new HttpExecutionSnapshot
+        {
+            Version = HttpExecutionSnapshot.CurrentVersion,
+            BaseUri = destinationUrl,
+            Request = JsonSerializer.Deserialize<HttpDeliveryConfiguration>(httpDeliveryJson, ConnectionSchemeSelection.StoredJson)
+                ?? throw new InvalidOperationException("Stored HTTP delivery configuration is invalid."),
+            DestinationAuthentication = string.IsNullOrWhiteSpace(destinationAuthJson)
+                ? null
+                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(destinationAuthJson, ConnectionSchemeSelection.StoredJson)
+        };
+        return JsonSerializer.Serialize(snapshot, ConnectionSchemeSelection.StoredJson);
     }
 
     private static async Task<int> InsertDeliveriesAsync(
@@ -145,18 +167,16 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                     event_id,
                     subscription_id,
                     destination_connection_id,
-                    destination_url,
                     integration_key,
-                    destination_auth,
+                    http_execution_snapshot,
                     transform_config_snapshot,
                     traceparent)
                 VALUES (
                     @EventId,
                     @SubscriptionId,
                     @DestinationConnectionId,
-                    @DestinationUrl,
                     @IntegrationKey,
-                    @DestinationAuthJson::jsonb,
+                    @HttpExecutionSnapshotJson::jsonb,
                     @TransformConfigJson::jsonb,
                     @Traceparent)
                 ON CONFLICT (event_id, subscription_id) DO NOTHING
@@ -166,9 +186,8 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                     EventId = eventId,
                     target.SubscriptionId,
                     target.DestinationConnectionId,
-                    target.DestinationUrl,
                     target.IntegrationKey,
-                    target.DestinationAuthJson,
+                    target.HttpExecutionSnapshotJson,
                     target.TransformConfigJson,
                     Traceparent = traceparent
                 }),
@@ -192,6 +211,7 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
         public int OrderIndex { get; init; }
         public string? MatchRulesJson { get; init; }
         public string? TransformConfigJson { get; init; }
+        public string HttpDeliveryJson { get; init; } = "{}";
         public string DestinationUrl { get; init; } = string.Empty;
         public string IntegrationKey { get; init; } = string.Empty;
         public string? DestinationAuthJson { get; init; }

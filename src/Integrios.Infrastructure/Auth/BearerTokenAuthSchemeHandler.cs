@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
@@ -11,8 +10,9 @@ internal sealed class BearerTokenAuthSchemeHandler : IAuthSchemeHandler
     public string Name => "bearer_token";
     public IReadOnlyList<string> RequiredConfigFields => [];
     public IReadOnlyList<string> RequiredSecretFields => ["token"];
+    public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config) => ["Authorization"];
 
-    public void Apply(HttpRequestMessage request, JsonElement config, IReadOnlyDictionary<string, string> secrets)
+    public void Apply(IDictionary<string, string> headers, JsonElement config, IReadOnlyDictionary<string, string> secrets)
     {
         _ = config;
 
@@ -22,6 +22,6 @@ internal sealed class BearerTokenAuthSchemeHandler : IAuthSchemeHandler
         }
 
         SecretValueValidator.EnsureHeaderSafe(token, "token");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        headers.Add("Authorization", $"Bearer {token}");
     }
 }

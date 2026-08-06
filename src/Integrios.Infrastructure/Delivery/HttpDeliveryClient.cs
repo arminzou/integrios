@@ -8,12 +8,10 @@ namespace Integrios.Infrastructure.Delivery;
 internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
 {
     public async Task<DeliveryResult> DeliverAsync(
-        string url,
-        string payloadJson,
-        Action<HttpRequestMessage>? decorate,
+        OutboundHttpMessage outboundRequest,
         CancellationToken cancellationToken)
     {
-        if (!OutboundHttpDestination.TryParse(url, out Uri? destination))
+        if (!OutboundHttpDestination.TryParse(outboundRequest.Uri, out Uri? destination))
         {
             return new DeliveryResult(
                 false,
@@ -22,14 +20,21 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
                 FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, destination);
-        var content = new StringContent(payloadJson, Encoding.UTF8);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-        request.Content = content;
+        using var request = new HttpRequestMessage(new HttpMethod(outboundRequest.Method), destination);
+        if (outboundRequest.JsonBody is not null)
+        {
+            var content = new StringContent(outboundRequest.JsonBody, Encoding.UTF8);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            request.Content = content;
+        }
 
         try
         {
-            decorate?.Invoke(request);
+            foreach ((string name, string value) in outboundRequest.Headers)
+            {
+                if (!request.Headers.TryAddWithoutValidation(name, value))
+                    throw new DeliveryConfigurationException($"Outbound header '{name}' could not be applied.");
+            }
         }
         catch (Exception ex)
         {

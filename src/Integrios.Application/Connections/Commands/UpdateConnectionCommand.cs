@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Integrations;
+using Integrios.Application.Subscriptions;
 using Integrios.Domain.Integrations;
+using Integrios.Domain.Topics;
 using MediatR;
 
 namespace Integrios.Application.Connections;
@@ -21,7 +23,8 @@ internal sealed class UpdateConnectionCommandHandler(
     IConnectionRepository repository,
     IConnectionAuthoringLock authoringLock,
     IIntegrationCatalog integrationCatalog,
-    IAuthSchemeRegistry authSchemeRegistry) : IRequestHandler<UpdateConnectionCommand, ConnectionDto?>
+    IAuthSchemeRegistry authSchemeRegistry,
+    ISubscriptionRepository subscriptionRepository) : IRequestHandler<UpdateConnectionCommand, ConnectionDto?>
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
 
@@ -57,6 +60,25 @@ internal sealed class UpdateConnectionCommandHandler(
             ConnectionUseValidator.ValidateSourceReadiness(proposed, integration);
         if (usage.Destination)
             ConnectionUseValidator.ValidateDestinationReadiness(proposed, integration, authSchemeRegistry);
+
+        IReadOnlyList<HttpDeliveryConfiguration> activeRequests = await subscriptionRepository.ListActiveHttpDeliveriesAsync(
+            command.TenantId,
+            command.Id,
+            cancellationToken);
+        try
+        {
+            foreach (HttpDeliveryConfiguration request in activeRequests)
+            {
+                HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
+                    request,
+                    destinationAuthentication,
+                    authSchemeRegistry);
+            }
+        }
+        catch (SubscriptionValidationException exception)
+        {
+            throw new ConnectionValidationException(exception.Message);
+        }
 
         Connection? updated = await repository.UpdateAsync(
             command.TenantId,

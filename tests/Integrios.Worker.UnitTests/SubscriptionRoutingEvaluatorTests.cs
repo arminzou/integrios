@@ -77,7 +77,6 @@ public sealed class SubscriptionRoutingEvaluatorTests
             orderIndex,
             matchRulesJson,
             """{"engine":"jsonata","version":"1","expression":"$"}""",
-            "https://example.test/deliver",
             "webhook",
-            null);
+            """{"version":1,"base_uri":"https://example.test/deliver","request":{"version":1,"method":"POST","headers":{},"body":"json"}}""");
 }

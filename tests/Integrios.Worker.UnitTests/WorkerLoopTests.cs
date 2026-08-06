@@ -325,9 +325,7 @@ public sealed class WorkerLoopTests
         public TaskCompletionSource Release { get; } = NewSignal();
 
         public async Task<DeliveryResult> DeliverAsync(
-            string url,
-            string payloadJson,
-            Action<HttpRequestMessage>? decorate = null,
+            OutboundHttpMessage request,
             CancellationToken cancellationToken = default)
         {
             Started.TrySetResult();

@@ -598,14 +598,13 @@ public sealed class WorkerTransportAbstractionsTests
             destinationConnectionId ?? Guid.NewGuid(),
             tenantId ?? Guid.NewGuid(),
             "test-tenant",
-            url,
             payload,
             "payment.created",
             "payments",
             DateTimeOffset.UtcNow,
             transform,
             integrationKey,
-            null,
+            "{\"version\":1,\"base_uri\":\"" + url + "\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}",
             traceparent);
 
     internal static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
@@ -691,13 +690,12 @@ public sealed class WorkerTransportAbstractionsTests
     {
         public List<string> DeliveredUrls { get; } = [];
 
-        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+        public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
         {
-            _ = decorate;
             _ = cancellationToken;
             operations?.Add("deliver");
-            DeliveredUrls.Add(url);
-            capturedPayloads?.Add(payloadJson);
+            DeliveredUrls.Add(request.Uri);
+            capturedPayloads?.Add(request.JsonBody ?? string.Empty);
             return Task.FromResult(result);
         }
     }
@@ -706,11 +704,9 @@ public sealed class WorkerTransportAbstractionsTests
     {
         private int _index;
 
-        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+        public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
         {
-            _ = url;
-            _ = payloadJson;
-            _ = decorate;
+            _ = request;
             _ = cancellationToken;
             return Task.FromResult(results[_index++]);
         }
@@ -721,14 +717,10 @@ public sealed class WorkerTransportAbstractionsTests
         public int CallCount { get; private set; }
 
         public async Task<DeliveryResult> DeliverAsync(
-            string url,
-            string payloadJson,
-            Action<HttpRequestMessage>? decorate = null,
+            OutboundHttpMessage request,
             CancellationToken cancellationToken = default)
         {
-            _ = url;
-            _ = payloadJson;
-            _ = decorate;
+            _ = request;
             CallCount++;
             if (CallCount == 1)
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);

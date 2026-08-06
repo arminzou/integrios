@@ -10,6 +10,7 @@ using Integrios.Application.Events;
 using Integrios.Application.Outbox;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Transforms;
+using Integrios.Domain.Topics;
 using Integrios.Infrastructure.Auth;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Delivery;
@@ -399,7 +400,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await connection.OpenAsync();
         await using var cmd = new NpgsqlCommand(
             """
-            SELECT destination_url, integration_key, destination_auth::text, transform_config_snapshot::text
+            SELECT http_execution_snapshot::text, integration_key, transform_config_snapshot::text
             FROM subscription_deliveries
             WHERE event_id = @EventId
             """,
@@ -411,10 +412,40 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             throw new InvalidOperationException($"No SubscriptionDelivery exists for Event {eventId}.");
 
         return new SubscriptionDeliverySnapshot(
-            reader.IsDBNull(0) ? null : reader.GetString(0),
+            reader.GetString(0),
             reader.GetString(1),
-            reader.IsDBNull(2) ? null : reader.GetString(2),
-            reader.IsDBNull(3) ? null : reader.GetString(3));
+            reader.IsDBNull(2) ? null : reader.GetString(2));
+    }
+
+    public async Task<SubscriptionDto> UpdateLedgerHttpDeliveryAsync(HttpDeliveryConfiguration httpDelivery)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT id, topic_id FROM subscriptions WHERE name = 'to-ledger'",
+            connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            throw new InvalidOperationException("The ledger Subscription does not exist.");
+        var subscriptionId = reader.GetGuid(0);
+        var subscriptionTopicId = reader.GetGuid(1);
+        await reader.DisposeAsync();
+
+        Subscription existing = await subscriptionRepository.GetByIdAsync(TenantId, subscriptionTopicId, subscriptionId, CancellationToken.None)
+            ?? throw new InvalidOperationException("The ledger Subscription could not be loaded.");
+        Subscription? updated = await subscriptionRepository.UpdateAsync(
+            TenantId,
+            subscriptionTopicId,
+            subscriptionId,
+            existing.Name,
+            existing.MatchRules,
+            existing.DestinationConnectionId,
+            existing.TransformConfig,
+            httpDelivery,
+            existing.OrderIndex,
+            existing.Description,
+            CancellationToken.None);
+        return SubscriptionDto.From(updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated."));
     }
 
     public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default)
@@ -576,9 +607,8 @@ public sealed record DeliveryAttemptState(
     DateTimeOffset? CompletedAt);
 
 public sealed record SubscriptionDeliverySnapshot(
-    string? DestinationUrl,
+    string HttpExecutionSnapshotJson,
     string IntegrationKey,
-    string? DestinationAuthJson,
     string? TransformConfigJson);
 
 public sealed class FakeDeliveryClient : IDeliveryClient
@@ -586,16 +616,10 @@ public sealed class FakeDeliveryClient : IDeliveryClient
     public List<DeliveryCall> Calls { get; } = [];
     public bool ShouldSucceed { get; set; } = true;
 
-    public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+    public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        decorate?.Invoke(request);
-        var headers = request.Headers.ToDictionary(
-            header => header.Key,
-            header => header.Value.Single(),
-            StringComparer.OrdinalIgnoreCase);
-        Calls.Add(new DeliveryCall(url, payloadJson, headers));
+        Calls.Add(new DeliveryCall(request.Method, request.Uri, request.JsonBody ?? string.Empty, request.Headers));
         var result = ShouldSucceed
             ? new DeliveryResult(true, 200)
             : new DeliveryResult(false, 500);
@@ -609,7 +633,7 @@ public sealed class FakeDeliveryClient : IDeliveryClient
     }
 }
 
-public sealed record DeliveryCall(string Url, string Payload, IReadOnlyDictionary<string, string> Headers);
+public sealed record DeliveryCall(string Method, string Url, string Payload, IReadOnlyDictionary<string, string> Headers);
 
 public sealed class MutableSecretResolver : IDestinationAuthenticationSecretResolver
 {

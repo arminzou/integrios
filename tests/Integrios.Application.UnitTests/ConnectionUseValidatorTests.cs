@@ -93,6 +93,53 @@ public sealed class ConnectionUseValidatorTests
         Assert.NotEqual("http", integration.Key);
     }
 
+    [Theory]
+    [InlineData("Bad Header")]
+    [InlineData("Content-Type")]
+    [InlineData("content-language")]
+    [InlineData("Host")]
+    [InlineData("Connection")]
+    [InlineData("Content-Length")]
+    [InlineData("Transfer-Encoding")]
+    [InlineData("Trailer")]
+    [InlineData("Integrios-Event-Id")]
+    public void DestinationAuthenticationAuthoring_RejectsInvalidOrOwnedHeaderNames(string headerName)
+    {
+        Integration integration = IntegrationFor(
+            "destination",
+            destinationSchemes: [Scheme("api_key_header", config: ["header_name"], secrets: ["api_key"])]);
+        var input = new ConnectionSchemeSelectionInput
+        {
+            Scheme = "api_key_header",
+            Config = Json($$"""{"header_name":"{{headerName}}"}"""),
+            SecretRefs = Json("""{"api_key":"destination_key"}""")
+        };
+
+        Assert.Throws<ConnectionValidationException>(
+            () => ConnectionSchemeSelectionValidator.ValidateDestination(integration, input, AuthenticationSchemes));
+    }
+
+    [Fact]
+    public void DestinationAuthenticationAuthoring_AllowsAuthenticationToOwnAuthorization()
+    {
+        Integration integration = IntegrationFor(
+            "destination",
+            destinationSchemes: [Scheme("api_key_header", config: ["header_name"], secrets: ["api_key"])]);
+        var input = new ConnectionSchemeSelectionInput
+        {
+            Scheme = "api_key_header",
+            Config = Json("""{"header_name":"Authorization"}"""),
+            SecretRefs = Json("""{"api_key":"destination_key"}""")
+        };
+
+        ConnectionSchemeSelection? selection = ConnectionSchemeSelectionValidator.ValidateDestination(
+            integration,
+            input,
+            AuthenticationSchemes);
+
+        Assert.Equal("Authorization", selection!.Config.GetProperty("header_name").GetString());
+    }
+
     private static Integration IntegrationFor(
         string direction,
         JsonElement? sourceSchema = null,

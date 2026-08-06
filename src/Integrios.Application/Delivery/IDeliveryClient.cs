@@ -5,9 +5,7 @@ namespace Integrios.Application.Delivery;
 public interface IDeliveryClient
 {
     Task<DeliveryResult> DeliverAsync(
-        string url,
-        string payloadJson,
-        Action<HttpRequestMessage>? decorate,
+        OutboundHttpMessage request,
         CancellationToken cancellationToken);
 }
 

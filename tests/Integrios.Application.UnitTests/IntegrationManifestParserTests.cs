@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Integrios.Application.Auth;
 using Integrios.Application.Bootstrap;
+using Integrios.Application.Delivery;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Integrations;
 
@@ -530,8 +531,10 @@ public sealed class IntegrationManifestParserTests
         IReadOnlyList<string> RequiredConfigFields,
         IReadOnlyList<string> RequiredSecretFields) : IAuthSchemeHandler
     {
+        public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config) => [];
+
         public void Apply(
-            HttpRequestMessage request,
+            IDictionary<string, string> headers,
             JsonElement config,
             IReadOnlyDictionary<string, string> secrets) => throw new NotSupportedException();
     }

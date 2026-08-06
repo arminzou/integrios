@@ -98,6 +98,7 @@ public sealed class SubscriptionAuthoringApplicationTests
                 matchRules ?? Json("""{"event_type":"payment.created"}"""),
                 connectionId,
                 transformConfig,
+                HttpDeliveryConfiguration.Default,
                 0,
                 null);
 
@@ -251,6 +252,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             JsonElement matchRules,
             Guid destinationConnectionId,
             JsonElement? transformConfig,
+            HttpDeliveryConfiguration httpDelivery,
             int orderIndex,
             string? description,
             CancellationToken cancellationToken = default)
@@ -265,10 +267,16 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(Guid tenantId, Guid topicId, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
             Task.FromResult<(IReadOnlyList<Subscription>, string?)>(([], null));
 
-        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
+        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
+
+        public Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(
+            Guid tenantId,
+            Guid destinationConnectionId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<HttpDeliveryConfiguration>>([]);
     }
 }

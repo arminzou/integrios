@@ -16,9 +16,8 @@ public static class SubscriptionRoutingEvaluator
                 candidate.SubscriptionId,
                 candidate.DestinationConnectionId,
                 candidate.TransformConfigJson,
-                candidate.DestinationUrl,
                 candidate.IntegrationKey,
-                candidate.DestinationAuthJson))
+                candidate.HttpExecutionSnapshotJson))
             .ToList();
     }
 
@@ -57,14 +56,12 @@ public sealed record SubscriptionRoutingCandidate(
     int OrderIndex,
     string? MatchRulesJson,
     string? TransformConfigJson,
-    string DestinationUrl,
     string IntegrationKey,
-    string? DestinationAuthJson);
+    string HttpExecutionSnapshotJson);
 
 public sealed record SubscriptionFanoutTarget(
     Guid SubscriptionId,
     Guid DestinationConnectionId,
     string? TransformConfigJson,
-    string DestinationUrl,
     string IntegrationKey,
-    string? DestinationAuthJson);
+    string HttpExecutionSnapshotJson);

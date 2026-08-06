@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Subscriptions;
+using Integrios.Domain.Topics;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -32,6 +33,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 request.MatchRules,
                 request.DestinationConnectionId,
                 request.Transform,
+                request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
                 request.OrderIndex,
                 request.Description),
             cancellationToken);
@@ -82,6 +84,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 request.MatchRules,
                 request.DestinationConnectionId,
                 request.Transform,
+                request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
                 request.OrderIndex,
                 request.Description),
             cancellationToken);
@@ -107,6 +110,7 @@ internal sealed record CreateSubscriptionRequest(
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? Transform,
+    HttpDeliveryConfiguration? HttpDelivery,
     int OrderIndex,
     string? Description);
 
@@ -115,5 +119,6 @@ internal sealed record UpdateSubscriptionRequest(
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? Transform,
+    HttpDeliveryConfiguration? HttpDelivery,
     int OrderIndex,
     string? Description);

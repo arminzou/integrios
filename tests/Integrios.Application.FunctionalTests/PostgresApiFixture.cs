@@ -310,9 +310,10 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 RETURNING id, destination_connection_id
             )
             INSERT INTO subscription_deliveries
-                (event_id, subscription_id, destination_connection_id, destination_url,
+                (event_id, subscription_id, destination_connection_id, http_execution_snapshot,
                  integration_key, status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
-            SELECT @EventId, si.id, si.destination_connection_id, 'http://test/sink',
+            SELECT @EventId, si.id, si.destination_connection_id,
+                   '{"version":1,"base_uri":"http://test/sink","request":{"version":1,"method":"POST","headers":{},"body":"json"}}'::jsonb,
                    'http', 'dead_lettered', 3, 3, now()
             FROM sub_insert si;
             """, connection);

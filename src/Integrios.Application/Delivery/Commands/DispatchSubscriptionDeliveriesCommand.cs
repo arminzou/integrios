@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Secrets;
+using Integrios.Application.Subscriptions;
 using Integrios.Application.Transforms;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Delivery;
@@ -91,24 +92,41 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         activity?.SetTag("attempt_number", row.AttemptNumber);
         activity?.SetTag("integration_key", row.IntegrationKey);
 
-        (string? payload, string? error) = ApplyTransform(row);
-        if (error is not null)
+        HttpExecutionSnapshot snapshot;
+        try
         {
-            var transformFailure = new DeliveryResult(
-                false,
-                0,
-                error,
-                FailurePhase: DeliveryFailurePhase.Transform);
-            await FinalizeAsync(row, row.PayloadJson, transformFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
+            snapshot = ReadSnapshot(row);
+        }
+        catch (DeliveryPreparationException ex)
+        {
+            var snapshotFailure = new DeliveryResult(false, 0, ex.Message, FailurePhase: ex.FailurePhase);
+            await FinalizeAsync(row, null, snapshotFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
             return;
         }
 
+        string? payload = null;
+        if (snapshot.Request.Body == "json")
+        {
+            (payload, string? error) = ApplyTransform(row);
+            if (error is not null)
+            {
+                var transformFailure = new DeliveryResult(
+                    false,
+                    0,
+                    error,
+                    FailurePhase: DeliveryFailurePhase.Transform);
+                await FinalizeAsync(row, row.PayloadJson, transformFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
+                return;
+            }
+        }
+
         DeliveryResult result;
+        OutboundHttpMessage? outboundRequest = null;
 
         try
         {
-            Action<HttpRequestMessage> decorate = await BuildRequestDecoratorAsync(row, cancellationToken);
-            result = await deliveryClient.DeliverAsync(row.DestinationUrl, payload!, decorate, cancellationToken);
+            outboundRequest = await BuildOutboundRequestAsync(row, snapshot, payload, cancellationToken);
+            result = await deliveryClient.DeliverAsync(outboundRequest, cancellationToken);
         }
         catch (DeliveryPreparationException ex)
         {
@@ -123,12 +141,12 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                 FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
-        await FinalizeAsync(row, payload!, result, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
+        await FinalizeAsync(row, outboundRequest?.JsonBody, result, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
     }
 
     private async Task FinalizeAsync(
         SubscriptionDeliveryWorkItem row,
-        string requestPayload,
+        string? requestPayload,
         DeliveryResult result,
         TimeSpan duration,
         CancellationToken cancellationToken)
@@ -187,21 +205,67 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         }
     }
 
-    private async Task<Action<HttpRequestMessage>> BuildRequestDecoratorAsync(
+    // The snapshot was validated by Admin authoring and written by fanout from those validated
+    // rows, so dispatch reads it rather than re-validating: re-running the authoring rules here
+    // would make a later rule change start failing deliveries that are already in flight, which is
+    // the exact drift the snapshot exists to prevent. Only the format version is checked, because a
+    // future version may mean something this build cannot execute.
+    private static HttpExecutionSnapshot ReadSnapshot(SubscriptionDeliveryWorkItem row)
+    {
+        try
+        {
+            HttpExecutionSnapshot snapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
+                row.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)
+                ?? throw new DeliveryConfigurationException("HTTP execution snapshot is invalid.");
+            if (snapshot.Version != HttpExecutionSnapshot.CurrentVersion)
+                throw new DeliveryConfigurationException($"Unsupported HTTP execution snapshot version '{snapshot.Version}'.");
+
+            return snapshot;
+        }
+        catch (Exception ex)
+        {
+            throw new DeliveryPreparationException(
+                DeliveryFailurePhase.RequestConstruction,
+                DeliveryConfigurationException.SafeMessage(ex, "HTTP execution snapshot could not be read."),
+                ex);
+        }
+    }
+
+    private async Task<OutboundHttpMessage> BuildOutboundRequestAsync(
         SubscriptionDeliveryWorkItem row,
+        HttpExecutionSnapshot snapshot,
+        string? transformedPayload,
         CancellationToken cancellationToken)
     {
+        string requestUri;
+        try
+        {
+            requestUri = HttpTargetComposer.Compose(snapshot.BaseUri, snapshot.Request.Path);
+        }
+        catch (Exception ex)
+        {
+            throw new DeliveryPreparationException(
+                DeliveryFailurePhase.RequestConstruction,
+                DeliveryConfigurationException.SafeMessage(ex, "HTTP request target could not be constructed."),
+                ex);
+        }
+
+        Dictionary<string, string> headers = new(StringComparer.OrdinalIgnoreCase);
+        foreach ((string name, string value) in snapshot.Request.Headers)
+        {
+            if (!headers.TryAdd(name, value))
+                throw new DeliveryConfigurationException($"Outbound header '{name}' is configured more than once.");
+        }
+
         IAuthSchemeHandler? handler = null;
-        ConnectionSchemeSelection? destinationAuth = null;
+        ConnectionSchemeSelection? destinationAuth = snapshot.DestinationAuthentication;
         Dictionary<string, string> secrets = [];
         string? resolvingReference = null;
 
-        if (!string.IsNullOrWhiteSpace(row.DestinationAuthJson))
+        if (destinationAuth is not null)
         {
             try
             {
-                destinationAuth = JsonSerializer.Deserialize<ConnectionSchemeSelection>(row.DestinationAuthJson, ConnectionSchemeSelection.StoredJson)
-                    ?? throw new DeliveryConfigurationException("Destination auth snapshot is invalid.");
                 handler = authSchemeRegistry.GetRequired(destinationAuth.Scheme);
             }
             catch (Exception ex)
@@ -240,22 +304,18 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             }
         }
 
-        return request =>
-        {
-            if (handler is not null && destinationAuth is not null)
-                handler.Apply(request, destinationAuth.Config, secrets);
+        if (handler is not null && destinationAuth is not null)
+            handler.Apply(headers, destinationAuth.Config, secrets);
 
-            SetReservedHeader(request, "Integrios-Event-Id", row.EventId.ToString());
-            SetReservedHeader(request, "Integrios-Delivery-Id", row.Id.ToString());
-            SetReservedHeader(request, "Integrios-Attempt-Id", row.AttemptId.ToString());
-            SetReservedHeader(request, "Integrios-Attempt-Number", row.AttemptNumber.ToString(CultureInfo.InvariantCulture));
-        };
-    }
+        // Assigned rather than added: Integrios delivery identity is authoritative even over a
+        // legacy snapshot written before authoring rejected these names.
+        headers["Integrios-Event-Id"] = row.EventId.ToString();
+        headers["Integrios-Delivery-Id"] = row.Id.ToString();
+        headers["Integrios-Attempt-Id"] = row.AttemptId.ToString();
+        headers["Integrios-Attempt-Number"] = row.AttemptNumber.ToString(CultureInfo.InvariantCulture);
 
-    private static void SetReservedHeader(HttpRequestMessage request, string name, string value)
-    {
-        request.Headers.Remove(name);
-        request.Headers.TryAddWithoutValidation(name, value);
+        string? jsonBody = snapshot.Request.Body == "json" ? transformedPayload : null;
+        return new OutboundHttpMessage(snapshot.Request.Method, requestUri, headers, jsonBody);
     }
 
     private void LogFailure(

@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Auth;
@@ -413,15 +412,22 @@ public sealed class AuthenticatedDispatchTests
             destinationConnectionId ?? Guid.NewGuid(),
             tenantId ?? Guid.NewGuid(),
             "test-tenant",
-            "https://erp.example/webhook",
             "{\"amount\":42}",
             "payment.created",
             "payments",
             DateTimeOffset.UtcNow,
             null,
             integrationKey,
-            authJson ?? (auth is null ? null : JsonSerializer.Serialize(auth, ConnectionSchemeSelection.StoredJson)),
+            BuildSnapshotJson(auth, authJson),
             null);
+
+    private static string BuildSnapshotJson(ConnectionSchemeSelection? auth, string? authJson)
+    {
+        string? destinationAuthSegment = authJson ?? (auth is null ? null : JsonSerializer.Serialize(auth, ConnectionSchemeSelection.StoredJson));
+        string destinationAuthProperty = destinationAuthSegment is null ? "" : $"\"destination_authentication\":{destinationAuthSegment},";
+        const string request = """{"version":1,"method":"POST","headers":{},"body":"json"}""";
+        return "{\"version\":1,\"base_uri\":\"https://erp.example/webhook\"," + destinationAuthProperty + "\"request\":" + request + "}";
+    }
 
     private sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
     {
@@ -455,29 +461,22 @@ public sealed class AuthenticatedDispatchTests
         public string Name => "leaky_scheme";
         public IReadOnlyList<string> RequiredConfigFields => [];
         public IReadOnlyList<string> RequiredSecretFields => ["token"];
+        public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config) => ["Authorization"];
 
-        public void Apply(HttpRequestMessage request, JsonElement config, IReadOnlyDictionary<string, string> secrets) =>
+        public void Apply(IDictionary<string, string> headers, JsonElement config, IReadOnlyDictionary<string, string> secrets) =>
             throw new FormatException($"The format of value '{secrets["token"]}' is invalid.");
     }
 
     private sealed class CapturingDeliveryClient(DeliveryResult result) : IDeliveryClient
     {
         public Dictionary<string, string> Headers { get; } = [];
-        public AuthenticationHeaderValue? Authorization { get; private set; }
         public int CallCount { get; private set; }
 
-        public Task<DeliveryResult> DeliverAsync(string url, string payloadJson, Action<HttpRequestMessage>? decorate = null, CancellationToken cancellationToken = default)
+        public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
         {
             CallCount++;
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            decorate?.Invoke(request);
-
-            foreach (var header in request.Headers)
-            {
-                Headers[header.Key] = header.Value.Single();
-            }
-
-            Authorization = request.Headers.Authorization;
+            foreach ((string name, string value) in request.Headers)
+                Headers[name] = value;
             return Task.FromResult(result);
         }
     }

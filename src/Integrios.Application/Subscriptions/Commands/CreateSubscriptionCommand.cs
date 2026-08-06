@@ -4,6 +4,7 @@ using Integrios.Application.Connections;
 using Integrios.Application.Integrations;
 using Integrios.Application.Topics;
 using Integrios.Domain.Integrations;
+using Integrios.Domain.Topics;
 using Integrios.Application.Auth;
 using MediatR;
 
@@ -16,6 +17,7 @@ public sealed record CreateSubscriptionCommand(
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? TransformConfig,
+    HttpDeliveryConfiguration HttpDelivery,
     int OrderIndex,
     string? Description) : IRequest<SubscriptionDto?>;
 
@@ -30,7 +32,7 @@ internal sealed class CreateSubscriptionCommandHandler(
 {
     public async Task<SubscriptionDto?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
     {
-        SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, transformEvaluator);
+        SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, command.HttpDelivery, transformEvaluator);
 
         var topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken);
         if (topic is null)
@@ -41,7 +43,8 @@ internal sealed class CreateSubscriptionCommandHandler(
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
             [command.DestinationConnectionId],
             cancellationToken);
-        await EnsureDestinationConnectionIsAllowed(command.TenantId, command.DestinationConnectionId, cancellationToken);
+        await EnsureDestinationConnectionIsAllowed(
+            command.TenantId, command.DestinationConnectionId, command.HttpDelivery, cancellationToken);
 
         var subscription = await subscriptionRepository.CreateAsync(
             command.TenantId,
@@ -50,6 +53,7 @@ internal sealed class CreateSubscriptionCommandHandler(
             command.MatchRules,
             command.DestinationConnectionId,
             command.TransformConfig,
+            command.HttpDelivery,
             command.OrderIndex,
             command.Description,
             cancellationToken);
@@ -57,7 +61,11 @@ internal sealed class CreateSubscriptionCommandHandler(
         return subscription is null ? null : SubscriptionDto.From(subscription);
     }
 
-    private async Task EnsureDestinationConnectionIsAllowed(Guid tenantId, Guid destinationConnectionId, CancellationToken cancellationToken)
+    private async Task EnsureDestinationConnectionIsAllowed(
+        Guid tenantId,
+        Guid destinationConnectionId,
+        HttpDeliveryConfiguration httpDelivery,
+        CancellationToken cancellationToken)
     {
         var connection = await connectionRepository.GetByIdAsync(tenantId, destinationConnectionId, cancellationToken);
         if (connection is null)
@@ -76,6 +84,10 @@ internal sealed class CreateSubscriptionCommandHandler(
         try
         {
             ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, authSchemeRegistry);
+            HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
+                httpDelivery,
+                connection.DestinationAuthentication,
+                authSchemeRegistry);
         }
         catch (ConnectionValidationException exception)
         {

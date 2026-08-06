@@ -4,6 +4,7 @@ using Integrios.Application.Subscriptions;
 using Integrios.Infrastructure.Data;
 using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
+using Integrios.Domain.Integrations;
 using Integrios.Domain.Topics;
 
 namespace Integrios.Infrastructure.Subscriptions;
@@ -19,6 +20,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
         s.match_rules::text AS MatchRulesJson,
         s.destination_connection_id AS DestinationConnectionId,
         s.transform_config::text AS TransformConfigJson,
+        s.http_delivery::text AS HttpDeliveryJson,
         s.status AS Status,
         s.order_index AS OrderIndex,
         s.description AS Description,
@@ -33,6 +35,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
         JsonElement matchRules,
         Guid destinationConnectionId,
         JsonElement? transformConfig,
+        HttpDeliveryConfiguration httpDelivery,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken)
@@ -51,6 +54,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
                         match_rules,
                         destination_connection_id,
                         transform_config,
+                        http_delivery,
                         status,
                         order_index,
                         description,
@@ -64,6 +68,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
                         CAST(@MatchRulesJson AS jsonb),
                         c.id,
                         CAST(@TransformConfigJson AS jsonb),
+                        CAST(@HttpDeliveryJson AS jsonb),
                         'active',
                         @OrderIndex,
                         @Description,
@@ -89,6 +94,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
                     TransformConfigJson = transformConfig.HasValue && transformConfig.Value.ValueKind != JsonValueKind.Null
                         ? transformConfig.Value.GetRawText()
                         : null,
+                    HttpDeliveryJson = JsonSerializer.Serialize(httpDelivery, ConnectionSchemeSelection.StoredJson),
                     OrderIndex = orderIndex,
                     Description = description,
                     Now = DateTimeOffset.UtcNow,
@@ -186,6 +192,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
         JsonElement matchRules,
         Guid destinationConnectionId,
         JsonElement? transformConfig,
+        HttpDeliveryConfiguration httpDelivery,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken)
@@ -201,6 +208,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
                         match_rules = CAST(@MatchRulesJson AS jsonb),
                         destination_connection_id = c.id,
                         transform_config = CAST(@TransformConfigJson AS jsonb),
+                        http_delivery = CAST(@HttpDeliveryJson AS jsonb),
                         order_index = @OrderIndex,
                         description = @Description,
                         updated_at = now()
@@ -228,6 +236,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
                     TransformConfigJson = transformConfig.HasValue && transformConfig.Value.ValueKind != JsonValueKind.Null
                         ? transformConfig.Value.GetRawText()
                         : null,
+                    HttpDeliveryJson = JsonSerializer.Serialize(httpDelivery, ConnectionSchemeSelection.StoredJson),
                     OrderIndex = orderIndex,
                     Description = description,
                 },
@@ -257,6 +266,31 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
         return affected > 0;
     }
 
+    public async Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(
+        Guid tenantId,
+        Guid destinationConnectionId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT http_delivery::text
+            FROM subscriptions
+            WHERE tenant_id = @TenantId
+              AND destination_connection_id = @DestinationConnectionId
+              AND status = 'active'
+            """;
+
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        IEnumerable<string> rows = await connection.QueryAsync<string>(
+            new CommandDefinition(
+                sql,
+                new { TenantId = tenantId, DestinationConnectionId = destinationConnectionId },
+                cancellationToken: cancellationToken));
+        return rows
+            .Select(json => JsonSerializer.Deserialize<HttpDeliveryConfiguration>(json, ConnectionSchemeSelection.StoredJson)
+                ?? throw new InvalidOperationException("Stored HTTP delivery configuration is invalid."))
+            .ToList();
+    }
+
     private sealed record SubscriptionAdminRow
     {
         public Guid Id { get; init; }
@@ -266,6 +300,7 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
         public string MatchRulesJson { get; init; } = "{}";
         public Guid DestinationConnectionId { get; init; }
         public string? TransformConfigJson { get; init; }
+        public string HttpDeliveryJson { get; init; } = "{}";
         public string Status { get; init; } = string.Empty;
         public int OrderIndex { get; init; }
         public string? Description { get; init; }
@@ -283,6 +318,8 @@ internal sealed class PostgresSubscriptionRepository(IDbConnectionFactory connec
             TransformConfig = string.IsNullOrWhiteSpace(TransformConfigJson)
                 ? null
                 : JsonSerializer.Deserialize<JsonElement>(TransformConfigJson),
+            HttpDelivery = JsonSerializer.Deserialize<HttpDeliveryConfiguration>(HttpDeliveryJson, ConnectionSchemeSelection.StoredJson)
+                ?? throw new InvalidOperationException("Stored HTTP delivery configuration is invalid."),
             Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
             OrderIndex = OrderIndex,
             Description = Description,

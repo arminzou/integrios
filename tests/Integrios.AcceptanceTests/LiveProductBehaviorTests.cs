@@ -216,7 +216,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await AssertReceiptHeaderAsync("bearer-auth", "Authorization", "Bearer bearer-token-value");
 
         string snapshots = await fixture.ScalarAsync<string>(
-            $"SELECT string_agg(COALESCE(destination_auth::text, 'open'), '|') FROM subscription_deliveries WHERE event_id = '{accepted.Id}'");
+            $"SELECT string_agg(COALESCE((http_execution_snapshot->'destination_authentication')::text, 'open'), '|') FROM subscription_deliveries WHERE event_id = '{accepted.Id}'");
         Assert.Contains("api_key_header", snapshots, StringComparison.Ordinal);
         Assert.Contains("bearer_token", snapshots, StringComparison.Ordinal);
         Assert.DoesNotContain("api-key-value", snapshots, StringComparison.Ordinal);

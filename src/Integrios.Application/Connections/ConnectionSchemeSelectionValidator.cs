@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
+using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
 using Integrios.Domain.Integrations;
 
@@ -8,13 +9,6 @@ namespace Integrios.Application.Connections;
 internal static partial class ConnectionSchemeSelectionValidator
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
-    private static readonly string[] ReservedDeliveryHeaders =
-    [
-        "Integrios-Event-Id",
-        "Integrios-Delivery-Id",
-        "Integrios-Attempt-Id",
-        "Integrios-Attempt-Number"
-    ];
 
     public static ConnectionSchemeSelection? ValidateSource(
         Integration integration,
@@ -72,7 +66,7 @@ internal static partial class ConnectionSchemeSelectionValidator
         EnsureRequiredFields(config, declared.RequiredConfig, capability, "config");
         EnsureRequiredFields(secretRefs, declared.RequiredSecretRefs, capability, "secret_refs");
         if (handler is not null)
-            EnsureReservedHeadersAreNotConfigured(handler.Name, config);
+            EnsureOwnedHeadersAreSafe(handler, config);
         EnsureSecretReferencesAreSafe(secretRefs);
 
         return new ConnectionSchemeSelection
@@ -101,20 +95,28 @@ internal static partial class ConnectionSchemeSelectionValidator
         }
     }
 
-    private static void EnsureReservedHeadersAreNotConfigured(string scheme, JsonElement config)
+    private static void EnsureOwnedHeadersAreSafe(IAuthSchemeHandler handler, JsonElement config)
     {
-        if (!scheme.Equals("api_key_header", StringComparison.OrdinalIgnoreCase)
-            || !config.TryGetProperty("header_name", out JsonElement headerElement)
-            || headerElement.ValueKind != JsonValueKind.String)
+        IReadOnlyList<string> ownedHeaders;
+        try
         {
-            return;
+            ownedHeaders = handler.GetOwnedHeaderNames(config);
         }
-
-        string headerName = headerElement.GetString() ?? string.Empty;
-        if (ReservedDeliveryHeaders.Contains(headerName, StringComparer.OrdinalIgnoreCase))
+        catch (Exception)
         {
             throw new ConnectionValidationException(
-                $"Header '{headerName}' is reserved for Integrios delivery identity metadata.");
+                "Destination authentication header configuration is invalid.");
+        }
+
+        foreach (string headerName in ownedHeaders)
+        {
+            if (!OutboundHttpHeaderRules.IsValidName(headerName))
+                throw new ConnectionValidationException(
+                    $"Destination authentication header name '{headerName}' is invalid.");
+
+            if (OutboundHttpHeaderRules.IsTransportOrPlatformOwned(headerName))
+                throw new ConnectionValidationException(
+                    $"Header '{headerName}' is reserved for HTTP transport or Integrios delivery metadata.");
         }
     }
 

@@ -54,9 +54,8 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
                     sd.lifetime_attempt_count AS LifetimeAttemptCount,
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
                     sd.active_attempt_id AS ActiveAttemptId,
-                    sd.destination_url AS DestinationUrl,
                     sd.integration_key AS IntegrationKey,
-                    sd.destination_auth::text AS DestinationAuthJson,
+                    sd.http_execution_snapshot::text AS HttpExecutionSnapshotJson,
                     sd.transform_config_snapshot AS TransformConfigSnapshot,
                     sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId,
@@ -202,14 +201,13 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
             row.DestinationConnectionId,
             row.TenantId,
             row.TenantSlug,
-            row.DestinationUrl ?? string.Empty,
             row.PayloadJson ?? string.Empty,
             row.EventType ?? string.Empty,
             row.TopicName,
             row.AcceptedAt,
             row.TransformConfigSnapshot,
             row.IntegrationKey ?? string.Empty,
-            row.DestinationAuthJson,
+            row.HttpExecutionSnapshotJson ?? string.Empty,
             row.Traceparent));
     }
 
@@ -387,14 +385,13 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
         public int LifetimeAttemptCount { get; init; }
         public int RetryCycleAttemptCount { get; init; }
         public Guid? ActiveAttemptId { get; init; }
-        public string? DestinationUrl { get; init; }
         public string? PayloadJson { get; init; }
         public string? EventType { get; init; }
         public string? TopicName { get; init; }
         public DateTimeOffset AcceptedAt { get; init; }
         public string? TransformConfigSnapshot { get; init; }
         public string? IntegrationKey { get; init; }
-        public string? DestinationAuthJson { get; init; }
+        public string? HttpExecutionSnapshotJson { get; init; }
         public string? Traceparent { get; init; }
         public DateTimeOffset DatabaseNow { get; init; }
     }

@@ -149,11 +149,12 @@ public sealed class DeliveryExecutionOptionsTests
         await using ServiceProvider provider = services.BuildServiceProvider();
         IDeliveryClient deliveryClient = provider.GetRequiredService<IDeliveryClient>();
 
-        DeliveryResult result = await deliveryClient.DeliverAsync(
+        var request = new OutboundHttpMessage(
+            "POST",
             destination,
-            "{}",
-            request => request.Headers.TryAddWithoutValidation("X-Api-Key", "must-not-follow"),
-            CancellationToken.None);
+            new Dictionary<string, string> { ["X-Api-Key"] = "must-not-follow" },
+            "{}");
+        DeliveryResult result = await deliveryClient.DeliverAsync(request, CancellationToken.None);
 
         await stopServer.CancelAsync();
         RedirectObservation observation = await serverTask;

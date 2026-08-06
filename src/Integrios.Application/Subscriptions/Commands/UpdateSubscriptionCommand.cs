@@ -4,6 +4,7 @@ using Integrios.Application.Connections;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
+using Integrios.Domain.Topics;
 using Integrios.Application.Auth;
 using MediatR;
 
@@ -17,6 +18,7 @@ public sealed record UpdateSubscriptionCommand(
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? TransformConfig,
+    HttpDeliveryConfiguration HttpDelivery,
     int OrderIndex,
     string? Description) : IRequest<SubscriptionDto?>;
 
@@ -30,7 +32,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
 {
     public async Task<SubscriptionDto?> Handle(UpdateSubscriptionCommand command, CancellationToken cancellationToken)
     {
-        SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, transformEvaluator);
+        SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, command.HttpDelivery, transformEvaluator);
 
         var existing = await subscriptionRepository.GetByIdAsync(
             command.TenantId,
@@ -45,7 +47,8 @@ internal sealed class UpdateSubscriptionCommandHandler(
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
             [command.DestinationConnectionId],
             cancellationToken);
-        await EnsureDestinationConnectionIsAllowed(command.TenantId, command.DestinationConnectionId, cancellationToken);
+        await EnsureDestinationConnectionIsAllowed(
+            command.TenantId, command.DestinationConnectionId, command.HttpDelivery, cancellationToken);
 
         var subscription = await subscriptionRepository.UpdateAsync(
             command.TenantId,
@@ -55,6 +58,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
             command.MatchRules,
             command.DestinationConnectionId,
             command.TransformConfig,
+            command.HttpDelivery,
             command.OrderIndex,
             command.Description,
             cancellationToken);
@@ -62,7 +66,11 @@ internal sealed class UpdateSubscriptionCommandHandler(
         return subscription is null ? null : SubscriptionDto.From(subscription);
     }
 
-    private async Task EnsureDestinationConnectionIsAllowed(Guid tenantId, Guid destinationConnectionId, CancellationToken cancellationToken)
+    private async Task EnsureDestinationConnectionIsAllowed(
+        Guid tenantId,
+        Guid destinationConnectionId,
+        HttpDeliveryConfiguration httpDelivery,
+        CancellationToken cancellationToken)
     {
         var connection = await connectionRepository.GetByIdAsync(tenantId, destinationConnectionId, cancellationToken);
         if (connection is null)
@@ -81,6 +89,10 @@ internal sealed class UpdateSubscriptionCommandHandler(
         try
         {
             ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, authSchemeRegistry);
+            HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
+                httpDelivery,
+                connection.DestinationAuthentication,
+                authSchemeRegistry);
         }
         catch (ConnectionValidationException exception)
         {

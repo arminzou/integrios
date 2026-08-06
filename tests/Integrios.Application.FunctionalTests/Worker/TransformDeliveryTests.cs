@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Integrios.Application.Delivery;
+using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.FunctionalTests.Worker;
 
@@ -87,10 +89,13 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
             "changed_webhook");
 
         var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
-        Assert.Equal(WorkerRoutingFixture.LedgerSinkUrl, snapshot.DestinationUrl);
         Assert.Equal("webhook", snapshot.IntegrationKey);
+        HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
+            snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+        Assert.Equal(WorkerRoutingFixture.LedgerSinkUrl, executionSnapshot.BaseUri);
         using var expectedAuth = JsonDocument.Parse(originalAuth);
-        using var actualAuth = JsonDocument.Parse(snapshot.DestinationAuthJson!);
+        using var actualAuth = JsonSerializer.SerializeToDocument(
+            executionSnapshot.DestinationAuthentication, ConnectionSchemeSelection.StoredJson);
         Assert.True(JsonElement.DeepEquals(expectedAuth.RootElement, actualAuth.RootElement));
         using var expectedTransform = JsonDocument.Parse(originalTransform);
         using var actualTransform = JsonDocument.Parse(snapshot.TransformConfigJson!);
@@ -121,7 +126,9 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         Assert.Equal("changed-value", laterAttempt.Headers["X-Changed-Key"]);
 
         var laterSnapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(laterEventId);
-        Assert.Equal("http://changed-sink/ledger", laterSnapshot.DestinationUrl);
+        HttpExecutionSnapshot laterExecutionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
+            laterSnapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+        Assert.Equal("http://changed-sink/ledger", laterExecutionSnapshot.BaseUri);
         Assert.Equal("changed_webhook", laterSnapshot.IntegrationKey);
     }
 
@@ -142,7 +149,9 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         // A destination without a url normalizes to an empty snapshot url (never a NOT NULL stall),
         // while integration_key stays populated from the inner-joined integration.
         var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
-        Assert.True(string.IsNullOrEmpty(snapshot.DestinationUrl));
+        HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
+            snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+        Assert.Equal(string.Empty, executionSnapshot.BaseUri);
         Assert.Equal("http", snapshot.IntegrationKey);
     }
 }

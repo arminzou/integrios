@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Integrios.Application.Transforms;
+using Integrios.Domain.Topics;
 
 namespace Integrios.Application.Subscriptions;
 
@@ -12,10 +13,13 @@ internal static class SubscriptionAuthoringRules
     public static void Validate(
         JsonElement matchRules,
         JsonElement? transformConfig,
+        HttpDeliveryConfiguration httpDelivery,
         ITransformEvaluator transformEvaluator)
     {
         if (!HasValidMatchRulesShape(matchRules))
             throw new SubscriptionValidationException(InvalidMatchRulesMessage);
+
+        HttpDeliveryConfigurationRules.Validate(httpDelivery);
 
         if (transformConfig is null || transformConfig.Value.ValueKind == JsonValueKind.Null)
             return;

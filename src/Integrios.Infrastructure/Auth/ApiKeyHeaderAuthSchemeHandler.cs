@@ -11,10 +11,16 @@ internal sealed class ApiKeyHeaderAuthSchemeHandler : IAuthSchemeHandler
     public IReadOnlyList<string> RequiredConfigFields => ["header_name"];
     public IReadOnlyList<string> RequiredSecretFields => ["api_key"];
 
-    public void Apply(HttpRequestMessage request, JsonElement config, IReadOnlyDictionary<string, string> secrets)
+    public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config)
     {
         string headerName = config.GetProperty("header_name").GetString()
             ?? throw new DeliveryConfigurationException("Auth config field 'header_name' is required.");
+        return [headerName];
+    }
+
+    public void Apply(IDictionary<string, string> headers, JsonElement config, IReadOnlyDictionary<string, string> secrets)
+    {
+        string headerName = GetOwnedHeaderNames(config)[0];
 
         if (!secrets.TryGetValue("api_key", out string? apiKey))
         {
@@ -22,6 +28,6 @@ internal sealed class ApiKeyHeaderAuthSchemeHandler : IAuthSchemeHandler
         }
 
         SecretValueValidator.EnsureHeaderSafe(apiKey, "api_key");
-        request.Headers.TryAddWithoutValidation(headerName, apiKey);
+        headers.Add(headerName, apiKey);
     }
 }

@@ -35,14 +35,13 @@ public sealed record SubscriptionDeliveryWorkItem(
     Guid DestinationConnectionId,
     Guid TenantId,
     string TenantSlug,
-    string DestinationUrl,
     string PayloadJson,
     string EventType,
     string? TopicName,
     DateTimeOffset AcceptedAt,
     string? TransformConfigSnapshot,
     string IntegrationKey,
-    string? DestinationAuthJson,
+    string HttpExecutionSnapshotJson,
     string? Traceparent);
 
 public sealed record DeliveryAttemptCompletion(

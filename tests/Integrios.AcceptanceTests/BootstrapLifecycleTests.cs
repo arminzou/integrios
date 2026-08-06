@@ -25,9 +25,10 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
             database, "SELECT COUNT(*) FROM flyway_schema_history"));
         Assert.Equal(0L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database, "SELECT COUNT(*) FROM flyway_schema_history WHERE NOT success"));
-        Assert.Equal("text|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_url"));
         Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "integration_key"));
-        Assert.Equal("jsonb|YES", await ColumnShapeAsync(database, "subscription_deliveries", "destination_auth"));
+        Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscription_deliveries", "http_execution_snapshot"));
+        Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscriptions", "http_delivery"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "subscription_deliveries", "destination_url", "destination_auth"));
         Assert.Equal("uuid|YES", await ColumnShapeAsync(database, "subscription_deliveries", "active_attempt_id"));
         Assert.Equal("timestamp with time zone|YES", await ColumnShapeAsync(database, "subscription_deliveries", "lease_expires_at"));
         Assert.Equal("uuid|NO", await ColumnShapeAsync(database, "delivery_attempts", "subscription_delivery_id"));

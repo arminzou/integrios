@@ -33,26 +33,23 @@ public sealed class AuthSchemeRegistryTests
     public void ApiKeyHeaderHandler_AppliesConfiguredHeader()
     {
         var handler = new ApiKeyHeaderAuthSchemeHandler();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         JsonElement config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
 
-        handler.Apply(request, config, new Dictionary<string, string> { ["api_key"] = "secret-value" });
+        handler.Apply(headers, config, new Dictionary<string, string> { ["api_key"] = "secret-value" });
 
-        Assert.True(request.Headers.TryGetValues("X-Api-Key", out IEnumerable<string>? values));
-        Assert.Equal(["secret-value"], values);
+        Assert.Equal("secret-value", headers["X-Api-Key"]);
     }
 
     [Fact]
     public void BearerTokenHandler_AppliesAuthorizationHeader()
     {
         var handler = new BearerTokenAuthSchemeHandler();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        handler.Apply(request, EmptyObject, new Dictionary<string, string> { ["token"] = "secret-token" });
+        handler.Apply(headers, EmptyObject, new Dictionary<string, string> { ["token"] = "secret-token" });
 
-        Assert.NotNull(request.Headers.Authorization);
-        Assert.Equal("Bearer", request.Headers.Authorization!.Scheme);
-        Assert.Equal("secret-token", request.Headers.Authorization.Parameter);
+        Assert.Equal("Bearer secret-token", headers["Authorization"]);
     }
 
     [Theory]
@@ -61,16 +58,16 @@ public sealed class AuthSchemeRegistryTests
     public void ApiKeyHeaderHandler_RejectsLineBreaksWithoutLeakingValue(string apiKey)
     {
         var handler = new ApiKeyHeaderAuthSchemeHandler();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         JsonElement config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
 
         var error = Assert.Throws<DeliveryConfigurationException>(
-            () => handler.Apply(request, config, new Dictionary<string, string> { ["api_key"] = apiKey }));
+            () => handler.Apply(headers, config, new Dictionary<string, string> { ["api_key"] = apiKey }));
 
         Assert.Equal(
             "Auth secret field 'api_key' contains a line break, which is not permitted in an HTTP header value.",
             error.Message);
-        Assert.False(request.Headers.Contains("X-Api-Key"));
+        Assert.False(headers.ContainsKey("X-Api-Key"));
     }
 
     [Theory]
@@ -79,15 +76,15 @@ public sealed class AuthSchemeRegistryTests
     public void BearerTokenHandler_RejectsLineBreaksWithoutLeakingValue(string token)
     {
         var handler = new BearerTokenAuthSchemeHandler();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://downstream.example");
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var error = Assert.Throws<DeliveryConfigurationException>(
-            () => handler.Apply(request, EmptyObject, new Dictionary<string, string> { ["token"] = token }));
+            () => handler.Apply(headers, EmptyObject, new Dictionary<string, string> { ["token"] = token }));
 
         Assert.Equal(
             "Auth secret field 'token' contains a line break, which is not permitted in an HTTP header value.",
             error.Message);
-        Assert.Null(request.Headers.Authorization);
+        Assert.False(headers.ContainsKey("Authorization"));
     }
 
     private static IAuthSchemeRegistry CreateRegistry()
