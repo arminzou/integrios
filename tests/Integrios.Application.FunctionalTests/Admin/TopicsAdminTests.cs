@@ -162,7 +162,7 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
             await using var reader = await inactivated.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
             Assert.Equal("inactive", reader.GetString(0));
-            Assert.Equal("inactive", reader.GetString(1));
+            Assert.Equal("revoked", reader.GetString(1));
             Assert.True(reader.GetBoolean(2));
         }
 
@@ -216,7 +216,7 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
             var statuses = new List<string>();
             while (await reader.ReadAsync())
                 statuses.Add(reader.GetString(0));
-            Assert.Equal(["active", "inactive"], statuses);
+            Assert.Equal(["active", "revoked"], statuses);
         }
     }
 

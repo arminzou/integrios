@@ -390,7 +390,7 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
             new CommandDefinition(
                 """
                 UPDATE source_endpoints
-                SET status = 'inactive', inactive_at = now()
+                SET status = 'revoked', revoked_at = now()
                 WHERE tenant_id = @TenantId
                   AND topic_id = @TopicId
                   AND status = 'active'
