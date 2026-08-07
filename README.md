@@ -6,20 +6,6 @@ Integrios is an open-source, self-hostable, Operator-run HTTP integration platfo
 engineering teams a durable boundary for accepting events, Tenant-aware routing and transformation,
 and reliable HTTP delivery with retries, dead-lettering, replay, and auditable delivery history.
 
-> [!NOTE]
-> **Early preview, built incrementally.** Generic ApiKey-authenticated intake and authenticated JSON
-> `POST` delivery work end to end. Evaluate Integrios as a self-hostable backend foundation, not a
-> turnkey production deployment. MIT licensed.
->
-> Not yet, but planned:
->
-> - **Operator-authored Integration definitions and richer generic HTTP delivery.** The finalized
->   model adds Subscription-owned methods, relative paths, restricted static headers, and optional
->   JSON bodies without adding provider-specific destination code.
-> - **No admin UI.** The Operator configures every Tenant and its Connections, Topics, and
->   Subscriptions through the Admin API. Integrations are currently built-in and read-only.
-> - **No Operator RBAC or rate limiting yet.** Tenant isolation is enforced at the data layer; Tenants do not receive control-plane access.
-
 ## Features
 
 - Durable event intake behind a transactional-outbox acceptance boundary, so no accepted event is lost
