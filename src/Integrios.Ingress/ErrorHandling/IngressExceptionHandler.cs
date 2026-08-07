@@ -13,6 +13,9 @@ public sealed class IngressExceptionHandler : IExceptionHandler
         (int StatusCode, string Message)? error = exception switch
         {
             EventAcceptanceException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            SourceEndpointNotFoundException => (StatusCodes.Status404NotFound, exception.Message),
+            SourceVerificationException => (StatusCodes.Status401Unauthorized, exception.Message),
+            WebhookPayloadException => (StatusCodes.Status400BadRequest, exception.Message),
             BadHttpRequestException badRequest => (badRequest.StatusCode, "The request body is invalid."),
             _ => null
         };

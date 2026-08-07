@@ -13,4 +13,6 @@ public sealed record SourceAdapterRegistration(
 public interface ISourceAdapterRegistry
 {
     bool TryGet(string key, int contractVersion, out SourceAdapterRegistration registration);
+
+    IReadOnlyCollection<SourceAdapterRegistration> GetAll();
 }

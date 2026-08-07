@@ -33,6 +33,8 @@ internal sealed class SourceAdapterRegistry : ISourceAdapterRegistry
     public bool TryGet(string key, int contractVersion, out SourceAdapterRegistration registration) =>
         Registrations.TryGetValue((key, contractVersion), out registration!);
 
+    public IReadOnlyCollection<SourceAdapterRegistration> GetAll() => Registrations.Values.ToArray();
+
     private static void ValidateVerifiedWebhookConfig(JsonElement config)
     {
         if (config.ValueKind != JsonValueKind.Object)

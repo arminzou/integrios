@@ -1,0 +1,25 @@
+using System.Text.Json;
+using Integrios.Domain.Connections;
+
+namespace Integrios.Application.Events;
+
+public interface ISourceEndpointResolver
+{
+    Task<ResolvedSourceEndpoint?> ResolveAsync(
+        string integrationKey,
+        Guid endpointId,
+        CancellationToken cancellationToken);
+}
+
+public sealed record ResolvedSourceEndpoint
+{
+    public required Guid TenantId { get; init; }
+    public required string TenantSlug { get; init; }
+    public required Guid TopicId { get; init; }
+    public required Guid ConnectionId { get; init; }
+    public required string IntegrationKey { get; init; }
+    public required string SourceAdapterKey { get; init; }
+    public required int SourceAdapterContractVersion { get; init; }
+    public required JsonElement SourceAdapterConfig { get; init; }
+    public required ConnectionSchemeSelection SourceVerification { get; init; }
+}

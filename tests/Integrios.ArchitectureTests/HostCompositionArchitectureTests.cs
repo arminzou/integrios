@@ -36,7 +36,10 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ITenantEventLookup)] = [Host.Ingress],
         [typeof(IIntegrationCatalog)] = [Host.Admin],
         [typeof(IIntegrationManifestStore)] = [Host.Admin],
-        [typeof(ISourceAdapterRegistry)] = [Host.Admin],
+        [typeof(ISourceAdapterRegistry)] = [Host.Admin, Host.Ingress],
+        [typeof(IIngressSourceAdapter)] = [Host.Ingress],
+        [typeof(IIngressSourceAdapterRuntime)] = [Host.Ingress],
+        [typeof(ISourceEndpointResolver)] = [Host.Ingress],
         [typeof(ISourceTopicLookup)] = [Host.Ingress],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
@@ -182,9 +185,13 @@ public sealed class HostCompositionArchitectureTests
 
         AssertResolves<IActiveApiKeyLookup>(provider);
         AssertResolves<ISourceTopicLookup>(provider);
+        AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
         AssertResolves<IDeadLetterReplay>(provider);
+        AssertResolves<ISourceAdapterRegistry>(provider);
+        AssertResolves<IIngressSourceAdapter>(provider);
+        AssertResolves<IIngressSourceAdapterRuntime>(provider);
 
         AssertOmits<IAdminKeyLookup>(provider);
         AssertOmits<IAdminKeyLifecycle>(provider);
@@ -192,7 +199,6 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IIntegrationCatalog>(provider);
         AssertOmits<IIntegrationManifestStore>(provider);
-        AssertOmits<ISourceAdapterRegistry>(provider);
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);

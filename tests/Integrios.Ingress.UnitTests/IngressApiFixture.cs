@@ -13,16 +13,25 @@ namespace Integrios.Ingress.UnitTests;
 
 public sealed class ApiTestAppFixture : IDisposable
 {
+    // Fixed identity used by WebhookEndpointTests to exercise the real
+    // ISourceVerificationSecretResolver production path (configuration-backed provider) rather
+    // than a stub, per i7a.5's acceptance criteria.
+    public const string WebhookTenantSlug = "acme";
+    public const string WebhookSecretReference = "webhook_secret";
+    public const string WebhookSecretValue = "correct-horse-battery-staple";
+
     public StubActiveApiKeyLookup ApiKeyRepository { get; } = new();
     public StubEventAcceptance EventAcceptance { get; } = new();
     public StubTenantEventLookup EventLookup { get; } = new();
     public StubDeadLetterReplay DeliveryQueue { get; } = new();
     public StubIntakeTopicResolver TopicRepository { get; } = new();
+    public StubSourceEndpointResolver SourceEndpointResolver { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
     public ApiTestAppFixture()
     {
-        Factory = new CustomApiFactory(ApiKeyRepository, EventAcceptance, EventLookup, TopicRepository, DeliveryQueue);
+        Factory = new CustomApiFactory(
+            ApiKeyRepository, EventAcceptance, EventLookup, TopicRepository, DeliveryQueue, SourceEndpointResolver);
     }
 
     public void Reset()
@@ -31,6 +40,8 @@ public sealed class ApiTestAppFixture : IDisposable
         EventLookup.GetEventResult = null;
         DeliveryQueue.ReplayResult = false;
         TopicRepository.ResolvedTopicId = Guid.NewGuid();
+        SourceEndpointResolver.Result = null;
+        EventAcceptance.LastSubmission = null;
     }
 
     public void Dispose()
@@ -44,7 +55,8 @@ internal sealed class CustomApiFactory(
     StubEventAcceptance eventAcceptance,
     StubTenantEventLookup eventLookup,
     StubIntakeTopicResolver topicRepository,
-    StubDeadLetterReplay deliveryQueue) : WebApplicationFactory<Program>
+    StubDeadLetterReplay deliveryQueue,
+    StubSourceEndpointResolver sourceEndpointResolver) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -53,7 +65,9 @@ internal sealed class CustomApiFactory(
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Postgres"] =
-                    "Host=localhost;Database=test;Username=test;Password=test"
+                    "Host=localhost;Database=test;Username=test;Password=test",
+                [$"SourceSecrets:{ApiTestAppFixture.WebhookTenantSlug}:{ApiTestAppFixture.WebhookSecretReference}"] =
+                    ApiTestAppFixture.WebhookSecretValue
             }));
 
         builder.ConfigureServices(services =>
@@ -63,6 +77,7 @@ internal sealed class CustomApiFactory(
             services.AddSingleton<ITenantEventLookup>(eventLookup);
             services.AddSingleton<ISourceTopicLookup>(topicRepository);
             services.AddSingleton<IDeadLetterReplay>(deliveryQueue);
+            services.AddSingleton<ISourceEndpointResolver>(sourceEndpointResolver);
         });
     }
 }
@@ -84,11 +99,14 @@ public sealed class StubActiveApiKeyLookup : IActiveApiKeyLookup
 
 public sealed class StubEventAcceptance : IEventAcceptance
 {
+    public EventSubmission? LastSubmission { get; set; }
+
     public Task<EventAcceptance> AcceptAsync(
         EventSubmission submission,
         string? traceparent,
         CancellationToken cancellationToken)
     {
+        LastSubmission = submission;
         return Task.FromResult(new EventAcceptance
         {
             EventId = Guid.NewGuid(),
@@ -97,6 +115,17 @@ public sealed class StubEventAcceptance : IEventAcceptance
             AlreadyAccepted = false
         });
     }
+}
+
+public sealed class StubSourceEndpointResolver : ISourceEndpointResolver
+{
+    public ResolvedSourceEndpoint? Result { get; set; }
+
+    public Task<ResolvedSourceEndpoint?> ResolveAsync(
+        string integrationKey,
+        Guid endpointId,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(Result);
 }
 
 public sealed class StubTenantEventLookup : ITenantEventLookup
