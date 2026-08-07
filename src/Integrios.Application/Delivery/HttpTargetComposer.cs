@@ -23,7 +23,9 @@ public static class HttpTargetComposer
         if (target.StartsWith("//", StringComparison.Ordinal))
             return "http_delivery.path must not be scheme-relative.";
 
-        if (Uri.TryCreate(target, UriKind.Absolute, out _))
+        // Uri.TryCreate(..., UriKind.Absolute) treats a leading '/' as an absolute file:// URI
+        // on Unix, so a genuine path-absolute target must be excluded from this check explicitly.
+        if (!target.StartsWith('/') && Uri.TryCreate(target, UriKind.Absolute, out _))
             return "http_delivery.path must be relative.";
 
         string path = target.Split('?', 2)[0].TrimStart('/');
