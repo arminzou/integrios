@@ -25,18 +25,25 @@ internal static class SecretValueValidator
         }
     }
 
+    // Edge CR/LF is never a legitimate byte of a secret value - no HTTP header can carry raw CRLF,
+    // and no scheme this platform supports defines a credential that includes one - so it is always
+    // a storage or editor artifact (a trailing newline from a text editor's "insert final newline
+    // on save", for example). Trimming only the edges, never the interior, means a genuinely
+    // corrupted value with an embedded line break still fails loud downstream instead of being
+    // silently accepted.
     public static string ValidateText(string? value, string secretReference, string providerName)
     {
         try
         {
-            if (string.IsNullOrEmpty(value)
-                || value.Contains('\0', StringComparison.Ordinal)
-                || StrictUtf8.GetByteCount(value) > MaxBytes)
+            string? trimmed = value?.Trim('\r', '\n');
+            if (string.IsNullOrEmpty(trimmed)
+                || trimmed.Contains('\0', StringComparison.Ordinal)
+                || StrictUtf8.GetByteCount(trimmed) > MaxBytes)
             {
                 throw new SecretResolutionException(secretReference, providerName);
             }
 
-            return value;
+            return trimmed;
         }
         catch (EncoderFallbackException)
         {

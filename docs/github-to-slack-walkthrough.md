@@ -144,6 +144,12 @@ mkdir -p ./secrets/destination/acme
 printf '%s' 'xoxb-REPLACE-WITH-YOUR-BOT-TOKEN' > ./secrets/destination/acme/slack_bot_token
 ```
 
+A leading or trailing newline in this file (for example from re-saving it in an editor with "insert
+final newline" on) is trimmed automatically — it's never a legitimate byte of the secret, so the
+platform strips it rather than failing. A line break *inside* the value is different: that's
+genuine corruption and still fails closed, surfacing as a `request_construction` delivery failure
+with `Auth secret field 'token' contains a line break`.
+
 ## 7. Subscribe GitHub pushes to the Slack Connection
 
 The transform is a JSONata expression evaluated with the Event payload as its root and platform

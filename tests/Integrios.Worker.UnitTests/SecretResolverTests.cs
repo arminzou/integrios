@@ -14,7 +14,7 @@ public sealed class SecretResolverTests : IDisposable
     public SecretResolverTests() => Directory.CreateDirectory(root);
 
     [Fact]
-    public async Task FileResolver_IsolatesSameReferenceByTenantAndPreservesExactValue()
+    public async Task FileResolver_IsolatesSameReferenceByTenantAndTrimsEdgeLineBreaks()
     {
         WriteSecret("tenant-a", "api_key", "first\n");
         WriteSecret("tenant-b", "api_key", "second");
@@ -23,8 +23,45 @@ public sealed class SecretResolverTests : IDisposable
         string tenantA = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None);
         string tenantB = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key", CancellationToken.None);
 
-        Assert.Equal("first\n", tenantA);
+        Assert.Equal("first", tenantA);
         Assert.Equal("second", tenantB);
+    }
+
+    // No real credential is defined to include an edge CR/LF (HTTP headers can't carry raw CRLF
+    // at all), so a trailing newline here is always a storage/editor artifact, never a legitimate
+    // byte of the secret. Trimming only the edges — never the interior — means a genuinely
+    // corrupted value with an embedded line break still fails loud downstream.
+    [Fact]
+    public async Task FileResolver_TrimsEdgeCarriageReturnAndLineFeed()
+    {
+        WriteSecret("tenant-a", "api_key", "\r\nvalue\r\n");
+        var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
+
+        Assert.Equal(
+            "value", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FileResolver_RejectsAValueThatIsOnlyLineBreaksAfterTrimming()
+    {
+        WriteSecret("tenant-a", "api_key", "\n");
+        var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
+
+        await Assert.ThrowsAsync<SecretResolutionException>(
+            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ConfigurationResolver_TrimsEdgeLineBreaks()
+    {
+        IConfiguration configuration = Configuration(new Dictionary<string, string?>
+        {
+            ["DestinationSecrets:tenant-a:api_key"] = "value\n"
+        });
+        var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
+
+        Assert.Equal(
+            "value", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
     }
 
     [Fact]
