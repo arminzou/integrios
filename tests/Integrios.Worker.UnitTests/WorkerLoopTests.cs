@@ -326,8 +326,10 @@ public sealed class WorkerLoopTests
 
         public async Task<DeliveryResult> DeliverAsync(
             OutboundHttpMessage request,
+            HttpOutcomeContract? outcomeContract,
             CancellationToken cancellationToken = default)
         {
+            _ = outcomeContract;
             Started.TrySetResult();
             await Release.Task.WaitAsync(cancellationToken);
             return new DeliveryResult(true, 200);

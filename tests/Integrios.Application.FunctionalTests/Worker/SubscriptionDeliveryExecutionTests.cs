@@ -416,6 +416,34 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         null,
         "HTTP 500");
 
+    private static DeliveryAttemptCompletion TerminalHttpCompletion(SubscriptionDeliveryWorkItem claimed) => new(
+        claimed.Id,
+        claimed.AttemptId,
+        false,
+        DeliveryFailurePhase.Http,
+        claimed.PayloadJson,
+        404,
+        null,
+        "HTTP 404",
+        IsTerminalFailure: true);
+
+    [Fact]
+    public async Task Finalize_TerminalHttpFailure_DeadLettersImmediatelyOnFirstAttempt()
+    {
+        Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
+        SubscriptionDeliveryWorkItem? claimed = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
+        Assert.NotNull(claimed);
+
+        DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(
+            TerminalHttpCompletion(claimed), CancellationToken.None);
+
+        Assert.Equal(DeliveryFinalizationStatus.Applied, result.Status);
+        Assert.Equal(SubscriptionDeliveryDisposition.DeadLettered, result.Disposition);
+        SubscriptionDeliveryState delivery = await fixture.GetSubscriptionDeliveryAsync(deliveryId);
+        Assert.Equal("dead_lettered", delivery.Status);
+        Assert.Equal(1, delivery.LifetimeAttemptCount);
+    }
+
     private async Task InstallRaceBarrierAsync(string blockedStatus, long advisoryLockKey)
     {
         await ExecuteSqlAsync(

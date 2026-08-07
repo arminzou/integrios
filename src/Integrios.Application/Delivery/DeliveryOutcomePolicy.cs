@@ -16,17 +16,19 @@ public sealed class DeliveryOutcomePolicy(RetryPolicy retryPolicy)
     public DeliveryOutcomeDecision Decide(
         DeliveryOutcomeKind outcome,
         int retryCycleAttemptCount,
-        DateTimeOffset databaseNow)
+        DateTimeOffset databaseNow,
+        bool isTerminal = false,
+        TimeSpan? retryAfter = null)
     {
         if (outcome == DeliveryOutcomeKind.Succeeded)
             return new(SubscriptionDeliveryDisposition.Succeeded);
 
-        if (retryCycleAttemptCount >= retryPolicy.MaxAttempts)
+        if (isTerminal || retryCycleAttemptCount >= retryPolicy.MaxAttempts)
             return new(SubscriptionDeliveryDisposition.DeadLettered);
 
         var deliverAfter = outcome == DeliveryOutcomeKind.Indeterminate
             ? databaseNow
-            : databaseNow + retryPolicy.CalculateBackoff(retryCycleAttemptCount);
+            : databaseNow + (retryAfter ?? retryPolicy.CalculateBackoff(retryCycleAttemptCount));
 
         return new(SubscriptionDeliveryDisposition.RetryScheduled, deliverAfter);
     }

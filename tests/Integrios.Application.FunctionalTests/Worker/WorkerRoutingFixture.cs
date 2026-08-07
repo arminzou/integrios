@@ -349,7 +349,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task UpdateLedgerExecutionConfigurationAsync(
         string destinationUrl,
         string? destinationAuthJson,
-        string integrationKey)
+        string integrationKey,
+        string? httpOutcomeJson = null)
     {
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
@@ -379,7 +380,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         cmd.Parameters.AddWithValue("NewIntegrationId", Guid.NewGuid());
         cmd.Parameters.AddWithValue(
             "Manifest",
-            TestIntegrationManifest.Create(integrationKey, integrationKey, "both"));
+            TestIntegrationManifest.Create(integrationKey, integrationKey, "both", httpOutcomeJson: httpOutcomeJson));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -616,8 +617,10 @@ public sealed class FakeDeliveryClient : IDeliveryClient
     public List<DeliveryCall> Calls { get; } = [];
     public bool ShouldSucceed { get; set; } = true;
 
-    public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
+    public Task<DeliveryResult> DeliverAsync(
+        OutboundHttpMessage request, HttpOutcomeContract? outcomeContract, CancellationToken cancellationToken = default)
     {
+        _ = outcomeContract;
         _ = cancellationToken;
         Calls.Add(new DeliveryCall(request.Method, request.Uri, request.JsonBody ?? string.Empty, request.Headers));
         var result = ShouldSucceed

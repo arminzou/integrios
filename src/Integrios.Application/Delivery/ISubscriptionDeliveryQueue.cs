@@ -52,7 +52,9 @@ public sealed record DeliveryAttemptCompletion(
     string? RequestPayloadJson,
     int? ResponseStatusCode,
     string? ResponseBody,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    bool IsTerminalFailure = false,
+    TimeSpan? RetryAfter = null);
 
 public enum DeliveryFinalizationStatus
 {

@@ -15,7 +15,8 @@ public static class TestIntegrationManifest
         string? description = "test integration",
         bool? allowUnauthenticated = null,
         bool? allowUnverified = null,
-        bool verifiedWebhookSourceAdapter = false)
+        bool verifiedWebhookSourceAdapter = false,
+        string? httpOutcomeJson = null)
     {
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
@@ -63,6 +64,9 @@ public static class TestIntegrationManifest
                         """),
                 }
                 : null,
+            HttpOutcome = httpOutcomeJson is null
+                ? null
+                : JsonSerializer.Deserialize<JsonElement>(httpOutcomeJson),
             Presentation = new IntegrationPresentationManifest
             {
                 Name = name,

@@ -50,4 +50,23 @@ public sealed class DeliveryOutcomePolicyTests
         Assert.Equal(DatabaseNow, decision.DeliverAfter);
     }
 
+    [Fact]
+    public void Decide_TerminalFailure_DeadLettersImmediatelyRegardlessOfRemainingBudget()
+    {
+        DeliveryOutcomeDecision decision = policy.Decide(
+            DeliveryOutcomeKind.Failed, retryCycleAttemptCount: 1, DatabaseNow, isTerminal: true);
+
+        Assert.Equal(SubscriptionDeliveryDisposition.DeadLettered, decision.Disposition);
+        Assert.Null(decision.DeliverAfter);
+    }
+
+    [Fact]
+    public void Decide_TransientFailureWithRetryAfter_HonorsItOverExponentialBackoff()
+    {
+        DeliveryOutcomeDecision decision = policy.Decide(
+            DeliveryOutcomeKind.Failed, retryCycleAttemptCount: 1, DatabaseNow, retryAfter: TimeSpan.FromSeconds(7));
+
+        Assert.Equal(SubscriptionDeliveryDisposition.RetryScheduled, decision.Disposition);
+        Assert.Equal(DatabaseNow.AddSeconds(7), decision.DeliverAfter);
+    }
 }

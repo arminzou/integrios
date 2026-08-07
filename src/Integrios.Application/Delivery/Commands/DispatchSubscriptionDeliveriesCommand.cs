@@ -126,7 +126,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         try
         {
             outboundRequest = await BuildOutboundRequestAsync(row, snapshot, payload, cancellationToken);
-            result = await deliveryClient.DeliverAsync(outboundRequest, cancellationToken);
+            result = await deliveryClient.DeliverAsync(outboundRequest, snapshot.HttpOutcome, cancellationToken);
         }
         catch (DeliveryPreparationException ex)
         {
@@ -163,7 +163,9 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             requestPayload,
             result.StatusCode == 0 ? null : result.StatusCode,
             null,
-            result.Error);
+            result.Error,
+            IsTerminalFailure: DeliveryFailureClassifier.IsTerminal(result),
+            RetryAfter: result.RetryAfter);
 
         DeliveryFinalizationResult finalization = await deliveryQueue.FinalizeAsync(completion, cancellationToken);
         if (finalization.Status == DeliveryFinalizationStatus.OwnershipLost)

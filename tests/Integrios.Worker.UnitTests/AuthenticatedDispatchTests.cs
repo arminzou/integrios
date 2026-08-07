@@ -472,8 +472,10 @@ public sealed class AuthenticatedDispatchTests
         public Dictionary<string, string> Headers { get; } = [];
         public int CallCount { get; private set; }
 
-        public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
+        public Task<DeliveryResult> DeliverAsync(
+            OutboundHttpMessage request, HttpOutcomeContract? outcomeContract, CancellationToken cancellationToken = default)
         {
+            _ = outcomeContract;
             CallCount++;
             foreach ((string name, string value) in request.Headers)
                 Headers[name] = value;

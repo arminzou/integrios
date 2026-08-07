@@ -108,7 +108,8 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                     s.http_delivery::text AS HttpDeliveryJson,
                     COALESCE(c.config->>'base_uri', '') AS DestinationUrl,
                     i.key AS IntegrationKey,
-                    c.destination_authentication::text AS DestinationAuthJson
+                    c.destination_authentication::text AS DestinationAuthJson,
+                    (i.manifest -> 'http_outcome')::text AS HttpOutcomeJson
                 FROM subscriptions s
                 JOIN connections c ON c.id = s.destination_connection_id
                 JOIN integrations i ON i.id = c.integration_id
@@ -127,14 +128,17 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                 row.MatchRulesJson,
                 row.TransformConfigJson,
                 row.IntegrationKey,
-                BuildHttpExecutionSnapshotJson(row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson)))
+                BuildHttpExecutionSnapshotJson(
+                    row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson, row.HttpOutcomeJson)))
             .ToList();
     }
 
-    // Fanout correlates the base_uri, request shape, and destination authentication a delivery
-    // will be dispatched and retried with, so a later Subscription or Connection edit cannot
-    // change an in-flight delivery's request out from under it.
-    private static string BuildHttpExecutionSnapshotJson(string destinationUrl, string httpDeliveryJson, string? destinationAuthJson)
+    // Fanout correlates the base_uri, request shape, destination authentication, and effective HTTP
+    // outcome contract a delivery will be dispatched and retried with, so a later Subscription,
+    // Connection, or Integration edit cannot change an in-flight delivery's request or success
+    // criteria out from under it.
+    private static string BuildHttpExecutionSnapshotJson(
+        string destinationUrl, string httpDeliveryJson, string? destinationAuthJson, string? httpOutcomeJson)
     {
         var snapshot = new HttpExecutionSnapshot
         {
@@ -144,7 +148,10 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                 ?? throw new InvalidOperationException("Stored HTTP delivery configuration is invalid."),
             DestinationAuthentication = string.IsNullOrWhiteSpace(destinationAuthJson)
                 ? null
-                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(destinationAuthJson, ConnectionSchemeSelection.StoredJson)
+                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(destinationAuthJson, ConnectionSchemeSelection.StoredJson),
+            HttpOutcome = string.IsNullOrWhiteSpace(httpOutcomeJson) || httpOutcomeJson == "null"
+                ? null
+                : JsonSerializer.Deserialize<HttpOutcomeContract>(httpOutcomeJson, ConnectionSchemeSelection.StoredJson)
         };
         return JsonSerializer.Serialize(snapshot, ConnectionSchemeSelection.StoredJson);
     }
@@ -215,5 +222,6 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
         public string DestinationUrl { get; init; } = string.Empty;
         public string IntegrationKey { get; init; } = string.Empty;
         public string? DestinationAuthJson { get; init; }
+        public string? HttpOutcomeJson { get; init; }
     }
 }

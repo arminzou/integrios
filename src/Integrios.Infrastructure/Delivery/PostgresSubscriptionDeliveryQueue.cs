@@ -268,7 +268,9 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
         DeliveryOutcomeDecision decision = outcomePolicy.Decide(
             completion.Succeeded ? DeliveryOutcomeKind.Succeeded : DeliveryOutcomeKind.Failed,
             owner.RetryCycleAttemptCount,
-            owner.DatabaseNow);
+            owner.DatabaseNow,
+            isTerminal: completion.IsTerminalFailure,
+            retryAfter: completion.RetryAfter);
 
         int finalized = await connection.ExecuteAsync(
             new CommandDefinition(

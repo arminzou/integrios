@@ -690,8 +690,10 @@ public sealed class WorkerTransportAbstractionsTests
     {
         public List<string> DeliveredUrls { get; } = [];
 
-        public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
+        public Task<DeliveryResult> DeliverAsync(
+            OutboundHttpMessage request, HttpOutcomeContract? outcomeContract, CancellationToken cancellationToken = default)
         {
+            _ = outcomeContract;
             _ = cancellationToken;
             operations?.Add("deliver");
             DeliveredUrls.Add(request.Uri);
@@ -704,9 +706,11 @@ public sealed class WorkerTransportAbstractionsTests
     {
         private int _index;
 
-        public Task<DeliveryResult> DeliverAsync(OutboundHttpMessage request, CancellationToken cancellationToken = default)
+        public Task<DeliveryResult> DeliverAsync(
+            OutboundHttpMessage request, HttpOutcomeContract? outcomeContract, CancellationToken cancellationToken = default)
         {
             _ = request;
+            _ = outcomeContract;
             _ = cancellationToken;
             return Task.FromResult(results[_index++]);
         }
@@ -718,9 +722,11 @@ public sealed class WorkerTransportAbstractionsTests
 
         public async Task<DeliveryResult> DeliverAsync(
             OutboundHttpMessage request,
+            HttpOutcomeContract? outcomeContract,
             CancellationToken cancellationToken = default)
         {
             _ = request;
+            _ = outcomeContract;
             CallCount++;
             if (CallCount == 1)
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);

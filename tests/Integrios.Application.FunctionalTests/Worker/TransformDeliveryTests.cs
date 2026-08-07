@@ -154,4 +154,30 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         Assert.Equal(string.Empty, executionSnapshot.BaseUri);
         Assert.Equal("http", snapshot.IntegrationKey);
     }
+
+    [Fact]
+    public async Task Worker_IntegrationWithHttpOutcomeContract_FansOutWithSnapshotCarryingIt()
+    {
+        await fixture.UpdateLedgerExecutionConfigurationAsync(
+            WorkerRoutingFixture.LedgerSinkUrl,
+            null,
+            "outcome_contract_test",
+            httpOutcomeJson: """
+                {"evaluator":"json_boolean","field":"ok","expected":true,"diagnostic_field":"error","max_body_bytes":2048}
+                """);
+
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        Assert.Equal(1, await fixture.RunFanoutBatchAsync());
+
+        var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
+        HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
+            snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+
+        Assert.NotNull(executionSnapshot.HttpOutcome);
+        Assert.Equal("json_boolean", executionSnapshot.HttpOutcome.Evaluator);
+        Assert.Equal("ok", executionSnapshot.HttpOutcome.Field);
+        Assert.True(executionSnapshot.HttpOutcome.Expected);
+        Assert.Equal("error", executionSnapshot.HttpOutcome.DiagnosticField);
+        Assert.Equal(2048, executionSnapshot.HttpOutcome.MaxBodyBytes);
+    }
 }

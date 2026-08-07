@@ -19,4 +19,7 @@ public sealed record HttpExecutionSnapshot
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ConnectionSchemeSelection? DestinationAuthentication { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public HttpOutcomeContract? HttpOutcome { get; init; }
 }

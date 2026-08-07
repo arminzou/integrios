@@ -154,7 +154,7 @@ public sealed class DeliveryExecutionOptionsTests
             destination,
             new Dictionary<string, string> { ["X-Api-Key"] = "must-not-follow" },
             "{}");
-        DeliveryResult result = await deliveryClient.DeliverAsync(request, CancellationToken.None);
+        DeliveryResult result = await deliveryClient.DeliverAsync(request, null, CancellationToken.None);
 
         await stopServer.CancelAsync();
         RedirectObservation observation = await serverTask;
