@@ -1,0 +1,51 @@
+{
+  "manifest_schema_version": 1,
+  "key": "github",
+  "contract_version": 1,
+  "direction": "source",
+  "source_configuration_schema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": true
+  },
+  "source_verification": {
+    "allow_unverified": false,
+    "schemes": [
+      {
+        "scheme": "hmac_sha256",
+        "required_config": [],
+        "required_secret_refs": ["secret"]
+      }
+    ]
+  },
+  "destination_authentication": {
+    "allow_unauthenticated": true,
+    "schemes": []
+  },
+  "source_adapter": {
+    "key": "verified_webhook",
+    "contract_version": 1,
+    "config": {
+      "signature_header": "X-Hub-Signature-256",
+      "signature_encoding": "hex",
+      "signature_prefix": "sha256=",
+      "delivery_id_header": "X-GitHub-Delivery",
+      "event_type_header": "X-GitHub-Event",
+      "event_type_action_field": "action"
+    }
+  },
+  "presentation": {
+    "name": "GitHub",
+    "description": "Verified GitHub repository or organization webhooks, delivered through the generic verified-webhook adapter. Configure the webhook manually in GitHub with this Connection's callback URL and shared secret; Integrios never provisions or manages the GitHub side.",
+    "event_types": [
+      "github.push",
+      "github.ping",
+      "github.issues.opened",
+      "github.issues.closed",
+      "github.pull_request.opened",
+      "github.pull_request.synchronize",
+      "github.pull_request.closed"
+    ],
+    "authoring_presets": []
+  }
+}

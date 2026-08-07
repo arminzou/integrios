@@ -129,4 +129,30 @@ public class TransformEvaluatorTests
         Assert.NotNull(evaluator.ValidateExpression(new TransformSpec("xslt", "1", "amount")));    // unsupported engine
         Assert.NotNull(evaluator.ValidateExpression(new TransformSpec("jsonata", "2", "amount"))); // unsupported version
     }
+
+    // Proves the exact expression published in docs/github-to-slack-walkthrough.md against a
+    // realistic GitHub push payload shape, so the walkthrough's transform is mechanically checked
+    // rather than merely eyeballed.
+    [Fact]
+    public void Evaluate_GitHubToSlackWalkthroughTransform_ProducesTheDocumentedSlackMessage()
+    {
+        const string expression =
+            "{'channel': '#deploys', 'text': pusher.name & ' pushed to ' & repository.full_name & ': ' & head_commit.message}";
+        const string githubPushPayload = """
+            {
+              "pusher": { "name": "octocat" },
+              "repository": { "full_name": "acme/widgets" },
+              "head_commit": { "message": "fix: correct off-by-one in retry backoff" }
+            }
+            """;
+
+        var output = evaluator.Evaluate(Jsonata(expression), githubPushPayload, Context);
+
+        using var doc = JsonDocument.Parse(output);
+        var root = doc.RootElement;
+        Assert.Equal("#deploys", root.GetProperty("channel").GetString());
+        Assert.Equal(
+            "octocat pushed to acme/widgets: fix: correct off-by-one in retry backoff",
+            root.GetProperty("text").GetString());
+    }
 }

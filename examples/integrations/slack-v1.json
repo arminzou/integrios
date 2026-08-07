@@ -1,0 +1,41 @@
+{
+  "manifest_schema_version": 1,
+  "key": "slack",
+  "contract_version": 1,
+  "direction": "destination",
+  "destination_configuration_schema": {
+    "type": "object",
+    "properties": {
+      "base_uri": { "type": "string", "format": "uri" }
+    },
+    "required": ["base_uri"],
+    "additionalProperties": false
+  },
+  "source_verification": {
+    "allow_unverified": true,
+    "schemes": []
+  },
+  "destination_authentication": {
+    "allow_unauthenticated": false,
+    "schemes": [
+      {
+        "scheme": "bearer_token",
+        "required_config": [],
+        "required_secret_refs": ["token"]
+      }
+    ]
+  },
+  "http_outcome": {
+    "evaluator": "json_boolean",
+    "field": "ok",
+    "expected": true,
+    "diagnostic_field": "error",
+    "max_body_bytes": 65536
+  },
+  "presentation": {
+    "name": "Slack",
+    "description": "Slack chat.postMessage delivery through generic HTTP with bearer-token authentication. Slack can return HTTP 2xx for an operation it rejects, so this manifest declares a json_boolean outcome contract requiring the response's top-level ok field to be true; a rejected outcome dead-letters like any other terminal delivery failure. Provide a bot token with chat:write scope as the bearer_token secret.",
+    "event_types": [],
+    "authoring_presets": []
+  }
+}

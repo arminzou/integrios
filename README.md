@@ -57,6 +57,8 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 ## Documentation
 
 - [Setup & quickstart](docs/setup.md): run locally and deliver your first event
+- [GitHub-to-Slack walkthrough](docs/github-to-slack-walkthrough.md): a verified provider webhook
+  source through to a transformed destination delivery, end to end
 - [Architecture](docs/architecture.md): design, processing flow, and platform concepts
 - [Observability](docs/observability.md): metrics, traces, logs, and OTLP export
 - [CI/CD](docs/ci-cd.md): the pipeline and published images

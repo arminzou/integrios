@@ -17,7 +17,7 @@ platform, API gateway, or multi-protocol runtime.
 flowchart LR
     Operator[Operator] -->|configures| Admin[Admin<br/>control plane]
     Producer[External Event producer] -->|generic Event + ApiKey| Ingress[Ingress<br/>data plane]
-    Adapter[Curated built-in<br/>HTTP source adapter] -.->|normalized Event| Ingress
+    Adapter[Verified-webhook<br/>source adapter] -->|verified, normalized Event| Ingress
     Admin --> DB[(PostgreSQL)]
     Ingress -->|Event + outbox<br/>one transaction| DB
     DB -->|fanout work| Worker[Worker]
@@ -25,8 +25,11 @@ flowchart LR
     Worker -->|attempt state,<br/>retry and DLQ| DB
 ```
 
-The built-in source-adapter path is part of the finalized model but is not implemented in the
-current release. External Event producers and generic intake are the universal source path.
+External Event producers and generic ApiKey intake remain the universal source path. A source
+Connection may additionally select the generic verified-webhook source adapter through its
+Integration's manifest, which verifies and normalizes a provider's HTTP request before it crosses
+the same durable Event-acceptance boundary; see [the GitHub-to-Slack
+walkthrough](github-to-slack-walkthrough.md) for a concrete, currently-shipped example.
 
 ## Control plane and data plane
 
@@ -79,48 +82,59 @@ flow, or small service—that:
 - authenticates to Integrios with an ApiKey
 - identifies a configured source Connection and an allowed Topic
 
-Integrios may later ship a small curated set of built-in provider HTTP source adapters when a
-popular, stable contract would otherwise make every adopter repeat meaningful security or
-operational work. A GitHub adapter, for example, could verify `X-Hub-Signature-256`, use
-`X-GitHub-Delivery` for idempotency, map `X-GitHub-Event` to Event type, handle pings, and retain the
-JSON payload. Every built-in adapter must cross the same durable Event-acceptance seam.
+A generic, platform-supplied **verified-webhook source adapter** lets an Operator-authored
+Integration manifest opt into provider HTTP intake without adding or rebuilding Integrios code. The
+manifest supplies signature header, encoding, delivery-identity header, and Event-type-derivation
+header as data; the adapter verifies HMAC-SHA256 over the exact raw request body before parsing,
+derives a provider-qualified Event type (for example `github.issues.opened`) from that data, and
+retains the JSON payload unchanged. The `github-v1` example under
+[`examples/integrations/`](../examples/integrations/) is a real, machine-validated instance of this,
+not a hypothetical. A curated set of provider-specific *compiled* built-in adapters may be added
+later for contracts that don't fit the generic adapter's closed shape; every adapter, generic or
+compiled, crosses the same durable Event-acceptance seam.
 
-Operator-authored Integrations cannot load runtime code. Polling remains external Event-producer
-behavior. Integrios does not commit to a broad provider catalog or an in-process plugin system.
+Operator-authored Integrations cannot load runtime code — the verified-webhook adapter's behavior is
+entirely platform-owned, and a manifest only supplies bounded configuration data for it. Polling
+remains external Event-producer behavior. Integrios does not commit to a broad provider catalog or
+an in-process plugin system.
 
 ## Destination model
 
 HTTP(S) is the only destination protocol. One generic HTTP module executes every outbound request;
 there are no provider-specific destination adapters or destination-action domain objects.
 
-In the finalized model:
-
 - a destination Connection owns the absolute base URI, authentication, Tenant-specific non-secret
   configuration, and secret references
 - a Subscription owns a versioned method (`POST`, `PUT`, `PATCH`, or `DELETE`), a literal relative
-  path or path expression, restricted static headers, and a transformed JSON body or explicit no-body
-- a path can never replace the Connection's scheme, host, or port
-- OAuth 2.0 client credentials is a reusable auth scheme; interactive OAuth flows are out of scope
-- fanout snapshots HTTP configuration, relevant non-secret Connection configuration, and secret
-  references; the Worker resolves current secret values for each attempt
-- any `2xx` response is success; other outcomes follow the fixed retry/DLQ policy
-- successful response bodies do not become persisted workflow state or new Events
+  path, restricted static headers, and a transformed JSON body or explicit no-body
+- the relative path always appends to the Connection's base path with one normalized boundary
+  slash; it can never replace the Connection's scheme, host, port, or base path
+- fanout snapshots the HTTP request shape, relevant non-secret Connection configuration, secret
+  references, and the Integration's effective HTTP outcome contract together, so a later edit
+  cannot change an in-flight delivery's request or success criteria; the Worker resolves current
+  secret values for each attempt
+- an Integration may declare an optional HTTP outcome contract: the default `status_code` evaluator
+  treats any `2xx` response as success, while a `json_boolean` evaluator additionally asserts that a
+  configured top-level response field equals an expected boolean, so a provider that returns `2xx`
+  for an operation it actually rejected (Slack's `chat.postMessage` is the shipped example) is
+  correctly classified as a failure
+- failure disposition is fixed platform policy: transport errors, timeouts, and HTTP
+  408/429/5xx retry with backoff to exhaustion; every other outcome, including a logically-rejected
+  `2xx`, dead-letters immediately for Operator replay; a bounded `Retry-After` on 429/503 is honored
+  over the computed backoff when present
+- successful response bodies do not become persisted workflow state or new Events; a response body
+  is only ever read (bounded) when the outcome contract requires it
 
 Dynamic headers, arbitrary methods, `GET`/`HEAD`/`CONNECT`/`TRACE`, form or multipart data, binary or
-streaming bodies, response-driven workflows, and non-HTTP protocols are out of scope. Updating
-several external entities means creating several independent Subscriptions so each update retains
-its own retry, DLQ, and replay lifecycle.
-
-The current release implements a narrower slice: the built-in `webhook` Integration, fixed JSON
-`POST` delivery to an absolute `Connection.config.url`, and open, API-key-header, or bearer-token
-authentication. Operator-authored Integrations, richer Subscription-owned HTTP configuration,
-OAuth client credentials, and curated built-in source adapters are target capabilities, not shipped
-features.
+streaming bodies, response-driven workflows, OAuth 2.0 client credentials, and non-HTTP protocols
+remain out of scope. Updating several external entities means creating several independent
+Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
 
 ## Core processing flow
 
 1. An external Event producer sends the generic Event contract to Ingress and authenticates with an
-   ApiKey. A future curated built-in adapter may instead verify and normalize a provider HTTP request.
+   ApiKey, or the generic verified-webhook source adapter verifies and normalizes a provider HTTP
+   request before Ingress ever sees an Event contract.
 2. Ingress resolves the Tenant and validates or derives the active source Connection and its Topic
    association.
 3. One PostgreSQL transaction writes the canonical Event and its outbox row before Ingress

@@ -22,7 +22,7 @@ provider. Secret files placed there are ignored by Git; the quickstart uses unau
 connections, so no secret values need to be added to its tracked documentation files.
 
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
-after migrations and before the services start. It creates the built-in `webhook` integration and
+after migrations and before the services start. It creates the built-in `http` integration and
 the admin credential used below (bootstrap output, not migration-seeded data), and is
 idempotent, so re-running `make up` against an existing database is safe. The dev credential
 `global_admin_key:admin_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET` in `.env`.
@@ -44,7 +44,7 @@ watches the Worker deliver it to the bundled MockSink.
 ADMIN=http://localhost:5150
 INGRESS=http://localhost:5231
 AUTH="Authorization: AdminKey global_admin_key:admin_bootstrap_secret"
-WEBHOOK=00000000-0000-0000-0000-000000000001   # deployment-wide built-in HTTP Integration
+HTTP_INTEGRATION=00000000-0000-0000-0000-000000000001   # deployment-wide built-in http Integration
 
 # 1. Create a tenant
 TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: application/json' \
@@ -54,23 +54,25 @@ TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: appli
 TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/api-keys -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name":"acme-ingress"}' | jq -r .token)
 
-# 3. Create Tenant-owned source and destination Connections from the same reusable Integration
+# 3. Create Tenant-owned source and destination Connections from the same reusable Integration.
+# The destination selects open (unauthenticated) delivery by omitting destination_authentication,
+# which the built-in http Integration's manifest explicitly allows.
 SRC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"integrationId\":\"$WEBHOOK\",\"name\":\"acme-source\",\"config\":{\"url\":\"http://mocksink:8080/sink/acme-source\"},\"environment\":\"production\"}" | jq -r .id)
+  -d "{\"integration_id\":\"$HTTP_INTEGRATION\",\"name\":\"acme-source\",\"config\":{},\"environment\":\"production\"}" | jq -r .id)
 DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"integrationId\":\"$WEBHOOK\",\"name\":\"acme-erp\",\"config\":{\"url\":\"http://mocksink:8080/sink/acme-erp\"},\"environment\":\"production\"}" | jq -r .id)
+  -d "{\"integration_id\":\"$HTTP_INTEGRATION\",\"name\":\"acme-erp\",\"config\":{\"base_uri\":\"http://mocksink:8080/sink/acme-erp\"},\"environment\":\"production\"}" | jq -r .id)
 
 # 4. Create a topic fed by the source connection
 TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"payments\",\"sourceConnectionIds\":[\"$SRC\"]}" | jq -r .id)
+  -d "{\"name\":\"payments\",\"source_connection_ids\":[\"$SRC\"]}" | jq -r .id)
 
 # 5. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"acme-erp-sub\",\"matchRules\":{\"event_type\":\"payment.created\"},\"destinationConnectionId\":\"$DST\"}" > /dev/null
+  -d "{\"name\":\"acme-erp-sub\",\"match_rules\":{\"event_type\":\"payment.created\"},\"destination_connection_id\":\"$DST\",\"order_index\":0}" > /dev/null
 
 # 6. Send an event to the data plane
 EVENT=$(curl -s -X POST $INGRESS/events -H "Authorization: ApiKey $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"sourceConnectionId\":\"$SRC\",\"topicName\":\"payments\",\"eventType\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_001\",\"amount\":1200},\"idempotencyKey\":\"demo-001\"}" | jq -r .eventId)
+  -d "{\"source_connection_id\":\"$SRC\",\"topic_name\":\"payments\",\"event_type\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_001\",\"amount\":1200},\"idempotency_key\":\"demo-001\"}" | jq -r .event_id)
 
 # 7. Check it was accepted and fanned out to the subscription
 curl -s $INGRESS/events/$EVENT -H "Authorization: ApiKey $TOKEN" | jq
@@ -79,20 +81,18 @@ curl -s $INGRESS/events/$EVENT -H "Authorization: ApiKey $TOKEN" | jq
 docker compose logs mocksink | grep MockSink
 ```
 
-Connection updates replace the complete `config` object rather than merging fields. Connections
-whose Integration direction is `destination` or `both` must include an absolute HTTP(S)
-`config.url` on both create and update. When upgrading a deployment with a legacy
-destination-capable Connection that has no URL, include a valid URL the next time that Connection
-is updated. Source-only Integration configuration remains free-form.
-
-This quickstart reflects the current implementation: Integrations are built-in and read-only, and
-delivery is a JSON `POST` to `config.url`. The finalized product model keeps HTTP as the only
-destination protocol while adding Operator-authored reusable Integration definitions and
-Subscription-owned method, relative-path, restricted-header, and JSON-or-no-body configuration.
+Connection updates replace the complete `config` object rather than merging fields. A Connection's
+destination configuration schema is declared by its Integration's manifest; the built-in `http`
+Integration requires an absolute HTTP(S) `base_uri` with no query or fragment for any Connection an
+active Subscription references. This quickstart's source Connection carries no configuration
+because the `http` Integration's source side is empty by contract (see
+[architecture.md](architecture.md) for the full Integration/Connection model, including
+Operator-authored Integrations such as the ones in the [GitHub-to-Slack
+walkthrough](github-to-slack-walkthrough.md)).
 
 Topic update requests must include the Topic's current `name`. The name is its immutable,
 Tenant-scoped stream identifier; changing it requires creating a new Topic. Updates may change the
-description and, when supplied, replace `sourceConnectionIds`.
+description and, when supplied, replace `source_connection_ids`.
 
 The last command should show a line like:
 
@@ -116,8 +116,8 @@ curl -s -X PUT http://localhost:5054/control/acme-erp -H 'Content-Type: applicat
 
 FAIL_EVENT=$(curl -s -X POST $INGRESS/events \
   -H "Authorization: ApiKey $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"sourceConnectionId\":\"$SRC\",\"topicName\":\"payments\",\"eventType\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_failure\",\"amount\":1200},\"idempotencyKey\":\"demo-failure-$(date +%s)\"}" \
-  | jq -r .eventId)
+  -d "{\"source_connection_id\":\"$SRC\",\"topic_name\":\"payments\",\"event_type\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_failure\",\"amount\":1200},\"idempotency_key\":\"demo-failure-$(date +%s)\"}" \
+  | jq -r .event_id)
 ```
 
 Wait until all three attempts have failed. The third failed attempt exhausts the retry budget and
@@ -125,12 +125,12 @@ dead-letters this SubscriptionDelivery:
 
 ```bash
 until curl -fsS $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
-  | jq -e '[.deliveryAttempts[] | select(.status == "failed")] | length >= 3' > /dev/null; do
+  | jq -e '[.delivery_attempts[] | select(.status == "failed")] | length >= 3' > /dev/null; do
   sleep 5
 done
 
 curl -s $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
-  | jq '.deliveryAttempts'
+  | jq '.delivery_attempts'
 ```
 
 Reset the sink, discard the failed-request receipts, and replay the same Event. Replay returns
@@ -142,7 +142,7 @@ curl -s -X DELETE http://localhost:5054/receipts/acme-erp > /dev/null
 curl -i -s -X POST $INGRESS/events/$FAIL_EVENT/replay -H "Authorization: ApiKey $TOKEN"
 
 until curl -fsS $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
-  | jq -e 'any(.deliveryAttempts[]; .attemptNumber >= 4 and .status == "succeeded")' > /dev/null; do
+  | jq -e 'any(.delivery_attempts[]; .attempt_number >= 4 and .status == "succeeded")' > /dev/null; do
   sleep 2
 done
 
