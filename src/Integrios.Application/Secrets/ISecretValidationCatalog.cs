@@ -1,4 +1,4 @@
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Tenants;
 
 namespace Integrios.Application.Secrets;

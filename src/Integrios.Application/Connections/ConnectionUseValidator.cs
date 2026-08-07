@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Domain.Common;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.Connections;

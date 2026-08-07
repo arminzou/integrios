@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Subscriptions;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Subscriptions;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;

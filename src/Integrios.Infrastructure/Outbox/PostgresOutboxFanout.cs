@@ -4,8 +4,8 @@ using Integrios.Application.Delivery;
 using Integrios.Application.Outbox;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Events;
-using Integrios.Domain.Integrations;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Connections;
+using Integrios.Domain.Subscriptions;
 using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Outbox;

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Domain.Common;
 
-namespace Integrios.Domain.Integrations;
+namespace Integrios.Domain.Connections;
 
 public sealed record Connection
 {

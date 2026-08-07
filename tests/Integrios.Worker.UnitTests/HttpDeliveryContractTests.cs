@@ -3,8 +3,8 @@ using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Transforms;
-using Integrios.Domain.Integrations;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Connections;
+using Integrios.Domain.Subscriptions;
 using Integrios.Infrastructure.Auth;
 
 namespace Integrios.Worker.UnitTests;
@@ -202,13 +202,13 @@ public sealed class HttpDeliveryContractTests
         string? path = null,
         IReadOnlyDictionary<string, string>? headers = null,
         string body = "json") => new()
-    {
-        Version = HttpDeliveryConfiguration.CurrentVersion,
-        Method = method,
-        Path = path,
-        Headers = headers ?? new Dictionary<string, string>(),
-        Body = body
-    };
+        {
+            Version = HttpDeliveryConfiguration.CurrentVersion,
+            Method = method,
+            Path = path,
+            Headers = headers ?? new Dictionary<string, string>(),
+            Body = body
+        };
 
     private static ConnectionSchemeSelection Selection(string scheme, string config, string secretRefs) => new()
     {

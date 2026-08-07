@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Connections;
 using Integrios.Domain.Common;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Integrations;
 using Integrios.Infrastructure.Auth;
 
@@ -189,18 +190,18 @@ public sealed class ConnectionUseValidatorTests
         ConnectionSchemeSelection? source = null,
         ConnectionSchemeSelection? destination = null,
         OperationalStatus status = OperationalStatus.Active) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = Guid.NewGuid(),
-        IntegrationId = Guid.NewGuid(),
-        Name = "connection",
-        Config = config,
-        SourceVerification = source,
-        DestinationAuthentication = destination,
-        Status = status,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow,
-    };
+        {
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            IntegrationId = Guid.NewGuid(),
+            Name = "connection",
+            Config = config,
+            SourceVerification = source,
+            DestinationAuthentication = destination,
+            Status = status,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
 
     private static ConnectionSchemeSelection Selection(string scheme, string field, string reference) => new()
     {
@@ -213,11 +214,11 @@ public sealed class ConnectionUseValidatorTests
         string scheme,
         IReadOnlyList<string>? config = null,
         IReadOnlyList<string>? secrets = null) => new()
-    {
-        Scheme = scheme,
-        RequiredConfig = config ?? [],
-        RequiredSecretRefs = secrets ?? [],
-    };
+        {
+            Scheme = scheme,
+            RequiredConfig = config ?? [],
+            RequiredSecretRefs = secrets ?? [],
+        };
 
     private static JsonElement Json(string value) => JsonSerializer.Deserialize<JsonElement>(value);
 }

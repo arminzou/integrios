@@ -4,8 +4,8 @@ using Integrios.Application.Subscriptions;
 using Integrios.Infrastructure.Data;
 using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
-using Integrios.Domain.Integrations;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Connections;
+using Integrios.Domain.Subscriptions;
 
 namespace Integrios.Infrastructure.Subscriptions;
 

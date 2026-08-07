@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Subscriptions;
 
 namespace Integrios.Application.Subscriptions;
 

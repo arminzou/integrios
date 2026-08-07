@@ -2,6 +2,7 @@ using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Integrations;
 
 namespace Integrios.Application.Connections;

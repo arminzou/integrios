@@ -1,4 +1,4 @@
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connections;
 using MediatR;
 
 namespace Integrios.Application.Connections;

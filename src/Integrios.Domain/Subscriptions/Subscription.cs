@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Domain.Common;
 
-namespace Integrios.Domain.Topics;
+namespace Integrios.Domain.Subscriptions;
 
 public sealed record Subscription
 {

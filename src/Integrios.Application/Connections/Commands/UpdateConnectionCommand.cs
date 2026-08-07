@@ -2,8 +2,9 @@ using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Integrations;
 using Integrios.Application.Subscriptions;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Integrations;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Subscriptions;
 using MediatR;
 
 namespace Integrios.Application.Connections;

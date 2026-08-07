@@ -1,8 +1,8 @@
 using System.Text;
 using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
-using Integrios.Domain.Integrations;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Connections;
+using Integrios.Domain.Subscriptions;
 
 namespace Integrios.Application.Subscriptions;
 

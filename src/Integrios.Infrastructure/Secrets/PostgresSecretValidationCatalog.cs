@@ -3,7 +3,7 @@ using Dapper;
 using Integrios.Application.Secrets;
 using Integrios.Infrastructure.Data;
 using Integrios.Domain.Common;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.Secrets;

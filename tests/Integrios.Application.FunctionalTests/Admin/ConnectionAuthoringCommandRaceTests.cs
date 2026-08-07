@@ -1,10 +1,10 @@
-using Integrios.Tests.Shared;
 using System.Text.Json;
 using Integrios.Application.Connections;
 using Integrios.Application.Subscriptions;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Subscriptions;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
+using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;

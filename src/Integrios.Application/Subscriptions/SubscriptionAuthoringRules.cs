@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Integrios.Application.Transforms;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Subscriptions;
 
 namespace Integrios.Application.Subscriptions;
 

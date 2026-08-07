@@ -1,7 +1,8 @@
-using MediatR;
 using Integrios.Application.Connections;
 using Integrios.Application.Integrations;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Integrations;
+using MediatR;
 
 namespace Integrios.Application.Topics;
 

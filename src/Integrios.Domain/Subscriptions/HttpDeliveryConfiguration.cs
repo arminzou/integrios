@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Integrios.Domain.Topics;
+namespace Integrios.Domain.Subscriptions;
 
 // Stored in subscriptions.http_delivery and nested inside HttpExecutionSnapshot in
 // subscription_deliveries.http_execution_snapshot. Neither column is reached by an HTTP host's

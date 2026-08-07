@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Delivery;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connections;
 
 namespace Integrios.Application.FunctionalTests.Worker;
 

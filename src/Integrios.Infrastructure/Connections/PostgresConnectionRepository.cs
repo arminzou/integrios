@@ -5,7 +5,7 @@ using Integrios.Infrastructure.Data;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connections;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Connections;

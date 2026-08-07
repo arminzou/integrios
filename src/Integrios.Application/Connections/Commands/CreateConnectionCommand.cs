@@ -2,6 +2,7 @@ using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Integrations;
 using Integrios.Domain.Common;
+using Integrios.Domain.Connections;
 using Integrios.Domain.Integrations;
 using MediatR;
 

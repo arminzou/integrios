@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connections;
 
 namespace Integrios.Domain.UnitTests;
 
