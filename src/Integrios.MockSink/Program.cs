@@ -18,7 +18,7 @@ long nextReceiptId = 0;
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
 // Delivery endpoint — Worker posts events here.
-app.MapPost("/sink/{name}", async (string name, HttpRequest request, ILogger<Program> logger) =>
+app.MapPost("/sink/{name}", async (string name, HttpRequest request, HttpResponse response, ILogger<Program> logger) =>
 {
     var body = await new StreamReader(request.Body).ReadToEndAsync();
     var mode = sinkModes.GetValueOrDefault(name, SinkMode.Default);
@@ -40,13 +40,22 @@ app.MapPost("/sink/{name}", async (string name, HttpRequest request, ILogger<Pro
     if (mode.Behavior == "slow")
         await Task.Delay(mode.DelayMs);
 
+    // Provider-capable overrides: a fixed response status/body/Retry-After lets a test simulate a
+    // Slack-shaped HTTP 200 the platform must still treat as a failure (json_boolean rejection), or
+    // an HTTP 429/503 carrying Retry-After, without depending on live GitHub or Slack.
+    if (mode.RetryAfterSeconds is { } retryAfterSeconds)
+        response.Headers["Retry-After"] = retryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    if (mode.Body is { } customBody)
+        return Results.Json(customBody, statusCode: mode.StatusCode ?? 200);
+
     if (mode.Behavior == "fail")
     {
-        logger.LogWarning("[MockSink] {Name} returning 500 (configured to fail)", name);
-        return Results.StatusCode(500);
+        logger.LogWarning("[MockSink] {Name} returning {StatusCode} (configured to fail)", name, mode.StatusCode ?? 500);
+        return Results.StatusCode(mode.StatusCode ?? 500);
     }
 
-    return Results.Ok(new { sink = name, received = true });
+    return Results.Json(new { sink = name, received = true }, statusCode: mode.StatusCode ?? 200);
 });
 
 // A controlled redirect proves that delivery treats the configured URL as the complete
@@ -108,12 +117,20 @@ app.MapDelete("/receipts/{name}", (string name) =>
     return Results.Ok(new { sink = name, count = 0 });
 });
 
-// Control endpoint — sets delivery behavior for a named sink.
+// Control endpoint — sets delivery behavior for a named sink. statusCode/body/retryAfterSeconds
+// are optional overrides layered on top of mode ("succeed"|"fail"|"slow").
 app.MapPut("/control/{name}", (string name, SinkModeRequest req) =>
 {
-    var mode = new SinkMode(req.Mode ?? "succeed", req.DelayMs ?? 2000);
+    var mode = new SinkMode(req.Mode ?? "succeed", req.DelayMs ?? 2000, req.StatusCode, req.Body, req.RetryAfterSeconds);
     sinkModes[name] = mode;
-    return Results.Ok(new { sink = name, mode = mode.Behavior, delayMs = mode.DelayMs });
+    return Results.Ok(new
+    {
+        sink = name,
+        mode = mode.Behavior,
+        delayMs = mode.DelayMs,
+        statusCode = mode.StatusCode,
+        retryAfterSeconds = mode.RetryAfterSeconds,
+    });
 });
 
 // Reset a sink back to default success behavior.
@@ -129,12 +146,12 @@ static bool HeaderMatches(SinkReceipt receipt, string headerName, string expecte
     receipt.Headers.TryGetValue(headerName, out string[]? actualValues)
     && actualValues.Contains(expectedValue, StringComparer.Ordinal);
 
-record SinkMode(string Behavior, int DelayMs)
+record SinkMode(string Behavior, int DelayMs, int? StatusCode = null, JsonElement? Body = null, int? RetryAfterSeconds = null)
 {
     public static SinkMode Default => new("succeed", 0);
 }
 
-record SinkModeRequest(string? Mode, int? DelayMs);
+record SinkModeRequest(string? Mode, int? DelayMs, int? StatusCode, JsonElement? Body, int? RetryAfterSeconds);
 
 record SinkReceipt(
     long Id,

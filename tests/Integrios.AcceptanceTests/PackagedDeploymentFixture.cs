@@ -153,6 +153,13 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         await File.WriteAllTextAsync(Path.Combine(tenantDirectory, reference), value);
     }
 
+    public async Task WriteSourceSecretAsync(string tenantSlug, string reference, string value)
+    {
+        string tenantDirectory = Path.Combine(sourceVerificationSecretsDirectory, tenantSlug);
+        Directory.CreateDirectory(tenantDirectory);
+        await File.WriteAllTextAsync(Path.Combine(tenantDirectory, reference), value);
+    }
+
     public async Task CreateBlockingSecretPipeAsync(string tenantSlug, string reference)
     {
         string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
