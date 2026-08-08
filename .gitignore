@@ -28,3 +28,6 @@ secrets/destination/*
 !secrets/destination/README.md
 *.lscache
 archive
+
+# Local git worktrees (see .worktrees/<slice>/)
+.worktrees/
