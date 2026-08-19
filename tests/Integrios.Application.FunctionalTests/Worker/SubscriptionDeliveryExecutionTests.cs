@@ -91,12 +91,10 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
                 """);
         }
 
-        SubscriptionDeliveryState delivery = await fixture.GetSubscriptionDeliveryAsync(deliveryId);
-        Assert.Equal("pending", delivery.Status);
-        Assert.Equal(0, delivery.LifetimeAttemptCount);
-        Assert.Equal(0, delivery.RetryCycleAttemptCount);
-        Assert.Null(delivery.ActiveAttemptId);
-        Assert.Empty(await fixture.GetDeliveryAttemptsAsync(deliveryId));
+        await ConsistencyContractAssertions.ClaimFailureRollsBackAsync(
+            deliveryId,
+            fixture.GetSubscriptionDeliveryAsync,
+            fixture.GetDeliveryAttemptsAsync);
     }
 
     [Fact]
@@ -132,14 +130,11 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
                 """);
         }
 
-        SubscriptionDeliveryState delivery = await fixture.GetSubscriptionDeliveryAsync(deliveryId);
-        Assert.Equal("in_flight", delivery.Status);
-        Assert.Equal(claimed.AttemptId, delivery.ActiveAttemptId);
-        Assert.NotNull(delivery.LeaseExpiresAt);
-
-        DeliveryAttemptState attempt = Assert.Single(await fixture.GetDeliveryAttemptsAsync(deliveryId));
-        Assert.Equal("in_progress", attempt.Status);
-        Assert.Null(attempt.CompletedAt);
+        await ConsistencyContractAssertions.FinalizationFailureRollsBackAsync(
+            deliveryId,
+            claimed.AttemptId,
+            fixture.GetSubscriptionDeliveryAsync,
+            fixture.GetDeliveryAttemptsAsync);
     }
 
     [Fact]

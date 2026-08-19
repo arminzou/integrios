@@ -8,11 +8,12 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Topics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Data.SqlClient;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Topics;
 
-internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITopicRepository
+internal sealed class TopicRepository(IntegriosDbContext context) : ITopicRepository
 {
     private const string ForeignKeyViolation = "23503";
     private const string SourceConnectionTenantConstraint = "fk_topic_sources_connection_tenant";
@@ -48,6 +49,7 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
             DbConnection db = context.Database.GetDbConnection();
             IReadOnlyList<TopicSource> sources = await UpsertSourcesAsync(
                 db,
+                DatabaseProviders.FromContext(context.Database) == DatabaseProvider.SqlServer,
                 tenantId,
                 id,
                 sourceConnectionIds.Distinct().ToArray(),
@@ -58,13 +60,19 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
             return topic with { Sources = sources };
         }
         catch (DbUpdateException ex) when (
-            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+            || ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
             throw new DuplicateResourceException($"A topic named '{name}' already exists for this tenant.", ex);
         }
         catch (PostgresException ex) when (
             ex.SqlState == ForeignKeyViolation
             && ex.ConstraintName == SourceConnectionTenantConstraint)
+        {
+            throw new TopicValidationException(
+                "Every source connection must exist in the same tenant as the topic.", ex);
+        }
+        catch (SqlException ex) when (ex.Number == 547 && ex.Message.Contains(SourceConnectionTenantConstraint, StringComparison.Ordinal))
         {
             throw new TopicValidationException(
                 "Every source connection must exist in the same tenant as the topic.", ex);
@@ -81,6 +89,7 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
 
         Dictionary<Guid, List<TopicSource>> sourceMap = await LoadSourcesForTopicsAsync(
             context.Database.GetDbConnection(),
+            DatabaseProviders.FromContext(context.Database) == DatabaseProvider.SqlServer,
             tenantId,
             [id],
             ct);
@@ -119,6 +128,7 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
         Guid[] topicIds = topics.Select(topic => topic.Id).ToArray();
         Dictionary<Guid, List<TopicSource>> sourceMap = await LoadSourcesForTopicsAsync(
             context.Database.GetDbConnection(),
+            DatabaseProviders.FromContext(context.Database) == DatabaseProvider.SqlServer,
             tenantId,
             topicIds,
             ct);
@@ -177,6 +187,7 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
             {
                 Dictionary<Guid, List<TopicSource>> sourceMap = await LoadSourcesForTopicsAsync(
                     db,
+                    DatabaseProviders.FromContext(context.Database) == DatabaseProvider.SqlServer,
                     tenantId,
                     [id],
                     ct);
@@ -185,8 +196,9 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
             else
             {
                 Guid[] desired = sourceConnectionIds.Distinct().ToArray();
-                await RemoveSourcesNotInAsync(db, tenantId, id, desired, dbTransaction, ct);
-                sources = await UpsertSourcesAsync(db, tenantId, id, desired, dbTransaction, ct);
+                bool sqlServer = DatabaseProviders.FromContext(context.Database) == DatabaseProvider.SqlServer;
+                await RemoveSourcesNotInAsync(db, sqlServer, tenantId, id, desired, dbTransaction, ct);
+                sources = await UpsertSourcesAsync(db, sqlServer, tenantId, id, desired, dbTransaction, ct);
             }
 
             await transaction.CommitAsync(ct);
@@ -195,6 +207,11 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
         catch (PostgresException ex) when (
             ex.SqlState == ForeignKeyViolation
             && ex.ConstraintName == SourceConnectionTenantConstraint)
+        {
+            throw new TopicValidationException(
+                "Every source connection must exist in the same tenant as the topic.", ex);
+        }
+        catch (SqlException ex) when (ex.Number == 547 && ex.Message.Contains(SourceConnectionTenantConstraint, StringComparison.Ordinal))
         {
             throw new TopicValidationException(
                 "Every source connection must exist in the same tenant as the topic.", ex);
@@ -218,6 +235,7 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
     // statement per connection id, and none of them need a follow-up read.
     private static async Task<IReadOnlyList<TopicSource>> UpsertSourcesAsync(
         DbConnection db,
+        bool sqlServer,
         Guid tenantId,
         Guid topicId,
         IReadOnlyList<Guid> connectionIds,
@@ -227,9 +245,44 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
         var sources = new List<TopicSource>(connectionIds.Count);
         foreach (var connectionId in connectionIds)
         {
-            var write = await db.QuerySingleAsync<SourceWriteRow>(
-                new CommandDefinition(
+            string sql = sqlServer
+                ? """
+                    DECLARE @activated table (created_at datetimeoffset);
+                    MERGE topic_sources WITH (HOLDLOCK) AS target
+                    USING (VALUES (@TenantId, @TopicId, @ConnectionId)) AS source(tenant_id, topic_id, connection_id)
+                       ON target.tenant_id=source.tenant_id AND target.topic_id=source.topic_id
+                      AND target.connection_id=source.connection_id
+                    WHEN MATCHED THEN UPDATE SET status=N'active', inactive_at=NULL
+                    WHEN NOT MATCHED THEN
+                        INSERT (tenant_id, topic_id, connection_id, status, inactive_at)
+                        VALUES (source.tenant_id, source.topic_id, source.connection_id, N'active', NULL)
+                    OUTPUT inserted.created_at INTO @activated;
+
+                    DECLARE @EndpointId uniqueidentifier;
+                    DECLARE @CallbackPath nvarchar(450);
+                    DECLARE @EndpointCreatedAt datetimeoffset;
+                    SELECT @EndpointId=id, @CallbackPath=callback_path, @EndpointCreatedAt=created_at
+                    FROM source_endpoints
+                    WHERE tenant_id=@TenantId AND topic_id=@TopicId AND connection_id=@ConnectionId
+                      AND status=N'active';
+                    IF @EndpointId IS NULL AND EXISTS (
+                        SELECT 1 FROM connections c JOIN integrations i ON i.id=c.integration_id
+                        WHERE c.tenant_id=@TenantId AND c.id=@ConnectionId
+                          AND JSON_QUERY(i.manifest, '$.source_adapter') IS NOT NULL)
+                    BEGIN
+                        SET @EndpointId=NEWID();
+                        SELECT @CallbackPath=CONCAT(N'/webhooks/', i.[key], N'/', CONVERT(nvarchar(36), @EndpointId))
+                        FROM connections c JOIN integrations i ON i.id=c.integration_id
+                        WHERE c.tenant_id=@TenantId AND c.id=@ConnectionId;
+                        INSERT INTO source_endpoints (id, tenant_id, topic_id, connection_id, callback_path, status)
+                        VALUES (@EndpointId, @TenantId, @TopicId, @ConnectionId, @CallbackPath, N'active');
+                        SELECT @EndpointCreatedAt=created_at FROM source_endpoints WHERE id=@EndpointId;
+                    END;
+                    SELECT a.created_at AS SourceCreatedAt, @EndpointId AS EndpointId,
+                           @CallbackPath AS CallbackPath, @EndpointCreatedAt AS EndpointCreatedAt
+                    FROM @activated a;
                     """
+                : """
                     WITH activated AS (
                         INSERT INTO topic_sources (tenant_id, topic_id, connection_id, status, inactive_at)
                         VALUES (@TenantId, @TopicId, @ConnectionId, 'active', NULL)
@@ -258,15 +311,14 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
                         FROM adapter_eligible
                         RETURNING id, callback_path, created_at
                     )
-                    SELECT
-                        a.created_at AS SourceCreatedAt,
-                        COALESCE(ie.id, ee.id) AS EndpointId,
-                        COALESCE(ie.callback_path, ee.callback_path) AS CallbackPath,
-                        COALESCE(ie.created_at, ee.created_at) AS EndpointCreatedAt
-                    FROM activated a
-                    LEFT JOIN inserted_endpoint ie ON true
-                    LEFT JOIN existing_endpoint ee ON true
-                    """,
+                    SELECT a.created_at AS SourceCreatedAt, COALESCE(ie.id, ee.id) AS EndpointId,
+                           COALESCE(ie.callback_path, ee.callback_path) AS CallbackPath,
+                           COALESCE(ie.created_at, ee.created_at) AS EndpointCreatedAt
+                    FROM activated a LEFT JOIN inserted_endpoint ie ON true LEFT JOIN existing_endpoint ee ON true
+                    """;
+            var write = await db.QuerySingleAsync<SourceWriteRow>(
+                new CommandDefinition(
+                    sql,
                     new { TenantId = tenantId, TopicId = topicId, ConnectionId = connectionId },
                     tx,
                     cancellationToken: ct));
@@ -282,6 +334,7 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
 
     private static async Task RemoveSourcesNotInAsync(
         DbConnection db,
+        bool sqlServer,
         Guid tenantId,
         Guid topicId,
         Guid[] desiredConnectionIds,
@@ -294,16 +347,20 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
             TopicId = topicId,
             ConnectionIds = desiredConnectionIds,
         };
+        string now = sqlServer ? "SYSUTCDATETIME()" : "now()";
+        string excluded = sqlServer
+            ? "connection_id NOT IN @ConnectionIds"
+            : "NOT (connection_id = ANY(@ConnectionIds))";
 
         await db.ExecuteAsync(
             new CommandDefinition(
-                """
+                $"""
                 UPDATE source_endpoints
-                SET status = 'revoked', revoked_at = now()
+                SET status = 'revoked', revoked_at = {now}
                 WHERE tenant_id = @TenantId
                   AND topic_id = @TopicId
                   AND status = 'active'
-                  AND NOT (connection_id = ANY(@ConnectionIds))
+                  AND {excluded}
                 """,
                 parameters,
                 tx,
@@ -311,13 +368,13 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
 
         await db.ExecuteAsync(
             new CommandDefinition(
-                """
+                $"""
                 UPDATE topic_sources
-                SET status = 'inactive', inactive_at = now()
+                SET status = 'inactive', inactive_at = {now}
                 WHERE tenant_id = @TenantId
                   AND topic_id = @TopicId
                   AND status = 'active'
-                  AND NOT (connection_id = ANY(@ConnectionIds))
+                  AND {excluded}
                 """,
                 parameters,
                 tx,
@@ -326,13 +383,15 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
 
     private static async Task<Dictionary<Guid, List<TopicSource>>> LoadSourcesForTopicsAsync(
         DbConnection db,
+        bool sqlServer,
         Guid tenantId,
         Guid[] topicIds,
         CancellationToken ct)
     {
+        string topicPredicate = sqlServer ? "ts.topic_id IN @TopicIds" : "ts.topic_id = ANY(@TopicIds)";
         var rows = await db.QueryAsync<TopicSourceWithTopicRow>(
             new CommandDefinition(
-                """
+                $"""
                 SELECT
                     ts.tenant_id AS TenantId,
                     ts.topic_id AS TopicId,
@@ -349,7 +408,7 @@ internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITop
                    AND se.topic_id = ts.topic_id
                    AND se.connection_id = ts.connection_id
                    AND se.status = 'active'
-                WHERE ts.tenant_id = @TenantId AND ts.topic_id = ANY(@TopicIds) AND ts.status = 'active'
+                WHERE ts.tenant_id = @TenantId AND {topicPredicate} AND ts.status = 'active'
                 ORDER BY ts.topic_id, ts.created_at, ts.connection_id
                 """,
                 new { TenantId = tenantId, TopicIds = topicIds },

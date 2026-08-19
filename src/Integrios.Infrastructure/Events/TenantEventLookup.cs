@@ -5,7 +5,7 @@ using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class PostgresTenantEventLookup(IDbConnectionFactory connectionFactory)
+internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
     : ITenantEventLookup
 {
     public async Task<EventDto?> GetByIdAsync(
@@ -14,12 +14,15 @@ internal sealed class PostgresTenantEventLookup(IDbConnectionFactory connectionF
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
+        string top = sqlServer ? "TOP (1) " : string.Empty;
+        string limit = sqlServer ? string.Empty : "LIMIT 1;";
 
         var row = await connection.QuerySingleOrDefaultAsync<EventByIdRow>(
             new CommandDefinition(
-                """
+                $"""
                 SELECT
-                    id           AS Id,
+                    {top}id      AS Id,
                     status       AS Status,
                     accepted_at  AS AcceptedAt,
                     processed_at AS ProcessedAt,
@@ -27,7 +30,7 @@ internal sealed class PostgresTenantEventLookup(IDbConnectionFactory connectionF
                 FROM events
                 WHERE tenant_id = @TenantId
                   AND id = @EventId
-                LIMIT 1;
+                {limit}
                 """,
                 new { TenantId = tenantId, EventId = eventId },
                 cancellationToken: cancellationToken));

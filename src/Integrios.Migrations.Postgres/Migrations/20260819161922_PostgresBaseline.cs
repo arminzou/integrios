@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Integrios.Infrastructure.Data.Migrations
+namespace Integrios.Migrations.Postgres.Migrations
 {
     /// <inheritdoc />
     internal partial class PostgresBaseline : Migration

@@ -61,16 +61,23 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDatabaseServices(configuration);
+        DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
         services.AddScoped<AdminKeyRepository>();
         services.AddScoped<IAdminKeyLookup>(provider => provider.GetRequiredService<AdminKeyRepository>());
         services.AddScoped<IAdminKeyLifecycle>(provider => provider.GetRequiredService<AdminKeyRepository>());
         services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IIntegrationCatalog, IntegrationCatalog>();
-        services.AddScoped<IIntegrationManifestStore, PostgresIntegrationManifestStore>();
+        if (databaseProvider == DatabaseProvider.SqlServer)
+            services.AddScoped<IIntegrationManifestStore, SqlServerIntegrationManifestStore>();
+        else
+            services.AddScoped<IIntegrationManifestStore, PostgresIntegrationManifestStore>();
         services.AddScoped<IConnectionRepository, ConnectionRepository>();
-        services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
-        services.AddScoped<ITopicRepository, PostgresTopicRepository>();
+        if (databaseProvider == DatabaseProvider.SqlServer)
+            services.AddSingleton<IConnectionAuthoringLock, SqlServerConnectionAuthoringLock>();
+        else
+            services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
+        services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.AddDestinationAuthenticationServices();
         services.AddSourceAdapterServices();
@@ -84,12 +91,16 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDatabaseServices(configuration);
-        services.AddSingleton<IActiveApiKeyLookup, PostgresActiveApiKeyLookup>();
-        services.AddSingleton<ISourceTopicLookup, PostgresIntakeTopicResolver>();
-        services.AddSingleton<ISourceEndpointResolver, PostgresSourceEndpointResolver>();
-        services.AddSingleton<IEventAcceptance, PostgresEventAcceptance>();
-        services.AddSingleton<ITenantEventLookup, PostgresTenantEventLookup>();
-        services.AddSingleton<IDeadLetterReplay, PostgresDeadLetterReplay>();
+        DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
+        services.AddSingleton<IActiveApiKeyLookup, ActiveApiKeyLookup>();
+        services.AddSingleton<ISourceTopicLookup, IntakeTopicResolver>();
+        services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
+        if (databaseProvider == DatabaseProvider.SqlServer)
+            services.AddSingleton<IEventAcceptance, SqlServerEventAcceptance>();
+        else
+            services.AddSingleton<IEventAcceptance, PostgresEventAcceptance>();
+        services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
+        services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.TryAddSingleton<ISourceVerificationSecretResolver, UnavailableSourceVerificationSecretResolver>();
         services.AddSourceAdapterServices();
         services.AddSingleton<IIngressSourceAdapter, VerifiedWebhookIngressAdapter>();
@@ -103,6 +114,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDatabaseServices(configuration);
+        DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
 
         DeliveryExecutionOptions deliveryOptions = ReadDeliveryOptions(configuration);
         deliveryOptions.Validate();
@@ -113,8 +125,11 @@ public static class DependencyInjection
         services.AddSingleton<DeliveryOutcomePolicy>();
 
         services.AddScoped<ISecretValidationCatalog, SecretValidationCatalog>();
-        services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
-        services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
+        if (databaseProvider == DatabaseProvider.SqlServer)
+            services.AddSingleton<IOutboxFanout, SqlServerOutboxFanout>();
+        else
+            services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
+        services.AddSingleton<ISubscriptionDeliveryQueue, SubscriptionDeliveryQueue>();
         services.AddDestinationAuthenticationServices();
         services.AddTransformEvaluationServices();
         services.TryAddSingleton<IDestinationAuthenticationSecretResolver, UnavailableDestinationAuthenticationSecretResolver>();
@@ -135,19 +150,38 @@ public static class DependencyInjection
     {
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
-        string databaseProvider = configuration["Database:Provider"]?.Trim() ?? "postgres";
-        if (!databaseProvider.Equals("postgres", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Database:Provider '{databaseProvider}' is not supported.");
-
-        var postgresConnectionString = configuration.GetConnectionString("Postgres");
-        if (string.IsNullOrWhiteSpace(postgresConnectionString))
-            throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
+        DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
+        string connectionName = databaseProvider == DatabaseProvider.SqlServer ? "SqlServer" : "Postgres";
+        string? connectionString = configuration.GetConnectionString(connectionName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException($"ConnectionStrings:{connectionName} is required.");
 
         services.AddDbContextFactory<IntegriosDbContext>(
-            options => options.UseNpgsql(postgresConnectionString));
+            options =>
+            {
+                if (databaseProvider == DatabaseProvider.SqlServer)
+                {
+                    options.UseSqlServer(
+                        connectionString,
+                        sql => sql.MigrationsAssembly("Integrios.Migrations.SqlServer"));
+                }
+                else
+                {
+                    options.UseNpgsql(
+                        connectionString,
+                        postgres => postgres.MigrationsAssembly("Integrios.Migrations.Postgres"));
+                }
+            });
+
+        if (databaseProvider == DatabaseProvider.SqlServer)
+        {
+            services.AddSingleton<IDbConnectionFactory>(_ => new SqlServerConnectionFactory(connectionString));
+            return services;
+        }
+
         services.AddSingleton(_ =>
         {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
             return dataSourceBuilder.Build();
         });
 

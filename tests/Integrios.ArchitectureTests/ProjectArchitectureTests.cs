@@ -72,7 +72,9 @@ public sealed class ProjectArchitectureTests
             ["Integrios.Domain"] = [],
             ["Integrios.Application"] = ["Integrios.Domain"],
             ["Integrios.Infrastructure"] = ["Integrios.Application", "Integrios.Domain"],
-            ["Integrios.Admin"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
+            ["Integrios.Migrations.Postgres"] = ["Integrios.Infrastructure"],
+            ["Integrios.Migrations.SqlServer"] = ["Integrios.Infrastructure"],
+            ["Integrios.Admin"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure", "Integrios.Migrations.Postgres", "Integrios.Migrations.SqlServer"],
             ["Integrios.Ingress"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
             ["Integrios.Worker"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
             ["Integrios.MockSink"] = []

@@ -2,11 +2,12 @@ using Dapper;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
 using Integrios.Infrastructure.Data;
+using Microsoft.Data.SqlClient;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Delivery;
 
-internal sealed class PostgresSubscriptionDeliveryQueue(
+internal sealed class SubscriptionDeliveryQueue(
     IDbConnectionFactory connectionFactory,
     DeliveryExecutionOptions options,
     DeliveryOutcomePolicy outcomePolicy) : ISubscriptionDeliveryQueue
@@ -41,10 +42,32 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-        var row = await connection.QuerySingleOrDefaultAsync<DeliveryWorkRow>(
-        new CommandDefinition(
-            """
+        bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
+        string claimSql = sqlServer
+            ? """
+                SELECT TOP (1)
+                    sd.id AS Id, sd.event_id AS EventId, sd.subscription_id AS SubscriptionId,
+                    sd.destination_connection_id AS DestinationConnectionId, sd.status AS Status,
+                    sd.lifetime_attempt_count AS LifetimeAttemptCount,
+                    sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
+                    sd.active_attempt_id AS ActiveAttemptId, sd.integration_key AS IntegrationKey,
+                    sd.http_execution_snapshot AS HttpExecutionSnapshotJson,
+                    sd.transform_config_snapshot AS TransformConfigSnapshot, sd.traceparent AS Traceparent,
+                    e.tenant_id AS TenantId, tenant.slug AS TenantSlug, e.payload AS PayloadJson,
+                    e.event_type AS EventType, e.accepted_at AS AcceptedAt, t.name AS TopicName,
+                    SYSUTCDATETIME() AS DatabaseNow
+                FROM subscription_deliveries sd WITH (UPDLOCK, ROWLOCK, READPAST, READCOMMITTEDLOCK)
+                JOIN events e ON e.id=sd.event_id
+                JOIN tenants tenant ON tenant.id=e.tenant_id
+                LEFT JOIN topics t ON t.id=e.topic_id
+                WHERE (sd.status=N'in_flight' AND sd.lease_expires_at <= SYSUTCDATETIME())
+                   OR (sd.status=N'pending' AND (sd.deliver_after IS NULL OR sd.deliver_after <= SYSUTCDATETIME()))
+                ORDER BY CASE WHEN sd.status=N'in_flight' THEN 0 ELSE 1 END,
+                    CASE WHEN sd.lease_expires_at IS NULL THEN 1 ELSE 0 END, sd.lease_expires_at,
+                    CASE WHEN sd.deliver_after IS NULL THEN 0 ELSE 1 END, sd.deliver_after,
+                    sd.created_at, sd.id
+                """
+            : """
                 SELECT
                     sd.id AS Id,
                     sd.event_id AS EventId,
@@ -69,22 +92,16 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
                 JOIN events e ON e.id = sd.event_id
                 JOIN tenants tenant ON tenant.id = e.tenant_id
                 LEFT JOIN topics t ON t.id = e.topic_id
-                WHERE (
-                    sd.status = 'in_flight'
-                    AND sd.lease_expires_at <= now()
-                ) OR (
-                    sd.status = 'pending'
-                    AND (sd.deliver_after IS NULL OR sd.deliver_after <= now())
-                )
-                ORDER BY
-                    CASE WHEN sd.status = 'in_flight' THEN 0 ELSE 1 END,
-                    sd.lease_expires_at NULLS LAST,
-                    sd.deliver_after NULLS FIRST,
-                    sd.created_at,
-                    sd.id
-                LIMIT 1
-                FOR UPDATE OF sd SKIP LOCKED;
-                """,
+                WHERE (sd.status = 'in_flight' AND sd.lease_expires_at <= now())
+                   OR (sd.status = 'pending' AND (sd.deliver_after IS NULL OR sd.deliver_after <= now()))
+                ORDER BY CASE WHEN sd.status = 'in_flight' THEN 0 ELSE 1 END,
+                    sd.lease_expires_at NULLS LAST, sd.deliver_after NULLS FIRST, sd.created_at, sd.id
+                LIMIT 1 FOR UPDATE OF sd SKIP LOCKED;
+                """;
+
+        var row = await connection.QuerySingleOrDefaultAsync<DeliveryWorkRow>(
+        new CommandDefinition(
+            claimSql,
             transaction: transaction,
             cancellationToken: cancellationToken));
 
@@ -96,9 +113,19 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
 
         if (row.Status == "in_flight")
         {
-            int finalized = await connection.ExecuteAsync(
-            new CommandDefinition(
-                """
+            var recoveryCommand = new CommandDefinition(
+                sqlServer
+                    ? """
+                    UPDATE delivery_attempts
+                    SET status = 'indeterminate',
+                        completed_at = @DatabaseNow,
+                        error_message = 'Lease expired before the owning worker finalized this attempt.'
+                    WHERE id = @ActiveAttemptId
+                      AND subscription_delivery_id = @Id
+                      AND status = 'in_progress';
+                    SELECT @@ROWCOUNT;
+                    """
+                    : """
                     UPDATE delivery_attempts
                     SET status = 'indeterminate',
                         completed_at = @DatabaseNow,
@@ -109,7 +136,11 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
                     """,
                 row,
                 transaction,
-                cancellationToken: cancellationToken));
+                cancellationToken: cancellationToken);
+
+            int finalized = sqlServer
+                ? await connection.ExecuteScalarAsync<int>(recoveryCommand)
+                : await connection.ExecuteAsync(recoveryCommand);
 
             if (finalized != 1)
                 throw new InvalidOperationException($"Active attempt {row.ActiveAttemptId} for delivery {row.Id} could not be made indeterminate.");
@@ -151,10 +182,13 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
         Guid attemptId = Guid.NewGuid();
         int attemptNumber = row.LifetimeAttemptCount + 1;
         int retryCycleAttemptCount = row.RetryCycleAttemptCount + 1;
+        string leaseEnd = sqlServer
+            ? "DATEADD(millisecond, @LeaseDurationMilliseconds, @DatabaseNow)"
+            : "@DatabaseNow + @LeaseDuration";
 
         await connection.ExecuteAsync(
         new CommandDefinition(
-            """
+            $"""
                 INSERT INTO delivery_attempts (
                     id,
                     subscription_delivery_id,
@@ -173,7 +207,7 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
                     lifetime_attempt_count = @AttemptNumber,
                     retry_cycle_attempt_count = @RetryCycleAttemptCount,
                     active_attempt_id = @AttemptId,
-                    lease_expires_at = @DatabaseNow + @LeaseDuration,
+                    lease_expires_at = {leaseEnd},
                     deliver_after = NULL,
                     updated_at = @DatabaseNow
                 WHERE id = @DeliveryId;
@@ -185,7 +219,8 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
                 AttemptNumber = attemptNumber,
                 RetryCycleAttemptCount = retryCycleAttemptCount,
                 row.DatabaseNow,
-                options.LeaseDuration
+                LeaseDurationMilliseconds = (int)options.LeaseDuration.TotalMilliseconds,
+                options.LeaseDuration,
             },
             transaction,
             cancellationToken: cancellationToken));
@@ -223,8 +258,8 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
             {
                 return await FinalizeOnceAsync(completion, cancellationToken);
             }
-            catch (NpgsqlException exception) when (
-                exception.IsTransient
+            catch (Exception exception) when (
+                IsTransient(exception)
                 && retry < FinalizationRetryDelays.Length
                 && !cancellationToken.IsCancellationRequested)
             {
@@ -239,10 +274,18 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
 
         var owner = await connection.QuerySingleOrDefaultAsync<DeliveryOwnerRow>(
             new CommandDefinition(
+                sqlServer
+                ? """
+                SELECT id AS Id, status AS Status, active_attempt_id AS ActiveAttemptId,
+                       retry_cycle_attempt_count AS RetryCycleAttemptCount, SYSUTCDATETIME() AS DatabaseNow
+                FROM subscription_deliveries WITH (UPDLOCK, ROWLOCK)
+                WHERE id = @DeliveryId;
                 """
+                : """
                 SELECT
                     id AS Id,
                     status AS Status,
@@ -272,9 +315,17 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
             isTerminal: completion.IsTerminalFailure,
             retryAfter: completion.RetryAfter);
 
-        int finalized = await connection.ExecuteAsync(
-            new CommandDefinition(
+        var finalizeCommand = new CommandDefinition(
+            sqlServer
+                ? """
+                UPDATE delivery_attempts
+                SET status = @AttemptStatus, failure_phase = @FailurePhase,
+                    request_payload = @RequestPayloadJson, response_status_code = @ResponseStatusCode,
+                    response_body = @ResponseBody, error_message = @ErrorMessage, completed_at = @DatabaseNow
+                WHERE id = @AttemptId AND subscription_delivery_id = @DeliveryId AND status = N'in_progress';
+                SELECT @@ROWCOUNT;
                 """
+                : """
                 UPDATE delivery_attempts
                 SET status = @AttemptStatus,
                     failure_phase = @FailurePhase,
@@ -300,7 +351,11 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
                     owner.DatabaseNow
                 },
                 transaction,
-                cancellationToken: cancellationToken));
+            cancellationToken: cancellationToken);
+
+        int finalized = sqlServer
+            ? await connection.ExecuteScalarAsync<int>(finalizeCommand)
+            : await connection.ExecuteAsync(finalizeCommand);
 
         if (finalized != 1)
         {
@@ -364,6 +419,13 @@ internal sealed class PostgresSubscriptionDeliveryQueue(
         DeliveryFailurePhase.RequestConstruction => "request_construction",
         DeliveryFailurePhase.Http => "http",
         _ => throw new ArgumentOutOfRangeException(nameof(phase), phase, null)
+    };
+
+    private static bool IsTransient(Exception exception) => exception switch
+    {
+        NpgsqlException postgres => postgres.IsTransient,
+        SqlException sqlServer => sqlServer.IsTransient,
+        _ => false,
     };
 
     private sealed record DeliveryOwnerRow

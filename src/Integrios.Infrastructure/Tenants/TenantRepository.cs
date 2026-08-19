@@ -5,6 +5,7 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Tenants;
@@ -20,7 +21,8 @@ internal sealed class TenantRepository(IntegriosDbContext context) : ITenantRepo
             return tenant;
         }
         catch (DbUpdateException ex) when (
-            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+            || ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
             throw new DuplicateResourceException("A tenant with that slug already exists.", ex);
         }
