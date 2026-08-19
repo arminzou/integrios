@@ -27,7 +27,6 @@ public sealed class DatabaseProviderRegistrationTests
         var entityTypes = context.Model.GetEntityTypes().ToArray();
         string[] tables = entityTypes.Select(entity => entity.GetTableName()!).ToArray();
         Assert.Contains("tenants", tables);
-        Assert.DoesNotContain("flyway_schema_history", tables);
         Assert.All(
             entityTypes.Where(entity => entity.ClrType != typeof(OutboxEntry)),
             entity => Assert.StartsWith("Integrios.Domain.", entity.ClrType.Namespace));

@@ -10,13 +10,30 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
     {
         entity.HasKey(e => e.Id).HasName("delivery_attempts_pkey");
 
-        entity.ToTable("delivery_attempts");
+        entity.ToTable("delivery_attempts", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_delivery_attempts_status",
+                "status IN ('in_progress', 'succeeded', 'failed', 'indeterminate')");
+            table.HasCheckConstraint("ck_delivery_attempts_number_positive", "attempt_number > 0");
+            table.HasCheckConstraint(
+                "ck_delivery_attempts_failure_phase",
+                "((status = 'failed' AND failure_phase IS NOT NULL "
+                + "AND failure_phase IN ('transform', 'secret_resolution', 'request_construction', 'http')) "
+                + "OR (status <> 'failed' AND failure_phase IS NULL))");
+            table.HasCheckConstraint(
+                "ck_delivery_attempts_completion",
+                "((status = 'in_progress' AND completed_at IS NULL) "
+                + "OR (status <> 'in_progress' AND completed_at IS NOT NULL))");
+        });
 
         entity.HasIndex(e => new { e.SubscriptionDeliveryId, e.AttemptNumber }, "idx_delivery_attempts_delivery");
 
-        entity.HasIndex(e => new { e.SubscriptionDeliveryId, e.Id }, "uq_delivery_attempts_delivery_id").IsUnique();
+        entity.HasAlternateKey(e => new { e.SubscriptionDeliveryId, e.Id })
+            .HasName("uq_delivery_attempts_delivery_id");
 
-        entity.HasIndex(e => new { e.SubscriptionDeliveryId, e.AttemptNumber }, "uq_delivery_attempts_delivery_number").IsUnique();
+        entity.HasAlternateKey(e => new { e.SubscriptionDeliveryId, e.AttemptNumber })
+            .HasName("uq_delivery_attempts_delivery_number");
 
         entity.Property(e => e.Id)
             .HasDefaultValueSql("gen_random_uuid()")

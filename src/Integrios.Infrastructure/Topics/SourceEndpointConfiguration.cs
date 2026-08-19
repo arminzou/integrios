@@ -10,7 +10,16 @@ internal sealed class SourceEndpointConfiguration : IEntityTypeConfiguration<Sou
     {
         entity.HasKey(e => e.Id).HasName("source_endpoints_pkey");
 
-        entity.ToTable("source_endpoints");
+        entity.ToTable("source_endpoints", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_source_endpoints_status",
+                "status IN ('active', 'revoked')");
+            table.HasCheckConstraint(
+                "ck_source_endpoints_revoked_at",
+                "((status = 'active' AND revoked_at IS NULL) "
+                + "OR (status = 'revoked' AND revoked_at IS NOT NULL))");
+        });
 
         entity.Property<Guid>("TenantId").HasColumnName("tenant_id");
         entity.Property<Guid>("TopicId").HasColumnName("topic_id");
@@ -24,7 +33,7 @@ internal sealed class SourceEndpointConfiguration : IEntityTypeConfiguration<Sou
         entity.HasIndex("TenantId", "TopicId", "ConnectionId", nameof(SourceEndpoint.CreatedAt))
             .HasDatabaseName("idx_source_endpoints_association");
 
-        entity.HasIndex(e => e.CallbackPath, "source_endpoints_callback_path_key").IsUnique();
+        entity.HasAlternateKey(e => e.CallbackPath).HasName("source_endpoints_callback_path_key");
 
         entity.HasIndex("TenantId", "TopicId", "ConnectionId")
             .HasDatabaseName("uq_source_endpoints_active_association")

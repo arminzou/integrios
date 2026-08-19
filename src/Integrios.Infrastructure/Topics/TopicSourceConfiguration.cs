@@ -9,7 +9,14 @@ internal sealed class TopicSourceConfiguration : IEntityTypeConfiguration<TopicS
 {
     public void Configure(EntityTypeBuilder<TopicSource> entity)
     {
-        entity.ToTable("topic_sources");
+        entity.ToTable("topic_sources", table =>
+        {
+            table.HasCheckConstraint("ck_topic_sources_status", "status IN ('active', 'inactive')");
+            table.HasCheckConstraint(
+                "ck_topic_sources_inactive_at",
+                "((status = 'active' AND inactive_at IS NULL) "
+                + "OR (status = 'inactive' AND inactive_at IS NOT NULL))");
+        });
 
         entity.Property<Guid>("TenantId").HasColumnName("tenant_id");
         entity.Property<Guid>("TopicId").HasColumnName("topic_id");

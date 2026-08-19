@@ -11,9 +11,11 @@ internal sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
     {
         entity.HasKey(e => e.Id).HasName("tenants_pkey");
 
-        entity.ToTable("tenants");
+        entity.ToTable("tenants", table => table.HasCheckConstraint(
+            "chk_tenants_slug_dns_label",
+            "slug ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'"));
 
-        entity.HasIndex(e => e.Slug, "tenants_slug_key").IsUnique();
+        entity.HasAlternateKey(e => e.Slug).HasName("tenants_slug_key");
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()

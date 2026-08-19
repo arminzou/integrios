@@ -16,9 +16,9 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
 
         entity.HasIndex(e => e.TenantId, "idx_topics_tenant_id");
 
-        entity.HasIndex(e => new { e.TenantId, e.Id }, "uq_topics_tenant_id_id").IsUnique();
+        entity.HasAlternateKey(e => new { e.TenantId, e.Id }).HasName("uq_topics_tenant_id_id");
 
-        entity.HasIndex(e => new { e.TenantId, e.Name }, "uq_topics_tenant_name").IsUnique();
+        entity.HasAlternateKey(e => new { e.TenantId, e.Name }).HasName("uq_topics_tenant_name");
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()

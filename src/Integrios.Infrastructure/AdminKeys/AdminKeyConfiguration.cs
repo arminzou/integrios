@@ -12,7 +12,7 @@ internal sealed class AdminKeyConfiguration : IEntityTypeConfiguration<AdminKey>
 
         entity.ToTable("admin_keys");
 
-        entity.HasIndex(e => e.PublicKey, "admin_keys_public_key_key").IsUnique();
+        entity.HasAlternateKey(e => e.PublicKey).HasName("admin_keys_public_key_key");
 
         entity.HasIndex(e => e.PublicKey, "idx_admin_keys_lookup").HasFilter("(revoked_at IS NULL)");
 

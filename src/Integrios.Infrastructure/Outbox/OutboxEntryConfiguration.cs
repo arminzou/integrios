@@ -21,7 +21,9 @@ internal sealed class OutboxEntryConfiguration : IEntityTypeConfiguration<Outbox
         entity.Property(e => e.Id)
             .HasDefaultValueSql("gen_random_uuid()")
             .HasColumnName("id");
-        entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");
+        entity.Property(e => e.AttemptCount)
+            .HasDefaultValue(0)
+            .HasColumnName("attempt_count");
         entity.Property(e => e.CreatedAt)
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");

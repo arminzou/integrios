@@ -11,9 +11,22 @@ internal sealed class IntegrationConfiguration : IEntityTypeConfiguration<Integr
     {
         entity.HasKey(e => e.Id).HasName("integrations_pkey");
 
-        entity.ToTable("integrations");
+        entity.ToTable("integrations", table =>
+        {
+            table.HasCheckConstraint("ck_integrations_contract_version_positive", "contract_version > 0");
+            table.HasCheckConstraint(
+                "ck_integrations_manifest_schema_version_positive",
+                "manifest_schema_version > 0");
+            table.HasCheckConstraint("ck_integrations_manifest_object", "jsonb_typeof(manifest) = 'object'");
+            table.HasCheckConstraint(
+                "ck_integrations_manifest_identity",
+                "manifest->>'key' = key "
+                + "AND (manifest->>'contract_version')::INTEGER = contract_version "
+                + "AND (manifest->>'manifest_schema_version')::INTEGER = manifest_schema_version");
+        });
 
-        entity.HasIndex(e => new { e.Key, e.ContractVersion }, "uq_integrations_key_contract_version").IsUnique();
+        entity.HasAlternateKey(e => new { e.Key, e.ContractVersion })
+            .HasName("uq_integrations_key_contract_version");
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()

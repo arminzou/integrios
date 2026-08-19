@@ -24,8 +24,16 @@ connections, so no secret values need to be added to its tracked documentation f
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
 after migrations and before the services start. It creates the built-in `http` integration and
 the admin credential used below (bootstrap output, not migration-seeded data), and is
-idempotent, so re-running `make up` against an existing database is safe. The dev credential
+idempotent, so re-running `make up` against an existing EF-managed database is safe. The dev credential
 `global_admin_key:admin_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET` in `.env`.
+
+The EF Core cutover does not upgrade databases created by the former Flyway migration path. Delete
+the old local database volume before starting this version; this permanently removes its data:
+
+```bash
+docker compose down --volumes
+make up
+```
 
 | Service  | URL                     | Purpose                       |
 |----------|-------------------------|-------------------------------|
@@ -252,7 +260,7 @@ make logs    # tail all service logs
 ## Migrations
 
 Migrations run automatically during `make up` via the `migrate` service. To run the same pinned
-Flyway service manually through the Compose network (starting its Postgres dependency if needed):
+EF Core migration command manually through the Compose network (starting its Postgres dependency if needed):
 
 ```bash
 make db-migrate

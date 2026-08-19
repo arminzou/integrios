@@ -20,6 +20,9 @@ services:
     # phase therefore reuses the exact local images without relying on Compose's implicit naming.
     image: ${INTEGRIOS_ADMIN_IMAGE}
 
+  migrate:
+    image: ${INTEGRIOS_ADMIN_IMAGE}
+
   ingress:
     image: ${INTEGRIOS_INGRESS_IMAGE}
     environment:
