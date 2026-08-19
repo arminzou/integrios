@@ -1,0 +1,67 @@
+using Integrios.Domain.Common;
+using Integrios.Domain.Connections;
+using Integrios.Domain.Subscriptions;
+using Integrios.Domain.Topics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using static Integrios.Infrastructure.Data.ModelConfigurationConversions;
+
+namespace Integrios.Infrastructure.Subscriptions;
+
+internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subscription>
+{
+    public void Configure(EntityTypeBuilder<Subscription> entity)
+    {
+        entity.HasKey(e => e.Id).HasName("routes_pkey");
+
+        entity.ToTable("subscriptions");
+
+        entity.HasIndex(e => e.TopicId, "idx_subscriptions_topic_id");
+
+        entity.Property(e => e.Id)
+            .ValueGeneratedNever()
+            .HasColumnName("id");
+        entity.Property(e => e.CreatedAt)
+            .HasDefaultValueSql("now()")
+            .HasColumnName("created_at");
+        entity.Property(e => e.Description).HasColumnName("description");
+        entity.Property(e => e.DestinationConnectionId).HasColumnName("destination_connection_id");
+        entity.Property(e => e.HttpDelivery)
+            .HasConversion(
+                value => SerializeJson(value),
+                value => DeserializeJson<HttpDeliveryConfiguration>(value))
+            .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb")
+            .HasColumnType("jsonb")
+            .HasColumnName("http_delivery");
+        entity.Property(e => e.MatchRules)
+            .HasDefaultValueSql("'{}'::jsonb")
+            .HasColumnType("jsonb")
+            .HasColumnName("match_rules");
+        entity.Property(e => e.Name).HasColumnName("name");
+        entity.Property(e => e.OrderIndex).HasColumnName("order_index");
+        entity.Property(e => e.Status)
+            .HasConversion(value => ToSnakeCase(value), value => FromSnakeCase<OperationalStatus>(value))
+            .HasDefaultValueSql("'active'::text")
+            .HasColumnName("status");
+        entity.Property(e => e.TenantId).HasColumnName("tenant_id");
+        entity.Property(e => e.TopicId).HasColumnName("topic_id");
+        entity.Property(e => e.TransformConfig)
+            .HasColumnType("jsonb")
+            .HasColumnName("transform_config");
+        entity.Property(e => e.UpdatedAt)
+            .HasDefaultValueSql("now()")
+            .HasColumnName("updated_at");
+
+        entity.HasOne<Connection>().WithMany()
+            .HasPrincipalKey(p => new { p.TenantId, p.Id })
+            .HasForeignKey(d => new { d.TenantId, d.DestinationConnectionId })
+            .OnDelete(DeleteBehavior.ClientSetNull)
+            .HasConstraintName("fk_subscriptions_destination_connection_tenant");
+
+        entity.HasOne<Topic>().WithMany()
+            .HasPrincipalKey(p => new { p.TenantId, p.Id })
+            .HasForeignKey(d => new { d.TenantId, d.TopicId })
+            .OnDelete(DeleteBehavior.ClientSetNull)
+            .HasConstraintName("fk_subscriptions_topic_tenant");
+    }
+}

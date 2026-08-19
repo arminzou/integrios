@@ -26,6 +26,7 @@ using Integrios.Infrastructure.Subscriptions;
 using Integrios.Infrastructure.Tenants;
 using Integrios.Infrastructure.Topics;
 using Integrios.Infrastructure.Transforms;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,7 +40,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddPostgresServices(configuration);
+        services.AddDatabaseServices(configuration);
         services.AddSingleton<PostgresAdminKeyRepository>();
         services.AddSingleton<IAdminKeyLookup>(provider => provider.GetRequiredService<PostgresAdminKeyRepository>());
         services.AddSingleton<IAdminKeyLifecycle>(provider => provider.GetRequiredService<PostgresAdminKeyRepository>());
@@ -63,7 +64,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddPostgresServices(configuration);
+        services.AddDatabaseServices(configuration);
         services.AddSingleton<IActiveApiKeyLookup, PostgresActiveApiKeyLookup>();
         services.AddSingleton<ISourceTopicLookup, PostgresIntakeTopicResolver>();
         services.AddSingleton<ISourceEndpointResolver, PostgresSourceEndpointResolver>();
@@ -82,7 +83,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddPostgresServices(configuration);
+        services.AddDatabaseServices(configuration);
 
         DeliveryExecutionOptions deliveryOptions = ReadDeliveryOptions(configuration);
         deliveryOptions.Validate();
@@ -109,16 +110,21 @@ public static class DependencyInjection
         return services;
     }
 
-    private static IServiceCollection AddPostgresServices(
+    private static IServiceCollection AddDatabaseServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
+        string databaseProvider = configuration["Database:Provider"]?.Trim() ?? "postgres";
+        if (!databaseProvider.Equals("postgres", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Database:Provider '{databaseProvider}' is not supported.");
+
         var postgresConnectionString = configuration.GetConnectionString("Postgres");
         if (string.IsNullOrWhiteSpace(postgresConnectionString))
             throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
 
+        services.AddDbContext<IntegriosDbContext>(options => options.UseNpgsql(postgresConnectionString));
         services.AddSingleton(_ =>
         {
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
