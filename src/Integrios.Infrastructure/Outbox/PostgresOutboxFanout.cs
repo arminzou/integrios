@@ -7,15 +7,19 @@ using Integrios.Domain.Events;
 using Integrios.Domain.Connections;
 using Integrios.Domain.Subscriptions;
 using Integrios.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Integrios.Infrastructure.Outbox;
 
-internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactory) : IOutboxFanout
+internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext> contextFactory) : IOutboxFanout
 {
     public async Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken)
     {
-        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        var connection = context.Database.GetDbConnection();
+        var dbTransaction = transaction.GetDbTransaction();
 
         var row = await connection.QuerySingleOrDefaultAsync<OutboxFanoutRow>(
             new CommandDefinition(
@@ -37,7 +41,7 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                 LIMIT 1
                 FOR UPDATE OF o SKIP LOCKED
                 """,
-                transaction: transaction,
+                transaction: dbTransaction,
                 cancellationToken: cancellationToken));
 
         if (row is null)
@@ -54,13 +58,13 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
         // unrouted state as an Event whose Topic has no matching Subscription.
         var candidates = row.TopicId is null
             ? []
-            : await LoadCandidatesAsync(connection, transaction, row.TopicId.Value, cancellationToken);
+            : await LoadCandidatesAsync(connection, dbTransaction, row.TopicId.Value, cancellationToken);
         var targets = SubscriptionRoutingEvaluator.SelectTargets(row.EventType, candidates);
 
         var status = targets.Count == 0 ? EventStatus.Unrouted : EventStatus.FannedOut;
         var insertedCount = await InsertDeliveriesAsync(
             connection,
-            transaction,
+            dbTransaction,
             row.EventId,
             targets,
             activity?.Id,
@@ -75,14 +79,14 @@ internal sealed class PostgresOutboxFanout(IDbConnectionFactory connectionFactor
                 WHERE id = @EventId
                 """,
                 new { row.EventId, Status = EventStatusMap.ToDbValue(status) },
-                transaction,
+                dbTransaction,
                 cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 "UPDATE outbox SET processed_at = now() WHERE id = @OutboxId",
                 new { row.OutboxId },
-                transaction,
+                dbTransaction,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);

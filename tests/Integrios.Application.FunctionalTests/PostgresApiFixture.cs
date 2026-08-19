@@ -7,6 +7,7 @@ using DotNet.Testcontainers.Builders;
 using Integrios.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -349,7 +350,12 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             {
                 services.RemoveAll<NpgsqlDataSource>();
                 services.RemoveAll<IDbConnectionFactory>();
+                services.RemoveAll<IDbContextFactory<IntegriosDbContext>>();
+                services.RemoveAll<DbContextOptions<IntegriosDbContext>>();
+                services.RemoveAll<IntegriosDbContext>();
 
+                services.AddDbContextFactory<IntegriosDbContext>(
+                    options => options.UseNpgsql(ConnectionString));
                 services.AddSingleton(_ =>
                 {
                     var dataSourceBuilder = new NpgsqlDataSourceBuilder(ConnectionString);

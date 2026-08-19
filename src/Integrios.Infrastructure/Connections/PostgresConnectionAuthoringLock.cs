@@ -5,10 +5,11 @@ using System.Security.Cryptography;
 using Dapper;
 using Integrios.Application.Connections;
 using Integrios.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Integrios.Infrastructure.Connections;
 
-internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory connectionFactory)
+internal sealed class PostgresConnectionAuthoringLock(IDbContextFactory<IntegriosDbContext> contextFactory)
     : IConnectionAuthoringLock
 {
     private static readonly TimeSpan AcquisitionBudget = TimeSpan.FromSeconds(2);
@@ -22,7 +23,17 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
             .Select(ToAdvisoryLockKey)
             .Order()
             .ToArray();
-        DbConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        try
+        {
+            await context.Database.OpenConnectionAsync(cancellationToken);
+        }
+        catch
+        {
+            await context.DisposeAsync();
+            throw;
+        }
+        DbConnection connection = context.Database.GetDbConnection();
         var acquiredKeys = new List<long>(keys.Length);
 
         var elapsed = Stopwatch.StartNew();
@@ -49,7 +60,7 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
                 }
 
                 if (acquiredAll)
-                    return new ConnectionAuthoringLease(connection, acquiredKeys);
+                    return new ConnectionAuthoringLease(context, connection, acquiredKeys);
 
                 await UnlockAsync(connection, acquiredKeys);
                 acquiredKeys.Clear();
@@ -65,7 +76,7 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
         }
         catch
         {
-            await ReleaseAfterFailedAcquisitionAsync(connection, acquiredKeys);
+            await ReleaseAfterFailedAcquisitionAsync(context, connection, acquiredKeys);
             throw;
         }
     }
@@ -78,6 +89,7 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
     }
 
     private static async Task ReleaseAfterFailedAcquisitionAsync(
+        IntegriosDbContext context,
         DbConnection connection,
         IReadOnlyList<long> acquiredKeys)
     {
@@ -93,7 +105,7 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
 
         try
         {
-            await connection.DisposeAsync();
+            await context.DisposeAsync();
         }
         catch
         {
@@ -112,6 +124,7 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
     }
 
     private sealed class ConnectionAuthoringLease(
+        IntegriosDbContext context,
         DbConnection connection,
         IReadOnlyList<long> keys) : IAsyncDisposable
     {
@@ -129,7 +142,7 @@ internal sealed class PostgresConnectionAuthoringLock(IDbConnectionFactory conne
             }
             finally
             {
-                await connection.DisposeAsync();
+                await context.DisposeAsync();
             }
         }
     }

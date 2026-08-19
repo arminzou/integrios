@@ -1,6 +1,7 @@
 using Integrios.Domain.Common;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Secrets;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Infrastructure;
@@ -42,8 +43,11 @@ public sealed class SecretValidationCatalogTests : IClassFixture<PostgresApiFixt
             await command.ExecuteNonQueryAsync();
         }
 
-        await using NpgsqlDataSource dataSource = new NpgsqlDataSourceBuilder(fixture.ConnectionString).Build();
-        var catalog = new PostgresSecretValidationCatalog(new NpgsqlConnectionFactory(dataSource));
+        await using var context = new IntegriosDbContext(
+            new DbContextOptionsBuilder<IntegriosDbContext>()
+                .UseNpgsql(fixture.ConnectionString)
+                .Options);
+        var catalog = new SecretValidationCatalog(context);
 
         var selectedTenant = await catalog.FindTenantBySlugAsync("test-tenant-b", CancellationToken.None);
         Assert.NotNull(selectedTenant);

@@ -212,7 +212,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
     // The fixture seeds subscriptions using the old array shape, so the tests above already
     // exercise the compat path. This test makes the intent explicit and documents the exit
     // condition: once all rows have been migrated to the new shape, remove the array branch
-    // from PostgresSubscriptionRepository and delete this test.
+    // from SubscriptionRepository and delete this test.
     [Fact]
     public async Task Worker_LegacyEventTypesArrayShape_RoutesCorrectly()
     {

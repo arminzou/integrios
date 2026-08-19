@@ -34,6 +34,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         configurationBuilder.Conventions.Remove<ForeignKeyIndexConvention>();
         configurationBuilder.Properties<OperationalStatus>()
             .HaveConversion<SnakeCaseEnumConverter<OperationalStatus>>();
+        configurationBuilder.Properties<TopicSourceStatus>()
+            .HaveConversion<SnakeCaseEnumConverter<TopicSourceStatus>>();
         configurationBuilder.Properties<DeliveryFailurePhase>()
             .HaveConversion<SnakeCaseEnumConverter<DeliveryFailurePhase>>();
         configurationBuilder.Properties<DeliveryAttemptStatus>()

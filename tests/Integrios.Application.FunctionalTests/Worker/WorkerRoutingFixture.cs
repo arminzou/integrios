@@ -19,6 +19,8 @@ using Integrios.Infrastructure.Subscriptions;
 using Integrios.Infrastructure.Transforms;
 using Integrios.Tests.Shared;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -52,6 +54,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal PostgresSubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
 
     private IDbConnectionFactory connectionFactory = null!;
+    private IntegriosDbContext dbContext = null!;
     private IDeadLetterReplay deadLetterReplay = null!;
     private IOutboxFanout outboxFanout = null!;
     private ISubscriptionRepository subscriptionRepository = null!;
@@ -65,9 +68,13 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
         var dataSource = new NpgsqlDataSourceBuilder(ConnectionString).Build();
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
+        dbContext = new IntegriosDbContext(
+            new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(ConnectionString).Options);
         deadLetterReplay = new PostgresDeadLetterReplay(connectionFactory);
-        outboxFanout = new PostgresOutboxFanout(connectionFactory);
-        subscriptionRepository = new PostgresSubscriptionRepository(connectionFactory);
+        outboxFanout = new PostgresOutboxFanout(
+            new PooledDbContextFactory<IntegriosDbContext>(
+                new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(ConnectionString).Options));
+        subscriptionRepository = new SubscriptionRepository(dbContext);
         eventLookup = new PostgresTenantEventLookup(connectionFactory);
         var deliveryOptions = DeliveryExecutionOptions.Default;
         DeliveryQueue = new PostgresSubscriptionDeliveryQueue(
@@ -92,7 +99,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
-    public async Task DisposeAsync() => await container.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await dbContext.DisposeAsync();
+        await container.DisposeAsync();
+    }
 
     public async Task ResetAsync()
     {
@@ -515,7 +526,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             VALUES (@TenantId, @TopicId, @SourceConnectionId);
 
             -- Intentionally uses the pre-v2.1 event_types[] array shape to cover the
-            -- compat read path in PostgresSubscriptionRepository.
+            -- compat read path in SubscriptionRepository.
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES
                 (@LedgerSubscriptionId, @TenantId, @TopicId, 'to-ledger',
