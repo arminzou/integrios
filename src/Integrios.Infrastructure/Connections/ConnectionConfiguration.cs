@@ -4,7 +4,6 @@ using Integrios.Domain.Integrations;
 using Integrios.Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using static Integrios.Infrastructure.Data.ModelConfigurationConversions;
 
 namespace Integrios.Infrastructure.Connections;
 
@@ -34,22 +33,15 @@ internal sealed class ConnectionConfiguration : IEntityTypeConfiguration<Connect
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
         entity.Property(e => e.DestinationAuthentication)
-            .HasConversion(
-                value => SerializeJson(value),
-                value => DeserializeJson<ConnectionSchemeSelection>(value))
             .HasColumnType("jsonb")
             .HasColumnName("destination_authentication");
         entity.Property(e => e.Environment).HasColumnName("environment");
         entity.Property(e => e.IntegrationId).HasColumnName("integration_id");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.SourceVerification)
-            .HasConversion(
-                value => SerializeJson(value),
-                value => DeserializeJson<ConnectionSchemeSelection>(value))
             .HasColumnType("jsonb")
             .HasColumnName("source_verification");
         entity.Property(e => e.Status)
-            .HasConversion(value => ToSnakeCase(value), value => FromSnakeCase<OperationalStatus>(value))
             .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");

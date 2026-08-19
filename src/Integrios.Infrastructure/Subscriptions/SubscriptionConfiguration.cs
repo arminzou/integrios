@@ -4,7 +4,6 @@ using Integrios.Domain.Subscriptions;
 using Integrios.Domain.Topics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using static Integrios.Infrastructure.Data.ModelConfigurationConversions;
 
 namespace Integrios.Infrastructure.Subscriptions;
 
@@ -27,9 +26,6 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
         entity.Property(e => e.Description).HasColumnName("description");
         entity.Property(e => e.DestinationConnectionId).HasColumnName("destination_connection_id");
         entity.Property(e => e.HttpDelivery)
-            .HasConversion(
-                value => SerializeJson(value),
-                value => DeserializeJson<HttpDeliveryConfiguration>(value))
             .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb")
             .HasColumnType("jsonb")
             .HasColumnName("http_delivery");
@@ -40,7 +36,6 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.OrderIndex).HasColumnName("order_index");
         entity.Property(e => e.Status)
-            .HasConversion(value => ToSnakeCase(value), value => FromSnakeCase<OperationalStatus>(value))
             .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");
