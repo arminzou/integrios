@@ -13,13 +13,21 @@ internal sealed class ConnectionConfiguration : IEntityTypeConfiguration<Connect
     {
         entity.HasKey(e => e.Id).HasName("connections_pkey");
 
-        entity.ToTable("connections");
+        entity.ToTable("connections", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_connections_source_verification_object",
+                "source_verification IS NULL OR jsonb_typeof(source_verification) = 'object'");
+            table.HasCheckConstraint(
+                "ck_connections_destination_authentication_object",
+                "destination_authentication IS NULL OR jsonb_typeof(destination_authentication) = 'object'");
+        });
 
         entity.HasIndex(e => e.TenantId, "idx_connections_tenant_id");
 
-        entity.HasIndex(e => new { e.TenantId, e.Id }, "uq_connections_tenant_id_id").IsUnique();
+        entity.HasAlternateKey(e => new { e.TenantId, e.Id }).HasName("uq_connections_tenant_id_id");
 
-        entity.HasIndex(e => new { e.TenantId, e.Name }, "uq_connections_tenant_name").IsUnique();
+        entity.HasAlternateKey(e => new { e.TenantId, e.Name }).HasName("uq_connections_tenant_name");
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()

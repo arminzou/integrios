@@ -1,9 +1,4 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
-using DotNet.Testcontainers.Builders;
-using DotNet.Testcontainers.Configurations;
-using DotNet.Testcontainers.Containers;
-using DotNet.Testcontainers.Networks;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -13,40 +8,21 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
 {
     private const string PostgresUser = "integrios";
     private const string PostgresPassword = "integrios_test";
-    private const string PostgresAlias = "postgres";
 
-    private readonly INetwork network;
     private readonly PostgreSqlContainer postgres;
-    private readonly string migrationsDirectory;
 
     public DatabaseLifecycleFixture()
     {
-        network = new NetworkBuilder()
-            .WithName($"integrios-qualification-{Guid.NewGuid():N}")
-            .Build();
-
         postgres = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
             .WithDatabase("postgres")
             .WithUsername(PostgresUser)
             .WithPassword(PostgresPassword)
-            .WithNetwork(network)
-            .WithNetworkAliases(PostgresAlias)
             .Build();
-
-        migrationsDirectory = Path.Combine(ResolveRepoRoot(), "db", "migrations");
     }
 
-    public async Task InitializeAsync()
-    {
-        await network.CreateAsync();
-        await postgres.StartAsync();
-    }
+    public Task InitializeAsync() => postgres.StartAsync();
 
-    public async Task DisposeAsync()
-    {
-        await postgres.DisposeAsync();
-        await network.DeleteAsync();
-    }
+    public Task DisposeAsync() => postgres.DisposeAsync().AsTask();
 
     public async Task<QualificationDatabase> CreateDatabaseAsync()
     {
@@ -65,35 +41,6 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         }.ConnectionString;
 
         return new QualificationDatabase(databaseName, connectionString);
-    }
-
-    public async Task<string> RunFlywayAsync(QualificationDatabase database, string command)
-    {
-        var builder = new ContainerBuilder("flyway/flyway:10.22.0")
-            .WithNetwork(network)
-            .WithBindMount(migrationsDirectory, "/flyway/sql", AccessMode.ReadOnly)
-            .WithEnvironment("FLYWAY_URL", $"jdbc:postgresql://{PostgresAlias}:5432/{database.Name}")
-            .WithEnvironment("FLYWAY_USER", PostgresUser)
-            .WithEnvironment("FLYWAY_PASSWORD", PostgresPassword)
-            .WithEnvironment("FLYWAY_LOCATIONS", "filesystem:/flyway/sql")
-            .WithCommand(command)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(
-                new Regex("Successfully (applied|validated)|Schema .* is up to date", RegexOptions.IgnoreCase),
-                strategy => strategy
-                    .WithMode(WaitStrategyMode.OneShot)
-                    .WithTimeout(TimeSpan.FromMinutes(2))));
-
-        await using IContainer flyway = builder.Build();
-        await flyway.StartAsync();
-
-        long exitCode = await flyway.GetExitCodeAsync();
-        (string stdout, string stderr) = await flyway.GetLogsAsync();
-        string output = stdout + stderr;
-
-        if (exitCode != 0)
-            throw new InvalidOperationException($"Flyway {command} exited with {exitCode}:{Environment.NewLine}{output}");
-
-        return output;
     }
 
     public static async Task<T> ScalarAsync<T>(QualificationDatabase database, string sql)
@@ -119,6 +66,14 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["ASPNETCORE_ENVIRONMENT"] = "Production",
             });
+
+    public static Task<BootstrapProcessResult> RunDatabaseMigrationAsync(QualificationDatabase database) =>
+        RunAdminProcessAsync(
+            database,
+            ["database", "migrate"],
+            "INTEGRIOS_UNUSED_MIGRATION_SECRET",
+            null,
+            "Database migration");
 
     public static Task<BootstrapProcessResult> RunAdminKeyRotationAsync(
         QualificationDatabase database,
@@ -179,18 +134,6 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         return new BootstrapProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
     }
 
-    private static string ResolveRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Integrios.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate the Integrios repository root.");
-    }
 }
 
 public sealed record QualificationDatabase(string Name, string ConnectionString);

@@ -14,7 +14,19 @@ internal sealed class SubscriptionDeliveryConfiguration : IEntityTypeConfigurati
     {
         entity.HasKey(e => e.Id).HasName("subscription_deliveries_pkey");
 
-        entity.ToTable("subscription_deliveries");
+        entity.ToTable("subscription_deliveries", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_subscription_deliveries_attempt_counts_nonnegative",
+                "lifetime_attempt_count >= 0 "
+                + "AND retry_cycle_attempt_count >= 0 "
+                + "AND retry_cycle_attempt_count <= lifetime_attempt_count");
+            table.HasCheckConstraint(
+                "ck_subscription_deliveries_lease_state",
+                "((status = 'in_flight' AND active_attempt_id IS NOT NULL AND lease_expires_at IS NOT NULL) "
+                + "OR (status IN ('pending', 'succeeded', 'dead_lettered') "
+                + "AND active_attempt_id IS NULL AND lease_expires_at IS NULL))");
+        });
 
         entity.HasIndex(e => new { e.Status, e.LeaseExpiresAt, e.DeliverAfter, e.CreatedAt }, "idx_subscription_deliveries_claimable").HasFilter("(status = ANY (ARRAY['pending'::text, 'in_flight'::text]))");
 
@@ -22,7 +34,8 @@ internal sealed class SubscriptionDeliveryConfiguration : IEntityTypeConfigurati
 
         entity.HasIndex(e => e.SubscriptionId, "idx_subscription_deliveries_subscription_id");
 
-        entity.HasIndex(e => new { e.EventId, e.SubscriptionId }, "uq_subscription_deliveries_event_subscription").IsUnique();
+        entity.HasAlternateKey(e => new { e.EventId, e.SubscriptionId })
+            .HasName("uq_subscription_deliveries_event_subscription");
 
         entity.Property(e => e.Id)
             .HasDefaultValueSql("gen_random_uuid()")
@@ -40,9 +53,13 @@ internal sealed class SubscriptionDeliveryConfiguration : IEntityTypeConfigurati
             .HasColumnName("http_execution_snapshot");
         entity.Property(e => e.IntegrationKey).HasColumnName("integration_key");
         entity.Property(e => e.LeaseExpiresAt).HasColumnName("lease_expires_at");
-        entity.Property(e => e.LifetimeAttemptCount).HasColumnName("lifetime_attempt_count");
+        entity.Property(e => e.LifetimeAttemptCount)
+            .HasDefaultValue(0)
+            .HasColumnName("lifetime_attempt_count");
         entity.Property(e => e.ProcessedAt).HasColumnName("processed_at");
-        entity.Property(e => e.RetryCycleAttemptCount).HasColumnName("retry_cycle_attempt_count");
+        entity.Property(e => e.RetryCycleAttemptCount)
+            .HasDefaultValue(0)
+            .HasColumnName("retry_cycle_attempt_count");
         entity.Property(e => e.Status)
             .HasDefaultValueSql("'pending'::text")
             .HasColumnName("status");

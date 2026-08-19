@@ -1,7 +1,7 @@
 # Production reference deployment
 
 This is the reference production Compose deployment for Integrios. It is copy-and-own: copy
-this directory, plus `db/`, into your own infrastructure repo and adapt it to your environment.
+this directory into your own infrastructure repo and adapt it to your environment.
 
 The root `compose.yml` at the repository root is the local development stack. It builds images
 from source and bundles a test sink and dashboards; it is not for deployment.
@@ -17,7 +17,7 @@ docker compose up -d
 ```
 
 Startup order is enforced by `depends_on`: `postgres` becomes healthy, then `migrate` runs the
-Flyway migrations to completion, then `bootstrap` runs its one-shot, then `ingress`, `admin`,
+EF Core migrations to completion, then `bootstrap` runs its one-shot, then `ingress`, `admin`,
 and `worker` start.
 
 ## Bootstrap semantics
@@ -86,6 +86,10 @@ values.
 
 ## Upgrading
 
+The first EF Core-managed release does not upgrade a database created by the former migration
+system. Export anything you need, then provision an empty database before starting that release.
+This is a destructive schema cutover; subsequent EF-managed releases migrate normally.
+
 Worker scheduling is configured independently for the two durable queues:
 
 | Setting | Default |
@@ -115,8 +119,8 @@ Migrations run automatically via the `migrate` one-shot on every `up`.
 
 ## Using a managed Postgres
 
-Remove the `postgres` service from `compose.yml`, then point `FLYWAY_URL` (in `migrate`) and
-`ConnectionStrings__Postgres` (in `bootstrap`, `ingress`, `admin`, `worker`) at your database.
+Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
+`migrate`, `bootstrap`, `ingress`, `admin`, and `worker` at your database.
 
 ## Ports
 

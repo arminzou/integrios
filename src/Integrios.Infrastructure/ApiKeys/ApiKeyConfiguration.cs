@@ -13,7 +13,7 @@ internal sealed class ApiKeyConfiguration : IEntityTypeConfiguration<ApiKey>
 
         entity.ToTable("api_keys");
 
-        entity.HasIndex(e => e.KeyPrefix, "api_credentials_key_id_key").IsUnique();
+        entity.HasAlternateKey(e => e.KeyPrefix).HasName("api_credentials_key_id_key");
 
         entity.HasIndex(e => e.KeyHash, "idx_api_keys_key_hash").IsUnique();
 

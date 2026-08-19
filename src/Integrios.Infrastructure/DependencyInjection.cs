@@ -36,6 +36,26 @@ namespace Integrios.Infrastructure;
 
 public static class DependencyInjection
 {
+    public static async Task MigrateDatabaseAsync(
+        this IServiceProvider services,
+        CancellationToken cancellationToken = default)
+    {
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IntegriosDbContext context = scope.ServiceProvider.GetRequiredService<IntegriosDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+    }
+
+    public static async Task<string> GetDatabaseMigrationInfoAsync(
+        this IServiceProvider services,
+        CancellationToken cancellationToken = default)
+    {
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IntegriosDbContext context = scope.ServiceProvider.GetRequiredService<IntegriosDbContext>();
+        string[] applied = (await context.Database.GetAppliedMigrationsAsync(cancellationToken)).ToArray();
+        string[] pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
+        return $"EF migrations: {applied.Length} applied, {pending.Length} pending.";
+    }
+
     public static IServiceCollection AddAdminInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)

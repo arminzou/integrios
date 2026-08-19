@@ -21,10 +21,10 @@ logs:
 # --- Database migrations through the Compose network ---
 
 db-migrate:
-	docker compose run --rm migrate migrate
+	docker compose run --rm migrate
 
 db-info:
-	docker compose run --rm migrate info
+	docker compose run --rm migrate database info
 
 # --- Admin bootstrap ---
 # DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET are exported above

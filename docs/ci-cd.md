@@ -24,7 +24,7 @@ mapping from cost to schedule stays in one place:
 
 | Tier | What it needs | Runs in |
 |---|---|---|
-| `database` | Flyway and Postgres only; no service images | pull request, main, nightly, release |
+| `database` | EF Core migrations and Postgres only; no service images | pull request, main, nightly, release |
 | `smoke` | packaged deployment, fast enough to gate a merge | main, nightly, release |
 | `deep` | packaged deployment, slow or timing-sensitive | nightly, release |
 

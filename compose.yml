@@ -17,18 +17,18 @@ services:
       retries: 10
 
   migrate:
-    image: flyway/flyway:10.22.0
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PROJECT: Integrios.Admin
+    image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./db/migrations:/flyway/sql
-      - ./db/flyway.toml:/flyway/conf/flyway.toml
     environment:
-      FLYWAY_URL: jdbc:postgresql://postgres:5432/integrios
-      FLYWAY_USER: ${POSTGRES_USER:-integrios}
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-integrios_dev}
-    command: migrate
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+    command: ["database", "migrate"]
 
   bootstrap:
     # Same command as production. What makes this stack dev-only is the well-known dev secret

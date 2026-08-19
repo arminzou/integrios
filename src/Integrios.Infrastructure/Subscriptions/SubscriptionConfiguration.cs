@@ -34,7 +34,9 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasColumnType("jsonb")
             .HasColumnName("match_rules");
         entity.Property(e => e.Name).HasColumnName("name");
-        entity.Property(e => e.OrderIndex).HasColumnName("order_index");
+        entity.Property(e => e.OrderIndex)
+            .HasDefaultValue(0)
+            .HasColumnName("order_index");
         entity.Property(e => e.Status)
             .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");

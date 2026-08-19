@@ -37,7 +37,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await container.StartAsync();
-        await InitializeSchemaAsync();
+        await PostgresMigrationTestHelper.MigrateAsync(ConnectionString);
         WebFactory = BuildWebFactory();
     }
 
@@ -332,19 +332,6 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         return Convert.ToInt32(await cmd.ExecuteScalarAsync());
     }
 
-    private async Task InitializeSchemaAsync()
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-
-        foreach (var migrationPath in ResolveMigrationPaths())
-        {
-            var migrationSql = await File.ReadAllTextAsync(migrationPath);
-            await using var migrationCommand = new NpgsqlCommand(migrationSql, connection);
-            await migrationCommand.ExecuteNonQueryAsync();
-        }
-    }
-
     private WebApplicationFactory<IngressHost::Program> BuildWebFactory()
     {
         return new WebApplicationFactory<IngressHost::Program>().WithWebHostBuilder(builder =>
@@ -373,47 +360,4 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         });
     }
 
-    private static IReadOnlyList<string> ResolveMigrationPaths()
-    {
-        var repoRoot = Environment.GetEnvironmentVariable("INTEGRIOS_REPO_ROOT");
-        if (!string.IsNullOrWhiteSpace(repoRoot))
-        {
-            var envMigrationDirectory = Path.Combine(repoRoot, "db", "migrations");
-            if (Directory.Exists(envMigrationDirectory))
-                return Directory.GetFiles(envMigrationDirectory, "*.sql")
-                    .OrderBy(GetMigrationVersion)
-                    .ThenBy(Path.GetFileName, StringComparer.Ordinal)
-                    .ToArray();
-        }
-
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var solutionPath = Path.Combine(directory.FullName, "Integrios.slnx");
-            if (File.Exists(solutionPath))
-            {
-                var migrationDirectory = Path.Combine(directory.FullName, "db", "migrations");
-                return Directory.GetFiles(migrationDirectory, "*.sql")
-                    .OrderBy(GetMigrationVersion)
-                    .ThenBy(Path.GetFileName, StringComparer.Ordinal)
-                    .ToArray();
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate repository root from test base directory.");
-    }
-
-    private static int GetMigrationVersion(string path)
-    {
-        var fileName = Path.GetFileName(path);
-        var separator = fileName.IndexOf("__", StringComparison.Ordinal);
-        if (separator <= 1)
-            return int.MaxValue;
-
-        return int.TryParse(fileName[1..separator], out var version)
-            ? version
-            : int.MaxValue;
-    }
 }

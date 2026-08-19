@@ -61,7 +61,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await container.StartAsync();
-        await RunMigrationsAsync();
+        await PostgresMigrationTestHelper.MigrateAsync(ConnectionString);
 
         var dataSource = new NpgsqlDataSourceBuilder(ConnectionString).Build();
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
@@ -546,44 +546,6 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await cmd.ExecuteNonQueryAsync();
     }
 
-    private async Task RunMigrationsAsync()
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Integrios.slnx")))
-            {
-                foreach (var path in Directory.GetFiles(Path.Combine(directory.FullName, "db", "migrations"), "*.sql")
-                             .Where(p => !Path.GetFileName(p).StartsWith("V4__"))
-                             .OrderBy(GetMigrationVersion)
-                             .ThenBy(Path.GetFileName, StringComparer.Ordinal))
-                {
-                    var sql = await File.ReadAllTextAsync(path);
-                    await using var cmd = new NpgsqlCommand(sql, connection);
-                    await cmd.ExecuteNonQueryAsync();
-                }
-                return;
-            }
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate repository root.");
-    }
-
-    private static int GetMigrationVersion(string path)
-    {
-        var fileName = Path.GetFileName(path);
-        var separator = fileName.IndexOf("__", StringComparison.Ordinal);
-        if (separator <= 1)
-            return int.MaxValue;
-
-        return int.TryParse(fileName[1..separator], out var version)
-            ? version
-            : int.MaxValue;
-    }
 }
 
 public sealed record SubscriptionDeliveryState(

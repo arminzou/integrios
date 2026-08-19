@@ -7,24 +7,17 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
     : IClassFixture<DatabaseLifecycleFixture>
 {
     [Fact]
-    public async Task FreshDatabase_RepeatedFlywayAndProductionBootstrap_AreSafeAndIdempotent()
+    public async Task FreshDatabase_RepeatedEfMigrationAndProductionBootstrap_AreSafeAndIdempotent()
     {
         QualificationDatabase database = await fixture.CreateDatabaseAsync();
 
-        string firstMigrate = await fixture.RunFlywayAsync(database, "migrate");
-        long historyCountAfterFirstMigrate = await DatabaseLifecycleFixture.ScalarAsync<long>(
-            database, "SELECT COUNT(*) FROM flyway_schema_history");
-        string secondMigrate = await fixture.RunFlywayAsync(database, "migrate");
-        string validate = await fixture.RunFlywayAsync(database, "validate");
+        BootstrapProcessResult firstMigrate = await DatabaseLifecycleFixture.RunDatabaseMigrationAsync(database);
+        BootstrapProcessResult secondMigrate = await DatabaseLifecycleFixture.RunDatabaseMigrationAsync(database);
 
-        Assert.Contains("Successfully applied", firstMigrate, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("up to date", secondMigrate, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Successfully validated", validate, StringComparison.OrdinalIgnoreCase);
-        Assert.True(historyCountAfterFirstMigrate > 0);
-        Assert.Equal(historyCountAfterFirstMigrate, await DatabaseLifecycleFixture.ScalarAsync<long>(
-            database, "SELECT COUNT(*) FROM flyway_schema_history"));
-        Assert.Equal(0L, await DatabaseLifecycleFixture.ScalarAsync<long>(
-            database, "SELECT COUNT(*) FROM flyway_schema_history WHERE NOT success"));
+        Assert.Equal(0, firstMigrate.ExitCode);
+        Assert.Equal(0, secondMigrate.ExitCode);
+        Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+            database, "SELECT COUNT(*) FROM \"__EFMigrationsHistory\""));
         Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "integration_key"));
         Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscription_deliveries", "http_execution_snapshot"));
         Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscriptions", "http_delivery"));
@@ -83,7 +76,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
     public async Task AdminKeyRotation_RequiresOutOfBandSecretAndDoesNotDiscloseIt()
     {
         QualificationDatabase database = await fixture.CreateDatabaseAsync();
-        await fixture.RunFlywayAsync(database, "migrate");
+        Assert.Equal(0, (await DatabaseLifecycleFixture.RunDatabaseMigrationAsync(database)).ExitCode);
 
         BootstrapProcessResult beforeBootstrap =
             await DatabaseLifecycleFixture.RunAdminKeyRotationAsync(database, "premature-rotation-secret");
