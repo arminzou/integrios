@@ -20,6 +20,24 @@ internal sealed class StoredJsonConverter<T>()
         ?? throw new JsonException($"Could not deserialize {typeof(T).Name}.");
 }
 
+internal sealed class JsonElementStoredConverter()
+    : ValueConverter<JsonElement, string>(
+        value => value.GetRawText(),
+        value => DeserializeElement(value))
+{
+    private static JsonElement DeserializeElement(string value) =>
+        JsonDocument.Parse(value).RootElement.Clone();
+}
+
+internal sealed class NullableJsonElementStoredConverter()
+    : ValueConverter<JsonElement?, string?>(
+        value => value.HasValue ? value.Value.GetRawText() : null,
+        value => value == null ? null : DeserializeElement(value))
+{
+    private static JsonElement DeserializeElement(string value) =>
+        JsonDocument.Parse(value).RootElement.Clone();
+}
+
 internal sealed class StringListValueComparer()
     : ValueComparer<IReadOnlyList<string>>(
         (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),

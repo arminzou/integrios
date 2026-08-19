@@ -5,6 +5,12 @@ using Integrios.Domain.Tenants;
 using Integrios.Domain.Topics;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Outbox;
+using Integrios.Application.Connections;
+using Integrios.Application.Events;
+using Integrios.Application.Integrations;
+using Integrios.Infrastructure.Connections;
+using Integrios.Infrastructure.Events;
+using Integrios.Infrastructure.Integrations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,6 +72,25 @@ public sealed class DatabaseProviderRegistrationTests
     }
 
     [Fact]
+    public void SqlServerProvider_RegistersSqlServerModelAndAdapters()
+    {
+        var services = new ServiceCollection();
+        services.AddAdminInfrastructureServices(BuildConfiguration("sqlserver"));
+        services.AddIngressInfrastructureServices(BuildConfiguration("sqlserver"));
+
+        using ServiceProvider provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using IServiceScope scope = provider.CreateScope();
+        IntegriosDbContext context = scope.ServiceProvider.GetRequiredService<IntegriosDbContext>();
+
+        Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", context.Database.ProviderName);
+        Assert.Equal("nvarchar(max)", context.Model.FindEntityType(typeof(Event))!
+            .FindProperty(nameof(Event.Payload))!.GetColumnType());
+        Assert.IsType<SqlServerConnectionAuthoringLock>(provider.GetRequiredService<IConnectionAuthoringLock>());
+        Assert.IsType<SqlServerEventAcceptance>(provider.GetRequiredService<IEventAcceptance>());
+        Assert.IsType<SqlServerIntegrationManifestStore>(scope.ServiceProvider.GetRequiredService<IIntegrationManifestStore>());
+    }
+
+    [Fact]
     public void StringListValueComparer_UsesStructuralEqualityAndSnapshots()
     {
         var comparer = new StringListValueComparer();
@@ -82,7 +107,9 @@ public sealed class DatabaseProviderRegistrationTests
             {
                 ["Database:Provider"] = provider,
                 ["ConnectionStrings:Postgres"] =
-                    "Host=localhost;Database=integrios;Username=integrios;Password=integrios"
+                    "Host=localhost;Database=integrios;Username=integrios;Password=integrios",
+                ["ConnectionStrings:SqlServer"] =
+                    "Server=localhost;Database=integrios;User Id=sa;Password=Integrios_Test_2026!;TrustServerCertificate=True"
             })
             .Build();
 }

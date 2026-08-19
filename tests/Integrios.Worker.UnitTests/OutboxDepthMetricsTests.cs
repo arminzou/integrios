@@ -49,6 +49,8 @@ public sealed class OutboxDepthMetricsTests
 
     private sealed class CountingConnectionFactory : IDbConnectionFactory
     {
+        public DatabaseProvider Provider => DatabaseProvider.Postgres;
+
         public int OpenCount { get; private set; }
 
         public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)

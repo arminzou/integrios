@@ -5,6 +5,8 @@ namespace Integrios.Infrastructure.Data;
 
 internal sealed class NpgsqlConnectionFactory(NpgsqlDataSource dataSource) : IDbConnectionFactory
 {
+    public DatabaseProvider Provider => DatabaseProvider.Postgres;
+
     public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         return await dataSource.OpenConnectionAsync(cancellationToken);

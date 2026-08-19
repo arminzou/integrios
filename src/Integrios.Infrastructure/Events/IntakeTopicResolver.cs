@@ -4,7 +4,7 @@ using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class PostgresIntakeTopicResolver(IDbConnectionFactory connectionFactory)
+internal sealed class IntakeTopicResolver(IDbConnectionFactory connectionFactory)
     : ISourceTopicLookup
 {
     public async Task<Guid?> FindActiveSourceTopicAsync(
@@ -14,10 +14,13 @@ internal sealed class PostgresIntakeTopicResolver(IDbConnectionFactory connectio
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
+        string top = sqlServer ? "TOP (1) " : string.Empty;
+        string limit = sqlServer ? string.Empty : "LIMIT 1";
         return await connection.QuerySingleOrDefaultAsync<Guid?>(
             new CommandDefinition(
-                """
-                SELECT t.id
+                $"""
+                SELECT {top}t.id
                 FROM topics t
                 JOIN topic_sources ts
                   ON ts.tenant_id = t.tenant_id
@@ -34,7 +37,7 @@ internal sealed class PostgresIntakeTopicResolver(IDbConnectionFactory connectio
                   AND c.status = 'active'
                   AND i.status = 'active'
                   AND i.direction IN ('source', 'both')
-                LIMIT 1
+                {limit}
                 """,
                 new { TenantId = tenantId, TopicName = topicName, SourceConnectionId = sourceConnectionId },
                 cancellationToken: cancellationToken));

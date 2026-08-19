@@ -20,6 +20,8 @@
     <ProjectReference Include="..\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
+    <ProjectReference Include="..\Integrios.Migrations.Postgres\Integrios.Migrations.Postgres.csproj" />
+    <ProjectReference Include="..\Integrios.Migrations.SqlServer\Integrios.Migrations.SqlServer.csproj" />
   </ItemGroup>
 
 </Project>

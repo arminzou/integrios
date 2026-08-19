@@ -6,6 +6,8 @@
     <Project Path="src/Integrios.Domain/Integrios.Domain.csproj" />
     <Project Path="src/Integrios.Application/Integrios.Application.csproj" />
     <Project Path="src/Integrios.Worker/Integrios.Worker.csproj" />
+    <Project Path="src/Integrios.Migrations.Postgres/Integrios.Migrations.Postgres.csproj" />
+    <Project Path="src/Integrios.Migrations.SqlServer/Integrios.Migrations.SqlServer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Integrios.ArchitectureTests/Integrios.ArchitectureTests.csproj" />

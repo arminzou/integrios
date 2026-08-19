@@ -28,7 +28,8 @@ team points it at their own stack. Licensed under MIT.
 - `src/Integrios.MockSink` provides a controllable local sink for testing and demos. Not part of the deployable product.
 - `src/Integrios.Domain` holds core domain types and shared contracts.
 - `tests/` contains unit and integration test projects.
-- `src/Integrios.Infrastructure/Data/Migrations/` contains EF Core migrations.
+- `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` contain the
+  provider-specific EF Core migrations.
 - `docs/` is for public documentation only.
 
 ## Architecture

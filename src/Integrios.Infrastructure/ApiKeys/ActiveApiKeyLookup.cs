@@ -6,14 +6,18 @@ using Integrios.Domain.Tenants;
 
 namespace Integrios.Infrastructure.ApiKeys;
 
-internal sealed class PostgresActiveApiKeyLookup(IDbConnectionFactory connectionFactory)
+internal sealed class ActiveApiKeyLookup(IDbConnectionFactory connectionFactory)
     : IActiveApiKeyLookup
 {
     public async Task<(ApiKey ApiKey, Tenant Tenant)?> FindActiveByKeyHashAsync(
         string keyHash,
         CancellationToken cancellationToken)
     {
-        const string sql = """
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        string currentTimestamp = connectionFactory.Provider == DatabaseProvider.SqlServer
+            ? "SYSUTCDATETIME()"
+            : "now()";
+        string sql = $"""
             SELECT
                 c.id           AS ApiKeyId,
                 c.tenant_id    AS ApiKeyTenantId,
@@ -39,10 +43,9 @@ internal sealed class PostgresActiveApiKeyLookup(IDbConnectionFactory connection
             WHERE c.key_hash = @KeyHash
               AND c.status = 'active'
               AND t.status = 'active'
-              AND (c.expires_at IS NULL OR c.expires_at > now())
+              AND (c.expires_at IS NULL OR c.expires_at > {currentTimestamp})
             """;
 
-        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         ApiKeyTenantRow? row = await connection.QuerySingleOrDefaultAsync<ApiKeyTenantRow>(
             new CommandDefinition(sql, new { KeyHash = keyHash }, cancellationToken: cancellationToken));
 

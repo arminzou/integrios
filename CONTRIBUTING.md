@@ -31,7 +31,8 @@ See [docs/setup.md](docs/setup.md) for the end-to-end run and a first-event walk
   plane), `Integrios.Worker` (delivery), plus `Integrios.Domain`, `Integrios.Application`,
   `Integrios.Infrastructure`, and `Integrios.MockSink` (a local test sink).
 - `tests/`: xUnit test projects.
-- `src/Integrios.Infrastructure/Data/Migrations/`: EF Core migrations.
+- `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/`: provider-specific
+  EF Core migrations.
 - `docs/`: public documentation.
 
 ## Making changes

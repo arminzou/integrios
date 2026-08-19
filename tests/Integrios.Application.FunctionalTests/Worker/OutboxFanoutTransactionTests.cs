@@ -25,10 +25,12 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
             fixture.RunFanoutBatchAsync(1),
             fixture.RunFanoutBatchAsync(1));
 
-        Assert.Equal(1, processedCounts.Sum());
-        Assert.Equal(1, await fixture.GetSubscriptionDeliveryCountAsync(eventId));
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal("fanned_out", await fixture.GetEventStatusAsync(eventId));
+        await ConsistencyContractAssertions.FanoutProcessesOnceAsync(
+            eventId,
+            processedCounts,
+            fixture.GetSubscriptionDeliveryCountAsync,
+            fixture.IsOutboxRowProcessedAsync,
+            fixture.GetEventStatusAsync);
     }
 
     [Fact]

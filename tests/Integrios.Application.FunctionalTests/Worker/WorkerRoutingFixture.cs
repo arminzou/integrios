@@ -51,7 +51,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public FakeDeliveryClient DeliveryClient { get; } = new();
     public MutableSecretResolver SecretResolver { get; } = new();
     public string ConnectionString => container.GetConnectionString();
-    internal PostgresSubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
+    internal SubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
 
     private IDbConnectionFactory connectionFactory = null!;
     private IntegriosDbContext dbContext = null!;
@@ -70,14 +70,14 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         connectionFactory = new NpgsqlConnectionFactory(dataSource);
         dbContext = new IntegriosDbContext(
             new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(ConnectionString).Options);
-        deadLetterReplay = new PostgresDeadLetterReplay(connectionFactory);
+        deadLetterReplay = new DeadLetterReplay(connectionFactory);
         outboxFanout = new PostgresOutboxFanout(
             new PooledDbContextFactory<IntegriosDbContext>(
                 new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(ConnectionString).Options));
         subscriptionRepository = new SubscriptionRepository(dbContext);
-        eventLookup = new PostgresTenantEventLookup(connectionFactory);
+        eventLookup = new TenantEventLookup(connectionFactory);
         var deliveryOptions = DeliveryExecutionOptions.Default;
-        DeliveryQueue = new PostgresSubscriptionDeliveryQueue(
+        DeliveryQueue = new SubscriptionDeliveryQueue(
             connectionFactory,
             deliveryOptions,
             new DeliveryOutcomePolicy(new RetryPolicy()));

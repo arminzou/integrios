@@ -6,7 +6,7 @@ using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class PostgresSourceEndpointResolver(IDbConnectionFactory connectionFactory)
+internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFactory)
     : ISourceEndpointResolver
 {
     public async Task<ResolvedSourceEndpoint?> ResolveAsync(
@@ -15,9 +15,25 @@ internal sealed class PostgresSourceEndpointResolver(IDbConnectionFactory connec
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        EndpointRow? row = await connection.QuerySingleOrDefaultAsync<EndpointRow>(
-            new CommandDefinition(
+        bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
+        string sql = sqlServer
+            ? """
+                SELECT TOP (1)
+                    se.tenant_id AS TenantId, t.slug AS TenantSlug, se.topic_id AS TopicId,
+                    se.connection_id AS ConnectionId, i.[key] AS IntegrationKey,
+                    JSON_VALUE(i.manifest, '$.source_adapter.key') AS SourceAdapterKey,
+                    TRY_CONVERT(int, JSON_VALUE(i.manifest, '$.source_adapter.contract_version')) AS SourceAdapterContractVersion,
+                    JSON_QUERY(i.manifest, '$.source_adapter.config') AS SourceAdapterConfigJson,
+                    c.source_verification AS SourceVerificationJson
+                FROM source_endpoints se
+                JOIN topic_sources ts ON ts.tenant_id=se.tenant_id AND ts.topic_id=se.topic_id AND ts.connection_id=se.connection_id
+                JOIN connections c ON c.tenant_id=se.tenant_id AND c.id=se.connection_id
+                JOIN integrations i ON i.id=c.integration_id
+                JOIN tenants t ON t.id=se.tenant_id
+                WHERE se.id=@EndpointId AND i.[key]=@IntegrationKey AND se.status=N'active'
+                  AND ts.status=N'active' AND c.status=N'active' AND i.status=N'active'
                 """
+            : """
                 SELECT
                     se.tenant_id AS TenantId,
                     t.slug AS TenantSlug,
@@ -30,22 +46,17 @@ internal sealed class PostgresSourceEndpointResolver(IDbConnectionFactory connec
                     c.source_verification::text AS SourceVerificationJson
                 FROM source_endpoints se
                 JOIN topic_sources ts
-                  ON ts.tenant_id = se.tenant_id
-                 AND ts.topic_id = se.topic_id
-                 AND ts.connection_id = se.connection_id
-                JOIN connections c
-                  ON c.tenant_id = se.tenant_id
-                 AND c.id = se.connection_id
+                  ON ts.tenant_id = se.tenant_id AND ts.topic_id = se.topic_id AND ts.connection_id = se.connection_id
+                JOIN connections c ON c.tenant_id = se.tenant_id AND c.id = se.connection_id
                 JOIN integrations i ON i.id = c.integration_id
                 JOIN tenants t ON t.id = se.tenant_id
-                WHERE se.id = @EndpointId
-                  AND i.key = @IntegrationKey
-                  AND se.status = 'active'
-                  AND ts.status = 'active'
-                  AND c.status = 'active'
-                  AND i.status = 'active'
+                WHERE se.id = @EndpointId AND i.key = @IntegrationKey AND se.status = 'active'
+                  AND ts.status = 'active' AND c.status = 'active' AND i.status = 'active'
                 LIMIT 1
-                """,
+                """;
+        EndpointRow? row = await connection.QuerySingleOrDefaultAsync<EndpointRow>(
+            new CommandDefinition(
+                sql,
                 new { EndpointId = endpointId, IntegrationKey = integrationKey },
                 cancellationToken: cancellationToken));
 

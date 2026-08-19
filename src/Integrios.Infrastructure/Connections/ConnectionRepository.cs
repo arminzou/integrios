@@ -7,6 +7,7 @@ using Integrios.Domain.Connections;
 using Integrios.Domain.Topics;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Connections;
@@ -22,12 +23,14 @@ internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnec
             return connection;
         }
         catch (DbUpdateException ex) when (
-            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation })
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation }
+            || ex.InnerException is SqlException { Number: 547 })
         {
             throw new InvalidOperationException("The specified integration does not exist.", ex);
         }
         catch (DbUpdateException ex) when (
-            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+            || ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
             throw new DuplicateResourceException(
                 $"A connection named '{connection.Name}' already exists for this tenant.",
@@ -130,6 +133,12 @@ internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnec
             return affected == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new DuplicateResourceException(
+                $"A connection named '{name}' already exists for this tenant.",
+                ex);
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
         {
             throw new DuplicateResourceException(
                 $"A connection named '{name}' already exists for this tenant.",
