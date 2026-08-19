@@ -2,6 +2,7 @@ using Integrios.Tests.Shared;
 using Integrios.Admin;
 using Integrios.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -127,8 +128,13 @@ public sealed class AdminApiFixture : IAsyncLifetime
             {
                 services.RemoveAll<NpgsqlDataSource>();
                 services.RemoveAll<IDbConnectionFactory>();
+                services.RemoveAll<IDbContextFactory<IntegriosDbContext>>();
+                services.RemoveAll<DbContextOptions<IntegriosDbContext>>();
+                services.RemoveAll<IntegriosDbContext>();
                 services.RemoveAll<PublicIngressBaseUri>();
 
+                services.AddDbContextFactory<IntegriosDbContext>(
+                    options => options.UseNpgsql(ConnectionString));
                 services.AddSingleton(_ => new NpgsqlDataSourceBuilder(ConnectionString).Build());
                 services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
                 services.AddSingleton(PublicIngressBaseUri.Parse(

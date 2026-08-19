@@ -1,6 +1,10 @@
+using Integrios.Application.AdminKeys;
 using Integrios.Application.Connections;
+using Integrios.Domain.Tenants;
+using Integrios.Infrastructure.AdminKeys;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Infrastructure;
@@ -13,14 +17,40 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
+    public async Task AdminKeyLookup_FindsActiveGlobalKey()
+    {
+        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand(
+                """
+                INSERT INTO admin_keys (public_key, secret_hash, name)
+                VALUES ('global_admin_key', 'sha256:test', 'Test key')
+                """,
+                connection);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await using IntegriosDbContext context = CreateContext();
+        IAdminKeyLookup repository = new AdminKeyRepository(context);
+
+        AdminKey? key = await repository.FindActiveByPublicKeyAsync(
+            "global_admin_key",
+            CancellationToken.None);
+
+        Assert.NotNull(key);
+        Assert.Equal("sha256:test", key.SecretHash);
+    }
+
+    [Fact]
     public async Task Usage_CountsActiveAssociations_AndIgnoresRetiredOnes()
     {
         Guid topicId = await fixture.SeedTopicAsync(fixture.TenantAId, "usage-topic");
         Guid connectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "usage-source");
         await fixture.AssociateSourceAsync(fixture.TenantAId, topicId, connectionId);
 
-        await using NpgsqlDataSource dataSource = new NpgsqlDataSourceBuilder(fixture.ConnectionString).Build();
-        var repository = new PostgresConnectionRepository(new NpgsqlConnectionFactory(dataSource));
+        await using IntegriosDbContext context = CreateContext();
+        var repository = new ConnectionRepository(context);
 
         ConnectionUsage whileAssociated = await repository.GetUsageAsync(
             fixture.TenantAId, connectionId, CancellationToken.None);
@@ -36,4 +66,9 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
         Assert.False(afterRetirement.Source);
         Assert.False(afterRetirement.Destination);
     }
+
+    private IntegriosDbContext CreateContext() => new(
+        new DbContextOptionsBuilder<IntegriosDbContext>()
+            .UseNpgsql(fixture.ConnectionString)
+            .Options);
 }

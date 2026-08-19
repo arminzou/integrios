@@ -6,18 +6,16 @@ using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Common;
 using Integrios.Domain.Topics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Topics;
 
-internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFactory) : ITopicRepository
+internal sealed class PostgresTopicRepository(IntegriosDbContext context) : ITopicRepository
 {
     private const string ForeignKeyViolation = "23503";
     private const string SourceConnectionTenantConstraint = "fk_topic_sources_connection_tenant";
-    private const string UniqueViolation = "23505";
-
-    private const string SelectColumns =
-        "id AS Id, tenant_id AS TenantId, name AS Name, status AS Status, description AS Description, created_at AS CreatedAt, updated_at AS UpdatedAt";
 
     public async Task<Topic> CreateAsync(
         Guid tenantId,
@@ -28,29 +26,39 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
     {
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
+        var topic = new Topic
+        {
+            Id = id,
+            TenantId = tenantId,
+            Name = name,
+            Sources = [],
+            Status = OperationalStatus.Active,
+            Description = description,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
 
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        await using var tx = await db.BeginTransactionAsync(ct);
+        await using var transaction = await context.Database.BeginTransactionAsync(ct);
 
         try
         {
-            var row = await db.QuerySingleAsync<TopicRow>(
-                new CommandDefinition(
-                    $"""
-                    INSERT INTO topics (id, tenant_id, name, status, description, created_at, updated_at)
-                    VALUES (@Id, @TenantId, @Name, 'active', @Description, @Now, @Now)
-                    RETURNING {SelectColumns}
-                    """,
-                    new { Id = id, TenantId = tenantId, Name = name, Description = description, Now = now },
-                    tx,
-                    cancellationToken: ct));
+            context.Topics.Add(topic);
+            await context.SaveChangesAsync(ct);
 
-            var sources = await UpsertSourcesAsync(db, tenantId, id, sourceConnectionIds.Distinct().ToArray(), tx, ct);
-            await tx.CommitAsync(ct);
+            DbConnection db = context.Database.GetDbConnection();
+            IReadOnlyList<TopicSource> sources = await UpsertSourcesAsync(
+                db,
+                tenantId,
+                id,
+                sourceConnectionIds.Distinct().ToArray(),
+                transaction.GetDbTransaction(),
+                ct);
+            await transaction.CommitAsync(ct);
 
-            return row.ToTopic(sources);
+            return topic with { Sources = sources };
         }
-        catch (NpgsqlException ex) when (ex.SqlState == UniqueViolation)
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             throw new DuplicateResourceException($"A topic named '{name}' already exists for this tenant.", ex);
         }
@@ -65,50 +73,18 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
 
     public async Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct)
     {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-
-        var rows = (await db.QueryAsync<TopicWithSourceRow>(
-            new CommandDefinition(
-                """
-                SELECT
-                    t.id AS Id,
-                    t.tenant_id AS TenantId,
-                    t.name AS Name,
-                    t.status AS Status,
-                    t.description AS Description,
-                    t.created_at AS CreatedAt,
-                    t.updated_at AS UpdatedAt,
-                    ts.connection_id AS SourceConnectionId,
-                    ts.created_at AS SourceCreatedAt,
-                    se.id AS EndpointId,
-                    se.callback_path AS CallbackPath,
-                    se.created_at AS EndpointCreatedAt
-                FROM topics t
-                LEFT JOIN topic_sources ts
-                    ON ts.tenant_id = t.tenant_id
-                   AND ts.topic_id = t.id
-                   AND ts.status = 'active'
-                -- Keep the endpoint status predicate in the LEFT JOIN. Moving it to WHERE drops
-                -- endpoint-free sources by turning the outer join into an inner join.
-                LEFT JOIN source_endpoints se
-                    ON se.tenant_id = ts.tenant_id
-                   AND se.topic_id = ts.topic_id
-                   AND se.connection_id = ts.connection_id
-                   AND se.status = 'active'
-                WHERE t.tenant_id = @TenantId AND t.id = @Id
-                ORDER BY ts.created_at, ts.connection_id
-                """,
-                new { TenantId = tenantId, Id = id },
-                cancellationToken: ct))).ToList();
-
-        if (rows.Count == 0)
+        Topic? topic = await context.Topics.AsNoTracking().SingleOrDefaultAsync(
+            candidate => candidate.TenantId == tenantId && candidate.Id == id,
+            ct);
+        if (topic is null)
             return null;
 
-        var sources = rows
-            .Where(static row => row.SourceConnectionId is not null)
-            .Select(static row => row.ToTopicSource())
-            .ToList();
-        return rows[0].ToTopic(sources);
+        Dictionary<Guid, List<TopicSource>> sourceMap = await LoadSourcesForTopicsAsync(
+            context.Database.GetDbConnection(),
+            tenantId,
+            [id],
+            ct);
+        return topic with { Sources = sourceMap.GetValueOrDefault(id) ?? [] };
     }
 
     public async Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(
@@ -119,44 +95,40 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
     {
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
-        var hasCursor = afterCursor is not null && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
-        int fetchLimit = limit + 1;
+        bool hasCursor = afterCursor is not null
+            && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
 
-        var sql = hasCursor
-            ? $"""
-               SELECT {SelectColumns} FROM topics
-               WHERE tenant_id = @TenantId AND (created_at, id) > (@CursorTime, @CursorId)
-               ORDER BY created_at, id LIMIT @Limit
-               """
-            : $"""
-               SELECT {SelectColumns} FROM topics
-               WHERE tenant_id = @TenantId
-               ORDER BY created_at, id LIMIT @Limit
-               """;
+        IQueryable<Topic> query = context.Topics.AsNoTracking().Where(topic => topic.TenantId == tenantId);
+        if (hasCursor)
+        {
+            query = query.Where(topic =>
+                topic.CreatedAt > cursorTime
+                || (topic.CreatedAt == cursorTime && topic.Id.CompareTo(cursorId) > 0));
+        }
 
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        var rows = (await db.QueryAsync<TopicRow>(
-            new CommandDefinition(
-                sql,
-                new { TenantId = tenantId, CursorTime = cursorTime, CursorId = cursorId, Limit = fetchLimit },
-                cancellationToken: ct))).ToList();
+        List<Topic> topics = await query
+            .OrderBy(topic => topic.CreatedAt)
+            .ThenBy(topic => topic.Id)
+            .Take(limit + 1)
+            .ToListAsync(ct);
 
-        if (rows.Count == 0)
-            return ([], null);
-
-        bool hasMore = rows.Count > limit;
+        bool hasMore = topics.Count > limit;
         if (hasMore)
-            rows.RemoveAt(rows.Count - 1);
+            topics.RemoveAt(topics.Count - 1);
 
-        var topicIds = rows.Select(r => r.Id).ToArray();
-        var sourceMap = await LoadSourcesForTopicsAsync(db, tenantId, topicIds, ct);
+        Guid[] topicIds = topics.Select(topic => topic.Id).ToArray();
+        Dictionary<Guid, List<TopicSource>> sourceMap = await LoadSourcesForTopicsAsync(
+            context.Database.GetDbConnection(),
+            tenantId,
+            topicIds,
+            ct);
 
-        var items = rows
-            .Select(r => r.ToTopic(sourceMap.TryGetValue(r.Id, out var s) ? s : []))
+        List<Topic> items = topics
+            .Select(topic => topic with { Sources = sourceMap.GetValueOrDefault(topic.Id) ?? [] })
             .ToList();
 
         var nextCursor = hasMore
-            ? PageCursor.Encode(rows[^1].CreatedAt, rows[^1].Id)
+            ? PageCursor.Encode(topics[^1].CreatedAt, topics[^1].Id)
             : null;
 
         return (items, nextCursor);
@@ -170,87 +142,55 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
         IReadOnlyList<Guid>? sourceConnectionIds,
         CancellationToken ct)
     {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        await using var tx = await db.BeginTransactionAsync(ct);
+        await using var transaction = await context.Database.BeginTransactionAsync(ct);
 
         try
         {
+            Topic? existing = await context.Topics.AsNoTracking().SingleOrDefaultAsync(
+                topic => topic.TenantId == tenantId && topic.Id == id,
+                ct);
+            if (existing is null)
+                return null;
+            if (string.IsNullOrWhiteSpace(name))
+                throw new TopicValidationException("Topic name is required for update.");
+            if (!string.Equals(existing.Name, name, StringComparison.Ordinal))
+            {
+                throw new TopicValidationException(
+                    "Topic names are immutable; create a new topic to change the stream identifier.");
+            }
+            if (existing.Status == OperationalStatus.Disabled)
+                return null;
+
+            DateTimeOffset updatedAt = DateTimeOffset.UtcNow;
+            await context.Topics
+                .Where(topic => topic.TenantId == tenantId && topic.Id == id)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(topic => topic.Description, description)
+                        .SetProperty(topic => topic.UpdatedAt, updatedAt),
+                    ct);
+
+            DbConnection db = context.Database.GetDbConnection();
+            DbTransaction dbTransaction = transaction.GetDbTransaction();
+            IReadOnlyList<TopicSource> sources;
             if (sourceConnectionIds is null)
             {
-                var rows = (await db.QueryAsync<TopicWithSourceRow>(
-                    new CommandDefinition(
-                        """
-                        WITH updated AS (
-                            UPDATE topics
-                            SET description = @Description, updated_at = now()
-                            WHERE tenant_id = @TenantId AND id = @Id AND name = @Name AND status != 'disabled'
-                            RETURNING id, tenant_id, name, status, description, created_at, updated_at
-                        )
-                        SELECT
-                            u.id AS Id,
-                            u.tenant_id AS TenantId,
-                            u.name AS Name,
-                            u.status AS Status,
-                            u.description AS Description,
-                            u.created_at AS CreatedAt,
-                            u.updated_at AS UpdatedAt,
-                            ts.connection_id AS SourceConnectionId,
-                            ts.created_at AS SourceCreatedAt,
-                            se.id AS EndpointId,
-                            se.callback_path AS CallbackPath,
-                            se.created_at AS EndpointCreatedAt
-                        FROM updated u
-                        LEFT JOIN topic_sources ts
-                            ON ts.tenant_id = u.tenant_id
-                           AND ts.topic_id = u.id
-                           AND ts.status = 'active'
-                        -- Keep the endpoint status predicate in the LEFT JOIN. Moving it to WHERE drops
-                        -- endpoint-free sources by turning the outer join into an inner join.
-                        LEFT JOIN source_endpoints se
-                            ON se.tenant_id = ts.tenant_id
-                           AND se.topic_id = ts.topic_id
-                           AND se.connection_id = ts.connection_id
-                           AND se.status = 'active'
-                        ORDER BY ts.created_at, ts.connection_id
-                        """,
-                        new { TenantId = tenantId, Id = id, Name = name, Description = description },
-                        tx,
-                        cancellationToken: ct))).ToList();
-
-                if (rows.Count > 0)
-                {
-                    var unchangedSources = rows
-                        .Where(static row => row.SourceConnectionId is not null)
-                        .Select(static row => row.ToTopicSource())
-                        .ToList();
-                    await tx.CommitAsync(ct);
-                    return rows[0].ToTopic(unchangedSources);
-                }
-
-                return await ResolveMissingUpdateAsync(db, tenantId, id, name, tx, ct);
+                Dictionary<Guid, List<TopicSource>> sourceMap = await LoadSourcesForTopicsAsync(
+                    db,
+                    tenantId,
+                    [id],
+                    ct);
+                sources = sourceMap.GetValueOrDefault(id) ?? [];
+            }
+            else
+            {
+                Guid[] desired = sourceConnectionIds.Distinct().ToArray();
+                await RemoveSourcesNotInAsync(db, tenantId, id, desired, dbTransaction, ct);
+                sources = await UpsertSourcesAsync(db, tenantId, id, desired, dbTransaction, ct);
             }
 
-            var row = await db.QuerySingleOrDefaultAsync<TopicRow>(
-                new CommandDefinition(
-                    $"""
-                    UPDATE topics
-                    SET description = @Description, updated_at = now()
-                    WHERE tenant_id = @TenantId AND id = @Id AND name = @Name AND status != 'disabled'
-                    RETURNING {SelectColumns}
-                    """,
-                    new { TenantId = tenantId, Id = id, Name = name, Description = description },
-                    tx,
-                    cancellationToken: ct));
-
-            if (row is null)
-                return await ResolveMissingUpdateAsync(db, tenantId, id, name, tx, ct);
-
-            var desired = sourceConnectionIds.Distinct().ToArray();
-            await RemoveSourcesNotInAsync(db, tenantId, id, desired, tx, ct);
-            IReadOnlyList<TopicSource> sources = await UpsertSourcesAsync(db, tenantId, id, desired, tx, ct);
-
-            await tx.CommitAsync(ct);
-            return row.ToTopic(sources);
+            await transaction.CommitAsync(ct);
+            return existing with { Description = description, UpdatedAt = updatedAt, Sources = sources };
         }
         catch (PostgresException ex) when (
             ex.SqlState == ForeignKeyViolation
@@ -261,48 +201,17 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
         }
     }
 
-    private static async Task<Topic?> ResolveMissingUpdateAsync(
-        DbConnection db,
-        Guid tenantId,
-        Guid id,
-        string? requestedName,
-        DbTransaction tx,
-        CancellationToken ct)
-    {
-        var existingName = await db.QuerySingleOrDefaultAsync<string?>(
-            new CommandDefinition(
-                "SELECT name FROM topics WHERE tenant_id = @TenantId AND id = @Id",
-                new { TenantId = tenantId, Id = id },
-                tx,
-                cancellationToken: ct));
-        await tx.RollbackAsync(ct);
-
-        if (existingName is not null && string.IsNullOrWhiteSpace(requestedName))
-            throw new TopicValidationException("Topic name is required for update.");
-
-        if (existingName is not null && !string.Equals(existingName, requestedName, StringComparison.Ordinal))
-        {
-            throw new TopicValidationException(
-                "Topic names are immutable; create a new topic to change the stream identifier.");
-        }
-
-        return null;
-    }
-
     public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct)
-    {
-        await using var db = await connectionFactory.OpenConnectionAsync(ct);
-        var affected = await db.ExecuteAsync(
-            new CommandDefinition(
-                """
-                UPDATE topics
-                SET status = 'disabled', updated_at = now()
-                WHERE tenant_id = @TenantId AND id = @Id AND status != 'disabled'
-                """,
-                new { TenantId = tenantId, Id = id },
-                cancellationToken: ct));
-        return affected > 0;
-    }
+        => await context.Topics
+            .Where(topic =>
+                topic.TenantId == tenantId
+                && topic.Id == id
+                && topic.Status != OperationalStatus.Disabled)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(topic => topic.Status, OperationalStatus.Disabled)
+                    .SetProperty(topic => topic.UpdatedAt, DateTimeOffset.UtcNow),
+                ct) > 0;
 
     // Activates (or reactivates) each source Connection and returns its correlated TopicSource,
     // including its source endpoint when one already exists or is newly minted here. One
@@ -362,7 +271,7 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
                     tx,
                     cancellationToken: ct));
 
-            sources.Add(write.ToTopicSource(connectionId));
+            sources.Add(write.ToTopicSource(tenantId, topicId, connectionId));
         }
 
         return sources
@@ -425,6 +334,7 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
             new CommandDefinition(
                 """
                 SELECT
+                    ts.tenant_id AS TenantId,
                     ts.topic_id AS TopicId,
                     ts.connection_id AS ConnectionId,
                     ts.created_at AS SourceCreatedAt,
@@ -462,9 +372,12 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
         public string? CallbackPath { get; init; }
         public DateTimeOffset? EndpointCreatedAt { get; init; }
 
-        public TopicSource ToTopicSource(Guid connectionId) => new()
+        public TopicSource ToTopicSource(Guid tenantId, Guid topicId, Guid connectionId) => new()
         {
+            TenantId = tenantId,
+            TopicId = topicId,
             ConnectionId = connectionId,
+            Status = TopicSourceStatus.Active,
             CreatedAt = SourceCreatedAt,
             Endpoint = EndpointId is null
                 ? null
@@ -474,6 +387,7 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
 
     private sealed record TopicSourceWithTopicRow
     {
+        public Guid TenantId { get; init; }
         public Guid TopicId { get; init; }
         public Guid ConnectionId { get; init; }
         public DateTimeOffset SourceCreatedAt { get; init; }
@@ -483,7 +397,10 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
 
         public TopicSource ToTopicSource() => new()
         {
+            TenantId = TenantId,
+            TopicId = TopicId,
             ConnectionId = ConnectionId,
+            Status = TopicSourceStatus.Active,
             CreatedAt = SourceCreatedAt,
             Endpoint = EndpointId is null
                 ? null
@@ -491,63 +408,4 @@ internal sealed class PostgresTopicRepository(IDbConnectionFactory connectionFac
         };
     }
 
-    private sealed record TopicWithSourceRow
-    {
-        public Guid Id { get; init; }
-        public Guid TenantId { get; init; }
-        public string Name { get; init; } = "";
-        public string Status { get; init; } = "";
-        public string? Description { get; init; }
-        public DateTimeOffset CreatedAt { get; init; }
-        public DateTimeOffset UpdatedAt { get; init; }
-        public Guid? SourceConnectionId { get; init; }
-        public DateTimeOffset? SourceCreatedAt { get; init; }
-        public Guid? EndpointId { get; init; }
-        public string? CallbackPath { get; init; }
-        public DateTimeOffset? EndpointCreatedAt { get; init; }
-
-        public TopicSource ToTopicSource() => new()
-        {
-            ConnectionId = SourceConnectionId!.Value,
-            CreatedAt = SourceCreatedAt!.Value,
-            Endpoint = EndpointId is null
-                ? null
-                : new SourceEndpoint { Id = EndpointId.Value, CallbackPath = CallbackPath!, CreatedAt = EndpointCreatedAt!.Value },
-        };
-
-        public Topic ToTopic(IReadOnlyList<TopicSource> sources) => new()
-        {
-            Id = Id,
-            TenantId = TenantId,
-            Name = Name,
-            Sources = sources,
-            Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
-            Description = Description,
-            CreatedAt = CreatedAt,
-            UpdatedAt = UpdatedAt,
-        };
-    }
-
-    private sealed record TopicRow
-    {
-        public Guid Id { get; init; }
-        public Guid TenantId { get; init; }
-        public string Name { get; init; } = "";
-        public string Status { get; init; } = "";
-        public string? Description { get; init; }
-        public DateTimeOffset CreatedAt { get; init; }
-        public DateTimeOffset UpdatedAt { get; init; }
-
-        public Topic ToTopic(IReadOnlyList<TopicSource> sources) => new()
-        {
-            Id = Id,
-            TenantId = TenantId,
-            Name = Name,
-            Sources = sources,
-            Status = Enum.Parse<OperationalStatus>(Status, ignoreCase: true),
-            Description = Description,
-            CreatedAt = CreatedAt,
-            UpdatedAt = UpdatedAt,
-        };
-    }
 }

@@ -18,21 +18,22 @@ internal sealed class TopicSourceConfiguration : IEntityTypeConfiguration<TopicS
                 + "OR (status = 'inactive' AND inactive_at IS NOT NULL))");
         });
 
-        entity.Property<Guid>("TenantId").HasColumnName("tenant_id");
-        entity.Property<Guid>("TopicId").HasColumnName("topic_id");
+        entity.Property(e => e.TenantId).HasColumnName("tenant_id");
+        entity.Property(e => e.TopicId).HasColumnName("topic_id");
 
-        entity.HasKey("TenantId", "TopicId", nameof(TopicSource.ConnectionId)).HasName("topic_sources_pkey");
+        entity.HasKey(e => new { e.TenantId, e.TopicId, e.ConnectionId })
+            .HasName("topic_sources_pkey");
 
         entity.HasIndex(e => e.ConnectionId, "idx_topic_sources_connection_id");
 
-        entity.HasIndex("TopicId").HasDatabaseName("idx_topic_sources_topic_id");
+        entity.HasIndex(e => e.TopicId).HasDatabaseName("idx_topic_sources_topic_id");
 
         entity.Property(e => e.ConnectionId).HasColumnName("connection_id");
         entity.Property(e => e.CreatedAt)
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
-        entity.Property<DateTimeOffset?>("InactiveAt").HasColumnName("inactive_at");
-        entity.Property<string>("Status")
+        entity.Property(e => e.InactiveAt).HasColumnName("inactive_at");
+        entity.Property(e => e.Status)
             .IsRequired()
             .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
@@ -41,13 +42,13 @@ internal sealed class TopicSourceConfiguration : IEntityTypeConfiguration<TopicS
 
         entity.HasOne<Connection>().WithMany()
             .HasPrincipalKey(nameof(Connection.TenantId), nameof(Connection.Id))
-            .HasForeignKey("TenantId", nameof(TopicSource.ConnectionId))
+            .HasForeignKey(e => new { e.TenantId, e.ConnectionId })
             .OnDelete(DeleteBehavior.ClientSetNull)
             .HasConstraintName("fk_topic_sources_connection_tenant");
 
         entity.HasOne<Topic>().WithMany()
             .HasPrincipalKey(nameof(Topic.TenantId), nameof(Topic.Id))
-            .HasForeignKey("TenantId", "TopicId")
+            .HasForeignKey(e => new { e.TenantId, e.TopicId })
             .HasConstraintName("fk_topic_sources_topic_tenant");
     }
 }

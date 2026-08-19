@@ -8,6 +8,8 @@ using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
@@ -33,9 +35,10 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IConnectionAuthoringLock>();
-                services.AddSingleton<IConnectionAuthoringLock>(provider =>
+                services.AddSingleton<IConnectionAuthoringLock>(
                     new CoordinatingConnectionAuthoringLock(
-                        new PostgresConnectionAuthoringLock(provider.GetRequiredService<IDbConnectionFactory>()),
+                        new PostgresConnectionAuthoringLock(new PooledDbContextFactory<IntegriosDbContext>(
+                            new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(fixture.ConnectionString).Options)),
                         connectionId));
             });
         });
@@ -126,9 +129,10 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IConnectionAuthoringLock>();
-                services.AddSingleton<IConnectionAuthoringLock>(provider =>
+                services.AddSingleton<IConnectionAuthoringLock>(
                     new CoordinatingConnectionAuthoringLock(
-                        new PostgresConnectionAuthoringLock(provider.GetRequiredService<IDbConnectionFactory>()),
+                        new PostgresConnectionAuthoringLock(new PooledDbContextFactory<IntegriosDbContext>(
+                            new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(fixture.ConnectionString).Options)),
                         connectionId));
             });
         });

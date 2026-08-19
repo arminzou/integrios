@@ -69,10 +69,11 @@ public sealed class DeliveryPolicyRegistrationTests
             services => services.AddAdminApplicationServices(),
             services =>
             services.AddAdminInfrastructureServices(configuration));
+        using IServiceScope scope = provider.CreateScope();
 
-        AssertResolves<IAdminKeyLookup>(provider);
-        AssertResolves<IAdminKeyLifecycle>(provider);
-        AssertOmits<DeliveryExecutionOptions>(provider);
+        AssertResolves<IAdminKeyLookup>(scope.ServiceProvider);
+        AssertResolves<IAdminKeyLifecycle>(scope.ServiceProvider);
+        AssertOmits<DeliveryExecutionOptions>(scope.ServiceProvider);
     }
 
     private static ServiceProvider BuildProvider(

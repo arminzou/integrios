@@ -3,11 +3,14 @@ using Dapper;
 using Integrios.Application.Events;
 using Integrios.Domain.Events;
 using Integrios.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using DomainEvent = Integrios.Domain.Events.Event;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class PostgresEventAcceptance(IDbConnectionFactory connectionFactory)
+internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbContext> contextFactory)
     : IEventAcceptance
 {
     public async Task<EventAcceptance> AcceptAsync(
@@ -32,75 +35,47 @@ internal sealed class PostgresEventAcceptance(IDbConnectionFactory connectionFac
             acceptedAt
         });
 
-        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        var connection = context.Database.GetDbConnection();
+        var dbTransaction = transaction.GetDbTransaction();
 
         try
         {
-            const string insertEventSql = """
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
                 INSERT INTO events (
-                    id,
-                    tenant_id,
-                    topic_id,
-                    source_connection_id,
-                    source_event_id,
-                    event_type,
-                    payload,
-                    metadata,
-                    idempotency_key,
-                    status,
-                    accepted_at
-                )
+                    id, tenant_id, topic_id, source_connection_id, source_event_id,
+                    event_type, payload, metadata, idempotency_key, status, accepted_at)
                 VALUES (
-                    @EventId,
-                    @TenantId,
-                    @TopicId,
-                    @SourceConnectionId,
-                    @SourceEventId,
-                    @EventType,
-                    CAST(@PayloadJson AS jsonb),
-                    CAST(@MetadataJson AS jsonb),
-                    @IdempotencyKey,
-                    'accepted',
-                    @AcceptedAt
-                );
-                """;
+                    @EventId, @TenantId, @TopicId, @SourceConnectionId, @SourceEventId,
+                    @EventType, CAST(@PayloadJson AS jsonb), CAST(@MetadataJson AS jsonb),
+                    @IdempotencyKey, 'accepted', @AcceptedAt)
+                """,
+                new
+                {
+                    EventId = eventId,
+                    submission.TenantId,
+                    submission.TopicId,
+                    submission.SourceConnectionId,
+                    submission.SourceEventId,
+                    submission.EventType,
+                    PayloadJson = payloadJson,
+                    MetadataJson = metadataJson,
+                    submission.IdempotencyKey,
+                    AcceptedAt = acceptedAt,
+                },
+                dbTransaction,
+                cancellationToken: cancellationToken));
 
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    insertEventSql,
-                    new
-                    {
-                        EventId = eventId,
-                        submission.TenantId,
-                        submission.TopicId,
-                        submission.SourceConnectionId,
-                        submission.SourceEventId,
-                        submission.EventType,
-                        PayloadJson = payloadJson,
-                        MetadataJson = metadataJson,
-                        submission.IdempotencyKey,
-                        AcceptedAt = acceptedAt
-                    },
-                    transaction,
-                    cancellationToken: cancellationToken));
-
-            const string insertOutboxSql = """
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
                 INSERT INTO outbox (event_id, payload, traceparent)
-                VALUES (@EventId, CAST(@PayloadJson AS jsonb), @Traceparent);
-                """;
-
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    insertOutboxSql,
-                    new
-                    {
-                        EventId = eventId,
-                        PayloadJson = outboxPayloadJson,
-                        Traceparent = traceparent
-                    },
-                    transaction,
-                    cancellationToken: cancellationToken));
+                VALUES (@EventId, CAST(@PayloadJson AS jsonb), @Traceparent)
+                """,
+                new { EventId = eventId, PayloadJson = outboxPayloadJson, Traceparent = traceparent },
+                dbTransaction,
+                cancellationToken: cancellationToken));
 
             await transaction.CommitAsync(cancellationToken);
 
@@ -116,17 +91,10 @@ internal sealed class PostgresEventAcceptance(IDbConnectionFactory connectionFac
         {
             await transaction.RollbackAsync(cancellationToken);
 
-            var existing = await connection.QuerySingleOrDefaultAsync<ExistingEventRow>(
-                new CommandDefinition(
-                    """
-                    SELECT id, status, accepted_at
-                    FROM events
-                    WHERE tenant_id = @TenantId
-                      AND idempotency_key = @IdempotencyKey
-                    LIMIT 1;
-                    """,
-                    new { submission.TenantId, submission.IdempotencyKey },
-                    cancellationToken: cancellationToken));
+            DomainEvent? existing = await context.Events.AsNoTracking().SingleOrDefaultAsync(
+                candidate => candidate.TenantId == submission.TenantId
+                    && candidate.IdempotencyKey == submission.IdempotencyKey,
+                cancellationToken);
 
             if (existing is null)
                 throw;
@@ -134,7 +102,7 @@ internal sealed class PostgresEventAcceptance(IDbConnectionFactory connectionFac
             return new EventAcceptance
             {
                 EventId = existing.Id,
-                Status = EventStatusMap.FromDbValue(existing.Status),
+                Status = existing.Status,
                 AcceptedAt = existing.AcceptedAt,
                 AlreadyAccepted = true
             };
@@ -163,12 +131,5 @@ internal sealed class PostgresEventAcceptance(IDbConnectionFactory connectionFac
         return !string.IsNullOrWhiteSpace(idempotencyKey)
                && ex.SqlState == PostgresErrorCodes.UniqueViolation
                && string.Equals(ex.ConstraintName, "idx_events_idempotency", StringComparison.Ordinal);
-    }
-
-    private sealed record ExistingEventRow
-    {
-        public Guid Id { get; init; }
-        public string Status { get; init; } = "";
-        public DateTimeOffset AcceptedAt { get; init; }
     }
 }

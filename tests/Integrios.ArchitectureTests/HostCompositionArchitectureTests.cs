@@ -64,12 +64,15 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider worker = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
+        using IServiceScope adminScope = admin.CreateScope();
+        using IServiceScope ingressScope = ingress.CreateScope();
+        using IServiceScope workerScope = worker.CreateScope();
 
         (string Name, IServiceProvider Provider)[] hosts =
         [
-            ("Admin", admin),
-            ("Ingress", ingress),
-            ("Worker", worker)
+            ("Admin", adminScope.ServiceProvider),
+            ("Ingress", ingressScope.ServiceProvider),
+            ("Worker", workerScope.ServiceProvider)
         ];
 
         ApplicationArchitectureTests.HandlerRegistration[] handlers =
@@ -119,12 +122,15 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider worker = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
+        using IServiceScope adminScope = admin.CreateScope();
+        using IServiceScope ingressScope = ingress.CreateScope();
+        using IServiceScope workerScope = worker.CreateScope();
 
         (Host Host, IServiceProvider Provider)[] providers =
         [
-            (Host.Admin, admin),
-            (Host.Ingress, ingress),
-            (Host.Worker, worker)
+            (Host.Admin, adminScope.ServiceProvider),
+            (Host.Ingress, ingressScope.ServiceProvider),
+            (Host.Worker, workerScope.ServiceProvider)
         ];
 
         foreach ((Type port, Host[] expectedOwners) in PortOwners)
@@ -145,35 +151,36 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider provider = BuildProvider(
             services => services.AddAdminApplicationServices(),
             services => services.AddAdminInfrastructureServices(BuildConfiguration()));
+        using IServiceScope scope = provider.CreateScope();
 
-        AssertResolves<IAdminKeyLookup>(provider);
-        AssertResolves<IAdminKeyLifecycle>(provider);
-        AssertResolves<IApiKeyRepository>(provider);
-        AssertResolves<ITenantRepository>(provider);
-        AssertResolves<IIntegrationCatalog>(provider);
-        AssertResolves<IIntegrationManifestStore>(provider);
-        AssertResolves<ISourceAdapterRegistry>(provider);
-        AssertResolves<IConnectionRepository>(provider);
-        AssertResolves<IConnectionAuthoringLock>(provider);
-        AssertResolves<ITopicRepository>(provider);
-        AssertResolves<ISubscriptionRepository>(provider);
-        AssertResolves<IAuthSchemeRegistry>(provider);
-        AssertResolves<ITransformEvaluator>(provider);
+        AssertResolves<IAdminKeyLookup>(scope.ServiceProvider);
+        AssertResolves<IAdminKeyLifecycle>(scope.ServiceProvider);
+        AssertResolves<IApiKeyRepository>(scope.ServiceProvider);
+        AssertResolves<ITenantRepository>(scope.ServiceProvider);
+        AssertResolves<IIntegrationCatalog>(scope.ServiceProvider);
+        AssertResolves<IIntegrationManifestStore>(scope.ServiceProvider);
+        AssertResolves<ISourceAdapterRegistry>(scope.ServiceProvider);
+        AssertResolves<IConnectionRepository>(scope.ServiceProvider);
+        AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
+        AssertResolves<ITopicRepository>(scope.ServiceProvider);
+        AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
+        AssertResolves<IAuthSchemeRegistry>(scope.ServiceProvider);
+        AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
 
-        AssertOmits<IEventAcceptance>(provider);
-        AssertOmits<ITenantEventLookup>(provider);
-        AssertOmits<IActiveApiKeyLookup>(provider);
-        AssertOmits<ISourceTopicLookup>(provider);
-        AssertOmits<IDeadLetterReplay>(provider);
-        AssertOmits<ISecretValidationCatalog>(provider);
-        AssertOmits<IOutboxFanout>(provider);
-        AssertOmits<ISubscriptionDeliveryQueue>(provider);
-        AssertOmits<IDeliveryClient>(provider);
-        AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
-        AssertOmits<ISourceVerificationSecretResolver>(provider);
-        AssertOmits<DeliveryExecutionOptions>(provider);
-        AssertOmits<RetryPolicy>(provider);
-        AssertOmits<DeliveryOutcomePolicy>(provider);
+        AssertOmits<IEventAcceptance>(scope.ServiceProvider);
+        AssertOmits<ITenantEventLookup>(scope.ServiceProvider);
+        AssertOmits<IActiveApiKeyLookup>(scope.ServiceProvider);
+        AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
+        AssertOmits<IDeadLetterReplay>(scope.ServiceProvider);
+        AssertOmits<ISecretValidationCatalog>(scope.ServiceProvider);
+        AssertOmits<IOutboxFanout>(scope.ServiceProvider);
+        AssertOmits<ISubscriptionDeliveryQueue>(scope.ServiceProvider);
+        AssertOmits<IDeliveryClient>(scope.ServiceProvider);
+        AssertOmits<IDestinationAuthenticationSecretResolver>(scope.ServiceProvider);
+        AssertOmits<ISourceVerificationSecretResolver>(scope.ServiceProvider);
+        AssertOmits<DeliveryExecutionOptions>(scope.ServiceProvider);
+        AssertOmits<RetryPolicy>(scope.ServiceProvider);
+        AssertOmits<DeliveryOutcomePolicy>(scope.ServiceProvider);
     }
 
     [Fact]
@@ -220,34 +227,35 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider provider = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
+        using IServiceScope scope = provider.CreateScope();
 
-        AssertResolves<ISecretValidationCatalog>(provider);
+        AssertResolves<ISecretValidationCatalog>(scope.ServiceProvider);
         AssertResolves<IOutboxFanout>(provider);
-        AssertResolves<ISubscriptionDeliveryQueue>(provider);
-        AssertResolves<IDeliveryClient>(provider);
-        AssertResolves<IAuthSchemeRegistry>(provider);
-        AssertResolves<ITransformEvaluator>(provider);
-        AssertResolves<IDestinationAuthenticationSecretResolver>(provider);
-        AssertOmits<ISourceVerificationSecretResolver>(provider);
-        AssertResolves<DeliveryExecutionOptions>(provider);
-        AssertResolves<RetryPolicy>(provider);
-        AssertResolves<DeliveryOutcomePolicy>(provider);
+        AssertResolves<ISubscriptionDeliveryQueue>(scope.ServiceProvider);
+        AssertResolves<IDeliveryClient>(scope.ServiceProvider);
+        AssertResolves<IAuthSchemeRegistry>(scope.ServiceProvider);
+        AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
+        AssertResolves<IDestinationAuthenticationSecretResolver>(scope.ServiceProvider);
+        AssertOmits<ISourceVerificationSecretResolver>(scope.ServiceProvider);
+        AssertResolves<DeliveryExecutionOptions>(scope.ServiceProvider);
+        AssertResolves<RetryPolicy>(scope.ServiceProvider);
+        AssertResolves<DeliveryOutcomePolicy>(scope.ServiceProvider);
 
-        AssertOmits<IAdminKeyLookup>(provider);
-        AssertOmits<IAdminKeyLifecycle>(provider);
-        AssertOmits<IApiKeyRepository>(provider);
-        AssertOmits<IActiveApiKeyLookup>(provider);
-        AssertOmits<ITenantRepository>(provider);
-        AssertOmits<IConnectionRepository>(provider);
-        AssertOmits<IEventAcceptance>(provider);
-        AssertOmits<ITenantEventLookup>(provider);
-        AssertOmits<ITopicRepository>(provider);
-        AssertOmits<ISourceTopicLookup>(provider);
-        AssertOmits<IDeadLetterReplay>(provider);
-        AssertOmits<IIntegrationCatalog>(provider);
-        AssertOmits<IIntegrationManifestStore>(provider);
-        AssertOmits<ISourceAdapterRegistry>(provider);
-        AssertOmits<ISubscriptionRepository>(provider);
+        AssertOmits<IAdminKeyLookup>(scope.ServiceProvider);
+        AssertOmits<IAdminKeyLifecycle>(scope.ServiceProvider);
+        AssertOmits<IApiKeyRepository>(scope.ServiceProvider);
+        AssertOmits<IActiveApiKeyLookup>(scope.ServiceProvider);
+        AssertOmits<ITenantRepository>(scope.ServiceProvider);
+        AssertOmits<IConnectionRepository>(scope.ServiceProvider);
+        AssertOmits<IEventAcceptance>(scope.ServiceProvider);
+        AssertOmits<ITenantEventLookup>(scope.ServiceProvider);
+        AssertOmits<ITopicRepository>(scope.ServiceProvider);
+        AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
+        AssertOmits<IDeadLetterReplay>(scope.ServiceProvider);
+        AssertOmits<IIntegrationCatalog>(scope.ServiceProvider);
+        AssertOmits<IIntegrationManifestStore>(scope.ServiceProvider);
+        AssertOmits<ISourceAdapterRegistry>(scope.ServiceProvider);
+        AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
     }
 
     private static ServiceProvider BuildProvider(

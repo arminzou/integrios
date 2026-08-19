@@ -61,18 +61,17 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDatabaseServices(configuration);
-        services.AddSingleton<PostgresAdminKeyRepository>();
-        services.AddSingleton<IAdminKeyLookup>(provider => provider.GetRequiredService<PostgresAdminKeyRepository>());
-        services.AddSingleton<IAdminKeyLifecycle>(provider => provider.GetRequiredService<PostgresAdminKeyRepository>());
-        services.AddSingleton<IApiKeyRepository, PostgresApiKeyRepository>();
-        services.AddSingleton<ITenantRepository, PostgresTenantRepository>();
-        services.AddSingleton<PostgresIntegrationRepository>();
-        services.AddSingleton<IIntegrationCatalog>(provider => provider.GetRequiredService<PostgresIntegrationRepository>());
-        services.AddSingleton<IIntegrationManifestStore>(provider => provider.GetRequiredService<PostgresIntegrationRepository>());
-        services.AddSingleton<IConnectionRepository, PostgresConnectionRepository>();
+        services.AddScoped<AdminKeyRepository>();
+        services.AddScoped<IAdminKeyLookup>(provider => provider.GetRequiredService<AdminKeyRepository>());
+        services.AddScoped<IAdminKeyLifecycle>(provider => provider.GetRequiredService<AdminKeyRepository>());
+        services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
+        services.AddScoped<ITenantRepository, TenantRepository>();
+        services.AddScoped<IIntegrationCatalog, IntegrationCatalog>();
+        services.AddScoped<IIntegrationManifestStore, PostgresIntegrationManifestStore>();
+        services.AddScoped<IConnectionRepository, ConnectionRepository>();
         services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
-        services.AddSingleton<ITopicRepository, PostgresTopicRepository>();
-        services.AddSingleton<ISubscriptionRepository, PostgresSubscriptionRepository>();
+        services.AddScoped<ITopicRepository, PostgresTopicRepository>();
+        services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.AddDestinationAuthenticationServices();
         services.AddSourceAdapterServices();
         services.AddTransformEvaluationServices();
@@ -113,7 +112,7 @@ public static class DependencyInjection
             deliveryOptions.RetryMaxAttempts));
         services.AddSingleton<DeliveryOutcomePolicy>();
 
-        services.AddSingleton<ISecretValidationCatalog, PostgresSecretValidationCatalog>();
+        services.AddScoped<ISecretValidationCatalog, SecretValidationCatalog>();
         services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
         services.AddSingleton<ISubscriptionDeliveryQueue, PostgresSubscriptionDeliveryQueue>();
         services.AddDestinationAuthenticationServices();
@@ -144,7 +143,8 @@ public static class DependencyInjection
         if (string.IsNullOrWhiteSpace(postgresConnectionString))
             throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
 
-        services.AddDbContext<IntegriosDbContext>(options => options.UseNpgsql(postgresConnectionString));
+        services.AddDbContextFactory<IntegriosDbContext>(
+            options => options.UseNpgsql(postgresConnectionString));
         services.AddSingleton(_ =>
         {
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);

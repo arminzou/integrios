@@ -33,7 +33,8 @@ public static class BootstrapCli
         hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);
 
         using IHost host = hostBuilder.Build();
-        IMediator mediator = host.Services.GetRequiredService<IMediator>();
+        await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
+        IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
         string? adminSecret = runAdminKey
             ? hostBuilder.Configuration[AdminSecretConfigKey]
