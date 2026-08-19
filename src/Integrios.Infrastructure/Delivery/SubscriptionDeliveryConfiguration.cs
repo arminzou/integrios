@@ -4,7 +4,6 @@ using Integrios.Domain.Events;
 using Integrios.Domain.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using static Integrios.Infrastructure.Data.ModelConfigurationConversions;
 using DomainEvent = Integrios.Domain.Events.Event;
 
 namespace Integrios.Infrastructure.Delivery;
@@ -45,7 +44,6 @@ internal sealed class SubscriptionDeliveryConfiguration : IEntityTypeConfigurati
         entity.Property(e => e.ProcessedAt).HasColumnName("processed_at");
         entity.Property(e => e.RetryCycleAttemptCount).HasColumnName("retry_cycle_attempt_count");
         entity.Property(e => e.Status)
-            .HasConversion(value => ToSnakeCase(value), value => FromSnakeCase<SubscriptionDeliveryStatus>(value))
             .HasDefaultValueSql("'pending'::text")
             .HasColumnName("status");
         entity.Property(e => e.SubscriptionId).HasColumnName("subscription_id");

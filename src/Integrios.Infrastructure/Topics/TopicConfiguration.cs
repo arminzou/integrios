@@ -3,7 +3,6 @@ using Integrios.Domain.Tenants;
 using Integrios.Domain.Topics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using static Integrios.Infrastructure.Data.ModelConfigurationConversions;
 
 namespace Integrios.Infrastructure.Topics;
 
@@ -30,7 +29,6 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
         entity.Property(e => e.Description).HasColumnName("description");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.Status)
-            .HasConversion(value => ToSnakeCase(value), value => FromSnakeCase<OperationalStatus>(value))
             .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");

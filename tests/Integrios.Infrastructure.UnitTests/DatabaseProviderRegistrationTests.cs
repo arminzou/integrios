@@ -1,5 +1,6 @@
 using Integrios.Domain.Delivery;
 using Integrios.Domain.Events;
+using Integrios.Domain.Integrations;
 using Integrios.Domain.Tenants;
 using Integrios.Domain.Topics;
 using Integrios.Infrastructure.Data;
@@ -51,6 +52,9 @@ public sealed class DatabaseProviderRegistrationTests
         Assert.Equal(
             "in_flight",
             status.GetTypeMapping().Converter!.ConvertToProvider(SubscriptionDeliveryStatus.InFlight));
+        Assert.IsType<StringListValueComparer>(context.Model.FindEntityType(typeof(Integration))!
+            .FindProperty(nameof(Integration.SupportedAuthSchemes))!
+            .GetValueComparer());
     }
 
     [Fact]
@@ -60,6 +64,17 @@ public sealed class DatabaseProviderRegistrationTests
             new ServiceCollection().AddAdminInfrastructureServices(BuildConfiguration("sqlite")));
 
         Assert.Equal("Database:Provider 'sqlite' is not supported.", exception.Message);
+    }
+
+    [Fact]
+    public void StringListValueComparer_UsesStructuralEqualityAndSnapshots()
+    {
+        var comparer = new StringListValueComparer();
+        IReadOnlyList<string> values = ["api_key_header", "bearer_token"];
+
+        Assert.True(comparer.Equals(values, values.ToArray()));
+        Assert.False(comparer.Equals(values, ["bearer_token", "api_key_header"]));
+        Assert.NotSame(values, comparer.Snapshot(values));
     }
 
     private static IConfiguration BuildConfiguration(string provider) =>

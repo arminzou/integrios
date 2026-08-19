@@ -2,7 +2,6 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using static Integrios.Infrastructure.Data.ModelConfigurationConversions;
 
 namespace Integrios.Infrastructure.ApiKeys;
 
@@ -34,7 +33,6 @@ internal sealed class ApiKeyConfiguration : IEntityTypeConfiguration<ApiKey>
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.RevokedAt).HasColumnName("revoked_at");
         entity.Property(e => e.Status)
-            .HasConversion(value => ToSnakeCase(value), value => FromSnakeCase<OperationalStatus>(value))
             .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");

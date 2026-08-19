@@ -1,7 +1,6 @@
 using Integrios.Domain.Delivery;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using static Integrios.Infrastructure.Data.ModelConfigurationConversions;
 
 namespace Integrios.Infrastructure.Delivery;
 
@@ -25,11 +24,7 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
         entity.Property(e => e.AttemptNumber).HasColumnName("attempt_number");
         entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
         entity.Property(e => e.ErrorMessage).HasColumnName("error_message");
-        entity.Property(e => e.FailurePhase)
-            .HasConversion(
-                value => value == null ? null : ToSnakeCase(value.Value),
-                value => value == null ? null : FromSnakeCase<DeliveryFailurePhase>(value))
-            .HasColumnName("failure_phase");
+        entity.Property(e => e.FailurePhase).HasColumnName("failure_phase");
         entity.Property(e => e.RequestPayload)
             .HasColumnType("jsonb")
             .HasColumnName("request_payload");
@@ -38,9 +33,7 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
         entity.Property(e => e.StartedAt)
             .HasDefaultValueSql("now()")
             .HasColumnName("started_at");
-        entity.Property(e => e.Status)
-            .HasConversion(value => ToSnakeCase(value), value => FromSnakeCase<DeliveryAttemptStatus>(value))
-            .HasColumnName("status");
+        entity.Property(e => e.Status).HasColumnName("status");
         entity.Property(e => e.SubscriptionDeliveryId).HasColumnName("subscription_delivery_id");
 
         entity.HasOne<SubscriptionDelivery>().WithMany()
