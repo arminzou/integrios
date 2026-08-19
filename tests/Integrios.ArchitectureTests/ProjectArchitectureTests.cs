@@ -31,6 +31,10 @@ public sealed class ProjectArchitectureTests
             "Integrios.Ingress",
             "Integrios.Worker",
             "Integrios.MockSink");
+        AssertOmitsReferencePrefixes(
+            assemblies["Integrios.Domain"],
+            "Microsoft.EntityFrameworkCore",
+            "Npgsql");
 
         AssertOmitsReferences(
             assemblies["Integrios.Application"],
@@ -42,6 +46,7 @@ public sealed class ProjectArchitectureTests
         AssertOmitsReferencePrefixes(
             assemblies["Integrios.Application"],
             "Microsoft.AspNetCore",
+            "Microsoft.EntityFrameworkCore",
             "Npgsql",
             "Dapper",
             "Jsonata.Net.Native");
@@ -104,6 +109,7 @@ public sealed class ProjectArchitectureTests
 
         Assert.DoesNotContain(declaredDependencies, dependency =>
             dependency.Equals("Dapper", StringComparison.OrdinalIgnoreCase)
+            || dependency.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Jsonata", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Microsoft.AspNetCore", StringComparison.OrdinalIgnoreCase));
@@ -314,7 +320,7 @@ public sealed class ProjectArchitectureTests
         // rule is that Application never acquires a web, database, or transform dependency, even
         // second-hand. An exact list would also fail on a patch bump that adds an unrelated
         // transitive package, which tells us nothing about the rule.
-        string[] forbiddenPrefixes = ["Microsoft.AspNetCore", "Npgsql", "Dapper", "Jsonata"];
+        string[] forbiddenPrefixes = ["Microsoft.AspNetCore", "Microsoft.EntityFrameworkCore", "Npgsql", "Dapper", "Jsonata"];
         string[] resolvedPackages = root.GetProperty("libraries")
             .EnumerateObject()
             .Where(property => property.Value.GetProperty("type").GetString() == "package")
