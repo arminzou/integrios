@@ -490,8 +490,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         }
         finally
         {
-            if (transaction.Connection is not null) await transaction.RollbackAsync();
-            try { await actionTask; } catch { }
+            try
+            {
+                if (transaction.Connection is not null) await transaction.RollbackAsync();
+                await actionTask;
+            }
+            catch { }
             await control.ExecuteAsync(
                 "DROP TRIGGER IF EXISTS test_fail_first_attempt_finalization; DROP TABLE IF EXISTS ##finalization_retry_signal;");
         }
@@ -671,8 +675,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 await barrier.ExecuteAsync(
                     "EXEC sp_releaseapplock @Resource=@Resource, @LockOwner='Session'", new { Resource = resource });
             }
-            if (finalizationTask is not null) await finalizationTask;
-            if (reclaimTask is not null) await reclaimTask;
+            try
+            {
+                if (finalizationTask is not null) await finalizationTask;
+                if (reclaimTask is not null) await reclaimTask;
+            }
+            catch { }
             await control.ExecuteAsync(
                 "DROP TRIGGER IF EXISTS test_block_delivery_attempt_update; DROP TABLE IF EXISTS ##delivery_race_signal;");
         }
