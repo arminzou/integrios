@@ -122,9 +122,9 @@ Migrations run automatically via the `migrate` one-shot on every `up`.
 Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
 `migrate`, `bootstrap`, `ingress`, `admin`, and `worker` at your database.
 
-## Using SQL Server
+## Using SQL Server 2022+
 
-Use an externally managed SQL Server, remove the bundled `postgres` service, and adjust the
+Use an externally managed SQL Server 2022 or later, remove the bundled `postgres` service, and adjust the
 `migrate` dependency. On `migrate`, `bootstrap`, `ingress`, `admin`, and `worker`, replace the
 PostgreSQL connection setting with:
 

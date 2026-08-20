@@ -16,11 +16,9 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
 {
     private readonly PostgreSqlContainer? postgres;
     private readonly MsSqlContainer? sqlServer;
-    // A null provider follows the CI matrix row. Provider-contract fixtures pass one explicitly
-    // because their assertions target one backend's SQL rather than the ambient row.
-    public FunctionalDatabase(string? provider = null)
+    public FunctionalDatabase()
     {
-        Provider = (provider ?? Environment.GetEnvironmentVariable("INTEGRIOS_TEST_DATABASE_PROVIDER") ?? "postgres")
+        Provider = (Environment.GetEnvironmentVariable("INTEGRIOS_TEST_DATABASE_PROVIDER") ?? "postgres")
             .Trim().ToLowerInvariant();
         switch (Provider)
         {

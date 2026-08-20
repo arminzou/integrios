@@ -18,7 +18,7 @@ flowchart LR
     Operator[Operator] -->|configures| Admin[Admin<br/>control plane]
     Producer[External Event producer] -->|generic Event + ApiKey| Ingress[Ingress<br/>data plane]
     Adapter[Verified-webhook<br/>source adapter] -->|verified, normalized Event| Ingress
-    Admin --> DB[(PostgreSQL or SQL Server)]
+    Admin --> DB[(PostgreSQL or SQL Server 2022+)]
     Ingress -->|Event + outbox<br/>one transaction| DB
     DB -->|fanout work| Worker[Worker]
     Worker -->|generic HTTP delivery| Destinations[HTTP destinations]
@@ -43,7 +43,7 @@ preview. Tenants never receive control-plane authority.
 resolution, source-Connection and Topic validation, durable Event acceptance, fanout, transformation,
 HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
 
-The services share the configured PostgreSQL or SQL Server database. Admin owns configuration
+The services share the configured PostgreSQL or SQL Server 2022+ database. Admin owns configuration
 writes; Worker reads the configuration it needs directly from that database and does not call Admin
 at runtime.
 

@@ -5,7 +5,7 @@ as-is or fork and adapt. The tiers keep routine feedback prompt while still maki
 qualification mandatory before publishing a release:
 
 1. **Pull request**: locked restore, dependency audit, Release build, architecture and component
-   tests, plus the same Functional suite against PostgreSQL and SQL Server. No configuration or
+   tests, plus the same Functional suite against PostgreSQL and SQL Server 2022. No configuration or
    secrets are required, so this runs for fork pull requests too.
 2. **Main**: repeats the pull-request gate, then runs the complete Acceptance project before
    publishing commit, `main`, and `latest` images.

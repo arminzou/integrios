@@ -1,13 +1,13 @@
 # Database backends
 
-Integrios supports PostgreSQL and SQL Server. PostgreSQL is the default: omitting
+Integrios supports PostgreSQL and SQL Server 2022 or later. PostgreSQL is the default: omitting
 `Database__Provider` selects it, and the root Compose quickstart starts PostgreSQL without extra
-configuration. SQL Server is the Microsoft-stack reference deployment.
+configuration. SQL Server 2022+ is the Microsoft-stack reference deployment.
 
 | Provider | `Database__Provider` | Connection string key |
 |---|---|---|
 | PostgreSQL | `postgres` or omitted | `ConnectionStrings__Postgres` |
-| SQL Server | `sqlserver` | `ConnectionStrings__SqlServer` |
+| SQL Server 2022+ | `sqlserver` | `ConnectionStrings__SqlServer` |
 
 Set the same provider and connection string on the migration one-shot, Admin, Ingress, and Worker.
 For example:
