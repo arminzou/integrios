@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Application.Connections;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Npgsql;
 using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
@@ -504,27 +504,24 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
         string direction = "destination")
     {
         Guid id = Guid.NewGuid();
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
+                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, description, manifest, created_at, updated_at)
             VALUES (
                 @Id, @Key, 1, 1, @Name, @Direction,
-                @SupportedAuthSchemes::jsonb, 'active', 'test integration', @Manifest::jsonb, now(), now());
-            """,
-            connection);
-        cmd.Parameters.AddWithValue("Id", id);
-        cmd.Parameters.AddWithValue("Key", key);
-        cmd.Parameters.AddWithValue("Name", key);
-        cmd.Parameters.AddWithValue("Direction", direction);
-        cmd.Parameters.AddWithValue("SupportedAuthSchemes", JsonSerializer.Serialize(supportedAuthSchemes));
-        cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
-            key, key, direction, supportedAuthSchemes));
-        await cmd.ExecuteNonQueryAsync();
+                {{{fixture.Json("@SupportedAuthSchemes")}}}, 'active', 'test integration', {{{fixture.Json("@Manifest")}}}, {{{fixture.Now}}}, {{{fixture.Now}}});
+            """, new
+            {
+                Id = id,
+                Key = key,
+                Name = key,
+                Direction = direction,
+                SupportedAuthSchemes = JsonSerializer.Serialize(supportedAuthSchemes),
+                Manifest = TestIntegrationManifest.Create(key, key, direction, supportedAuthSchemes)
+            });
 
         return id;
     }
@@ -532,32 +529,20 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     private async Task<Guid> InsertConnectionAsync(Guid integrationId, string name)
     {
         Guid id = Guid.NewGuid();
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"base_uri":"http://localhost:5054/sink/erp-auth"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
-            """,
-            connection);
-        cmd.Parameters.AddWithValue("Id", id);
-        cmd.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        cmd.Parameters.AddWithValue("IntegrationId", integrationId);
-        cmd.Parameters.AddWithValue("Name", name);
-        await cmd.ExecuteNonQueryAsync();
+            VALUES (@Id, @TenantId, @IntegrationId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
+            """, new { Id = id, fixture.TenantId, IntegrationId = integrationId, Name = name, Config = "{\"base_uri\":\"http://localhost:5054/sink/erp-auth\"}" });
 
         return id;
     }
 
     private async Task<Guid> GetTenantIdBySlugAsync(string slug)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand("SELECT id FROM tenants WHERE slug = @Slug LIMIT 1", connection);
-        cmd.Parameters.AddWithValue("Slug", slug);
-        object? result = await cmd.ExecuteScalarAsync();
-        return (Guid)result!;
+        return await connection.ExecuteScalarAsync<Guid>("SELECT id FROM tenants WHERE slug = @Slug", new { Slug = slug });
     }
 }

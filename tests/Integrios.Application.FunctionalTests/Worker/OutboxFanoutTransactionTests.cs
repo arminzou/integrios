@@ -1,6 +1,7 @@
+using System.Data.Common;
+using Dapper;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
-using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Worker;
 
@@ -38,17 +39,10 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        await using var ownerConnection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var ownerConnection = fixture.CreateConnection();
         await ownerConnection.OpenAsync();
         await using var ownerTransaction = await ownerConnection.BeginTransactionAsync();
-        await using (var lockCommand = new NpgsqlCommand(
-            "SELECT id FROM outbox WHERE event_id = @EventId FOR UPDATE",
-            ownerConnection,
-            ownerTransaction))
-        {
-            lockCommand.Parameters.AddWithValue("EventId", eventId);
-            Assert.NotNull(await lockCommand.ExecuteScalarAsync());
-        }
+        Assert.True(await fixture.LockOutboxRowAsync(ownerConnection, ownerTransaction, eventId));
 
         Assert.Equal(0, await fixture.RunFanoutBatchAsync(1));
         Assert.False(await fixture.IsOutboxRowProcessedAsync(eventId));
@@ -66,38 +60,14 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        await ExecuteAsync(
-            """
-            CREATE FUNCTION fail_outbox_completion() RETURNS trigger AS $$
-            BEGIN
-                IF OLD.processed_at IS NULL AND NEW.processed_at IS NOT NULL THEN
-                    RAISE EXCEPTION 'simulated interruption before outbox completion';
-                END IF;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            CREATE TRIGGER fail_outbox_completion
-            BEFORE UPDATE ON outbox
-            FOR EACH ROW EXECUTE FUNCTION fail_outbox_completion();
-            """);
-
-        try
+        await fixture.WithOutboxCompletionFailureAsync(async () =>
         {
-            await Assert.ThrowsAsync<PostgresException>(() => fixture.RunFanoutBatchAsync(1));
+            await Assert.ThrowsAnyAsync<DbException>(() => fixture.RunFanoutBatchAsync(1));
 
             Assert.False(await fixture.IsOutboxRowProcessedAsync(eventId));
             Assert.Equal("accepted", await fixture.GetEventStatusAsync(eventId));
             Assert.Equal(0, await fixture.GetSubscriptionDeliveryCountAsync(eventId));
-        }
-        finally
-        {
-            await ExecuteAsync(
-                """
-                DROP TRIGGER IF EXISTS fail_outbox_completion ON outbox;
-                DROP FUNCTION IF EXISTS fail_outbox_completion();
-                """);
-        }
+        });
 
         Assert.Equal(1, await fixture.RunFanoutBatchAsync(1));
         Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
@@ -167,20 +137,12 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
         }
     }
 
-    private async Task ExecuteAsync(string sql)
-    {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        await command.ExecuteNonQueryAsync();
-    }
-
     private async Task<T> ScalarAsync<T>(string sql)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        return (T)(await command.ExecuteScalarAsync()
-            ?? throw new InvalidOperationException($"Query returned no value: {sql}"));
+        object value = await connection.ExecuteScalarAsync(sql)
+            ?? throw new InvalidOperationException($"Query returned no value: {sql}");
+        return (T)Convert.ChangeType(value, typeof(T));
     }
 }

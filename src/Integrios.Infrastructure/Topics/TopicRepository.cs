@@ -190,7 +190,8 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                     DatabaseProviders.FromContext(context.Database) == DatabaseProvider.SqlServer,
                     tenantId,
                     [id],
-                    ct);
+                    ct,
+                    dbTransaction);
                 sources = sourceMap.GetValueOrDefault(id) ?? [];
             }
             else
@@ -271,7 +272,7 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                           AND JSON_QUERY(i.manifest, '$.source_adapter') IS NOT NULL)
                     BEGIN
                         SET @EndpointId=NEWID();
-                        SELECT @CallbackPath=CONCAT(N'/webhooks/', i.[key], N'/', CONVERT(nvarchar(36), @EndpointId))
+                        SELECT @CallbackPath=CONCAT(N'/webhooks/', i.[key], N'/', LOWER(CONVERT(nvarchar(36), @EndpointId)))
                         FROM connections c JOIN integrations i ON i.id=c.integration_id
                         WHERE c.tenant_id=@TenantId AND c.id=@ConnectionId;
                         INSERT INTO source_endpoints (id, tenant_id, topic_id, connection_id, callback_path, status)
@@ -326,10 +327,7 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
             sources.Add(write.ToTopicSource(tenantId, topicId, connectionId));
         }
 
-        return sources
-            .OrderBy(static source => source.CreatedAt)
-            .ThenBy(static source => source.ConnectionId)
-            .ToList();
+        return sources.OrderBy(static source => source.ConnectionId).ToList();
     }
 
     private static async Task RemoveSourcesNotInAsync(
@@ -386,7 +384,8 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
         bool sqlServer,
         Guid tenantId,
         Guid[] topicIds,
-        CancellationToken ct)
+        CancellationToken ct,
+        DbTransaction? transaction = null)
     {
         string topicPredicate = sqlServer ? "ts.topic_id IN @TopicIds" : "ts.topic_id = ANY(@TopicIds)";
         var rows = await db.QueryAsync<TopicSourceWithTopicRow>(
@@ -409,13 +408,13 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                    AND se.connection_id = ts.connection_id
                    AND se.status = 'active'
                 WHERE ts.tenant_id = @TenantId AND {topicPredicate} AND ts.status = 'active'
-                ORDER BY ts.topic_id, ts.created_at, ts.connection_id
                 """,
                 new { TenantId = tenantId, TopicIds = topicIds },
+                transaction,
                 cancellationToken: ct));
 
         var map = new Dictionary<Guid, List<TopicSource>>();
-        foreach (var row in rows)
+        foreach (var row in rows.OrderBy(static row => row.ConnectionId))
         {
             if (!map.TryGetValue(row.TopicId, out var list))
                 map[row.TopicId] = list = [];

@@ -1,14 +1,14 @@
-using Integrios.Tests.Shared;
+using System.Data.Common;
+using Dapper;
 using Integrios.Admin;
 using Integrios.Infrastructure.Data;
+using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Npgsql;
 using Respawn;
-using Testcontainers.PostgreSql;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
@@ -20,128 +20,101 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string InvalidAdminAuthHeader = "AdminKey legacy_tenant_key:unsupported-secret";
 
     private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
-        .WithDatabase("integrios")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private readonly FunctionalDatabase database = new();
+    private Respawner respawner = null!;
 
     public WebApplicationFactory<Program> WebFactory { get; private set; } = null!;
-    public string ConnectionString => container.GetConnectionString();
+    public string ConnectionString => database.ConnectionString;
+    internal string PresentationDriftExpression => database.Provider == "postgres"
+        ? "jsonb_set(jsonb_set(manifest, '{presentation,name}', '\"Drifted\"'), '{presentation,description}', '\"Drifted description\"')"
+        : "JSON_MODIFY(JSON_MODIFY(manifest, '$.presentation.name', 'Drifted'), '$.presentation.description', 'Drifted description')";
+    internal DbConnection CreateConnection() => database.CreateConnection();
+    internal string Json(string parameter) => database.Json(parameter);
+    internal string JsonText(string column) => database.JsonText(column);
+    internal string Now => database.Now;
+    internal string KeyColumn => database.KeyColumn;
+    internal IConfiguration Configuration => database.Configuration;
     public Guid TenantId { get; private set; }
     public Guid OtherTenantId { get; private set; }
     public Guid SourceConnectionId { get; private set; }
 
-    private Respawner respawner = null!;
-
     public async Task InitializeAsync()
     {
-        await container.StartAsync();
-        await PostgresMigrationTestHelper.MigrateAsync(ConnectionString);
-        await using (var connection = new NpgsqlConnection(ConnectionString))
-        {
-            await connection.OpenAsync();
-            respawner = await Respawner.CreateAsync(connection, new RespawnerOptions
-            {
-                DbAdapter = DbAdapter.Postgres,
-                SchemasToInclude = ["public"],
-                TablesToIgnore = [new Respawn.Graph.Table("public", "__EFMigrationsHistory")]
-            });
-        }
-
+        await database.StartAsync();
+        respawner = await database.CreateRespawnerAsync();
         WebFactory = BuildWebFactory();
     }
 
     public async Task DisposeAsync()
     {
         WebFactory.Dispose();
-        await container.DisposeAsync();
+        await database.DisposeAsync();
     }
 
     public async Task ResetAsync()
     {
-        await using var connection = new NpgsqlConnection(ConnectionString);
+        await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
-
         await respawner.ResetAsync(connection);
-
         await SeedAsync(connection);
     }
 
-    private async Task SeedAsync(NpgsqlConnection connection)
+    private async Task SeedAsync(DbConnection connection)
     {
         TenantId = Guid.NewGuid();
         OtherTenantId = Guid.NewGuid();
         SourceConnectionId = Guid.NewGuid();
-        await using var cmd = new NpgsqlCommand("""
+        string now = database.Now;
+        string json = database.Json("@Manifest");
+        await connection.ExecuteAsync($$$"""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES
-                (@TenantId, 'test-tenant', 'Test Tenant', 'active', now(), now()),
-                (@OtherTenantId, 'other-tenant', 'Other Tenant', 'active', now(), now());
+                (@TenantId, 'test-tenant', 'Test Tenant', 'active', {{{now}}}, {{{now}}}),
+                (@OtherTenantId, 'other-tenant', 'Other Tenant', 'active', {{{now}}}, {{{now}}});
 
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
+                id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
             VALUES (
                 @IntegrationId, 'http', 1, 1, 'HTTP', 'both',
-                '["api_key_header","bearer_token"]'::jsonb, 'active', @Manifest::jsonb)
-            ON CONFLICT (id) DO NOTHING;
+                {{{database.Json("@SupportedAuthSchemes")}}}, 'active', {{{json}}});
 
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
-            VALUES (
-                @SourceConnectionId, @TenantId, @IntegrationId, 'source',
-                '{"base_uri":"http://localhost:5054/sink/source"}', 'active');
+            VALUES (@SourceConnectionId, @TenantId, @IntegrationId, 'source',
+                {{{database.Json("@Config")}}}, 'active');
 
-            -- Re-seed global bootstrap key (cleared by Respawn in ResetAsync)
             INSERT INTO admin_keys (public_key, secret_hash, name, created_at)
             VALUES ('global_admin_key',
                     'sha256:5af35a0149f5a07231b181c3b4d5d3a76a4c765258533a123b34dfb843599328',
-                    'Bootstrap Operator Admin Key', now());
-            """, connection);
-
-        cmd.Parameters.AddWithValue("TenantId", TenantId);
-        cmd.Parameters.AddWithValue("OtherTenantId", OtherTenantId);
-        cmd.Parameters.AddWithValue("IntegrationId", HttpIntegrationId);
-        cmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
-            "http",
-            "HTTP",
-            "both",
-            authenticationSchemes: ["api_key_header", "bearer_token"],
-            description: "Generic HTTP source or destination.",
-            allowUnauthenticated: true));
-        cmd.Parameters.AddWithValue("SourceConnectionId", SourceConnectionId);
-        await cmd.ExecuteNonQueryAsync();
+                    'Bootstrap Operator Admin Key', {{{now}}});
+            """, new
+            {
+                TenantId,
+                OtherTenantId,
+                IntegrationId = HttpIntegrationId,
+                SupportedAuthSchemes = "[\"api_key_header\",\"bearer_token\"]",
+                Manifest = TestIntegrationManifest.Create(
+                    "http", "HTTP", "both",
+                    authenticationSchemes: ["api_key_header", "bearer_token"],
+                    description: "Generic HTTP source or destination.",
+                    allowUnauthenticated: true),
+                SourceConnectionId,
+                Config = "{\"base_uri\":\"http://localhost:5054/sink/source\"}"
+            });
     }
 
-    private WebApplicationFactory<Program> BuildWebFactory()
-    {
-        return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+    private WebApplicationFactory<Program> BuildWebFactory() =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            builder.UseSetting("Database:Provider", database.Provider);
+            builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
             builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Postgres"] = ConnectionString
-                }));
-
+                config.AddConfiguration(database.Configuration));
             builder.ConfigureServices(services =>
             {
-                services.RemoveAll<NpgsqlDataSource>();
-                services.RemoveAll<IDbConnectionFactory>();
-                services.RemoveAll<IDbContextFactory<IntegriosDbContext>>();
-                services.RemoveAll<DbContextOptions<IntegriosDbContext>>();
-                services.RemoveAll<IntegriosDbContext>();
                 services.RemoveAll<PublicIngressBaseUri>();
-
-                services.AddDbContextFactory<IntegriosDbContext>(
-                    options => options.UseNpgsql(ConnectionString));
-                services.AddSingleton(_ => new NpgsqlDataSourceBuilder(ConnectionString).Build());
-                services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
                 services.AddSingleton(PublicIngressBaseUri.Parse(
-                    "https://ingress.example.test/proxy/integrios",
-                    allowHttp: false));
+                    "https://ingress.example.test/proxy/integrios", allowHttp: false));
             });
         });
-    }
-
 }

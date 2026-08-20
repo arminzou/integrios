@@ -18,7 +18,7 @@ flowchart LR
     Operator[Operator] -->|configures| Admin[Admin<br/>control plane]
     Producer[External Event producer] -->|generic Event + ApiKey| Ingress[Ingress<br/>data plane]
     Adapter[Verified-webhook<br/>source adapter] -->|verified, normalized Event| Ingress
-    Admin --> DB[(PostgreSQL)]
+    Admin --> DB[(PostgreSQL or SQL Server)]
     Ingress -->|Event + outbox<br/>one transaction| DB
     DB -->|fanout work| Worker[Worker]
     Worker -->|generic HTTP delivery| Destinations[HTTP destinations]
@@ -43,8 +43,9 @@ preview. Tenants never receive control-plane authority.
 resolution, source-Connection and Topic validation, durable Event acceptance, fanout, transformation,
 HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
 
-The services share PostgreSQL. Admin owns configuration writes; Worker reads the configuration it
-needs directly from PostgreSQL and does not call Admin at runtime.
+The services share the configured PostgreSQL or SQL Server database. Admin owns configuration
+writes; Worker reads the configuration it needs directly from that database and does not call Admin
+at runtime.
 
 ## Core model
 
@@ -137,7 +138,7 @@ Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
    request before Ingress ever sees an Event contract.
 2. Ingress resolves the Tenant and validates or derives the active source Connection and its Topic
    association.
-3. One PostgreSQL transaction writes the canonical Event and its outbox row before Ingress
+3. One database transaction writes the canonical Event and its outbox row before Ingress
    acknowledges acceptance.
 4. Worker fanout reads matching active Subscriptions and creates one SubscriptionDelivery for each.
 5. Each SubscriptionDelivery is claimed independently, transformed, and sent through the generic
@@ -177,9 +178,10 @@ and indeterminate attempts preserve ambiguity rather than reporting a false conf
 
 ## Scaling and observability
 
-Ingress instances are stateless and Worker replicas safely claim disjoint PostgreSQL work with
-`FOR UPDATE SKIP LOCKED`. PostgreSQL is the current durable backbone; another transport should be
-introduced only when measured scale or operational pressure justifies it.
+Ingress instances are stateless and Worker replicas safely claim disjoint work with PostgreSQL
+`FOR UPDATE SKIP LOCKED` or equivalent SQL Server locking hints. The configured database is the
+durable backbone; another transport should be introduced only when measured scale or operational
+pressure justifies it.
 
 Integrios emits structured logs, metrics, and OTLP-capable traces but bundles no production
 observability backend. Aggregate telemetry remains low-cardinality; Tenant-specific delivery detail

@@ -7,7 +7,6 @@ using Integrios.Application.Events;
 using Integrios.Domain.Events;
 using IngressHost::Integrios.Ingress.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Npgsql;
 using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Ingress;
@@ -60,16 +59,8 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.False(body.AlreadyAccepted);
         Assert.Equal(EventStatus.Accepted, body.Status);
 
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-        await connection.OpenAsync();
-
-        await using var eventCountCommand = new NpgsqlCommand("SELECT COUNT(*) FROM events;", connection);
-        var eventCount = (long)(await eventCountCommand.ExecuteScalarAsync() ?? 0L);
-        Assert.Equal(1, eventCount);
-
-        await using var outboxCountCommand = new NpgsqlCommand("SELECT COUNT(*) FROM outbox;", connection);
-        var outboxCount = (long)(await outboxCountCommand.ExecuteScalarAsync() ?? 0L);
-        Assert.Equal(1, outboxCount);
+        Assert.Equal(1, await fixture.GetEventCountAsync());
+        Assert.Equal(1, await fixture.GetOutboxCountAsync());
 
         Assert.Equal(defaultSourceConnectionId, await fixture.GetEventSourceConnectionIdAsync(body.EventId));
     }
@@ -157,16 +148,8 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.True(secondBody.AlreadyAccepted);
         Assert.Equal(firstBody.EventId, secondBody.EventId);
 
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-        await connection.OpenAsync();
-
-        await using var eventCountCommand = new NpgsqlCommand("SELECT COUNT(*) FROM events;", connection);
-        var eventCount = (long)(await eventCountCommand.ExecuteScalarAsync() ?? 0L);
-        Assert.Equal(1, eventCount);
-
-        await using var outboxCountCommand = new NpgsqlCommand("SELECT COUNT(*) FROM outbox;", connection);
-        var outboxCount = (long)(await outboxCountCommand.ExecuteScalarAsync() ?? 0L);
-        Assert.Equal(1, outboxCount);
+        Assert.Equal(1, await fixture.GetEventCountAsync());
+        Assert.Equal(1, await fixture.GetOutboxCountAsync());
     }
 
     [Fact]
@@ -203,14 +186,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         });
         Assert.Equal(HttpStatusCode.NotFound, otherTenantReplay.StatusCode);
 
-        await using (var isolationConnection = new NpgsqlConnection(fixture.ConnectionString))
-        {
-            await isolationConnection.OpenAsync();
-            await using var isolationStatus = new NpgsqlCommand(
-                "SELECT status FROM subscription_deliveries WHERE event_id = @Id", isolationConnection);
-            isolationStatus.Parameters.AddWithValue("Id", body.EventId);
-            Assert.Equal("dead_lettered", await isolationStatus.ExecuteScalarAsync());
-        }
+        Assert.Equal("dead_lettered", await fixture.GetDeliveryStatusAsync(body.EventId));
 
         var replayResponse = await client.SendAsync(new HttpRequestMessage(
             HttpMethod.Post, $"/events/{body.EventId}/replay")
@@ -219,12 +195,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         });
         Assert.Equal(HttpStatusCode.Accepted, replayResponse.StatusCode);
 
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-        await connection.OpenAsync();
-        await using var statusCmd = new NpgsqlCommand(
-            "SELECT status FROM subscription_deliveries WHERE event_id = @Id", connection);
-        statusCmd.Parameters.AddWithValue("Id", body.EventId);
-        Assert.Equal("pending", await statusCmd.ExecuteScalarAsync());
+        Assert.Equal("pending", await fixture.GetDeliveryStatusAsync(body.EventId));
     }
 
     [Fact]

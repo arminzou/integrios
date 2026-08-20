@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Npgsql;
 using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
@@ -296,14 +296,11 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
 
     private async Task SetConnectionStatusAsync(Guid connectionId, string status)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
+        await connection.ExecuteAsync(
             "UPDATE connections SET status = @Status WHERE id = @Id",
-            connection);
-        command.Parameters.AddWithValue("Status", status);
-        command.Parameters.AddWithValue("Id", connectionId);
-        await command.ExecuteNonQueryAsync();
+            new { Status = status, Id = connectionId });
     }
 
     [Fact]

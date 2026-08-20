@@ -1,7 +1,6 @@
-using System.Diagnostics;
+using System.Data.Common;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Delivery;
-using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Worker;
 
@@ -65,31 +64,8 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
     public async Task ClaimNext_WhenDeliveryAdvanceFails_RollsBackAttemptAndClaim()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        await ExecuteSqlAsync(
-            """
-            CREATE FUNCTION test_fail_delivery_claim() RETURNS trigger LANGUAGE plpgsql AS $$
-            BEGIN
-                RAISE EXCEPTION 'injected claim failure';
-            END $$;
-            CREATE TRIGGER test_fail_delivery_claim
-                BEFORE UPDATE ON subscription_deliveries
-                FOR EACH ROW
-                WHEN (OLD.status = 'pending' AND NEW.status = 'in_flight')
-                EXECUTE FUNCTION test_fail_delivery_claim();
-            """);
-
-        try
-        {
-            await Assert.ThrowsAsync<PostgresException>(() => fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
-        }
-        finally
-        {
-            await ExecuteSqlAsync(
-                """
-                DROP TRIGGER IF EXISTS test_fail_delivery_claim ON subscription_deliveries;
-                DROP FUNCTION IF EXISTS test_fail_delivery_claim();
-                """);
-        }
+        await fixture.WithDeliveryClaimFailureAsync(async () =>
+            await Assert.ThrowsAnyAsync<DbException>(() => fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None)));
 
         await ConsistencyContractAssertions.ClaimFailureRollsBackAsync(
             deliveryId,
@@ -103,32 +79,9 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
         SubscriptionDeliveryWorkItem claimed = Assert.IsType<SubscriptionDeliveryWorkItem>(
             await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
-        await ExecuteSqlAsync(
-            """
-            CREATE FUNCTION test_fail_delivery_finalization() RETURNS trigger LANGUAGE plpgsql AS $$
-            BEGIN
-                RAISE EXCEPTION 'injected finalization failure';
-            END $$;
-            CREATE TRIGGER test_fail_delivery_finalization
-                BEFORE UPDATE ON subscription_deliveries
-                FOR EACH ROW
-                WHEN (OLD.status = 'in_flight' AND NEW.status <> 'in_flight')
-                EXECUTE FUNCTION test_fail_delivery_finalization();
-            """);
-
-        try
-        {
-            await Assert.ThrowsAsync<PostgresException>(() =>
-                fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(claimed), CancellationToken.None));
-        }
-        finally
-        {
-            await ExecuteSqlAsync(
-                """
-                DROP TRIGGER IF EXISTS test_fail_delivery_finalization ON subscription_deliveries;
-                DROP FUNCTION IF EXISTS test_fail_delivery_finalization();
-                """);
-        }
+        await fixture.WithDeliveryFinalizationFailureAsync(async () =>
+            await Assert.ThrowsAnyAsync<DbException>(() =>
+                fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(claimed), CancellationToken.None)));
 
         await ConsistencyContractAssertions.FinalizationFailureRollsBackAsync(
             deliveryId,
@@ -181,79 +134,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
     [InlineData(false)]
     public async Task ExpiredLease_ReclaimAndFinalizationRace_HonorsTheRowLockWinner(bool finalizationWins)
     {
-        const long advisoryLockKey = 8_931_047_221;
-        Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        SubscriptionDeliveryWorkItem first = Assert.IsType<SubscriptionDeliveryWorkItem>(
-            await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
-        await fixture.ForceLeaseExpiredAsync(deliveryId);
-
-        string blockedStatus = finalizationWins ? "succeeded" : "indeterminate";
-        await InstallRaceBarrierAsync(blockedStatus, advisoryLockKey);
-
-        await using var barrierConnection = new NpgsqlConnection(fixture.ConnectionString);
-        await barrierConnection.OpenAsync();
-        await ExecuteScalarAsync(barrierConnection, "SELECT pg_advisory_lock(@LockKey)", advisoryLockKey);
-
-        Task<DeliveryFinalizationResult>? finalizationTask = null;
-        Task<SubscriptionDeliveryWorkItem?>? reclaimTask = null;
-
-        try
-        {
-            if (finalizationWins)
-                finalizationTask = fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(first), CancellationToken.None);
-            else
-                reclaimTask = fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-
-            await WaitForRaceBarrierAsync();
-
-            if (finalizationWins)
-            {
-                reclaimTask = fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-                Assert.Null(await reclaimTask);
-            }
-            else
-            {
-                finalizationTask = fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(first), CancellationToken.None);
-                await WaitForBlockedFinalizationAsync();
-            }
-
-            await ExecuteScalarAsync(barrierConnection, "SELECT pg_advisory_unlock(@LockKey)", advisoryLockKey);
-
-            DeliveryFinalizationResult finalization = await finalizationTask!;
-            SubscriptionDeliveryWorkItem? reclaim = await reclaimTask!;
-
-            if (finalizationWins)
-            {
-                Assert.Equal(DeliveryFinalizationStatus.Applied, finalization.Status);
-                Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, finalization.Disposition);
-                Assert.Null(reclaim);
-                Assert.Equal("succeeded", (await fixture.GetSubscriptionDeliveryAsync(deliveryId)).Status);
-                Assert.Equal("succeeded", Assert.Single(await fixture.GetDeliveryAttemptsAsync(deliveryId)).Status);
-            }
-            else
-            {
-                Assert.Equal(DeliveryFinalizationStatus.OwnershipLost, finalization.Status);
-                Assert.NotNull(reclaim);
-                Assert.Equal(2, reclaim.AttemptNumber);
-                Assert.Equal(
-                    ["indeterminate", "in_progress"],
-                    (await fixture.GetDeliveryAttemptsAsync(deliveryId)).Select(attempt => attempt.Status));
-            }
-        }
-        finally
-        {
-            await ExecuteScalarAsync(barrierConnection, "SELECT pg_advisory_unlock(@LockKey)", advisoryLockKey);
-            if (finalizationTask is not null)
-                await finalizationTask;
-            if (reclaimTask is not null)
-                await reclaimTask;
-            await ExecuteSqlAsync(
-                """
-                DROP TRIGGER IF EXISTS test_block_delivery_attempt_update ON delivery_attempts;
-                DROP FUNCTION IF EXISTS test_block_delivery_attempt_update();
-                DROP SEQUENCE IF EXISTS test_delivery_race_sequence;
-                """);
-        }
+        await fixture.RunExpiredLeaseRaceAsync(finalizationWins);
     }
 
     [Fact]
@@ -316,36 +197,10 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
     public async Task Dispatch_WhenTransientFinalizationFails_RetriesDatabaseOnly()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        await ExecuteSqlAsync(
-            """
-            CREATE SEQUENCE test_finalization_retry_sequence;
-            CREATE FUNCTION test_fail_first_attempt_finalization() RETURNS trigger LANGUAGE plpgsql AS $$
-            BEGIN
-                IF nextval('test_finalization_retry_sequence') = 1 THEN
-                    RAISE EXCEPTION 'injected transient finalization failure' USING ERRCODE = '40001';
-                END IF;
-                RETURN NEW;
-            END $$;
-            CREATE TRIGGER test_fail_first_attempt_finalization
-                BEFORE UPDATE ON delivery_attempts
-                FOR EACH ROW
-                WHEN (OLD.status = 'in_progress' AND NEW.status <> 'in_progress')
-                EXECUTE FUNCTION test_fail_first_attempt_finalization();
-            """);
-
-        try
+        await fixture.WithTransientFinalizationFailureAsync(async () =>
         {
             Assert.Equal(1, await fixture.RunDeliveryBatchAsync(1));
-        }
-        finally
-        {
-            await ExecuteSqlAsync(
-                """
-                DROP TRIGGER IF EXISTS test_fail_first_attempt_finalization ON delivery_attempts;
-                DROP FUNCTION IF EXISTS test_fail_first_attempt_finalization();
-                DROP SEQUENCE IF EXISTS test_finalization_retry_sequence;
-                """);
-        }
+        });
 
         Assert.Single(fixture.DeliveryClient.Calls);
         Assert.Equal("succeeded", (await fixture.GetSubscriptionDeliveryAsync(deliveryId)).Status);
@@ -439,87 +294,4 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
         Assert.Equal(1, delivery.LifetimeAttemptCount);
     }
 
-    private async Task InstallRaceBarrierAsync(string blockedStatus, long advisoryLockKey)
-    {
-        await ExecuteSqlAsync(
-            $$"""
-            CREATE SEQUENCE test_delivery_race_sequence;
-            CREATE FUNCTION test_block_delivery_attempt_update() RETURNS trigger LANGUAGE plpgsql AS $function$
-            BEGIN
-                PERFORM nextval('test_delivery_race_sequence');
-                PERFORM pg_advisory_xact_lock({{advisoryLockKey}});
-                RETURN NEW;
-            END
-            $function$;
-            CREATE TRIGGER test_block_delivery_attempt_update
-                BEFORE UPDATE ON delivery_attempts
-                FOR EACH ROW
-                WHEN (NEW.status = '{{blockedStatus}}')
-                EXECUTE FUNCTION test_block_delivery_attempt_update();
-            """);
-    }
-
-    private async Task WaitForRaceBarrierAsync()
-    {
-        var deadline = Stopwatch.StartNew();
-        while (deadline.Elapsed < TimeSpan.FromSeconds(5))
-        {
-            await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-            await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(
-                "SELECT is_called FROM test_delivery_race_sequence",
-                connection);
-            if (await command.ExecuteScalarAsync() is true)
-                return;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(10));
-        }
-
-        throw new TimeoutException("The delivery race did not reach its database barrier within five seconds.");
-    }
-
-    private async Task WaitForBlockedFinalizationAsync()
-    {
-        var deadline = Stopwatch.StartNew();
-        while (deadline.Elapsed < TimeSpan.FromSeconds(5))
-        {
-            await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-            await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(
-                """
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM pg_stat_activity
-                    WHERE datname = current_database()
-                      AND wait_event_type = 'Lock'
-                      AND query LIKE '%FROM subscription_deliveries%FOR UPDATE%'
-                )
-                """,
-                connection);
-            if (await command.ExecuteScalarAsync() is true)
-                return;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(10));
-        }
-
-        throw new TimeoutException("The stale finalization did not block behind the reclaim transaction within five seconds.");
-    }
-
-    private async Task ExecuteSqlAsync(string sql)
-    {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<object?> ExecuteScalarAsync(
-        NpgsqlConnection connection,
-        string sql,
-        long advisoryLockKey)
-    {
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("LockKey", advisoryLockKey);
-        return await command.ExecuteScalarAsync();
-    }
 }

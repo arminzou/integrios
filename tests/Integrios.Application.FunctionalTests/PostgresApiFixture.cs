@@ -1,369 +1,220 @@
 extern alias IngressHost;
 
-using Integrios.Tests.Shared;
+using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
-using DotNet.Testcontainers.Builders;
+using Dapper;
 using Integrios.Infrastructure.Data;
+using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Npgsql;
-using Testcontainers.PostgreSql;
+using Respawn;
 
-// Shared by the Ingress/ tests that drive the host and the Infrastructure/ tests that construct an
-// adapter directly, so it sits above both rather than inside either.
 namespace Integrios.Application.FunctionalTests;
 
+// Retains its historical name to avoid a path-only churn across the test suite. The selected
+// runtime provider is owned by FunctionalDatabase.
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
     private static readonly Guid SourceIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000101");
     public const string TenantAToken = "intg_aa11bb22cc33dd440011223344556677001122334455667700112233445566";
     public const string TenantBToken = "intg_ee55ff66aa77bb888877665544332211887766554433221188776655443322";
 
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
-        .WithDatabase("integrios")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private readonly FunctionalDatabase database = new();
+    private Respawner respawner = null!;
 
     public WebApplicationFactory<IngressHost::Program> WebFactory { get; private set; } = null!;
-    public string ConnectionString => container.GetConnectionString();
+    public string ConnectionString => database.ConnectionString;
+    internal DbConnection CreateConnection() => database.CreateConnection();
+    internal DbContextOptions<IntegriosDbContext> CreateOptions() => database.CreateOptions();
     public Guid TenantAId { get; private set; }
     public Guid TenantBId { get; private set; }
 
     public async Task InitializeAsync()
     {
-        await container.StartAsync();
-        await PostgresMigrationTestHelper.MigrateAsync(ConnectionString);
+        await database.StartAsync();
+        respawner = await database.CreateRespawnerAsync();
         WebFactory = BuildWebFactory();
     }
 
     public async Task DisposeAsync()
     {
         WebFactory.Dispose();
-        await container.DisposeAsync();
+        await database.DisposeAsync();
     }
 
     public async Task ResetDataAsync()
     {
-        await using var connection = new NpgsqlConnection(ConnectionString);
+        await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
-
-        const string resetSql = """
-            TRUNCATE TABLE subscription_deliveries, delivery_attempts, outbox, events, subscriptions, topics, connections, api_keys, tenants, integrations RESTART IDENTITY CASCADE;
-            """;
-        await using (var resetCommand = new NpgsqlCommand(resetSql, connection))
-        {
-            await resetCommand.ExecuteNonQueryAsync();
-        }
+        await respawner.ResetAsync(connection);
 
         TenantAId = Guid.NewGuid();
-        var tenantAId = TenantAId;
         TenantBId = Guid.NewGuid();
-        var tenantBId = TenantBId;
         var credentialAId = Guid.NewGuid();
         var credentialBId = Guid.NewGuid();
-        var secretHashA = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(TenantAToken))).ToLowerInvariant();
-        var secretHashB = "sha256:" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(TenantBToken))).ToLowerInvariant();
+        string secretHashA = Hash(TenantAToken);
+        string secretHashB = Hash(TenantBToken);
+        string now = database.Now;
 
-        const string seedSql = """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES
-                (@TenantAId, 'test-tenant-a', 'Test Tenant A', 'active', now(), now()),
-                (@TenantBId, 'test-tenant-b', 'Test Tenant B', 'active', now(), now());
+                (@TenantAId, 'test-tenant-a', 'Test Tenant A', 'active', {{{now}}}, {{{now}}}),
+                (@TenantBId, 'test-tenant-b', 'Test Tenant B', 'active', {{{now}}}, {{{now}}});
 
-            INSERT INTO api_keys (
-                id,
-                tenant_id,
-                name,
-                key_prefix,
-                key_hash,
-                status,
-                created_at
-            )
-            VALUES (
-                @CredentialAId,
-                @TenantAId,
-                'test-ingest-key-a',
-                @KeyPrefixA,
-                @KeyHashA,
-                'active',
-                now()
-            ),
-            (
-                @CredentialBId,
-                @TenantBId,
-                'test-ingest-key-b',
-                @KeyPrefixB,
-                @KeyHashB,
-                'active',
-                now()
-            );
+            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, status, created_at)
+            VALUES
+                (@CredentialAId, @TenantAId, 'test-ingest-key-a', @KeyPrefixA, @KeyHashA, 'active', {{{now}}}),
+                (@CredentialBId, @TenantBId, 'test-ingest-key-b', @KeyPrefixB, @KeyHashB, 'active', {{{now}}});
 
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
-                supported_auth_schemes, status, manifest, created_at, updated_at
-            ) VALUES (
-                @SourceIntegrationId, 'test_source', 1, 1, 'Test Source', 'source',
-                '[]'::jsonb, 'active', @SourceManifest::jsonb, now(), now()
-            );
-            """;
-
-        await using var seedCommand = new NpgsqlCommand(seedSql, connection);
-        seedCommand.Parameters.AddWithValue("TenantAId", tenantAId);
-        seedCommand.Parameters.AddWithValue("TenantBId", tenantBId);
-        seedCommand.Parameters.AddWithValue("CredentialAId", credentialAId);
-        seedCommand.Parameters.AddWithValue("CredentialBId", credentialBId);
-        seedCommand.Parameters.AddWithValue("KeyPrefixA", TenantAToken[..12]);
-        seedCommand.Parameters.AddWithValue("KeyPrefixB", TenantBToken[..12]);
-        seedCommand.Parameters.AddWithValue("KeyHashA", secretHashA);
-        seedCommand.Parameters.AddWithValue("KeyHashB", secretHashB);
-        seedCommand.Parameters.AddWithValue("SourceIntegrationId", SourceIntegrationId);
-        seedCommand.Parameters.AddWithValue("SourceManifest", TestIntegrationManifest.Create(
-            "test_source", "Test Source", "source"));
-        await seedCommand.ExecuteNonQueryAsync();
+                id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest, created_at, updated_at)
+            VALUES (@SourceIntegrationId, 'test_source', 1, 1, 'Test Source', 'source',
+                {{{database.Json("@SupportedAuthSchemes")}}}, 'active', {{{database.Json("@SourceManifest")}}}, {{{now}}}, {{{now}}});
+            """, new
+            {
+                TenantAId,
+                TenantBId,
+                CredentialAId = credentialAId,
+                CredentialBId = credentialBId,
+                KeyPrefixA = TenantAToken[..12],
+                KeyPrefixB = TenantBToken[..12],
+                KeyHashA = secretHashA,
+                KeyHashB = secretHashB,
+                SourceIntegrationId,
+                SupportedAuthSchemes = "[]",
+                SourceManifest = TestIntegrationManifest.Create("test_source", "Test Source", "source")
+            });
     }
 
-    public async Task<Guid?> GetEventTenantIdAsync(Guid eventId)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand("SELECT tenant_id FROM events WHERE id = @Id", connection);
-        cmd.Parameters.AddWithValue("Id", eventId);
-        var result = await cmd.ExecuteScalarAsync();
-        return result is Guid g ? g : null;
-    }
+    public Task<Guid?> GetEventTenantIdAsync(Guid eventId) =>
+        ScalarAsync<Guid?>("SELECT tenant_id FROM events WHERE id=@Id", new { Id = eventId });
 
-    public async Task<Guid?> GetEventTopicIdAsync(Guid eventId)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand("SELECT topic_id FROM events WHERE id = @Id", connection);
-        cmd.Parameters.AddWithValue("Id", eventId);
-        var result = await cmd.ExecuteScalarAsync();
-        return result is Guid g ? g : null;
-    }
+    public Task<Guid?> GetEventTopicIdAsync(Guid eventId) =>
+        ScalarAsync<Guid?>("SELECT topic_id FROM events WHERE id=@Id", new { Id = eventId });
 
     public async Task<Guid> SeedTopicAsync(Guid tenantId, string name)
     {
-        var topicId = Guid.NewGuid();
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(
-            "INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at) VALUES (@Id, @TenantId, @Name, 'active', now(), now())",
-            connection);
-        cmd.Parameters.AddWithValue("Id", topicId);
-        cmd.Parameters.AddWithValue("TenantId", tenantId);
-        cmd.Parameters.AddWithValue("Name", name);
-        await cmd.ExecuteNonQueryAsync();
+        Guid topicId = Guid.NewGuid();
+        await ExecuteAsync($"INSERT INTO topics (id,tenant_id,name,status,created_at,updated_at) VALUES (@Id,@TenantId,@Name,'active',{database.Now},{database.Now})",
+            new { Id = topicId, TenantId = tenantId, Name = name });
         return topicId;
     }
 
     public async Task<Guid> SeedSourceConnectionAsync(
-        Guid tenantId,
-        string name,
-        string status = "active",
-        string direction = "source")
+        Guid tenantId, string name, string status = "active", string direction = "source")
     {
-        var integrationId = SourceIntegrationId;
-        if (direction != "source")
-        {
-            integrationId = Guid.NewGuid();
-        }
-
-        var connectionId = Guid.NewGuid();
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-
+        Guid integrationId = direction == "source" ? SourceIntegrationId : Guid.NewGuid();
         if (integrationId != SourceIntegrationId)
         {
-            await using var integrationCommand = new NpgsqlCommand(
-                """
-                INSERT INTO integrations (
-                    id, key, contract_version, manifest_schema_version, name, direction,
-                    supported_auth_schemes, status, manifest, created_at, updated_at
-                ) VALUES (@Id, @Key, 1, 1, @Key, @Direction, '[]'::jsonb, 'active', @Manifest::jsonb, now(), now())
-                """,
-                connection);
-            integrationCommand.Parameters.AddWithValue("Id", integrationId);
             string key = $"test_{direction}_{integrationId:N}";
-            integrationCommand.Parameters.AddWithValue("Key", key);
-            integrationCommand.Parameters.AddWithValue("Direction", direction);
-            integrationCommand.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(key, key, direction));
-            await integrationCommand.ExecuteNonQueryAsync();
+            await ExecuteAsync($$$"""
+                INSERT INTO integrations (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,
+                    name,direction,supported_auth_schemes,status,manifest,created_at,updated_at)
+                VALUES (@Id,@Key,1,1,@Key,@Direction,{{{database.Json("@Schemes")}}},'active',
+                    {{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}})
+                """, new
+                {
+                    Id = integrationId, Key = key, Direction = direction, Schemes = "[]",
+                    Manifest = TestIntegrationManifest.Create(key, key, direction)
+                });
         }
 
-        await using var command = new NpgsqlCommand(
-            """
-            INSERT INTO connections (
-                id, tenant_id, integration_id, name, config, status, created_at, updated_at
-            ) VALUES (@Id, @TenantId, @IntegrationId, @Name, '{}'::jsonb, @Status, now(), now())
-            """,
-            connection);
-        command.Parameters.AddWithValue("Id", connectionId);
-        command.Parameters.AddWithValue("TenantId", tenantId);
-        command.Parameters.AddWithValue("IntegrationId", integrationId);
-        command.Parameters.AddWithValue("Name", name);
-        command.Parameters.AddWithValue("Status", status);
-        await command.ExecuteNonQueryAsync();
+        Guid connectionId = Guid.NewGuid();
+        await ExecuteAsync($$$"""
+            INSERT INTO connections (id,tenant_id,integration_id,name,config,status,created_at,updated_at)
+            VALUES (@Id,@TenantId,@IntegrationId,@Name,{{{database.Json("@Config")}}},@Status,{{{database.Now}}},{{{database.Now}}})
+            """, new
+            {
+                Id = connectionId, TenantId = tenantId, IntegrationId = integrationId,
+                Name = name, Config = "{}", Status = status
+            });
         return connectionId;
     }
 
-    public async Task AssociateSourceAsync(Guid tenantId, Guid topicId, Guid connectionId)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            """
-            INSERT INTO topic_sources (tenant_id, topic_id, connection_id)
-            VALUES (@TenantId, @TopicId, @ConnectionId)
-            """,
-            connection);
-        command.Parameters.AddWithValue("TenantId", tenantId);
-        command.Parameters.AddWithValue("TopicId", topicId);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
-        await command.ExecuteNonQueryAsync();
-    }
+    public Task AssociateSourceAsync(Guid tenantId, Guid topicId, Guid connectionId) =>
+        ExecuteAsync(
+            "INSERT INTO topic_sources (tenant_id,topic_id,connection_id) VALUES (@TenantId,@TopicId,@ConnectionId)",
+            new { TenantId = tenantId, TopicId = topicId, ConnectionId = connectionId });
 
-    // Removing a source from a Topic retires the association rather than deleting it, because the
-    // row is a tombstone that historical Event foreign keys still point at.
-    public async Task RetireSourceAsync(Guid tenantId, Guid topicId, Guid connectionId)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            """
-            UPDATE topic_sources
-            SET status = 'inactive', inactive_at = now()
-            WHERE tenant_id = @TenantId
-              AND topic_id = @TopicId
-              AND connection_id = @ConnectionId
-            """,
-            connection);
-        command.Parameters.AddWithValue("TenantId", tenantId);
-        command.Parameters.AddWithValue("TopicId", topicId);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
-        await command.ExecuteNonQueryAsync();
-    }
+    public Task RetireSourceAsync(Guid tenantId, Guid topicId, Guid connectionId) =>
+        ExecuteAsync($"UPDATE topic_sources SET status='inactive',inactive_at={database.Now} WHERE tenant_id=@TenantId AND topic_id=@TopicId AND connection_id=@ConnectionId",
+            new { TenantId = tenantId, TopicId = topicId, ConnectionId = connectionId });
 
-    public async Task<Guid?> GetEventSourceConnectionIdAsync(Guid eventId)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            "SELECT source_connection_id FROM events WHERE id = @Id", connection);
-        command.Parameters.AddWithValue("Id", eventId);
-        return await command.ExecuteScalarAsync() is Guid id ? id : null;
-    }
+    public Task<Guid?> GetEventSourceConnectionIdAsync(Guid eventId) =>
+        ScalarAsync<Guid?>("SELECT source_connection_id FROM events WHERE id=@Id", new { Id = eventId });
 
-    public async Task ForceEventStatusAsync(Guid eventId, string status)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(
-            "UPDATE events SET status = @Status WHERE id = @Id", connection);
-        cmd.Parameters.AddWithValue("Status", status);
-        cmd.Parameters.AddWithValue("Id", eventId);
-        await cmd.ExecuteNonQueryAsync();
-    }
+    public Task ForceEventStatusAsync(Guid eventId, string status) =>
+        ExecuteAsync("UPDATE events SET status=@Status WHERE id=@Id", new { Status = status, Id = eventId });
 
     public async Task ForceDeadLetteredDeliveryAsync(Guid eventId)
     {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-
-        // Self-contained: seed a minimal connection + topic + subscription, then a dead_lettered delivery.
-        await using var cmd = new NpgsqlCommand(
-            """
-            INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction, status, manifest)
-            VALUES (
-                '00000000-0000-0000-0000-000000000001', 'http', 1, 1, 'HTTP', 'both',
-                'active', @HttpManifest::jsonb)
-            ON CONFLICT (id) DO NOTHING;
-
-            WITH ev AS (SELECT tenant_id FROM events WHERE id = @EventId),
-            conn_insert AS (
-                INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
-                SELECT gen_random_uuid(), ev.tenant_id, '00000000-0000-0000-0000-000000000001',
-                       'replay-test-sink', '{"base_uri":"http://test/sink"}'::jsonb, 'active'
-                FROM ev
-                RETURNING id, tenant_id
-            ),
-            topic_insert AS (
-                INSERT INTO topics (id, tenant_id, name, status)
-                SELECT gen_random_uuid(), ci.tenant_id, 'replay-test-topic', 'active'
-                FROM conn_insert ci
-                RETURNING id, tenant_id
-            ),
-            sub_insert AS (
-                INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
-                SELECT gen_random_uuid(), ti.tenant_id, ti.id, 'replay-test-sub',
-                       '{"event_types":["payment.created"]}'::jsonb,
-                       ci.id, 0, 'active'
-                FROM topic_insert ti, conn_insert ci
-                RETURNING id, destination_connection_id
-            )
+        Guid tenantId = await ScalarAsync<Guid>("SELECT tenant_id FROM events WHERE id=@EventId", new { EventId = eventId });
+        Guid connectionId = Guid.NewGuid();
+        Guid topicId = Guid.NewGuid();
+        Guid subscriptionId = Guid.NewGuid();
+        await ExecuteAsync($$$"""
+            INSERT INTO integrations (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
+                supported_auth_schemes,status,manifest)
+            VALUES (@IntegrationId,'http',1,1,'HTTP','both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}});
+            INSERT INTO connections (id,tenant_id,integration_id,name,config,status)
+            VALUES (@ConnectionId,@TenantId,@IntegrationId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
+            INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','active');
+            INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status)
+            VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@MatchRules")}}},@ConnectionId,0,'active');
             INSERT INTO subscription_deliveries
-                (event_id, subscription_id, destination_connection_id, http_execution_snapshot,
-                 integration_key, status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
-            SELECT @EventId, si.id, si.destination_connection_id,
-                   '{"version":1,"base_uri":"http://test/sink","request":{"version":1,"method":"POST","headers":{},"body":"json"}}'::jsonb,
-                   'http', 'dead_lettered', 3, 3, now()
-            FROM sub_insert si;
-            """, connection);
-        cmd.Parameters.AddWithValue("EventId", eventId);
-        cmd.Parameters.AddWithValue("HttpManifest", TestIntegrationManifest.Create("http", "HTTP", "both"));
-        await cmd.ExecuteNonQueryAsync();
+                (event_id,subscription_id,destination_connection_id,http_execution_snapshot,integration_key,
+                 status,lifetime_attempt_count,retry_cycle_attempt_count,failed_at)
+            VALUES (@EventId,@SubscriptionId,@ConnectionId,{{{database.Json("@Snapshot")}}},'http',
+                'dead_lettered',3,3,{{{database.Now}}});
+            """, new
+            {
+                IntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Schemes = "[]", Manifest = TestIntegrationManifest.Create("http", "HTTP", "both"),
+                ConnectionId = connectionId, TenantId = tenantId, Config = "{\"base_uri\":\"http://test/sink\"}",
+                TopicId = topicId, SubscriptionId = subscriptionId,
+                MatchRules = "{\"event_types\":[\"payment.created\"]}",
+                Snapshot = "{\"version\":1,\"base_uri\":\"http://test/sink\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}",
+                EventId = eventId
+            });
     }
 
-    public async Task<int> GetOutboxRowCountAsync(Guid eventId)
+    public Task<int> GetOutboxRowCountAsync(Guid eventId) =>
+        ScalarAsync<int>("SELECT COUNT(*) FROM outbox WHERE event_id=@Id", new { Id = eventId });
+
+    public Task<int> GetEventCountAsync() => ScalarAsync<int>("SELECT COUNT(*) FROM events");
+    public Task<int> GetOutboxCountAsync() => ScalarAsync<int>("SELECT COUNT(*) FROM outbox");
+    public Task<string?> GetDeliveryStatusAsync(Guid eventId) =>
+        ScalarAsync<string?>("SELECT status FROM subscription_deliveries WHERE event_id=@Id", new { Id = eventId });
+
+    private async Task ExecuteAsync(string sql, object? parameters = null)
     {
-        await using var connection = new NpgsqlConnection(ConnectionString);
+        await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(
-            "SELECT COUNT(*) FROM outbox WHERE event_id = @Id", connection);
-        cmd.Parameters.AddWithValue("Id", eventId);
-        return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        await connection.ExecuteAsync(sql, parameters);
     }
 
-    private WebApplicationFactory<IngressHost::Program> BuildWebFactory()
+    private async Task<T> ScalarAsync<T>(string sql, object? parameters = null)
     {
-        return new WebApplicationFactory<IngressHost::Program>().WithWebHostBuilder(builder =>
+        await using DbConnection connection = database.CreateConnection();
+        await connection.OpenAsync();
+        return (await connection.ExecuteScalarAsync<T>(sql, parameters))!;
+    }
+
+    private WebApplicationFactory<IngressHost::Program> BuildWebFactory() =>
+        new WebApplicationFactory<IngressHost::Program>().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
+            builder.UseSetting("Database:Provider", database.Provider);
+            builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
             builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Postgres"] = ConnectionString
-                }));
-
-            // The app builds its data source during startup; replace DB services explicitly
-            // so repositories resolve against the container connection string in integration tests.
-            builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<NpgsqlDataSource>();
-                services.RemoveAll<IDbConnectionFactory>();
-                services.RemoveAll<IDbContextFactory<IntegriosDbContext>>();
-                services.RemoveAll<DbContextOptions<IntegriosDbContext>>();
-                services.RemoveAll<IntegriosDbContext>();
-
-                services.AddDbContextFactory<IntegriosDbContext>(
-                    options => options.UseNpgsql(ConnectionString));
-                services.AddSingleton(_ =>
-                {
-                    var dataSourceBuilder = new NpgsqlDataSourceBuilder(ConnectionString);
-                    return dataSourceBuilder.Build();
-                });
-                services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
-            });
+                config.AddConfiguration(database.Configuration));
         });
-    }
 
+    private static string Hash(string token) => "sha256:" + Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
 }

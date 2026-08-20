@@ -37,7 +37,7 @@ internal sealed class SqlServerConnectionAuthoringLock(IDbContextFactory<Integri
                 }
                 return new Lease(context, connection, acquired);
             }
-            catch
+            catch (Exception exception)
             {
                 try
                 {
@@ -47,6 +47,8 @@ internal sealed class SqlServerConnectionAuthoringLock(IDbContextFactory<Integri
                 {
                     // Preserve the acquisition failure; disposing the context closes the pinned session.
                 }
+                if (cancellationToken.IsCancellationRequested)
+                    throw new OperationCanceledException("SQL Server application-lock acquisition was canceled.", exception, cancellationToken);
                 throw;
             }
         }

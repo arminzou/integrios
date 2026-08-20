@@ -1,8 +1,7 @@
+using Dapper;
 using Integrios.Domain.Common;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Secrets;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Infrastructure;
 
@@ -29,24 +28,18 @@ public sealed class SecretValidationCatalogTests : IClassFixture<PostgresApiFixt
             fixture.TenantAId,
             "disabled-source");
 
-        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        await using (var connection = fixture.CreateConnection())
         {
             await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(
+            await connection.ExecuteAsync(
                 """
                 UPDATE tenants SET status = 'disabled' WHERE id = @DisabledTenantId;
                 UPDATE connections SET status = 'disabled' WHERE id = @DisabledConnectionId;
                 """,
-                connection);
-            command.Parameters.AddWithValue("DisabledTenantId", fixture.TenantBId);
-            command.Parameters.AddWithValue("DisabledConnectionId", disabledConnectionId);
-            await command.ExecuteNonQueryAsync();
+                new { DisabledTenantId = fixture.TenantBId, DisabledConnectionId = disabledConnectionId });
         }
 
-        await using var context = new IntegriosDbContext(
-            new DbContextOptionsBuilder<IntegriosDbContext>()
-                .UseNpgsql(fixture.ConnectionString)
-                .Options);
+        await using var context = new IntegriosDbContext(fixture.CreateOptions());
         var catalog = new SecretValidationCatalog(context);
 
         var selectedTenant = await catalog.FindTenantBySlugAsync("test-tenant-b", CancellationToken.None);

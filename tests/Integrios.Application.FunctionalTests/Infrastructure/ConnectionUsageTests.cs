@@ -1,11 +1,10 @@
+using Dapper;
 using Integrios.Application.AdminKeys;
 using Integrios.Application.Connections;
 using Integrios.Domain.Tenants;
 using Integrios.Infrastructure.AdminKeys;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Infrastructure;
 
@@ -19,16 +18,14 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
     [Fact]
     public async Task AdminKeyLookup_FindsActiveGlobalKey()
     {
-        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        await using (var connection = fixture.CreateConnection())
         {
             await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(
+            await connection.ExecuteAsync(
                 """
                 INSERT INTO admin_keys (public_key, secret_hash, name)
                 VALUES ('global_admin_key', 'sha256:test', 'Test key')
-                """,
-                connection);
-            await command.ExecuteNonQueryAsync();
+                """);
         }
 
         await using IntegriosDbContext context = CreateContext();
@@ -67,8 +64,5 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
         Assert.False(afterRetirement.Destination);
     }
 
-    private IntegriosDbContext CreateContext() => new(
-        new DbContextOptionsBuilder<IntegriosDbContext>()
-            .UseNpgsql(fixture.ConnectionString)
-            .Options);
+    private IntegriosDbContext CreateContext() => new(fixture.CreateOptions());
 }

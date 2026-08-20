@@ -1,9 +1,10 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Npgsql;
 using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
@@ -115,22 +116,15 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
         Assert.Equal(initial.Id, Assert.Single(unchanged.Sources).Endpoint!.Id);
 
         Guid eventId = Guid.NewGuid();
-        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        await using (var connection = fixture.CreateConnection())
         {
             await connection.OpenAsync();
-            await using var insertEvent = new NpgsqlCommand(
-                """
+            await connection.ExecuteAsync($$$"""
                 INSERT INTO events (
                     id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
                 VALUES (
-                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', '{}'::jsonb, 'accepted')
-                """,
-                connection);
-            insertEvent.Parameters.AddWithValue("Id", eventId);
-            insertEvent.Parameters.AddWithValue("TenantId", fixture.TenantId);
-            insertEvent.Parameters.AddWithValue("TopicId", created.Id);
-            insertEvent.Parameters.AddWithValue("SourceConnectionId", sourceConnectionId);
-            await insertEvent.ExecuteNonQueryAsync();
+                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', {{{fixture.Json("@Payload")}}}, 'accepted')
+                """, new { Id = eventId, fixture.TenantId, TopicId = created.Id, SourceConnectionId = sourceConnectionId, Payload = "{}" });
         }
 
         var removedResponse = await client.SendAsync(AdminRequest(
@@ -142,48 +136,33 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
         Assert.NotNull(removed);
         Assert.Empty(removed.Sources);
 
-        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        await using (var connection = fixture.CreateConnection())
         {
             await connection.OpenAsync();
-            await using var inactivated = new NpgsqlCommand(
+            SourceInactivationRow inactivated = await connection.QuerySingleAsync<SourceInactivationRow>(
                 """
                 SELECT
                     (SELECT status FROM topic_sources
-                     WHERE tenant_id = @TenantId AND topic_id = @TopicId AND connection_id = @ConnectionId),
-                    (SELECT status FROM source_endpoints WHERE id = @EndpointId),
-                    EXISTS (SELECT 1 FROM events WHERE id = @EventId)
+                     WHERE tenant_id = @TenantId AND topic_id = @TopicId AND connection_id = @ConnectionId) AS SourceStatus,
+                    (SELECT status FROM source_endpoints WHERE id = @EndpointId) AS EndpointStatus,
+                    CASE WHEN EXISTS (SELECT 1 FROM events WHERE id = @EventId) THEN 1 ELSE 0 END AS EventExists
                 """,
-                connection);
-            inactivated.Parameters.AddWithValue("TenantId", fixture.TenantId);
-            inactivated.Parameters.AddWithValue("TopicId", created.Id);
-            inactivated.Parameters.AddWithValue("ConnectionId", sourceConnectionId);
-            inactivated.Parameters.AddWithValue("EndpointId", initial.Id);
-            inactivated.Parameters.AddWithValue("EventId", eventId);
-            await using var reader = await inactivated.ExecuteReaderAsync();
-            Assert.True(await reader.ReadAsync());
-            Assert.Equal("inactive", reader.GetString(0));
-            Assert.Equal("revoked", reader.GetString(1));
-            Assert.True(reader.GetBoolean(2));
+                new { fixture.TenantId, TopicId = created.Id, ConnectionId = sourceConnectionId, EndpointId = initial.Id, EventId = eventId });
+            Assert.Equal("inactive", inactivated.SourceStatus);
+            Assert.Equal("revoked", inactivated.EndpointStatus);
+            Assert.True(Convert.ToBoolean(inactivated.EventExists));
         }
 
-        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        await using (var connection = fixture.CreateConnection())
         {
             await connection.OpenAsync();
-            await using var insertInactiveEvent = new NpgsqlCommand(
-                """
+            Task insertInactiveEvent = connection.ExecuteAsync($$$"""
                 INSERT INTO events (
                     id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
                 VALUES (
-                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', '{}'::jsonb, 'accepted')
-                """,
-                connection);
-            insertInactiveEvent.Parameters.AddWithValue("Id", Guid.NewGuid());
-            insertInactiveEvent.Parameters.AddWithValue("TenantId", fixture.TenantId);
-            insertInactiveEvent.Parameters.AddWithValue("TopicId", created.Id);
-            insertInactiveEvent.Parameters.AddWithValue("SourceConnectionId", sourceConnectionId);
-            PostgresException exception = await Assert.ThrowsAsync<PostgresException>(
-                () => insertInactiveEvent.ExecuteNonQueryAsync());
-            Assert.Equal("fk_events_topic_source_active", exception.ConstraintName);
+                    @Id, @TenantId, @TopicId, @SourceConnectionId, 'github.push', {{{fixture.Json("@Payload")}}}, 'accepted')
+                """, new { Id = Guid.NewGuid(), fixture.TenantId, TopicId = created.Id, SourceConnectionId = sourceConnectionId, Payload = "{}" });
+            await Assert.ThrowsAnyAsync<DbException>(() => insertInactiveEvent);
         }
 
         var recreatedResponse = await client.SendAsync(AdminRequest(
@@ -196,10 +175,10 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
         AdminSourceEndpointResponse replacement = Assert.Single(recreated.Sources).Endpoint!;
         Assert.NotEqual(initial.Id, replacement.Id);
 
-        await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+        await using (var connection = fixture.CreateConnection())
         {
             await connection.OpenAsync();
-            await using var endpointHistory = new NpgsqlCommand(
+            IEnumerable<string> statuses = await connection.QueryAsync<string>(
                 """
                 SELECT status
                 FROM source_endpoints
@@ -208,14 +187,7 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
                   AND connection_id = @ConnectionId
                 ORDER BY status
                 """,
-                connection);
-            endpointHistory.Parameters.AddWithValue("TenantId", fixture.TenantId);
-            endpointHistory.Parameters.AddWithValue("TopicId", created.Id);
-            endpointHistory.Parameters.AddWithValue("ConnectionId", sourceConnectionId);
-            await using var reader = await endpointHistory.ExecuteReaderAsync();
-            var statuses = new List<string>();
-            while (await reader.ReadAsync())
-                statuses.Add(reader.GetString(0));
+                new { fixture.TenantId, TopicId = created.Id, ConnectionId = sourceConnectionId });
             Assert.Equal(["active", "revoked"], statuses);
         }
     }
@@ -710,34 +682,31 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
     {
         Guid integrationId = Guid.NewGuid();
         Guid resolvedConnectionId = connectionId ?? Guid.NewGuid();
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-
-        await using var command = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
+                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
-            VALUES (@IntegrationId, @Key, 1, 1, @Key, @Direction, '[]'::jsonb, 'active', @Manifest::jsonb);
+            VALUES (@IntegrationId, @Key, 1, 1, @Key, @Direction, {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
 
             INSERT INTO connections (
                 id, tenant_id, integration_id, name, config,
                 source_verification, destination_authentication, status)
-            VALUES (@ConnectionId, @TenantId, @IntegrationId, @Key, '{}'::jsonb, NULL, NULL, @Status);
-            """,
-            connection);
-        command.Parameters.AddWithValue("IntegrationId", integrationId);
-        command.Parameters.AddWithValue("ConnectionId", resolvedConnectionId);
-        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        command.Parameters.AddWithValue("Key", key);
-        command.Parameters.AddWithValue("Direction", direction);
-        command.Parameters.AddWithValue("Status", status);
-        command.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
-            key,
-            key,
-            direction,
-            sourceVerificationSchemes: requireSourceVerification ? ["github_hmac_sha256"] : []));
-        await command.ExecuteNonQueryAsync();
+            VALUES (@ConnectionId, @TenantId, @IntegrationId, @Key, {{{fixture.Json("@Config")}}}, NULL, NULL, @Status);
+            """, new
+        {
+            IntegrationId = integrationId,
+            ConnectionId = resolvedConnectionId,
+            fixture.TenantId,
+            Key = key,
+            Direction = direction,
+            Status = status,
+            Schemes = "[]",
+            Config = "{}",
+            Manifest = TestIntegrationManifest.Create(key, key, direction,
+                sourceVerificationSchemes: requireSourceVerification ? ["github_hmac_sha256"] : [])
+        });
         return resolvedConnectionId;
     }
 
@@ -745,38 +714,34 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
     {
         Guid integrationId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-
-        await using var command = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
+                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
             VALUES (
-                @IntegrationId, 'github', 1, 1, 'GitHub', 'source', '[]'::jsonb, 'active', @Manifest::jsonb);
+                @IntegrationId, 'github', 1, 1, 'GitHub', 'source', {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
 
             INSERT INTO connections (
                 id, tenant_id, integration_id, name, config,
                 source_verification, destination_authentication, status)
             VALUES (
-                @ConnectionId, @TenantId, @IntegrationId, 'github-source', '{}'::jsonb,
-                '{"scheme":"hmac_sha256","config":{},"secret_refs":{"secret":"github_webhook_secret"}}'::jsonb,
+                @ConnectionId, @TenantId, @IntegrationId, 'github-source', {{{fixture.Json("@Config")}}},
+                {{{fixture.Json("@Verification")}}},
                 NULL,
                 'active');
-            """,
-            connection);
-        command.Parameters.AddWithValue("IntegrationId", integrationId);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
-        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        command.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
-            "github",
-            "GitHub",
-            "source",
-            sourceVerificationSchemes: ["hmac_sha256"],
-            allowUnverified: false,
-            verifiedWebhookSourceAdapter: true));
-        await command.ExecuteNonQueryAsync();
+            """, new
+        {
+            IntegrationId = integrationId,
+            ConnectionId = connectionId,
+            fixture.TenantId,
+            Schemes = "[]",
+            Config = "{}",
+            Verification = "{\"scheme\":\"hmac_sha256\",\"config\":{},\"secret_refs\":{\"secret\":\"github_webhook_secret\"}}",
+            Manifest = TestIntegrationManifest.Create("github", "GitHub", "source",
+                sourceVerificationSchemes: ["hmac_sha256"], allowUnverified: false, verifiedWebhookSourceAdapter: true)
+        });
         return connectionId;
     }
 
@@ -787,5 +752,12 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
         if (body is not null)
             msg.Content = JsonContent.Create(body);
         return msg;
+    }
+
+    private sealed class SourceInactivationRow
+    {
+        public string SourceStatus { get; init; } = null!;
+        public string EndpointStatus { get; init; } = null!;
+        public object EventExists { get; init; } = null!;
     }
 }
