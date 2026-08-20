@@ -15,7 +15,12 @@ permissions:
 
 jobs:
   verify:
+    name: verify (${{ matrix.database-provider }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database-provider: [postgres, sqlserver]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -35,7 +40,7 @@ jobs:
       - name: Build
         run: dotnet build Integrios.slnx --configuration Release --no-restore
 
-      - name: Test architecture, unit, and Postgres tiers
+      - name: Test architecture and unit tiers
         run: |
           dotnet test tests/Integrios.ArchitectureTests/Integrios.ArchitectureTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Domain.UnitTests/Integrios.Domain.UnitTests.csproj --configuration Release --no-build
@@ -44,7 +49,13 @@ jobs:
           dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Ingress.UnitTests/Integrios.Ingress.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
+
+      - name: Test ${{ matrix.database-provider }} functional tier
+        env:
+          INTEGRIOS_TEST_DATABASE_PROVIDER: ${{ matrix.database-provider }}
+        run: >
+          dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj
+          --configuration Release --no-build
 
   qualify:
     needs: verify
@@ -113,7 +124,7 @@ jobs:
           cp global.json evidence/global.json
           cp .github/workflows/ci.yml evidence/ci-workflow.yml
           cat > evidence/commands.txt <<'EOF'
-          # Architecture/unit/Postgres tests below ran in this workflow run's verify job; see its log.
+          # Architecture/unit/provider tests below ran in this workflow run's verify matrix; see its logs.
           # The full-suite command below ran in this qualify job; see acceptance.log.
           dotnet restore Integrios.slnx --locked-mode
           dotnet list Integrios.slnx package --vulnerable --include-transitive --no-restore
@@ -125,7 +136,8 @@ jobs:
           dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Ingress.UnitTests/Integrios.Ingress.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
+          INTEGRIOS_TEST_DATABASE_PROVIDER=postgres dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
+          INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
           dotnet test Integrios.slnx --configuration Release --no-restore
           EOF
 

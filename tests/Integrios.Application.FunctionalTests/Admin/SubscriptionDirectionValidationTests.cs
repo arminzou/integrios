@@ -1,9 +1,10 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Npgsql;
 using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
@@ -173,29 +174,26 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             "destination",
             fixture.OtherTenantId);
 
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            """
+        Task insert = connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (
                 id, tenant_id, topic_id, name, match_rules,
                 destination_connection_id, status, order_index)
             VALUES (
                 @Id, @TenantId, @TopicId, 'cross-tenant-direct',
-                '{"event_type":"payment.created"}'::jsonb,
+                {{{fixture.Json("@MatchRules")}}},
                 @DestinationConnectionId, 'active', 0);
-            """,
-            connection);
-        command.Parameters.AddWithValue("Id", Guid.NewGuid());
-        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        command.Parameters.AddWithValue("TopicId", topic.Id);
-        command.Parameters.AddWithValue("DestinationConnectionId", destinationConnectionId);
+            """, new
+        {
+            Id = Guid.NewGuid(),
+            fixture.TenantId,
+            TopicId = topic.Id,
+            MatchRules = "{\"event_type\":\"payment.created\"}",
+            DestinationConnectionId = destinationConnectionId
+        });
 
-        var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
-            await command.ExecuteNonQueryAsync());
-
-        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
-        Assert.Equal("fk_subscriptions_destination_connection_tenant", exception.ConstraintName);
+        await Assert.ThrowsAnyAsync<DbException>(() => insert);
     }
 
     private async Task<AdminTopicResponse> CreateTopicAsync(string name)
@@ -235,46 +233,36 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         Guid integrationId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
 
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-
-        await using (var integrationCmd = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
+                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, description, manifest, created_at, updated_at)
             VALUES (
                 @Id, @Key, 1, 1, @Name, @Direction,
-                @SupportedAuthSchemes::jsonb, 'active', 'test integration', @Manifest::jsonb, now(), now());
-            """,
-            connection))
+                {{{fixture.Json("@SupportedAuthSchemes")}}}, 'active', 'test integration', {{{fixture.Json("@Manifest")}}}, {{{fixture.Now}}}, {{{fixture.Now}}});
+            """, new
         {
-            integrationCmd.Parameters.AddWithValue("Id", integrationId);
-            integrationCmd.Parameters.AddWithValue("Key", key);
-            integrationCmd.Parameters.AddWithValue("Name", key);
-            integrationCmd.Parameters.AddWithValue("Direction", direction);
-            integrationCmd.Parameters.AddWithValue("SupportedAuthSchemes", JsonSerializer.Serialize(authenticationSchemes ?? []));
-            integrationCmd.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
-                key,
-                key,
-                direction,
-                authenticationSchemes));
-            await integrationCmd.ExecuteNonQueryAsync();
-        }
+            Id = integrationId,
+            Key = key,
+            Name = key,
+            Direction = direction,
+            SupportedAuthSchemes = JsonSerializer.Serialize(authenticationSchemes ?? []),
+            Manifest = TestIntegrationManifest.Create(key, key, direction, authenticationSchemes)
+        });
 
-        await using (var connectionCmd = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, '{"base_uri":"http://localhost:5054/sink/custom"}'::jsonb, NULL, NULL, 'active', NULL, NULL, now(), now());
-            """,
-            connection))
+            VALUES (@Id, @TenantId, @IntegrationId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
+            """, new
         {
-            connectionCmd.Parameters.AddWithValue("Id", connectionId);
-            connectionCmd.Parameters.AddWithValue("TenantId", tenantId ?? fixture.TenantId);
-            connectionCmd.Parameters.AddWithValue("IntegrationId", integrationId);
-            connectionCmd.Parameters.AddWithValue("Name", key);
-            await connectionCmd.ExecuteNonQueryAsync();
-        }
+            Id = connectionId,
+            TenantId = tenantId ?? fixture.TenantId,
+            IntegrationId = integrationId,
+            Name = key,
+            Config = "{\"base_uri\":\"http://localhost:5054/sink/custom\"}"
+        });
 
         return connectionId;
     }

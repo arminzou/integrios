@@ -267,6 +267,9 @@ make db-migrate
 make db-info
 ```
 
+The local stack intentionally defaults to PostgreSQL. See [Database backends](database-backends.md)
+for SQL Server configuration and migration details.
+
 ## Production deployment
 
 This guide covers the local dev stack only. For a production reference deployment, see

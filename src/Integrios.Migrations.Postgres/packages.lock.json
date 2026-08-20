@@ -581,6 +581,16 @@
           "OpenTelemetry.Api": "[1.15.3, 2.0.0)"
         }
       },
+      "OpenTelemetry.Instrumentation.SqlClient": {
+        "type": "Transitive",
+        "resolved": "1.15.2",
+        "contentHash": "pRB84YJEXD121kygc6CtcF46dtLuTKIjphA2SJye32G4g2Xl3epkCrOcPCOAg4WDagCdMGa16Ge6PPVzFJZsAQ==",
+        "dependencies": {
+          "Microsoft.Extensions.Configuration": "10.0.0",
+          "Microsoft.Extensions.Options": "10.0.0",
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.15.3, 2.0.0)"
+        }
+      },
       "System.ClientModel": {
         "type": "Transitive",
         "resolved": "1.5.1",
@@ -712,7 +722,8 @@
           "OpenTelemetry.Extensions.Hosting": "[1.15.3, )",
           "OpenTelemetry.Instrumentation.AspNetCore": "[1.15.2, )",
           "OpenTelemetry.Instrumentation.Http": "[1.15.1, )",
-          "OpenTelemetry.Instrumentation.Runtime": "[1.15.1, )"
+          "OpenTelemetry.Instrumentation.Runtime": "[1.15.1, )",
+          "OpenTelemetry.Instrumentation.SqlClient": "[1.15.2, )"
         }
       }
     }

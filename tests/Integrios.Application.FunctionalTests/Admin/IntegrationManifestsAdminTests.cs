@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Application.Integrations;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Npgsql;
 using Integrios.Tests.Shared;
 
 namespace Integrios.Application.FunctionalTests.Admin;
@@ -88,7 +88,7 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
 
         Assert.Equal(2L, await CountAsync(
             "integrations",
-            "key = 'example_api' AND contract_version IN (1, 2)"));
+            $"{fixture.KeyColumn} = 'example_api' AND contract_version IN (1, 2)"));
 
         using HttpResponseMessage listResponse = await SendAsync(HttpMethod.Get, "/admin/integrations");
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
@@ -127,7 +127,7 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
 
         Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Created));
         Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
-        Assert.Equal(1L, await CountAsync("integrations", "key = 'example_api' AND contract_version = 1"));
+        Assert.Equal(1L, await CountAsync("integrations", $"{fixture.KeyColumn} = 'example_api' AND contract_version = 1"));
     }
 
     private async Task<IntegrationDto?> GetVersionAsync(int contractVersion)
@@ -153,19 +153,16 @@ public sealed class IntegrationManifestsAdminTests : IClassFixture<AdminApiFixtu
 
     private async Task<long> CountAsync(string table, string where)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand($"SELECT COUNT(*) FROM {table} WHERE {where}", connection);
-        return (long)(await command.ExecuteScalarAsync())!;
+        return await connection.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM {table} WHERE {where}");
     }
 
     private async Task ExecuteAsync(string sql, Guid id)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("Id", id);
-        await command.ExecuteNonQueryAsync();
+        await connection.ExecuteAsync(sql, new { Id = id });
     }
 
     private static JsonElement Manifest(int contractVersion, string name) => Json($$$"""

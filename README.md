@@ -43,6 +43,7 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 ## Documentation
 
 - [Setup & quickstart](docs/setup.md): run locally and deliver your first event
+- [Database backends](docs/database-backends.md): PostgreSQL default and SQL Server reference configuration
 - [GitHub-to-Slack walkthrough](docs/github-to-slack-walkthrough.md): a verified provider webhook
   source through to a transformed destination delivery, end to end
 - [Architecture](docs/architecture.md): design, processing flow, and platform concepts
@@ -55,8 +56,8 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 | Area               | Technology                                                                       |
 | ------------------ | -------------------------------------------------------------------------------- |
 | Language / Runtime | C# / ASP.NET Core (.NET 10)                                                       |
-| Database           | PostgreSQL                                                                        |
-| Event backbone     | PostgreSQL transactional outbox and work queues                                 |
+| Database           | PostgreSQL (default) or SQL Server                                                |
+| Event backbone     | Database-backed transactional outbox and work queues                             |
 | Observability      | OpenTelemetry (OTLP-capable); Prometheus + Grafana for local dev; bring your own backend |
 | Deployment         | Docker / Compose; container images on GHCR                                        |
 

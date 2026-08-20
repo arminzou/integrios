@@ -2,6 +2,7 @@ using Integrios.Tests.Shared;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Dapper;
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
 using Integrios.Application.Integrations;
@@ -9,9 +10,7 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Integrations;
 using Integrios.Infrastructure;
 using MediatR;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
@@ -30,16 +29,9 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     {
         await fixture.ResetAsync();
 
-        IConfiguration configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Postgres"] = fixture.ConnectionString
-            })
-            .Build();
-
         var services = new ServiceCollection();
         services.AddAdminApplicationServices();
-        services.AddAdminInfrastructureServices(configuration);
+        services.AddAdminInfrastructureServices(fixture.Configuration);
         provider = services.BuildServiceProvider();
         mediator = provider.GetRequiredService<IMediator>();
     }
@@ -62,16 +54,13 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString());
         Assert.Equal("base_uri", destinationSchema.GetProperty("required")[0].GetString());
 
-        await ExecuteAsync("""
+        await ExecuteAsync($$$"""
             UPDATE integrations
             SET name = 'Drifted',
                 description = 'Drifted description',
                 status = 'disabled',
-                manifest = jsonb_set(
-                    jsonb_set(manifest, '{presentation,name}', '"Drifted"'),
-                    '{presentation,description}',
-                    '"Drifted description"')
-            WHERE key = 'http' AND contract_version = 1
+                manifest = {{{fixture.PresentationDriftExpression}}}
+            WHERE {{{fixture.KeyColumn}}} = 'http' AND contract_version = 1
             """);
 
         IReadOnlyList<Integration> second = await mediator.Send(new BootstrapBuiltinsCommand());
@@ -79,7 +68,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Assert.Equal("HTTP", reconciled.Name);
         Assert.Equal(OperationalStatus.Active, reconciled.Status);
 
-        Assert.Equal(1, await CountAsync("integrations", "key = 'http'"));
+        Assert.Equal(1, await CountAsync("integrations", $"{fixture.KeyColumn} = 'http'"));
     }
 
     [Fact]
@@ -90,14 +79,14 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Guid unexpectedId = Guid.NewGuid();
         string manifest = TestIntegrationManifest.Create(
             "http", "HTTP", "both", description: "Generic HTTP source or destination.");
-        await ExecuteAsync($$"""
+        await ExecuteAsync($$$"""
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
+                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, description, manifest)
             VALUES (
-                '{{unexpectedId}}', 'http', 1, 1, 'HTTP', 'both', '[]'::jsonb, 'active',
-                'Generic HTTP source or destination.', '{{manifest}}'::jsonb)
-            """);
+                @Id, 'http', 1, 1, 'HTTP', 'both', {{{fixture.Json("@Schemes")}}}, 'active',
+                'Generic HTTP source or destination.', {{{fixture.Json("@Manifest")}}})
+            """, new { Id = unexpectedId, Schemes = "[]", Manifest = manifest });
 
         var exception = await Assert.ThrowsAsync<IntegrationVersionConflictException>(
             () => mediator.Send(new BootstrapBuiltinsCommand()));
@@ -193,7 +182,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
             new BootstrapAdminKeyCommand("global_admin_key", "admin_bootstrap_secret"));
         Assert.True(keyResult.Created);
 
-        Assert.Equal(1, await CountAsync("integrations", "key = 'http'"));
+        Assert.Equal(1, await CountAsync("integrations", $"{fixture.KeyColumn} = 'http'"));
 
         string? secretHash = await ScalarAsync<string>(
             "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL");
@@ -205,24 +194,24 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     private async Task DeleteGlobalAdminKeysAsync() =>
         await ExecuteAsync("DELETE FROM admin_keys");
 
-    private async Task ExecuteAsync(string sql)
+    private async Task ExecuteAsync(string sql, object? parameters = null)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, connection);
-        await cmd.ExecuteNonQueryAsync();
+        await connection.ExecuteAsync(sql, parameters);
     }
 
     private async Task<T?> ScalarAsync<T>(string sql)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, connection);
-        object? result = await cmd.ExecuteScalarAsync();
-        return result is null ? default : (T)result;
+        object? result = await connection.ExecuteScalarAsync(sql);
+        if (result is null or DBNull)
+            return default;
+        return result is T value ? value : (T)Convert.ChangeType(result, typeof(T));
     }
 
-    private async Task<long> CountAsync(string table, string where = "TRUE") =>
+    private async Task<long> CountAsync(string table, string where = "1=1") =>
         await ScalarAsync<long>($"SELECT COUNT(*) FROM {table} WHERE {where}");
 
     private static string Hash(string secret) =>

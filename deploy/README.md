@@ -1,7 +1,7 @@
 # Production reference deployment
 
-This is the reference production Compose deployment for Integrios. It is copy-and-own: copy
-this directory into your own infrastructure repo and adapt it to your environment.
+This is the PostgreSQL reference production Compose deployment for Integrios. It is copy-and-own:
+copy this directory into your own infrastructure repo and adapt it to your environment.
 
 The root `compose.yml` at the repository root is the local development stack. It builds images
 from source and bundles a test sink and dashboards; it is not for deployment.
@@ -121,6 +121,22 @@ Migrations run automatically via the `migrate` one-shot on every `up`.
 
 Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
 `migrate`, `bootstrap`, `ingress`, `admin`, and `worker` at your database.
+
+## Using SQL Server
+
+Use an externally managed SQL Server, remove the bundled `postgres` service, and adjust the
+`migrate` dependency. On `migrate`, `bootstrap`, `ingress`, `admin`, and `worker`, replace the
+PostgreSQL connection setting with:
+
+```yaml
+environment:
+  Database__Provider: sqlserver
+  ConnectionStrings__SqlServer: ${INTEGRIOS_SQLSERVER_CONNECTION_STRING}
+```
+
+Keep the same startup order and matched image version. The migration one-shot selects the SQL
+Server migration assembly automatically. Both `READ_COMMITTED_SNAPSHOT` settings are supported;
+see [Database backends](../docs/database-backends.md) for the queue-locking policy.
 
 ## Ports
 

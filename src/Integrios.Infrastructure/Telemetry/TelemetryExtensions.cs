@@ -38,7 +38,8 @@ public static class TelemetryExtensions
                     .AddSource("integrios.application")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddNpgsql();
+                    .AddNpgsql()
+                    .AddSqlClientInstrumentation();
 
                 if (!string.IsNullOrWhiteSpace(otlpEndpoint))
                 {

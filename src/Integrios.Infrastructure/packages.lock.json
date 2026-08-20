@@ -134,6 +134,17 @@
           "OpenTelemetry.Api": "[1.15.3, 2.0.0)"
         }
       },
+      "OpenTelemetry.Instrumentation.SqlClient": {
+        "type": "Direct",
+        "requested": "[1.15.2, )",
+        "resolved": "1.15.2",
+        "contentHash": "pRB84YJEXD121kygc6CtcF46dtLuTKIjphA2SJye32G4g2Xl3epkCrOcPCOAg4WDagCdMGa16Ge6PPVzFJZsAQ==",
+        "dependencies": {
+          "Microsoft.Extensions.Configuration": "10.0.0",
+          "Microsoft.Extensions.Options": "10.0.0",
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.15.3, 2.0.0)"
+        }
+      },
       "Azure.Core": {
         "type": "Transitive",
         "resolved": "1.47.1",

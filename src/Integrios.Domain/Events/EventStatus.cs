@@ -17,7 +17,7 @@ public enum EventStatus
 }
 
 // Single source of truth for the canonical snake_case spelling of each EventStatus, shared by
-// the JSON wire (EventStatusJsonConverter) and the Postgres status column.
+// the JSON wire (EventStatusJsonConverter) and the database status column.
 public static class EventStatusMap
 {
     private static readonly IReadOnlyDictionary<EventStatus, string> ToDb =

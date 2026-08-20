@@ -1,18 +1,15 @@
 using System.Text.Json;
+using Dapper;
 using Integrios.Application.Connections;
 using Integrios.Application.Subscriptions;
 using Integrios.Domain.Subscriptions;
 using Integrios.Infrastructure.Connections;
-using Integrios.Infrastructure.Data;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Npgsql;
 
 namespace Integrios.Application.FunctionalTests.Admin;
 
@@ -30,16 +27,14 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
     public async Task RemoveDestinationAuthenticationRacingSubscriptionCreate_PreservesUseReadiness()
     {
         var (_, connectionId, topicId) = await SeedGraphAsync();
+        IConnectionAuthoringLock innerLock = fixture.WebFactory.Services.GetRequiredService<IConnectionAuthoringLock>();
         await using WebApplicationFactory<Program> factory = fixture.WebFactory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IConnectionAuthoringLock>();
                 services.AddSingleton<IConnectionAuthoringLock>(
-                    new CoordinatingConnectionAuthoringLock(
-                        new PostgresConnectionAuthoringLock(new PooledDbContextFactory<IntegriosDbContext>(
-                            new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(fixture.ConnectionString).Options)),
-                        connectionId));
+                    new CoordinatingConnectionAuthoringLock(innerLock, connectionId));
             });
         });
 
@@ -81,21 +76,17 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             failure.Exception is ConnectionValidationException or SubscriptionValidationException,
             failure.Exception?.ToString());
 
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync(timeout.Token);
-        await using var command = new NpgsqlCommand(
-            """
+        dynamic invariant = await connection.QuerySingleAsync($$$"""
             SELECT
-                EXISTS (SELECT 1 FROM subscriptions WHERE destination_connection_id = @ConnectionId AND status = 'active'),
-                destination_authentication IS NOT NULL
+                (SELECT COUNT(*) FROM subscriptions WHERE destination_connection_id = @ConnectionId AND status = 'active') AS ActiveSubscriptions,
+                {{{fixture.JsonText("destination_authentication")}}} AS DestinationAuthentication
             FROM connections
             WHERE id = @ConnectionId
-            """,
-            connection);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
-        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(timeout.Token);
-        Assert.True(await reader.ReadAsync(timeout.Token));
-        Assert.Equal(reader.GetBoolean(0), reader.GetBoolean(1));
+            """, new { ConnectionId = connectionId });
+        Assert.Equal(Convert.ToInt32(invariant.ActiveSubscriptions) > 0,
+            invariant.DestinationAuthentication is string);
     }
 
     [Fact]
@@ -124,16 +115,14 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
     public async Task ChangeDestinationAuthenticationRacingStaticHeaderSubscriptionCreate_PreservesHeaderOwnership()
     {
         var (_, connectionId, topicId) = await SeedGraphAsync();
+        IConnectionAuthoringLock innerLock = fixture.WebFactory.Services.GetRequiredService<IConnectionAuthoringLock>();
         await using WebApplicationFactory<Program> factory = fixture.WebFactory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IConnectionAuthoringLock>();
                 services.AddSingleton<IConnectionAuthoringLock>(
-                    new CoordinatingConnectionAuthoringLock(
-                        new PostgresConnectionAuthoringLock(new PooledDbContextFactory<IntegriosDbContext>(
-                            new DbContextOptionsBuilder<IntegriosDbContext>().UseNpgsql(fixture.ConnectionString).Options)),
-                        connectionId));
+                    new CoordinatingConnectionAuthoringLock(innerLock, connectionId));
             });
         });
 
@@ -171,27 +160,24 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             failure.Exception is ConnectionValidationException or SubscriptionValidationException,
             failure.Exception?.ToString());
 
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync(timeout.Token);
-        await using var invariant = new NpgsqlCommand(
-            """
-            SELECT NOT (
-                c.destination_authentication->>'scheme' = 'api_key_header'
-                AND c.destination_authentication->'config'->>'header_name' = 'X-Api-Key'
-                AND EXISTS (
-                    SELECT 1
-                    FROM subscriptions s
-                    WHERE s.tenant_id = @TenantId
-                      AND s.destination_connection_id = c.id
-                      AND s.status = 'active'
-                      AND s.http_delivery->'headers' ? 'X-Api-Key'))
-            FROM connections c
-            WHERE c.tenant_id = @TenantId AND c.id = @ConnectionId
-            """,
-            connection);
-        invariant.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        invariant.Parameters.AddWithValue("ConnectionId", connectionId);
-        Assert.True((bool)(await invariant.ExecuteScalarAsync(timeout.Token))!);
+        string authentication = await connection.ExecuteScalarAsync<string>($$$"""
+            SELECT {{{fixture.JsonText("destination_authentication")}}}
+            FROM connections WHERE tenant_id=@TenantId AND id=@ConnectionId
+            """, new { fixture.TenantId, ConnectionId = connectionId })
+            ?? throw new InvalidOperationException("The Connection does not exist.");
+        IEnumerable<string> deliveries = await connection.QueryAsync<string>($$$"""
+            SELECT {{{fixture.JsonText("http_delivery")}}}
+            FROM subscriptions
+            WHERE tenant_id=@TenantId AND destination_connection_id=@ConnectionId AND status='active'
+            """, new { fixture.TenantId, ConnectionId = connectionId });
+        JsonElement auth = Json(authentication);
+        bool headerOwned = auth.GetProperty("scheme").GetString() == "api_key_header"
+            && auth.GetProperty("config").GetProperty("header_name").GetString() == "X-Api-Key";
+        bool staticCollision = deliveries.Select(Json).Any(delivery =>
+            delivery.GetProperty("headers").TryGetProperty("X-Api-Key", out _));
+        Assert.False(headerOwned && staticCollision);
     }
 
     private async Task<(Guid IntegrationId, Guid ConnectionId, Guid TopicId)> SeedGraphAsync()
@@ -199,90 +185,83 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
         Guid integrationId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
         Guid topicId = Guid.NewGuid();
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO integrations (
-                id, key, contract_version, manifest_schema_version, name, direction,
+                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
             VALUES (
                 @IntegrationId, 'race_destination', 1, 1, 'Race Destination', 'destination',
-                '["api_key_header","bearer_token"]'::jsonb, 'active', @Manifest::jsonb);
+                {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
 
             INSERT INTO connections (
                 id, tenant_id, integration_id, name, config,
                 source_verification, destination_authentication, status)
             VALUES (
                 @ConnectionId, @TenantId, @IntegrationId, 'race-destination',
-                '{"base_uri":"https://example.test/race"}'::jsonb, NULL,
-                '{"scheme":"bearer_token","config":{},"secret_refs":{"token":"race_bearer_token"}}'::jsonb,
+                {{{fixture.Json("@Config")}}}, NULL,
+                {{{fixture.Json("@Authentication")}}},
                 'active');
 
             INSERT INTO topics (id, tenant_id, name, status)
             VALUES (@TopicId, @TenantId, 'race-topic', 'active');
-            """,
-            connection);
-        command.Parameters.AddWithValue("IntegrationId", integrationId);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
-        command.Parameters.AddWithValue("TopicId", topicId);
-        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        command.Parameters.AddWithValue("Manifest", TestIntegrationManifest.Create(
-            "race_destination",
-            "Race Destination",
-            "destination",
-            ["api_key_header", "bearer_token"]));
-        await command.ExecuteNonQueryAsync();
+            """, new
+        {
+            IntegrationId = integrationId,
+            ConnectionId = connectionId,
+            TopicId = topicId,
+            fixture.TenantId,
+            Schemes = "[\"api_key_header\",\"bearer_token\"]",
+            Config = "{\"base_uri\":\"https://example.test/race\"}",
+            Authentication = "{\"scheme\":\"bearer_token\",\"config\":{},\"secret_refs\":{\"token\":\"race_bearer_token\"}}",
+            Manifest = TestIntegrationManifest.Create("race_destination", "Race Destination", "destination",
+                ["api_key_header", "bearer_token"])
+        });
         return (integrationId, connectionId, topicId);
     }
 
     private async Task InsertSubscriptionAsync(Guid connectionId, Guid topicId, string name, string status)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            """
+        await connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (
                 id, tenant_id, topic_id, name, match_rules, destination_connection_id,
                 http_delivery, status)
             VALUES (
-                gen_random_uuid(), @TenantId, @TopicId, @Name, '{"event_type":"race.header"}'::jsonb,
-                @ConnectionId, '{"version":1,"method":"POST","headers":{"X-Api-Key":"static-value"},"body":"json"}'::jsonb,
+                @Id, @TenantId, @TopicId, @Name, {{{fixture.Json("@MatchRules")}}},
+                @ConnectionId, {{{fixture.Json("@HttpDelivery")}}},
                 @Status)
-            """,
-            connection);
-        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        command.Parameters.AddWithValue("TopicId", topicId);
-        command.Parameters.AddWithValue("Name", name);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
-        command.Parameters.AddWithValue("Status", status);
-        await command.ExecuteNonQueryAsync();
+            """, new
+        {
+            Id = Guid.NewGuid(), fixture.TenantId, TopicId = topicId, Name = name,
+            MatchRules = "{\"event_type\":\"race.header\"}", ConnectionId = connectionId,
+            HttpDelivery = "{\"version\":1,\"method\":\"POST\",\"headers\":{\"X-Api-Key\":\"static-value\"},\"body\":\"json\"}",
+            Status = status
+        });
     }
 
     private async Task SetSubscriptionStatusAsync(string name, string status)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
+        await connection.ExecuteAsync(
             "UPDATE subscriptions SET status = @Status WHERE tenant_id = @TenantId AND name = @Name",
-            connection);
-        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        command.Parameters.AddWithValue("Name", name);
-        command.Parameters.AddWithValue("Status", status);
-        await command.ExecuteNonQueryAsync();
+            new { fixture.TenantId, Name = name, Status = status });
     }
 
     private async Task<string> GetDestinationAuthenticationSchemeAsync(Guid connectionId)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(
-            "SELECT destination_authentication->>'scheme' FROM connections WHERE tenant_id = @TenantId AND id = @ConnectionId",
-            connection);
-        command.Parameters.AddWithValue("TenantId", fixture.TenantId);
-        command.Parameters.AddWithValue("ConnectionId", connectionId);
-        return (string)(await command.ExecuteScalarAsync()
-            ?? throw new InvalidOperationException("The Connection does not exist."));
+        string authentication = await connection.ExecuteScalarAsync<string>($$$"""
+            SELECT {{{fixture.JsonText("destination_authentication")}}}
+            FROM connections WHERE tenant_id=@TenantId AND id=@ConnectionId
+            """, new { fixture.TenantId, ConnectionId = connectionId })
+            ?? throw new InvalidOperationException("The Connection does not exist.");
+        return Json(authentication).GetProperty("scheme").GetString()
+            ?? throw new InvalidOperationException("The Connection does not exist.");
     }
 
     private UpdateConnectionCommand ChangeToApiKeyHeader(Guid connectionId) => new(
