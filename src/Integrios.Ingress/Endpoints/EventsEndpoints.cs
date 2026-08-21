@@ -13,7 +13,6 @@ public sealed class EventsEndpoints : IEndpointGroup
         group.RequireAuthorization();
         group.MapPost(IngestEvent);
         group.MapGet(GetEventById, "/{id:guid}");
-        group.MapPost(ReplayEvent, "/{id:guid}/replay");
     }
 
     private static async Task<IResult> IngestEvent(
@@ -50,16 +49,4 @@ public sealed class EventsEndpoints : IEndpointGroup
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
-    private static async Task<IResult> ReplayEvent(
-        Guid id,
-        HttpContext httpContext,
-        IMediator mediator,
-        CancellationToken cancellationToken)
-    {
-        var tenantContext = httpContext.GetTenantContext();
-        bool replayed = await mediator.Send(
-            new ReplayEventCommand(tenantContext.Tenant.Id, id),
-            cancellationToken);
-        return replayed ? Results.Accepted($"/events/{id}") : Results.NotFound();
-    }
 }

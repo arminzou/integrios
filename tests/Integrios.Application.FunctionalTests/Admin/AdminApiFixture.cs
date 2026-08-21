@@ -59,6 +59,66 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await SeedAsync(connection);
     }
 
+    public async Task<(Guid EventId, Guid DeliveryId)> SeedDeadLetteredDeliveryAsync()
+    {
+        Guid topicId = Guid.NewGuid();
+        Guid destinationConnectionId = Guid.NewGuid();
+        Guid subscriptionId = Guid.NewGuid();
+        Guid eventId = Guid.NewGuid();
+        Guid deliveryId = Guid.NewGuid();
+        Guid attemptId = Guid.NewGuid();
+
+        await using DbConnection connection = database.CreateConnection();
+        await connection.OpenAsync();
+        await connection.ExecuteAsync($$$"""
+            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
+            VALUES (@DestinationConnectionId, @TenantId, @IntegrationId, 'recovery-destination',
+                {{{database.Json("@DestinationConfig")}}}, 'active');
+            INSERT INTO topics (id, tenant_id, name, status) VALUES (@TopicId, @TenantId, 'recovery-topic', 'active');
+            INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @SourceConnectionId);
+            INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
+            VALUES (@SubscriptionId, @TenantId, @TopicId, 'recovery-subscription',
+                {{{database.Json("@MatchRules")}}}, @DestinationConnectionId, 0, 'active');
+            INSERT INTO events (id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
+            VALUES (@EventId, @TenantId, @TopicId, @SourceConnectionId, 'recovery.test',
+                {{{database.Json("@Payload")}}}, 'fanned_out');
+            INSERT INTO subscription_deliveries
+                (id, event_id, subscription_id, destination_connection_id, http_execution_snapshot, integration_key,
+                 status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
+            VALUES (@DeliveryId, @EventId, @SubscriptionId, @DestinationConnectionId,
+                {{{database.Json("@Snapshot")}}}, 'http', 'dead_lettered', 1, 1, {{{database.Now}}});
+            INSERT INTO delivery_attempts
+                (id, subscription_delivery_id, attempt_number, status, failure_phase, started_at, completed_at)
+            VALUES (@AttemptId, @DeliveryId, 1, 'failed', 'http', {{{database.Now}}}, {{{database.Now}}});
+            """, new
+        {
+            TenantId,
+            SourceConnectionId,
+            IntegrationId = HttpIntegrationId,
+            DestinationConnectionId = destinationConnectionId,
+            TopicId = topicId,
+            SubscriptionId = subscriptionId,
+            EventId = eventId,
+            DeliveryId = deliveryId,
+            AttemptId = attemptId,
+            DestinationConfig = "{\"base_uri\":\"http://localhost:5054/sink/recovery\"}",
+            MatchRules = "{\"event_types\":[\"recovery.test\"]}",
+            Payload = "{\"recovery\":true}",
+            Snapshot = "{\"version\":1,\"base_uri\":\"http://localhost:5054/sink/recovery\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}"
+        });
+
+        return (eventId, deliveryId);
+    }
+
+    public async Task<string?> GetDeliveryStatusAsync(Guid deliveryId)
+    {
+        await using DbConnection connection = database.CreateConnection();
+        await connection.OpenAsync();
+        return await connection.ExecuteScalarAsync<string?>(
+            "SELECT status FROM subscription_deliveries WHERE id = @DeliveryId",
+            new { DeliveryId = deliveryId });
+    }
+
     private async Task SeedAsync(DbConnection connection)
     {
         TenantId = Guid.NewGuid();

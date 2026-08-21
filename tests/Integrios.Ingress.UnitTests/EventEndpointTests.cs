@@ -126,6 +126,22 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ReplayRoute_IsNotMapped()
+    {
+        (var apiKey, var tenant) = ApiKeyAuthHandlerTests.BuildValidApiKey(ApiKeyAuthHandlerTests.TestToken);
+        fixture.ApiKeyRepository.Result = (apiKey, tenant);
+
+        HttpResponseMessage response = await client.SendAsync(new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/events/{Guid.NewGuid()}/replay")
+        {
+            Headers = { { "Authorization", $"ApiKey {ApiKeyAuthHandlerTests.TestToken}" } }
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static HttpRequestMessage AuthorizedRequest(object body)
     {
         var message = new HttpRequestMessage(HttpMethod.Post, "/events")

@@ -31,9 +31,9 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         Assert.Single(deadDeliveries);
         Assert.Equal("dead_lettered", deadDeliveries[0].Status);
 
-        var replayed = await fixture.ReplayAsync(eventId);
+        var replayed = await fixture.ReplayAsync(eventId, deadDeliveries[0].Id);
 
-        Assert.True(replayed);
+        Assert.Equal(DeadLetterReplayResult.Replayed, replayed);
         var resetDeliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
         Assert.Single(resetDeliveries);
         Assert.Equal("pending", resetDeliveries[0].Status);
@@ -48,17 +48,18 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
         await fixture.RunWorkerBatchAsync(); // succeeds — no failures to replay
 
-        var replayed = await fixture.ReplayAsync(eventId);
+        var delivery = Assert.Single(await fixture.GetSubscriptionDeliveriesAsync(eventId));
+        var replayed = await fixture.ReplayAsync(eventId, delivery.Id);
 
-        Assert.False(replayed);
+        Assert.Equal(DeadLetterReplayResult.NotDeadLettered, replayed);
     }
 
     [Fact]
     public async Task Replay_NonExistentEvent_ReturnsFalse()
     {
         var nonExistentEventId = Guid.NewGuid();
-        var replayed = await fixture.ReplayAsync(nonExistentEventId);
-        Assert.False(replayed);
+        var replayed = await fixture.ReplayAsync(nonExistentEventId, Guid.NewGuid());
+        Assert.Equal(DeadLetterReplayResult.NotFound, replayed);
     }
 
     [Fact]
@@ -67,8 +68,8 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         var eventId = await fixture.InsertOrphanEventAndOutboxAsync("payment.created");
         // The orphan Tenant's Event produces no deliveries. Replaying it as the main Tenant
         // must still return false because replay is Tenant-isolated.
-        var replayed = await fixture.ReplayAsync(eventId);
-        Assert.False(replayed);
+        var replayed = await fixture.ReplayAsync(eventId, Guid.NewGuid());
+        Assert.Equal(DeadLetterReplayResult.NotFound, replayed);
     }
 
     [Fact]
@@ -84,7 +85,8 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         }
         await fixture.RunWorkerBatchAsync();
 
-        await fixture.ReplayAsync(eventId);
+        var delivery = Assert.Single(await fixture.GetSubscriptionDeliveriesAsync(eventId));
+        Assert.Equal(DeadLetterReplayResult.Replayed, await fixture.ReplayAsync(eventId, delivery.Id));
 
         fixture.DeliveryClient.Reset();
         fixture.DeliveryClient.ShouldSucceed = true;

@@ -168,37 +168,6 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task Replay_DeadLetteredDelivery_ViaHttp_Returns202AndResetsDeliveryToPending()
-    {
-        var request = BuildRequest(idempotencyKey: "idem-evt-replay-http");
-        var postResponse = await PostEventAsync(request);
-        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
-
-        var body = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(body);
-
-        await fixture.ForceDeadLetteredDeliveryAsync(body.EventId);
-
-        var otherTenantReplay = await client.SendAsync(new HttpRequestMessage(
-            HttpMethod.Post, $"/events/{body.EventId}/replay")
-        {
-            Headers = { { "Authorization", tenantBAuthHeaderValue } }
-        });
-        Assert.Equal(HttpStatusCode.NotFound, otherTenantReplay.StatusCode);
-
-        Assert.Equal("dead_lettered", await fixture.GetDeliveryStatusAsync(body.EventId));
-
-        var replayResponse = await client.SendAsync(new HttpRequestMessage(
-            HttpMethod.Post, $"/events/{body.EventId}/replay")
-        {
-            Headers = { { "Authorization", tenantAAuthHeaderValue } }
-        });
-        Assert.Equal(HttpStatusCode.Accepted, replayResponse.StatusCode);
-
-        Assert.Equal("pending", await fixture.GetDeliveryStatusAsync(body.EventId));
-    }
-
-    [Fact]
     public async Task PostEvents_WithTopicName_StoresTopicIdOnEvent()
     {
         var request = new IngestEventRequest

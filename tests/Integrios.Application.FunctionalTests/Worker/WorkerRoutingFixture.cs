@@ -7,6 +7,7 @@ using Dapper;
 using Integrios.Application;
 using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
+using Integrios.Application.Recovery;
 using Integrios.Application.Events;
 using Integrios.Application.Outbox;
 using Integrios.Application.Secrets;
@@ -276,8 +277,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         return SubscriptionDto.From(updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated."));
     }
 
-    public Task<bool> ReplayAsync(Guid eventId, CancellationToken cancellationToken = default) =>
-        mediator.Send(new ReplayEventCommand(TenantId, eventId), cancellationToken);
+    public Task<DeadLetterReplayResult> ReplayAsync(
+        Guid eventId,
+        Guid deliveryId,
+        CancellationToken cancellationToken = default) =>
+        mediator.Send(new ReplaySubscriptionDeliveryCommand(TenantId, eventId, deliveryId), cancellationToken);
     public Task<EventDto?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default) =>
         eventLookup.GetByIdAsync(TenantId, eventId, cancellationToken);
 

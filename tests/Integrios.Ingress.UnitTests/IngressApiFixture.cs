@@ -1,5 +1,4 @@
 using Integrios.Application.ApiKeys;
-using Integrios.Application.Delivery;
 using Integrios.Application.Events;
 using Integrios.Domain.Common;
 using Integrios.Domain.Events;
@@ -23,7 +22,6 @@ public sealed class ApiTestAppFixture : IDisposable
     public StubActiveApiKeyLookup ApiKeyRepository { get; } = new();
     public StubEventAcceptance EventAcceptance { get; } = new();
     public StubTenantEventLookup EventLookup { get; } = new();
-    public StubDeadLetterReplay DeliveryQueue { get; } = new();
     public StubIntakeTopicResolver TopicRepository { get; } = new();
     public StubSourceEndpointResolver SourceEndpointResolver { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
@@ -31,14 +29,13 @@ public sealed class ApiTestAppFixture : IDisposable
     public ApiTestAppFixture()
     {
         Factory = new CustomApiFactory(
-            ApiKeyRepository, EventAcceptance, EventLookup, TopicRepository, DeliveryQueue, SourceEndpointResolver);
+            ApiKeyRepository, EventAcceptance, EventLookup, TopicRepository, SourceEndpointResolver);
     }
 
     public void Reset()
     {
         ApiKeyRepository.Result = null;
         EventLookup.GetEventResult = null;
-        DeliveryQueue.ReplayResult = false;
         TopicRepository.ResolvedTopicId = Guid.NewGuid();
         SourceEndpointResolver.Result = null;
         EventAcceptance.LastSubmission = null;
@@ -55,7 +52,6 @@ internal sealed class CustomApiFactory(
     StubEventAcceptance eventAcceptance,
     StubTenantEventLookup eventLookup,
     StubIntakeTopicResolver topicRepository,
-    StubDeadLetterReplay deliveryQueue,
     StubSourceEndpointResolver sourceEndpointResolver) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -76,7 +72,6 @@ internal sealed class CustomApiFactory(
             services.AddSingleton<IEventAcceptance>(eventAcceptance);
             services.AddSingleton<ITenantEventLookup>(eventLookup);
             services.AddSingleton<ISourceTopicLookup>(topicRepository);
-            services.AddSingleton<IDeadLetterReplay>(deliveryQueue);
             services.AddSingleton<ISourceEndpointResolver>(sourceEndpointResolver);
         });
     }
@@ -139,17 +134,6 @@ public sealed class StubTenantEventLookup : ITenantEventLookup
     {
         return Task.FromResult(GetEventResult);
     }
-}
-
-public sealed class StubDeadLetterReplay : IDeadLetterReplay
-{
-    public bool ReplayResult { get; set; }
-
-    public Task<bool> ReplayDeadLetteredAsync(
-        Guid tenantId,
-        Guid eventId,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult(ReplayResult);
 }
 
 public sealed class StubIntakeTopicResolver : ISourceTopicLookup
