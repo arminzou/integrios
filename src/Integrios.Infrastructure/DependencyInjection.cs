@@ -79,6 +79,8 @@ public static class DependencyInjection
             services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
         services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+        services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
+        services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.AddDestinationAuthenticationServices();
         services.AddSourceAdapterServices();
         services.AddTransformEvaluationServices();
@@ -100,7 +102,6 @@ public static class DependencyInjection
         else
             services.AddSingleton<IEventAcceptance, PostgresEventAcceptance>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
-        services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.TryAddSingleton<ISourceVerificationSecretResolver, UnavailableSourceVerificationSecretResolver>();
         services.AddSourceAdapterServices();
         services.AddSingleton<IIngressSourceAdapter, VerifiedWebhookIngressAdapter>();

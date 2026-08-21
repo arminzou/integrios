@@ -91,7 +91,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         Assert.Equal(HttpStatusCode.OK, ownRead.StatusCode);
         using HttpResponseMessage otherRead = await SendIngressAsync(isolated, HttpMethod.Get, $"/events/{accepted.Id}");
         Assert.Equal(HttpStatusCode.NotFound, otherRead.StatusCode);
-        using HttpResponseMessage otherReplay = await SendIngressAsync(isolated, HttpMethod.Post, $"/events/{accepted.Id}/replay");
+        using HttpResponseMessage otherReplay = await SendAdminAsync(
+            HttpMethod.Get,
+            $"/admin/tenants/{isolated.Id}/events/{accepted.Id}/deliveries");
         Assert.Equal(HttpStatusCode.NotFound, otherReplay.StatusCode);
     }
 
@@ -250,7 +252,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
         using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
         Assert.Equal(HttpStatusCode.OK, recover.StatusCode);
-        using HttpResponseMessage replay = await SendIngressAsync(tenant, HttpMethod.Post, $"/events/{accepted.Id}/replay");
+        Guid failureDelivery = await fixture.ScalarAsync<Guid>(
+            $"SELECT id FROM subscription_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'");
+        using HttpResponseMessage replay = await SendAdminAsync(
+            HttpMethod.Post,
+            $"/admin/tenants/{tenant.Id}/events/{accepted.Id}/deliveries/{failureDelivery}/replay");
         Assert.Equal(HttpStatusCode.Accepted, replay.StatusCode);
         await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "succeeded");
         Assert.Equal(4, await fixture.ScalarAsync<int>(

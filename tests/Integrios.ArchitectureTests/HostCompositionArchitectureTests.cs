@@ -30,10 +30,10 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IAuthSchemeRegistry)] = [Host.Admin, Host.Worker],
         [typeof(IConnectionRepository)] = [Host.Admin],
         [typeof(IConnectionAuthoringLock)] = [Host.Admin],
-        [typeof(IDeadLetterReplay)] = [Host.Ingress],
+        [typeof(IDeadLetterReplay)] = [Host.Admin],
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingress],
-        [typeof(ITenantEventLookup)] = [Host.Ingress],
+        [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingress],
         [typeof(IIntegrationCatalog)] = [Host.Admin],
         [typeof(IIntegrationManifestStore)] = [Host.Admin],
         [typeof(ISourceAdapterRegistry)] = [Host.Admin, Host.Ingress],
@@ -166,12 +166,12 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
         AssertResolves<IAuthSchemeRegistry>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
+        AssertResolves<ITenantEventLookup>(scope.ServiceProvider);
+        AssertResolves<IDeadLetterReplay>(scope.ServiceProvider);
 
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
-        AssertOmits<ITenantEventLookup>(scope.ServiceProvider);
         AssertOmits<IActiveApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
-        AssertOmits<IDeadLetterReplay>(scope.ServiceProvider);
         AssertOmits<ISecretValidationCatalog>(scope.ServiceProvider);
         AssertOmits<IOutboxFanout>(scope.ServiceProvider);
         AssertOmits<ISubscriptionDeliveryQueue>(scope.ServiceProvider);
@@ -184,7 +184,7 @@ public sealed class HostCompositionArchitectureTests
     }
 
     [Fact]
-    public void Ingress_ResolvesOnlyIntakeAndReplayPorts()
+    public void Ingress_ResolvesOnlyIntakePorts()
     {
         using ServiceProvider provider = BuildProvider(
             services => services.AddIngressApplicationServices(),
@@ -195,7 +195,6 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
-        AssertResolves<IDeadLetterReplay>(provider);
         AssertResolves<ISourceAdapterRegistry>(provider);
         AssertResolves<IIngressSourceAdapter>(provider);
         AssertResolves<IIngressSourceAdapterRuntime>(provider);
@@ -215,6 +214,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IAuthSchemeRegistry>(provider);
         AssertOmits<ITransformEvaluator>(provider);
         AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
+        AssertOmits<IDeadLetterReplay>(provider);
         AssertResolves<ISourceVerificationSecretResolver>(provider);
         AssertOmits<DeliveryExecutionOptions>(provider);
         AssertOmits<RetryPolicy>(provider);

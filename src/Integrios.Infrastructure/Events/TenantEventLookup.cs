@@ -38,6 +38,25 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
         if (row is null)
             return null;
 
+        var deliveries = await connection.QueryAsync<SubscriptionDeliveryRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    id                        AS SubscriptionDeliveryId,
+                    subscription_id           AS SubscriptionId,
+                    destination_connection_id AS DestinationConnectionId,
+                    status                    AS Status,
+                    lifetime_attempt_count    AS LifetimeAttemptCount,
+                    retry_cycle_attempt_count AS RetryCycleAttemptCount,
+                    deliver_after             AS DeliverAfter,
+                    failed_at                 AS FailedAt
+                FROM subscription_deliveries
+                WHERE event_id = @EventId
+                ORDER BY id;
+                """,
+                new { EventId = eventId },
+                cancellationToken: cancellationToken));
+
         var attempts = await connection.QueryAsync<DeliveryAttemptRow>(
             new CommandDefinition(
                 """
@@ -61,6 +80,24 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                 new { EventId = eventId },
                 cancellationToken: cancellationToken));
 
+        var attemptDtos = attempts.Select(a => new DeliveryAttemptDto
+        {
+            AttemptId = a.AttemptId,
+            SubscriptionDeliveryId = a.SubscriptionDeliveryId,
+            SubscriptionId = a.SubscriptionId,
+            DestinationConnectionId = a.DestinationConnectionId,
+            AttemptNumber = a.AttemptNumber,
+            Status = a.Status,
+            FailurePhase = a.FailurePhase,
+            ResponseStatusCode = a.ResponseStatusCode,
+            ErrorMessage = a.ErrorMessage,
+            StartedAt = a.StartedAt,
+            CompletedAt = a.CompletedAt
+        }).ToList();
+        var attemptsByDelivery = attemptDtos
+            .GroupBy(attempt => attempt.SubscriptionDeliveryId)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<DeliveryAttemptDto>)group.ToList());
+
         return new EventDto
         {
             EventId = row.Id,
@@ -68,20 +105,19 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
             FailedAt = row.FailedAt,
-            DeliveryAttempts = attempts.Select(a => new DeliveryAttemptDto
+            SubscriptionDeliveries = deliveries.Select(delivery => new SubscriptionDeliveryDto
             {
-                AttemptId = a.AttemptId,
-                SubscriptionDeliveryId = a.SubscriptionDeliveryId,
-                SubscriptionId = a.SubscriptionId,
-                DestinationConnectionId = a.DestinationConnectionId,
-                AttemptNumber = a.AttemptNumber,
-                Status = a.Status,
-                FailurePhase = a.FailurePhase,
-                ResponseStatusCode = a.ResponseStatusCode,
-                ErrorMessage = a.ErrorMessage,
-                StartedAt = a.StartedAt,
-                CompletedAt = a.CompletedAt
-            }).ToList()
+                SubscriptionDeliveryId = delivery.SubscriptionDeliveryId,
+                SubscriptionId = delivery.SubscriptionId,
+                DestinationConnectionId = delivery.DestinationConnectionId,
+                Status = delivery.Status,
+                LifetimeAttemptCount = delivery.LifetimeAttemptCount,
+                RetryCycleAttemptCount = delivery.RetryCycleAttemptCount,
+                DeliverAfter = delivery.DeliverAfter,
+                FailedAt = delivery.FailedAt,
+                DeliveryAttempts = attemptsByDelivery.GetValueOrDefault(delivery.SubscriptionDeliveryId, [])
+            }).ToList(),
+            DeliveryAttempts = attemptDtos
         };
     }
 
@@ -107,5 +143,17 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
         public string? ErrorMessage { get; init; }
         public DateTimeOffset StartedAt { get; init; }
         public DateTimeOffset? CompletedAt { get; init; }
+    }
+
+    private sealed record SubscriptionDeliveryRow
+    {
+        public Guid SubscriptionDeliveryId { get; init; }
+        public Guid SubscriptionId { get; init; }
+        public Guid DestinationConnectionId { get; init; }
+        public string Status { get; init; } = "";
+        public int LifetimeAttemptCount { get; init; }
+        public int RetryCycleAttemptCount { get; init; }
+        public DateTimeOffset? DeliverAfter { get; init; }
+        public DateTimeOffset? FailedAt { get; init; }
     }
 }

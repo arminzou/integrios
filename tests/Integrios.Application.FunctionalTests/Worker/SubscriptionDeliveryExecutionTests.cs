@@ -227,7 +227,7 @@ public sealed class SubscriptionDeliveryExecutionTests : IClassFixture<WorkerRou
                 await fixture.ForceDeliveryRetryNowAsync(eventId);
         }
 
-        Assert.True(await fixture.ReplayAsync(eventId));
+        Assert.Equal(DeadLetterReplayResult.Replayed, await fixture.ReplayAsync(eventId, initial.Id));
         SubscriptionDeliveryState replayed = await fixture.GetSubscriptionDeliveryAsync(initial.Id);
         Assert.Equal(RetryPolicy.DefaultMaxAttempts, replayed.LifetimeAttemptCount);
         Assert.Equal(0, replayed.RetryCycleAttemptCount);

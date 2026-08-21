@@ -141,13 +141,15 @@ curl -s $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
   | jq '.delivery_attempts'
 ```
 
-Reset the sink, discard the failed-request receipts, and replay the same Event. Replay returns
-`202 Accepted` only when it finds a dead-lettered delivery to schedule again:
+Reset the sink, discard the failed-request receipts, and replay the dead-lettered SubscriptionDelivery.
+Recovery is an Operator action through Admin, so it requires the AdminKey and targets one delivery:
 
 ```bash
 curl -s -X DELETE http://localhost:5054/control/acme-erp
 curl -s -X DELETE http://localhost:5054/receipts/acme-erp > /dev/null
-curl -i -s -X POST $INGRESS/events/$FAIL_EVENT/replay -H "Authorization: ApiKey $TOKEN"
+FAIL_DELIVERY=$(curl -s $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries -H "$AUTH" \
+  | jq -r '.subscription_deliveries[] | select(.status == "dead_lettered") | .subscription_delivery_id')
+curl -i -s -X POST $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries/$FAIL_DELIVERY/replay -H "$AUTH"
 
 until curl -fsS $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
   | jq -e 'any(.delivery_attempts[]; .attempt_number >= 4 and .status == "succeeded")' > /dev/null; do

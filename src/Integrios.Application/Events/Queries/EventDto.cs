@@ -9,6 +9,20 @@ public sealed record EventDto
     public required DateTimeOffset AcceptedAt { get; init; }
     public DateTimeOffset? ProcessedAt { get; init; }
     public DateTimeOffset? FailedAt { get; init; }
+    public IReadOnlyList<SubscriptionDeliveryDto> SubscriptionDeliveries { get; init; } = [];
+    public IReadOnlyList<DeliveryAttemptDto> DeliveryAttempts { get; init; } = [];
+}
+
+public sealed record SubscriptionDeliveryDto
+{
+    public required Guid SubscriptionDeliveryId { get; init; }
+    public required Guid SubscriptionId { get; init; }
+    public required Guid DestinationConnectionId { get; init; }
+    public required string Status { get; init; }
+    public required int LifetimeAttemptCount { get; init; }
+    public required int RetryCycleAttemptCount { get; init; }
+    public DateTimeOffset? DeliverAfter { get; init; }
+    public DateTimeOffset? FailedAt { get; init; }
     public IReadOnlyList<DeliveryAttemptDto> DeliveryAttempts { get; init; } = [];
 }
 
