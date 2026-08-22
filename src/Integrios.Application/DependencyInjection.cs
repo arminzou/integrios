@@ -29,8 +29,8 @@ public static class DependencyInjection
             typeof(IIntegrationCatalog),
             typeof(ISubscriptionRepository),
             typeof(ITenantRepository),
-            typeof(ITopicRepository))
-            || IsInCapability(type, typeof(ReplaySubscriptionDeliveryCommand)));
+            typeof(ITopicRepository),
+            typeof(ReplaySubscriptionDeliveryCommand)));
 
     public static IServiceCollection AddIngressApplicationServices(this IServiceCollection services)
         => AddApplicationServices(

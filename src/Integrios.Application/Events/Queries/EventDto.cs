@@ -23,7 +23,6 @@ public sealed record SubscriptionDeliveryDto
     public required int RetryCycleAttemptCount { get; init; }
     public DateTimeOffset? DeliverAfter { get; init; }
     public DateTimeOffset? FailedAt { get; init; }
-    public IReadOnlyList<DeliveryAttemptDto> DeliveryAttempts { get; init; } = [];
 }
 
 public sealed record DeliveryAttemptDto
