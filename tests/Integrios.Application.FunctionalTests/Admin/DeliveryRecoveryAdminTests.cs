@@ -41,7 +41,7 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         SubscriptionDeliveryDto delivery = Assert.Single(history.SubscriptionDeliveries);
         Assert.Equal(deliveryId, delivery.SubscriptionDeliveryId);
         Assert.Equal("dead_lettered", delivery.Status);
-        Assert.Equal("failed", Assert.Single(delivery.DeliveryAttempts).Status);
+        Assert.Equal("failed", Assert.Single(history.DeliveryAttempts).Status);
 
         HttpResponseMessage replayResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -54,6 +54,20 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
             HttpMethod.Post,
             $"{route}/{deliveryId}/replay"));
         Assert.Equal(HttpStatusCode.Conflict, repeatedReplay.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replay_DeliveryFromAnotherEvent_Returns404()
+    {
+        var (eventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        var (_, otherDeliveryId) = await fixture.SeedDeadLetteredDeliveryAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries/{otherDeliveryId}/replay"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("dead_lettered", await fixture.GetDeliveryStatusAsync(otherDeliveryId));
     }
 
     [Fact]

@@ -72,12 +72,12 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
             INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
-            VALUES (@DestinationConnectionId, @TenantId, @IntegrationId, 'recovery-destination',
+            VALUES (@DestinationConnectionId, @TenantId, @IntegrationId, @DestinationName,
                 {{{database.Json("@DestinationConfig")}}}, 'active');
-            INSERT INTO topics (id, tenant_id, name, status) VALUES (@TopicId, @TenantId, 'recovery-topic', 'active');
+            INSERT INTO topics (id, tenant_id, name, status) VALUES (@TopicId, @TenantId, @TopicName, 'active');
             INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @SourceConnectionId);
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
-            VALUES (@SubscriptionId, @TenantId, @TopicId, 'recovery-subscription',
+            VALUES (@SubscriptionId, @TenantId, @TopicId, @SubscriptionName,
                 {{{database.Json("@MatchRules")}}}, @DestinationConnectionId, 0, 'active');
             INSERT INTO events (id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
             VALUES (@EventId, @TenantId, @TopicId, @SourceConnectionId, 'recovery.test',
@@ -100,6 +100,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
             SubscriptionId = subscriptionId,
             EventId = eventId,
             DeliveryId = deliveryId,
+            DestinationName = $"recovery-destination-{destinationConnectionId:N}",
+            TopicName = $"recovery-topic-{topicId:N}",
+            SubscriptionName = $"recovery-subscription-{subscriptionId:N}",
             AttemptId = attemptId,
             DestinationConfig = "{\"base_uri\":\"http://localhost:5054/sink/recovery\"}",
             MatchRules = "{\"event_types\":[\"recovery.test\"]}",

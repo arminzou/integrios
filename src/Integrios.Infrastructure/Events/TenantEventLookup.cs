@@ -94,10 +94,6 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
             StartedAt = a.StartedAt,
             CompletedAt = a.CompletedAt
         }).ToList();
-        var attemptsByDelivery = attemptDtos
-            .GroupBy(attempt => attempt.SubscriptionDeliveryId)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<DeliveryAttemptDto>)group.ToList());
-
         return new EventDto
         {
             EventId = row.Id,
@@ -114,8 +110,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                 LifetimeAttemptCount = delivery.LifetimeAttemptCount,
                 RetryCycleAttemptCount = delivery.RetryCycleAttemptCount,
                 DeliverAfter = delivery.DeliverAfter,
-                FailedAt = delivery.FailedAt,
-                DeliveryAttempts = attemptsByDelivery.GetValueOrDefault(delivery.SubscriptionDeliveryId, [])
+                FailedAt = delivery.FailedAt
             }).ToList(),
             DeliveryAttempts = attemptDtos
         };
