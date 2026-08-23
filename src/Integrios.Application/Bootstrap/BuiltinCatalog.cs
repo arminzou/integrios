@@ -1,21 +1,21 @@
 using System.Text.Json;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 
 namespace Integrios.Application.Bootstrap;
 
-public sealed record BuiltinIntegration(
+public sealed record BuiltinConnector(
     Guid Id,
-    IntegrationManifest Manifest);
+    ConnectorManifest Manifest);
 
 public static class BuiltinCatalog
 {
     public static readonly Guid HttpId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
-    public static readonly IReadOnlyList<BuiltinIntegration> All =
+    public static readonly IReadOnlyList<BuiltinConnector> All =
     [
-        new BuiltinIntegration(
+        new BuiltinConnector(
             HttpId,
-            new IntegrationManifest
+            new ConnectorManifest
             {
                 ManifestSchemaVersion = 1,
                 Key = "http",
@@ -23,26 +23,26 @@ public static class BuiltinCatalog
                 Direction = "both",
                 SourceConfigurationSchema = EmptyObjectSchema(),
                 DestinationConfigurationSchema = HttpDestinationSchema(),
-                SourceVerification = new IntegrationSourceVerificationManifest { AllowUnverified = true },
-                DestinationAuthentication = new IntegrationDestinationAuthenticationManifest
+                SourceVerification = new ConnectorSourceVerificationManifest { AllowUnverified = true },
+                DestinationAuthentication = new ConnectorDestinationAuthenticationManifest
                 {
                     AllowUnauthenticated = true,
                     Schemes =
                     [
-                        new IntegrationSchemeManifest
+                        new ConnectorSchemeManifest
                         {
                             Scheme = "api_key_header",
                             RequiredConfig = ["header_name"],
                             RequiredSecretRefs = ["api_key"],
                         },
-                        new IntegrationSchemeManifest
+                        new ConnectorSchemeManifest
                         {
                             Scheme = "bearer_token",
                             RequiredSecretRefs = ["token"],
                         },
                     ],
                 },
-                Presentation = new IntegrationPresentationManifest
+                Presentation = new ConnectorPresentationManifest
                 {
                     Name = "HTTP",
                     Description = "Generic HTTP source or destination.",

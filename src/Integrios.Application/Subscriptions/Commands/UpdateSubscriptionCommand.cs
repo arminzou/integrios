@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Application.Connections;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Common;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Domain.Subscriptions;
 using MediatR;
 
@@ -26,7 +26,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     IConnectionRepository connectionRepository,
     IConnectionAuthoringLock authoringLock,
-    IIntegrationCatalog integrationCatalog,
+    IConnectorCatalog connectorCatalog,
     IAuthSchemeRegistry authSchemeRegistry,
     ITransformEvaluator transformEvaluator) : IRequestHandler<UpdateSubscriptionCommand, SubscriptionDto?>
 {
@@ -79,16 +79,16 @@ internal sealed class UpdateSubscriptionCommandHandler(
                 "The specified destination connection does not exist for this tenant.");
         }
 
-        Integration? integration = await integrationCatalog.GetByIdAsync(connection.IntegrationId, cancellationToken);
-        if (integration is null)
+        Connector? connector = await connectorCatalog.GetByIdAsync(connection.ConnectorId, cancellationToken);
+        if (connector is null)
         {
             throw new SubscriptionValidationException(
-                "The destination connection references an integration that does not exist.");
+                "The destination connection references a connector that does not exist.");
         }
 
         try
         {
-            ConnectionUseValidator.ValidateDestinationAuthoring(connection, integration, authSchemeRegistry);
+            ConnectionUseValidator.ValidateDestinationAuthoring(connection, connector, authSchemeRegistry);
             HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
                 httpDelivery,
                 connection.DestinationAuthentication,

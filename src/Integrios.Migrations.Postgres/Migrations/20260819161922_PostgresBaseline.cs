@@ -31,7 +31,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "integrations",
+                name: "connectors",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -49,12 +49,12 @@ namespace Integrios.Migrations.Postgres.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("integrations_pkey", x => x.id);
-                    table.UniqueConstraint("uq_integrations_key_contract_version", x => new { x.key, x.contract_version });
-                    table.CheckConstraint("ck_integrations_contract_version_positive", "contract_version > 0");
-                    table.CheckConstraint("ck_integrations_manifest_identity", "manifest->>'key' = key AND (manifest->>'contract_version')::INTEGER = contract_version AND (manifest->>'manifest_schema_version')::INTEGER = manifest_schema_version");
-                    table.CheckConstraint("ck_integrations_manifest_object", "jsonb_typeof(manifest) = 'object'");
-                    table.CheckConstraint("ck_integrations_manifest_schema_version_positive", "manifest_schema_version > 0");
+                    table.PrimaryKey("connectors_pkey", x => x.id);
+                    table.UniqueConstraint("uq_connectors_key_contract_version", x => new { x.key, x.contract_version });
+                    table.CheckConstraint("ck_connectors_contract_version_positive", "contract_version > 0");
+                    table.CheckConstraint("ck_connectors_manifest_identity", "manifest->>'key' = key AND (manifest->>'contract_version')::INTEGER = contract_version AND (manifest->>'manifest_schema_version')::INTEGER = manifest_schema_version");
+                    table.CheckConstraint("ck_connectors_manifest_object", "jsonb_typeof(manifest) = 'object'");
+                    table.CheckConstraint("ck_connectors_manifest_schema_version_positive", "manifest_schema_version > 0");
                 });
 
             migrationBuilder.CreateTable(
@@ -110,7 +110,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    integration_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    connector_id = table.Column<Guid>(type: "uuid", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     config = table.Column<JsonElement>(type: "jsonb", nullable: false, defaultValueSql: "'{}'::jsonb"),
                     source_verification = table.Column<string>(type: "jsonb", nullable: true),
@@ -129,9 +129,9 @@ namespace Integrios.Migrations.Postgres.Migrations
                     table.CheckConstraint("ck_connections_destination_authentication_object", "destination_authentication IS NULL OR jsonb_typeof(destination_authentication) = 'object'");
                     table.CheckConstraint("ck_connections_source_verification_object", "source_verification IS NULL OR jsonb_typeof(source_verification) = 'object'");
                     table.ForeignKey(
-                        name: "connections_integration_id_fkey",
-                        column: x => x.integration_id,
-                        principalTable: "integrations",
+                        name: "connections_connector_id_fkey",
+                        column: x => x.connector_id,
+                        principalTable: "connectors",
                         principalColumn: "id");
                     table.ForeignKey(
                         name: "connections_tenant_id_fkey",
@@ -363,7 +363,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
                     transform_config_snapshot = table.Column<JsonElement>(type: "jsonb", nullable: true),
                     traceparent = table.Column<string>(type: "text", nullable: true),
-                    integration_key = table.Column<string>(type: "text", nullable: false),
+                    connector_key = table.Column<string>(type: "text", nullable: false),
                     active_attempt_id = table.Column<Guid>(type: "uuid", nullable: true),
                     lease_expires_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     http_execution_snapshot = table.Column<JsonElement>(type: "jsonb", nullable: false)
@@ -504,7 +504,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     ADD CONSTRAINT ck_events_source_connection_required
                     CHECK (source_connection_id IS NOT NULL) NOT VALID;
 
-                CREATE FUNCTION reject_integration_functional_update()
+                CREATE FUNCTION reject_connector_functional_update()
                 RETURNS trigger
                 LANGUAGE plpgsql
                 AS $$
@@ -516,17 +516,17 @@ namespace Integrios.Migrations.Postgres.Migrations
                        OR NEW.direction IS DISTINCT FROM OLD.direction
                        OR NEW.supported_auth_schemes IS DISTINCT FROM OLD.supported_auth_schemes
                        OR (NEW.manifest - 'presentation') IS DISTINCT FROM (OLD.manifest - 'presentation') THEN
-                        RAISE EXCEPTION 'Integration functional contracts are immutable; apply a new contract_version';
+                        RAISE EXCEPTION 'Connector functional contracts are immutable; apply a new contract_version';
                     END IF;
 
                     RETURN NEW;
                 END;
                 $$;
 
-                CREATE TRIGGER integrations_reject_functional_update
-                BEFORE UPDATE ON integrations
+                CREATE TRIGGER connectors_reject_functional_update
+                BEFORE UPDATE ON connectors
                 FOR EACH ROW
-                EXECUTE FUNCTION reject_integration_functional_update();
+                EXECUTE FUNCTION reject_connector_functional_update();
 
                 CREATE FUNCTION events_require_active_topic_source()
                 RETURNS trigger AS $$
@@ -563,8 +563,8 @@ namespace Integrios.Migrations.Postgres.Migrations
                 """
                 DROP TRIGGER IF EXISTS trg_events_require_active_topic_source ON events;
                 DROP FUNCTION IF EXISTS events_require_active_topic_source();
-                DROP TRIGGER IF EXISTS integrations_reject_functional_update ON integrations;
-                DROP FUNCTION IF EXISTS reject_integration_functional_update();
+                DROP TRIGGER IF EXISTS connectors_reject_functional_update ON connectors;
+                DROP FUNCTION IF EXISTS reject_connector_functional_update();
                 """);
 
             migrationBuilder.DropForeignKey(
@@ -580,7 +580,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                 table: "topics");
 
             migrationBuilder.DropForeignKey(
-                name: "connections_integration_id_fkey",
+                name: "connections_connector_id_fkey",
                 table: "connections");
 
             migrationBuilder.DropForeignKey(
@@ -603,7 +603,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                 name: "tenants");
 
             migrationBuilder.DropTable(
-                name: "integrations");
+                name: "connectors");
 
             migrationBuilder.DropTable(
                 name: "subscription_deliveries");

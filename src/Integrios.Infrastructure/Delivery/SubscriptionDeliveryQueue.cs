@@ -50,7 +50,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     sd.destination_connection_id AS DestinationConnectionId, sd.status AS Status,
                     sd.lifetime_attempt_count AS LifetimeAttemptCount,
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
-                    sd.active_attempt_id AS ActiveAttemptId, sd.integration_key AS IntegrationKey,
+                    sd.active_attempt_id AS ActiveAttemptId, sd.connector_key AS ConnectorKey,
                     sd.http_execution_snapshot AS HttpExecutionSnapshotJson,
                     sd.transform_config_snapshot AS TransformConfigSnapshot, sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId, tenant.slug AS TenantSlug, e.payload AS PayloadJson,
@@ -77,7 +77,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     sd.lifetime_attempt_count AS LifetimeAttemptCount,
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
                     sd.active_attempt_id AS ActiveAttemptId,
-                    sd.integration_key AS IntegrationKey,
+                    sd.connector_key AS ConnectorKey,
                     sd.http_execution_snapshot::text AS HttpExecutionSnapshotJson,
                     sd.transform_config_snapshot AS TransformConfigSnapshot,
                     sd.traceparent AS Traceparent,
@@ -175,7 +175,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     row.LifetimeAttemptCount,
                     row.EventId,
                     row.SubscriptionId,
-                    row.IntegrationKey ?? string.Empty);
+                    row.ConnectorKey ?? string.Empty);
             }
         }
 
@@ -241,7 +241,7 @@ internal sealed class SubscriptionDeliveryQueue(
             row.TopicName,
             row.AcceptedAt,
             row.TransformConfigSnapshot,
-            row.IntegrationKey ?? string.Empty,
+            row.ConnectorKey ?? string.Empty,
             row.HttpExecutionSnapshotJson ?? string.Empty,
             row.Traceparent));
     }
@@ -454,7 +454,7 @@ internal sealed class SubscriptionDeliveryQueue(
         public string? TopicName { get; init; }
         public DateTimeOffset AcceptedAt { get; init; }
         public string? TransformConfigSnapshot { get; init; }
-        public string? IntegrationKey { get; init; }
+        public string? ConnectorKey { get; init; }
         public string? HttpExecutionSnapshotJson { get; init; }
         public string? Traceparent { get; init; }
         public DateTimeOffset DatabaseNow { get; init; }

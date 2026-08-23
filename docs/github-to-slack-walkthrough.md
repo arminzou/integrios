@@ -2,7 +2,7 @@
 
 Drive a verified GitHub webhook through Integrios and deliver a transformed Slack message,
 entirely through the Admin and Ingress APIs. This exercises the platform's generic
-verified-webhook source adapter, Operator-authored Integrations, and logical HTTP-outcome
+verified-webhook source adapter, Operator-authored Connectors, and logical HTTP-outcome
 evaluation on one concrete path — it is not a GitHub-specific or Slack-specific runtime feature.
 
 This walkthrough is API-driven. There is no Operator UI yet; every step below is a `curl` command
@@ -29,31 +29,31 @@ provider sides manually, once, using values this walkthrough produces. This matc
 model: [architecture.md](architecture.md) describes why (no runtime plugins, no broad provider
 catalog).
 
-## 1. Apply the example Integration manifests
+## 1. Apply the example Connector manifests
 
-The [`examples/integrations/`](../examples/integrations/) directory carries the exact
+The [`examples/connectors/`](../examples/connectors/) directory carries the exact
 machine-validated manifests this walkthrough uses. `github-v1.json` selects the authoring-safe
 `verified_webhook` v1 source adapter; `slack-v1.json` is generic HTTP with bearer-token
 authentication and a `json_boolean` outcome contract, because Slack's `chat.postMessage` can return
 HTTP 200 for a request it rejected. Apply is idempotent — a missing version is created, and
 re-applying the identical manifest is a no-op.
 
-Apply returns the created Integration, including its deployment-wide `id`, which every Connection
+Apply returns the created Connector, including its deployment-wide `id`, which every Connection
 against it references below.
 
 ```bash
 ADMIN=http://localhost:5150
 AUTH="Authorization: AdminKey global_admin_key:admin_bootstrap_secret"
 
-GITHUB_INTEGRATION=$(curl -s -X PUT "$ADMIN/admin/integrations/github/versions/1" -H "$AUTH" \
-  -H 'Content-Type: application/json' --data-binary @examples/integrations/github-v1.json | jq -r .id)
+GITHUB_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/github/versions/1" -H "$AUTH" \
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/github-v1.json | jq -r .id)
 
-SLACK_INTEGRATION=$(curl -s -X PUT "$ADMIN/admin/integrations/slack/versions/1" -H "$AUTH" \
-  -H 'Content-Type: application/json' --data-binary @examples/integrations/slack-v1.json | jq -r .id)
+SLACK_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/slack/versions/1" -H "$AUTH" \
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/slack-v1.json | jq -r .id)
 ```
 
-Bootstrap installs neither: only the deployment-wide generic `http` Integration is built in. These
-two are ordinary Operator-authored Integrations, validated by the same manifest parser and
+Bootstrap installs neither: only the deployment-wide generic `http` Connector is built in. These
+two are ordinary Operator-authored Connectors, validated by the same manifest parser and
 authoring rules any Operator-authored manifest goes through.
 
 ## 2. Create a Tenant
@@ -73,7 +73,7 @@ different Connection.
 ```bash
 GITHUB_CONN=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/connections" -H "$AUTH" \
   -H 'Content-Type: application/json' \
-  -d "{\"integration_id\":\"$GITHUB_INTEGRATION\",\"name\":\"acme-github\",\"config\":{},
+  -d "{\"connector_id\":\"$GITHUB_CONNECTOR\",\"name\":\"acme-github\",\"config\":{},
        \"source_verification\":{\"scheme\":\"hmac_sha256\",\"config\":{},
          \"secret_refs\":{\"secret\":\"github_webhook_secret\"}},
        \"environment\":\"production\"}" | jq -r .id)
@@ -95,7 +95,7 @@ exact same shape under `secrets/source/` instead of `secrets/destination/`.)
 ## 4. Create a Topic and get the callback URL
 
 Creating the Topic with this Connection as a source mints a stable source endpoint, because the
-GitHub Integration's manifest declares a `source_adapter`. Removing and re-adding the association
+GitHub Connector's manifest declares a `source_adapter`. Removing and re-adding the association
 later would mint a new endpoint identity; this one is stable for as long as the association exists.
 
 ```bash
@@ -134,7 +134,7 @@ Event history alongside real pushes.
 ```bash
 SLACK_CONN=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/connections" -H "$AUTH" \
   -H 'Content-Type: application/json' \
-  -d "{\"integration_id\":\"$SLACK_INTEGRATION\",\"name\":\"acme-slack\",
+  -d "{\"connector_id\":\"$SLACK_CONNECTOR\",\"name\":\"acme-slack\",
        \"config\":{\"base_uri\":\"https://slack.com/api\"},
        \"destination_authentication\":{\"scheme\":\"bearer_token\",\"config\":{},
          \"secret_refs\":{\"token\":\"slack_bot_token\"}},

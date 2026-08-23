@@ -2,40 +2,40 @@ using System.Text.Json;
 using Integrios.Application.Auth;
 using Integrios.Domain.Common;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 
 namespace Integrios.Application.Connections;
 
 internal static class ConnectionUseValidator
 {
-    public static void ValidateSourceReadiness(Connection connection, Integration integration)
+    public static void ValidateSourceReadiness(Connection connection, Connector connector)
     {
-        if (integration.Direction == IntegrationDirection.Destination)
-            throw Invalid("source", integration);
+        if (connector.Direction == ConnectorDirection.Destination)
+            throw Invalid("source", connector);
 
-        ValidateConfiguration(connection.Config, integration.Manifest.SourceConfigurationSchema, "source");
+        ValidateConfiguration(connection.Config, connector.Manifest.SourceConfigurationSchema, "source");
         RequireSelection(
             connection.SourceVerification,
-            integration.Manifest.SourceVerification.Schemes,
-            integration.Manifest.SourceVerification.AllowUnverified,
+            connector.Manifest.SourceVerification.Schemes,
+            connector.Manifest.SourceVerification.AllowUnverified,
             "source verification");
     }
 
     public static void ValidateDestinationReadiness(
         Connection connection,
-        Integration integration,
+        Connector connector,
         IAuthSchemeRegistry registry)
     {
-        if (integration.Direction == IntegrationDirection.Source)
-            throw Invalid("destination", integration);
+        if (connector.Direction == ConnectorDirection.Source)
+            throw Invalid("destination", connector);
 
-        ValidateConfiguration(connection.Config, integration.Manifest.DestinationConfigurationSchema, "destination");
+        ValidateConfiguration(connection.Config, connector.Manifest.DestinationConfigurationSchema, "destination");
         ValidateDestinationBaseUri(connection.Config);
 
         ConnectionSchemeSelection? selection = RequireSelection(
             connection.DestinationAuthentication,
-            integration.Manifest.DestinationAuthentication.Schemes,
-            integration.Manifest.DestinationAuthentication.AllowUnauthenticated,
+            connector.Manifest.DestinationAuthentication.Schemes,
+            connector.Manifest.DestinationAuthentication.AllowUnauthenticated,
             "destination authentication");
         if (selection is not null && !registry.TryGet(selection.Scheme, out _))
         {
@@ -44,24 +44,24 @@ internal static class ConnectionUseValidator
         }
     }
 
-    public static void ValidateSourceAuthoring(Connection connection, Integration integration)
+    public static void ValidateSourceAuthoring(Connection connection, Connector connector)
     {
-        EnsureActive(connection, integration);
-        ValidateSourceReadiness(connection, integration);
+        EnsureActive(connection, connector);
+        ValidateSourceReadiness(connection, connector);
     }
 
     public static void ValidateDestinationAuthoring(
         Connection connection,
-        Integration integration,
+        Connector connector,
         IAuthSchemeRegistry registry)
     {
-        EnsureActive(connection, integration);
-        ValidateDestinationReadiness(connection, integration, registry);
+        EnsureActive(connection, connector);
+        ValidateDestinationReadiness(connection, connector, registry);
     }
 
     private static ConnectionSchemeSelection? RequireSelection(
         ConnectionSchemeSelection? selection,
-        IReadOnlyList<IntegrationSchemeManifest> supportedSchemes,
+        IReadOnlyList<ConnectorSchemeManifest> supportedSchemes,
         bool allowAbsent,
         string use)
     {
@@ -75,13 +75,13 @@ internal static class ConnectionUseValidator
 
         if (supportedSchemes.Count == 0)
             throw new ConnectionValidationException(
-                $"This Integration does not support a {use} selection.");
+                $"This Connector does not support a {use} selection.");
 
-        IntegrationSchemeManifest? declaration = supportedSchemes.SingleOrDefault(
+        ConnectorSchemeManifest? declaration = supportedSchemes.SingleOrDefault(
             scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
         if (declaration is null)
             throw new ConnectionValidationException(
-                $"{use} scheme '{selection.Scheme}' is not supported by this Integration.");
+                $"{use} scheme '{selection.Scheme}' is not supported by this Connector.");
 
         ValidateRequiredFields(selection.Config, declaration.RequiredConfig, use, "config");
         ValidateRequiredFields(selection.SecretRefs, declaration.RequiredSecretRefs, use, "secret_refs");
@@ -107,7 +107,7 @@ internal static class ConnectionUseValidator
     {
         if (schema is not JsonElement declaredSchema)
             throw new ConnectionValidationException(
-                $"The Integration does not declare a {use} Connection configuration schema.");
+                $"The Connector does not declare a {use} Connection configuration schema.");
 
         try
         {
@@ -119,15 +119,15 @@ internal static class ConnectionUseValidator
         }
     }
 
-    private static ConnectionValidationException Invalid(string use, Integration integration) =>
-        new($"The Connection must use an Integration whose direction permits {use} use; '{integration.Key}' does not.");
+    private static ConnectionValidationException Invalid(string use, Connector connector) =>
+        new($"The Connection must use a Connector whose direction permits {use} use; '{connector.Key}' does not.");
 
-    private static void EnsureActive(Connection connection, Integration integration)
+    private static void EnsureActive(Connection connection, Connector connector)
     {
         if (connection.Status != OperationalStatus.Active)
             throw new ConnectionValidationException("The Connection must be active before this relationship can be established.");
-        if (integration.Status != OperationalStatus.Active)
-            throw new ConnectionValidationException("The Connection's Integration must be active before this relationship can be established.");
+        if (connector.Status != OperationalStatus.Active)
+            throw new ConnectionValidationException("The Connection's Connector must be active before this relationship can be established.");
     }
 
     private static void ValidateDestinationBaseUri(JsonElement config)

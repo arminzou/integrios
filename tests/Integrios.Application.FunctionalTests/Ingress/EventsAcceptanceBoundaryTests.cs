@@ -275,7 +275,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
             TopicName = "payments",
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"paymentId":"pay_123","amount":1200}""").RootElement.Clone(),
-            Metadata = JsonDocument.Parse("""{"source":"integration-tests"}""").RootElement.Clone(),
+            Metadata = JsonDocument.Parse("""{"source":"connector-tests"}""").RootElement.Clone(),
             IdempotencyKey = idempotencyKey
         };
     }

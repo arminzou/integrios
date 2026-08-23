@@ -3,7 +3,7 @@ using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 
 namespace Integrios.Application.Connections;
 
@@ -12,53 +12,53 @@ internal static partial class ConnectionSchemeSelectionValidator
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
 
     public static ConnectionSchemeSelection? ValidateSource(
-        Integration integration,
+        Connector connector,
         ConnectionSchemeSelectionInput? selection)
     {
-        EnsureDirection(integration, source: true, selection);
+        EnsureDirection(connector, source: true, selection);
         return Validate(
-            integration,
+            connector,
             selection,
-            integration.Manifest.SourceVerification.Schemes,
+            connector.Manifest.SourceVerification.Schemes,
             "source verification",
             handler: null);
     }
 
     public static ConnectionSchemeSelection? ValidateDestination(
-        Integration integration,
+        Connector connector,
         ConnectionSchemeSelectionInput? selection,
         IAuthSchemeRegistry registry)
     {
-        EnsureDirection(integration, source: false, selection);
+        EnsureDirection(connector, source: false, selection);
         IAuthSchemeHandler? handler = null;
         if (selection is not null && !registry.TryGet(selection.Scheme, out handler))
             throw new ConnectionValidationException(
                 $"Destination authentication scheme '{selection.Scheme}' is not implemented.");
 
         return Validate(
-            integration,
+            connector,
             selection,
-            integration.Manifest.DestinationAuthentication.Schemes,
+            connector.Manifest.DestinationAuthentication.Schemes,
             "destination authentication",
             handler);
     }
 
     private static ConnectionSchemeSelection? Validate(
-        Integration integration,
+        Connector connector,
         ConnectionSchemeSelectionInput? selection,
-        IReadOnlyList<IntegrationSchemeManifest> supportedSchemes,
+        IReadOnlyList<ConnectorSchemeManifest> supportedSchemes,
         string capability,
         IAuthSchemeHandler? handler)
     {
         if (selection is null)
             return null;
 
-        IntegrationSchemeManifest? declared = supportedSchemes.SingleOrDefault(
+        ConnectorSchemeManifest? declared = supportedSchemes.SingleOrDefault(
             scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
         if (declared is null)
         {
             throw new ConnectionValidationException(
-                $"{capability} scheme '{selection.Scheme}' is not supported by integration '{integration.Key}'.");
+                $"{capability} scheme '{selection.Scheme}' is not supported by connector '{connector.Key}'.");
         }
 
         JsonElement config = NormalizeObject(selection.Config);
@@ -79,7 +79,7 @@ internal static partial class ConnectionSchemeSelectionValidator
     }
 
     private static void EnsureDirection(
-        Integration integration,
+        Connector connector,
         bool source,
         ConnectionSchemeSelectionInput? selection)
     {
@@ -87,12 +87,12 @@ internal static partial class ConnectionSchemeSelectionValidator
             return;
 
         bool capable = source
-            ? integration.Direction is IntegrationDirection.Source or IntegrationDirection.Both
-            : integration.Direction is IntegrationDirection.Destination or IntegrationDirection.Both;
+            ? connector.Direction is ConnectorDirection.Source or ConnectorDirection.Both
+            : connector.Direction is ConnectorDirection.Destination or ConnectorDirection.Both;
         if (!capable)
         {
             throw new ConnectionValidationException(
-                $"Integration '{integration.Key}' does not permit {(source ? "source verification" : "destination authentication")}.");
+                $"Connector '{connector.Key}' does not permit {(source ? "source verification" : "destination authentication")}.");
         }
     }
 

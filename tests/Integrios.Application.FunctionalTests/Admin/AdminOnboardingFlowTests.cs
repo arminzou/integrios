@@ -12,7 +12,7 @@ namespace Integrios.Application.FunctionalTests.Admin;
 
 public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
-    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     private readonly AdminApiFixture fixture;
     private HttpClient client = null!;
@@ -156,7 +156,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integration_id = HttpIntegrationId,
+                connector_id = HttpConnectorId,
                 name,
                 config = new { base_uri = url },
                 environment,

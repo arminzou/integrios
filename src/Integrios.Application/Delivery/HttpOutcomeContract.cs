@@ -1,6 +1,6 @@
 namespace Integrios.Application.Delivery;
 
-// Mirrors the manifest's already-validated http_outcome shape (IntegrationManifestParser owns
+// Mirrors the manifest's already-validated http_outcome shape (ConnectorManifestParser owns
 // authoring validation); dispatch only ever reads an already-validated snapshot, so this record
 // carries no parsing beyond ordinary JSON deserialization. Property names match the manifest's
 // snake_case fields exactly under ConnectionSchemeSelection.StoredJson's naming policy.

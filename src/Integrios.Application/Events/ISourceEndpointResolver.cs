@@ -6,7 +6,7 @@ namespace Integrios.Application.Events;
 public interface ISourceEndpointResolver
 {
     Task<ResolvedSourceEndpoint?> ResolveAsync(
-        string integrationKey,
+        string connectorKey,
         Guid endpointId,
         CancellationToken cancellationToken);
 }
@@ -17,7 +17,7 @@ public sealed record ResolvedSourceEndpoint
     public required string TenantSlug { get; init; }
     public required Guid TopicId { get; init; }
     public required Guid ConnectionId { get; init; }
-    public required string IntegrationKey { get; init; }
+    public required string ConnectorKey { get; init; }
     public required string SourceAdapterKey { get; init; }
     public required int SourceAdapterContractVersion { get; init; }
     public required JsonElement SourceAdapterConfig { get; init; }

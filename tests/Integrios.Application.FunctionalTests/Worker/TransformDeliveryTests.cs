@@ -89,7 +89,7 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
             "changed_webhook");
 
         var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
-        Assert.Equal("webhook", snapshot.IntegrationKey);
+        Assert.Equal("webhook", snapshot.ConnectorKey);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
         Assert.Equal(WorkerRoutingFixture.LedgerSinkUrl, executionSnapshot.BaseUri);
@@ -129,7 +129,7 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         HttpExecutionSnapshot laterExecutionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             laterSnapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
         Assert.Equal("http://changed-sink/ledger", laterExecutionSnapshot.BaseUri);
-        Assert.Equal("changed_webhook", laterSnapshot.IntegrationKey);
+        Assert.Equal("changed_webhook", laterSnapshot.ConnectorKey);
     }
 
     [Fact]
@@ -147,16 +147,16 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         Assert.Equal("pending", delivery.Status);
 
         // A destination without a url normalizes to an empty snapshot url (never a NOT NULL stall),
-        // while integration_key stays populated from the inner-joined integration.
+        // while connector_key stays populated from the inner-joined connector.
         var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
         Assert.Equal(string.Empty, executionSnapshot.BaseUri);
-        Assert.Equal("http", snapshot.IntegrationKey);
+        Assert.Equal("http", snapshot.ConnectorKey);
     }
 
     [Fact]
-    public async Task Worker_IntegrationWithHttpOutcomeContract_FansOutWithSnapshotCarryingIt()
+    public async Task Worker_ConnectorWithHttpOutcomeContract_FansOutWithSnapshotCarryingIt()
     {
         await fixture.UpdateLedgerExecutionConfigurationAsync(
             WorkerRoutingFixture.LedgerSinkUrl,

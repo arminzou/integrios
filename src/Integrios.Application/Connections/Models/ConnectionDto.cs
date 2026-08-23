@@ -7,7 +7,7 @@ public sealed record ConnectionDto
 {
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
-    public required Guid IntegrationId { get; init; }
+    public required Guid ConnectorId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
     public ConnectionSchemeSelectionDto? SourceVerification { get; init; }
@@ -22,7 +22,7 @@ public sealed record ConnectionDto
     {
         Id = connection.Id,
         TenantId = connection.TenantId,
-        IntegrationId = connection.IntegrationId,
+        ConnectorId = connection.ConnectorId,
         Name = connection.Name,
         Config = connection.Config,
         SourceVerification = ConnectionSchemeSelectionDto.From(connection.SourceVerification),

@@ -14,7 +14,7 @@ public sealed class ApplicationArchitectureTests
         "Integrios.Application.Connections",
         "Integrios.Application.Delivery",
         "Integrios.Application.Events",
-        "Integrios.Application.Integrations",
+        "Integrios.Application.Connectors",
         "Integrios.Application.Outbox",
         "Integrios.Application.Secrets",
         "Integrios.Application.Subscriptions",

@@ -1,18 +1,18 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Integrios.Application.Integrations;
-using Integrios.Domain.Integrations;
+using Integrios.Application.Connectors;
+using Integrios.Domain.Connectors;
 
 namespace Integrios.Application.UnitTests;
 
-// IntegrationManifest round-trips through a jsonb column rather than through an HTTP host, so no
+// ConnectorManifest round-trips through a jsonb column rather than through an HTTP host, so no
 // host naming policy reaches it. It used to hold its key names in [JsonPropertyName] attributes;
 // this Fact holds the same contract now that the names come from serializer options instead. A
 // regression here silently rewrites stored rows.
 public sealed partial class StoredJsonContractTests
 {
     [Fact]
-    public void IntegrationManifest_RoundTripsStoredKeysUnchanged()
+    public void ConnectorManifest_RoundTripsStoredKeysUnchanged()
     {
         const string stored = """
             {
@@ -32,8 +32,8 @@ public sealed partial class StoredJsonContractTests
             }
             """;
 
-        IntegrationManifest manifest = IntegrationManifestParser.DeserializeStored(stored);
-        JsonElement written = IntegrationManifestParser.ToJson(manifest);
+        ConnectorManifest manifest = ConnectorManifestParser.DeserializeStored(stored);
+        JsonElement written = ConnectorManifestParser.ToJson(manifest);
 
         Assert.Equal(1, manifest.ManifestSchemaVersion);
         Assert.Equal("github_webhook", manifest.SourceAdapter?.Key);

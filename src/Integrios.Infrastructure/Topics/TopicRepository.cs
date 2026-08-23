@@ -267,13 +267,13 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                     WHERE tenant_id=@TenantId AND topic_id=@TopicId AND connection_id=@ConnectionId
                       AND status=N'active';
                     IF @EndpointId IS NULL AND EXISTS (
-                        SELECT 1 FROM connections c JOIN integrations i ON i.id=c.integration_id
+                        SELECT 1 FROM connections c JOIN connectors i ON i.id=c.connector_id
                         WHERE c.tenant_id=@TenantId AND c.id=@ConnectionId
                           AND JSON_QUERY(i.manifest, '$.source_adapter') IS NOT NULL)
                     BEGIN
                         SET @EndpointId=NEWID();
                         SELECT @CallbackPath=CONCAT(N'/webhooks/', i.[key], N'/', LOWER(CONVERT(nvarchar(36), @EndpointId)))
-                        FROM connections c JOIN integrations i ON i.id=c.integration_id
+                        FROM connections c JOIN connectors i ON i.id=c.connector_id
                         WHERE c.tenant_id=@TenantId AND c.id=@ConnectionId;
                         INSERT INTO source_endpoints (id, tenant_id, topic_id, connection_id, callback_path, status)
                         VALUES (@EndpointId, @TenantId, @TopicId, @ConnectionId, @CallbackPath, N'active');
@@ -298,9 +298,9 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                           AND status = 'active'
                     ),
                     adapter_eligible AS (
-                        SELECT gen_random_uuid() AS endpoint_id, i.key AS integration_key
+                        SELECT gen_random_uuid() AS endpoint_id, i.key AS connector_key
                         FROM connections c
-                        JOIN integrations i ON i.id = c.integration_id
+                        JOIN connectors i ON i.id = c.connector_id
                         WHERE c.tenant_id = @TenantId AND c.id = @ConnectionId
                           AND jsonb_typeof(i.manifest -> 'source_adapter') = 'object'
                           AND NOT EXISTS (SELECT 1 FROM existing_endpoint)
@@ -308,7 +308,7 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                     inserted_endpoint AS (
                         INSERT INTO source_endpoints (id, tenant_id, topic_id, connection_id, callback_path, status)
                         SELECT endpoint_id, @TenantId, @TopicId, @ConnectionId,
-                               '/webhooks/' || integration_key || '/' || endpoint_id::text, 'active'
+                               '/webhooks/' || connector_key || '/' || endpoint_id::text, 'active'
                         FROM adapter_eligible
                         RETURNING id, callback_path, created_at
                     )

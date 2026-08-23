@@ -30,7 +30,7 @@ db-info:
 # DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET are exported above
 # so appsettings.Development.json and the dev admin secret are picked up.
 
-# Upsert the built-in webhook integration.
+# Upsert the built-in webhook connector.
 bootstrap-builtins:
 	dotnet run --project src/Integrios.Admin -- bootstrap --builtins
 

@@ -37,7 +37,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
             if (claim is RecoveredSubscriptionDeliveryDeadLetter recovered)
             {
-                metrics.RecordDeliveryDeadLettered(recovered.IntegrationKey);
+                metrics.RecordDeliveryDeadLettered(recovered.ConnectorKey);
                 logger.LogWarning(
                     "Recovered expired attempt_id={AttemptId}, attempt_number={AttemptNumber} and dead-lettered delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
                     recovered.AttemptId,
@@ -90,7 +90,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         activity?.SetTag("delivery_id", row.Id);
         activity?.SetTag("attempt_id", row.AttemptId);
         activity?.SetTag("attempt_number", row.AttemptNumber);
-        activity?.SetTag("integration_key", row.IntegrationKey);
+        activity?.SetTag("connector_key", row.ConnectorKey);
 
         HttpExecutionSnapshot snapshot;
         try
@@ -180,13 +180,13 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             return;
         }
 
-        metrics.RecordDeliveryAttemptDuration(duration.TotalSeconds, result.Succeeded ? "success" : "failed", row.IntegrationKey);
-        RecordFailurePhaseMetric(failurePhase, row.IntegrationKey);
+        metrics.RecordDeliveryAttemptDuration(duration.TotalSeconds, result.Succeeded ? "success" : "failed", row.ConnectorKey);
+        RecordFailurePhaseMetric(failurePhase, row.ConnectorKey);
 
         switch (finalization.Disposition)
         {
             case SubscriptionDeliveryDisposition.Succeeded:
-                metrics.RecordDeliverySucceeded(row.IntegrationKey);
+                metrics.RecordDeliverySucceeded(row.ConnectorKey);
                 logger.LogInformation(
                     "Delivery succeeded for attempt_id={AttemptId}, delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
                     row.AttemptId,
@@ -195,11 +195,11 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                     row.EventId);
                 break;
             case SubscriptionDeliveryDisposition.RetryScheduled:
-                metrics.RecordDeliveryFailed(row.IntegrationKey, HttpStatusClass(result));
+                metrics.RecordDeliveryFailed(row.ConnectorKey, HttpStatusClass(result));
                 LogFailure(row, result, failurePhase, "scheduled for retry");
                 break;
             case SubscriptionDeliveryDisposition.DeadLettered:
-                metrics.RecordDeliveryDeadLettered(row.IntegrationKey);
+                metrics.RecordDeliveryDeadLettered(row.ConnectorKey);
                 LogFailure(row, result, failurePhase, "dead-lettered");
                 break;
             default:
@@ -337,12 +337,12 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             result.Error ?? $"HTTP {result.StatusCode}");
     }
 
-    private void RecordFailurePhaseMetric(DeliveryFailurePhase? failurePhase, string integrationKey)
+    private void RecordFailurePhaseMetric(DeliveryFailurePhase? failurePhase, string connectorKey)
     {
         if (failurePhase == DeliveryFailurePhase.SecretResolution)
-            metrics.RecordDeliverySecretResolutionFailure(integrationKey);
+            metrics.RecordDeliverySecretResolutionFailure(connectorKey);
         else if (failurePhase == DeliveryFailurePhase.RequestConstruction)
-            metrics.RecordDeliveryRequestConstructionFailure(integrationKey);
+            metrics.RecordDeliveryRequestConstructionFailure(connectorKey);
     }
 
     private static string MapFailurePhase(DeliveryFailurePhase? failurePhase) => failurePhase switch

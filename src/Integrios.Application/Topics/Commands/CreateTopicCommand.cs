@@ -1,7 +1,7 @@
 using Integrios.Application.Connections;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using MediatR;
 
 namespace Integrios.Application.Topics;
@@ -17,7 +17,7 @@ internal sealed class CreateTopicCommandHandler(
     ITopicRepository topicRepository,
     IConnectionRepository connectionRepository,
     IConnectionAuthoringLock authoringLock,
-    IIntegrationCatalog integrationCatalog)
+    IConnectorCatalog connectorCatalog)
     : IRequestHandler<CreateTopicCommand, TopicDto>
 {
     public async Task<TopicDto> Handle(CreateTopicCommand command, CancellationToken cancellationToken)
@@ -45,12 +45,12 @@ internal sealed class CreateTopicCommandHandler(
             Connection connection = await connectionRepository.GetByIdAsync(tenantId, connectionId, cancellationToken)
                 ?? throw new TopicValidationException(
                     "Every source Connection must exist in the same Tenant as the Topic.");
-            Integration integration = await integrationCatalog.GetByIdAsync(connection.IntegrationId, cancellationToken)
+            Connector connector = await connectorCatalog.GetByIdAsync(connection.ConnectorId, cancellationToken)
                 ?? throw new TopicValidationException(
-                    "A source Connection references an Integration that does not exist.");
+                    "A source Connection references a Connector that does not exist.");
             try
             {
-                ConnectionUseValidator.ValidateSourceAuthoring(connection, integration);
+                ConnectionUseValidator.ValidateSourceAuthoring(connection, connector);
             }
             catch (ConnectionValidationException exception)
             {

@@ -3,7 +3,7 @@ using Integrios.Application.Bootstrap;
 using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
 using Integrios.Application.Events;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Outbox;
 using Integrios.Application.Recovery;
 using Integrios.Application.Secrets;
@@ -26,7 +26,7 @@ public static class DependencyInjection
             typeof(IApiKeyRepository),
             typeof(BootstrapBuiltinsCommand),
             typeof(IConnectionRepository),
-            typeof(IIntegrationCatalog),
+            typeof(IConnectorCatalog),
             typeof(ISubscriptionRepository),
             typeof(ITenantRepository),
             typeof(ITopicRepository),

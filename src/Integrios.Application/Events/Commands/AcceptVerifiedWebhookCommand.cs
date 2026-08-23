@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Telemetry;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Integrios.Application.Events;
 
 public sealed record AcceptVerifiedWebhookCommand(
-    string IntegrationKey,
+    string ConnectorKey,
     Guid EndpointId,
     string? ContentType,
     IReadOnlyDictionary<string, string> Headers,
@@ -25,7 +25,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
     public async Task<IngestEventResult> Handle(AcceptVerifiedWebhookCommand command, CancellationToken cancellationToken)
     {
         ResolvedSourceEndpoint endpoint = await endpointResolver.ResolveAsync(
-                command.IntegrationKey, command.EndpointId, cancellationToken)
+                command.ConnectorKey, command.EndpointId, cancellationToken)
             ?? throw new SourceEndpointNotFoundException("No active source endpoint matches this callback URL.");
 
         IIngressSourceAdapter adapter = adapterRuntime.GetRequired(
@@ -39,7 +39,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
                 TopicId = endpoint.TopicId,
                 SourceConnectionId = endpoint.ConnectionId,
                 EndpointId = command.EndpointId,
-                IntegrationKey = endpoint.IntegrationKey,
+                ConnectorKey = endpoint.ConnectorKey,
                 AdapterConfig = endpoint.SourceAdapterConfig,
                 SourceVerification = endpoint.SourceVerification,
                 ContentType = command.ContentType,

@@ -37,7 +37,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public const string LedgerSinkUrl = "http://test-sink/ledger";
     public const string RiskSinkUrl = "http://test-sink/risk";
 
-    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private static readonly Guid TenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000001");
     private static readonly Guid OrphanTenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000009");
     private static readonly Guid SourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
@@ -216,33 +216,33 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         new { Config = transformConfigJson, Name = subscriptionName });
 
     public async Task UpdateLedgerExecutionConfigurationAsync(
-        string destinationUrl, string? destinationAuthJson, string integrationKey, string? httpOutcomeJson = null)
+        string destinationUrl, string? destinationAuthJson, string connectorKey, string? httpOutcomeJson = null)
     {
-        Guid? integrationId = await ScalarAsync<Guid?>(
-            $"SELECT id FROM integrations WHERE {database.KeyColumn}=@IntegrationKey AND contract_version=1",
-            new { IntegrationKey = integrationKey });
-        if (integrationId is null)
+        Guid? connectorId = await ScalarAsync<Guid?>(
+            $"SELECT id FROM connectors WHERE {database.KeyColumn}=@ConnectorKey AND contract_version=1",
+            new { ConnectorKey = connectorKey });
+        if (connectorId is null)
         {
-            integrationId = Guid.NewGuid();
+            connectorId = Guid.NewGuid();
             await ExecuteAsync($$$"""
-                INSERT INTO integrations (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
+                INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
                     supported_auth_schemes,status,manifest)
-                VALUES (@Id,@IntegrationKey,1,1,@IntegrationKey,'both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}})
+                VALUES (@Id,@ConnectorKey,1,1,@ConnectorKey,'both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}})
                 """, new
                 {
-                    Id = integrationId.Value, IntegrationKey = integrationKey, Schemes = "[]",
-                    Manifest = TestIntegrationManifest.Create(integrationKey, integrationKey, "both", httpOutcomeJson: httpOutcomeJson)
+                    Id = connectorId.Value, ConnectorKey = connectorKey, Schemes = "[]",
+                    Manifest = TestConnectorManifest.Create(connectorKey, connectorKey, "both", httpOutcomeJson: httpOutcomeJson)
                 });
         }
         await ExecuteAsync($$$"""
             UPDATE connections SET config={{{database.Json("@Config")}}},
-                destination_authentication={{{database.Json("@DestinationAuth")}}}, integration_id=@IntegrationId
+                destination_authentication={{{database.Json("@DestinationAuth")}}}, connector_id=@ConnectorId
             WHERE id=@LedgerConnectionId
             """, new
             {
                 Config = JsonSerializer.Serialize(new { base_uri = destinationUrl }),
                 DestinationAuth = destinationAuthJson,
-                IntegrationId = integrationId.Value,
+                ConnectorId = connectorId.Value,
                 LedgerConnectionId
             });
     }
@@ -255,11 +255,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     {
         SnapshotRow row = (await QueryAsync<SnapshotRow>($$$"""
             SELECT {{{database.JsonText("http_execution_snapshot")}}} AS HttpExecutionSnapshotJson,
-                integration_key AS IntegrationKey, {{{database.JsonText("transform_config_snapshot")}}} AS TransformConfigJson
+                connector_key AS ConnectorKey, {{{database.JsonText("transform_config_snapshot")}}} AS TransformConfigJson
             FROM subscription_deliveries WHERE event_id=@EventId
             """, new { EventId = eventId })).SingleOrDefault()
             ?? throw new InvalidOperationException($"No SubscriptionDelivery exists for Event {eventId}.");
-        return new(row.HttpExecutionSnapshotJson, row.IntegrationKey, row.TransformConfigJson);
+        return new(row.HttpExecutionSnapshotJson, row.ConnectorKey, row.TransformConfigJson);
     }
 
     public async Task<SubscriptionDto> UpdateLedgerHttpDeliveryAsync(HttpDeliveryConfiguration httpDelivery)
@@ -300,19 +300,19 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     {
         string hash = "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(TenantToken))).ToLowerInvariant();
         return connection.ExecuteAsync($$$"""
-            INSERT INTO integrations (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
+            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
                 supported_auth_schemes,status,manifest)
-            VALUES (@IntegrationId,'http',1,1,'HTTP','both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}});
+            VALUES (@ConnectorId,'http',1,1,'HTTP','both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}});
             INSERT INTO tenants (id,slug,name,status,created_at,updated_at) VALUES
                 (@TenantId,'test-routing-tenant','Test Routing Tenant','active',{{{database.Now}}},{{{database.Now}}}),
                 (@OrphanTenantId,'test-orphan-tenant','Test Orphan Tenant','active',{{{database.Now}}},{{{database.Now}}});
             INSERT INTO api_keys (id,tenant_id,name,key_prefix,key_hash,status,created_at)
             VALUES (@ApiKeyId,@TenantId,'test-key',@KeyPrefix,@KeyHash,'active',{{{database.Now}}});
-            INSERT INTO connections (id,tenant_id,integration_id,name,config,status) VALUES
-                (@SourceConnectionId,@TenantId,@IntegrationId,'source',{{{database.Json("@EmptyConfig")}}},'active'),
-                (@OrphanSourceConnectionId,@OrphanTenantId,@IntegrationId,'orphan-source',{{{database.Json("@EmptyConfig")}}},'active'),
-                (@LedgerConnectionId,@TenantId,@IntegrationId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'active'),
-                (@RiskConnectionId,@TenantId,@IntegrationId,'risk-sink',{{{database.Json("@RiskConfig")}}},'active');
+            INSERT INTO connections (id,tenant_id,connector_id,name,config,status) VALUES
+                (@SourceConnectionId,@TenantId,@ConnectorId,'source',{{{database.Json("@EmptyConfig")}}},'active'),
+                (@OrphanSourceConnectionId,@OrphanTenantId,@ConnectorId,'orphan-source',{{{database.Json("@EmptyConfig")}}},'active'),
+                (@LedgerConnectionId,@TenantId,@ConnectorId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'active'),
+                (@RiskConnectionId,@TenantId,@ConnectorId,'risk-sink',{{{database.Json("@RiskConfig")}}},'active');
             INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'test-topic','active');
             INSERT INTO topic_sources (tenant_id,topic_id,connection_id) VALUES (@TenantId,@TopicId,@SourceConnectionId);
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status) VALUES
@@ -320,7 +320,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskConnectionId,1,'active');
             """, new
         {
-            IntegrationId = HttpIntegrationId, Schemes = "[]", Manifest = TestIntegrationManifest.Create("http", "HTTP", "both"),
+            ConnectorId = HttpConnectorId, Schemes = "[]", Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
             TenantId, OrphanTenantId, ApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
             SourceConnectionId, OrphanSourceConnectionId, LedgerConnectionId, RiskConnectionId,
             EmptyConfig = "{}", LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),
@@ -774,7 +774,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         public object? CompletedAt { get; init; }
     }
     private sealed record OutboxRetryRow { public int AttemptCount { get; init; } public object? DeliverAfter { get; init; } }
-    private sealed record SnapshotRow { public string HttpExecutionSnapshotJson { get; init; } = string.Empty; public string IntegrationKey { get; init; } = string.Empty; public string? TransformConfigJson { get; init; } }
+    private sealed record SnapshotRow { public string HttpExecutionSnapshotJson { get; init; } = string.Empty; public string ConnectorKey { get; init; } = string.Empty; public string? TransformConfigJson { get; init; } }
     private sealed record SubscriptionIdentity { public Guid Id { get; init; } public Guid TopicId { get; init; } }
 }
 
@@ -790,7 +790,7 @@ public sealed record DeliveryAttemptState(
     string? FailurePhase, DateTimeOffset? CompletedAt);
 
 public sealed record SubscriptionDeliverySnapshot(
-    string HttpExecutionSnapshotJson, string IntegrationKey, string? TransformConfigJson);
+    string HttpExecutionSnapshotJson, string ConnectorKey, string? TransformConfigJson);
 
 public sealed class FakeDeliveryClient : IDeliveryClient
 {

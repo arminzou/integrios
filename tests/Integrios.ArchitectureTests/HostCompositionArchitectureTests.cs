@@ -5,7 +5,7 @@ using Integrios.Application.Auth;
 using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
 using Integrios.Application.Events;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Outbox;
 using Integrios.Application.Secrets;
 using Integrios.Application.Subscriptions;
@@ -34,8 +34,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingress],
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingress],
-        [typeof(IIntegrationCatalog)] = [Host.Admin],
-        [typeof(IIntegrationManifestStore)] = [Host.Admin],
+        [typeof(IConnectorCatalog)] = [Host.Admin],
+        [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceAdapterRegistry)] = [Host.Admin, Host.Ingress],
         [typeof(IIngressSourceAdapter)] = [Host.Ingress],
         [typeof(IIngressSourceAdapterRuntime)] = [Host.Ingress],
@@ -157,8 +157,8 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IAdminKeyLifecycle>(scope.ServiceProvider);
         AssertResolves<IApiKeyRepository>(scope.ServiceProvider);
         AssertResolves<ITenantRepository>(scope.ServiceProvider);
-        AssertResolves<IIntegrationCatalog>(scope.ServiceProvider);
-        AssertResolves<IIntegrationManifestStore>(scope.ServiceProvider);
+        AssertResolves<IConnectorCatalog>(scope.ServiceProvider);
+        AssertResolves<IConnectorManifestStore>(scope.ServiceProvider);
         AssertResolves<ISourceAdapterRegistry>(scope.ServiceProvider);
         AssertResolves<IConnectionRepository>(scope.ServiceProvider);
         AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
@@ -203,8 +203,8 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IAdminKeyLifecycle>(provider);
         AssertOmits<IApiKeyRepository>(provider);
         AssertOmits<ITenantRepository>(provider);
-        AssertOmits<IIntegrationCatalog>(provider);
-        AssertOmits<IIntegrationManifestStore>(provider);
+        AssertOmits<IConnectorCatalog>(provider);
+        AssertOmits<IConnectorManifestStore>(provider);
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
@@ -252,8 +252,8 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITopicRepository>(scope.ServiceProvider);
         AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
         AssertOmits<IDeadLetterReplay>(scope.ServiceProvider);
-        AssertOmits<IIntegrationCatalog>(scope.ServiceProvider);
-        AssertOmits<IIntegrationManifestStore>(scope.ServiceProvider);
+        AssertOmits<IConnectorCatalog>(scope.ServiceProvider);
+        AssertOmits<IConnectorManifestStore>(scope.ServiceProvider);
         AssertOmits<ISourceAdapterRegistry>(scope.ServiceProvider);
         AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
     }

@@ -18,7 +18,7 @@ public sealed record SubscriptionDelivery
     public required DateTimeOffset UpdatedAt { get; init; }
     public JsonElement? TransformConfigSnapshot { get; init; }
     public string? Traceparent { get; init; }
-    public required string IntegrationKey { get; init; }
+    public required string ConnectorKey { get; init; }
     public Guid? ActiveAttemptId { get; init; }
     public DateTimeOffset? LeaseExpiresAt { get; init; }
     public required JsonElement HttpExecutionSnapshot { get; init; }

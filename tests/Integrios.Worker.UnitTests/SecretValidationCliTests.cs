@@ -4,7 +4,7 @@ using Integrios.Application;
 using Integrios.Application.Secrets;
 using Integrios.Domain.Common;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Domain.Tenants;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
@@ -168,7 +168,7 @@ public sealed class SecretValidationCliTests
     {
         Id = Guid.NewGuid(),
         TenantId = tenantId,
-        IntegrationId = Guid.NewGuid(),
+        ConnectorId = Guid.NewGuid(),
         Name = "Destination",
         Config = JsonSerializer.Deserialize<JsonElement>("{}"),
         DestinationAuthentication = new ConnectionSchemeSelection

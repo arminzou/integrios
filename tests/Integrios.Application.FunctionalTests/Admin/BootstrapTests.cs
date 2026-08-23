@@ -5,9 +5,9 @@ using System.Text.Json;
 using Dapper;
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Domain.Common;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Infrastructure;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,17 +45,17 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     [Fact]
     public async Task BootstrapBuiltins_IsIdempotent_AndReconcilesPresentationAndStatusDrift()
     {
-        IReadOnlyList<Integration> first = await mediator.Send(new BootstrapBuiltinsCommand());
-        Integration http = Assert.Single(first, i => i.Key == "http");
+        IReadOnlyList<Connector> first = await mediator.Send(new BootstrapBuiltinsCommand());
+        Connector http = Assert.Single(first, i => i.Key == "http");
         Assert.Equal(BuiltinCatalog.HttpId, http.Id);
-        Assert.Equal(IntegrationDirection.Both, http.Direction);
+        Assert.Equal(ConnectorDirection.Both, http.Direction);
         Assert.Equal(["api_key_header", "bearer_token"], http.SupportedAuthSchemes.Order(StringComparer.Ordinal));
         JsonElement destinationSchema = http.Manifest.DestinationConfigurationSchema!.Value;
         Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString());
         Assert.Equal("base_uri", destinationSchema.GetProperty("required")[0].GetString());
 
         await ExecuteAsync($$$"""
-            UPDATE integrations
+            UPDATE connectors
             SET name = 'Drifted',
                 description = 'Drifted description',
                 status = 'disabled',
@@ -63,24 +63,24 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
             WHERE {{{fixture.KeyColumn}}} = 'http' AND contract_version = 1
             """);
 
-        IReadOnlyList<Integration> second = await mediator.Send(new BootstrapBuiltinsCommand());
-        Integration reconciled = Assert.Single(second);
+        IReadOnlyList<Connector> second = await mediator.Send(new BootstrapBuiltinsCommand());
+        Connector reconciled = Assert.Single(second);
         Assert.Equal("HTTP", reconciled.Name);
         Assert.Equal(OperationalStatus.Active, reconciled.Status);
 
-        Assert.Equal(1, await CountAsync("integrations", $"{fixture.KeyColumn} = 'http'"));
+        Assert.Equal(1, await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'"));
     }
 
     [Fact]
     public async Task BootstrapBuiltins_RejectsUnexpectedWellKnownIdentity()
     {
         await ExecuteAsync("DELETE FROM connections");
-        await ExecuteAsync("DELETE FROM integrations");
+        await ExecuteAsync("DELETE FROM connectors");
         Guid unexpectedId = Guid.NewGuid();
-        string manifest = TestIntegrationManifest.Create(
+        string manifest = TestConnectorManifest.Create(
             "http", "HTTP", "both", description: "Generic HTTP source or destination.");
         await ExecuteAsync($$$"""
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, description, manifest)
             VALUES (
@@ -88,7 +88,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
                 'Generic HTTP source or destination.', {{{fixture.Json("@Manifest")}}})
             """, new { Id = unexpectedId, Schemes = "[]", Manifest = manifest });
 
-        var exception = await Assert.ThrowsAsync<IntegrationVersionConflictException>(
+        var exception = await Assert.ThrowsAsync<ConnectorVersionConflictException>(
             () => mediator.Send(new BootstrapBuiltinsCommand()));
         Assert.Contains("unexpected id", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -182,7 +182,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
             new BootstrapAdminKeyCommand("global_admin_key", "admin_bootstrap_secret"));
         Assert.True(keyResult.Created);
 
-        Assert.Equal(1, await CountAsync("integrations", $"{fixture.KeyColumn} = 'http'"));
+        Assert.Equal(1, await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'"));
 
         string? secretHash = await ScalarAsync<string>(
             "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL");

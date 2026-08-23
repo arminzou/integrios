@@ -27,7 +27,7 @@ flowchart LR
 
 External Event producers and generic ApiKey intake remain the universal source path. A source
 Connection may additionally select the generic verified-webhook source adapter through its
-Integration's manifest, which verifies and normalizes a provider's HTTP request before it crosses
+Connector's manifest, which verifies and normalizes a provider's HTTP request before it crosses
 the same durable Event-acceptance boundary; see [the GitHub-to-Slack
 walkthrough](github-to-slack-walkthrough.md) for a concrete, currently-shipped example.
 
@@ -35,7 +35,7 @@ walkthrough](github-to-slack-walkthrough.md) for a concrete, currently-shipped e
 
 Integrios separates platform intent from runtime execution.
 
-**Control plane** (`Integrios.Admin`): Operator-owned Tenant lifecycle, Integration catalog,
+**Control plane** (`Integrios.Admin`): Operator-owned Tenant lifecycle, Connector catalog,
 Connection configuration and secret references, Topic and Subscription authoring, and transform
 preview. Tenants never receive control-plane authority.
 
@@ -52,10 +52,10 @@ at runtime.
 - **Tenant** is the top-level ownership and isolation boundary.
 - **ApiKey** is an Integrios-issued machine credential for generic Event intake and resolves one
   Tenant.
-- **Integration** is a deployment-wide reusable declarative HTTP contract for an external-system
+- **Connector** is a deployment-wide reusable declarative HTTP contract for an external-system
   class. It may be built in or Operator-authored, is shared across Tenants, and contains no Tenant
   data or Operator-authored executable code.
-- **Connection** is a Tenant-owned configured instance of one Integration. It owns Tenant-specific
+- **Connection** is a Tenant-owned configured instance of one Connector. It owns Tenant-specific
   endpoint configuration plus separate source-verification and destination-authentication
   selections and secret references. Its source and destination roles are derived from Topic and
   Subscription relationships rather than persisted independently.
@@ -68,8 +68,8 @@ at runtime.
   fanout.
 - **DeliveryAttempt** records one concrete outbound execution.
 
-The same Integration can back Connections for many Tenants. For example, one deployment-wide
-`klaviyo` Integration can constrain separate Premier Group and Contoso Connections without sharing
+The same Connector can back Connections for many Tenants. For example, one deployment-wide
+`klaviyo` Connector can constrain separate Premier Group and Contoso Connections without sharing
 their base URIs, credentials, or runtime data.
 
 ## Source model
@@ -84,17 +84,17 @@ flow, or small service—that:
 - identifies a configured source Connection and an allowed Topic
 
 A generic, platform-supplied **verified-webhook source adapter** lets an Operator-authored
-Integration manifest opt into provider HTTP intake without adding or rebuilding Integrios code. The
+Connector manifest opt into provider HTTP intake without adding or rebuilding Integrios code. The
 manifest supplies signature header, encoding, delivery-identity header, and Event-type-derivation
 header as data; the adapter verifies HMAC-SHA256 over the exact raw request body before parsing,
 derives a provider-qualified Event type (for example `github.issues.opened`) from that data, and
 retains the JSON payload unchanged. The `github-v1` example under
-[`examples/integrations/`](../examples/integrations/) is a real, machine-validated instance of this,
+[`examples/connectors/`](../examples/connectors/) is a real, machine-validated instance of this,
 not a hypothetical. A curated set of provider-specific *compiled* built-in adapters may be added
 later for contracts that don't fit the generic adapter's closed shape; every adapter, generic or
 compiled, crosses the same durable Event-acceptance seam.
 
-Operator-authored Integrations cannot load runtime code — the verified-webhook adapter's behavior is
+Operator-authored Connectors cannot load runtime code — the verified-webhook adapter's behavior is
 entirely platform-owned, and a manifest only supplies bounded configuration data for it. Polling
 remains external Event-producer behavior. Integrios does not commit to a broad provider catalog or
 an in-process plugin system.
@@ -111,10 +111,10 @@ there are no provider-specific destination adapters or destination-action domain
 - the relative path always appends to the Connection's base path with one normalized boundary
   slash; it can never replace the Connection's scheme, host, port, or base path
 - fanout snapshots the HTTP request shape, relevant non-secret Connection configuration, secret
-  references, and the Integration's effective HTTP outcome contract together, so a later edit
+  references, and the Connector's effective HTTP outcome contract together, so a later edit
   cannot change an in-flight delivery's request or success criteria; the Worker resolves current
   secret values for each attempt
-- an Integration may declare an optional HTTP outcome contract: the default `status_code` evaluator
+- a Connector may declare an optional HTTP outcome contract: the default `status_code` evaluator
   treats any `2xx` response as success, while a `json_boolean` evaluator additionally asserts that a
   configured top-level response field equals an expected boolean, so a provider that returns `2xx`
   for an operation it actually rejected (Slack's `chat.postMessage` is the shipped example) is
@@ -158,7 +158,7 @@ availability and avoids a database/message-transport dual write.
 
 Generic callers provide a `sourceConnectionId` and may provide an `idempotencyKey`. Ingress accepts
 the source Connection only when it belongs to the authenticated Tenant, is active, uses a
-source-capable Integration, and may publish to the selected Topic. Repeated submissions with the
+source-capable Connector, and may publish to the selected Topic. Repeated submissions with the
 same Tenant-scoped idempotency key resolve to the same accepted Event.
 
 Provider credentials and webhook secrets are not Integrios ApiKeys. Connections store logical

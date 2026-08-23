@@ -5,7 +5,7 @@ using Integrios.Application.Auth;
 using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
 using Integrios.Application.Events;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Outbox;
 using Integrios.Application.Secrets;
 using Integrios.Application.Subscriptions;
@@ -19,7 +19,7 @@ using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Events;
-using Integrios.Infrastructure.Integrations;
+using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Outbox;
 using Integrios.Infrastructure.Secrets;
 using Integrios.Infrastructure.Subscriptions;
@@ -67,11 +67,11 @@ public static class DependencyInjection
         services.AddScoped<IAdminKeyLifecycle>(provider => provider.GetRequiredService<AdminKeyRepository>());
         services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
         services.AddScoped<ITenantRepository, TenantRepository>();
-        services.AddScoped<IIntegrationCatalog, IntegrationCatalog>();
+        services.AddScoped<IConnectorCatalog, ConnectorCatalog>();
         if (databaseProvider == DatabaseProvider.SqlServer)
-            services.AddScoped<IIntegrationManifestStore, SqlServerIntegrationManifestStore>();
+            services.AddScoped<IConnectorManifestStore, SqlServerConnectorManifestStore>();
         else
-            services.AddScoped<IIntegrationManifestStore, PostgresIntegrationManifestStore>();
+            services.AddScoped<IConnectorManifestStore, PostgresConnectorManifestStore>();
         services.AddScoped<IConnectionRepository, ConnectionRepository>();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IConnectionAuthoringLock, SqlServerConnectionAuthoringLock>();

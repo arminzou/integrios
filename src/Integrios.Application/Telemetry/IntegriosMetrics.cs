@@ -4,7 +4,7 @@ namespace Integrios.Application.Telemetry;
 
 // Instrument names omit the `_total` suffix: the Prometheus exporter appends it to
 // counters, yielding the documented `integrios_*_total` exposition names. Labels are
-// platform-owned only (integration_key, http_status_class, result) — never tenant-controlled.
+// platform-owned only (connector_key, http_status_class, result) — never tenant-controlled.
 public sealed class IntegriosMetrics
 {
     public const string MeterName = "integrios.application";
@@ -42,29 +42,29 @@ public sealed class IntegriosMetrics
 
     public void RecordFanoutRowsCreated(int count) => _fanoutRowsCreated.Add(count);
 
-    public void RecordDeliverySucceeded(string integrationKey) =>
-        _deliveriesSucceeded.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+    public void RecordDeliverySucceeded(string connectorKey) =>
+        _deliveriesSucceeded.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
 
-    public void RecordDeliveryFailed(string integrationKey, string httpStatusClass) =>
+    public void RecordDeliveryFailed(string connectorKey, string httpStatusClass) =>
         _deliveriesFailed.Add(
             1,
-            new KeyValuePair<string, object?>("integration_key", integrationKey),
+            new KeyValuePair<string, object?>("connector_key", connectorKey),
             new KeyValuePair<string, object?>("http_status_class", httpStatusClass));
 
-    public void RecordDeliveryDeadLettered(string integrationKey) =>
-        _deliveriesDeadLettered.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+    public void RecordDeliveryDeadLettered(string connectorKey) =>
+        _deliveriesDeadLettered.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
 
-    public void RecordDeliverySecretResolutionFailure(string integrationKey) =>
-        _deliverySecretResolutionFailures.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+    public void RecordDeliverySecretResolutionFailure(string connectorKey) =>
+        _deliverySecretResolutionFailures.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
 
-    public void RecordDeliveryRequestConstructionFailure(string integrationKey) =>
-        _deliveryRequestConstructionFailures.Add(1, new KeyValuePair<string, object?>("integration_key", integrationKey));
+    public void RecordDeliveryRequestConstructionFailure(string connectorKey) =>
+        _deliveryRequestConstructionFailures.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
 
     public void RecordDeliveryStaleFinalization() => _deliveryStaleFinalizations.Add(1);
 
-    public void RecordDeliveryAttemptDuration(double seconds, string result, string integrationKey) =>
+    public void RecordDeliveryAttemptDuration(double seconds, string result, string connectorKey) =>
         _deliveryAttemptDuration.Record(
             seconds,
             new KeyValuePair<string, object?>("result", result),
-            new KeyValuePair<string, object?>("integration_key", integrationKey));
+            new KeyValuePair<string, object?>("connector_key", connectorKey));
 }

@@ -7,7 +7,7 @@ public sealed record Connection
 {
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
-    public required Guid IntegrationId { get; init; }
+    public required Guid ConnectorId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
     public ConnectionSchemeSelection? SourceVerification { get; init; }

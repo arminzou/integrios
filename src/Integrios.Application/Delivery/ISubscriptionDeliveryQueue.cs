@@ -23,7 +23,7 @@ public sealed record RecoveredSubscriptionDeliveryDeadLetter(
     int AttemptNumber,
     Guid EventId,
     Guid SubscriptionId,
-    string IntegrationKey)
+    string ConnectorKey)
     : SubscriptionDeliveryClaimResult;
 
 public sealed record SubscriptionDeliveryWorkItem(
@@ -40,7 +40,7 @@ public sealed record SubscriptionDeliveryWorkItem(
     string? TopicName,
     DateTimeOffset AcceptedAt,
     string? TransformConfigSnapshot,
-    string IntegrationKey,
+    string ConnectorKey,
     string HttpExecutionSnapshotJson,
     string? Traceparent);
 

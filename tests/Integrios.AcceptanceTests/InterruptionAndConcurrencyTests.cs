@@ -14,8 +14,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan LeaseRecoveryTimeout = TimeSpan.FromSeconds(150);
     private static readonly TimeSpan CleanupLockTimeout = TimeSpan.FromSeconds(10);
-    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-    private static readonly Guid ApiKeyIntegrationId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid ApiKeyConnectorId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     // Barrier key for the post-send window. Any constant works; it only has to be unique within
     // this deployment, and both the test session and the trigger must agree on it.
@@ -131,7 +131,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
         try
         {
-            await InstallQualificationIntegrationAsync();
+            await InstallQualificationConnectorAsync();
             await fixture.RecreateWorkerAsync("file");
 
             string suffix = Suffix();
@@ -354,7 +354,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integration_id = HttpIntegrationId,
+                connector_id = HttpConnectorId,
                 name = "resilience-source",
                 config = new { base_uri = $"http://mocksink:8080/sink/{name}-source" },
                 environment = "production"
@@ -372,7 +372,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                integration_id = authReference is null ? HttpIntegrationId : ApiKeyIntegrationId,
+                connector_id = authReference is null ? HttpConnectorId : ApiKeyConnectorId,
                 name = "resilience-destination",
                 config = new { base_uri = $"http://mocksink:8080/sink/{name}" },
                 destination_authentication = auth,
@@ -401,12 +401,12 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             name);
     }
 
-    private async Task InstallQualificationIntegrationAsync() => await fixture.ExecuteAsync($$"""
-        INSERT INTO integrations (
+    private async Task InstallQualificationConnectorAsync() => await fixture.ExecuteAsync($$"""
+        INSERT INTO connectors (
             id, key, contract_version, manifest_schema_version, name, direction,
             supported_auth_schemes, status, description, manifest)
         VALUES (
-            '{{ApiKeyIntegrationId}}',
+            '{{ApiKeyConnectorId}}',
             'qualification_resilience_api_key',
             1,
             1,
@@ -414,8 +414,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             'destination',
             '["api_key_header"]',
             'active',
-            'Qualification-only resilience integration',
-            '{{TestIntegrationManifest.Create(
+            'Qualification-only resilience connector',
+            '{{TestConnectorManifest.Create(
                 "qualification_resilience_api_key",
                 "Qualification resilience API key",
                 "destination",

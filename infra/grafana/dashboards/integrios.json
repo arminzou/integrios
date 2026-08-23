@@ -45,7 +45,7 @@
     },
     {
       "id": 3,
-      "title": "Delivery success /s by integration",
+      "title": "Delivery success /s by connector",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
@@ -54,8 +54,8 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (integration_key) (rate(integrios_deliveries_succeeded_total[5m]))",
-          "legendFormat": "{{integration_key}}"
+          "expr": "sum by (connector_key) (rate(integrios_deliveries_succeeded_total[5m]))",
+          "legendFormat": "{{connector_key}}"
         }
       ]
     },
@@ -86,8 +86,8 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (integration_key) (rate(integrios_deliveries_dead_lettered_total[5m]))",
-          "legendFormat": "{{integration_key}}"
+          "expr": "sum by (connector_key) (rate(integrios_deliveries_dead_lettered_total[5m]))",
+          "legendFormat": "{{connector_key}}"
         }
       ]
     },

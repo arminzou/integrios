@@ -22,7 +22,7 @@ and `worker` start.
 
 ## Bootstrap semantics
 
-The `bootstrap` service is idempotent and safe to re-run. It creates the built-in integration
+The `bootstrap` service is idempotent and safe to re-run. It creates the built-in connector
 catalog and, only if no live deployment-wide AdminKey exists yet, the first AdminKey.
 
 The admin secret comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`. Production bootstrap requires a

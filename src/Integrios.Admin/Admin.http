@@ -2,8 +2,8 @@
 @operatorKey = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
 @webhookIntId = 00000000-0000-0000-0000-000000000001
 
-# Local-only integration IDs seeded for manual verification.
-# These are useful because the stock seed data only includes the open webhook integration.
+# Local-only connector IDs seeded for manual verification.
+# These are useful because the stock seed data only includes the open webhook connector.
 @authDestinationIntId = 11111111-1111-1111-1111-111111111111
 @sourceOnlyIntId = 22222222-2222-2222-2222-222222222222
 
@@ -35,31 +35,31 @@ GET {{baseUrl}}/health
 GET {{baseUrl}}/admin/tenants
 
 ###
-# Step 1 - Inspect the integration catalog
+# Step 1 - Inspect the connector catalog
 # This shows the platform-level connection types the control plane knows about.
-# The webhook integration and deployment-wide AdminKey below come from the `bootstrap` one-shot
+# The webhook connector and deployment-wide AdminKey below come from the `bootstrap` one-shot
 # (`Integrios.Admin bootstrap`, run automatically by `make up`), not from migrations.
-GET {{baseUrl}}/admin/integrations
+GET {{baseUrl}}/admin/connectors
 {{operatorKey}}
 
 ###
-# Step 1a - Inspect the stock open webhook integration
-# This is the generic HTTP integration used by the normal local walkthrough.
-GET {{baseUrl}}/admin/integrations/{{webhookIntId}}
+# Step 1a - Inspect the stock open webhook connector
+# This is the generic HTTP connector used by the normal local walkthrough.
+GET {{baseUrl}}/admin/connectors/{{webhookIntId}}
 {{operatorKey}}
 
 ###
-# Step 1b - Inspect the local-only auth-capable integration
+# Step 1b - Inspect the local-only auth-capable connector
 # Use this for manual v2.6 verification. Expect:
 # - direction = destination
 # - supportedAuthSchemes = ["api_key_header"]
-GET {{baseUrl}}/admin/integrations/{{authDestinationIntId}}
+GET {{baseUrl}}/admin/connectors/{{authDestinationIntId}}
 {{operatorKey}}
 
 ###
-# Step 1c - Inspect the local-only source-only integration
+# Step 1c - Inspect the local-only source-only connector
 # Use this for the destination direction rejection check later.
-GET {{baseUrl}}/admin/integrations/{{sourceOnlyIntId}}
+GET {{baseUrl}}/admin/connectors/{{sourceOnlyIntId}}
 {{operatorKey}}
 
 ###
@@ -131,7 +131,7 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 Content-Type: application/json
 
 {
-  "integrationId": "{{webhookIntId}}",
+  "connectorId": "{{webhookIntId}}",
   "name": "acme-source",
   "config": {
     "url": "{{sinkBase}}/sink/acme-source"
@@ -149,7 +149,7 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 Content-Type: application/json
 
 {
-  "integrationId": "{{webhookIntId}}",
+  "connectorId": "{{webhookIntId}}",
   "name": "acme-erp",
   "config": {
     "url": "{{sinkBase}}/sink/acme-erp"
@@ -334,7 +334,7 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 Content-Type: application/json
 
 {
-  "integrationId": "{{authDestinationIntId}}",
+  "connectorId": "{{authDestinationIntId}}",
   "name": "acme-erp-auth",
   "config": {
     "url": "{{sinkBase}}/sink/acme-erp-auth"
@@ -385,7 +385,7 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
 Content-Type: application/json
 
 {
-  "integrationId": "{{sourceOnlyIntId}}",
+  "connectorId": "{{sourceOnlyIntId}}",
   "name": "acme-source-only-destination",
   "config": {
     "url": "{{sinkBase}}/sink/acme-source-only-destination"

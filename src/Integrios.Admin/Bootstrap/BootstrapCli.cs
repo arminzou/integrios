@@ -1,6 +1,6 @@
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Infrastructure;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,8 +55,8 @@ public static class BootstrapCli
 
         if (runBuiltins)
         {
-            IReadOnlyList<Integration> reconciled = await mediator.Send(new BootstrapBuiltinsCommand());
-            Console.WriteLine($"builtins: reconciled {reconciled.Count} built-in integration(s).");
+            IReadOnlyList<Connector> reconciled = await mediator.Send(new BootstrapBuiltinsCommand());
+            Console.WriteLine($"builtins: reconciled {reconciled.Count} built-in connector(s).");
         }
 
         if (runAdminKey)

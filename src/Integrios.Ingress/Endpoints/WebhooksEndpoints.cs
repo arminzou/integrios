@@ -15,11 +15,11 @@ public sealed class WebhooksEndpoints : IEndpointGroup
     {
         // No ApiKey authentication: a provider webhook cannot carry an Integrios credential.
         // Source verification (HMAC over the raw body) is the trust boundary here instead.
-        group.MapPost(ReceiveWebhook, "/{integrationKey}/{endpointId:guid}");
+        group.MapPost(ReceiveWebhook, "/{connectorKey}/{endpointId:guid}");
     }
 
     private static async Task<IResult> ReceiveWebhook(
-        string integrationKey,
+        string connectorKey,
         Guid endpointId,
         HttpContext httpContext,
         IMediator mediator,
@@ -38,7 +38,7 @@ public sealed class WebhooksEndpoints : IEndpointGroup
 
         IngestEventResult result = await mediator.Send(
             new AcceptVerifiedWebhookCommand(
-                integrationKey,
+                connectorKey,
                 endpointId,
                 httpContext.Request.ContentType,
                 headers,

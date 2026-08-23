@@ -157,7 +157,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         TenantSlug = ApiTestAppFixture.WebhookTenantSlug,
         TopicId = Guid.NewGuid(),
         ConnectionId = Guid.NewGuid(),
-        IntegrationKey = "github",
+        ConnectorKey = "github",
         SourceAdapterKey = "verified_webhook",
         SourceAdapterContractVersion = 1,
         SourceAdapterConfig = JsonSerializer.Deserialize<JsonElement>(

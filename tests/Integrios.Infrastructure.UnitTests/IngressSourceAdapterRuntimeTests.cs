@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Events;
-using Integrios.Application.Integrations;
-using Integrios.Infrastructure.Integrations;
+using Integrios.Application.Connectors;
+using Integrios.Infrastructure.Connectors;
 
 namespace Integrios.Infrastructure.UnitTests;
 

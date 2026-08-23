@@ -110,7 +110,7 @@ public sealed class AuthenticatedDispatchTests
     public async Task Dispatch_SecretWithTrailingNewline_FailsRequestConstructionWithoutLeaking()
     {
         const string resolvedSecret = "super-secret-value\n";
-        const string integrationKey = "request_construction_observability";
+        const string connectorKey = "request_construction_observability";
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
         var loggerProvider = new CapturingLoggerProvider();
         var queue = new FakeSubscriptionDeliveryQueue
@@ -118,7 +118,7 @@ public sealed class AuthenticatedDispatchTests
             ClaimedItems =
             [
                 MakeWorkItem(
-                    integrationKey: integrationKey,
+                    connectorKey: connectorKey,
                     auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
@@ -152,7 +152,7 @@ public sealed class AuthenticatedDispatchTests
         Assert.True(loggerProvider.AnyMessageContains("failure_phase=request_construction"));
         Assert.Single(
             metrics.ForInstrument("integrios_delivery_request_construction_failures"),
-            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
+            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class AuthenticatedDispatchTests
     public async Task Dispatch_MissingSecret_SchedulesRetry()
     {
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
-        const string integrationKey = "secret_resolution_observability";
+        const string connectorKey = "secret_resolution_observability";
         Guid deliveryId = Guid.NewGuid();
         var loggerProvider = new CapturingLoggerProvider();
         var queue = new FakeSubscriptionDeliveryQueue
@@ -206,7 +206,7 @@ public sealed class AuthenticatedDispatchTests
             [
                 MakeWorkItem(
                     id: deliveryId,
-                    integrationKey: integrationKey,
+                    connectorKey: connectorKey,
                     auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
@@ -236,7 +236,7 @@ public sealed class AuthenticatedDispatchTests
         Assert.True(loggerProvider.AnyMessageContains("failure_phase=secret_resolution"));
         Assert.Single(
             metrics.ForInstrument("integrios_delivery_secret_resolution_failures"),
-            measurement => Equals(measurement.Tag("integration_key"), integrationKey));
+            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
     }
 
     [Fact]
@@ -400,7 +400,7 @@ public sealed class AuthenticatedDispatchTests
         Guid? subscriptionId = null,
         Guid? destinationConnectionId = null,
         Guid? tenantId = null,
-        string integrationKey = "erp_system",
+        string connectorKey = "erp_system",
         ConnectionSchemeSelection? auth = null,
         string? authJson = null)
         => new(
@@ -417,7 +417,7 @@ public sealed class AuthenticatedDispatchTests
             "payments",
             DateTimeOffset.UtcNow,
             null,
-            integrationKey,
+            connectorKey,
             BuildSnapshotJson(auth, authJson),
             null);
 

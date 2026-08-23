@@ -26,7 +26,7 @@ internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnec
             ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation }
             || ex.InnerException is SqlException { Number: 547 })
         {
-            throw new InvalidOperationException("The specified integration does not exist.", ex);
+            throw new InvalidOperationException("The specified connector does not exist.", ex);
         }
         catch (DbUpdateException ex) when (
             ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }

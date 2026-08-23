@@ -680,23 +680,23 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
         string status = "active",
         Guid? connectionId = null)
     {
-        Guid integrationId = Guid.NewGuid();
+        Guid connectorId = Guid.NewGuid();
         Guid resolvedConnectionId = connectionId ?? Guid.NewGuid();
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
-            VALUES (@IntegrationId, @Key, 1, 1, @Key, @Direction, {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
+            VALUES (@ConnectorId, @Key, 1, 1, @Key, @Direction, {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
 
             INSERT INTO connections (
-                id, tenant_id, integration_id, name, config,
+                id, tenant_id, connector_id, name, config,
                 source_verification, destination_authentication, status)
-            VALUES (@ConnectionId, @TenantId, @IntegrationId, @Key, {{{fixture.Json("@Config")}}}, NULL, NULL, @Status);
+            VALUES (@ConnectionId, @TenantId, @ConnectorId, @Key, {{{fixture.Json("@Config")}}}, NULL, NULL, @Status);
             """, new
         {
-            IntegrationId = integrationId,
+            ConnectorId = connectorId,
             ConnectionId = resolvedConnectionId,
             fixture.TenantId,
             Key = key,
@@ -704,7 +704,7 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
             Status = status,
             Schemes = "[]",
             Config = "{}",
-            Manifest = TestIntegrationManifest.Create(key, key, direction,
+            Manifest = TestConnectorManifest.Create(key, key, direction,
                 sourceVerificationSchemes: requireSourceVerification ? ["github_hmac_sha256"] : [])
         });
         return resolvedConnectionId;
@@ -712,34 +712,34 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
 
     private async Task<Guid> InsertAdapterBackedSourceConnectionAsync()
     {
-        Guid integrationId = Guid.NewGuid();
+        Guid connectorId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
             VALUES (
-                @IntegrationId, 'github', 1, 1, 'GitHub', 'source', {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
+                @ConnectorId, 'github', 1, 1, 'GitHub', 'source', {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
 
             INSERT INTO connections (
-                id, tenant_id, integration_id, name, config,
+                id, tenant_id, connector_id, name, config,
                 source_verification, destination_authentication, status)
             VALUES (
-                @ConnectionId, @TenantId, @IntegrationId, 'github-source', {{{fixture.Json("@Config")}}},
+                @ConnectionId, @TenantId, @ConnectorId, 'github-source', {{{fixture.Json("@Config")}}},
                 {{{fixture.Json("@Verification")}}},
                 NULL,
                 'active');
             """, new
         {
-            IntegrationId = integrationId,
+            ConnectorId = connectorId,
             ConnectionId = connectionId,
             fixture.TenantId,
             Schemes = "[]",
             Config = "{}",
             Verification = "{\"scheme\":\"hmac_sha256\",\"config\":{},\"secret_refs\":{\"secret\":\"github_webhook_secret\"}}",
-            Manifest = TestIntegrationManifest.Create("github", "GitHub", "source",
+            Manifest = TestConnectorManifest.Create("github", "GitHub", "source",
                 sourceVerificationSchemes: ["hmac_sha256"], allowUnverified: false, verifiedWebhookSourceAdapter: true)
         });
         return connectionId;

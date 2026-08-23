@@ -18,7 +18,7 @@ namespace Integrios.Application.FunctionalTests;
 // runtime provider is owned by FunctionalDatabase.
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
-    private static readonly Guid SourceIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000101");
+    private static readonly Guid SourceConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000101");
     public const string TenantAToken = "intg_aa11bb22cc33dd440011223344556677001122334455667700112233445566";
     public const string TenantBToken = "intg_ee55ff66aa77bb888877665544332211887766554433221188776655443322";
 
@@ -70,10 +70,10 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 (@CredentialAId, @TenantAId, 'test-ingest-key-a', @KeyPrefixA, @KeyHashA, 'active', {{{now}}}),
                 (@CredentialBId, @TenantBId, 'test-ingest-key-b', @KeyPrefixB, @KeyHashB, 'active', {{{now}}});
 
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest, created_at, updated_at)
-            VALUES (@SourceIntegrationId, 'test_source', 1, 1, 'Test Source', 'source',
+            VALUES (@SourceConnectorId, 'test_source', 1, 1, 'Test Source', 'source',
                 {{{database.Json("@SupportedAuthSchemes")}}}, 'active', {{{database.Json("@SourceManifest")}}}, {{{now}}}, {{{now}}});
             """, new
             {
@@ -85,9 +85,9 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 KeyPrefixB = TenantBToken[..12],
                 KeyHashA = secretHashA,
                 KeyHashB = secretHashB,
-                SourceIntegrationId,
+                SourceConnectorId,
                 SupportedAuthSchemes = "[]",
-                SourceManifest = TestIntegrationManifest.Create("test_source", "Test Source", "source")
+                SourceManifest = TestConnectorManifest.Create("test_source", "Test Source", "source")
             });
     }
 
@@ -108,29 +108,29 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public async Task<Guid> SeedSourceConnectionAsync(
         Guid tenantId, string name, string status = "active", string direction = "source")
     {
-        Guid integrationId = direction == "source" ? SourceIntegrationId : Guid.NewGuid();
-        if (integrationId != SourceIntegrationId)
+        Guid connectorId = direction == "source" ? SourceConnectorId : Guid.NewGuid();
+        if (connectorId != SourceConnectorId)
         {
-            string key = $"test_{direction}_{integrationId:N}";
+            string key = $"test_{direction}_{connectorId:N}";
             await ExecuteAsync($$$"""
-                INSERT INTO integrations (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,
+                INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,
                     name,direction,supported_auth_schemes,status,manifest,created_at,updated_at)
                 VALUES (@Id,@Key,1,1,@Key,@Direction,{{{database.Json("@Schemes")}}},'active',
                     {{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}})
                 """, new
                 {
-                    Id = integrationId, Key = key, Direction = direction, Schemes = "[]",
-                    Manifest = TestIntegrationManifest.Create(key, key, direction)
+                    Id = connectorId, Key = key, Direction = direction, Schemes = "[]",
+                    Manifest = TestConnectorManifest.Create(key, key, direction)
                 });
         }
 
         Guid connectionId = Guid.NewGuid();
         await ExecuteAsync($$$"""
-            INSERT INTO connections (id,tenant_id,integration_id,name,config,status,created_at,updated_at)
-            VALUES (@Id,@TenantId,@IntegrationId,@Name,{{{database.Json("@Config")}}},@Status,{{{database.Now}}},{{{database.Now}}})
+            INSERT INTO connections (id,tenant_id,connector_id,name,config,status,created_at,updated_at)
+            VALUES (@Id,@TenantId,@ConnectorId,@Name,{{{database.Json("@Config")}}},@Status,{{{database.Now}}},{{{database.Now}}})
             """, new
             {
-                Id = connectionId, TenantId = tenantId, IntegrationId = integrationId,
+                Id = connectionId, TenantId = tenantId, ConnectorId = connectorId,
                 Name = name, Config = "{}", Status = status
             });
         return connectionId;
@@ -158,23 +158,23 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         Guid topicId = Guid.NewGuid();
         Guid subscriptionId = Guid.NewGuid();
         await ExecuteAsync($$$"""
-            INSERT INTO integrations (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
+            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
                 supported_auth_schemes,status,manifest)
-            VALUES (@IntegrationId,'http',1,1,'HTTP','both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}});
-            INSERT INTO connections (id,tenant_id,integration_id,name,config,status)
-            VALUES (@ConnectionId,@TenantId,@IntegrationId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
+            VALUES (@ConnectorId,'http',1,1,'HTTP','both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}});
+            INSERT INTO connections (id,tenant_id,connector_id,name,config,status)
+            VALUES (@ConnectionId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
             INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','active');
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status)
             VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@MatchRules")}}},@ConnectionId,0,'active');
             INSERT INTO subscription_deliveries
-                (event_id,subscription_id,destination_connection_id,http_execution_snapshot,integration_key,
+                (event_id,subscription_id,destination_connection_id,http_execution_snapshot,connector_key,
                  status,lifetime_attempt_count,retry_cycle_attempt_count,failed_at)
             VALUES (@EventId,@SubscriptionId,@ConnectionId,{{{database.Json("@Snapshot")}}},'http',
                 'dead_lettered',3,3,{{{database.Now}}});
             """, new
             {
-                IntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                Schemes = "[]", Manifest = TestIntegrationManifest.Create("http", "HTTP", "both"),
+                ConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Schemes = "[]", Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
                 ConnectionId = connectionId, TenantId = tenantId, Config = "{\"base_uri\":\"http://test/sink\"}",
                 TopicId = topicId, SubscriptionId = subscriptionId,
                 MatchRules = "{\"event_types\":[\"payment.created\"]}",

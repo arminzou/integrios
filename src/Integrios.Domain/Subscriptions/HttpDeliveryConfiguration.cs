@@ -5,7 +5,7 @@ namespace Integrios.Domain.Subscriptions;
 // Stored in subscriptions.http_delivery and nested inside HttpExecutionSnapshot in
 // subscription_deliveries.http_execution_snapshot. Neither column is reached by an HTTP host's
 // naming policy, so every call site that serializes or deserializes this type - or a type that
-// nests it - must pass Integrios.Domain.Integrations.ConnectionSchemeSelection.StoredJson.
+// nests it - must pass Integrios.Domain.Connectors.ConnectionSchemeSelection.StoredJson.
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record HttpDeliveryConfiguration
 {

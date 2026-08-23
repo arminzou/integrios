@@ -117,7 +117,7 @@ public sealed class StubSourceEndpointResolver : ISourceEndpointResolver
     public ResolvedSourceEndpoint? Result { get; set; }
 
     public Task<ResolvedSourceEndpoint?> ResolveAsync(
-        string integrationKey,
+        string connectorKey,
         Guid endpointId,
         CancellationToken cancellationToken) =>
         Task.FromResult(Result);

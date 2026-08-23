@@ -53,9 +53,9 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("environment");
 
-                    b.Property<Guid>("IntegrationId")
+                    b.Property<Guid>("ConnectorId")
                         .HasColumnType("uuid")
-                        .HasColumnName("integration_id");
+                        .HasColumnName("connector_id");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -214,10 +214,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("http_execution_snapshot");
 
-                    b.Property<string>("IntegrationKey")
+                    b.Property<string>("ConnectorKey")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("integration_key");
+                        .HasColumnName("connector_key");
 
                     b.Property<DateTimeOffset?>("LeaseExpiresAt")
                         .HasColumnType("timestamp with time zone")
@@ -357,7 +357,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("events", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Integrations.Integration", b =>
+            modelBuilder.Entity("Integrios.Domain.Connectors.Connector", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -422,20 +422,20 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasDefaultValueSql("now()");
 
                     b.HasKey("Id")
-                        .HasName("integrations_pkey");
+                        .HasName("connectors_pkey");
 
                     b.HasAlternateKey("Key", "ContractVersion")
-                        .HasName("uq_integrations_key_contract_version");
+                        .HasName("uq_connectors_key_contract_version");
 
-                    b.ToTable("integrations", null, t =>
+                    b.ToTable("connectors", null, t =>
                         {
-                            t.HasCheckConstraint("ck_integrations_contract_version_positive", "contract_version > 0");
+                            t.HasCheckConstraint("ck_connectors_contract_version_positive", "contract_version > 0");
 
-                            t.HasCheckConstraint("ck_integrations_manifest_identity", "manifest->>'key' = key AND (manifest->>'contract_version')::INTEGER = contract_version AND (manifest->>'manifest_schema_version')::INTEGER = manifest_schema_version");
+                            t.HasCheckConstraint("ck_connectors_manifest_identity", "manifest->>'key' = key AND (manifest->>'contract_version')::INTEGER = contract_version AND (manifest->>'manifest_schema_version')::INTEGER = manifest_schema_version");
 
-                            t.HasCheckConstraint("ck_integrations_manifest_object", "jsonb_typeof(manifest) = 'object'");
+                            t.HasCheckConstraint("ck_connectors_manifest_object", "jsonb_typeof(manifest) = 'object'");
 
-                            t.HasCheckConstraint("ck_integrations_manifest_schema_version_positive", "manifest_schema_version > 0");
+                            t.HasCheckConstraint("ck_connectors_manifest_schema_version_positive", "manifest_schema_version > 0");
                         });
                 });
 
@@ -900,11 +900,11 @@ namespace Integrios.Migrations.Postgres.Migrations
 
             modelBuilder.Entity("Integrios.Domain.Connections.Connection", b =>
                 {
-                    b.HasOne("Integrios.Domain.Integrations.Integration", null)
+                    b.HasOne("Integrios.Domain.Connectors.Connector", null)
                         .WithMany()
-                        .HasForeignKey("IntegrationId")
+                        .HasForeignKey("ConnectorId")
                         .IsRequired()
-                        .HasConstraintName("connections_integration_id_fkey");
+                        .HasConstraintName("connections_connector_id_fkey");
 
                     b.HasOne("Integrios.Domain.Tenants.Tenant", null)
                         .WithMany()

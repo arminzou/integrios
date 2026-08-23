@@ -51,7 +51,7 @@ internal sealed class SubscriptionDeliveryConfiguration : IEntityTypeConfigurati
         entity.Property(e => e.HttpExecutionSnapshot)
             .HasColumnType("jsonb")
             .HasColumnName("http_execution_snapshot");
-        entity.Property(e => e.IntegrationKey).HasColumnName("integration_key");
+        entity.Property(e => e.ConnectorKey).HasColumnName("connector_key");
         entity.Property(e => e.LeaseExpiresAt).HasColumnName("lease_expires_at");
         entity.Property(e => e.LifetimeAttemptCount)
             .HasDefaultValue(0)

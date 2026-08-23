@@ -20,10 +20,10 @@ and reliable HTTP delivery with retries, dead-lettering, replay, and auditable d
 
 ## Architecture
 
-Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, integrations, connections, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingress` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
+Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, connections, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingress` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
 
-An **Integration** is a reusable, deployment-wide declarative HTTP contract. A **Connection** is a
-Tenant-owned configured instance of one Integration, so the same Integration can serve many Tenants
+A **Connector** is a reusable, deployment-wide declarative HTTP contract. A **Connection** is a
+Tenant-owned configured instance of one Connector, so the same Connector can serve many Tenants
 without sharing their endpoints or credentials. Generic external Event producers are the universal
 source path; HTTP(S) is the only destination protocol. Integrios deliberately does not require
 provider-specific destination actions or runtime plugins.

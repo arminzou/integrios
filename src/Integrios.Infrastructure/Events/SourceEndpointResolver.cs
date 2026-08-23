@@ -10,7 +10,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
     : ISourceEndpointResolver
 {
     public async Task<ResolvedSourceEndpoint?> ResolveAsync(
-        string integrationKey,
+        string connectorKey,
         Guid endpointId,
         CancellationToken cancellationToken)
     {
@@ -20,7 +20,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
             ? """
                 SELECT TOP (1)
                     se.tenant_id AS TenantId, t.slug AS TenantSlug, se.topic_id AS TopicId,
-                    se.connection_id AS ConnectionId, i.[key] AS IntegrationKey,
+                    se.connection_id AS ConnectionId, i.[key] AS ConnectorKey,
                     JSON_VALUE(i.manifest, '$.source_adapter.key') AS SourceAdapterKey,
                     TRY_CONVERT(int, JSON_VALUE(i.manifest, '$.source_adapter.contract_version')) AS SourceAdapterContractVersion,
                     JSON_QUERY(i.manifest, '$.source_adapter.config') AS SourceAdapterConfigJson,
@@ -28,9 +28,9 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 FROM source_endpoints se
                 JOIN topic_sources ts ON ts.tenant_id=se.tenant_id AND ts.topic_id=se.topic_id AND ts.connection_id=se.connection_id
                 JOIN connections c ON c.tenant_id=se.tenant_id AND c.id=se.connection_id
-                JOIN integrations i ON i.id=c.integration_id
+                JOIN connectors i ON i.id=c.connector_id
                 JOIN tenants t ON t.id=se.tenant_id
-                WHERE se.id=@EndpointId AND i.[key]=@IntegrationKey AND se.status=N'active'
+                WHERE se.id=@EndpointId AND i.[key]=@ConnectorKey AND se.status=N'active'
                   AND ts.status=N'active' AND c.status=N'active' AND i.status=N'active'
                 """
             : """
@@ -39,7 +39,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                     t.slug AS TenantSlug,
                     se.topic_id AS TopicId,
                     se.connection_id AS ConnectionId,
-                    i.key AS IntegrationKey,
+                    i.key AS ConnectorKey,
                     i.manifest -> 'source_adapter' ->> 'key' AS SourceAdapterKey,
                     (i.manifest -> 'source_adapter' ->> 'contract_version')::int AS SourceAdapterContractVersion,
                     (i.manifest -> 'source_adapter' -> 'config')::text AS SourceAdapterConfigJson,
@@ -48,16 +48,16 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 JOIN topic_sources ts
                   ON ts.tenant_id = se.tenant_id AND ts.topic_id = se.topic_id AND ts.connection_id = se.connection_id
                 JOIN connections c ON c.tenant_id = se.tenant_id AND c.id = se.connection_id
-                JOIN integrations i ON i.id = c.integration_id
+                JOIN connectors i ON i.id = c.connector_id
                 JOIN tenants t ON t.id = se.tenant_id
-                WHERE se.id = @EndpointId AND i.key = @IntegrationKey AND se.status = 'active'
+                WHERE se.id = @EndpointId AND i.key = @ConnectorKey AND se.status = 'active'
                   AND ts.status = 'active' AND c.status = 'active' AND i.status = 'active'
                 LIMIT 1
                 """;
         EndpointRow? row = await connection.QuerySingleOrDefaultAsync<EndpointRow>(
             new CommandDefinition(
                 sql,
-                new { EndpointId = endpointId, IntegrationKey = integrationKey },
+                new { EndpointId = endpointId, ConnectorKey = connectorKey },
                 cancellationToken: cancellationToken));
 
         return row?.ToResolvedSourceEndpoint();
@@ -69,7 +69,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
         public string TenantSlug { get; init; } = "";
         public Guid TopicId { get; init; }
         public Guid ConnectionId { get; init; }
-        public string IntegrationKey { get; init; } = "";
+        public string ConnectorKey { get; init; } = "";
         public string? SourceAdapterKey { get; init; }
         public int? SourceAdapterContractVersion { get; init; }
         public string? SourceAdapterConfigJson { get; init; }
@@ -86,7 +86,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 TenantSlug = TenantSlug,
                 TopicId = TopicId,
                 ConnectionId = ConnectionId,
-                IntegrationKey = IntegrationKey,
+                ConnectorKey = ConnectorKey,
                 SourceAdapterKey = SourceAdapterKey,
                 SourceAdapterContractVersion = SourceAdapterContractVersion.Value,
                 SourceAdapterConfig = JsonSerializer.Deserialize<JsonElement>(SourceAdapterConfigJson ?? "{}"),

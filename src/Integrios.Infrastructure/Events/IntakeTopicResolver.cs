@@ -28,7 +28,7 @@ internal sealed class IntakeTopicResolver(IDbConnectionFactory connectionFactory
                 JOIN connections c
                   ON c.tenant_id = ts.tenant_id
                  AND c.id = ts.connection_id
-                JOIN integrations i ON i.id = c.integration_id
+                JOIN connectors i ON i.id = c.connector_id
                 WHERE t.tenant_id = @TenantId
                   AND t.name = @TopicName
                   AND t.status = 'active'

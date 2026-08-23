@@ -22,7 +22,7 @@ provider. Secret files placed there are ignored by Git; the quickstart uses unau
 connections, so no secret values need to be added to its tracked documentation files.
 
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
-after migrations and before the services start. It creates the built-in `http` integration and
+after migrations and before the services start. It creates the built-in `http` connector and
 the admin credential used below (bootstrap output, not migration-seeded data), and is
 idempotent, so re-running `make up` against an existing EF-managed database is safe. The dev credential
 `global_admin_key:admin_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET` in `.env`.
@@ -52,7 +52,7 @@ watches the Worker deliver it to the bundled MockSink.
 ADMIN=http://localhost:5150
 INGRESS=http://localhost:5231
 AUTH="Authorization: AdminKey global_admin_key:admin_bootstrap_secret"
-HTTP_INTEGRATION=00000000-0000-0000-0000-000000000001   # deployment-wide built-in http Integration
+HTTP_CONNECTOR=00000000-0000-0000-0000-000000000001   # deployment-wide built-in http Connector
 
 # 1. Create a tenant
 TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: application/json' \
@@ -62,13 +62,13 @@ TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: appli
 TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/api-keys -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name":"acme-ingress"}' | jq -r .token)
 
-# 3. Create Tenant-owned source and destination Connections from the same reusable Integration.
+# 3. Create Tenant-owned source and destination Connections from the same reusable Connector.
 # The destination selects open (unauthenticated) delivery by omitting destination_authentication,
-# which the built-in http Integration's manifest explicitly allows.
+# which the built-in http Connector's manifest explicitly allows.
 SRC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"integration_id\":\"$HTTP_INTEGRATION\",\"name\":\"acme-source\",\"config\":{},\"environment\":\"production\"}" | jq -r .id)
+  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-source\",\"config\":{},\"environment\":\"production\"}" | jq -r .id)
 DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"integration_id\":\"$HTTP_INTEGRATION\",\"name\":\"acme-erp\",\"config\":{\"base_uri\":\"http://mocksink:8080/sink/acme-erp\"},\"environment\":\"production\"}" | jq -r .id)
+  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-erp\",\"config\":{\"base_uri\":\"http://mocksink:8080/sink/acme-erp\"},\"environment\":\"production\"}" | jq -r .id)
 
 # 4. Create a topic fed by the source connection
 TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Content-Type: application/json' \
@@ -90,12 +90,12 @@ docker compose logs mocksink | grep MockSink
 ```
 
 Connection updates replace the complete `config` object rather than merging fields. A Connection's
-destination configuration schema is declared by its Integration's manifest; the built-in `http`
-Integration requires an absolute HTTP(S) `base_uri` with no query or fragment for any Connection an
+destination configuration schema is declared by its Connector's manifest; the built-in `http`
+Connector requires an absolute HTTP(S) `base_uri` with no query or fragment for any Connection an
 active Subscription references. This quickstart's source Connection carries no configuration
-because the `http` Integration's source side is empty by contract (see
-[architecture.md](architecture.md) for the full Integration/Connection model, including
-Operator-authored Integrations such as the ones in the [GitHub-to-Slack
+because the `http` Connector's source side is empty by contract (see
+[architecture.md](architecture.md) for the full Connector/Connection model, including
+Operator-authored Connectors such as the ones in the [GitHub-to-Slack
 walkthrough](github-to-slack-walkthrough.md)).
 
 Topic update requests must include the Topic's current `name`. The name is its immutable,

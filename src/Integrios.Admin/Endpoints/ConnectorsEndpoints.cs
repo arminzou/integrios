@@ -1,0 +1,77 @@
+using System.Text.Json;
+using Integrios.Application.Connectors;
+using MediatR;
+
+namespace Integrios.Admin.Endpoints;
+
+public sealed class ConnectorsEndpoints : IEndpointGroup
+{
+    private const string GetByVersionRouteName = "GetConnectorByVersion";
+
+    public string Prefix => "/connectors";
+
+    public void Map(RouteGroupBuilder group)
+    {
+        group.MapGet(ListConnectors);
+        group.MapGet(GetConnectorById, "/{id:guid}");
+        group.MapGet(GetConnectorByVersion, "/{key}/versions/{contractVersion:int}")
+            .WithName(GetByVersionRouteName);
+        group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}");
+    }
+
+    private static async Task<IResult> ListConnectors(
+        IMediator mediator,
+        string? after,
+        int limit = 0,
+        CancellationToken cancellationToken = default)
+    {
+        limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
+        ConnectorListDto response = await mediator.Send(new ListConnectorsQuery(after, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    private static async Task<IResult> GetConnectorById(
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ConnectorDto? response = await mediator.Send(new GetConnectorByIdQuery(id), cancellationToken);
+        return response is null ? Results.NotFound() : Results.Ok(response);
+    }
+
+    private static async Task<IResult> GetConnectorByVersion(
+        string key,
+        int contractVersion,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ConnectorDto? response = await mediator.Send(
+            new GetConnectorByVersionQuery(key, contractVersion),
+            cancellationToken);
+        return response is null ? Results.NotFound() : Results.Ok(response);
+    }
+
+    private static async Task<IResult> ApplyConnectorManifest(
+        string key,
+        int contractVersion,
+        JsonElement manifest,
+        IMediator mediator,
+        HttpContext httpContext,
+        LinkGenerator links,
+        CancellationToken cancellationToken)
+    {
+        ApplyConnectorManifestResult result = await mediator.Send(
+            new ApplyConnectorManifestCommand(key, contractVersion, manifest),
+            cancellationToken);
+
+        if (result.Outcome != ConnectorManifestApplyOutcome.Created)
+            return Results.Ok(result.Connector);
+
+        string location = links.GetPathByName(
+            httpContext,
+            GetByVersionRouteName,
+            new { key, contractVersion })
+            ?? throw new InvalidOperationException("The Connector version route could not be generated.");
+        return Results.Created(location, result.Connector);
+    }
+}

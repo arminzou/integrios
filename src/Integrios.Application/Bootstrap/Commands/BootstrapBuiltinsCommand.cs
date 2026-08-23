@@ -1,35 +1,35 @@
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Auth;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using MediatR;
 
 namespace Integrios.Application.Bootstrap;
 
-public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Integration>>;
+public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Connector>>;
 
 internal sealed class BootstrapBuiltinsCommandHandler(
-    IIntegrationManifestStore manifestStore,
+    IConnectorManifestStore manifestStore,
     IAuthSchemeRegistry authenticationSchemes,
     ISourceAdapterRegistry sourceAdapters)
-    : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Integration>>
+    : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Connector>>
 {
-    public async Task<IReadOnlyList<Integration>> Handle(BootstrapBuiltinsCommand command, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<Connector>> Handle(BootstrapBuiltinsCommand command, CancellationToken cancellationToken)
     {
-        var reconciled = new List<Integration>();
-        foreach (BuiltinIntegration builtin in BuiltinCatalog.All)
+        var reconciled = new List<Connector>();
+        foreach (BuiltinConnector builtin in BuiltinCatalog.All)
         {
-            IntegrationManifestApplyAuthority authority =
-                IntegrationManifestApplyAuthority.Bootstrap(builtin.Id);
-            IntegrationManifest manifest = IntegrationManifestParser.Parse(
-                IntegrationManifestParser.ToJson(builtin.Manifest),
+            ConnectorManifestApplyAuthority authority =
+                ConnectorManifestApplyAuthority.Bootstrap(builtin.Id);
+            ConnectorManifest manifest = ConnectorManifestParser.Parse(
+                ConnectorManifestParser.ToJson(builtin.Manifest),
                 authenticationSchemes,
                 sourceAdapters,
                 authority);
-            IntegrationManifestStoreResult result = await manifestStore.ApplyAsync(
+            ConnectorManifestStoreResult result = await manifestStore.ApplyAsync(
                 manifest,
                 authority,
                 cancellationToken);
-            reconciled.Add(result.Integration);
+            reconciled.Add(result.Connector);
         }
 
         return reconciled;

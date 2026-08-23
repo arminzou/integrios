@@ -1,16 +1,16 @@
 using Integrios.Domain.Delivery;
 using Integrios.Domain.Events;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Domain.Tenants;
 using Integrios.Domain.Topics;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Outbox;
 using Integrios.Application.Connections;
 using Integrios.Application.Events;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Events;
-using Integrios.Infrastructure.Integrations;
+using Integrios.Infrastructure.Connectors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,8 +57,8 @@ public sealed class DatabaseProviderRegistrationTests
         Assert.Equal(
             "in_flight",
             status.GetTypeMapping().Converter!.ConvertToProvider(SubscriptionDeliveryStatus.InFlight));
-        Assert.IsType<StringListValueComparer>(context.Model.FindEntityType(typeof(Integration))!
-            .FindProperty(nameof(Integration.SupportedAuthSchemes))!
+        Assert.IsType<StringListValueComparer>(context.Model.FindEntityType(typeof(Connector))!
+            .FindProperty(nameof(Connector.SupportedAuthSchemes))!
             .GetValueComparer());
     }
 
@@ -87,7 +87,7 @@ public sealed class DatabaseProviderRegistrationTests
             .FindProperty(nameof(Event.Payload))!.GetColumnType());
         Assert.IsType<SqlServerConnectionAuthoringLock>(provider.GetRequiredService<IConnectionAuthoringLock>());
         Assert.IsType<SqlServerEventAcceptance>(provider.GetRequiredService<IEventAcceptance>());
-        Assert.IsType<SqlServerIntegrationManifestStore>(scope.ServiceProvider.GetRequiredService<IIntegrationManifestStore>());
+        Assert.IsType<SqlServerConnectorManifestStore>(scope.ServiceProvider.GetRequiredService<IConnectorManifestStore>());
     }
 
     [Fact]

@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Subscriptions;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Domain.Subscriptions;
 using MediatR;
 
@@ -23,7 +23,7 @@ public sealed record UpdateConnectionCommand(
 internal sealed class UpdateConnectionCommandHandler(
     IConnectionRepository repository,
     IConnectionAuthoringLock authoringLock,
-    IIntegrationCatalog integrationCatalog,
+    IConnectorCatalog connectorCatalog,
     IAuthSchemeRegistry authSchemeRegistry,
     ISubscriptionRepository subscriptionRepository) : IRequestHandler<UpdateConnectionCommand, ConnectionDto?>
 {
@@ -38,15 +38,15 @@ internal sealed class UpdateConnectionCommandHandler(
             return null;
         }
 
-        Integration integration = await integrationCatalog.GetByIdAsync(existing.IntegrationId, cancellationToken)
-            ?? throw new ConnectionValidationException("The specified integration does not exist.");
+        Connector connector = await connectorCatalog.GetByIdAsync(existing.ConnectorId, cancellationToken)
+            ?? throw new ConnectionValidationException("The specified connector does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
         ConnectionSchemeSelection? sourceVerification = ConnectionSchemeSelectionValidator.ValidateSource(
-            integration,
+            connector,
             command.SourceVerification);
         ConnectionSchemeSelection? destinationAuthentication = ConnectionSchemeSelectionValidator.ValidateDestination(
-            integration,
+            connector,
             command.DestinationAuthentication,
             authSchemeRegistry);
 
@@ -58,9 +58,9 @@ internal sealed class UpdateConnectionCommandHandler(
         };
         ConnectionUsage usage = await repository.GetUsageAsync(command.TenantId, command.Id, cancellationToken);
         if (usage.Source)
-            ConnectionUseValidator.ValidateSourceReadiness(proposed, integration);
+            ConnectionUseValidator.ValidateSourceReadiness(proposed, connector);
         if (usage.Destination)
-            ConnectionUseValidator.ValidateDestinationReadiness(proposed, integration, authSchemeRegistry);
+            ConnectionUseValidator.ValidateDestinationReadiness(proposed, connector, authSchemeRegistry);
 
         IReadOnlyList<HttpDeliveryConfiguration> activeRequests = await subscriptionRepository.ListActiveHttpDeliveriesAsync(
             command.TenantId,

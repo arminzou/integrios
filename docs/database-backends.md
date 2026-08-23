@@ -27,5 +27,5 @@ The SQL Server work queues run at `READ COMMITTED` and use locking hints that wo
 for Integrios. The claim queries combine `READPAST` with `READCOMMITTEDLOCK`, as required by
 [Microsoft's table-hint guidance](https://learn.microsoft.com/sql/t-sql/queries/hints-transact-sql-table#readpast-transact-sql).
 
-Database selection changes persistence only. Integrations—including future Dataverse source and
+Database selection changes persistence only. Connectors—including future Dataverse source and
 destination support—use the same HTTP, OAuth, Event, and delivery contracts with either backend.

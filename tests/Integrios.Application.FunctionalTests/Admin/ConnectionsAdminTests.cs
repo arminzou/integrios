@@ -12,7 +12,7 @@ namespace Integrios.Application.FunctionalTests.Admin;
 public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     private readonly AdminApiFixture fixture;
-    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private HttpClient client = default!;
 
     public ConnectionsAdminTests(AdminApiFixture fixture)
@@ -75,7 +75,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integration_id = HttpIntegrationId,
+                connector_id = HttpConnectorId,
                 name = "missing-url",
                 config = new { }
             }));
@@ -84,9 +84,9 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     }
 
     [Fact]
-    public async Task CreateConnection_SourceOnlyIntegration_AllowsFreeFormConfig()
+    public async Task CreateConnection_SourceOnlyConnector_AllowsFreeFormConfig()
     {
-        Guid integrationId = await InsertIntegrationAsync(
+        Guid connectorId = await InsertConnectorAsync(
             $"source_only_{Guid.NewGuid():N}",
             [],
             "source");
@@ -96,7 +96,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integration_id = integrationId,
+                connector_id = connectorId,
                 name = "source-without-url",
                 config = new { source_name = "orders" }
             }));
@@ -107,10 +107,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task CreateConnection_WithSupportedAuth_PersistsAndHidesSecretRefs()
     {
-        Guid integrationId = await InsertIntegrationAsync("erp_sink_auth", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync("erp_sink_auth", ["api_key_header"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "erp-auth",
             "api_key_header",
             new { header_name = "X-Api-Key" },
@@ -146,7 +146,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             $"/admin/tenants/{otherTenantId}/connections",
             new
             {
-                integration_id = HttpIntegrationId,
+                connector_id = HttpConnectorId,
                 name = "erp-sink",
                 config = new { base_uri = "http://localhost:5054/sink/other" }
             }));
@@ -155,14 +155,14 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     }
 
     [Fact]
-    public async Task CreateConnection_MissingIntegration_Returns422()
+    public async Task CreateConnection_MissingConnector_Returns422()
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integration_id = Guid.NewGuid(),
+                connector_id = Guid.NewGuid(),
                 name = "bad-connection",
                 config = new { base_uri = "http://localhost:5054/sink/x" }
             }));
@@ -173,10 +173,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task CreateConnection_UnsupportedScheme_Returns422()
     {
-        Guid integrationId = await InsertIntegrationAsync("unsupported_auth_sink", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync("unsupported_auth_sink", ["api_key_header"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "erp-auth",
             "bearer_token",
             new { },
@@ -188,10 +188,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task CreateConnection_UnimplementedScheme_Returns422()
     {
-        Guid integrationId = await InsertIntegrationAsync("oauth_sink", ["oauth_client_credentials"]);
+        Guid connectorId = await InsertConnectorAsync("oauth_sink", ["oauth_client_credentials"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "erp-auth",
             "oauth_client_credentials",
             new { token_url = "https://auth.example/token" },
@@ -203,10 +203,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task CreateConnection_MissingRequiredConfig_Returns422()
     {
-        Guid integrationId = await InsertIntegrationAsync("missing_config_sink", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync("missing_config_sink", ["api_key_header"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "erp-auth",
             "api_key_header",
             new { },
@@ -218,10 +218,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task CreateConnection_MissingRequiredSecretRef_Returns422()
     {
-        Guid integrationId = await InsertIntegrationAsync("missing_secret_sink", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync("missing_secret_sink", ["api_key_header"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "erp-auth",
             "api_key_header",
             new { header_name = "X-Api-Key" },
@@ -233,10 +233,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task CreateConnection_InvalidSecretReference_Returns422()
     {
-        Guid integrationId = await InsertIntegrationAsync("invalid_secret_sink", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync("invalid_secret_sink", ["api_key_header"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "erp-auth",
             "api_key_header",
             new { header_name = "X-Api-Key" },
@@ -250,10 +250,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [InlineData("a234567890123456789012345678901234567890123456789012345678901234")]
     public async Task CreateConnection_RejectsSecretReferenceOutsideFlatNameContract(string reference)
     {
-        Guid integrationId = await InsertIntegrationAsync($"invalid_ref_{Guid.NewGuid():N}", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync($"invalid_ref_{Guid.NewGuid():N}", ["api_key_header"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "invalid-reference",
             "api_key_header",
             new { header_name = "X-Api-Key" },
@@ -267,10 +267,10 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [InlineData("integrios-attempt-number")]
     public async Task CreateConnection_ReservedDeliveryHeader_Returns422(string headerName)
     {
-        Guid integrationId = await InsertIntegrationAsync($"reserved_{Guid.NewGuid():N}", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync($"reserved_{Guid.NewGuid():N}", ["api_key_header"]);
 
         var response = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "reserved-header",
             "api_key_header",
             new { header_name = headerName },
@@ -282,14 +282,14 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task CreateConnection_UnusedConnectionMayOmitDestinationAuthentication()
     {
-        Guid integrationId = await InsertIntegrationAsync("closed_auth_sink", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync("closed_auth_sink", ["api_key_header"]);
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integration_id = integrationId,
+                connector_id = connectorId,
                 name = "erp-auth",
                 config = new { base_uri = "http://localhost:5054/sink/erp-auth" }
             }));
@@ -300,8 +300,8 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task UpdateConnection_WithSupportedAuth_PersistsAndReturnsAuth()
     {
-        Guid integrationId = await InsertIntegrationAsync("update_auth_sink", ["api_key_header"]);
-        Guid connectionId = await InsertConnectionAsync(integrationId, "erp-auth");
+        Guid connectorId = await InsertConnectorAsync("update_auth_sink", ["api_key_header"]);
+        Guid connectionId = await InsertConnectionAsync(connectorId, "erp-auth");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -328,7 +328,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task UpdateConnection_UnusedInvalidHttpDestination_IsStoredUntilDestinationUse()
     {
-        Guid connectionId = await InsertConnectionAsync(HttpIntegrationId, "invalid-update");
+        Guid connectionId = await InsertConnectionAsync(HttpConnectorId, "invalid-update");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -343,9 +343,9 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     }
 
     [Fact]
-    public async Task UpdateConnection_UnusedDestinationCapableIntegrationMayOmitConfig()
+    public async Task UpdateConnection_UnusedDestinationCapableConnectorMayOmitConfig()
     {
-        Guid connectionId = await InsertConnectionAsync(HttpIntegrationId, "omitted-config");
+        Guid connectionId = await InsertConnectionAsync(HttpConnectorId, "omitted-config");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -359,13 +359,13 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     }
 
     [Fact]
-    public async Task UpdateConnection_SourceOnlyIntegration_AllowsFreeFormConfig()
+    public async Task UpdateConnection_SourceOnlyConnector_AllowsFreeFormConfig()
     {
-        Guid integrationId = await InsertIntegrationAsync(
+        Guid connectorId = await InsertConnectorAsync(
             $"source_only_update_{Guid.NewGuid():N}",
             [],
             "source");
-        Guid connectionId = await InsertConnectionAsync(integrationId, "source-update");
+        Guid connectionId = await InsertConnectionAsync(connectorId, "source-update");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -382,8 +382,8 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task UpdateConnection_ReservedDeliveryHeader_Returns422()
     {
-        Guid integrationId = await InsertIntegrationAsync("update_reserved_header", ["api_key_header"]);
-        Guid connectionId = await InsertConnectionAsync(integrationId, "erp-auth");
+        Guid connectorId = await InsertConnectorAsync("update_reserved_header", ["api_key_header"]);
+        Guid connectionId = await InsertConnectionAsync(connectorId, "erp-auth");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -406,9 +406,9 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     [Fact]
     public async Task DeactivatedConnection_CanRotateButCannotRemoveAuthenticationRequiredByActiveSubscription()
     {
-        Guid integrationId = await InsertIntegrationAsync("in_use_authentication_sink", ["api_key_header"]);
+        Guid connectorId = await InsertConnectorAsync("in_use_authentication_sink", ["api_key_header"]);
         HttpResponseMessage createdResponse = await PostConnectionWithAuthAsync(
-            integrationId,
+            connectorId,
             "in-use-authentication",
             "api_key_header",
             new { header_name = "X-Api-Key" },
@@ -471,13 +471,13 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integration_id = HttpIntegrationId,
+                connector_id = HttpConnectorId,
                 name,
                 config = new { base_uri = url }
             }));
 
     private Task<HttpResponseMessage> PostConnectionWithAuthAsync(
-        Guid integrationId,
+        Guid connectorId,
         string name,
         string scheme,
         object authConfig,
@@ -487,7 +487,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             $"/admin/tenants/{fixture.TenantId}/connections",
             new
             {
-                integration_id = integrationId,
+                connector_id = connectorId,
                 name,
                 config = new { base_uri = "http://localhost:5054/sink/erp-auth" },
                 destination_authentication = new
@@ -498,7 +498,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 }
             }));
 
-    private async Task<Guid> InsertIntegrationAsync(
+    private async Task<Guid> InsertConnectorAsync(
         string key,
         string[] supportedAuthSchemes,
         string direction = "destination")
@@ -507,12 +507,12 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, description, manifest, created_at, updated_at)
             VALUES (
                 @Id, @Key, 1, 1, @Name, @Direction,
-                {{{fixture.Json("@SupportedAuthSchemes")}}}, 'active', 'test integration', {{{fixture.Json("@Manifest")}}}, {{{fixture.Now}}}, {{{fixture.Now}}});
+                {{{fixture.Json("@SupportedAuthSchemes")}}}, 'active', 'test connector', {{{fixture.Json("@Manifest")}}}, {{{fixture.Now}}}, {{{fixture.Now}}});
             """, new
             {
                 Id = id,
@@ -520,21 +520,21 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 Name = key,
                 Direction = direction,
                 SupportedAuthSchemes = JsonSerializer.Serialize(supportedAuthSchemes),
-                Manifest = TestIntegrationManifest.Create(key, key, direction, supportedAuthSchemes)
+                Manifest = TestConnectorManifest.Create(key, key, direction, supportedAuthSchemes)
             });
 
         return id;
     }
 
-    private async Task<Guid> InsertConnectionAsync(Guid integrationId, string name)
+    private async Task<Guid> InsertConnectionAsync(Guid connectorId, string name)
     {
         Guid id = Guid.NewGuid();
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
-            """, new { Id = id, fixture.TenantId, IntegrationId = integrationId, Name = name, Config = "{\"base_uri\":\"http://localhost:5054/sink/erp-auth\"}" });
+            INSERT INTO connections (id, tenant_id, connector_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
+            VALUES (@Id, @TenantId, @ConnectorId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
+            """, new { Id = id, fixture.TenantId, ConnectorId = connectorId, Name = name, Config = "{\"base_uri\":\"http://localhost:5054/sink/erp-auth\"}" });
 
         return id;
     }

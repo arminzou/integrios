@@ -1,16 +1,16 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Domain.Common;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using MediatR;
 
 namespace Integrios.Application.Connections;
 
 public sealed record CreateConnectionCommand(
     Guid TenantId,
-    Guid IntegrationId,
+    Guid ConnectorId,
     string Name,
     JsonElement Config,
     ConnectionSchemeSelectionInput? SourceVerification,
@@ -20,7 +20,7 @@ public sealed record CreateConnectionCommand(
 
 internal sealed class CreateConnectionCommandHandler(
     IConnectionRepository repository,
-    IIntegrationCatalog integrationCatalog,
+    IConnectorCatalog connectorCatalog,
     IAuthSchemeRegistry authSchemeRegistry)
     : IRequestHandler<CreateConnectionCommand, ConnectionDto>
 {
@@ -28,22 +28,22 @@ internal sealed class CreateConnectionCommandHandler(
 
     public async Task<ConnectionDto> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
     {
-        Integration integration = await integrationCatalog.GetByIdAsync(command.IntegrationId, cancellationToken)
-            ?? throw new ConnectionValidationException("The specified integration does not exist.");
+        Connector connector = await connectorCatalog.GetByIdAsync(command.ConnectorId, cancellationToken)
+            ?? throw new ConnectionValidationException("The specified connector does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
         var connection = new Connection
         {
             Id = Guid.NewGuid(),
             TenantId = command.TenantId,
-            IntegrationId = command.IntegrationId,
+            ConnectorId = command.ConnectorId,
             Name = command.Name,
             Config = config,
             SourceVerification = ConnectionSchemeSelectionValidator.ValidateSource(
-                integration,
+                connector,
                 command.SourceVerification),
             DestinationAuthentication = ConnectionSchemeSelectionValidator.ValidateDestination(
-                integration,
+                connector,
                 command.DestinationAuthentication,
                 authSchemeRegistry),
             Status = OperationalStatus.Active,

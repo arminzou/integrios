@@ -26,7 +26,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         ConnectionDto response = await mediator.Send(
             new CreateConnectionCommand(
                 tenantId,
-                request.IntegrationId,
+                request.ConnectorId,
                 request.Name,
                 request.Config,
                 request.SourceVerification?.ToInput(),
@@ -96,7 +96,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
 }
 
 internal sealed record CreateConnectionRequest(
-    Guid IntegrationId,
+    Guid ConnectorId,
     string Name,
     JsonElement Config,
     ConnectionSchemeSelectionRequest? SourceVerification,

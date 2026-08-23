@@ -2,13 +2,13 @@ using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Auth;
 using Integrios.Application.Connections;
-using Integrios.Application.Integrations;
+using Integrios.Application.Connectors;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Topics;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Common;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Domain.Subscriptions;
 using Integrios.Domain.Topics;
 using MediatR;
@@ -46,7 +46,7 @@ public sealed class SubscriptionAuthoringApplicationTests
     [Fact]
     public async Task CreateSubscription_SourceOnlyDestination_IsRejectedThroughMediator()
     {
-        await using AuthoringHarness harness = new(destinationDirection: IntegrationDirection.Source);
+        await using AuthoringHarness harness = new(destinationDirection: ConnectorDirection.Source);
 
         var exception = await Assert.ThrowsAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command()));
@@ -69,18 +69,18 @@ public sealed class SubscriptionAuthoringApplicationTests
         private readonly ServiceProvider provider;
 
         public AuthoringHarness(
-            IntegrationDirection destinationDirection = IntegrationDirection.Both,
+            ConnectorDirection destinationDirection = ConnectorDirection.Both,
             string? transformValidationError = null)
         {
             SubscriptionRepository = new FakeSubscriptionRepository();
-            var integrationId = Guid.NewGuid();
+            var connectorId = Guid.NewGuid();
             var services = new ServiceCollection();
             services.AddApplicationServices();
             services.AddSingleton<ISubscriptionRepository>(SubscriptionRepository);
             services.AddSingleton<ITopicRepository>(new FakeTopicRepository(Topic()));
-            services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(integrationId)));
+            services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(connectorId)));
             services.AddSingleton<IConnectionAuthoringLock>(new NoOpConnectionAuthoringLock());
-            services.AddSingleton<IIntegrationCatalog>(new FakeIntegrationCatalog(Integration(integrationId, destinationDirection)));
+            services.AddSingleton<IConnectorCatalog>(new FakeConnectorCatalog(Connector(connectorId, destinationDirection)));
             services.AddSingleton<IAuthSchemeRegistry>(new EmptyAuthSchemeRegistry());
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator(transformValidationError));
             provider = services.BuildServiceProvider();
@@ -117,11 +117,11 @@ public sealed class SubscriptionAuthoringApplicationTests
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
-        private Connection Connection(Guid integrationId) => new()
+        private Connection Connection(Guid connectorId) => new()
         {
             Id = connectionId,
             TenantId = tenantId,
-            IntegrationId = integrationId,
+            ConnectorId = connectorId,
             Name = "destination",
             Config = Json("{}"),
             Status = OperationalStatus.Active,
@@ -129,31 +129,31 @@ public sealed class SubscriptionAuthoringApplicationTests
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
-        private static Integration Integration(Guid integrationId, IntegrationDirection direction) => new()
+        private static Connector Connector(Guid connectorId, ConnectorDirection direction) => new()
         {
-            Id = integrationId,
-            Key = "test_integration",
+            Id = connectorId,
+            Key = "test_connector",
             ContractVersion = 1,
             ManifestSchemaVersion = 1,
-            Name = "Test Integration",
+            Name = "Test Connector",
             Direction = direction,
             SupportedAuthSchemes = [],
             Status = OperationalStatus.Active,
-            Manifest = new IntegrationManifest
+            Manifest = new ConnectorManifest
             {
                 ManifestSchemaVersion = 1,
-                Key = "test_integration",
+                Key = "test_connector",
                 ContractVersion = 1,
                 Direction = direction.ToString().ToLowerInvariant(),
-                SourceConfigurationSchema = direction is IntegrationDirection.Source or IntegrationDirection.Both
+                SourceConfigurationSchema = direction is ConnectorDirection.Source or ConnectorDirection.Both
                     ? Json("""{"type":"object","properties":{},"additionalProperties":true}""")
                     : null,
-                DestinationConfigurationSchema = direction is IntegrationDirection.Destination or IntegrationDirection.Both
+                DestinationConfigurationSchema = direction is ConnectorDirection.Destination or ConnectorDirection.Both
                     ? Json("""{"type":"object","properties":{},"additionalProperties":true}""")
                     : null,
-                SourceVerification = new IntegrationSourceVerificationManifest { AllowUnverified = true },
-                DestinationAuthentication = new IntegrationDestinationAuthenticationManifest { AllowUnauthenticated = true },
-                Presentation = new IntegrationPresentationManifest { Name = "Test Integration" },
+                SourceVerification = new ConnectorSourceVerificationManifest { AllowUnverified = true },
+                DestinationAuthentication = new ConnectorDestinationAuthenticationManifest { AllowUnauthenticated = true },
+                Presentation = new ConnectorPresentationManifest { Name = "Test Connector" },
             },
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -234,13 +234,13 @@ public sealed class SubscriptionAuthoringApplicationTests
             Task.FromResult(true);
     }
 
-    private sealed class FakeIntegrationCatalog(Integration integration) : IIntegrationCatalog
+    private sealed class FakeConnectorCatalog(Connector connector) : IConnectorCatalog
     {
-        public Task<Integration?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Integration?>(integration);
+        public Task<Connector?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Connector?>(connector);
 
-        public Task<(IReadOnlyList<Integration> Items, string? NextCursor)> ListAsync(string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
-            Task.FromResult<(IReadOnlyList<Integration>, string?)>(([integration], null));
+        public Task<(IReadOnlyList<Connector> Items, string? NextCursor)> ListAsync(string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
+            Task.FromResult<(IReadOnlyList<Connector>, string?)>(([connector], null));
     }
 
     public sealed class FakeSubscriptionRepository : ISubscriptionRepository

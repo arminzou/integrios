@@ -19,7 +19,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string GlobalAdminAuthHeader = $"AdminKey {GlobalAdminPublicKey}:{GlobalAdminSecret}";
     public const string InvalidAdminAuthHeader = "AdminKey legacy_tenant_key:unsupported-secret";
 
-    private static readonly Guid HttpIntegrationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;
 
@@ -71,8 +71,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
-            VALUES (@DestinationConnectionId, @TenantId, @IntegrationId, @DestinationName,
+            INSERT INTO connections (id, tenant_id, connector_id, name, config, status)
+            VALUES (@DestinationConnectionId, @TenantId, @ConnectorId, @DestinationName,
                 {{{database.Json("@DestinationConfig")}}}, 'active');
             INSERT INTO topics (id, tenant_id, name, status) VALUES (@TopicId, @TenantId, @TopicName, 'active');
             INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @SourceConnectionId);
@@ -83,7 +83,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
             VALUES (@EventId, @TenantId, @TopicId, @SourceConnectionId, 'recovery.test',
                 {{{database.Json("@Payload")}}}, 'fanned_out');
             INSERT INTO subscription_deliveries
-                (id, event_id, subscription_id, destination_connection_id, http_execution_snapshot, integration_key,
+                (id, event_id, subscription_id, destination_connection_id, http_execution_snapshot, connector_key,
                  status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
             VALUES (@DeliveryId, @EventId, @SubscriptionId, @DestinationConnectionId,
                 {{{database.Json("@Snapshot")}}}, 'http', 'dead_lettered', 1, 1, {{{database.Now}}});
@@ -94,7 +94,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         {
             TenantId,
             SourceConnectionId,
-            IntegrationId = HttpIntegrationId,
+            ConnectorId = HttpConnectorId,
             DestinationConnectionId = destinationConnectionId,
             TopicId = topicId,
             SubscriptionId = subscriptionId,
@@ -135,15 +135,15 @@ public sealed class AdminApiFixture : IAsyncLifetime
                 (@TenantId, 'test-tenant', 'Test Tenant', 'active', {{{now}}}, {{{now}}}),
                 (@OtherTenantId, 'other-tenant', 'Other Tenant', 'active', {{{now}}}, {{{now}}});
 
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
             VALUES (
-                @IntegrationId, 'http', 1, 1, 'HTTP', 'both',
+                @ConnectorId, 'http', 1, 1, 'HTTP', 'both',
                 {{{database.Json("@SupportedAuthSchemes")}}}, 'active', {{{json}}});
 
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, status)
-            VALUES (@SourceConnectionId, @TenantId, @IntegrationId, 'source',
+            INSERT INTO connections (id, tenant_id, connector_id, name, config, status)
+            VALUES (@SourceConnectionId, @TenantId, @ConnectorId, 'source',
                 {{{database.Json("@Config")}}}, 'active');
 
             INSERT INTO admin_keys (public_key, secret_hash, name, created_at)
@@ -154,9 +154,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
             {
                 TenantId,
                 OtherTenantId,
-                IntegrationId = HttpIntegrationId,
+                ConnectorId = HttpConnectorId,
                 SupportedAuthSchemes = "[\"api_key_header\",\"bearer_token\"]",
-                Manifest = TestIntegrationManifest.Create(
+                Manifest = TestConnectorManifest.Create(
                     "http", "HTTP", "both",
                     authenticationSchemes: ["api_key_header", "bearer_token"],
                     description: "Generic HTTP source or destination.",

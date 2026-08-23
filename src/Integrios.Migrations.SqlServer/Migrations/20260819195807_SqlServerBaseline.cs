@@ -29,7 +29,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "integrations",
+                name: "connectors",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -47,13 +47,13 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("integrations_pkey", x => x.id);
-                    table.UniqueConstraint("uq_integrations_key_contract_version", x => new { x.key, x.contract_version });
-                    table.CheckConstraint("ck_integrations_contract_version_positive", "contract_version > 0");
-                    table.CheckConstraint("ck_integrations_manifest_identity", "JSON_VALUE(manifest, '$.key') = [key] AND TRY_CONVERT(int, JSON_VALUE(manifest, '$.contract_version')) = contract_version AND TRY_CONVERT(int, JSON_VALUE(manifest, '$.manifest_schema_version')) = manifest_schema_version");
-                    table.CheckConstraint("ck_integrations_manifest_object", "ISJSON(manifest, OBJECT) = 1");
-                    table.CheckConstraint("ck_integrations_manifest_schema_version_positive", "manifest_schema_version > 0");
-                    table.CheckConstraint("ck_integrations_supported_auth_schemes_json", "ISJSON(supported_auth_schemes, VALUE) = 1");
+                    table.PrimaryKey("connectors_pkey", x => x.id);
+                    table.UniqueConstraint("uq_connectors_key_contract_version", x => new { x.key, x.contract_version });
+                    table.CheckConstraint("ck_connectors_contract_version_positive", "contract_version > 0");
+                    table.CheckConstraint("ck_connectors_manifest_identity", "JSON_VALUE(manifest, '$.key') = [key] AND TRY_CONVERT(int, JSON_VALUE(manifest, '$.contract_version')) = contract_version AND TRY_CONVERT(int, JSON_VALUE(manifest, '$.manifest_schema_version')) = manifest_schema_version");
+                    table.CheckConstraint("ck_connectors_manifest_object", "ISJSON(manifest, OBJECT) = 1");
+                    table.CheckConstraint("ck_connectors_manifest_schema_version_positive", "manifest_schema_version > 0");
+                    table.CheckConstraint("ck_connectors_supported_auth_schemes_json", "ISJSON(supported_auth_schemes, VALUE) = 1");
                 });
 
             migrationBuilder.CreateTable(
@@ -109,7 +109,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 {
                     id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     tenant_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    integration_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    connector_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     name = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     config = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValueSql: "N'{}'"),
                     source_verification = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -129,9 +129,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     table.CheckConstraint("ck_connections_destination_authentication_object", "destination_authentication IS NULL OR ISJSON(destination_authentication, OBJECT) = 1");
                     table.CheckConstraint("ck_connections_source_verification_object", "source_verification IS NULL OR ISJSON(source_verification, OBJECT) = 1");
                     table.ForeignKey(
-                        name: "connections_integration_id_fkey",
-                        column: x => x.integration_id,
-                        principalTable: "integrations",
+                        name: "connections_connector_id_fkey",
+                        column: x => x.connector_id,
+                        principalTable: "connectors",
                         principalColumn: "id");
                     table.ForeignKey(
                         name: "connections_tenant_id_fkey",
@@ -371,7 +371,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     updated_at = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
                     transform_config_snapshot = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     traceparent = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    integration_key = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    connector_key = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     active_attempt_id = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     lease_expires_at = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     http_execution_snapshot = table.Column<string>(type: "nvarchar(max)", nullable: false)
@@ -508,8 +508,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
             migrationBuilder.Sql(
                 """
-                CREATE TRIGGER integrations_reject_functional_update
-                ON integrations
+                CREATE TRIGGER connectors_reject_functional_update
+                ON connectors
                 AFTER UPDATE
                 AS
                 BEGIN
@@ -531,7 +531,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                                supported_auth_schemes, JSON_MODIFY(manifest, '$.presentation', NULL)
                         FROM inserted
                     )
-                        THROW 51000, 'Integration functional contracts are immutable; apply a new contract_version', 1;
+                        THROW 51000, 'Connector functional contracts are immutable; apply a new contract_version', 1;
                 END
                 """);
 
@@ -563,7 +563,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("DROP TRIGGER IF EXISTS events_require_active_topic_source");
-            migrationBuilder.Sql("DROP TRIGGER IF EXISTS integrations_reject_functional_update");
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS connectors_reject_functional_update");
 
             migrationBuilder.DropForeignKey(
                 name: "connections_tenant_id_fkey",
@@ -578,7 +578,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 table: "topics");
 
             migrationBuilder.DropForeignKey(
-                name: "connections_integration_id_fkey",
+                name: "connections_connector_id_fkey",
                 table: "connections");
 
             migrationBuilder.DropForeignKey(
@@ -601,7 +601,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 name: "tenants");
 
             migrationBuilder.DropTable(
-                name: "integrations");
+                name: "connectors");
 
             migrationBuilder.DropTable(
                 name: "subscription_deliveries");

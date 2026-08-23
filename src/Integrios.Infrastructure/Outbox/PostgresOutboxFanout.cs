@@ -111,12 +111,12 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     s.transform_config::text AS TransformConfigJson,
                     s.http_delivery::text AS HttpDeliveryJson,
                     COALESCE(c.config->>'base_uri', '') AS DestinationUrl,
-                    i.key AS IntegrationKey,
+                    i.key AS ConnectorKey,
                     c.destination_authentication::text AS DestinationAuthJson,
                     (i.manifest -> 'http_outcome')::text AS HttpOutcomeJson
                 FROM subscriptions s
                 JOIN connections c ON c.id = s.destination_connection_id
-                JOIN integrations i ON i.id = c.integration_id
+                JOIN connectors i ON i.id = c.connector_id
                 WHERE s.topic_id = @TopicId
                   AND s.status = 'active'
                 """,
@@ -131,7 +131,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 row.OrderIndex,
                 row.MatchRulesJson,
                 row.TransformConfigJson,
-                row.IntegrationKey,
+                row.ConnectorKey,
                 BuildHttpExecutionSnapshotJson(
                     row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson, row.HttpOutcomeJson)))
             .ToList();
@@ -139,7 +139,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
 
     // Fanout correlates the base_uri, request shape, destination authentication, and effective HTTP
     // outcome contract a delivery will be dispatched and retried with, so a later Subscription,
-    // Connection, or Integration edit cannot change an in-flight delivery's request or success
+    // Connection, or Connector edit cannot change an in-flight delivery's request or success
     // criteria out from under it.
     private static string BuildHttpExecutionSnapshotJson(
         string destinationUrl, string httpDeliveryJson, string? destinationAuthJson, string? httpOutcomeJson)
@@ -178,7 +178,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     event_id,
                     subscription_id,
                     destination_connection_id,
-                    integration_key,
+                    connector_key,
                     http_execution_snapshot,
                     transform_config_snapshot,
                     traceparent)
@@ -186,7 +186,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     @EventId,
                     @SubscriptionId,
                     @DestinationConnectionId,
-                    @IntegrationKey,
+                    @ConnectorKey,
                     @HttpExecutionSnapshotJson::jsonb,
                     @TransformConfigJson::jsonb,
                     @Traceparent)
@@ -197,7 +197,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     EventId = eventId,
                     target.SubscriptionId,
                     target.DestinationConnectionId,
-                    target.IntegrationKey,
+                    target.ConnectorKey,
                     target.HttpExecutionSnapshotJson,
                     target.TransformConfigJson,
                     Traceparent = traceparent
@@ -224,7 +224,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         public string? TransformConfigJson { get; init; }
         public string HttpDeliveryJson { get; init; } = "{}";
         public string DestinationUrl { get; init; } = string.Empty;
-        public string IntegrationKey { get; init; } = string.Empty;
+        public string ConnectorKey { get; init; } = string.Empty;
         public string? DestinationAuthJson { get; init; }
         public string? HttpOutcomeJson { get; init; }
     }

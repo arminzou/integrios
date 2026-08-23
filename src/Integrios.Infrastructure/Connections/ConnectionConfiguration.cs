@@ -1,6 +1,6 @@
 using Integrios.Domain.Common;
 using Integrios.Domain.Connections;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -44,7 +44,7 @@ internal sealed class ConnectionConfiguration : IEntityTypeConfiguration<Connect
             .HasColumnType("jsonb")
             .HasColumnName("destination_authentication");
         entity.Property(e => e.Environment).HasColumnName("environment");
-        entity.Property(e => e.IntegrationId).HasColumnName("integration_id");
+        entity.Property(e => e.ConnectorId).HasColumnName("connector_id");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.SourceVerification)
             .HasColumnType("jsonb")
@@ -57,10 +57,10 @@ internal sealed class ConnectionConfiguration : IEntityTypeConfiguration<Connect
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");
 
-        entity.HasOne<Integration>().WithMany()
-            .HasForeignKey(d => d.IntegrationId)
+        entity.HasOne<Connector>().WithMany()
+            .HasForeignKey(d => d.ConnectorId)
             .OnDelete(DeleteBehavior.ClientSetNull)
-            .HasConstraintName("connections_integration_id_fkey");
+            .HasConstraintName("connections_connector_id_fkey");
 
         entity.HasOne<Tenant>().WithMany()
             .HasForeignKey(d => d.TenantId)

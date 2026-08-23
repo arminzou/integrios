@@ -2,7 +2,7 @@ using Integrios.Domain.Common;
 using Integrios.Domain.Connections;
 using Integrios.Domain.Delivery;
 using Integrios.Domain.Events;
-using Integrios.Domain.Integrations;
+using Integrios.Domain.Connectors;
 using Integrios.Domain.Subscriptions;
 using Integrios.Domain.Tenants;
 using Integrios.Domain.Topics;
@@ -20,7 +20,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
     public DbSet<Connection> Connections => Set<Connection>();
     public DbSet<DeliveryAttempt> DeliveryAttempts => Set<DeliveryAttempt>();
     public DbSet<DomainEvent> Events => Set<DomainEvent>();
-    public DbSet<Integration> Integrations => Set<Integration>();
+    public DbSet<Connector> Connectors => Set<Connector>();
     public DbSet<OutboxEntry> Outboxes => Set<OutboxEntry>();
     public DbSet<SourceEndpoint> SourceEndpoints => Set<SourceEndpoint>();
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
@@ -40,14 +40,14 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<SnakeCaseEnumConverter<DeliveryFailurePhase>>();
         configurationBuilder.Properties<DeliveryAttemptStatus>()
             .HaveConversion<SnakeCaseEnumConverter<DeliveryAttemptStatus>>();
-        configurationBuilder.Properties<IntegrationDirection>()
-            .HaveConversion<SnakeCaseEnumConverter<IntegrationDirection>>();
+        configurationBuilder.Properties<ConnectorDirection>()
+            .HaveConversion<SnakeCaseEnumConverter<ConnectorDirection>>();
         configurationBuilder.Properties<SubscriptionDeliveryStatus>()
             .HaveConversion<SnakeCaseEnumConverter<SubscriptionDeliveryStatus>>();
         configurationBuilder.Properties<ConnectionSchemeSelection>()
             .HaveConversion<StoredJsonConverter<ConnectionSchemeSelection>>();
-        configurationBuilder.Properties<IntegrationManifest>()
-            .HaveConversion<StoredJsonConverter<IntegrationManifest>>();
+        configurationBuilder.Properties<ConnectorManifest>()
+            .HaveConversion<StoredJsonConverter<ConnectorManifest>>();
         configurationBuilder.Properties<HttpDeliveryConfiguration>()
             .HaveConversion<StoredJsonConverter<HttpDeliveryConfiguration>>();
         configurationBuilder.Properties<IReadOnlyList<string>>()
@@ -130,17 +130,17 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("accepted"));
         });
 
-        modelBuilder.Entity<Integration>(entity =>
+        modelBuilder.Entity<Connector>(entity =>
         {
-            entity.ToTable("integrations", table =>
+            entity.ToTable("connectors", table =>
             {
                 table.UseSqlOutputClause(false);
                 table.HasCheckConstraint(
-                    "ck_integrations_supported_auth_schemes_json",
+                    "ck_connectors_supported_auth_schemes_json",
                     "ISJSON(supported_auth_schemes, VALUE) = 1");
-                table.HasCheckConstraint("ck_integrations_manifest_object", "ISJSON(manifest, OBJECT) = 1");
+                table.HasCheckConstraint("ck_connectors_manifest_object", "ISJSON(manifest, OBJECT) = 1");
                 table.HasCheckConstraint(
-                    "ck_integrations_manifest_identity",
+                    "ck_connectors_manifest_identity",
                     "JSON_VALUE(manifest, '$.key') = [key] "
                     + "AND TRY_CONVERT(int, JSON_VALUE(manifest, '$.contract_version')) = contract_version "
                     + "AND TRY_CONVERT(int, JSON_VALUE(manifest, '$.manifest_schema_version')) = manifest_schema_version");

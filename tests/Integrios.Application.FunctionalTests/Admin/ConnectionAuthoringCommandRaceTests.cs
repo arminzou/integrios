@@ -180,26 +180,26 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
         Assert.False(headerOwned && staticCollision);
     }
 
-    private async Task<(Guid IntegrationId, Guid ConnectionId, Guid TopicId)> SeedGraphAsync()
+    private async Task<(Guid ConnectorId, Guid ConnectionId, Guid TopicId)> SeedGraphAsync()
     {
-        Guid integrationId = Guid.NewGuid();
+        Guid connectorId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
         Guid topicId = Guid.NewGuid();
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, manifest)
             VALUES (
-                @IntegrationId, 'race_destination', 1, 1, 'Race Destination', 'destination',
+                @ConnectorId, 'race_destination', 1, 1, 'Race Destination', 'destination',
                 {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
 
             INSERT INTO connections (
-                id, tenant_id, integration_id, name, config,
+                id, tenant_id, connector_id, name, config,
                 source_verification, destination_authentication, status)
             VALUES (
-                @ConnectionId, @TenantId, @IntegrationId, 'race-destination',
+                @ConnectionId, @TenantId, @ConnectorId, 'race-destination',
                 {{{fixture.Json("@Config")}}}, NULL,
                 {{{fixture.Json("@Authentication")}}},
                 'active');
@@ -208,17 +208,17 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             VALUES (@TopicId, @TenantId, 'race-topic', 'active');
             """, new
         {
-            IntegrationId = integrationId,
+            ConnectorId = connectorId,
             ConnectionId = connectionId,
             TopicId = topicId,
             fixture.TenantId,
             Schemes = "[\"api_key_header\",\"bearer_token\"]",
             Config = "{\"base_uri\":\"https://example.test/race\"}",
             Authentication = "{\"scheme\":\"bearer_token\",\"config\":{},\"secret_refs\":{\"token\":\"race_bearer_token\"}}",
-            Manifest = TestIntegrationManifest.Create("race_destination", "Race Destination", "destination",
+            Manifest = TestConnectorManifest.Create("race_destination", "Race Destination", "destination",
                 ["api_key_header", "bearer_token"])
         });
-        return (integrationId, connectionId, topicId);
+        return (connectorId, connectionId, topicId);
     }
 
     private async Task InsertSubscriptionAsync(Guid connectionId, Guid topicId, string name, string status)

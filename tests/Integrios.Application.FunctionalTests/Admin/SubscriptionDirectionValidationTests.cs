@@ -230,36 +230,36 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         Guid? tenantId = null,
         string[]? authenticationSchemes = null)
     {
-        Guid integrationId = Guid.NewGuid();
+        Guid connectorId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
 
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO integrations (
+            INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, description, manifest, created_at, updated_at)
             VALUES (
                 @Id, @Key, 1, 1, @Name, @Direction,
-                {{{fixture.Json("@SupportedAuthSchemes")}}}, 'active', 'test integration', {{{fixture.Json("@Manifest")}}}, {{{fixture.Now}}}, {{{fixture.Now}}});
+                {{{fixture.Json("@SupportedAuthSchemes")}}}, 'active', 'test connector', {{{fixture.Json("@Manifest")}}}, {{{fixture.Now}}}, {{{fixture.Now}}});
             """, new
         {
-            Id = integrationId,
+            Id = connectorId,
             Key = key,
             Name = key,
             Direction = direction,
             SupportedAuthSchemes = JsonSerializer.Serialize(authenticationSchemes ?? []),
-            Manifest = TestIntegrationManifest.Create(key, key, direction, authenticationSchemes)
+            Manifest = TestConnectorManifest.Create(key, key, direction, authenticationSchemes)
         });
 
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @IntegrationId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
+            INSERT INTO connections (id, tenant_id, connector_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
+            VALUES (@Id, @TenantId, @ConnectorId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
             """, new
         {
             Id = connectionId,
             TenantId = tenantId ?? fixture.TenantId,
-            IntegrationId = integrationId,
+            ConnectorId = connectorId,
             Name = key,
             Config = "{\"base_uri\":\"http://localhost:5054/sink/custom\"}"
         });

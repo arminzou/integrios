@@ -24,20 +24,20 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
     [Fact]
     public async Task PackagedSystem_QualifiesGitHubToSlackGoldenPath()
     {
-        string githubIntegrationId = await ApplyExampleManifestAsync("github");
-        string slackIntegrationId = await ApplyExampleManifestAsync("slack");
+        string githubConnectorId = await ApplyExampleManifestAsync("github");
+        string slackConnectorId = await ApplyExampleManifestAsync("slack");
 
         string tenantSlug = $"golden-{Suffix()}";
         Guid tenant = await CreateTenantAsync(tenantSlug);
 
         const string githubSecret = "qualification-github-secret";
         await fixture.WriteSourceSecretAsync(tenantSlug, GitHubSecretReference, githubSecret);
-        Guid githubConnection = await CreateGitHubConnectionAsync(tenant, githubIntegrationId);
+        Guid githubConnection = await CreateGitHubConnectionAsync(tenant, githubConnectorId);
         Guid topic = await CreateTopicAsync(tenant, "github-events", [githubConnection]);
         string callbackPath = await GetCallbackPathAsync(tenant, topic);
 
         await fixture.WriteSecretAsync(tenantSlug, SlackSecretReference, "xoxb-qualification-token");
-        Guid slackConnection = await CreateSlackConnectionAsync(tenant, slackIntegrationId);
+        Guid slackConnection = await CreateSlackConnectionAsync(tenant, slackConnectorId);
         Guid subscription = await CreateSlackSubscriptionAsync(tenant, topic, slackConnection);
 
         // Scenario 1: Slack's ok:true confirms a real success, traversing Event, Topic,
@@ -75,9 +75,9 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
 
     private async Task<string> ApplyExampleManifestAsync(string key)
     {
-        string path = Path.Combine(RepositoryRoot(), "examples", "integrations", $"{key}-v1.json");
+        string path = Path.Combine(RepositoryRoot(), "examples", "connectors", $"{key}-v1.json");
         using var content = new StringContent(await File.ReadAllTextAsync(path), Encoding.UTF8, "application/json");
-        using HttpRequestMessage request = new(HttpMethod.Put, $"/admin/integrations/{key}/versions/1") { Content = content };
+        using HttpRequestMessage request = new(HttpMethod.Put, $"/admin/connectors/{key}/versions/1") { Content = content };
         request.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
         using HttpResponseMessage response = await fixture.AdminClient.SendAsync(request);
         JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Created, HttpStatusCode.OK);
@@ -91,13 +91,13 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateGitHubConnectionAsync(Guid tenant, string integrationId)
+    private async Task<Guid> CreateGitHubConnectionAsync(Guid tenant, string connectorId)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant}/connections",
             new
             {
-                integration_id = integrationId,
+                connector_id = connectorId,
                 name = "github-source",
                 config = new { },
                 source_verification = new
@@ -111,13 +111,13 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateSlackConnectionAsync(Guid tenant, string integrationId)
+    private async Task<Guid> CreateSlackConnectionAsync(Guid tenant, string connectorId)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant}/connections",
             new
             {
-                integration_id = integrationId,
+                connector_id = connectorId,
                 name = "slack-destination",
                 config = new { base_uri = "http://mocksink:8080/sink/slack" },
                 destination_authentication = new

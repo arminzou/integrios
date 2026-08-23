@@ -40,13 +40,13 @@ Alongside standard ASP.NET Core, HttpClient, and runtime metrics, Integrios emit
 | `integrios_events_ingested_total` | counter | — | events accepted at the ingress boundary (excludes idempotent duplicates) |
 | `integrios_events_unrouted_total` | counter | — | events that matched no Subscription during fanout |
 | `integrios_fanout_rows_created_total` | counter | — | per-subscription delivery rows created by fanout |
-| `integrios_deliveries_succeeded_total` | counter | `integration_key` | successful deliveries, by destination integration class |
-| `integrios_deliveries_failed_total` | counter | `integration_key`, `http_status_class` | transient delivery failures (will retry) |
-| `integrios_deliveries_dead_lettered_total` | counter | `integration_key` | deliveries that exhausted their retry budget |
-| `integrios_delivery_secret_resolution_failures_total` | counter | `integration_key` | attempts that could not resolve a required secret reference |
-| `integrios_delivery_request_construction_failures_total` | counter | `integration_key` | attempts that could not construct a valid outbound request |
+| `integrios_deliveries_succeeded_total` | counter | `connector_key` | successful deliveries, by destination connector class |
+| `integrios_deliveries_failed_total` | counter | `connector_key`, `http_status_class` | transient delivery failures (will retry) |
+| `integrios_deliveries_dead_lettered_total` | counter | `connector_key` | deliveries that exhausted their retry budget |
+| `integrios_delivery_secret_resolution_failures_total` | counter | `connector_key` | attempts that could not resolve a required secret reference |
+| `integrios_delivery_request_construction_failures_total` | counter | `connector_key` | attempts that could not construct a valid outbound request |
 | `integrios_delivery_stale_finalizations_total` | counter | — | finalization results discarded after delivery ownership was lost |
-| `integrios_delivery_attempt_duration_seconds` | histogram | `result`, `integration_key` | outbound attempt latency |
+| `integrios_delivery_attempt_duration_seconds` | histogram | `result`, `connector_key` | outbound attempt latency |
 | `integrios_outbox_pending_depth` | gauge | — | Worker-owned deployment-global count of unprocessed outbox rows; your primary "is the worker keeping up?" signal |
 
 The outbox-depth gauge is exposed only by the Worker. Its value is sampled asynchronously from the
@@ -63,7 +63,7 @@ in time), or `error` (a failure with no HTTP response, such as a transform error
 connection failure).
 
 > [!NOTE]
-> Metric labels are deliberately **low-cardinality and platform-owned** (`integration_key`,
+> Metric labels are deliberately **low-cardinality and platform-owned** (`connector_key`,
 > `http_status_class`, `result`). Tenant-controlled dimensions such as tenant, subscription,
 > or connection identifiers never appear as metric labels — they live in traces and in the
 > database. This keeps your metrics backend cheap regardless of how many tenants you onboard.
@@ -80,7 +80,7 @@ boundaries.
 graph TD
   A["ingest (acceptance)<br/>tenant, topic, event, idempotency key"]
   B["fanout<br/>event, topic"]
-  C["deliver — one per attempt, incl. retries<br/>event, subscription, delivery, integration, http status class"]
+  C["deliver — one per attempt, incl. retries<br/>event, subscription, delivery, connector, http status class"]
   D["transform<br/>no-op or evaluated"]
   A --> B --> C --> D
 ```
@@ -129,7 +129,7 @@ a development convenience, not a production backend** — in production you run 
 | Grafana | http://localhost:3000 | Anonymous access; opens to the **Integrios Overview** dashboard |
 
 The provisioned dashboard shows ingest rate, outbox pending depth, delivery success by
-integration, failures by HTTP status class, dead-letter trends, and delivery-duration
+connector, failures by HTTP status class, dead-letter trends, and delivery-duration
 percentiles. Configuration lives under `infra/` and is version-controlled, so the dashboard
 is reproducible.
 

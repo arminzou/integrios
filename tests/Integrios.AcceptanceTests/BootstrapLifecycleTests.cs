@@ -18,7 +18,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Equal(0, secondMigrate.ExitCode);
         Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database, "SELECT COUNT(*) FROM \"__EFMigrationsHistory\""));
-        Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "integration_key"));
+        Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "connector_key"));
         Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscription_deliveries", "http_execution_snapshot"));
         Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscriptions", "http_delivery"));
         Assert.Equal(0L, await CountColumnsAsync(database, "subscription_deliveries", "destination_url", "destination_auth"));
@@ -29,7 +29,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Equal(0L, await CountColumnsAsync(database, "subscriptions", "delivery_policy", "dlq_enabled"));
         Assert.Equal(0L, await CountColumnsAsync(database, "admin_keys", "tenant_id"));
         Assert.Equal(0L, await CountColumnsAsync(database, "api_keys", "scopes"));
-        Assert.Equal(0L, await CountAsync(database, "integrations"));
+        Assert.Equal(0L, await CountAsync(database, "connectors"));
         Assert.Equal(0L, await CountAsync(database, "admin_keys"));
 
         BootstrapProcessResult missingSecret =
@@ -38,7 +38,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.NotEqual(0, missingSecret.ExitCode);
         Assert.Contains("requires a non-empty", missingSecret.StandardError, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("shown once", missingSecret.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(0L, await CountAsync(database, "integrations"));
+        Assert.Equal(0L, await CountAsync(database, "connectors"));
         Assert.Equal(0L, await CountAsync(database, "admin_keys"));
 
         const string suppliedSecret = "qualification-production-secret";
@@ -47,10 +47,10 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
 
         Assert.Equal(0, firstBootstrap.ExitCode);
         Assert.DoesNotContain(suppliedSecret, firstBootstrap.Output, StringComparison.Ordinal);
-        Assert.Equal(1L, await CountAsync(database, "integrations", "key = 'http'"));
+        Assert.Equal(1L, await CountAsync(database, "connectors", "key = 'http'"));
         Assert.Equal(1L, await CountAsync(database, "admin_keys", "revoked_at IS NULL"));
 
-        await ExecuteAsync(database, "UPDATE integrations SET name = 'Drifted', status = 'disabled' WHERE key = 'http'");
+        await ExecuteAsync(database, "UPDATE connectors SET name = 'Drifted', status = 'disabled' WHERE key = 'http'");
 
         BootstrapProcessResult secondBootstrap =
             await DatabaseLifecycleFixture.RunProductionBootstrapAsync(database, "unused-second-secret");
@@ -60,13 +60,13 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.DoesNotContain("unused-second-secret", secondBootstrap.Output, StringComparison.Ordinal);
         Assert.Equal("HTTP|both|active", await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
-            "SELECT name || '|' || direction || '|' || status FROM integrations WHERE key = 'http'"));
+            "SELECT name || '|' || direction || '|' || status FROM connectors WHERE key = 'http'"));
         Assert.Equal(2, await DatabaseLifecycleFixture.ScalarAsync<int>(
             database,
-            "SELECT jsonb_array_length(supported_auth_schemes) FROM integrations WHERE key = 'http'"));
+            "SELECT jsonb_array_length(supported_auth_schemes) FROM connectors WHERE key = 'http'"));
         Assert.True(await DatabaseLifecycleFixture.ScalarAsync<bool>(
             database,
-            "SELECT supported_auth_schemes @> '[\"api_key_header\", \"bearer_token\"]'::jsonb FROM integrations WHERE key = 'http'"));
+            "SELECT supported_auth_schemes @> '[\"api_key_header\", \"bearer_token\"]'::jsonb FROM connectors WHERE key = 'http'"));
         Assert.Equal(Hash(suppliedSecret), await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL"));

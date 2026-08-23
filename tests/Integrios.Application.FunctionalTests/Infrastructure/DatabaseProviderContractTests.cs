@@ -2,11 +2,11 @@ using System.Data.Common;
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Events;
-using Integrios.Application.Integrations;
-using Integrios.Domain.Integrations;
+using Integrios.Application.Connectors;
+using Integrios.Domain.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Events;
-using Integrios.Infrastructure.Integrations;
+using Integrios.Infrastructure.Connectors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Respawn;
@@ -87,22 +87,22 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     }
 
     [Fact]
-    public async Task IntegrationFunctionalUpdate_IsRejected_WhilePresentationStillReconciles()
+    public async Task ConnectorFunctionalUpdate_IsRejected_WhilePresentationStillReconciles()
     {
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
         await Assert.ThrowsAnyAsync<DbException>(() => connection.ExecuteAsync(
-            "UPDATE integrations SET direction='destination' WHERE id=@IntegrationId",
-            new { seed.IntegrationId }));
+            "UPDATE connectors SET direction='destination' WHERE id=@ConnectorId",
+            new { seed.ConnectorId }));
 
         await using IntegriosDbContext context = fixture.CreateContext();
-        IntegrationManifest renamed = IntegrationManifestParser.DeserializeStored(
+        ConnectorManifest renamed = ConnectorManifestParser.DeserializeStored(
             DatabaseProviderFixture.Manifest("Renamed Source").GetRawText());
-        IntegrationManifestStoreResult result = await fixture.ManifestStore(context).ApplyAsync(
-            renamed, IntegrationManifestApplyAuthority.Operator, CancellationToken.None);
+        ConnectorManifestStoreResult result = await fixture.ManifestStore(context).ApplyAsync(
+            renamed, ConnectorManifestApplyAuthority.Operator, CancellationToken.None);
 
-        Assert.Equal(IntegrationManifestApplyOutcome.PresentationReconciled, result.Outcome);
-        Assert.Equal("Renamed Source", result.Integration.Name);
+        Assert.Equal(ConnectorManifestApplyOutcome.PresentationReconciled, result.Outcome);
+        Assert.Equal("Renamed Source", result.Connector.Name);
     }
 }
 
@@ -146,17 +146,17 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             : new PostgresEventAcceptance(factory);
     }
 
-    internal IIntegrationManifestStore ManifestStore(IntegriosDbContext context) =>
+    internal IConnectorManifestStore ManifestStore(IntegriosDbContext context) =>
         Database.Provider == "sqlserver"
-            ? new SqlServerIntegrationManifestStore(context)
-            : new PostgresIntegrationManifestStore(context);
+            ? new SqlServerConnectorManifestStore(context)
+            : new PostgresConnectorManifestStore(context);
 
     internal async Task<string[]> GetJsonStorageTypesAsync(DbConnection connection)
     {
         string sql = Database.Provider == "postgres"
             ? """
               SELECT data_type FROM information_schema.columns
-              WHERE table_schema='public' AND table_name='integrations' AND column_name='manifest'
+              WHERE table_schema='public' AND table_name='connectors' AND column_name='manifest'
               UNION ALL
               SELECT data_type FROM information_schema.columns
               WHERE table_schema='public' AND table_name='events' AND column_name='payload'
@@ -164,7 +164,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             : """
               SELECT TYPE_NAME(c.user_type_id) FROM sys.columns c
               JOIN sys.tables t ON t.object_id=c.object_id
-              WHERE t.name=N'integrations' AND c.name=N'manifest'
+              WHERE t.name=N'connectors' AND c.name=N'manifest'
               UNION ALL
               SELECT TYPE_NAME(c.user_type_id) FROM sys.columns c
               JOIN sys.tables t ON t.object_id=c.object_id
@@ -175,19 +175,19 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
 
     internal Task<int> GetRuntimeTriggerCountAsync(DbConnection connection) =>
         connection.ExecuteScalarAsync<int>(Database.Provider == "postgres"
-            ? "SELECT COUNT(*) FROM pg_trigger WHERE tgname IN ('integrations_reject_functional_update', 'trg_events_require_active_topic_source')"
-            : "SELECT COUNT(*) FROM sys.triggers WHERE name IN (N'integrations_reject_functional_update', N'events_require_active_topic_source')");
+            ? "SELECT COUNT(*) FROM pg_trigger WHERE tgname IN ('connectors_reject_functional_update', 'trg_events_require_active_topic_source')"
+            : "SELECT COUNT(*) FROM sys.triggers WHERE name IN (N'connectors_reject_functional_update', N'events_require_active_topic_source')");
 
     internal Task InsertInvalidManifestAsync(DbConnection connection) => connection.ExecuteAsync(
         Database.Provider == "postgres"
             ? """
-              INSERT INTO integrations (id, key, contract_version, manifest_schema_version, name, direction,
+              INSERT INTO connectors (id, key, contract_version, manifest_schema_version, name, direction,
                   supported_auth_schemes, status, created_at, updated_at, manifest)
               VALUES (gen_random_uuid(), 'bad_json', 1, 1, 'Bad JSON', 'source', '[]'::jsonb, 'active',
                   now(), now(), '[]'::jsonb)
               """
             : """
-              INSERT INTO integrations (id, [key], contract_version, manifest_schema_version, name, direction,
+              INSERT INTO connectors (id, [key], contract_version, manifest_schema_version, name, direction,
                   supported_auth_schemes, status, created_at, updated_at, manifest)
               VALUES (NEWID(), N'bad_json', 1, 1, N'Bad JSON', N'source', N'[]', N'active',
                   SYSUTCDATETIME(), SYSUTCDATETIME(), N'[]')
@@ -217,25 +217,25 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             $"VALUES (@TenantId, 'provider-contract', 'Provider Contract', 'active', {now}, {now})",
             new { seed.TenantId });
         await connection.ExecuteAsync($$$"""
-            INSERT INTO integrations (id, {{{Database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
+            INSERT INTO connectors (id, {{{Database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
                 supported_auth_schemes, status, created_at, updated_at, manifest)
-            VALUES (@IntegrationId, 'test_http', 1, 1, 'Provider Contract Source', 'both',
+            VALUES (@ConnectorId, 'test_http', 1, 1, 'Provider Contract Source', 'both',
                 {{{Database.Json("@Schemes")}}}, 'active', {{{now}}}, {{{now}}}, {{{Database.Json("@ManifestJson")}}})
             """, new
         {
-            seed.IntegrationId,
+            seed.ConnectorId,
             Schemes = "[]",
             ManifestJson = Manifest("Provider Contract Source").GetRawText()
         });
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, integration_id, name, config, status, created_at, updated_at)
-            VALUES (@ConnectionId, @TenantId, @IntegrationId, 'provider-contract-connection',
+            INSERT INTO connections (id, tenant_id, connector_id, name, config, status, created_at, updated_at)
+            VALUES (@ConnectionId, @TenantId, @ConnectorId, 'provider-contract-connection',
                 {{{Database.Json("@Config")}}}, 'active', {{{now}}}, {{{now}}})
             """, new
         {
             seed.ConnectionId,
             seed.TenantId,
-            seed.IntegrationId,
+            seed.ConnectorId,
             Config = """{"base_uri":"https://example.test"}"""
         });
 
@@ -295,7 +295,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
 
 internal sealed record ProviderContractSeed(
     Guid TenantId,
-    Guid IntegrationId,
+    Guid ConnectorId,
     Guid ConnectionId,
     Guid TopicId,
     Guid SubscriptionId);
