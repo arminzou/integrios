@@ -17,6 +17,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
         group.MapGet(GetConnectorByVersion, "/{key}/versions/{contractVersion:int}")
             .WithName(GetByVersionRouteName);
         group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}");
+        group.MapPost(PreviewSourceContract, "/source-contracts/preview");
     }
 
     private static async Task<IResult> ListConnectors(
@@ -74,4 +75,28 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
             ?? throw new InvalidOperationException("The Connector version route could not be generated.");
         return Results.Created(location, result.Connector);
     }
+
+    // Stateless dry-run: exercises the complete Source-contract pipeline (schema validation, JSONata
+    // mapping, restricted output shape) against a sample input so an author can see the result
+    // before saving. No tenant data is read, so any authenticated admin may call it.
+    private static async Task<IResult> PreviewSourceContract(
+        SourceContractPreviewRequest request,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        PreviewSourceContractResult result = await mediator.Send(
+            new PreviewSourceContractQuery(request.Schema, request.Mapping, request.SampleInput, request.SampleContext),
+            cancellationToken);
+        if (result.Error is not null)
+            return Results.BadRequest(new { error = result.Error });
+
+        using var doc = JsonDocument.Parse(result.OutputJson!);
+        return Results.Ok(new { output = doc.RootElement.Clone() });
+    }
 }
+
+internal sealed record SourceContractPreviewRequest(
+    JsonElement? Schema,
+    JsonElement Mapping,
+    JsonElement SampleInput,
+    JsonElement? SampleContext);

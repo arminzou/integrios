@@ -16,7 +16,8 @@ public static class TestConnectorManifest
         bool? allowUnauthenticated = null,
         bool? allowUnverified = null,
         bool verifiedWebhookSourceAdapter = false,
-        string? httpOutcomeJson = null)
+        bool declarativeSourceContract = false,
+        string? httpSuccessJson = null)
     {
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
             """{"type":"object","properties":{},"additionalProperties":true}""");
@@ -46,27 +47,46 @@ public static class TestConnectorManifest
                     .Select(AuthenticationScheme)
                     .ToArray(),
             },
-            SourceAdapter = verifiedWebhookSourceAdapter
-                ? new ConnectorSourceAdapterManifest
-                {
-                    Key = "verified_webhook",
-                    ContractVersion = 1,
-                    Config = JsonSerializer.Deserialize<JsonElement>(
-                        """
+            SourceContracts = verifiedWebhookSourceAdapter
+                ?
+                [
+                    new ConnectorSourceContractManifest
+                    {
+                        Key = "verified_webhook",
+                        ContractVersion = 1,
+                        Config = JsonSerializer.Deserialize<JsonElement>(
+                            """
+                            {
+                              "signature_header": "X-Hub-Signature-256",
+                              "signature_encoding": "hex",
+                              "signature_prefix": "sha256=",
+                              "delivery_id_header": "X-GitHub-Delivery",
+                              "event_type_header": "X-GitHub-Event",
+                              "event_type_action_field": "action"
+                            }
+                            """),
+                    },
+                ]
+                : declarativeSourceContract
+                ?
+                [
+                    new ConnectorSourceContractManifest
+                    {
+                        Key = "event_json",
+                        ContractVersion = 1,
+                        Config = JsonSerializer.Deserialize<JsonElement>("{}"),
+                        Mapping = new ConnectorSourceMappingManifest
                         {
-                          "signature_header": "X-Hub-Signature-256",
-                          "signature_encoding": "hex",
-                          "signature_prefix": "sha256=",
-                          "delivery_id_header": "X-GitHub-Delivery",
-                          "event_type_header": "X-GitHub-Event",
-                          "event_type_action_field": "action"
-                        }
-                        """),
-                }
-                : null,
-            HttpOutcome = httpOutcomeJson is null
+                            Engine = "jsonata",
+                            Version = "1",
+                            Expression = "{ \"event_type\": \"event\", \"payload\": $ }",
+                        },
+                    },
+                ]
+                : [],
+            HttpSuccess = httpSuccessJson is null
                 ? null
-                : JsonSerializer.Deserialize<JsonElement>(httpOutcomeJson),
+                : JsonSerializer.Deserialize<JsonElement>(httpSuccessJson),
             Presentation = new ConnectorPresentationManifest
             {
                 Name = name,

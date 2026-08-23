@@ -285,7 +285,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
           "direction":"both",
           "source_verification":{"allow_unverified":true,"schemes":[]},
           "destination_authentication":{"allow_unauthenticated":true,"schemes":[]},
-          "source_adapter":{"key":"verified_webhook","contract_version":1,"config":{}},
+          "source_contracts":[{"key":"verified_webhook","contract_version":1,"config":{}}],
           "presentation":{"name":"{{{name}}}","event_types":[],"authoring_presets":[]}
         }
         """);

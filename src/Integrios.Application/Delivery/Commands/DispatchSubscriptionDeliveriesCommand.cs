@@ -126,7 +126,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         try
         {
             outboundRequest = await BuildOutboundRequestAsync(row, snapshot, payload, cancellationToken);
-            result = await deliveryClient.DeliverAsync(outboundRequest, snapshot.HttpOutcome, cancellationToken);
+            result = await deliveryClient.DeliverAsync(outboundRequest, snapshot.HttpSuccess, cancellationToken);
         }
         catch (DeliveryPreparationException ex)
         {

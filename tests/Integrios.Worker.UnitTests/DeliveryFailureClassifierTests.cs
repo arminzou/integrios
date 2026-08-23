@@ -17,7 +17,7 @@ public sealed class DeliveryFailureClassifierTests
     [InlineData(500)]
     [InlineData(503)]
     [InlineData(0)] // transport/connection failure
-    public void IsTerminal_TransientHttpOutcome_IsFalse(int statusCode)
+    public void IsTerminal_TransientHttpSuccess_IsFalse(int statusCode)
     {
         var result = new DeliveryResult(false, statusCode, FailurePhase: DeliveryFailurePhase.Http);
 
@@ -37,7 +37,7 @@ public sealed class DeliveryFailureClassifierTests
     [InlineData(404)]
     [InlineData(410)]
     [InlineData(200)] // a logically rejected 2xx from the outcome evaluator
-    public void IsTerminal_OtherHttpOutcome_IsTrue(int statusCode)
+    public void IsTerminal_OtherHttpSuccess_IsTrue(int statusCode)
     {
         var result = new DeliveryResult(false, statusCode, FailurePhase: DeliveryFailurePhase.Http);
 

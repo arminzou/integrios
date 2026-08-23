@@ -4,6 +4,7 @@ using Integrios.Application.Auth;
 using Integrios.Application.Bootstrap;
 using Integrios.Application.Delivery;
 using Integrios.Application.Connectors;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Connectors;
 
 namespace Integrios.Application.UnitTests;
@@ -135,7 +136,7 @@ public sealed class ConnectorManifestParserTests
     {
         var manifest = Parse(Json(ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")));
 
-        Assert.Equal("verified_webhook", manifest.SourceAdapter!.Key);
+        Assert.Equal("verified_webhook", Assert.Single(manifest.SourceContracts).Key);
         Assert.Equal("hmac_sha256", Assert.Single(manifest.SourceVerification.Schemes).Scheme);
     }
 
@@ -200,7 +201,7 @@ public sealed class ConnectorManifestParserTests
         var exception = Assert.Throws<ConnectorManifestValidationException>(
             () => Parse(Json(json)));
 
-        Assert.Contains("requires a source_adapter selection", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires a source_contracts selection", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -216,11 +217,11 @@ public sealed class ConnectorManifestParserTests
                 "\"source_verification\": { \"allow_unverified\": true, \"schemes\": [] }",
                 """
                 "source_verification": { "allow_unverified": true, "schemes": [] },
-                "source_adapter": {
+                "source_contracts": [{
                   "key": "verified_webhook",
                   "contract_version": 1,
                   "config": { "signature_header": "X-Hub-Signature-256" }
-                }
+                }]
                 """,
                 StringComparison.Ordinal);
 
@@ -229,6 +230,78 @@ public sealed class ConnectorManifestParserTests
 
         Assert.Contains("requires source_verification.schemes to declare exactly", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Parse_AcceptsDeclarativeSourceContractWithSchemaAndMapping()
+    {
+        string json = ManifestWithDeclarativeSourceContract(
+            """{"type":"object","properties":{"amount":{"type":"integer"}},"required":["amount"],"additionalProperties":true}""",
+            """{"engine":"jsonata","version":"1","expression":"{ \"event_type\": \"payment.created\", \"payload\": $ }"}""");
+
+        var manifest = Parse(Json(json));
+
+        ConnectorSourceContractManifest entry = Assert.Single(manifest.SourceContracts);
+        Assert.Equal("event_json", entry.Key);
+        Assert.True(entry.Schema.HasValue);
+        Assert.Equal("jsonata", entry.Mapping!.Engine);
+    }
+
+    [Fact]
+    public void Parse_RejectsDeclarativeSourceContractWithInvalidMappingSyntax()
+    {
+        string json = ManifestWithDeclarativeSourceContract(
+            schema: null,
+            mapping: """{"engine":"jsonata","version":"1","expression":"{ "}""");
+
+        var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(json)));
+
+        Assert.Contains("Invalid JSONata expression", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_RejectsDeclarativeSourceContractWithUnregisteredKeyAndNoSchemaOrMapping()
+    {
+        string json = ManifestWithDeclarativeSourceContract(schema: null, mapping: null);
+
+        var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(json)));
+
+        Assert.Contains("is not registered", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_RejectsRegisteredSourceContractThatDeclaresSchema()
+    {
+        string json = ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")
+            .Replace(
+                "\"config\": { \"signature_header\": \"X-Hub-Signature-256\" }",
+                """
+                "config": { "signature_header": "X-Hub-Signature-256" },
+                "schema": {"type":"object","properties":{},"additionalProperties":true}
+                """,
+                StringComparison.Ordinal);
+
+        var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(json)));
+
+        Assert.Contains("cannot declare schema or mapping", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static string ManifestWithDeclarativeSourceContract(string? schema, string? mapping) => $$"""
+        {
+          "manifest_schema_version": 1,
+          "key": "event_api_example",
+          "contract_version": 1,
+          "direction": "source",
+          "source_configuration_schema": { "type": "object", "properties": {}, "additionalProperties": true },
+          "source_verification": { "allow_unverified": true, "schemes": [] },
+          "destination_authentication": { "allow_unauthenticated": true, "schemes": [] },
+          "source_contracts": [{
+            "key": "event_json",
+            "contract_version": 1,
+            "config": {}{{(schema is null ? "" : $",\n            \"schema\": {schema}")}}{{(mapping is null ? "" : $",\n            \"mapping\": {mapping}")}}
+          }],
+          "presentation": { "name": "Event API Example", "event_types": [], "authoring_presets": [] }
+        }
+        """;
 
     private static string ManifestWithSourceAdapter(string adapterKey, string schemeName) => ValidManifest()
         .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
@@ -243,11 +316,11 @@ public sealed class ConnectorManifestParserTests
               "allow_unverified": false,
               "schemes": [{"scheme":"{{schemeName}}","required_config":[],"required_secret_refs":["secret"]}]
             },
-            "source_adapter": {
+            "source_contracts": [{
               "key": "{{adapterKey}}",
               "contract_version": 1,
               "config": { "signature_header": "X-Hub-Signature-256" }
-            }
+            }]
             """,
             StringComparison.Ordinal);
 
@@ -291,6 +364,21 @@ public sealed class ConnectorManifestParserTests
     }
 
     [Fact]
+    public void FunctionalDocument_CanonicalizesSourceContractSchemaSetLikeArrays()
+    {
+        var first = Parse(Json(ManifestWithDeclarativeSourceContract(
+            schema: """{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"required":["b","a"],"additionalProperties":true}""",
+            mapping: null)));
+        var second = Parse(Json(ManifestWithDeclarativeSourceContract(
+            schema: """{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"required":["a","b"],"additionalProperties":true}""",
+            mapping: null)));
+
+        Assert.True(JsonElement.DeepEquals(
+            ConnectorManifestParser.ToFunctionalJson(first),
+            ConnectorManifestParser.ToFunctionalJson(second)));
+    }
+
+    [Fact]
     public void Parse_RejectsDuplicateEnumValues()
     {
         var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(SetManifest(
@@ -306,10 +394,10 @@ public sealed class ConnectorManifestParserTests
     {
         string json = ValidManifest().Replace(
             "\"presentation\":",
-            "\"http_outcome\":{\"evaluator\":\"json_boolean\",\"field\":\"ok\",\"expected\":true,\"diagnostic_field\":\"error\",\"max_body_bytes\":65536},\"presentation\":",
+            "\"http_success\":{\"evaluator\":\"json_boolean\",\"field\":\"ok\",\"expected\":true,\"diagnostic_field\":\"error\",\"max_body_bytes\":65536},\"presentation\":",
             StringComparison.Ordinal);
 
-        Assert.NotNull(Parse(Json(json)).HttpOutcome);
+        Assert.NotNull(Parse(Json(json)).HttpSuccess);
     }
 
     [Fact]
@@ -348,12 +436,12 @@ public sealed class ConnectorManifestParserTests
                 "destination_authentication",
                 "destination_configuration_schema",
                 "direction",
-                "http_outcome",
+                "http_success",
                 "key",
                 "manifest_schema_version",
                 "presentation",
-                "source_adapter",
                 "source_configuration_schema",
+                "source_contracts",
                 "source_verification",
             ],
             stored.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
@@ -371,7 +459,7 @@ public sealed class ConnectorManifestParserTests
                 .Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
             ["config", "contract_version", "key"],
-            stored.GetProperty("source_adapter").EnumerateObject()
+            stored.GetProperty("source_contracts")[0].EnumerateObject()
                 .Select(property => property.Name).Order(StringComparer.Ordinal));
 
         ConnectorManifest rehydrated =
@@ -457,7 +545,7 @@ public sealed class ConnectorManifestParserTests
               {"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}
             ]
           },
-          "source_adapter":{
+          "source_contracts":[{
             "key":"verified_webhook",
             "contract_version":1,
             "config":{
@@ -468,8 +556,8 @@ public sealed class ConnectorManifestParserTests
               "event_type_header":"X-GitHub-Event",
               "event_type_action_field":"action"
             }
-          },
-          "http_outcome":{
+          }],
+          "http_success":{
             "evaluator":"json_boolean",
             "field":"ok",
             "expected":true,
@@ -487,11 +575,14 @@ public sealed class ConnectorManifestParserTests
 
     private static JsonElement Json(string value) => JsonSerializer.Deserialize<JsonElement>(value);
 
+    private static readonly ITransformEvaluator MappingEvaluator = new Integrios.Infrastructure.Transforms.JsonataTransformEvaluator();
+
     private static ConnectorManifest ParseAsBootstrap(JsonElement document) =>
         ConnectorManifestParser.Parse(
             document,
             new FakeAuthSchemeRegistry(),
             new FakeSourceAdapterRegistry(),
+            MappingEvaluator,
             ConnectorManifestApplyAuthority.Bootstrap(Guid.NewGuid()));
 
     private static ConnectorManifest Parse(JsonElement document) =>
@@ -499,6 +590,7 @@ public sealed class ConnectorManifestParserTests
             document,
             new FakeAuthSchemeRegistry(),
             new FakeSourceAdapterRegistry(),
+            MappingEvaluator,
             ConnectorManifestApplyAuthority.Operator);
 
     private static ConnectorManifest ParseWithRealSourceAdapterRegistry(JsonElement document) =>
@@ -506,6 +598,7 @@ public sealed class ConnectorManifestParserTests
             document,
             new FakeAuthSchemeRegistry(),
             new Integrios.Infrastructure.Connectors.SourceAdapterRegistry(),
+            MappingEvaluator,
             ConnectorManifestApplyAuthority.Operator);
 
     private sealed class FakeAuthSchemeRegistry : IAuthSchemeRegistry

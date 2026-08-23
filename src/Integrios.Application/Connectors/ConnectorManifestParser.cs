@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Integrios.Application.Auth;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Connectors;
 
 namespace Integrios.Application.Connectors;
@@ -21,15 +22,16 @@ public static partial class ConnectorManifestParser
         "destination_configuration_schema",
         "source_verification",
         "destination_authentication",
-        "source_adapter",
-        "http_outcome",
+        "source_contracts",
+        "http_success",
         "presentation",
     ];
 
     public static ConnectorManifest Parse(
         JsonElement document,
         IAuthSchemeRegistry authenticationSchemes,
-        ISourceAdapterRegistry sourceAdapters,
+        ISourceAdapterRegistry sourceContracts,
+        ITransformEvaluator mappingEvaluator,
         ConnectorManifestApplyAuthority authority)
     {
         if (document.ValueKind != JsonValueKind.Object)
@@ -48,7 +50,7 @@ public static partial class ConnectorManifestParser
             throw Invalid($"The Connector manifest is invalid: {exception.Message}");
         }
 
-        Validate(manifest, document, authenticationSchemes, sourceAdapters, authority);
+        Validate(manifest, document, authenticationSchemes, sourceContracts, mappingEvaluator, authority);
         return Canonicalize(manifest);
     }
 
@@ -85,7 +87,8 @@ public static partial class ConnectorManifestParser
         ConnectorManifest manifest,
         JsonElement document,
         IAuthSchemeRegistry authenticationSchemes,
-        ISourceAdapterRegistry sourceAdapters,
+        ISourceAdapterRegistry sourceContracts,
+        ITransformEvaluator mappingEvaluator,
         ConnectorManifestApplyAuthority authority)
     {
         if (manifest.ManifestSchemaVersion != 1)
@@ -140,63 +143,13 @@ public static partial class ConnectorManifestParser
             throw Invalid("destination_authentication must declare a scheme or set allow_unauthenticated to true.");
         }
 
-        if (manifest.SourceAdapter is ConnectorSourceAdapterManifest sourceAdapterManifest)
-        {
-            if (!document.TryGetProperty("source_adapter", out JsonElement sourceAdapterDocument)
-                || sourceAdapterDocument.ValueKind != JsonValueKind.Object)
-            {
-                throw Invalid("source_adapter must be an object.");
-            }
-            RejectUnknownProperties(
-                sourceAdapterDocument,
-                new HashSet<string>(["key", "contract_version", "config"]),
-                "source_adapter");
-            if (string.IsNullOrWhiteSpace(sourceAdapterManifest.Key)
-                || !ConnectorKeyPattern().IsMatch(sourceAdapterManifest.Key))
-            {
-                throw Invalid("source_adapter.key must use lower snake_case and start with a letter.");
-            }
-            if (sourceAdapterManifest.ContractVersion < 1)
-                throw Invalid("source_adapter.contract_version must be a positive integer.");
-            if (!sourceAdapterDocument.TryGetProperty("config", out JsonElement configDocument)
-                || configDocument.ValueKind != JsonValueKind.Object)
-            {
-                throw Invalid("source_adapter.config is required and must be an object.");
-            }
-            if (!sourceCapable)
-                throw Invalid("source_adapter requires a source-capable direction.");
+        ValidateSourceContracts(manifest, document, sourceContracts, mappingEvaluator, authority, sourceCapable);
 
-            if (!sourceAdapters.TryGet(
-                    sourceAdapterManifest.Key, sourceAdapterManifest.ContractVersion, out SourceAdapterRegistration registration))
-            {
-                throw Invalid(
-                    $"source_adapter '{sourceAdapterManifest.Key}' version {sourceAdapterManifest.ContractVersion} is not registered.");
-            }
-            if (authority.Mode != ConnectorManifestApplyMode.Bootstrap && !registration.AuthoringSafe)
-                throw Invalid($"source_adapter '{sourceAdapterManifest.Key}' may be selected only by Bootstrap.");
-            registration.ValidateConfig(sourceAdapterManifest.Config);
-
-            var declaredSchemes = new HashSet<string>(
-                manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme), StringComparer.Ordinal);
-            if (!declaredSchemes.SetEquals(registration.CompatibleSourceVerificationSchemes))
-            {
-                throw Invalid(
-                    $"source_adapter '{sourceAdapterManifest.Key}' requires source_verification.schemes to declare exactly: "
-                    + string.Join(", ", registration.CompatibleSourceVerificationSchemes) + ".");
-            }
-            if (manifest.SourceVerification.AllowUnverified && !registration.AllowsUnverifiedUse)
-                throw Invalid($"source_adapter '{sourceAdapterManifest.Key}' does not allow unverified use.");
-        }
-        else if (manifest.SourceVerification.Schemes.Count > 0)
-        {
-            throw Invalid("source_verification.schemes requires a source_adapter selection.");
-        }
-
-        if (manifest.HttpOutcome is JsonElement outcome)
+        if (manifest.HttpSuccess is JsonElement httpSuccess)
         {
             if (!destinationCapable)
-                throw Invalid("http_outcome requires a destination-capable direction.");
-            ValidateHttpOutcome(outcome);
+                throw Invalid("http_success requires a destination-capable direction.");
+            ValidateHttpSuccess(httpSuccess);
         }
 
         if (!document.TryGetProperty("presentation", out JsonElement presentationDocument)
@@ -206,6 +159,103 @@ public static partial class ConnectorManifestParser
             throw Invalid("presentation is required and must be an object.");
         }
         ValidatePresentation(manifest.Presentation, presentationDocument);
+    }
+
+    private static void ValidateSourceContracts(
+        ConnectorManifest manifest,
+        JsonElement document,
+        ISourceAdapterRegistry sourceContracts,
+        ITransformEvaluator mappingEvaluator,
+        ConnectorManifestApplyAuthority authority,
+        bool sourceCapable)
+    {
+        if (manifest.SourceContracts.Count == 0)
+        {
+            if (manifest.SourceVerification.Schemes.Count > 0)
+                throw Invalid("source_verification.schemes requires a source_contracts selection.");
+            return;
+        }
+
+        if (!sourceCapable)
+            throw Invalid("source_contracts requires a source-capable direction.");
+
+        JsonElement[] entryDocuments = [.. document.GetProperty("source_contracts").EnumerateArray()];
+        var seen = new HashSet<(string Key, int ContractVersion)>();
+        bool anyRegistered = false;
+
+        for (int index = 0; index < manifest.SourceContracts.Count; index++)
+        {
+            ConnectorSourceContractManifest entry = manifest.SourceContracts[index];
+            JsonElement entryDocument = entryDocuments[index];
+            string path = $"source_contracts[{index}]";
+
+            if (entryDocument.ValueKind != JsonValueKind.Object)
+                throw Invalid($"{path} must be an object.");
+            RejectUnknownProperties(
+                entryDocument,
+                new HashSet<string>(["key", "contract_version", "config", "schema", "mapping"]),
+                path);
+            if (string.IsNullOrWhiteSpace(entry.Key) || !ConnectorKeyPattern().IsMatch(entry.Key))
+                throw Invalid($"{path}.key must use lower snake_case and start with a letter.");
+            if (entry.ContractVersion < 1)
+                throw Invalid($"{path}.contract_version must be a positive integer.");
+            if (!seen.Add((entry.Key, entry.ContractVersion)))
+                throw Invalid($"source_contracts contains duplicate entry '{entry.Key}' v{entry.ContractVersion}.");
+            if (!entryDocument.TryGetProperty("config", out JsonElement configDocument)
+                || configDocument.ValueKind != JsonValueKind.Object)
+            {
+                throw Invalid($"{path}.config is required and must be an object.");
+            }
+
+            if (sourceContracts.TryGet(entry.Key, entry.ContractVersion, out SourceAdapterRegistration registration))
+            {
+                anyRegistered = true;
+                if (entryDocument.TryGetProperty("schema", out _) || entryDocument.TryGetProperty("mapping", out _))
+                {
+                    throw Invalid(
+                        $"{path} '{entry.Key}' is a registered contract and cannot declare schema or mapping.");
+                }
+                if (authority.Mode != ConnectorManifestApplyMode.Bootstrap && !registration.AuthoringSafe)
+                    throw Invalid($"{path} '{entry.Key}' may be selected only by Bootstrap.");
+                registration.ValidateConfig(entry.Config);
+
+                var declaredSchemes = new HashSet<string>(
+                    manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme), StringComparer.Ordinal);
+                if (!declaredSchemes.SetEquals(registration.CompatibleSourceVerificationSchemes))
+                {
+                    throw Invalid(
+                        $"{path} '{entry.Key}' requires source_verification.schemes to declare exactly: "
+                        + string.Join(", ", registration.CompatibleSourceVerificationSchemes) + ".");
+                }
+                if (manifest.SourceVerification.AllowUnverified && !registration.AllowsUnverifiedUse)
+                    throw Invalid($"{path} '{entry.Key}' does not allow unverified use.");
+            }
+            else
+            {
+                bool declaresSchema = entryDocument.TryGetProperty("schema", out JsonElement schemaDocument);
+                bool declaresMapping = entry.Mapping is ConnectorSourceMappingManifest;
+                if (!declaresSchema && !declaresMapping)
+                {
+                    throw Invalid(
+                        $"{path} '{entry.Key}' version {entry.ContractVersion} is not registered "
+                        + "and declares neither schema nor mapping.");
+                }
+
+                if (declaresSchema)
+                    ConstrainedJsonSchemaValidator.Validate(schemaDocument, $"{path}.schema");
+                if (declaresMapping)
+                {
+                    JsonElement mappingDocument = entryDocument.GetProperty("mapping");
+                    string? mappingError = TransformConfigValidator.Validate(
+                        mappingDocument, mappingEvaluator, $"{path}.mapping", out _);
+                    if (mappingError is not null)
+                        throw Invalid(mappingError);
+                }
+            }
+        }
+
+        if (!anyRegistered && manifest.SourceVerification.Schemes.Count > 0)
+            throw Invalid("source_verification.schemes requires a source_contracts selection.");
     }
 
     private static void ValidatePlatformSchemes(
@@ -321,14 +371,14 @@ public static partial class ConnectorManifestParser
         }
     }
 
-    private static void ValidateHttpOutcome(JsonElement outcome)
+    private static void ValidateHttpSuccess(JsonElement httpSuccess)
     {
-        if (outcome.ValueKind != JsonValueKind.Object)
-            throw Invalid("http_outcome must be an object.");
-        if (!outcome.TryGetProperty("evaluator", out JsonElement evaluatorElement)
+        if (httpSuccess.ValueKind != JsonValueKind.Object)
+            throw Invalid("http_success must be an object.");
+        if (!httpSuccess.TryGetProperty("evaluator", out JsonElement evaluatorElement)
             || evaluatorElement.ValueKind != JsonValueKind.String)
         {
-            throw Invalid("http_outcome.evaluator is required.");
+            throw Invalid("http_success.evaluator is required.");
         }
 
         string evaluator = evaluatorElement.GetString()!;
@@ -336,35 +386,35 @@ public static partial class ConnectorManifestParser
         {
             "status_code" => ["evaluator"],
             "json_boolean" => ["evaluator", "field", "expected", "diagnostic_field", "max_body_bytes"],
-            _ => throw Invalid("http_outcome.evaluator must be status_code or json_boolean."),
+            _ => throw Invalid("http_success.evaluator must be status_code or json_boolean."),
         };
-        RejectUnknownProperties(outcome, allowed, "http_outcome");
+        RejectUnknownProperties(httpSuccess, allowed, "http_success");
 
         if (evaluator == "json_boolean")
         {
-            if (!outcome.TryGetProperty("field", out JsonElement field)
+            if (!httpSuccess.TryGetProperty("field", out JsonElement field)
                 || field.ValueKind != JsonValueKind.String
                 || string.IsNullOrWhiteSpace(field.GetString()))
             {
-                throw Invalid("http_outcome.field is required for json_boolean.");
+                throw Invalid("http_success.field is required for json_boolean.");
             }
-            if (!outcome.TryGetProperty("expected", out JsonElement expected)
+            if (!httpSuccess.TryGetProperty("expected", out JsonElement expected)
                 || expected.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             {
-                throw Invalid("http_outcome.expected must be a boolean for json_boolean.");
+                throw Invalid("http_success.expected must be a boolean for json_boolean.");
             }
-            if (outcome.TryGetProperty("diagnostic_field", out JsonElement diagnosticField)
+            if (httpSuccess.TryGetProperty("diagnostic_field", out JsonElement diagnosticField)
                 && (diagnosticField.ValueKind != JsonValueKind.String
                     || string.IsNullOrWhiteSpace(diagnosticField.GetString())))
             {
-                throw Invalid("http_outcome.diagnostic_field must be a non-empty top-level field name.");
+                throw Invalid("http_success.diagnostic_field must be a non-empty top-level field name.");
             }
-            if (outcome.TryGetProperty("max_body_bytes", out JsonElement maxBytes)
+            if (httpSuccess.TryGetProperty("max_body_bytes", out JsonElement maxBytes)
                 && (maxBytes.ValueKind != JsonValueKind.Number
                     || !maxBytes.TryGetInt32(out int value)
                     || value is < 1 or > 1_048_576))
             {
-                throw Invalid("http_outcome.max_body_bytes must be an integer from 1 through 1048576.");
+                throw Invalid("http_success.max_body_bytes must be an integer from 1 through 1048576.");
             }
         }
     }
@@ -415,10 +465,14 @@ public static partial class ConnectorManifestParser
             EventTypes = manifest.Presentation.EventTypes.ToArray(),
             AuthoringPresets = manifest.Presentation.AuthoringPresets.Select(preset => preset.Clone()).ToArray(),
         },
-        SourceAdapter = manifest.SourceAdapter is ConnectorSourceAdapterManifest adapter
-            ? adapter with { Config = adapter.Config.Clone() }
-            : null,
-        HttpOutcome = manifest.HttpOutcome?.Clone(),
+        SourceContracts = manifest.SourceContracts
+            .Select(entry => entry with
+            {
+                Config = entry.Config.Clone(),
+                Schema = entry.Schema is JsonElement entrySchema ? CanonicalizeSchema(entrySchema) : null,
+            })
+            .ToArray(),
+        HttpSuccess = manifest.HttpSuccess?.Clone(),
     };
 
     private static IReadOnlyList<ConnectorSchemeManifest> CanonicalizeSchemes(

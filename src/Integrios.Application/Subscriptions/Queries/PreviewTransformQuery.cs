@@ -23,6 +23,7 @@ internal sealed class PreviewTransformQueryHandler(ITransformEvaluator evaluator
         string? error = TransformConfigValidator.Validate(
             query.Transform,
             evaluator,
+            "transform",
             out TransformSpec? transform);
         if (error is not null)
             return Task.FromResult(new PreviewTransformResult(error, null));

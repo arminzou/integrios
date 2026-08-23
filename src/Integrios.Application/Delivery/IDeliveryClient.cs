@@ -6,7 +6,7 @@ public interface IDeliveryClient
 {
     Task<DeliveryResult> DeliverAsync(
         OutboundHttpMessage request,
-        HttpOutcomeContract? outcomeContract,
+        HttpSuccessRule? successRule,
         CancellationToken cancellationToken);
 }
 

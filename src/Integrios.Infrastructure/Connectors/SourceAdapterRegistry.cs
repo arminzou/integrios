@@ -38,12 +38,12 @@ internal sealed class SourceAdapterRegistry : ISourceAdapterRegistry
     private static void ValidateVerifiedWebhookConfig(JsonElement config)
     {
         if (config.ValueKind != JsonValueKind.Object)
-            throw Invalid("source_adapter.config must be an object.");
+            throw Invalid("source_contracts[].config must be an object.");
 
         foreach (JsonProperty property in config.EnumerateObject())
         {
             if (!VerifiedWebhookConfigProperties.Contains(property.Name))
-                throw Invalid($"source_adapter.config contains unsupported property '{property.Name}'.");
+                throw Invalid($"source_contracts[].config contains unsupported property '{property.Name}'.");
         }
 
         RequireHeaderName(config, "signature_header");
@@ -64,7 +64,7 @@ internal sealed class SourceAdapterRegistry : ISourceAdapterRegistry
             || headerName.Length > MaxHeaderNameLength
             || !headerName.All(IsHttpTokenCharacter))
         {
-            throw Invalid($"source_adapter.config.{property} is required and must be a valid HTTP header name.");
+            throw Invalid($"source_contracts[].config.{property} is required and must be a valid HTTP header name.");
         }
     }
 
@@ -80,7 +80,7 @@ internal sealed class SourceAdapterRegistry : ISourceAdapterRegistry
             || value.ValueKind != JsonValueKind.String
             || value.GetString() is not ("hex" or "base64"))
         {
-            throw Invalid("source_adapter.config.signature_encoding is required and must be 'hex' or 'base64'.");
+            throw Invalid("source_contracts[].config.signature_encoding is required and must be 'hex' or 'base64'.");
         }
     }
 
@@ -93,7 +93,7 @@ internal sealed class SourceAdapterRegistry : ISourceAdapterRegistry
             || string.IsNullOrWhiteSpace(value.GetString())
             || value.GetString()!.Length > maxLength)
         {
-            throw Invalid($"source_adapter.config.{property} must be a non-empty bounded string when present.");
+            throw Invalid($"source_contracts[].config.{property} must be a non-empty bounded string when present.");
         }
     }
 

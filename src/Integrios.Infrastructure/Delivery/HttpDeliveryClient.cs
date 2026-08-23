@@ -12,7 +12,7 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
 
     public async Task<DeliveryResult> DeliverAsync(
         OutboundHttpMessage outboundRequest,
-        HttpOutcomeContract? outcomeContract,
+        HttpSuccessRule? successRule,
         CancellationToken cancellationToken)
     {
         if (!OutboundHttpDestination.TryParse(outboundRequest.Uri, out Uri? destination))
@@ -61,11 +61,11 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
                     false, statusCode, FailurePhase: DeliveryFailurePhase.Http, RetryAfter: retryAfter);
             }
 
-            if (outcomeContract is not { Evaluator: "json_boolean" })
+            if (successRule is not { Evaluator: "json_boolean" })
                 return new DeliveryResult(true, statusCode);
 
             byte[]? body = await ReadBoundedBodyAsync(
-                response, outcomeContract.MaxBodyBytes ?? HttpOutcomeContract.DefaultMaxBodyBytes, cancellationToken);
+                response, successRule.MaxBodyBytes ?? HttpSuccessRule.DefaultMaxBodyBytes, cancellationToken);
             if (body is null)
             {
                 return new DeliveryResult(
@@ -73,7 +73,7 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
                     FailurePhase: DeliveryFailurePhase.Http);
             }
 
-            bool accepted = HttpOutcomeEvaluator.Evaluate(outcomeContract, body, out string? diagnostic);
+            bool accepted = HttpSuccessEvaluator.Evaluate(successRule, body, out string? diagnostic);
             return accepted
                 ? new DeliveryResult(true, statusCode)
                 : new DeliveryResult(false, statusCode, diagnostic, FailurePhase: DeliveryFailurePhase.Http);
@@ -116,7 +116,7 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
     }
 
     // Bounded so a provider cannot force the Worker to buffer an unbounded response merely because
-    // its manifest opted into logical-outcome evaluation.
+    // its manifest opted into HTTP success rule evaluation.
     private static async Task<byte[]?> ReadBoundedBodyAsync(
         HttpResponseMessage response, int maxBytes, CancellationToken cancellationToken)
     {

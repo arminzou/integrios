@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Auth;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Connectors;
 using MediatR;
 
@@ -17,7 +18,8 @@ public sealed record ApplyConnectorManifestCommand(
 internal sealed class ApplyConnectorManifestCommandHandler(
     IConnectorManifestStore store,
     IAuthSchemeRegistry authenticationSchemes,
-    ISourceAdapterRegistry sourceAdapters)
+    ISourceAdapterRegistry sourceContracts,
+    ITransformEvaluator mappingEvaluator)
     : IRequestHandler<ApplyConnectorManifestCommand, ApplyConnectorManifestResult>
 {
     public async Task<ApplyConnectorManifestResult> Handle(
@@ -28,7 +30,8 @@ internal sealed class ApplyConnectorManifestCommandHandler(
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             command.Document,
             authenticationSchemes,
-            sourceAdapters,
+            sourceContracts,
+            mappingEvaluator,
             authority);
 
         if (!string.Equals(command.Key, manifest.Key, StringComparison.Ordinal)

@@ -266,10 +266,18 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                     FROM source_endpoints
                     WHERE tenant_id=@TenantId AND topic_id=@TopicId AND connection_id=@ConnectionId
                       AND status=N'active';
+                    -- No Source entity exists yet to pick a source_contracts[] entry by key, so entry
+                    -- 0 transitionally stands in for "the" Source. Only a *registered* (compiled)
+                    -- contract has a runtime handler to serve a live webhook; the manifest parser
+                    -- guarantees a registered entry never carries schema or mapping and a declarative
+                    -- one always carries at least one, so their absence identifies "registered" here
+                    -- without duplicating the registry's key list into SQL.
                     IF @EndpointId IS NULL AND EXISTS (
                         SELECT 1 FROM connections c JOIN connectors i ON i.id=c.connector_id
                         WHERE c.tenant_id=@TenantId AND c.id=@ConnectionId
-                          AND JSON_QUERY(i.manifest, '$.source_adapter') IS NOT NULL)
+                          AND JSON_QUERY(i.manifest, '$.source_contracts[0]') IS NOT NULL
+                          AND JSON_QUERY(i.manifest, '$.source_contracts[0].schema') IS NULL
+                          AND JSON_QUERY(i.manifest, '$.source_contracts[0].mapping') IS NULL)
                     BEGIN
                         SET @EndpointId=NEWID();
                         SELECT @CallbackPath=CONCAT(N'/webhooks/', i.[key], N'/', LOWER(CONVERT(nvarchar(36), @EndpointId)))
@@ -297,12 +305,20 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
                         WHERE tenant_id = @TenantId AND topic_id = @TopicId AND connection_id = @ConnectionId
                           AND status = 'active'
                     ),
+                    -- No Source entity exists yet to pick a source_contracts[] entry by key, so entry
+                    -- 0 transitionally stands in for "the" Source. Only a *registered* (compiled)
+                    -- contract has a runtime handler to serve a live webhook; the manifest parser
+                    -- guarantees a registered entry never carries schema or mapping and a declarative
+                    -- one always carries at least one, so their absence identifies "registered" here
+                    -- without duplicating the registry's key list into SQL.
                     adapter_eligible AS (
                         SELECT gen_random_uuid() AS endpoint_id, i.key AS connector_key
                         FROM connections c
                         JOIN connectors i ON i.id = c.connector_id
                         WHERE c.tenant_id = @TenantId AND c.id = @ConnectionId
-                          AND jsonb_typeof(i.manifest -> 'source_adapter') = 'object'
+                          AND jsonb_array_length(i.manifest -> 'source_contracts') > 0
+                          AND (i.manifest -> 'source_contracts' -> 0 -> 'schema') IS NULL
+                          AND (i.manifest -> 'source_contracts' -> 0 -> 'mapping') IS NULL
                           AND NOT EXISTS (SELECT 1 FROM existing_endpoint)
                     ),
                     inserted_endpoint AS (

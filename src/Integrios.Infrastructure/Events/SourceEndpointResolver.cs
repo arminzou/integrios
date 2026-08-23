@@ -16,14 +16,17 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
+        // No Source entity exists yet to pick a source_contracts[] entry by key (that lands with the
+        // Source model rewrite), so this transitionally takes the first entry: today only one
+        // webhook-capable entry is ever configured per Connector.
         string sql = sqlServer
             ? """
                 SELECT TOP (1)
                     se.tenant_id AS TenantId, t.slug AS TenantSlug, se.topic_id AS TopicId,
                     se.connection_id AS ConnectionId, i.[key] AS ConnectorKey,
-                    JSON_VALUE(i.manifest, '$.source_adapter.key') AS SourceAdapterKey,
-                    TRY_CONVERT(int, JSON_VALUE(i.manifest, '$.source_adapter.contract_version')) AS SourceAdapterContractVersion,
-                    JSON_QUERY(i.manifest, '$.source_adapter.config') AS SourceAdapterConfigJson,
+                    JSON_VALUE(i.manifest, '$.source_contracts[0].key') AS SourceAdapterKey,
+                    TRY_CONVERT(int, JSON_VALUE(i.manifest, '$.source_contracts[0].contract_version')) AS SourceAdapterContractVersion,
+                    JSON_QUERY(i.manifest, '$.source_contracts[0].config') AS SourceAdapterConfigJson,
                     c.source_verification AS SourceVerificationJson
                 FROM source_endpoints se
                 JOIN topic_sources ts ON ts.tenant_id=se.tenant_id AND ts.topic_id=se.topic_id AND ts.connection_id=se.connection_id
@@ -40,9 +43,9 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                     se.topic_id AS TopicId,
                     se.connection_id AS ConnectionId,
                     i.key AS ConnectorKey,
-                    i.manifest -> 'source_adapter' ->> 'key' AS SourceAdapterKey,
-                    (i.manifest -> 'source_adapter' ->> 'contract_version')::int AS SourceAdapterContractVersion,
-                    (i.manifest -> 'source_adapter' -> 'config')::text AS SourceAdapterConfigJson,
+                    i.manifest -> 'source_contracts' -> 0 ->> 'key' AS SourceAdapterKey,
+                    (i.manifest -> 'source_contracts' -> 0 ->> 'contract_version')::int AS SourceAdapterContractVersion,
+                    (i.manifest -> 'source_contracts' -> 0 -> 'config')::text AS SourceAdapterConfigJson,
                     c.source_verification::text AS SourceVerificationJson
                 FROM source_endpoints se
                 JOIN topic_sources ts

@@ -473,9 +473,9 @@ public sealed class AuthenticatedDispatchTests
         public int CallCount { get; private set; }
 
         public Task<DeliveryResult> DeliverAsync(
-            OutboundHttpMessage request, HttpOutcomeContract? outcomeContract, CancellationToken cancellationToken = default)
+            OutboundHttpMessage request, HttpSuccessRule? successRule, CancellationToken cancellationToken = default)
         {
-            _ = outcomeContract;
+            _ = successRule;
             CallCount++;
             foreach ((string name, string value) in request.Headers)
                 Headers[name] = value;

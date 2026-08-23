@@ -216,7 +216,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         new { Config = transformConfigJson, Name = subscriptionName });
 
     public async Task UpdateLedgerExecutionConfigurationAsync(
-        string destinationUrl, string? destinationAuthJson, string connectorKey, string? httpOutcomeJson = null)
+        string destinationUrl, string? destinationAuthJson, string connectorKey, string? httpSuccessJson = null)
     {
         Guid? connectorId = await ScalarAsync<Guid?>(
             $"SELECT id FROM connectors WHERE {database.KeyColumn}=@ConnectorKey AND contract_version=1",
@@ -231,7 +231,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 """, new
                 {
                     Id = connectorId.Value, ConnectorKey = connectorKey, Schemes = "[]",
-                    Manifest = TestConnectorManifest.Create(connectorKey, connectorKey, "both", httpOutcomeJson: httpOutcomeJson)
+                    Manifest = TestConnectorManifest.Create(connectorKey, connectorKey, "both", httpSuccessJson: httpSuccessJson)
                 });
         }
         await ExecuteAsync($$$"""
@@ -797,7 +797,7 @@ public sealed class FakeDeliveryClient : IDeliveryClient
     public List<DeliveryCall> Calls { get; } = [];
     public bool ShouldSucceed { get; set; } = true;
     public Task<DeliveryResult> DeliverAsync(
-        OutboundHttpMessage request, HttpOutcomeContract? outcomeContract, CancellationToken cancellationToken = default)
+        OutboundHttpMessage request, HttpSuccessRule? successRule, CancellationToken cancellationToken = default)
     {
         Calls.Add(new DeliveryCall(request.Method, request.Uri, request.JsonBody ?? string.Empty, request.Headers));
         return Task.FromResult(ShouldSucceed ? new DeliveryResult(true, 200) : new DeliveryResult(false, 500));

@@ -25,7 +25,7 @@
       }
     ]
   },
-  "http_outcome": {
+  "http_success": {
     "evaluator": "json_boolean",
     "field": "ok",
     "expected": true,

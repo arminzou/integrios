@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Integrios.Application.Transforms;
 using Jsonata.Net.Native;
 using Jsonata.Net.Native.Json;
@@ -28,6 +29,18 @@ internal sealed class JsonataTransformEvaluator : ITransformEvaluator
         string payloadJson,
         TransformContext context)
     {
+        var contextJson = $"{{\"event_type\":{Quoted(context.EventType)},\"topic_name\":{Quoted(context.TopicName)},\"accepted_at\":{Quoted(context.AcceptedAt.ToString("o"))}}}";
+        return Evaluate(transform, payloadJson, contextJson);
+    }
+
+    public string Evaluate(
+        TransformSpec transform,
+        string payloadJson,
+        JsonElement? context) =>
+        Evaluate(transform, payloadJson, context is { } value ? value.GetRawText() : "{}");
+
+    private static string Evaluate(TransformSpec transform, string payloadJson, string contextJson)
+    {
         string? unsupportedPair = ValidateEngineVersion(transform);
         if (unsupportedPair is not null)
             throw new TransformEvaluationException(unsupportedPair);
@@ -52,7 +65,6 @@ internal sealed class JsonataTransformEvaluator : ITransformEvaluator
             throw new TransformEvaluationException($"Failed to parse event payload for transform: {ex.Message}");
         }
 
-        var contextJson = $"{{\"event_type\":{Quoted(context.EventType)},\"topic_name\":{Quoted(context.TopicName)},\"accepted_at\":{Quoted(context.AcceptedAt.ToString("o"))}}}";
         var contextToken = JToken.Parse(contextJson);
 
         var env = new EvaluationEnvironment();

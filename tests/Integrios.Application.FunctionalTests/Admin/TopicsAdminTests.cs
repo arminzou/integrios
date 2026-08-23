@@ -745,6 +745,57 @@ public sealed class TopicsAdminTests : AdminApiTestBase, IClassFixture<AdminApiF
         return connectionId;
     }
 
+    [Fact]
+    public async Task DeclarativeSourceContractConnection_NeverAutoCreatesAWebhookEndpoint()
+    {
+        Guid declarativeConnectionId = await InsertDeclarativeSourceContractConnectionAsync();
+        var created = await (await PostTopicAsync(new
+        {
+            name = "declarative-source",
+            source_connection_ids = new[] { declarativeConnectionId }
+        })).Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
+        Assert.NotNull(created);
+
+        // A declarative source_contracts entry has no compiled runtime handler; minting a live
+        // /webhooks/{key}/{id} route for it would 500 on every request. TopicRepository's
+        // webhook-eligibility gate must only fire for a registered (compiled) entry.
+        Assert.Null(Assert.Single(created.Sources).Endpoint);
+    }
+
+    private async Task<Guid> InsertDeclarativeSourceContractConnectionAsync()
+    {
+        Guid connectorId = Guid.NewGuid();
+        Guid connectionId = Guid.NewGuid();
+        await using var connection = fixture.CreateConnection();
+        await connection.OpenAsync();
+        await connection.ExecuteAsync($$$"""
+            INSERT INTO connectors (
+                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
+                supported_auth_schemes, status, manifest)
+            VALUES (
+                @ConnectorId, 'event_source', 1, 1, 'Event Source', 'source', {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
+
+            INSERT INTO connections (
+                id, tenant_id, connector_id, name, config,
+                source_verification, destination_authentication, status)
+            VALUES (
+                @ConnectionId, @TenantId, @ConnectorId, 'event-source', {{{fixture.Json("@Config")}}},
+                NULL,
+                NULL,
+                'active');
+            """, new
+        {
+            ConnectorId = connectorId,
+            ConnectionId = connectionId,
+            fixture.TenantId,
+            Schemes = "[]",
+            Config = "{}",
+            Manifest = TestConnectorManifest.Create("event_source", "Event Source", "source",
+                declarativeSourceContract: true)
+        });
+        return connectionId;
+    }
+
     private HttpRequestMessage TenantRequest(HttpMethod method, string url, object? body, string authHeader)
     {
         var msg = new HttpRequestMessage(method, url);

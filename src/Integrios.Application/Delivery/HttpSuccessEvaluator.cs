@@ -2,14 +2,14 @@ using System.Text.Json;
 
 namespace Integrios.Application.Delivery;
 
-// Generic logical-outcome evaluation: no provider identity, no Slack adapter, no error taxonomy.
+// Generic HTTP success rule evaluation: no provider identity, no Slack adapter, no error taxonomy.
 // A provider manifest supplies field names and an expected value as data (ADR-0035); this evaluates
 // them against whatever bounded body the transport layer already read.
-public static class HttpOutcomeEvaluator
+public static class HttpSuccessEvaluator
 {
     private const int MaxDiagnosticLength = 500;
 
-    public static bool Evaluate(HttpOutcomeContract? contract, ReadOnlySpan<byte> body, out string? diagnostic)
+    public static bool Evaluate(HttpSuccessRule? contract, ReadOnlySpan<byte> body, out string? diagnostic)
     {
         diagnostic = null;
 

@@ -99,8 +99,8 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 BaseUri = baseUri,
                 Request = subscription.HttpDelivery,
                 DestinationAuthentication = connection.DestinationAuthentication,
-                HttpOutcome = connector.Manifest.HttpOutcome is { } outcome
-                    ? JsonSerializer.Deserialize<HttpOutcomeContract>(outcome.GetRawText(), ConnectionSchemeSelection.StoredJson)
+                HttpSuccess = connector.Manifest.HttpSuccess is { } httpSuccess
+                    ? JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccess.GetRawText(), ConnectionSchemeSelection.StoredJson)
                     : null,
             };
             return new SubscriptionRoutingCandidate(

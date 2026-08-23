@@ -113,7 +113,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
             "\"direction\":\"destination\"",
             "\"direction\":\"both\","
             + "\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true},"
-            + "\"source_adapter\":{\"key\":\"nonexistent_adapter\",\"contract_version\":1,\"config\":{}}",
+            + "\"source_contracts\":[{\"key\":\"nonexistent_adapter\",\"contract_version\":1,\"config\":{}}]",
             StringComparison.Ordinal));
         HttpResponseMessage adapterResponse = await ApplyAsync(1, unregisteredAdapter);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, adapterResponse.StatusCode);

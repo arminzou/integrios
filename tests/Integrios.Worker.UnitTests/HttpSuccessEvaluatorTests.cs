@@ -3,12 +3,12 @@ using Integrios.Application.Delivery;
 
 namespace Integrios.Worker.UnitTests;
 
-public sealed class HttpOutcomeEvaluatorTests
+public sealed class HttpSuccessEvaluatorTests
 {
     [Fact]
     public void Evaluate_NoContract_IsAlwaysTrue()
     {
-        bool accepted = HttpOutcomeEvaluator.Evaluate(null, Body("{}"), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(null, Body("{}"), out string? diagnostic);
 
         Assert.True(accepted);
         Assert.Null(diagnostic);
@@ -17,9 +17,9 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_StatusCodeEvaluator_IsAlwaysTrue()
     {
-        var contract = new HttpOutcomeContract { Evaluator = "status_code" };
+        var contract = new HttpSuccessRule { Evaluator = "status_code" };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(contract, Body("{\"ok\":false}"), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"ok\":false}"), out string? diagnostic);
 
         Assert.True(accepted);
         Assert.Null(diagnostic);
@@ -28,9 +28,9 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_JsonBooleanMatchesExpected_IsTrue()
     {
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(contract, Body("{\"ok\":true}"), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"ok\":true}"), out string? diagnostic);
 
         Assert.True(accepted);
         Assert.Null(diagnostic);
@@ -39,12 +39,12 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_JsonBooleanRejected_UsesDiagnosticFieldWhenPresent()
     {
-        var contract = new HttpOutcomeContract
+        var contract = new HttpSuccessRule
         {
             Evaluator = "json_boolean", Field = "ok", Expected = true, DiagnosticField = "error"
         };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(
+        bool accepted = HttpSuccessEvaluator.Evaluate(
             contract, Body("""{"ok":false,"error":"channel_not_found"}"""), out string? diagnostic);
 
         Assert.False(accepted);
@@ -54,12 +54,12 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_JsonBooleanRejected_FallsBackWhenDiagnosticFieldMissing()
     {
-        var contract = new HttpOutcomeContract
+        var contract = new HttpSuccessRule
         {
             Evaluator = "json_boolean", Field = "ok", Expected = true, DiagnosticField = "error"
         };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(contract, Body("""{"ok":false}"""), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("""{"ok":false}"""), out string? diagnostic);
 
         Assert.False(accepted);
         Assert.Contains("ok", diagnostic, StringComparison.Ordinal);
@@ -68,9 +68,9 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_MalformedJson_FailsClosed()
     {
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(contract, Body("not json"), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("not json"), out string? diagnostic);
 
         Assert.False(accepted);
         Assert.NotNull(diagnostic);
@@ -79,9 +79,9 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_FieldMissing_FailsClosed()
     {
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(contract, Body("{\"other\":1}"), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"other\":1}"), out string? diagnostic);
 
         Assert.False(accepted);
         Assert.NotNull(diagnostic);
@@ -90,9 +90,9 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_FieldNotBoolean_FailsClosed()
     {
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(contract, Body("{\"ok\":\"true\"}"), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"ok\":\"true\"}"), out string? diagnostic);
 
         Assert.False(accepted);
         Assert.NotNull(diagnostic);
@@ -101,9 +101,9 @@ public sealed class HttpOutcomeEvaluatorTests
     [Fact]
     public void Evaluate_RootNotObject_FailsClosed()
     {
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true };
 
-        bool accepted = HttpOutcomeEvaluator.Evaluate(contract, Body("[1,2,3]"), out string? diagnostic);
+        bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("[1,2,3]"), out string? diagnostic);
 
         Assert.False(accepted);
         Assert.NotNull(diagnostic);

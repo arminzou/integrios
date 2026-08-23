@@ -1,5 +1,6 @@
 using Integrios.Application.Connectors;
 using Integrios.Application.Auth;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Connectors;
 using MediatR;
 
@@ -10,7 +11,8 @@ public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Connector
 internal sealed class BootstrapBuiltinsCommandHandler(
     IConnectorManifestStore manifestStore,
     IAuthSchemeRegistry authenticationSchemes,
-    ISourceAdapterRegistry sourceAdapters)
+    ISourceAdapterRegistry sourceContracts,
+    ITransformEvaluator mappingEvaluator)
     : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Connector>>
 {
     public async Task<IReadOnlyList<Connector>> Handle(BootstrapBuiltinsCommand command, CancellationToken cancellationToken)
@@ -23,7 +25,8 @@ internal sealed class BootstrapBuiltinsCommandHandler(
             ConnectorManifest manifest = ConnectorManifestParser.Parse(
                 ConnectorManifestParser.ToJson(builtin.Manifest),
                 authenticationSchemes,
-                sourceAdapters,
+                sourceContracts,
+                mappingEvaluator,
                 authority);
             ConnectorManifestStoreResult result = await manifestStore.ApplyAsync(
                 manifest,

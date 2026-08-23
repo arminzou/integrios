@@ -124,7 +124,7 @@ public sealed class HttpDeliveryClientTests
     {
         var handler = new StubHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"ok":true}""")));
         var client = new HttpDeliveryClient(new HttpClient(handler));
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true };
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
 
@@ -138,7 +138,7 @@ public sealed class HttpDeliveryClientTests
         var handler = new StubHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"ok":false,"error":"channel_not_found"}""")));
         var client = new HttpDeliveryClient(new HttpClient(handler));
-        var contract = new HttpOutcomeContract
+        var contract = new HttpSuccessRule
         {
             Evaluator = "json_boolean", Field = "ok", Expected = true, DiagnosticField = "error"
         };
@@ -157,7 +157,7 @@ public sealed class HttpDeliveryClientTests
         var handler = new StubHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, new string('a', 100))));
         var client = new HttpDeliveryClient(new HttpClient(handler));
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true, MaxBodyBytes = 10 };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true, MaxBodyBytes = 10 };
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
 
@@ -172,7 +172,7 @@ public sealed class HttpDeliveryClientTests
         var handler = new StubHandler((_, _) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
         var client = new HttpDeliveryClient(new HttpClient(handler));
-        var contract = new HttpOutcomeContract { Evaluator = "json_boolean", Field = "ok", Expected = true };
+        var contract = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true };
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
 

@@ -156,13 +156,13 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
     }
 
     [Fact]
-    public async Task Worker_ConnectorWithHttpOutcomeContract_FansOutWithSnapshotCarryingIt()
+    public async Task Worker_ConnectorWithHttpSuccessRule_FansOutWithSnapshotCarryingIt()
     {
         await fixture.UpdateLedgerExecutionConfigurationAsync(
             WorkerRoutingFixture.LedgerSinkUrl,
             null,
             "outcome_contract_test",
-            httpOutcomeJson: """
+            httpSuccessJson: """
                 {"evaluator":"json_boolean","field":"ok","expected":true,"diagnostic_field":"error","max_body_bytes":2048}
                 """);
 
@@ -173,11 +173,11 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
 
-        Assert.NotNull(executionSnapshot.HttpOutcome);
-        Assert.Equal("json_boolean", executionSnapshot.HttpOutcome.Evaluator);
-        Assert.Equal("ok", executionSnapshot.HttpOutcome.Field);
-        Assert.True(executionSnapshot.HttpOutcome.Expected);
-        Assert.Equal("error", executionSnapshot.HttpOutcome.DiagnosticField);
-        Assert.Equal(2048, executionSnapshot.HttpOutcome.MaxBodyBytes);
+        Assert.NotNull(executionSnapshot.HttpSuccess);
+        Assert.Equal("json_boolean", executionSnapshot.HttpSuccess.Evaluator);
+        Assert.Equal("ok", executionSnapshot.HttpSuccess.Field);
+        Assert.True(executionSnapshot.HttpSuccess.Expected);
+        Assert.Equal("error", executionSnapshot.HttpSuccess.DiagnosticField);
+        Assert.Equal(2048, executionSnapshot.HttpSuccess.MaxBodyBytes);
     }
 }

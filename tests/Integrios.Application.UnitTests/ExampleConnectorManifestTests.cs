@@ -3,6 +3,7 @@ using Integrios.Application.Connectors;
 using Integrios.Domain.Connectors;
 using Integrios.Infrastructure.Auth;
 using Integrios.Infrastructure.Connectors;
+using Integrios.Infrastructure.Transforms;
 
 namespace Integrios.Application.UnitTests;
 
@@ -19,7 +20,7 @@ public sealed class ExampleConnectorManifestTests
 
         Assert.Equal("github", manifest.Key);
         Assert.Equal("source", manifest.Direction);
-        Assert.Equal("verified_webhook", manifest.SourceAdapter?.Key);
+        Assert.Equal("verified_webhook", Assert.Single(manifest.SourceContracts).Key);
         Assert.Equal("hmac_sha256", Assert.Single(manifest.SourceVerification.Schemes).Scheme);
         Assert.False(manifest.SourceVerification.AllowUnverified);
     }
@@ -33,9 +34,9 @@ public sealed class ExampleConnectorManifestTests
         Assert.Equal("destination", manifest.Direction);
         Assert.Equal("bearer_token", Assert.Single(manifest.DestinationAuthentication.Schemes).Scheme);
         Assert.False(manifest.DestinationAuthentication.AllowUnauthenticated);
-        Assert.True(manifest.HttpOutcome.HasValue);
-        Assert.Equal("json_boolean", manifest.HttpOutcome!.Value.GetProperty("evaluator").GetString());
-        Assert.Equal("ok", manifest.HttpOutcome.Value.GetProperty("field").GetString());
+        Assert.True(manifest.HttpSuccess.HasValue);
+        Assert.Equal("json_boolean", manifest.HttpSuccess!.Value.GetProperty("evaluator").GetString());
+        Assert.Equal("ok", manifest.HttpSuccess.Value.GetProperty("field").GetString());
     }
 
     private static ConnectorManifest ParseExample(string fileName)
@@ -47,6 +48,7 @@ public sealed class ExampleConnectorManifestTests
             document,
             new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]),
             new SourceAdapterRegistry(),
+            new JsonataTransformEvaluator(),
             ConnectorManifestApplyAuthority.Operator);
     }
 

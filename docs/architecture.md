@@ -111,10 +111,10 @@ there are no provider-specific destination adapters or destination-action domain
 - the relative path always appends to the Connection's base path with one normalized boundary
   slash; it can never replace the Connection's scheme, host, port, or base path
 - fanout snapshots the HTTP request shape, relevant non-secret Connection configuration, secret
-  references, and the Connector's effective HTTP outcome contract together, so a later edit
+  references, and the Connector's effective HTTP success rule together, so a later edit
   cannot change an in-flight delivery's request or success criteria; the Worker resolves current
   secret values for each attempt
-- a Connector may declare an optional HTTP outcome contract: the default `status_code` evaluator
+- a Connector may declare an optional HTTP success rule: the default `status_code` evaluator
   treats any `2xx` response as success, while a `json_boolean` evaluator additionally asserts that a
   configured top-level response field equals an expected boolean, so a provider that returns `2xx`
   for an operation it actually rejected (Slack's `chat.postMessage` is the shipped example) is
@@ -124,7 +124,7 @@ there are no provider-specific destination adapters or destination-action domain
   `2xx`, dead-letters immediately for Operator replay; a bounded `Retry-After` on 429/503 is honored
   over the computed backoff when present
 - successful response bodies do not become persisted workflow state or new Events; a response body
-  is only ever read (bounded) when the outcome contract requires it
+  is only ever read (bounded) when the success rule requires it
 
 Dynamic headers, arbitrary methods, `GET`/`HEAD`/`CONNECT`/`TRACE`, form or multipart data, binary or
 streaming bodies, response-driven workflows, OAuth 2.0 client credentials, and non-HTTP protocols

@@ -27,7 +27,7 @@ public sealed partial class StoredJsonContractTests
                 ]
               },
               "destination_authentication": { "allow_unauthenticated": true, "schemes": [] },
-              "source_adapter": { "key": "github_webhook", "contract_version": 1, "config": {} },
+              "source_contracts": [{ "key": "github_webhook", "contract_version": 1, "config": {} }],
               "presentation": { "name": "GitHub", "event_types": ["issues.opened"], "authoring_presets": [] }
             }
             """;
@@ -36,7 +36,7 @@ public sealed partial class StoredJsonContractTests
         JsonElement written = ConnectorManifestParser.ToJson(manifest);
 
         Assert.Equal(1, manifest.ManifestSchemaVersion);
-        Assert.Equal("github_webhook", manifest.SourceAdapter?.Key);
+        Assert.Equal("github_webhook", Assert.Single(manifest.SourceContracts).Key);
         Assert.Equal(["secret"], manifest.SourceVerification.Schemes[0].RequiredSecretRefs);
 
         AssertAllPropertyNamesAreSnakeCase(written, path: "$");
@@ -44,7 +44,7 @@ public sealed partial class StoredJsonContractTests
         JsonElement scheme = written.GetProperty("source_verification").GetProperty("schemes")[0];
         Assert.True(scheme.TryGetProperty("required_secret_refs", out _));
         Assert.True(written.GetProperty("presentation").TryGetProperty("event_types", out _));
-        Assert.True(written.GetProperty("source_adapter").TryGetProperty("contract_version", out _));
+        Assert.True(written.GetProperty("source_contracts")[0].TryGetProperty("contract_version", out _));
     }
 
     // Stored keys are snake_case and stable; a flat top-level pin misses nested keys and breaks on

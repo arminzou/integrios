@@ -23,11 +23,10 @@ public sealed record ConnectorManifest
 
     public required ConnectorDestinationAuthenticationManifest DestinationAuthentication { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ConnectorSourceAdapterManifest? SourceAdapter { get; init; }
+    public IReadOnlyList<ConnectorSourceContractManifest> SourceContracts { get; init; } = [];
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public JsonElement? HttpOutcome { get; init; }
+    public JsonElement? HttpSuccess { get; init; }
 
     public required ConnectorPresentationManifest Presentation { get; init; }
 }
@@ -46,13 +45,28 @@ public sealed record ConnectorDestinationAuthenticationManifest
     public IReadOnlyList<ConnectorSchemeManifest> Schemes { get; init; } = [];
 }
 
-public sealed record ConnectorSourceAdapterManifest
+public sealed record ConnectorSourceContractManifest
 {
     public required string Key { get; init; }
 
     public required int ContractVersion { get; init; }
 
     public JsonElement Config { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Schema { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ConnectorSourceMappingManifest? Mapping { get; init; }
+}
+
+public sealed record ConnectorSourceMappingManifest
+{
+    public required string Engine { get; init; }
+
+    public required string Version { get; init; }
+
+    public required string Expression { get; init; }
 }
 
 public sealed record ConnectorSchemeManifest

@@ -34,7 +34,7 @@ catalog).
 The [`examples/connectors/`](../examples/connectors/) directory carries the exact
 machine-validated manifests this walkthrough uses. `github-v1.json` selects the authoring-safe
 `verified_webhook` v1 source adapter; `slack-v1.json` is generic HTTP with bearer-token
-authentication and a `json_boolean` outcome contract, because Slack's `chat.postMessage` can return
+authentication and a `json_boolean` success rule, because Slack's `chat.postMessage` can return
 HTTP 200 for a request it rejected. Apply is idempotent — a missing version is created, and
 re-applying the identical manifest is a no-op.
 
@@ -95,7 +95,7 @@ exact same shape under `secrets/source/` instead of `secrets/destination/`.)
 ## 4. Create a Topic and get the callback URL
 
 Creating the Topic with this Connection as a source mints a stable source endpoint, because the
-GitHub Connector's manifest declares a `source_adapter`. Removing and re-adding the association
+GitHub Connector's manifest declares a `source_contracts` entry. Removing and re-adding the association
 later would mint a new endpoint identity; this one is stable for as long as the association exists.
 
 ```bash
@@ -196,7 +196,7 @@ curl -s "http://localhost:5231/events/$EVENT" -H "Authorization: ApiKey $TOKEN" 
 
 A `delivery_attempts[].status` of `succeeded` with `response_status_code: 200` means Slack accepted
 and confirmed the message logically (`ok: true`); a `dead_lettered` SubscriptionDelivery despite an
-HTTP 200 attempt means Slack returned `ok: false`, which the `json_boolean` outcome contract in
+HTTP 200 attempt means Slack returned `ok: false`, which the `json_boolean` success rule in
 `slack-v1.json` classifies as a terminal delivery failure rather than a false success.
 
 ## Recovery notes

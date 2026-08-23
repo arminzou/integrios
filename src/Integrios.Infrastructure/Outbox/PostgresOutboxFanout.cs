@@ -113,7 +113,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     COALESCE(c.config->>'base_uri', '') AS DestinationUrl,
                     i.key AS ConnectorKey,
                     c.destination_authentication::text AS DestinationAuthJson,
-                    (i.manifest -> 'http_outcome')::text AS HttpOutcomeJson
+                    (i.manifest -> 'http_success')::text AS HttpSuccessJson
                 FROM subscriptions s
                 JOIN connections c ON c.id = s.destination_connection_id
                 JOIN connectors i ON i.id = c.connector_id
@@ -133,16 +133,16 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 row.TransformConfigJson,
                 row.ConnectorKey,
                 BuildHttpExecutionSnapshotJson(
-                    row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson, row.HttpOutcomeJson)))
+                    row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson, row.HttpSuccessJson)))
             .ToList();
     }
 
     // Fanout correlates the base_uri, request shape, destination authentication, and effective HTTP
-    // outcome contract a delivery will be dispatched and retried with, so a later Subscription,
+    // success rule a delivery will be dispatched and retried with, so a later Subscription,
     // Connection, or Connector edit cannot change an in-flight delivery's request or success
     // criteria out from under it.
     private static string BuildHttpExecutionSnapshotJson(
-        string destinationUrl, string httpDeliveryJson, string? destinationAuthJson, string? httpOutcomeJson)
+        string destinationUrl, string httpDeliveryJson, string? destinationAuthJson, string? httpSuccessJson)
     {
         var snapshot = new HttpExecutionSnapshot
         {
@@ -153,9 +153,9 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
             DestinationAuthentication = string.IsNullOrWhiteSpace(destinationAuthJson)
                 ? null
                 : JsonSerializer.Deserialize<ConnectionSchemeSelection>(destinationAuthJson, ConnectionSchemeSelection.StoredJson),
-            HttpOutcome = string.IsNullOrWhiteSpace(httpOutcomeJson) || httpOutcomeJson == "null"
+            HttpSuccess = string.IsNullOrWhiteSpace(httpSuccessJson) || httpSuccessJson == "null"
                 ? null
-                : JsonSerializer.Deserialize<HttpOutcomeContract>(httpOutcomeJson, ConnectionSchemeSelection.StoredJson)
+                : JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccessJson, ConnectionSchemeSelection.StoredJson)
         };
         return JsonSerializer.Serialize(snapshot, ConnectionSchemeSelection.StoredJson);
     }
@@ -226,6 +226,6 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         public string DestinationUrl { get; init; } = string.Empty;
         public string ConnectorKey { get; init; } = string.Empty;
         public string? DestinationAuthJson { get; init; }
-        public string? HttpOutcomeJson { get; init; }
+        public string? HttpSuccessJson { get; init; }
     }
 }
