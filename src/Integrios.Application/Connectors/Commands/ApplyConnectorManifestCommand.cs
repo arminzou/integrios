@@ -20,7 +20,6 @@ public sealed record ApplyConnectorManifestCommand(
 internal sealed class ApplyConnectorManifestCommandHandler(
     IConnectorManifestStore store,
     IAuthSchemeRegistry authenticationSchemes,
-    ISourceAdapterRegistry sourceContracts,
     ITransformEvaluator mappingEvaluator)
     : IRequestHandler<ApplyConnectorManifestCommand, ApplyConnectorManifestResult>
 {
@@ -32,7 +31,6 @@ internal sealed class ApplyConnectorManifestCommandHandler(
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             command.Document,
             authenticationSchemes,
-            sourceContracts,
             mappingEvaluator,
             authority);
 

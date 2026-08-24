@@ -47,6 +47,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     public async Task BootstrapBuiltins_IsIdempotent_AndReconcilesPresentationAndStatusDrift()
     {
         IReadOnlyList<Connector> first = await mediator.Send(new BootstrapBuiltinsCommand());
+        Assert.Equal(2, first.Count);
         Connector http = Assert.Single(first, i => i.Key == "http");
         Assert.Equal(BuiltinCatalog.HttpId, http.Id);
         Assert.Equal(ConnectorDirection.Both, http.Direction);
@@ -54,6 +55,9 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         JsonElement destinationSchema = http.Manifest.DestinationConfigurationSchema!.Value;
         Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString());
         Assert.Equal("base_uri", destinationSchema.GetProperty("required")[0].GetString());
+        Connector github = Assert.Single(first, i => i.Key == "github");
+        Assert.Equal(BuiltinCatalog.GitHubId, github.Id);
+        Assert.Equal("github_webhook", Assert.Single(github.Manifest.SourceContracts).Key);
 
         await ExecuteAsync($$$"""
             UPDATE connectors
@@ -65,7 +69,8 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
             """);
 
         IReadOnlyList<Connector> second = await mediator.Send(new BootstrapBuiltinsCommand());
-        Connector reconciled = Assert.Single(second);
+        Assert.Equal(2, second.Count);
+        Connector reconciled = Assert.Single(second, item => item.Key == "http");
         Assert.Equal("HTTP", reconciled.Name);
         Assert.Equal(OperationalStatus.Active, reconciled.Status);
 

@@ -32,7 +32,6 @@ public static partial class ConnectorManifestParser
     public static ConnectorManifest Parse(
         JsonElement document,
         IAuthSchemeRegistry authenticationSchemes,
-        ISourceAdapterRegistry sourceContracts,
         ITransformEvaluator mappingEvaluator,
         ConnectorManifestApplyAuthority authority)
     {
@@ -52,7 +51,7 @@ public static partial class ConnectorManifestParser
             throw Invalid($"The Connector manifest is invalid: {exception.Message}");
         }
 
-        Validate(manifest, document, authenticationSchemes, sourceContracts, mappingEvaluator, authority);
+        Validate(manifest, document, authenticationSchemes, mappingEvaluator, authority);
         return Canonicalize(manifest);
     }
 
@@ -89,7 +88,6 @@ public static partial class ConnectorManifestParser
         ConnectorManifest manifest,
         JsonElement document,
         IAuthSchemeRegistry authenticationSchemes,
-        ISourceAdapterRegistry sourceContracts,
         ITransformEvaluator mappingEvaluator,
         ConnectorManifestApplyAuthority authority)
     {
@@ -145,7 +143,7 @@ public static partial class ConnectorManifestParser
             throw Invalid("destination_authentication must declare a scheme or set allow_unauthenticated to true.");
         }
 
-        ValidateSourceContracts(manifest, document, sourceContracts, mappingEvaluator, authority, sourceCapable);
+        ValidateSourceContracts(manifest, document, mappingEvaluator, sourceCapable);
 
         if (manifest.HttpSuccess is JsonElement httpSuccess)
         {
@@ -166,9 +164,7 @@ public static partial class ConnectorManifestParser
     private static void ValidateSourceContracts(
         ConnectorManifest manifest,
         JsonElement document,
-        ISourceAdapterRegistry sourceContracts,
         ITransformEvaluator mappingEvaluator,
-        ConnectorManifestApplyAuthority authority,
         bool sourceCapable)
     {
         if (manifest.SourceContracts.Count == 0)
@@ -183,7 +179,6 @@ public static partial class ConnectorManifestParser
 
         JsonElement[] entryDocuments = [.. document.GetProperty("source_contracts").EnumerateArray()];
         var seen = new HashSet<(string Key, int ContractVersion)>();
-        bool anyRegistered = false;
 
         for (int index = 0; index < manifest.SourceContracts.Count; index++)
         {
@@ -209,55 +204,18 @@ public static partial class ConnectorManifestParser
                 throw Invalid($"{path}.config is required and must be an object.");
             }
 
-            if (sourceContracts.TryGet(entry.Key, entry.ContractVersion, out SourceAdapterRegistration registration))
+            bool declaresSchema = entryDocument.TryGetProperty("schema", out JsonElement schemaDocument);
+            bool declaresMapping = entry.Mapping is ConnectorSourceMappingManifest;
+            if (declaresSchema)
+                ConstrainedJsonSchemaValidator.Validate(schemaDocument, $"{path}.schema");
+            if (declaresMapping)
             {
-                anyRegistered = true;
-                if (entryDocument.TryGetProperty("schema", out _) || entryDocument.TryGetProperty("mapping", out _))
-                {
-                    throw Invalid(
-                        $"{path} '{entry.Key}' is a registered contract and cannot declare schema or mapping.");
-                }
-                if (authority.Mode != ConnectorManifestApplyMode.Bootstrap && !registration.AuthoringSafe)
-                    throw Invalid($"{path} '{entry.Key}' may be selected only by Bootstrap.");
-                registration.ValidateConfig(entry.Config);
-
-                var declaredSchemes = new HashSet<string>(
-                    manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme), StringComparer.Ordinal);
-                if (!declaredSchemes.SetEquals(registration.CompatibleSourceVerificationSchemes))
-                {
-                    throw Invalid(
-                        $"{path} '{entry.Key}' requires source_verification.schemes to declare exactly: "
-                        + string.Join(", ", registration.CompatibleSourceVerificationSchemes) + ".");
-                }
-                if (manifest.SourceVerification.AllowUnverified && !registration.AllowsUnverifiedUse)
-                    throw Invalid($"{path} '{entry.Key}' does not allow unverified use.");
-            }
-            else
-            {
-                bool declaresSchema = entryDocument.TryGetProperty("schema", out JsonElement schemaDocument);
-                bool declaresMapping = entry.Mapping is ConnectorSourceMappingManifest;
-                if (!declaresSchema && !declaresMapping)
-                {
-                    throw Invalid(
-                        $"{path} '{entry.Key}' version {entry.ContractVersion} is not registered "
-                        + "and declares neither schema nor mapping.");
-                }
-
-                if (declaresSchema)
-                    ConstrainedJsonSchemaValidator.Validate(schemaDocument, $"{path}.schema");
-                if (declaresMapping)
-                {
-                    JsonElement mappingDocument = entryDocument.GetProperty("mapping");
-                    string? mappingError = MappingConfigValidator.Validate(
-                        mappingDocument, mappingEvaluator, $"{path}.mapping", out _);
-                    if (mappingError is not null)
-                        throw Invalid(mappingError);
-                }
+                JsonElement mappingDocument = entryDocument.GetProperty("mapping");
+                string? mappingError = MappingConfigValidator.Validate(mappingDocument, mappingEvaluator, $"{path}.mapping", out _);
+                if (mappingError is not null)
+                    throw Invalid(mappingError);
             }
         }
-
-        if (!anyRegistered && manifest.SourceVerification.Schemes.Count > 0)
-            throw Invalid("source_verification.schemes requires a source_contracts selection.");
     }
 
     private static void ValidatePlatformSchemes(

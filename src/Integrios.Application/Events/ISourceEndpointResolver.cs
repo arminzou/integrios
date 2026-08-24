@@ -20,8 +20,5 @@ public sealed record ResolvedSourceEndpoint
     public required Guid SourceId { get; init; }
     public required Guid ConnectionId { get; init; }
     public required string ConnectorKey { get; init; }
-    public required string SourceAdapterKey { get; init; }
-    public required int SourceAdapterContractVersion { get; init; }
-    public required JsonElement SourceAdapterConfig { get; init; }
     public required ConnectionSchemeSelection SourceVerification { get; init; }
 }

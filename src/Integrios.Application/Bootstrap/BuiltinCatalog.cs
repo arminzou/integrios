@@ -12,6 +12,8 @@ public sealed record BuiltinConnector(
 public static class BuiltinCatalog
 {
     public static readonly Guid HttpId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    public static readonly Guid GitHubId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+    public const int GitHubContractVersion = 1;
 
     public static readonly IReadOnlyList<BuiltinConnector> All =
     [
@@ -48,6 +50,43 @@ public static class BuiltinCatalog
                 {
                     Name = "HTTP",
                     Description = "Generic HTTP source or destination.",
+                },
+            }),
+        new BuiltinConnector(
+            GitHubId,
+            new ConnectorManifest
+            {
+                ManifestSchemaVersion = 1,
+                Key = "github",
+                ContractVersion = GitHubContractVersion,
+                Direction = "source",
+                SourceConfigurationSchema = EmptyObjectSchema(),
+                SourceVerification = new ConnectorSourceVerificationManifest
+                {
+                    AllowUnverified = false,
+                    Schemes =
+                    [
+                        new ConnectorSchemeManifest
+                        {
+                            Scheme = "hmac_sha256",
+                            RequiredSecretRefs = ["secret"],
+                        },
+                    ],
+                },
+                DestinationAuthentication = new ConnectorDestinationAuthenticationManifest { AllowUnauthenticated = true },
+                SourceContracts =
+                [
+                    new ConnectorSourceContractManifest
+                    {
+                        Key = "github_webhook",
+                        ContractVersion = GitHubContractVersion,
+                        Config = JsonSerializer.Deserialize<JsonElement>("{}"),
+                    },
+                ],
+                Presentation = new ConnectorPresentationManifest
+                {
+                    Name = "GitHub",
+                    Description = "GitHub webhook source.",
                 },
             }),
     ];

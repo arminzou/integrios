@@ -37,9 +37,6 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingress],
         [typeof(IConnectorCatalog)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
-        [typeof(ISourceAdapterRegistry)] = [Host.Admin, Host.Ingress],
-        [typeof(IIngressSourceAdapter)] = [Host.Ingress],
-        [typeof(IIngressSourceAdapterRuntime)] = [Host.Ingress],
         [typeof(ISourceEndpointResolver)] = [Host.Ingress],
         [typeof(ISourceTopicLookup)] = [Host.Ingress],
         [typeof(IOutboxFanout)] = [Host.Worker],
@@ -161,7 +158,6 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ITenantRepository>(scope.ServiceProvider);
         AssertResolves<IConnectorCatalog>(scope.ServiceProvider);
         AssertResolves<IConnectorManifestStore>(scope.ServiceProvider);
-        AssertResolves<ISourceAdapterRegistry>(scope.ServiceProvider);
         AssertResolves<IConnectionRepository>(scope.ServiceProvider);
         AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
         AssertResolves<ITopicRepository>(scope.ServiceProvider);
@@ -197,9 +193,6 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
-        AssertResolves<ISourceAdapterRegistry>(provider);
-        AssertResolves<IIngressSourceAdapter>(provider);
-        AssertResolves<IIngressSourceAdapterRuntime>(provider);
 
         AssertOmits<IAdminKeyLookup>(provider);
         AssertOmits<IAdminKeyLifecycle>(provider);
@@ -256,7 +249,6 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IDeadLetterReplay>(scope.ServiceProvider);
         AssertOmits<IConnectorCatalog>(scope.ServiceProvider);
         AssertOmits<IConnectorManifestStore>(scope.ServiceProvider);
-        AssertOmits<ISourceAdapterRegistry>(scope.ServiceProvider);
         AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
     }
 

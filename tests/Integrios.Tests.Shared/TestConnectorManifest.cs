@@ -17,7 +17,7 @@ public static class TestConnectorManifest
         string? description = "test connector",
         bool? allowUnauthenticated = null,
         bool? allowUnverified = null,
-        bool verifiedWebhookSourceAdapter = false,
+        bool verifiedWebhookSourceContract = false,
         bool declarativeSourceContract = false,
         string? httpSuccessJson = null)
     {
@@ -49,7 +49,7 @@ public static class TestConnectorManifest
                     .Select(AuthenticationScheme)
                     .ToArray(),
             },
-            SourceContracts = verifiedWebhookSourceAdapter
+            SourceContracts = verifiedWebhookSourceContract
                 ?
                 [
                     new ConnectorSourceContractManifest

@@ -123,114 +123,32 @@ public sealed class ConnectorManifestParserTests
     }
 
     [Fact]
-    public void Parse_RejectsSourceAdapterSelectionForOperatorWhenNotAuthoringSafe()
+    public void Parse_AcceptsDeclaredSourceContract()
     {
-        string json = ManifestWithSourceAdapter("github_native", schemeName: "hmac_sha256");
-
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
-            () => Parse(Json(json)));
-
-        Assert.Contains("only by Bootstrap", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Parse_AcceptsOperatorAuthoringSafeSourceAdapterSelection()
-    {
-        var manifest = Parse(Json(ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")));
+        var manifest = Parse(Json(ManifestWithSourceContract("verified_webhook", schemeName: "hmac_sha256")));
 
         Assert.Equal("verified_webhook", Assert.Single(manifest.SourceContracts).Key);
         Assert.Equal("hmac_sha256", Assert.Single(manifest.SourceVerification.Schemes).Scheme);
     }
 
     [Fact]
-    public void Parse_RejectsVerifiedWebhookThatAllowsUnverifiedUse()
-    {
-        string json = ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")
-            .Replace("\"allow_unverified\": false", "\"allow_unverified\": true", StringComparison.Ordinal);
-
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
-            () => Parse(Json(json)));
-
-        Assert.Contains("does not allow unverified use", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Parse_RejectsSourceAdapterConfigWithInvalidHttpHeaderName()
-    {
-        string json = MaximalManifest()
-            .Replace("X-Hub-Signature-256", "bad header", StringComparison.Ordinal);
-
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
-            () => ParseWithRealSourceAdapterRegistry(Json(json)));
-
-        Assert.Contains("valid HTTP header name", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void BuiltinHttpDestinationSchema_RejectsUnknownConfiguration()
     {
-        BuiltinConnector http = Assert.Single(BuiltinCatalog.All);
+        BuiltinConnector http = Assert.Single(BuiltinCatalog.All, item => item.Manifest.Key == "http");
         JsonElement schema = http.Manifest.DestinationConfigurationSchema!.Value;
 
         Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
     }
 
     [Fact]
-    public void Parse_RejectsUnknownSourceAdapter()
+    public void BuiltinGitHub_IsPinnedToTheCompiledWebhookContract()
     {
-        string json = ManifestWithSourceAdapter("nonexistent_adapter", schemeName: "hmac_sha256");
+        BuiltinConnector github = Assert.Single(BuiltinCatalog.All, item => item.Manifest.Key == "github");
 
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
-            () => Parse(Json(json)));
-
-        Assert.Contains("is not registered", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Parse_RejectsSourceVerificationSchemesWithoutSourceAdapter()
-    {
-        string json = ValidManifest()
-            .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
-            .Replace(
-                "\"destination_configuration_schema\"",
-                "\"source_configuration_schema\": { \"type\": \"object\", \"properties\": {}, \"additionalProperties\": true }, \"destination_configuration_schema\"",
-                StringComparison.Ordinal)
-            .Replace(
-                "\"source_verification\": { \"allow_unverified\": true, \"schemes\": [] }",
-                "\"source_verification\": { \"allow_unverified\": false, \"schemes\": [{\"scheme\":\"hmac_sha256\",\"required_config\":[],\"required_secret_refs\":[\"secret\"]}] }",
-                StringComparison.Ordinal);
-
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
-            () => Parse(Json(json)));
-
-        Assert.Contains("requires a source_contracts selection", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Parse_RejectsSourceAdapterWithIncompatibleVerificationSchemes()
-    {
-        string json = ValidManifest()
-            .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
-            .Replace(
-                "\"destination_configuration_schema\"",
-                "\"source_configuration_schema\": { \"type\": \"object\", \"properties\": {}, \"additionalProperties\": true }, \"destination_configuration_schema\"",
-                StringComparison.Ordinal)
-            .Replace(
-                "\"source_verification\": { \"allow_unverified\": true, \"schemes\": [] }",
-                """
-                "source_verification": { "allow_unverified": true, "schemes": [] },
-                "source_contracts": [{
-                  "key": "verified_webhook",
-                  "contract_version": 1,
-                  "config": { "signature_header": "X-Hub-Signature-256" }
-                }]
-                """,
-                StringComparison.Ordinal);
-
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
-            () => Parse(Json(json)));
-
-        Assert.Contains("requires source_verification.schemes to declare exactly", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(BuiltinCatalog.GitHubId, github.Id);
+        Assert.Equal(BuiltinCatalog.GitHubContractVersion, github.Manifest.ContractVersion);
+        Assert.Equal("github_webhook", Assert.Single(github.Manifest.SourceContracts).Key);
+        Assert.Equal("hmac_sha256", Assert.Single(github.Manifest.SourceVerification.Schemes).Scheme);
     }
 
     [Fact]
@@ -260,33 +178,6 @@ public sealed class ConnectorManifestParserTests
         Assert.Contains("Invalid JSONata expression", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Parse_RejectsDeclarativeSourceContractWithUnregisteredKeyAndNoSchemaOrMapping()
-    {
-        string json = ManifestWithDeclarativeSourceContract(schema: null, mapping: null);
-
-        var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(json)));
-
-        Assert.Contains("is not registered", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Parse_RejectsRegisteredSourceContractThatDeclaresSchema()
-    {
-        string json = ManifestWithSourceAdapter("verified_webhook", schemeName: "hmac_sha256")
-            .Replace(
-                "\"config\": { \"signature_header\": \"X-Hub-Signature-256\" }",
-                """
-                "config": { "signature_header": "X-Hub-Signature-256" },
-                "schema": {"type":"object","properties":{},"additionalProperties":true}
-                """,
-                StringComparison.Ordinal);
-
-        var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(json)));
-
-        Assert.Contains("cannot declare schema or mapping", exception.Message, StringComparison.Ordinal);
-    }
-
     private static string ManifestWithDeclarativeSourceContract(string? schema, string? mapping) => $$"""
         {
           "manifest_schema_version": 1,
@@ -305,7 +196,7 @@ public sealed class ConnectorManifestParserTests
         }
         """;
 
-    private static string ManifestWithSourceAdapter(string adapterKey, string schemeName) => ValidManifest()
+    private static string ManifestWithSourceContract(string contractKey, string schemeName) => ValidManifest()
         .Replace("\"direction\": \"destination\"", "\"direction\": \"both\"", StringComparison.Ordinal)
         .Replace(
             "\"destination_configuration_schema\"",
@@ -319,7 +210,7 @@ public sealed class ConnectorManifestParserTests
               "schemes": [{"scheme":"{{schemeName}}","required_config":[],"required_secret_refs":["secret"]}]
             },
             "source_contracts": [{
-              "key": "{{adapterKey}}",
+              "key": "{{contractKey}}",
               "contract_version": 1,
               "config": { "signature_header": "X-Hub-Signature-256" }
             }]
@@ -583,7 +474,6 @@ public sealed class ConnectorManifestParserTests
         ConnectorManifestParser.Parse(
             document,
             new FakeAuthSchemeRegistry(),
-            new FakeSourceAdapterRegistry(),
             MappingEvaluator,
             ConnectorManifestApplyAuthority.Bootstrap(Guid.NewGuid()));
 
@@ -591,15 +481,6 @@ public sealed class ConnectorManifestParserTests
         ConnectorManifestParser.Parse(
             document,
             new FakeAuthSchemeRegistry(),
-            new FakeSourceAdapterRegistry(),
-            MappingEvaluator,
-            ConnectorManifestApplyAuthority.Operator);
-
-    private static ConnectorManifest ParseWithRealSourceAdapterRegistry(JsonElement document) =>
-        ConnectorManifestParser.Parse(
-            document,
-            new FakeAuthSchemeRegistry(),
-            new Integrios.Infrastructure.Connectors.SourceAdapterRegistry(),
             MappingEvaluator,
             ConnectorManifestApplyAuthority.Operator);
 
@@ -634,28 +515,4 @@ public sealed class ConnectorManifestParserTests
             IReadOnlyDictionary<string, string> secrets) => throw new NotSupportedException();
     }
 
-    private sealed class FakeSourceAdapterRegistry : ISourceAdapterRegistry
-    {
-        private static readonly IReadOnlyDictionary<(string Key, int ContractVersion), SourceAdapterRegistration> Registrations =
-            new Dictionary<(string, int), SourceAdapterRegistration>
-            {
-                [("verified_webhook", 1)] = new(
-                    "verified_webhook", 1, AuthoringSafe: true, AllowsUnverifiedUse: false,
-                    ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
-                [("github_native", 1)] = new(
-                    "github_native", 1, AuthoringSafe: false, AllowsUnverifiedUse: false,
-                    ["hmac_sha256"], ValidateConfig: RequireObjectConfig),
-            };
-
-        public bool TryGet(string key, int contractVersion, out SourceAdapterRegistration registration) =>
-            Registrations.TryGetValue((key, contractVersion), out registration!);
-
-        public IReadOnlyCollection<SourceAdapterRegistration> GetAll() => Registrations.Values.ToArray();
-
-        private static void RequireObjectConfig(JsonElement config)
-        {
-            if (config.ValueKind != JsonValueKind.Object)
-                throw new ConnectorManifestValidationException("source_adapter.config must be an object.");
-        }
-    }
 }

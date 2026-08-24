@@ -16,7 +16,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
 
         Assert.Equal(0, firstMigrate.ExitCode);
         Assert.Equal(0, secondMigrate.ExitCode);
-        Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(
+        Assert.Equal(3L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database, "SELECT COUNT(*) FROM \"__EFMigrationsHistory\""));
         Assert.Equal("text|NO", await ColumnShapeAsync(database, "event_deliveries", "connector_key"));
         Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "event_deliveries", "http_execution_snapshot"));

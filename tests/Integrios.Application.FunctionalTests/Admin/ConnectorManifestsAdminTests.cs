@@ -104,19 +104,19 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
     }
 
     [Fact]
-    public async Task Apply_RejectsRouteIdentityMismatchAndUnregisteredSourceAdapterSelection()
+    public async Task Apply_RejectsRouteIdentityMismatchAndAcceptsDeclarativeSourceContract()
     {
         HttpResponseMessage identityMismatch = await ApplyAsync(2, Manifest(contractVersion: 1, name: "Example API"));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, identityMismatch.StatusCode);
 
-        JsonElement unregisteredAdapter = Json(Manifest(1, "Example API").GetRawText().Replace(
+        JsonElement sourceContract = Json(Manifest(1, "Example API").GetRawText().Replace(
             "\"direction\":\"destination\"",
             "\"direction\":\"both\","
             + "\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true},"
-            + "\"source_contracts\":[{\"key\":\"nonexistent_adapter\",\"contract_version\":1,\"config\":{}}]",
+            + "\"source_contracts\":[{\"key\":\"event_json\",\"contract_version\":1,\"config\":{}}]",
             StringComparison.Ordinal));
-        HttpResponseMessage adapterResponse = await ApplyAsync(1, unregisteredAdapter);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, adapterResponse.StatusCode);
+        HttpResponseMessage sourceContractResponse = await ApplyAsync(1, sourceContract);
+        Assert.Equal(HttpStatusCode.Created, sourceContractResponse.StatusCode);
     }
 
     [Fact]

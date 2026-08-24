@@ -10,7 +10,7 @@ using Integrios.Infrastructure.Transforms;
 namespace Integrios.Application.UnitTests;
 
 // Proves the public examples under examples/connectors/ are valid against the exact same
-// manifest parser, real destination-authentication handler registry, and real source-adapter
+// manifest parser, real destination-authentication handler registry, and real source-contract
 // registry that Admin's PUT /admin/connectors/{key}/versions/{contractVersion} uses — i7a.8's
 // "machine-validated" acceptance criterion, not a hand-rolled fake-registry approximation of it.
 public sealed class ExampleConnectorManifestTests
@@ -49,7 +49,6 @@ public sealed class ExampleConnectorManifestTests
         return ConnectorManifestParser.Parse(
             document,
             new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]),
-            new SourceAdapterRegistry(),
             new JsonataTransformEvaluator(),
             ConnectorManifestApplyAuthority.Operator);
     }

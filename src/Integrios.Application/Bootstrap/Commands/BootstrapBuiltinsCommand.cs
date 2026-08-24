@@ -13,7 +13,6 @@ public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Connector
 internal sealed class BootstrapBuiltinsCommandHandler(
     IConnectorManifestStore manifestStore,
     IAuthSchemeRegistry authenticationSchemes,
-    ISourceAdapterRegistry sourceContracts,
     ITransformEvaluator mappingEvaluator)
     : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Connector>>
 {
@@ -27,7 +26,6 @@ internal sealed class BootstrapBuiltinsCommandHandler(
             ConnectorManifest manifest = ConnectorManifestParser.Parse(
                 ConnectorManifestParser.ToJson(builtin.Manifest),
                 authenticationSchemes,
-                sourceContracts,
                 mappingEvaluator,
                 authority);
             ConnectorManifestStoreResult result = await manifestStore.ApplyAsync(

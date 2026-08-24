@@ -532,7 +532,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
             "/admin/transform/preview",
             new
             {
-                mapping = new { engine = "jsonata", version = "1" },
+                transform = new { engine = "jsonata", version = "1" },
                 sample_input = new { amount = 42 }
             }));
 

@@ -85,7 +85,6 @@ public static class DependencyInjection
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.AddDestinationAuthenticationServices();
-        services.AddSourceAdapterServices();
         services.AddTransformEvaluationServices();
 
         return services;
@@ -106,9 +105,6 @@ public static class DependencyInjection
             services.AddSingleton<IEventAcceptance, PostgresEventAcceptance>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
         services.TryAddSingleton<ISourceVerificationSecretResolver, UnavailableSourceVerificationSecretResolver>();
-        services.AddSourceAdapterServices();
-        services.AddSingleton<IIngressSourceAdapter, VerifiedWebhookIngressAdapter>();
-        services.AddSingleton<IIngressSourceAdapterRuntime, IngressSourceAdapterRuntime>();
 
         return services;
     }
@@ -199,13 +195,6 @@ public static class DependencyInjection
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
-
-        return services;
-    }
-
-    private static IServiceCollection AddSourceAdapterServices(this IServiceCollection services)
-    {
-        services.AddSingleton<ISourceAdapterRegistry, SourceAdapterRegistry>();
 
         return services;
     }

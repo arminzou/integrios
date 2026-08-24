@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.Ingress.UnitTests;
 
-// Exercises the real VerifiedWebhookIngressAdapter, IngressSourceAdapterRuntime, and the
+// Exercises the real webhook command, and the
 // configuration-backed ISourceVerificationSecretResolver end to end through the HTTP endpoint;
 // only the Postgres-backed ISourceEndpointResolver and IEventAcceptance ports are stubbed. This is
 // the "production path" i7a.5 requires host isolation to be proven against.
@@ -48,13 +48,13 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         EventSubmission submission = fixture.EventAcceptance.LastSubmission;
         Assert.Equal("github.issues.opened", submission.EventType);
         Assert.Equal("delivery-1", submission.SourceEventId);
-        Assert.Equal($"{endpointId}:delivery-1", submission.IdempotencyKey);
+        Assert.Equal($"{fixture.SourceEndpointResolver.Result!.SourceId}:delivery-1", submission.IdempotencyKey);
         Assert.Equal(JsonValueKind.Object, submission.Payload.ValueKind);
         Assert.Equal(1, submission.Payload.GetProperty("number").GetInt32());
     }
 
     // Resolves the design's deferred "verified GitHub ping" Known Unknown: a verified ping becomes
-    // an ordinary Event under its derived type, with no adapter-level special-casing.
+    // an ordinary Event under its derived type, with no provider-specific special-casing.
     [Fact]
     public async Task PostWebhook_GitHubPing_AcceptsAsOrdinaryPingEventWithNoActionSegment()
     {
@@ -160,19 +160,6 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         SourceId = Guid.NewGuid(),
         ConnectionId = Guid.NewGuid(),
         ConnectorKey = "github",
-        SourceAdapterKey = "verified_webhook",
-        SourceAdapterContractVersion = 1,
-        SourceAdapterConfig = JsonSerializer.Deserialize<JsonElement>(
-            """
-            {
-              "signature_header": "X-Hub-Signature-256",
-              "signature_encoding": "hex",
-              "signature_prefix": "sha256=",
-              "delivery_id_header": "X-GitHub-Delivery",
-              "event_type_header": "X-GitHub-Event",
-              "event_type_action_field": "action"
-            }
-            """),
         SourceVerification = new ConnectionSchemeSelection
         {
             Scheme = "hmac_sha256",
