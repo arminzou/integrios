@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Integrios.Application.Authoring.Connections;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using MediatR;
@@ -29,7 +28,8 @@ internal sealed class IngestEventCommandHandler(
             ?? throw new SourceEndpointNotFoundException(
                 "No active event_api Source matches the requested id.");
 
-        SourceContractOutput output = EvaluateSourceContract(source, command.RawInput);
+        SourceContractOutput output = SourceContractEvaluator.Evaluate(
+            evaluator, source.SourceContractSchema, source.SourceMapping, command.RawInput);
         string? idempotencyKey = output.SourceEventId is { } sourceEventId
             ? $"{command.SourceId}:{sourceEventId}"
             : null;
@@ -80,32 +80,5 @@ internal sealed class IngestEventCommandHandler(
             AcceptedAt = accepted.AcceptedAt,
             AlreadyAccepted = accepted.AlreadyAccepted
         };
-    }
-
-    private SourceContractOutput EvaluateSourceContract(ResolvedEventApiSource source, JsonElement rawInput)
-    {
-        if (source.SourceContractSchema is JsonElement schema)
-        {
-            try
-            {
-                ConnectionConfigurationSchemaEvaluator.Validate(rawInput, schema, "input");
-            }
-            catch (ConnectionConfigurationValidationException exception)
-            {
-                throw new EventAcceptanceException(exception.Message);
-            }
-        }
-
-        try
-        {
-            string outputJson = source.SourceMapping is { } mapping
-                ? evaluator.Evaluate(mapping, rawInput.GetRawText(), (JsonElement?)null)
-                : rawInput.GetRawText();
-            return SourceMappingOutputValidator.Validate(outputJson);
-        }
-        catch (TransformEvaluationException exception)
-        {
-            throw new EventAcceptanceException(exception.Message);
-        }
     }
 }

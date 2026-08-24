@@ -96,6 +96,8 @@ public static class DependencyInjection
         services.AddSingleton<IActiveTenantApiKeyLookup, ActiveTenantApiKeyLookup>();
         services.AddSingleton<IEventApiSourceResolver, EventApiSourceResolver>();
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
+        services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
+        services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
         services.AddTransformEvaluationServices();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IEventAcceptance, SqlServerEventAcceptance>();

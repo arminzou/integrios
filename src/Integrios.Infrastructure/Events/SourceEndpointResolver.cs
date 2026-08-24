@@ -1,8 +1,7 @@
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Bootstrap;
 using Integrios.Application.Ingestion;
-using Integrios.Domain.Entities;
+using Integrios.Application.Transforms;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 
@@ -12,8 +11,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
     : ISourceEndpointResolver
 {
     public async Task<ResolvedSourceEndpoint?> ResolveAsync(
-        string connectorKey,
-        Guid endpointId,
+        Guid callbackId,
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -23,16 +21,17 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 SELECT TOP (1)
                     s.tenant_id AS TenantId, t.slug AS TenantSlug, s.topic_id AS TopicId, s.id AS SourceId,
                     s.connection_id AS ConnectionId, i.[key] AS ConnectorKey,
-                    c.source_verification AS SourceVerificationJson
+                    s.configuration AS SourceConfigurationJson,
+                    c.source_verification AS SourceVerificationJson,
+                    i.manifest AS ManifestJson
                 FROM sources s
-                JOIN connections c ON c.tenant_id=s.tenant_id AND c.id=s.connection_id
-                JOIN connectors i ON i.id=c.connector_id
-                JOIN tenants t ON t.id=s.tenant_id
-                WHERE JSON_VALUE(s.configuration, '$.callback_id')=@EndpointId
-                  AND JSON_VALUE(s.configuration, '$.source_contract')=N'github_webhook'
-                  AND i.id=@GitHubConnectorId AND i.contract_version=@GitHubContractVersion AND i.[key]=@ConnectorKey
-                  AND s.type=N'webhook' AND s.status=N'active'
-                  AND c.status=N'active' AND i.status=N'active'
+                JOIN connections c ON c.tenant_id = s.tenant_id AND c.id = s.connection_id
+                JOIN connectors i ON i.id = c.connector_id
+                JOIN tenants t ON t.id = s.tenant_id
+                WHERE JSON_VALUE(s.configuration, '$.callback_id') = @CallbackId
+                  AND s.type = N'webhook' AND s.status = N'active'
+                  AND c.status = N'active'
+                  AND i.status = N'active' AND i.direction IN (N'source', N'both')
                 """
             : """
                 SELECT
@@ -42,28 +41,23 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                     s.id AS SourceId,
                     s.connection_id AS ConnectionId,
                     i.key AS ConnectorKey,
-                    c.source_verification::text AS SourceVerificationJson
+                    s.configuration::text AS SourceConfigurationJson,
+                    c.source_verification::text AS SourceVerificationJson,
+                    i.manifest::text AS ManifestJson
                 FROM sources s
                 JOIN connections c ON c.tenant_id = s.tenant_id AND c.id = s.connection_id
                 JOIN connectors i ON i.id = c.connector_id
                 JOIN tenants t ON t.id = s.tenant_id
-                WHERE s.configuration ->> 'callback_id' = @EndpointId::text
-                  AND s.configuration ->> 'source_contract' = 'github_webhook'
-                  AND i.id = @GitHubConnectorId AND i.contract_version = @GitHubContractVersion AND i.key = @ConnectorKey
+                WHERE s.configuration ->> 'callback_id' = @CallbackId
                   AND s.type = 'webhook' AND s.status = 'active'
-                  AND c.status = 'active' AND i.status = 'active'
+                  AND c.status = 'active'
+                  AND i.status = 'active' AND i.direction IN ('source', 'both')
                 LIMIT 1
                 """;
         EndpointRow? row = await connection.QuerySingleOrDefaultAsync<EndpointRow>(
             new CommandDefinition(
                 sql,
-                new
-                {
-                    EndpointId = endpointId,
-                    ConnectorKey = connectorKey,
-                    GitHubConnectorId = BuiltinCatalog.GitHubId,
-                    BuiltinCatalog.GitHubContractVersion,
-                },
+                new { CallbackId = callbackId.ToString() },
                 cancellationToken: cancellationToken));
 
         return row?.ToResolvedSourceEndpoint();
@@ -77,11 +71,22 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
         public Guid SourceId { get; init; }
         public Guid ConnectionId { get; init; }
         public string ConnectorKey { get; init; } = "";
+        public string SourceConfigurationJson { get; init; } = "{}";
         public string? SourceVerificationJson { get; init; }
+        public string ManifestJson { get; init; } = "";
 
         public ResolvedSourceEndpoint? ToResolvedSourceEndpoint()
         {
-            if (SourceVerificationJson is null)
+            JsonElement sourceConfiguration = JsonSerializer.Deserialize<JsonElement>(SourceConfigurationJson);
+            if (!sourceConfiguration.TryGetProperty("source_contract", out JsonElement contractKeyElement))
+                return null;
+            string? contractKey = contractKeyElement.GetString();
+
+            ConnectorManifest manifest = JsonSerializer.Deserialize<ConnectorManifest>(
+                ManifestJson, StoredJson.Options)!;
+            ConnectorSourceContractManifest? contract = manifest.SourceContracts
+                .FirstOrDefault(candidate => candidate.Key == contractKey);
+            if (contract is null)
                 return null;
 
             return new ResolvedSourceEndpoint
@@ -92,8 +97,13 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 SourceId = SourceId,
                 ConnectionId = ConnectionId,
                 ConnectorKey = ConnectorKey,
-                SourceVerification = JsonSerializer.Deserialize<SourceVerification>(
-                    SourceVerificationJson, StoredJson.Options)!,
+                SourceVerification = SourceVerificationJson is null
+                    ? null
+                    : JsonSerializer.Deserialize<SourceVerification>(SourceVerificationJson, StoredJson.Options)!,
+                SourceContractSchema = contract.Schema,
+                SourceMapping = contract.Mapping is { } mapping
+                    ? new TransformSpec(mapping.Engine, mapping.Version, mapping.Expression)
+                    : null,
             };
         }
     }

@@ -37,6 +37,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
         [typeof(IEventApiSourceResolver)] = [Host.Ingestion],
+        [typeof(ISourceVerifier)] = [Host.Ingestion],
+        [typeof(ISourceVerifierRegistry)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
@@ -275,6 +277,8 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IActiveTenantApiKeyLookup>(provider);
         AssertResolves<IEventApiSourceResolver>(provider);
         AssertResolves<ISourceEndpointResolver>(provider);
+        AssertResolves<ISourceVerifier>(provider);
+        AssertResolves<ISourceVerifierRegistry>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
 

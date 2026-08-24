@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Domain.Entities;
+using Integrios.Application.Transforms;
 using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Ingestion;
@@ -7,8 +7,7 @@ namespace Integrios.Application.Ingestion;
 public interface ISourceEndpointResolver
 {
     Task<ResolvedSourceEndpoint?> ResolveAsync(
-        string connectorKey,
-        Guid endpointId,
+        Guid callbackId,
         CancellationToken cancellationToken);
 }
 
@@ -20,5 +19,7 @@ public sealed record ResolvedSourceEndpoint
     public required Guid SourceId { get; init; }
     public required Guid ConnectionId { get; init; }
     public required string ConnectorKey { get; init; }
-    public required SourceVerification SourceVerification { get; init; }
+    public SourceVerification? SourceVerification { get; init; }
+    public required JsonElement? SourceContractSchema { get; init; }
+    public required TransformSpec? SourceMapping { get; init; }
 }

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Integrios.Application.Ingestion;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -16,6 +17,10 @@ namespace Integrios.Ingestion.UnitTests;
 public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
     : IClassFixture<ApiTestAppFixture>, IAsyncLifetime
 {
+    private const string SignatureHeaderName = "X-Signature";
+    private const string EventTypeHeaderName = "X-Event-Type";
+    private const string DeliveryIdHeaderName = "X-Delivery-Id";
+
     private HttpClient client = null!;
 
     public Task InitializeAsync()
@@ -35,48 +40,49 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
     }
 
     [Fact]
-    public async Task PostWebhook_ValidSignature_AcceptsAndDerivesActionQualifiedEventType()
+    public async Task PostWebhook_ValidSignature_AcceptsAndDerivesEventTypeFromContext()
     {
-        Guid endpointId = Guid.NewGuid();
+        Guid callbackId = Guid.NewGuid();
         fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint();
 
         HttpResponseMessage response = await SendAsync(
-            endpointId, """{"action":"opened","number":1}""", "X-GitHub-Event", "issues", "delivery-1");
+            callbackId, """{"action":"opened","number":1}""", "issue.opened", "delivery-1");
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.NotNull(fixture.EventAcceptance.LastSubmission);
         EventSubmission submission = fixture.EventAcceptance.LastSubmission;
-        Assert.Equal("github.issues.opened", submission.EventType);
+        Assert.Equal("test.issue.opened", submission.EventType);
         Assert.Equal("delivery-1", submission.SourceEventId);
         Assert.Equal($"{fixture.SourceEndpointResolver.Result!.SourceId}:delivery-1", submission.IdempotencyKey);
         Assert.Equal(JsonValueKind.Object, submission.Payload.ValueKind);
         Assert.Equal(1, submission.Payload.GetProperty("number").GetInt32());
     }
 
-    // Resolves the design's deferred "verified GitHub ping" Known Unknown: a verified ping becomes
-    // an ordinary Event under its derived type, with no provider-specific special-casing.
     [Fact]
-    public async Task PostWebhook_GitHubPing_AcceptsAsOrdinaryPingEventWithNoActionSegment()
+    public async Task PostWebhook_NoVerificationConfigured_SkipsVerificationAndAccepts()
     {
-        Guid endpointId = Guid.NewGuid();
-        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint();
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with { SourceVerification = null };
 
-        HttpResponseMessage response = await SendAsync(
-            endpointId, """{"zen":"hello"}""", "X-GitHub-Event", "ping", "delivery-ping");
+        HttpRequestMessage request = new(HttpMethod.Post, $"/webhooks/{callbackId}")
+        {
+            Content = new StringContent("""{"action":"opened"}""", Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(EventTypeHeaderName, "issue.opened");
+        request.Headers.TryAddWithoutValidation(DeliveryIdHeaderName, "delivery-open");
 
+        HttpResponseMessage response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal("github.ping", fixture.EventAcceptance.LastSubmission!.EventType);
     }
 
     [Fact]
     public async Task PostWebhook_InvalidSignature_Returns401()
     {
-        Guid endpointId = Guid.NewGuid();
+        Guid callbackId = Guid.NewGuid();
         fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint();
 
         HttpRequestMessage request = BuildRequest(
-            endpointId, """{"action":"opened"}""", "sha256=" + new string('0', 64),
-            "X-GitHub-Event", "issues", "delivery-2");
+            callbackId, """{"action":"opened"}""", new string('0', 64), "issue.opened", "delivery-2");
 
         HttpResponseMessage response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -84,12 +90,11 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
     }
 
     [Fact]
-    public async Task PostWebhook_UnknownEndpoint_Returns404()
+    public async Task PostWebhook_UnknownCallback_Returns404()
     {
         fixture.SourceEndpointResolver.Result = null;
 
-        HttpResponseMessage response = await SendAsync(
-            Guid.NewGuid(), """{"a":1}""", "X-GitHub-Event", "push", "delivery-3");
+        HttpResponseMessage response = await SendAsync(Guid.NewGuid(), """{"a":1}""", "push", "delivery-3");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -97,10 +102,10 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task PostWebhook_NonObjectPayload_Returns400()
     {
-        Guid endpointId = Guid.NewGuid();
+        Guid callbackId = Guid.NewGuid();
         fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint();
 
-        HttpResponseMessage response = await SendAsync(endpointId, "[1,2,3]", "X-GitHub-Event", "push", "delivery-4");
+        HttpResponseMessage response = await SendAsync(callbackId, "[1,2,3]", "push", "delivery-4");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -108,40 +113,38 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
     [Fact]
     public async Task PostWebhook_BodyExceedsBound_Returns413()
     {
-        Guid endpointId = Guid.NewGuid();
+        Guid callbackId = Guid.NewGuid();
         fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint();
 
         string oversizedBody = "{\"padding\":\"" + new string('a', 2_000_000) + "\"}";
-        HttpRequestMessage request = BuildRequest(
-            endpointId, oversizedBody, "sha256=deadbeef", "X-GitHub-Event", "push", "delivery-5");
+        HttpRequestMessage request = BuildRequest(callbackId, oversizedBody, "deadbeef", "push", "delivery-5");
 
         HttpResponseMessage response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
 
     private async Task<HttpResponseMessage> SendAsync(
-        Guid endpointId, string body, string eventTypeHeaderName, string eventTypeValue, string deliveryId)
+        Guid callbackId, string body, string eventTypeValue, string deliveryId)
     {
-        string signature = "sha256=" + SignBody(body);
-        HttpRequestMessage request = BuildRequest(endpointId, body, signature, eventTypeHeaderName, eventTypeValue, deliveryId);
+        string signature = SignBody(body);
+        HttpRequestMessage request = BuildRequest(callbackId, body, signature, eventTypeValue, deliveryId);
         return await client.SendAsync(request);
     }
 
     private static HttpRequestMessage BuildRequest(
-        Guid endpointId,
+        Guid callbackId,
         string body,
         string signatureHeaderValue,
-        string eventTypeHeaderName,
         string eventTypeValue,
         string deliveryId)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, $"/webhooks/github/{endpointId}")
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/webhooks/{callbackId}")
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
-        request.Headers.TryAddWithoutValidation("X-Hub-Signature-256", signatureHeaderValue);
-        request.Headers.TryAddWithoutValidation(eventTypeHeaderName, eventTypeValue);
-        request.Headers.TryAddWithoutValidation("X-GitHub-Delivery", deliveryId);
+        request.Headers.TryAddWithoutValidation(SignatureHeaderName, signatureHeaderValue);
+        request.Headers.TryAddWithoutValidation(EventTypeHeaderName, eventTypeValue);
+        request.Headers.TryAddWithoutValidation(DeliveryIdHeaderName, deliveryId);
         return request;
     }
 
@@ -159,13 +162,20 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         TopicId = Guid.NewGuid(),
         SourceId = Guid.NewGuid(),
         ConnectionId = Guid.NewGuid(),
-        ConnectorKey = "github",
+        ConnectorKey = "test_webhook",
         SourceVerification = new SourceVerification
         {
             Scheme = "hmac_sha256",
-            Config = JsonSerializer.Deserialize<JsonElement>("{}"),
+            Config = JsonSerializer.Deserialize<JsonElement>($$"""{"header_name":"{{SignatureHeaderName}}","encoding":"hex"}"""),
             SecretRefs = JsonSerializer.Deserialize<JsonElement>(
                 $$"""{"secret":"{{ApiTestAppFixture.WebhookSecretReference}}"}"""),
         },
+        SourceContractSchema = null,
+        // $context.headers keys are lower-cased by BuildContext regardless of how the request sent
+        // them, so the mapping looks them up in lower case too.
+        SourceMapping = new TransformSpec(
+            "jsonata",
+            "1",
+            $$"""{ "event_type": "test." & $context.headers.`x-event-type`, "source_event_id": $context.headers.`x-delivery-id`, "payload": $ }"""),
     };
 }
