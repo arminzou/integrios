@@ -50,6 +50,9 @@ jobs:
     name: functional (${{ matrix.database-provider }})
     needs: verify
     runs-on: ubuntu-latest
+    # The tier now starts a real Service Bus emulator alongside the database container; a broker
+    # that never becomes ready would otherwise burn the six-hour default before failing.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
