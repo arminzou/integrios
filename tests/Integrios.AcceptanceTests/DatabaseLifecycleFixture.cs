@@ -58,7 +58,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         RunAdminProcessAsync(
             database,
             ["bootstrap"],
-            "INTEGRIOS_BOOTSTRAP_ADMIN_SECRET",
+            "INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET",
             secret,
             "Production Bootstrap",
             new Dictionary<string, string?>
@@ -75,15 +75,15 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             null,
             "Database migration");
 
-    public static Task<BootstrapProcessResult> RunAdminKeyRotationAsync(
+    public static Task<BootstrapProcessResult> RunOperatorKeyRotationAsync(
         QualificationDatabase database,
         string? secret) =>
         RunAdminProcessAsync(
             database,
-            ["admin-key", "rotate"],
-            "INTEGRIOS_ADMIN_KEY_ROTATION_SECRET",
+            ["operator-key", "rotate"],
+            "INTEGRIOS_OPERATOR_KEY_ROTATION_SECRET",
             secret,
-            "AdminKey rotation");
+            "OperatorKey rotation");
 
     private static async Task<BootstrapProcessResult> RunAdminProcessAsync(
         QualificationDatabase database,

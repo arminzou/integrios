@@ -286,7 +286,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
     // Killing a container leaves its PostgreSQL backend running, so locks taken by an interrupted
     // Worker outlive it. Matching on an actively executing statement against the table under test
-    // is specific enough here: the Worker is already dead, and Admin and Ingress hold no
+    // is specific enough here: the Worker is already dead, and Admin and Ingestion hold no
     // long-running statement against these tables.
     private async Task TerminateActiveBackendsAsync(string table) => await SafeExecuteAsync(
         $"""
@@ -347,8 +347,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             "/admin/tenants",
             new { slug = tenantSlug, name = $"Resilience {name}", environment = "production" });
         string apiToken = await PostAdminForPropertyAsync(
-            $"/admin/tenants/{tenantId}/api-keys",
-            new { name = "resilience-ingress" },
+            $"/admin/tenants/{tenantId}/tenant-api-keys",
+            new { name = "resilience-ingestion" },
             "token");
         Guid sourceConnectionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/connections",
@@ -380,7 +380,10 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name, source_connection_ids = new[] { sourceConnectionId } });
+            new { name });
+        Guid sourceId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/sources",
+            new { connection_id = sourceConnectionId, topic_id = topicId, type = "event_api", configuration = new { source_contract = "event_json" } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
@@ -394,7 +397,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             tenantId,
             tenantSlug,
             apiToken,
-            sourceConnectionId,
+            sourceId,
             name,
             $"{name}.test",
             subscriptionId,
@@ -432,15 +435,15 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         {
             Content = JsonContent.Create(new
             {
-                source_connection_id = pipeline.SourceConnectionId,
+                source_id = pipeline.SourceId,
                 topic_name = pipeline.TopicName,
                 event_type = pipeline.EventType,
                 payload,
                 idempotency_key = idempotencyKey ?? $"resilience-{Guid.NewGuid():N}"
             })
         };
-        request.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {pipeline.ApiToken}");
-        using HttpResponseMessage response = await fixture.IngressClient.SendAsync(request);
+        request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {pipeline.ApiToken}");
+        using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         string body = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         using JsonDocument document = JsonDocument.Parse(body);
@@ -520,7 +523,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         Guid TenantId,
         string TenantSlug,
         string ApiToken,
-        Guid SourceConnectionId,
+        Guid SourceId,
         string TopicName,
         string EventType,
         Guid SubscriptionId,

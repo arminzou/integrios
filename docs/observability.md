@@ -24,7 +24,7 @@ Every service exposes a Prometheus-format `/metrics` endpoint.
 
 | Endpoint | Local URL | In-cluster port |
 |----------|-----------|-----------------|
-| Ingress `/metrics` | http://localhost:5231/metrics | `8080` |
+| Ingestion `/metrics` | http://localhost:5231/metrics | `8080` |
 | Admin `/metrics` | http://localhost:5150/metrics | `8080` |
 | Worker `/metrics` | — | `5299` (`WorkerMetricsPort`) |
 
@@ -37,7 +37,7 @@ Alongside standard ASP.NET Core, HttpClient, and runtime metrics, Integrios emit
 
 | Metric | Type | Labels | Meaning |
 |--------|------|--------|---------|
-| `integrios_events_ingested_total` | counter | — | events accepted at the ingress boundary (excludes idempotent duplicates) |
+| `integrios_events_ingested_total` | counter | — | events accepted at the ingestion boundary (excludes idempotent duplicates) |
 | `integrios_events_unrouted_total` | counter | — | events that matched no Subscription during fanout |
 | `integrios_fanout_rows_created_total` | counter | — | per-subscription delivery rows created by fanout |
 | `integrios_deliveries_succeeded_total` | counter | `connector_key` | successful deliveries, by destination connector class |
@@ -125,7 +125,7 @@ a development convenience, not a production backend** — in production you run 
 
 | Tool | URL | Notes |
 |------|-----|-------|
-| Prometheus | http://localhost:9090 | Targets page shows ingress, admin, and worker as `UP` |
+| Prometheus | http://localhost:9090 | Targets page shows ingestion, admin, and worker as `UP` |
 | Grafana | http://localhost:3000 | Anonymous access; opens to the **Integrios Overview** dashboard |
 
 The provisioned dashboard shows ingest rate, outbox pending depth, delivery success by

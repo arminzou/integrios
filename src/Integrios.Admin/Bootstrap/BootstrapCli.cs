@@ -12,23 +12,23 @@ namespace Integrios.Admin.Bootstrap;
 
 public static class BootstrapCli
 {
-    private const string GlobalAdminPublicKey = "global_admin_key";
-    private const string AdminSecretConfigKey = "INTEGRIOS_BOOTSTRAP_ADMIN_SECRET";
+    private const string GlobalOperatorPublicKey = "global_operator_key";
+    private const string OperatorKeySecretConfigKey = "INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET";
 
     // Denylist entry only: refuses this well-known dev secret when running with a Production environment.
-    private const string WellKnownDevSecret = "admin_bootstrap_secret";
+    private const string WellKnownDevSecret = "operator_bootstrap_secret";
 
     public static async Task<int> RunAsync(string[] args)
     {
         string[] flags = args.Skip(1).ToArray();
-        if (flags.Any(flag => flag is not ("--builtins" or "--admin-key")))
+        if (flags.Any(flag => flag is not ("--builtins" or "--operator-key")))
         {
-            Console.Error.WriteLine("Usage: bootstrap [--builtins] [--admin-key]");
+            Console.Error.WriteLine("Usage: bootstrap [--builtins] [--operator-key]");
             return 2;
         }
 
         bool runBuiltins = flags.Length == 0 || flags.Contains("--builtins");
-        bool runAdminKey = flags.Length == 0 || flags.Contains("--admin-key");
+        bool runOperatorKey = flags.Length == 0 || flags.Contains("--operator-key");
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
         hostBuilder.Services.AddAdminApplicationServices();
@@ -38,20 +38,20 @@ public static class BootstrapCli
         await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
         IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        string? adminSecret = runAdminKey
-            ? hostBuilder.Configuration[AdminSecretConfigKey]
+        string? operatorKeySecret = runOperatorKey
+            ? hostBuilder.Configuration[OperatorKeySecretConfigKey]
             : null;
 
-        if (runAdminKey && hostBuilder.Environment.IsProduction() && string.IsNullOrWhiteSpace(adminSecret))
+        if (runOperatorKey && hostBuilder.Environment.IsProduction() && string.IsNullOrWhiteSpace(operatorKeySecret))
         {
             Console.Error.WriteLine(
-                $"admin-key: Production Bootstrap requires a non-empty {AdminSecretConfigKey} value.");
+                $"operator-key: Production Bootstrap requires a non-empty {OperatorKeySecretConfigKey} value.");
             return 1;
         }
 
-        if (runAdminKey && hostBuilder.Environment.IsProduction() && adminSecret == WellKnownDevSecret)
+        if (runOperatorKey && hostBuilder.Environment.IsProduction() && operatorKeySecret == WellKnownDevSecret)
         {
-            Console.Error.WriteLine("admin-key: refusing to bootstrap Production with the well-known dev secret.");
+            Console.Error.WriteLine("operator-key: refusing to bootstrap Production with the well-known dev secret.");
             return 1;
         }
 
@@ -61,17 +61,17 @@ public static class BootstrapCli
             Console.WriteLine($"builtins: reconciled {reconciled.Count} built-in connector(s).");
         }
 
-        if (runAdminKey)
+        if (runOperatorKey)
         {
-            BootstrapAdminKeyResult result = await mediator.Send(
-                new BootstrapAdminKeyCommand(GlobalAdminPublicKey, adminSecret));
+            BootstrapOperatorKeyResult result = await mediator.Send(
+                new BootstrapOperatorKeyCommand(GlobalOperatorPublicKey, operatorKeySecret));
 
             if (!result.Created)
-                Console.WriteLine("admin-key: a live deployment-wide admin key already exists, no-op.");
+                Console.WriteLine("operator-key: a live deployment-wide operator key already exists, no-op.");
             else if (result.GeneratedSecret is not null)
-                Console.WriteLine($"admin-key: created deployment-wide admin key. Secret (store securely, shown once): {result.GeneratedSecret}");
+                Console.WriteLine($"operator-key: created deployment-wide operator key. Secret (store securely, shown once): {result.GeneratedSecret}");
             else
-                Console.WriteLine("admin-key: created deployment-wide admin key using the supplied secret.");
+                Console.WriteLine("operator-key: created deployment-wide operator key using the supplied secret.");
         }
 
         return 0;

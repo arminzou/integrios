@@ -20,10 +20,10 @@ public sealed class WorkerHostStartupTests
         admin.AddAdminInfrastructureServices(configuration);
         admin.AddTelemetryServices(configuration, "integrios-admin");
 
-        var ingress = new ServiceCollection();
-        ingress.AddIngressApplicationServices();
-        ingress.AddIngressInfrastructureServices(configuration);
-        ingress.AddTelemetryServices(configuration, "integrios-ingress");
+        var ingestion = new ServiceCollection();
+        ingestion.AddIngestionApplicationServices();
+        ingestion.AddIngestionInfrastructureServices(configuration);
+        ingestion.AddTelemetryServices(configuration, "integrios-ingestion");
 
         var worker = new ServiceCollection();
         worker.AddWorkerApplicationServices();
@@ -32,7 +32,7 @@ public sealed class WorkerHostStartupTests
         worker.AddOutboxDepthMetricsServices(configuration);
 
         Assert.DoesNotContain(admin, IsOutboxDepthMetricsRegistration);
-        Assert.DoesNotContain(ingress, IsOutboxDepthMetricsRegistration);
+        Assert.DoesNotContain(ingestion, IsOutboxDepthMetricsRegistration);
         Assert.Single(worker, IsOutboxDepthMetricsRegistration);
     }
 

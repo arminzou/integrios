@@ -1,0 +1,55 @@
+@baseUrl = {{INGESTION_BASE_URL}}
+
+# Run Admin.http first.
+#
+# What this file verifies:
+# 1. Ingestion accepts an authenticated event write.
+# 2. The event is stored durably and can be fetched back by ID.
+# 3. Worker will later fan out the event to matching subscriptions and deliver it
+#    to MockSink.
+#
+# Setup:
+# - copy the token from Admin.http createTenantApiKey into src/Integrios.Ingestion/.env
+# - for the auth-enabled destination path, provision the default file-backed Worker secret at:
+#   secrets/acme-corp/erp_api_key (exact secret value; no automatic trimming)
+@tenantApiKeyToken = {{$dotenv INGESTION_TENANT_API_KEY}}
+@sourceConnectionId = {{$dotenv INGESTION_SOURCE_CONNECTION_ID}}
+
+###
+# Step 1 - Ingest an event
+# This event targets topic `payments`. The worker will later match subscriptions
+# with `event_type = payment.created`.
+# @name ingest
+POST {{baseUrl}}/events
+Authorization: TenantApiKey {{tenantApiKeyToken}}
+Content-Type: application/json
+
+{
+  "sourceEventId": "event_src_001",
+  "sourceConnectionId": "{{sourceConnectionId}}",
+  "topicName": "payments",
+  "eventType": "payment.created",
+  "payload": {
+    "paymentId": "pay_001",
+    "amount": 1200
+  },
+  "metadata": {
+    "source": "manual-test"
+  },
+  "idempotencyKey": "manual-001"
+}
+
+###
+@eventId = {{ingest.response.body.$.eventId}}
+
+###
+# Step 2 - Fetch the accepted event
+# This confirms the durable acceptance boundary: Ingestion committed the event
+# before async delivery begins.
+GET {{baseUrl}}/events/{{eventId}}
+Authorization: TenantApiKey {{tenantApiKeyToken}}
+
+###
+# Step 3 - Replay the event if it later reaches dead-letter
+POST {{baseUrl}}/events/{{eventId}}/replay
+Authorization: TenantApiKey {{tenantApiKeyToken}}

@@ -16,13 +16,13 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     public async Task PackagedDeployment_StartsAndExposesDeterministicEvidence()
     {
         await AssertHealthyAsync(fixture.AdminClient);
-        await AssertHealthyAsync(fixture.IngressClient);
+        await AssertHealthyAsync(fixture.IngestionClient);
         await AssertHealthyAsync(fixture.MockSinkClient);
 
         Assert.Equal(1L, await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM connectors WHERE key = 'http' AND status = 'active'"));
         Assert.Equal(1L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM admin_keys WHERE revoked_at IS NULL"));
+            "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL"));
 
         const string sinkName = "qualification-harness";
         const string headerValue = "expected-value";
@@ -77,8 +77,8 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             "/admin/tenants",
             new { slug = tenantSlug, name = "OTLP qualification", environment = "production" });
         string apiToken = await PostAdminForPropertyAsync(
-            $"/admin/tenants/{tenantId}/api-keys",
-            new { name = "qualification-ingress" },
+            $"/admin/tenants/{tenantId}/tenant-api-keys",
+            new { name = "qualification-ingestion" },
             "token");
 
         Guid sourceConnectionId = await PostAdminForIdAsync(
@@ -101,11 +101,10 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new
-            {
-                name = $"payments-{suffix}",
-                source_connection_ids = new[] { sourceConnectionId }
-            });
+            new { name = $"payments-{suffix}" });
+        Guid sourceId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/sources",
+            new { connection_id = sourceConnectionId, topic_id = topicId, type = "event_api", configuration = new { source_contract = "event_json" } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
@@ -124,15 +123,15 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         {
             Content = JsonContent.Create(new
             {
-                source_connection_id = sourceConnectionId,
+                source_id = sourceId,
                 topic_name = $"payments-{suffix}",
                 event_type = "payment.created",
                 payload = new { paymentId = $"pay-{suffix}", amount = 1200 },
                 idempotency_key = $"qualification-{suffix}"
             })
         };
-        ingest.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {apiToken}");
-        using HttpResponseMessage accepted = await fixture.IngressClient.SendAsync(ingest);
+        ingest.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
+        using HttpResponseMessage accepted = await fixture.IngestionClient.SendAsync(ingest);
         string acceptedBody = await accepted.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
         using JsonDocument acceptedDocument = JsonDocument.Parse(acceptedBody);
@@ -158,8 +157,8 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         string traceId = traceparent.Split('-')[1];
 
         IReadOnlyList<ExportedSpan> traceSpans = [];
-        // Ingress and Worker export through independent batch processors, so delivery spans can
-        // reach the collector before the acceptance span the Ingress emitted seconds earlier.
+        // Ingestion and Worker export through independent batch processors, so delivery spans can
+        // reach the collector before the acceptance span the Ingestion emitted seconds earlier.
         // Wait for the whole causal chain, not just its tail, or the assertions below race the flush.
         await WaitForAsync(async () =>
         {
@@ -177,16 +176,16 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.Equal(acceptanceSpan.SpanId, fanoutSpan.ParentSpanId);
         Assert.All(deliverySpans, span => Assert.Equal(fanoutSpan.SpanId, span.ParentSpanId));
 
-        string ingressMetrics = await fixture.IngressClient.GetStringAsync("/metrics");
+        string ingestionMetrics = await fixture.IngestionClient.GetStringAsync("/metrics");
         string adminMetrics = await fixture.AdminClient.GetStringAsync("/metrics");
         string workerMetrics = await fixture.WorkerMetricsClient.GetStringAsync("/metrics");
-        Assert.Contains("integrios_events_ingested_total", ingressMetrics, StringComparison.Ordinal);
+        Assert.Contains("integrios_events_ingested_total", ingestionMetrics, StringComparison.Ordinal);
         Assert.Contains("http_server_request_duration", adminMetrics, StringComparison.Ordinal);
         Assert.Contains("integrios_fanout_rows_created_total", workerMetrics, StringComparison.Ordinal);
         Assert.Contains("integrios_deliveries_failed_total", workerMetrics, StringComparison.Ordinal);
         Assert.Contains("integrios_deliveries_succeeded_total", workerMetrics, StringComparison.Ordinal);
         Assert.Contains("integrios_delivery_attempt_duration_seconds", workerMetrics, StringComparison.Ordinal);
-        Assert.DoesNotContain("integrios_outbox_pending_depth", ingressMetrics, StringComparison.Ordinal);
+        Assert.DoesNotContain("integrios_outbox_pending_depth", ingestionMetrics, StringComparison.Ordinal);
         Assert.DoesNotContain("integrios_outbox_pending_depth", adminMetrics, StringComparison.Ordinal);
         Assert.Contains("integrios_outbox_pending_depth", workerMetrics, StringComparison.Ordinal);
 
@@ -210,8 +209,8 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             "/admin/tenants",
             new { slug = tenantSlug, name = "Worker loop isolation", environment = "production" });
         string apiToken = await PostAdminForPropertyAsync(
-            $"/admin/tenants/{tenantId}/api-keys",
-            new { name = "loop-isolation-ingress" },
+            $"/admin/tenants/{tenantId}/tenant-api-keys",
+            new { name = "loop-isolation-ingestion" },
             "token");
         Guid sourceConnectionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/connections",
@@ -233,7 +232,10 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name = topicName, source_connection_ids = new[] { sourceConnectionId } });
+            new { name = topicName });
+        Guid sourceId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/sources",
+            new { connection_id = sourceConnectionId, topic_id = topicId, type = "event_api", configuration = new { source_contract = "event_json" } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
@@ -253,7 +255,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         {
             blockedEventId = await IngestEventAsync(
                 apiToken,
-                sourceConnectionId,
+                sourceId,
                 topicName,
                 "delivery.blocked",
                 $"blocked-{suffix}");
@@ -265,7 +267,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
 
             Guid independentEventId = await IngestEventAsync(
                 apiToken,
-                sourceConnectionId,
+                sourceId,
                 topicName,
                 "fanout.independent",
                 $"independent-{suffix}");
@@ -307,7 +309,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
 
     private async Task<Guid> IngestEventAsync(
         string apiToken,
-        Guid sourceConnectionId,
+        Guid sourceId,
         string topicName,
         string eventType,
         string idempotencyKey)
@@ -316,15 +318,15 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         {
             Content = JsonContent.Create(new
             {
-                source_connection_id = sourceConnectionId,
+                source_id = sourceId,
                 topic_name = topicName,
                 event_type = eventType,
                 payload = new { idempotencyKey },
                 idempotency_key = idempotencyKey
             })
         };
-        request.Headers.TryAddWithoutValidation("Authorization", $"ApiKey {apiToken}");
-        using HttpResponseMessage response = await fixture.IngressClient.SendAsync(request);
+        request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
+        using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         string responseBody = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         using JsonDocument document = JsonDocument.Parse(responseBody);

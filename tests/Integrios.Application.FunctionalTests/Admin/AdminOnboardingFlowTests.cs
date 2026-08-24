@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.ApiKeys;
+using Integrios.Application.TenantApiKeys;
 using Integrios.Application.Connections;
 using Integrios.Application.Tenants;
 using Integrios.Admin.Endpoints;
@@ -55,20 +55,20 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
         var tenant = await tenantResponse.Content.ReadFromJsonAsync<TenantDto>(HostJson.Options);
         Assert.NotNull(tenant);
 
-        var apiKeyResponse = await client.SendAsync(AdminRequest(
+        var tenantApiKeyResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
-            $"/admin/tenants/{tenant.Id}/api-keys",
+            $"/admin/tenants/{tenant.Id}/tenant-api-keys",
             new
             {
-                name = "acme-ingress",
-                description = "Ingress automation key"
+                name = "acme-ingestion",
+                description = "Ingestion automation key"
             }));
-        Assert.Equal(HttpStatusCode.Created, apiKeyResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, tenantApiKeyResponse.StatusCode);
 
-        var apiKey = await apiKeyResponse.Content.ReadFromJsonAsync<CreateApiKeyResult>(HostJson.Options);
-        Assert.NotNull(apiKey);
-        Assert.False(string.IsNullOrWhiteSpace(apiKey.Token));
-        Assert.Equal("acme-ingress", apiKey.ApiKey.Name);
+        var tenantApiKey = await tenantApiKeyResponse.Content.ReadFromJsonAsync<CreateTenantApiKeyResult>(HostJson.Options);
+        Assert.NotNull(tenantApiKey);
+        Assert.False(string.IsNullOrWhiteSpace(tenantApiKey.Token));
+        Assert.Equal("acme-ingestion", tenantApiKey.TenantApiKey.Name);
 
         var sourceConnection = await CreateConnectionAsync(
             tenant.Id,

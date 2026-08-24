@@ -1,6 +1,8 @@
 using System.Data.Common;
 using Dapper;
 using Integrios.Admin;
+using Integrios.Application.Bootstrap;
+using Integrios.Application.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
@@ -14,10 +16,10 @@ namespace Integrios.Application.FunctionalTests.Admin;
 
 public sealed class AdminApiFixture : IAsyncLifetime
 {
-    public const string GlobalAdminPublicKey = "global_admin_key";
-    public const string GlobalAdminSecret = "admin_bootstrap_secret";
-    public const string GlobalAdminAuthHeader = $"AdminKey {GlobalAdminPublicKey}:{GlobalAdminSecret}";
-    public const string InvalidAdminAuthHeader = "AdminKey legacy_tenant_key:unsupported-secret";
+    public const string GlobalOperatorPublicKey = "global_operator_key";
+    public const string GlobalOperatorSecret = "operator_bootstrap_secret";
+    public const string GlobalOperatorAuthHeader = $"OperatorKey {GlobalOperatorPublicKey}:{GlobalOperatorSecret}";
+    public const string InvalidOperatorAuthHeader = "OperatorKey unknown_operator_key:unsupported-secret";
 
     private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private readonly FunctionalDatabase database = new();
@@ -150,21 +152,18 @@ public sealed class AdminApiFixture : IAsyncLifetime
             VALUES (@SourceConnectionId, @TenantId, @ConnectorId, 'source',
                 {{{database.Json("@Config")}}}, 'active');
 
-            INSERT INTO admin_keys (public_key, secret_hash, name, created_at)
-            VALUES ('global_admin_key',
-                    'sha256:5af35a0149f5a07231b181c3b4d5d3a76a4c765258533a123b34dfb843599328',
-                    'Bootstrap Operator Admin Key', {{{now}}});
+            INSERT INTO operator_keys (public_key, secret_hash, name, created_at)
+            VALUES ('global_operator_key',
+                    'sha256:e98f79daedd50eea3a83ba72c3cd33802bcb5432a6e6273d1fe0bf573dfe8420',
+                    'Bootstrap Operator Key', {{{now}}});
             """, new
             {
                 TenantId,
                 OtherTenantId,
                 ConnectorId = HttpConnectorId,
                 SupportedAuthSchemes = "[\"api_key_header\",\"bearer_token\"]",
-                Manifest = TestConnectorManifest.Create(
-                    "http", "HTTP", "both",
-                    authenticationSchemes: ["api_key_header", "bearer_token"],
-                    description: "Generic HTTP source or destination.",
-                    allowUnauthenticated: true),
+                Manifest = ConnectorManifestParser.ToJson(
+                    BuiltinCatalog.All.Single(item => item.Id == BuiltinCatalog.HttpId).Manifest).GetRawText(),
                 SourceConnectionId,
                 Config = "{\"base_uri\":\"http://localhost:5054/sink/source\"}"
             });
@@ -179,9 +178,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
                 config.AddConfiguration(database.Configuration));
             builder.ConfigureServices(services =>
             {
-                services.RemoveAll<PublicIngressBaseUri>();
-                services.AddSingleton(PublicIngressBaseUri.Parse(
-                    "https://ingress.example.test/proxy/integrios", allowHttp: false));
+                services.RemoveAll<PublicIngestionBaseUri>();
+                services.AddSingleton(PublicIngestionBaseUri.Parse(
+                    "https://ingestion.example.test/proxy/integrios", allowHttp: false));
             });
         });
 }

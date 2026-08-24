@@ -3,9 +3,9 @@
 POSTGRES_USER ?= integrios
 POSTGRES_PASSWORD ?= integrios_dev
 DOTNET_ENVIRONMENT ?= Development
-INTEGRIOS_BOOTSTRAP_ADMIN_SECRET ?= admin_bootstrap_secret
+INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET ?= operator_bootstrap_secret
 export DOTNET_ENVIRONMENT
-export INTEGRIOS_BOOTSTRAP_ADMIN_SECRET
+export INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET
 
 # --- Docker Compose stack ---
 
@@ -27,17 +27,17 @@ db-info:
 	docker compose run --rm migrate database info
 
 # --- Admin bootstrap ---
-# DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_ADMIN_SECRET are exported above
-# so appsettings.Development.json and the dev admin secret are picked up.
+# DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET are exported above
+# so appsettings.Development.json and the dev OperatorKey secret are picked up.
 
 # Upsert the built-in webhook connector.
 bootstrap-builtins:
 	dotnet run --project src/Integrios.Admin -- bootstrap --builtins
 
-# Create the global admin key (no-op if a live one already exists).
-bootstrap-admin-key:
-	dotnet run --project src/Integrios.Admin -- bootstrap --admin-key
+# Create the global operator key (no-op if a live one already exists).
+bootstrap-operator-key:
+	dotnet run --project src/Integrios.Admin -- bootstrap --operator-key
 
-# Run builtins + admin-key together.
+# Run builtins + operator-key together.
 bootstrap:
 	dotnet run --project src/Integrios.Admin -- bootstrap

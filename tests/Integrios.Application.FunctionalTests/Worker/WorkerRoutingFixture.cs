@@ -310,8 +310,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             INSERT INTO tenants (id,slug,name,status,created_at,updated_at) VALUES
                 (@TenantId,'test-routing-tenant','Test Routing Tenant','active',{{{database.Now}}},{{{database.Now}}}),
                 (@OrphanTenantId,'test-orphan-tenant','Test Orphan Tenant','active',{{{database.Now}}},{{{database.Now}}});
-            INSERT INTO api_keys (id,tenant_id,name,key_prefix,key_hash,status,created_at)
-            VALUES (@ApiKeyId,@TenantId,'test-key',@KeyPrefix,@KeyHash,'active',{{{database.Now}}});
+            INSERT INTO tenant_api_keys (id,tenant_id,name,key_prefix,key_hash,status,created_at)
+            VALUES (@TenantApiKeyId,@TenantId,'test-key',@KeyPrefix,@KeyHash,'active',{{{database.Now}}});
             INSERT INTO connections (id,tenant_id,connector_id,name,config,status) VALUES
                 (@SourceConnectionId,@TenantId,@ConnectorId,'source',{{{database.Json("@EmptyConfig")}}},'active'),
                 (@OrphanSourceConnectionId,@OrphanTenantId,@ConnectorId,'orphan-source',{{{database.Json("@EmptyConfig")}}},'active'),
@@ -330,7 +330,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             """, new
         {
             ConnectorId = HttpConnectorId, Schemes = "[]", Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
-            TenantId, OrphanTenantId, ApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
+            TenantId, OrphanTenantId, TenantApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
             SourceConnectionId, OrphanSourceConnectionId, SourceId, OrphanSourceId, LedgerConnectionId, RiskConnectionId,
             EmptyConfig = "{}", LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),
             RiskConfig = JsonSerializer.Serialize(new { base_uri = RiskSinkUrl }), TopicId, OrphanTopicId,

@@ -1,6 +1,6 @@
 using Integrios.Admin;
 using Integrios.Admin.Auth;
-using Integrios.Admin.AdminKeys;
+using Integrios.Admin.OperatorKeys;
 using Integrios.Admin.Bootstrap;
 using Integrios.Admin.Database;
 using Integrios.Admin.Endpoints;
@@ -14,15 +14,15 @@ using System.Text.Json;
 
 if (args is ["bootstrap", ..])
     return await BootstrapCli.RunAsync(args);
-if (args is ["admin-key", ..])
-    return await AdminKeyCli.RunAsync(args);
+if (args is ["operator-key", ..])
+    return await OperatorKeyCli.RunAsync(args);
 if (args is ["database", ..])
     return await DatabaseMigrationCli.RunAsync(args);
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton(PublicIngressBaseUri.Parse(
-    builder.Configuration[PublicIngressBaseUri.ConfigurationKey],
+builder.Services.AddSingleton(PublicIngestionBaseUri.Parse(
+    builder.Configuration[PublicIngestionBaseUri.ConfigurationKey],
     builder.Environment.IsDevelopment()));
 
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -30,7 +30,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddOpenApi(options =>
 {
-    options.AddDocumentTransformer<AdminKeySchemeTransformer>();
+    options.AddDocumentTransformer<OperatorKeySchemeTransformer>();
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AdminExceptionHandler>();
@@ -38,8 +38,8 @@ builder.Services.AddAdminApplicationServices();
 builder.Services.AddAdminInfrastructureServices(builder.Configuration);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-admin");
 
-builder.Services.AddAuthentication(AdminKeyAuthHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, AdminKeyAuthHandler>(AdminKeyAuthHandler.SchemeName, _ => { });
+builder.Services.AddAuthentication(OperatorKeyAuthHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, OperatorKeyAuthHandler>(OperatorKeyAuthHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization();
 
 var app = builder.Build();

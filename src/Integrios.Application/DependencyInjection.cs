@@ -1,4 +1,4 @@
-using Integrios.Application.ApiKeys;
+using Integrios.Application.TenantApiKeys;
 using Integrios.Application.Bootstrap;
 using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
@@ -24,7 +24,7 @@ public static class DependencyInjection
     public static IServiceCollection AddAdminApplicationServices(this IServiceCollection services)
         => AddApplicationServices(services, type => IsInCapability(
             type,
-            typeof(IApiKeyRepository),
+            typeof(ITenantApiKeyRepository),
             typeof(BootstrapBuiltinsCommand),
             typeof(IConnectionRepository),
             typeof(IConnectorCatalog),
@@ -34,7 +34,7 @@ public static class DependencyInjection
             typeof(ITopicRepository),
             typeof(ReplayEventDeliveryCommand)));
 
-    public static IServiceCollection AddIngressApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddIngestionApplicationServices(this IServiceCollection services)
         => AddApplicationServices(
             services,
             type => IsInCapability(type, typeof(IEventAcceptance)));

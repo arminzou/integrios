@@ -2,13 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Ingress",
+      "name": "Ingestion",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build-ingress",
-      "program": "${workspaceFolder}/src/Integrios.Ingress/bin/Debug/net10.0/Integrios.Ingress.dll",
+      "preLaunchTask": "build-ingestion",
+      "program": "${workspaceFolder}/src/Integrios.Ingestion/bin/Debug/net10.0/Integrios.Ingestion.dll",
       "args": [],
-      "cwd": "${workspaceFolder}/src/Integrios.Ingress",
+      "cwd": "${workspaceFolder}/src/Integrios.Ingestion",
       "env": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPNETCORE_URLS": "http://localhost:5231"
@@ -61,7 +61,7 @@
     {
       "name": "Full Stack",
       "configurations": [
-        "Ingress",
+        "Ingestion",
         "Admin",
         "Worker",
         "MockSink"
@@ -70,7 +70,7 @@
     {
       "name": "Data Plane",
       "configurations": [
-        "Ingress",
+        "Ingestion",
         "Worker",
         "MockSink"
       ]

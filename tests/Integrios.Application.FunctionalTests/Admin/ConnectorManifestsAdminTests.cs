@@ -145,7 +145,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
     private Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, JsonElement? body = null)
     {
         var request = new HttpRequestMessage(method, url);
-        request.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.GlobalAdminAuthHeader);
+        request.Headers.TryAddWithoutValidation("Authorization", AdminApiFixture.GlobalOperatorAuthHeader);
         if (body is JsonElement content)
             request.Content = JsonContent.Create(content);
         return client.SendAsync(request);

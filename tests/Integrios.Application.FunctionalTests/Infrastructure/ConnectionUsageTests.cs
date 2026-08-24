@@ -1,10 +1,10 @@
 using Dapper;
-using Integrios.Application.AdminKeys;
+using Integrios.Application.OperatorKeys;
 using Integrios.Application.Connections;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
-using Integrios.Infrastructure.AdminKeys;
+using Integrios.Infrastructure.OperatorKeys;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -19,23 +19,23 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task AdminKeyLookup_FindsActiveGlobalKey()
+    public async Task OperatorKeyLookup_FindsActiveGlobalKey()
     {
         await using (var connection = fixture.CreateConnection())
         {
             await connection.OpenAsync();
             await connection.ExecuteAsync(
                 """
-                INSERT INTO admin_keys (public_key, secret_hash, name)
-                VALUES ('global_admin_key', 'sha256:test', 'Test key')
+                INSERT INTO operator_keys (public_key, secret_hash, name)
+                VALUES ('global_operator_key', 'sha256:test', 'Test key')
                 """);
         }
 
         await using IntegriosDbContext context = CreateContext();
-        IAdminKeyLookup repository = new AdminKeyRepository(context);
+        IOperatorKeyLookup repository = new OperatorKeyRepository(context);
 
-        AdminKey? key = await repository.FindActiveByPublicKeyAsync(
-            "global_admin_key",
+        OperatorKey? key = await repository.FindActiveByPublicKeyAsync(
+            "global_operator_key",
             CancellationToken.None);
 
         Assert.NotNull(key);

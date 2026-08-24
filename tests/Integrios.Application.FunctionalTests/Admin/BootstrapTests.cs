@@ -52,6 +52,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Assert.Equal(BuiltinCatalog.HttpId, http.Id);
         Assert.Equal(ConnectorDirection.Both, http.Direction);
         Assert.Equal(["api_key_header", "bearer_token"], http.SupportedAuthSchemes.Order(StringComparer.Ordinal));
+        Assert.Equal("event_json", Assert.Single(http.Manifest.SourceContracts).Key);
         JsonElement destinationSchema = http.Manifest.DestinationConfigurationSchema!.Value;
         Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString());
         Assert.Equal("base_uri", destinationSchema.GetProperty("required")[0].GetString());
@@ -100,105 +101,105 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     }
 
     [Fact]
-    public async Task BootstrapAdminKey_CreatesOnce_ThenNoOps()
+    public async Task BootstrapOperatorKey_CreatesOnce_ThenNoOps()
     {
-        await DeleteGlobalAdminKeysAsync();
+        await DeleteGlobalOperatorKeysAsync();
 
-        BootstrapAdminKeyResult first = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", "test-secret"));
+        BootstrapOperatorKeyResult first = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", "test-secret"));
         Assert.True(first.Created);
         Assert.Null(first.GeneratedSecret);
 
-        BootstrapAdminKeyResult second = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", "test-secret"));
+        BootstrapOperatorKeyResult second = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", "test-secret"));
         Assert.False(second.Created);
 
-        Assert.Equal(1, await CountAsync("admin_keys", "revoked_at IS NULL"));
+        Assert.Equal(1, await CountAsync("operator_keys", "revoked_at IS NULL"));
     }
 
     [Fact]
-    public async Task BootstrapAdminKey_GeneratesSecret_WhenNoneSupplied()
+    public async Task BootstrapOperatorKey_GeneratesSecret_WhenNoneSupplied()
     {
-        await DeleteGlobalAdminKeysAsync();
+        await DeleteGlobalOperatorKeysAsync();
 
-        BootstrapAdminKeyResult result = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", null));
+        BootstrapOperatorKeyResult result = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", null));
         Assert.True(result.Created);
         Assert.False(string.IsNullOrWhiteSpace(result.GeneratedSecret));
     }
 
     [Fact]
-    public async Task BootstrapAdminKey_GeneratesSecret_WhenSecretIsEmpty()
+    public async Task BootstrapOperatorKey_GeneratesSecret_WhenSecretIsEmpty()
     {
         // An unset env var reaches the command as "" (not null); storing SHA256("")
         // would mint a key no auth header can present.
-        await DeleteGlobalAdminKeysAsync();
+        await DeleteGlobalOperatorKeysAsync();
 
-        BootstrapAdminKeyResult result = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", ""));
+        BootstrapOperatorKeyResult result = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", ""));
         Assert.True(result.Created);
         Assert.False(string.IsNullOrWhiteSpace(result.GeneratedSecret));
     }
 
     [Fact]
-    public async Task RotateAdminKey_MintsNewPublicKey_AndRevokesPrior_NoUniqueViolation()
+    public async Task RotateOperatorKey_MintsNewPublicKey_AndRevokesPrior_NoUniqueViolation()
     {
-        await DeleteGlobalAdminKeysAsync();
-        BootstrapAdminKeyResult first = await mediator.Send(new BootstrapAdminKeyCommand("global_admin_key", "first-secret"));
+        await DeleteGlobalOperatorKeysAsync();
+        BootstrapOperatorKeyResult first = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", "first-secret"));
         Assert.True(first.Created);
 
-        RotateAdminKeyResult rotate1 = await mediator.Send(new RotateAdminKeyCommand("rotated-secret-1"));
-        Assert.NotEqual("global_admin_key", rotate1.PublicKey);
+        RotateOperatorKeyResult rotate1 = await mediator.Send(new RotateOperatorKeyCommand("rotated-secret-1"));
+        Assert.NotEqual("global_operator_key", rotate1.PublicKey);
 
-        RotateAdminKeyResult rotate2 = await mediator.Send(new RotateAdminKeyCommand("rotated-secret-2"));
+        RotateOperatorKeyResult rotate2 = await mediator.Send(new RotateOperatorKeyCommand("rotated-secret-2"));
         Assert.NotEqual(rotate1.PublicKey, rotate2.PublicKey);
 
-        Assert.Equal(1, await CountAsync("admin_keys", "revoked_at IS NULL"));
-        Assert.Equal(3, await CountAsync("admin_keys")); // original + 2 rotations retained
+        Assert.Equal(1, await CountAsync("operator_keys", "revoked_at IS NULL"));
+        Assert.Equal(3, await CountAsync("operator_keys")); // original + 2 rotations retained
         Assert.Equal(Hash("rotated-secret-2"), await ScalarAsync<string>(
-            "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL"));
+            "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL"));
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task RotateAdminKey_RejectsMissingReplacementSecret(string secret)
+    public async Task RotateOperatorKey_RejectsMissingReplacementSecret(string secret)
     {
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            mediator.Send(new RotateAdminKeyCommand(secret)));
+            mediator.Send(new RotateOperatorKeyCommand(secret)));
 
-        Assert.Equal(1, await CountAsync("admin_keys", "revoked_at IS NULL"));
+        Assert.Equal(1, await CountAsync("operator_keys", "revoked_at IS NULL"));
     }
 
     [Fact]
-    public async Task RotateAdminKey_WithoutLiveKey_RequiresBootstrap()
+    public async Task RotateOperatorKey_WithoutLiveKey_RequiresBootstrap()
     {
-        await DeleteGlobalAdminKeysAsync();
+        await DeleteGlobalOperatorKeysAsync();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            mediator.Send(new RotateAdminKeyCommand("replacement-secret")));
+            mediator.Send(new RotateOperatorKeyCommand("replacement-secret")));
 
         Assert.Contains("Run bootstrap before rotation", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, await CountAsync("admin_keys"));
+        Assert.Equal(0, await CountAsync("operator_keys"));
     }
 
     [Fact]
-    public async Task BootstrapBuiltinsAndAdminKey_CreatesBuiltinsAndDeterministicKey()
+    public async Task BootstrapBuiltinsAndOperatorKey_CreatesBuiltinsAndDeterministicKey()
     {
-        await DeleteGlobalAdminKeysAsync();
+        await DeleteGlobalOperatorKeysAsync();
 
         await mediator.Send(new BootstrapBuiltinsCommand());
-        BootstrapAdminKeyResult keyResult = await mediator.Send(
-            new BootstrapAdminKeyCommand("global_admin_key", "admin_bootstrap_secret"));
+        BootstrapOperatorKeyResult keyResult = await mediator.Send(
+            new BootstrapOperatorKeyCommand("global_operator_key", "operator_bootstrap_secret"));
         Assert.True(keyResult.Created);
 
         Assert.Equal(1, await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'"));
 
         string? secretHash = await ScalarAsync<string>(
-            "SELECT secret_hash FROM admin_keys WHERE revoked_at IS NULL");
+            "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL");
         Assert.Equal(
-            "sha256:5af35a0149f5a07231b181c3b4d5d3a76a4c765258533a123b34dfb843599328",
+            "sha256:e98f79daedd50eea3a83ba72c3cd33802bcb5432a6e6273d1fe0bf573dfe8420",
             secretHash);
     }
 
-    private async Task DeleteGlobalAdminKeysAsync() =>
-        await ExecuteAsync("DELETE FROM admin_keys");
+    private async Task DeleteGlobalOperatorKeysAsync() =>
+        await ExecuteAsync("DELETE FROM operator_keys");
 
     private async Task ExecuteAsync(string sql, object? parameters = null)
     {

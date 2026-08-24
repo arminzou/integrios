@@ -14,7 +14,7 @@ namespace Integrios.Migrations.Postgres.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "admin_keys",
+                name: "operator_keys",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
@@ -26,8 +26,8 @@ namespace Integrios.Migrations.Postgres.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("admin_keys_pkey", x => x.id);
-                    table.UniqueConstraint("admin_keys_public_key_key", x => x.public_key);
+                    table.PrimaryKey("operator_keys_pkey", x => x.id);
+                    table.UniqueConstraint("operator_keys_public_key_key", x => x.public_key);
                 });
 
             migrationBuilder.CreateTable(
@@ -78,7 +78,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "api_keys",
+                name: "tenant_api_keys",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -95,10 +95,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("api_credentials_pkey", x => x.id);
-                    table.UniqueConstraint("api_credentials_key_id_key", x => x.key_prefix);
+                    table.PrimaryKey("tenant_api_keys_pkey", x => x.id);
+                    table.UniqueConstraint("tenant_api_keys_key_prefix_key", x => x.key_prefix);
                     table.ForeignKey(
-                        name: "api_credentials_tenant_id_fkey",
+                        name: "tenant_api_keys_tenant_id_fkey",
                         column: x => x.tenant_id,
                         principalTable: "tenants",
                         principalColumn: "id");
@@ -397,20 +397,20 @@ namespace Integrios.Migrations.Postgres.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "idx_admin_keys_lookup",
-                table: "admin_keys",
+                name: "idx_operator_keys_lookup",
+                table: "operator_keys",
                 column: "public_key",
                 filter: "(revoked_at IS NULL)");
 
             migrationBuilder.CreateIndex(
-                name: "idx_api_keys_key_hash",
-                table: "api_keys",
+                name: "idx_tenant_api_keys_key_hash",
+                table: "tenant_api_keys",
                 column: "key_hash",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "idx_api_keys_tenant_id",
-                table: "api_keys",
+                name: "idx_tenant_api_keys_tenant_id",
+                table: "tenant_api_keys",
                 column: "tenant_id");
 
             migrationBuilder.CreateIndex(
@@ -588,10 +588,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                 table: "delivery_attempts");
 
             migrationBuilder.DropTable(
-                name: "admin_keys");
+                name: "operator_keys");
 
             migrationBuilder.DropTable(
-                name: "api_keys");
+                name: "tenant_api_keys");
 
             migrationBuilder.DropTable(
                 name: "outbox");

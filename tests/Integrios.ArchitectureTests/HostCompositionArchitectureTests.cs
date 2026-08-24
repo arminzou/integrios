@@ -1,6 +1,6 @@
 using Integrios.Application;
-using Integrios.Application.AdminKeys;
-using Integrios.Application.ApiKeys;
+using Integrios.Application.OperatorKeys;
+using Integrios.Application.TenantApiKeys;
 using Integrios.Application.Auth;
 using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
@@ -23,25 +23,25 @@ public sealed class HostCompositionArchitectureTests
 {
     private static readonly IReadOnlyDictionary<Type, Host[]> PortOwners = new Dictionary<Type, Host[]>
     {
-        [typeof(IAdminKeyLookup)] = [Host.Admin],
-        [typeof(IAdminKeyLifecycle)] = [Host.Admin],
-        [typeof(IApiKeyRepository)] = [Host.Admin],
-        [typeof(IActiveApiKeyLookup)] = [Host.Ingress],
+        [typeof(IOperatorKeyLookup)] = [Host.Admin],
+        [typeof(IOperatorKeyLifecycle)] = [Host.Admin],
+        [typeof(ITenantApiKeyRepository)] = [Host.Admin],
+        [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
         [typeof(IAuthSchemeHandler)] = [Host.Admin, Host.Worker],
         [typeof(IAuthSchemeRegistry)] = [Host.Admin, Host.Worker],
         [typeof(IConnectionRepository)] = [Host.Admin],
         [typeof(IConnectionAuthoringLock)] = [Host.Admin],
         [typeof(IDeadLetterReplay)] = [Host.Admin],
         [typeof(IDeliveryClient)] = [Host.Worker],
-        [typeof(IEventAcceptance)] = [Host.Ingress],
-        [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingress],
+        [typeof(IEventAcceptance)] = [Host.Ingestion],
+        [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingestion],
         [typeof(IConnectorCatalog)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
-        [typeof(ISourceEndpointResolver)] = [Host.Ingress],
-        [typeof(ISourceTopicLookup)] = [Host.Ingress],
+        [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
+        [typeof(ISourceTopicLookup)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
-        [typeof(ISourceVerificationSecretResolver)] = [Host.Ingress],
+        [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
         [typeof(ISecretValidationCatalog)] = [Host.Worker],
         [typeof(ISourceRepository)] = [Host.Admin],
         [typeof(IEventDeliveryQueue)] = [Host.Worker],
@@ -57,20 +57,20 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider admin = BuildProvider(
             services => services.AddAdminApplicationServices(),
             services => services.AddAdminInfrastructureServices(BuildConfiguration()));
-        using ServiceProvider ingress = BuildProvider(
-            services => services.AddIngressApplicationServices(),
-            services => services.AddIngressInfrastructureServices(BuildConfiguration()));
+        using ServiceProvider ingestion = BuildProvider(
+            services => services.AddIngestionApplicationServices(),
+            services => services.AddIngestionInfrastructureServices(BuildConfiguration()));
         using ServiceProvider worker = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
-        using IServiceScope ingressScope = ingress.CreateScope();
+        using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
 
         (string Name, IServiceProvider Provider)[] hosts =
         [
             ("Admin", adminScope.ServiceProvider),
-            ("Ingress", ingressScope.ServiceProvider),
+            ("Ingestion", ingestionScope.ServiceProvider),
             ("Worker", workerScope.ServiceProvider)
         ];
 
@@ -115,20 +115,20 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider admin = BuildProvider(
             services => services.AddAdminApplicationServices(),
             services => services.AddAdminInfrastructureServices(BuildConfiguration()));
-        using ServiceProvider ingress = BuildProvider(
-            services => services.AddIngressApplicationServices(),
-            services => services.AddIngressInfrastructureServices(BuildConfiguration()));
+        using ServiceProvider ingestion = BuildProvider(
+            services => services.AddIngestionApplicationServices(),
+            services => services.AddIngestionInfrastructureServices(BuildConfiguration()));
         using ServiceProvider worker = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
-        using IServiceScope ingressScope = ingress.CreateScope();
+        using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
 
         (Host Host, IServiceProvider Provider)[] providers =
         [
             (Host.Admin, adminScope.ServiceProvider),
-            (Host.Ingress, ingressScope.ServiceProvider),
+            (Host.Ingestion, ingestionScope.ServiceProvider),
             (Host.Worker, workerScope.ServiceProvider)
         ];
 
@@ -152,9 +152,9 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddAdminInfrastructureServices(BuildConfiguration()));
         using IServiceScope scope = provider.CreateScope();
 
-        AssertResolves<IAdminKeyLookup>(scope.ServiceProvider);
-        AssertResolves<IAdminKeyLifecycle>(scope.ServiceProvider);
-        AssertResolves<IApiKeyRepository>(scope.ServiceProvider);
+        AssertResolves<IOperatorKeyLookup>(scope.ServiceProvider);
+        AssertResolves<IOperatorKeyLifecycle>(scope.ServiceProvider);
+        AssertResolves<ITenantApiKeyRepository>(scope.ServiceProvider);
         AssertResolves<ITenantRepository>(scope.ServiceProvider);
         AssertResolves<IConnectorCatalog>(scope.ServiceProvider);
         AssertResolves<IConnectorManifestStore>(scope.ServiceProvider);
@@ -168,7 +168,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IDeadLetterReplay>(scope.ServiceProvider);
 
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
-        AssertOmits<IActiveApiKeyLookup>(scope.ServiceProvider);
+        AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
         AssertOmits<ISecretValidationCatalog>(scope.ServiceProvider);
         AssertOmits<IOutboxFanout>(scope.ServiceProvider);
@@ -182,21 +182,21 @@ public sealed class HostCompositionArchitectureTests
     }
 
     [Fact]
-    public void Ingress_ResolvesOnlyIntakePorts()
+    public void Ingestion_ResolvesOnlyIntakePorts()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddIngressApplicationServices(),
-            services => services.AddIngressInfrastructureServices(BuildConfiguration()));
+            services => services.AddIngestionApplicationServices(),
+            services => services.AddIngestionInfrastructureServices(BuildConfiguration()));
 
-        AssertResolves<IActiveApiKeyLookup>(provider);
+        AssertResolves<IActiveTenantApiKeyLookup>(provider);
         AssertResolves<ISourceTopicLookup>(provider);
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
 
-        AssertOmits<IAdminKeyLookup>(provider);
-        AssertOmits<IAdminKeyLifecycle>(provider);
-        AssertOmits<IApiKeyRepository>(provider);
+        AssertOmits<IOperatorKeyLookup>(provider);
+        AssertOmits<IOperatorKeyLifecycle>(provider);
+        AssertOmits<ITenantApiKeyRepository>(provider);
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IConnectorCatalog>(provider);
         AssertOmits<IConnectorManifestStore>(provider);
@@ -236,10 +236,10 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<RetryPolicy>(scope.ServiceProvider);
         AssertResolves<DeliveryOutcomePolicy>(scope.ServiceProvider);
 
-        AssertOmits<IAdminKeyLookup>(scope.ServiceProvider);
-        AssertOmits<IAdminKeyLifecycle>(scope.ServiceProvider);
-        AssertOmits<IApiKeyRepository>(scope.ServiceProvider);
-        AssertOmits<IActiveApiKeyLookup>(scope.ServiceProvider);
+        AssertOmits<IOperatorKeyLookup>(scope.ServiceProvider);
+        AssertOmits<IOperatorKeyLifecycle>(scope.ServiceProvider);
+        AssertOmits<ITenantApiKeyRepository>(scope.ServiceProvider);
+        AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<ITenantRepository>(scope.ServiceProvider);
         AssertOmits<IConnectionRepository>(scope.ServiceProvider);
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
@@ -285,7 +285,7 @@ public sealed class HostCompositionArchitectureTests
     private enum Host
     {
         Admin,
-        Ingress,
+        Ingestion,
         Worker
     }
 }

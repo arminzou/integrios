@@ -23,7 +23,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private IReadOnlyList<string> composeFiles;
 
     private readonly int postgresPort = GetAvailablePort();
-    private readonly int ingressPort = GetAvailablePort();
+    private readonly int ingestionPort = GetAvailablePort();
     private readonly int adminPort = GetAvailablePort();
     private readonly int mockSinkPort = GetAvailablePort();
     private readonly int workerMetricsPort = GetAvailablePort();
@@ -45,7 +45,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         environment = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["INTEGRIOS_POSTGRES_PORT"] = postgresPort.ToString(),
-            ["INTEGRIOS_INGRESS_PORT"] = ingressPort.ToString(),
+            ["INTEGRIOS_INGESTION_PORT"] = ingestionPort.ToString(),
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
             ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
@@ -55,21 +55,21 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceVerificationSecretsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "qualification_postgres",
-            ["INTEGRIOS_BOOTSTRAP_ADMIN_SECRET"] = "qualification-admin-secret",
-            ["INTEGRIOS_PUBLIC_INGRESS_BASE_URI"] = "https://qualification.example.test",
+            ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "qualification-admin-secret",
+            ["INTEGRIOS_PUBLIC_INGESTION_BASE_URI"] = "https://qualification.example.test",
             ["INTEGRIOS_BOOTSTRAP_IMAGE"] = $"{projectName}-bootstrap",
             ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
-            ["INTEGRIOS_INGRESS_IMAGE"] = $"{projectName}-ingress",
+            ["INTEGRIOS_INGESTION_IMAGE"] = $"{projectName}-ingestion",
             ["INTEGRIOS_WORKER_IMAGE"] = $"{projectName}-worker",
             ["INTEGRIOS_MOCKSINK_IMAGE"] = $"{projectName}-mocksink",
         };
     }
 
     public HttpClient AdminClient { get; private set; } = null!;
-    public HttpClient IngressClient { get; private set; } = null!;
+    public HttpClient IngestionClient { get; private set; } = null!;
     public HttpClient MockSinkClient { get; private set; } = null!;
     public HttpClient WorkerMetricsClient { get; private set; } = null!;
-    public string AdminAuthorization { get; private set; } = "AdminKey global_admin_key:qualification-admin-secret";
+    public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:qualification-admin-secret";
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
     {
@@ -241,9 +241,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         return await RunComposeAsync(TimeSpan.FromMinutes(2), composeArguments.ToArray());
     }
 
-    // Revokes the bootstrap AdminKey deployment-wide. Every later control-plane call in this
+    // Revokes the bootstrap OperatorKey deployment-wide. Every later control-plane call in this
     // collection must authenticate through AdminAuthorization rather than a captured header value.
-    public async Task<string> RotateAdminKeyAsync(string replacementSecret)
+    public async Task<string> RotateOperatorKeyAsync(string replacementSecret)
     {
         ComposeResult result = await RunComposeAsync(
             TimeSpan.FromMinutes(2),
@@ -251,21 +251,21 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "--rm",
             "--no-deps",
             "-e",
-            $"INTEGRIOS_ADMIN_KEY_ROTATION_SECRET={replacementSecret}",
+            $"INTEGRIOS_OPERATOR_KEY_ROTATION_SECRET={replacementSecret}",
             "admin",
-            "admin-key",
+            "operator-key",
             "rotate");
         if (result.ExitCode != 0)
-            throw new InvalidOperationException($"AdminKey rotation failed: {result.Output}");
+            throw new InvalidOperationException($"OperatorKey rotation failed: {result.Output}");
         if (result.Output.Contains(replacementSecret, StringComparison.Ordinal))
-            throw new InvalidOperationException("AdminKey rotation disclosed the replacement secret.");
+            throw new InvalidOperationException("OperatorKey rotation disclosed the replacement secret.");
 
         Match match = Regex.Match(result.StandardOutput, @"Public key:\s*(?<key>[a-zA-Z0-9_]+)");
         if (!match.Success)
-            throw new InvalidOperationException($"AdminKey rotation did not print a public identifier: {result.Output}");
+            throw new InvalidOperationException($"OperatorKey rotation did not print a public identifier: {result.Output}");
 
         string publicKey = match.Groups["key"].Value;
-        AdminAuthorization = $"AdminKey {publicKey}:{replacementSecret}";
+        AdminAuthorization = $"OperatorKey {publicKey}:{replacementSecret}";
         return publicKey;
     }
 
@@ -282,7 +282,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             TimeSpan.FromMinutes(2),
             "restart",
             "admin",
-            "ingress",
+            "ingestion",
             "worker");
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"Service restart failed: {result.Output}");
@@ -375,7 +375,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "postgres",
             "migrate",
             "bootstrap",
-            "ingress",
+            "ingestion",
             "admin",
             "worker",
             "mocksink",
@@ -393,7 +393,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         }
 
         AdminClient = CreateClient(adminPort);
-        IngressClient = CreateClient(ingressPort);
+        IngestionClient = CreateClient(ingestionPort);
         MockSinkClient = CreateClient(mockSinkPort);
         WorkerMetricsClient = CreateClient(workerMetricsPort);
         await WaitUntilReadyAsync(expectCollector: !buildImages);
@@ -448,12 +448,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     {
         long builtins = await ScalarAsync<long>(
             "SELECT COUNT(*) FROM connectors WHERE key = 'http' AND status = 'active'");
-        long liveAdminKeys = await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM admin_keys WHERE revoked_at IS NULL");
-        if (builtins != 1 || liveAdminKeys != 1)
+        long liveOperatorKeys = await ScalarAsync<long>(
+            "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL");
+        if (builtins != 1 || liveOperatorKeys != 1)
         {
             throw new InvalidOperationException(
-                $"Packaged Bootstrap state was unexpected: built-ins={builtins}, live AdminKeys={liveAdminKeys}.");
+                $"Packaged Bootstrap state was unexpected: built-ins={builtins}, live OperatorKeys={liveOperatorKeys}.");
         }
     }
 
@@ -467,7 +467,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             try
             {
                 await AssertHealthyAsync(AdminClient, "Admin");
-                await AssertHealthyAsync(IngressClient, "Ingress");
+                await AssertHealthyAsync(IngestionClient, "Ingestion");
                 await AssertHealthyAsync(MockSinkClient, "MockSink");
 
                 // The OTLP receiver must accept spans before a test emits any, or early spans are
@@ -490,7 +490,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
                 if (runningServices.ExitCode == 0
                     && services.Contains("admin", StringComparer.Ordinal)
-                    && services.Contains("ingress", StringComparer.Ordinal)
+                    && services.Contains("ingestion", StringComparer.Ordinal)
                     && services.Contains("worker", StringComparer.Ordinal)
                     && services.Contains("mocksink", StringComparer.Ordinal)
                     && (!expectCollector || services.Contains("otel-collector", StringComparer.Ordinal)))
@@ -578,7 +578,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         [
             environment["INTEGRIOS_BOOTSTRAP_IMAGE"],
             environment["INTEGRIOS_ADMIN_IMAGE"],
-            environment["INTEGRIOS_INGRESS_IMAGE"],
+            environment["INTEGRIOS_INGESTION_IMAGE"],
             environment["INTEGRIOS_WORKER_IMAGE"],
             environment["INTEGRIOS_MOCKSINK_IMAGE"],
         ];
@@ -598,7 +598,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private void DisposeClients()
     {
         AdminClient?.Dispose();
-        IngressClient?.Dispose();
+        IngestionClient?.Dispose();
         MockSinkClient?.Dispose();
         WorkerMetricsClient?.Dispose();
     }

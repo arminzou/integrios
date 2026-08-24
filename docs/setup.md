@@ -23,9 +23,9 @@ connections, so no secret values need to be added to its tracked documentation f
 
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
 after migrations and before the services start. It creates the built-in `http` connector and
-the admin credential used below (bootstrap output, not migration-seeded data), and is
+the OperatorKey credential used below (bootstrap output, not migration-seeded data), and is
 idempotent, so re-running `make up` against an existing EF-managed database is safe. The dev credential
-`global_admin_key:admin_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET` in `.env`.
+`global_operator_key:operator_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` in `.env`.
 
 The EF Core cutover does not upgrade databases created by the former Flyway migration path. Delete
 the old local database volume before starting this version; this permanently removes its data:
@@ -37,7 +37,7 @@ make up
 
 | Service  | URL                     | Purpose                       |
 |----------|-------------------------|-------------------------------|
-| Ingress  | `http://localhost:5231` | Webhook/event intake (data plane) |
+| Ingestion  | `http://localhost:5231` | Webhook/event intake (data plane) |
 | Admin    | `http://localhost:5150` | Tenant and config management (control plane) |
 | MockSink | `http://localhost:5054` | Controllable delivery target for testing |
 
@@ -45,13 +45,13 @@ The Worker runs in the background with no HTTP port.
 
 ## Quickstart: your first delivered event
 
-This drives the Admin API to onboard a Tenant and a Subscription, sends an Event to Ingress, and
+This drives the Admin API to onboard a Tenant and a Subscription, sends an Event to Ingestion, and
 watches the Worker deliver it to the bundled MockSink.
 
 ```bash
 ADMIN=http://localhost:5150
-INGRESS=http://localhost:5231
-AUTH="Authorization: AdminKey global_admin_key:admin_bootstrap_secret"
+INGESTION=http://localhost:5231
+AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
 HTTP_CONNECTOR=00000000-0000-0000-0000-000000000001   # deployment-wide built-in http Connector
 
 # 1. Create a tenant
@@ -59,8 +59,8 @@ TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: appli
   -d '{"slug":"acme","name":"Acme","environment":"production"}' | jq -r .id)
 
 # 2. Create an Integrios API key for this generic source (the token is shown once, capture it)
-TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/api-keys -H "$AUTH" -H 'Content-Type: application/json' \
-  -d '{"name":"acme-ingress"}' | jq -r .token)
+TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/tenant-api-keys -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"name":"acme-ingestion"}' | jq -r .token)
 
 # 3. Create Tenant-owned source and destination Connections from the same reusable Connector.
 # The destination selects open (unauthenticated) delivery by omitting destination_authentication,
@@ -79,11 +79,11 @@ curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AU
   -d "{\"name\":\"acme-erp-sub\",\"match_rules\":{\"event_type\":\"payment.created\"},\"destination_connection_id\":\"$DST\",\"order_index\":0}" > /dev/null
 
 # 6. Send an event to the data plane
-EVENT=$(curl -s -X POST $INGRESS/events -H "Authorization: ApiKey $TOKEN" -H 'Content-Type: application/json' \
+EVENT=$(curl -s -X POST $INGESTION/events -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"source_connection_id\":\"$SRC\",\"topic_name\":\"payments\",\"event_type\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_001\",\"amount\":1200},\"idempotency_key\":\"demo-001\"}" | jq -r .event_id)
 
 # 7. Check it was accepted and fanned out to the subscription
-curl -s $INGRESS/events/$EVENT -H "Authorization: ApiKey $TOKEN" | jq
+curl -s $INGESTION/events/$EVENT -H "Authorization: TenantApiKey $TOKEN" | jq
 
 # 8. See it delivered in the sink
 docker compose logs mocksink | grep MockSink
@@ -122,8 +122,8 @@ First, clear earlier receipts, configure the destination to fail, and send a new
 curl -s -X DELETE http://localhost:5054/receipts/acme-erp > /dev/null
 curl -s -X PUT http://localhost:5054/control/acme-erp -H 'Content-Type: application/json' -d '{"mode":"fail"}'
 
-FAIL_EVENT=$(curl -s -X POST $INGRESS/events \
-  -H "Authorization: ApiKey $TOKEN" -H 'Content-Type: application/json' \
+FAIL_EVENT=$(curl -s -X POST $INGESTION/events \
+  -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"source_connection_id\":\"$SRC\",\"topic_name\":\"payments\",\"event_type\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_failure\",\"amount\":1200},\"idempotency_key\":\"demo-failure-$(date +%s)\"}" \
   | jq -r .event_id)
 ```
@@ -132,17 +132,17 @@ Wait until all three attempts have failed. The third failed attempt exhausts the
 dead-letters this SubscriptionDelivery:
 
 ```bash
-until curl -fsS $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
+until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
   | jq -e '[.delivery_attempts[] | select(.status == "failed")] | length >= 3' > /dev/null; do
   sleep 5
 done
 
-curl -s $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
+curl -s $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
   | jq '.delivery_attempts'
 ```
 
 Reset the sink, discard the failed-request receipts, and replay the dead-lettered SubscriptionDelivery.
-Recovery is an Operator action through Admin, so it requires the AdminKey and targets one delivery:
+Recovery is an Operator action through Admin, so it requires the OperatorKey and targets one delivery:
 
 ```bash
 curl -s -X DELETE http://localhost:5054/control/acme-erp
@@ -151,7 +151,7 @@ FAIL_DELIVERY=$(curl -s $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveri
   | jq -r '.subscription_deliveries[] | select(.status == "dead_lettered") | .subscription_delivery_id')
 curl -i -s -X POST $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries/$FAIL_DELIVERY/replay -H "$AUTH"
 
-until curl -fsS $INGRESS/events/$FAIL_EVENT -H "Authorization: ApiKey $TOKEN" \
+until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
   | jq -e 'any(.delivery_attempts[]; .attempt_number >= 4 and .status == "succeeded")' > /dev/null; do
   sleep 2
 done
@@ -163,15 +163,15 @@ The final receipt proves that replay created a new successful attempt without di
 failed attempts in the Event's history. The `.http` request collections under each service in
 `src/` cover the same APIs interactively.
 
-## Rotate the Operator AdminKey
+## Rotate the OperatorKey
 
-Every AdminKey has deployment-wide control-plane authority. Supply the replacement secret out of
+Every OperatorKey has deployment-wide control-plane authority. Supply the replacement secret out of
 band when running the one-shot rotation command:
 
 ```bash
 docker compose run --rm \
-  -e INTEGRIOS_ADMIN_KEY_ROTATION_SECRET='<replacement-secret>' \
-  admin admin-key rotate
+  -e INTEGRIOS_OPERATOR_KEY_ROTATION_SECRET='<replacement-secret>' \
+  admin operator-key rotate
 ```
 
 Rotation atomically revokes the previous live key and creates its replacement. The command prints
@@ -186,12 +186,12 @@ a working local value. Create a `.env` at the repo root only to override.
 |-------------------------------------|--------------------------|-----------------------------|---------------------------------|
 | `POSTGRES_USER`                     | `integrios`              | compose, Makefile `db-*`    | Database username               |
 | `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
-| `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`  | `admin_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the admin credential |
+| `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`  | `operator_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the OperatorKey credential |
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
 | `INTEGRIOS_DESTINATION_SECRETS_PROVIDER` | `file` | Worker | Selects `file` or `configuration` destination-authentication secret resolution |
 | `INTEGRIOS_DESTINATION_SECRETS_DIR` | `./secrets/destination` | Worker | Host directory mounted read-only for destination-authentication values |
-| `INTEGRIOS_SOURCE_SECRETS_PROVIDER` | `file` | Ingress | Selects `file` or `configuration` source-verification secret resolution |
-| `INTEGRIOS_SOURCE_SECRETS_DIR` | `./secrets/source` | Ingress | Host directory mounted read-only for source-verification values |
+| `INTEGRIOS_SOURCE_SECRETS_PROVIDER` | `file` | Ingestion | Selects `file` or `configuration` source-verification secret resolution |
+| `INTEGRIOS_SOURCE_SECRETS_DIR` | `./secrets/source` | Ingestion | Host directory mounted read-only for source-verification values |
 
 ## Destination-authentication secrets
 
@@ -244,11 +244,11 @@ Validation prints references and resolution status, never values. Tenant slugs a
 labels up to 63 characters. References are flat lowercase names up to 63 characters using letters,
 digits, and underscores, and must begin with a letter or digit.
 
-Ingress has a separate source-verification secret capability for built-in source adapters. Its file
+Ingestion has a separate source-verification secret capability for built-in source adapters. Its file
 backend uses `/run/secrets/integrios/source/<tenant-slug>/<reference>` and its configuration backend
-reads `SourceSecrets:<tenant-slug>:<reference>`. When Ingress runs directly, the default Windows
+reads `SourceSecrets:<tenant-slug>:<reference>`. When Ingestion runs directly, the default Windows
 root is `%ProgramData%\Integrios\secrets\source`; the selected directory must exist at startup.
-Ingress cannot
+Ingestion cannot
 resolve the Worker's destination-authentication namespace, and Admin resolves neither namespace.
 
 ## Useful commands

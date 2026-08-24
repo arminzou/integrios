@@ -46,6 +46,15 @@ public static class BuiltinCatalog
                         },
                     ],
                 },
+                SourceContracts =
+                [
+                    new ConnectorSourceContractManifest
+                    {
+                        Key = "event_json",
+                        ContractVersion = 1,
+                        Config = JsonSerializer.Deserialize<JsonElement>("{}"),
+                    },
+                ],
                 Presentation = new ConnectorPresentationManifest
                 {
                     Name = "HTTP",

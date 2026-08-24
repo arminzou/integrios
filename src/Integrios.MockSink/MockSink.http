@@ -3,7 +3,7 @@
 ###
 # MockSink helper flow
 #
-# Use this file alongside Admin.http and Ingress.http.
+# Use this file alongside Admin.http and Ingestion.http.
 # It lets you push the downstream sink into failure or slow modes so you can
 # observe worker retries, replay, and recovery.
 

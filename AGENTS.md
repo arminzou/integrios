@@ -22,7 +22,7 @@ team points it at their own stack. Licensed under MIT.
 
 - `Integrios.slnx` is the solution entrypoint.
 - `src/` contains the main application projects.
-- `src/Integrios.Ingress` owns HTTP intake, tenant auth, and the durable acceptance boundary. Data plane.
+- `src/Integrios.Ingestion` owns HTTP intake, tenant auth, and the durable acceptance boundary. Data plane.
 - `src/Integrios.Admin` owns tenant management, connection configuration, topic and subscription management. Control plane.
 - `src/Integrios.Worker` owns outbox polling, fanout to subscriptions, delivery, and retry/DLQ behavior.
 - `src/Integrios.MockSink` provides a controllable local sink for testing and demos. Not part of the deployable product.
@@ -39,7 +39,7 @@ team points it at their own stack. Licensed under MIT.
 The platform is divided into two planes across three deployable processes.
 
 - **Control plane** (`Integrios.Admin`, port 5150): Operator-owned Tenant lifecycle, connection configuration, topic and subscription management, and policy. Auth may evolve for Operator identities, but never into Tenant-scoped control-plane authority.
-- **Data plane** (`Integrios.Ingress`, port 5231): generic ApiKey-authenticated Event intake plus any curated built-in provider HTTP endpoints, Tenant resolution, source-Connection validation, durable acceptance boundary, and outbox writes. External Event producers remain the universal source path.
+- **Data plane** (`Integrios.Ingestion`, port 5231): generic TenantApiKey-authenticated Event intake plus any curated built-in provider HTTP endpoints, Tenant resolution, source-Connection validation, durable acceptance boundary, and outbox writes. External Event producers remain the universal source path.
 - **Worker** (`Integrios.Worker`): outbox polling, fanout to subscriptions, per-subscription delivery, retry/DLQ/replay.
 
 `Integrios.Worker` reads topic and subscription config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are currently no service-to-service config calls.
@@ -47,8 +47,8 @@ The platform is divided into two planes across three deployable processes.
 ### Core domain model
 
 - `Tenant` is the top-level ownership and isolation boundary, not a control-plane actor.
-- `ApiKey` represents the Integrios-issued machine credential for generic Event intake.
-- An `Event producer` is an external Operator-controlled application or automation that converts source-system changes into the generic Event contract and calls Integrios with an ApiKey; it is not an Integrios runtime plugin.
+- `TenantApiKey` represents the Integrios-issued machine credential for generic Event intake.
+- An `Event producer` is an external Operator-controlled application or automation that converts source-system changes into the generic Event contract and calls Integrios with an TenantApiKey; it is not an Integrios runtime plugin.
 - A `Built-in source adapter` is a platform-supplied HTTP intake module for a popular, stable provider contract; it verifies and normalizes into the same generic Event contract.
 - `Connector` is a deployment-wide, reusable declarative HTTP contract for an external-system class. It may be built in or Operator-authored, is shared across tenants, and carries no tenant data.
 - `Connection` is a Tenant-owned configured instance of one Connector and carries Tenant-specific endpoint configuration plus separate source-verification and destination-authentication selections and secret references. Its current uses are relationship-derived, never persisted on the Connection.
@@ -68,7 +68,7 @@ API-key-header, or bearer-token destination authentication. Connections already 
 `source_verification` and `destination_authentication` envelopes. Do not document target
 capabilities as shipped until their implementation lands.
 
-- Generic HTTP Event intake through external Event producers is universal. An Event producer authenticates with an ApiKey, identifies a configured source Connection, and publishes to an allowed Topic.
+- Generic HTTP Event intake through external Event producers is universal. An Event producer authenticates with an TenantApiKey, identifies a configured source Connection, and publishes to an allowed Topic.
 - Integrios may ship a small curated set of built-in provider HTTP source adapters when a stable, popular contract materially reduces repeated security or operational work. Every adapter must normalize into the same Event acceptance seam.
 - Operator-authored Connectors cannot contain executable source code. Do not add runtime plugins, polling adapters, or a broad connector catalog without a new architecture decision.
 - HTTP(S) is the only destination protocol in current scope. Do not introduce non-HTTP destination protocols, a runtime plugin system, or provider-specific execution adapters without a new architecture decision.
@@ -84,7 +84,7 @@ capabilities as shipped until their implementation lands.
 
 ### Module boundaries
 
-- `Integrios.Ingress` owns the HTTP surface, tenant resolution, and acceptance-boundary writes. It does not own fanout, delivery, or retry behavior.
+- `Integrios.Ingestion` owns the HTTP surface, tenant resolution, and acceptance-boundary writes. It does not own fanout, delivery, or retry behavior.
 - `Integrios.Admin` owns control plane configuration. It does not own event processing.
 - `Integrios.Worker` owns outbox polling, fanout to subscriptions, per-subscription delivery, and retry/DLQ/replay. It does not own HTTP intake or config writes.
 - `Integrios.MockSink` owns controllable success, failure, and slow-path responses for local testing. It is never a dependency of production services.
@@ -111,10 +111,10 @@ dotnet build Integrios.slnx
 dotnet test Integrios.slnx
 
 # Run one test project
-dotnet test tests/Integrios.Ingress.Tests/Integrios.Ingress.Tests.csproj
+dotnet test tests/Integrios.Ingestion.Tests/Integrios.Ingestion.Tests.csproj
 
 # Run one service
-dotnet run --project src/Integrios.Ingress
+dotnet run --project src/Integrios.Ingestion
 dotnet run --project src/Integrios.Admin
 dotnet run --project src/Integrios.Worker
 dotnet run --project src/Integrios.MockSink
@@ -147,7 +147,7 @@ Naming:
 
 Domain naming:
 
-- keep domain entity names aligned with the model: `Tenant`, `ApiKey`, `Connector`, `Connection`, `Topic`, `Subscription`, `Event`, `SubscriptionDelivery`, `DeliveryAttempt`
+- keep domain entity names aligned with the model: `Tenant`, `TenantApiKey`, `Connector`, `Connection`, `Topic`, `Subscription`, `Event`, `SubscriptionDelivery`, `DeliveryAttempt`
 
 Style:
 

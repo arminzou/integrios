@@ -43,7 +43,7 @@ jobs:
           dotnet test tests/Integrios.Application.UnitTests/Integrios.Application.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Infrastructure.UnitTests/Integrios.Infrastructure.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Ingress.UnitTests/Integrios.Ingress.UnitTests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
 
   functional:
@@ -154,7 +154,7 @@ jobs:
           dotnet test tests/Integrios.Application.UnitTests/Integrios.Application.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Infrastructure.UnitTests/Integrios.Infrastructure.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Ingress.UnitTests/Integrios.Ingress.UnitTests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
           INTEGRIOS_TEST_DATABASE_PROVIDER=postgres dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
           INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
@@ -270,8 +270,8 @@ jobs:
           # One Dockerfile builds every image; the host is selected by build argument, so each
           # published image still contains only its own service. Keep these arguments in step
           # with the same services in compose.yml.
-          - name: ingress
-            project: Integrios.Ingress
+          - name: ingestion
+            project: Integrios.Ingestion
             build-args: |
               MOUNT_ROOT=/run/secrets/integrios/source
           - name: admin

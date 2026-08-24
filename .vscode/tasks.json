@@ -16,12 +16,12 @@
       }
     },
     {
-      "label": "build-ingress",
+      "label": "build-ingestion",
       "command": "dotnet",
       "type": "process",
       "args": [
         "build",
-        "${workspaceFolder}/src/Integrios.Ingress/Integrios.Ingress.csproj"
+        "${workspaceFolder}/src/Integrios.Ingestion/Integrios.Ingestion.csproj"
       ],
       "problemMatcher": "$msCompile"
     },

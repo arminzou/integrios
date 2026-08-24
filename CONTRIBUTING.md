@@ -27,7 +27,7 @@ See [docs/setup.md](docs/setup.md) for the end-to-end run and a first-event walk
 
 ## Project layout
 
-- `src/` contains the services: `Integrios.Ingress` (data plane), `Integrios.Admin` (control
+- `src/` contains the services: `Integrios.Ingestion` (data plane), `Integrios.Admin` (control
   plane), `Integrios.Worker` (delivery), plus `Integrios.Domain`, `Integrios.Application`,
   `Integrios.Infrastructure`, and `Integrios.MockSink` (a local test sink).
 - `tests/`: xUnit test projects.

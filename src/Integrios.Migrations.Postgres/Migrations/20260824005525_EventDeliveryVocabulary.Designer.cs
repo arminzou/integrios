@@ -26,7 +26,7 @@ namespace Integrios.Migrations.Postgres.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Integrios.Domain.Entities.AdminKey", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.OperatorKey", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -60,18 +60,18 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnName("secret_hash");
 
                     b.HasKey("Id")
-                        .HasName("admin_keys_pkey");
+                        .HasName("operator_keys_pkey");
 
                     b.HasAlternateKey("PublicKey")
-                        .HasName("admin_keys_public_key_key");
+                        .HasName("operator_keys_public_key_key");
 
-                    b.HasIndex(new[] { "PublicKey" }, "idx_admin_keys_lookup")
+                    b.HasIndex(new[] { "PublicKey" }, "idx_operator_keys_lookup")
                         .HasFilter("(revoked_at IS NULL)");
 
-                    b.ToTable("admin_keys", (string)null);
+                    b.ToTable("operator_keys", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Entities.ApiKey", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.TenantApiKey", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -126,17 +126,17 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnName("tenant_id");
 
                     b.HasKey("Id")
-                        .HasName("api_credentials_pkey");
+                        .HasName("tenant_api_keys_pkey");
 
                     b.HasAlternateKey("KeyPrefix")
-                        .HasName("api_credentials_key_id_key");
+                        .HasName("tenant_api_keys_key_prefix_key");
 
-                    b.HasIndex(new[] { "KeyHash" }, "idx_api_keys_key_hash")
+                    b.HasIndex(new[] { "KeyHash" }, "idx_tenant_api_keys_key_hash")
                         .IsUnique();
 
-                    b.HasIndex(new[] { "TenantId" }, "idx_api_keys_tenant_id");
+                    b.HasIndex(new[] { "TenantId" }, "idx_tenant_api_keys_tenant_id");
 
-                    b.ToTable("api_keys", (string)null);
+                    b.ToTable("tenant_api_keys", (string)null);
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>
@@ -973,13 +973,13 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("outbox", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Entities.ApiKey", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.TenantApiKey", b =>
                 {
                     b.HasOne("Integrios.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .IsRequired()
-                        .HasConstraintName("api_credentials_tenant_id_fkey");
+                        .HasConstraintName("tenant_api_keys_tenant_id_fkey");
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>

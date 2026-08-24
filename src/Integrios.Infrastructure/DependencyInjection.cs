@@ -1,6 +1,6 @@
 using Integrios.Application;
-using Integrios.Application.AdminKeys;
-using Integrios.Application.ApiKeys;
+using Integrios.Application.OperatorKeys;
+using Integrios.Application.TenantApiKeys;
 using Integrios.Application.Auth;
 using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
@@ -13,8 +13,8 @@ using Integrios.Application.Sources;
 using Integrios.Application.Tenants;
 using Integrios.Application.Topics;
 using Integrios.Application.Transforms;
-using Integrios.Infrastructure.AdminKeys;
-using Integrios.Infrastructure.ApiKeys;
+using Integrios.Infrastructure.OperatorKeys;
+using Integrios.Infrastructure.TenantApiKeys;
 using Integrios.Infrastructure.Auth;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
@@ -64,10 +64,10 @@ public static class DependencyInjection
     {
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
-        services.AddScoped<AdminKeyRepository>();
-        services.AddScoped<IAdminKeyLookup>(provider => provider.GetRequiredService<AdminKeyRepository>());
-        services.AddScoped<IAdminKeyLifecycle>(provider => provider.GetRequiredService<AdminKeyRepository>());
-        services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
+        services.AddScoped<OperatorKeyRepository>();
+        services.AddScoped<IOperatorKeyLookup>(provider => provider.GetRequiredService<OperatorKeyRepository>());
+        services.AddScoped<IOperatorKeyLifecycle>(provider => provider.GetRequiredService<OperatorKeyRepository>());
+        services.AddScoped<ITenantApiKeyRepository, TenantApiKeyRepository>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IConnectorCatalog, ConnectorCatalog>();
         if (databaseProvider == DatabaseProvider.SqlServer)
@@ -90,13 +90,13 @@ public static class DependencyInjection
         return services;
     }
 
-    public static IServiceCollection AddIngressInfrastructureServices(
+    public static IServiceCollection AddIngestionInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
-        services.AddSingleton<IActiveApiKeyLookup, ActiveApiKeyLookup>();
+        services.AddSingleton<IActiveTenantApiKeyLookup, ActiveTenantApiKeyLookup>();
         services.AddSingleton<ISourceTopicLookup, IntakeTopicResolver>();
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
         if (databaseProvider == DatabaseProvider.SqlServer)

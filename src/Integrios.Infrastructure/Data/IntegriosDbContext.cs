@@ -10,8 +10,8 @@ namespace Integrios.Infrastructure.Data;
 
 internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> options) : DbContext(options)
 {
-    public DbSet<AdminKey> AdminKeys => Set<AdminKey>();
-    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<OperatorKey> OperatorKeys => Set<OperatorKey>();
+    public DbSet<TenantApiKey> TenantApiKeys => Set<TenantApiKey>();
     public DbSet<Connection> Connections => Set<Connection>();
     public DbSet<DeliveryAttempt> DeliveryAttempts => Set<DeliveryAttempt>();
     public DbSet<DomainEvent> Events => Set<DomainEvent>();
@@ -71,13 +71,13 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         static string JsonDefault(string value) =>
             $"N'{value.Replace("'", "''", StringComparison.Ordinal)}'";
 
-        modelBuilder.Entity<AdminKey>(entity =>
+        modelBuilder.Entity<OperatorKey>(entity =>
         {
             entity.Property(e => e.Id).HasDefaultValueSql(generatedGuid);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
         });
 
-        modelBuilder.Entity<ApiKey>(entity =>
+        modelBuilder.Entity<TenantApiKey>(entity =>
         {
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));

@@ -1,5 +1,5 @@
 using Integrios.Application;
-using Integrios.Application.AdminKeys;
+using Integrios.Application.OperatorKeys;
 using Integrios.Application.Delivery;
 using Integrios.Infrastructure;
 using Microsoft.Extensions.Configuration;
@@ -22,21 +22,21 @@ public sealed class DeliveryPolicyRegistrationTests
     }
 
     [Fact]
-    public void Ingress_OmitsDeliveryPolicies_WhileWorkerUsesConfiguredPolicy()
+    public void Ingestion_OmitsDeliveryPolicies_WhileWorkerUsesConfiguredPolicy()
     {
-        IConfiguration ingressConfiguration = BuildConfiguration(new Dictionary<string, string?>
+        IConfiguration ingestionConfiguration = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Integrios:Delivery:Retry:BaseDelay"] = "not-a-timespan",
             ["Integrios:Delivery:Retry:MaxAttempts"] = "not-an-integer"
         });
-        using ServiceProvider ingress = BuildProvider(
-            services => services.AddIngressApplicationServices(),
+        using ServiceProvider ingestion = BuildProvider(
+            services => services.AddIngestionApplicationServices(),
             services =>
-            services.AddIngressInfrastructureServices(ingressConfiguration));
+            services.AddIngestionInfrastructureServices(ingestionConfiguration));
 
-        AssertOmits<DeliveryExecutionOptions>(ingress);
-        AssertOmits<RetryPolicy>(ingress);
-        AssertOmits<DeliveryOutcomePolicy>(ingress);
+        AssertOmits<DeliveryExecutionOptions>(ingestion);
+        AssertOmits<RetryPolicy>(ingestion);
+        AssertOmits<DeliveryOutcomePolicy>(ingestion);
 
         IConfiguration workerConfiguration = BuildConfiguration(new Dictionary<string, string?>
         {
@@ -71,8 +71,8 @@ public sealed class DeliveryPolicyRegistrationTests
             services.AddAdminInfrastructureServices(configuration));
         using IServiceScope scope = provider.CreateScope();
 
-        AssertResolves<IAdminKeyLookup>(scope.ServiceProvider);
-        AssertResolves<IAdminKeyLifecycle>(scope.ServiceProvider);
+        AssertResolves<IOperatorKeyLookup>(scope.ServiceProvider);
+        AssertResolves<IOperatorKeyLifecycle>(scope.ServiceProvider);
         AssertOmits<DeliveryExecutionOptions>(scope.ServiceProvider);
     }
 

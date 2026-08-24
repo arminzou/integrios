@@ -1,6 +1,6 @@
 # Local source-verification secrets
 
-This directory is mounted read-only into Ingress for local development when the default file
+This directory is mounted read-only into Ingestion for local development when the default file
 provider is selected. Store each value at:
 
 ```text

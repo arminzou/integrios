@@ -18,10 +18,10 @@ namespace Integrios.Worker.UnitTests;
 
 public sealed class AuthenticatedDispatchTests
 {
-    private static readonly JsonElement ApiKeyConfig =
+    private static readonly JsonElement TenantApiKeyConfig =
         JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
 
-    private static readonly JsonElement ApiKeySecretRefs =
+    private static readonly JsonElement TenantApiKeySecretRefs =
         JsonSerializer.Deserialize<JsonElement>("""{"api_key":"erp_api_key"}""");
 
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
@@ -41,8 +41,8 @@ public sealed class AuthenticatedDispatchTests
                     auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
-                        Config = ApiKeyConfig,
-                        SecretRefs = ApiKeySecretRefs
+                        Config = TenantApiKeyConfig,
+                        SecretRefs = TenantApiKeySecretRefs
                     })
             ]
         };
@@ -83,8 +83,8 @@ public sealed class AuthenticatedDispatchTests
                     auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
-                        Config = ApiKeyConfig,
-                        SecretRefs = ApiKeySecretRefs
+                        Config = TenantApiKeyConfig,
+                        SecretRefs = TenantApiKeySecretRefs
                     })
             ]
         };
@@ -123,8 +123,8 @@ public sealed class AuthenticatedDispatchTests
                     auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
-                        Config = ApiKeyConfig,
-                        SecretRefs = ApiKeySecretRefs
+                        Config = TenantApiKeyConfig,
+                        SecretRefs = TenantApiKeySecretRefs
                     })
             ]
         };
@@ -211,8 +211,8 @@ public sealed class AuthenticatedDispatchTests
                     auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
-                        Config = ApiKeyConfig,
-                        SecretRefs = ApiKeySecretRefs
+                        Config = TenantApiKeyConfig,
+                        SecretRefs = TenantApiKeySecretRefs
                     })
             ]
         };
@@ -253,8 +253,8 @@ public sealed class AuthenticatedDispatchTests
                     auth: new ConnectionSchemeSelection
                     {
                         Scheme = "api_key_header",
-                        Config = ApiKeyConfig,
-                        SecretRefs = ApiKeySecretRefs
+                        Config = TenantApiKeyConfig,
+                        SecretRefs = TenantApiKeySecretRefs
                     })
             ]
         };
@@ -296,7 +296,7 @@ public sealed class AuthenticatedDispatchTests
                     {
                         Scheme = "api_key_header",
                         Config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"Integrios-Event-Id"}"""),
-                        SecretRefs = ApiKeySecretRefs
+                        SecretRefs = TenantApiKeySecretRefs
                     })
             ]
         };

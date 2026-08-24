@@ -10,35 +10,35 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 
 ```bash
 cp .env.example .env
-# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_BOOTSTRAP_ADMIN_SECRET, and INTEGRIOS_PUBLIC_INGRESS_BASE_URI
+# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET, and INTEGRIOS_PUBLIC_INGESTION_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
 mkdir -p secrets
 docker compose up -d
 ```
 
 Startup order is enforced by `depends_on`: `postgres` becomes healthy, then `migrate` runs the
-EF Core migrations to completion, then `bootstrap` runs its one-shot, then `ingress`, `admin`,
+EF Core migrations to completion, then `bootstrap` runs its one-shot, then `ingestion`, `admin`,
 and `worker` start.
 
 ## Bootstrap semantics
 
 The `bootstrap` service is idempotent and safe to re-run. It creates the built-in connector
-catalog and, only if no live deployment-wide AdminKey exists yet, the first AdminKey.
+catalog and, only if no live deployment-wide OperatorKey exists yet, the first OperatorKey.
 
-The admin secret comes from `INTEGRIOS_BOOTSTRAP_ADMIN_SECRET`. Production bootstrap requires a
-non-empty Operator-supplied value and never prints the secret. The admin credential format is:
+The OperatorKey secret comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`. Production bootstrap requires a
+non-empty Operator-supplied value and never prints the secret. The OperatorKey credential format is:
 
 ```text
-global_admin_key:<secret>
+global_operator_key:<secret>
 ```
 
-Every AdminKey has deployment-wide Operator authority. Rotate it by supplying the replacement
+Every OperatorKey has deployment-wide Operator authority. Rotate it by supplying the replacement
 secret out of band to the one-shot Admin CLI:
 
 ```bash
 docker compose run --rm \
-  -e INTEGRIOS_ADMIN_KEY_ROTATION_SECRET='<replacement-secret>' \
-  admin admin-key rotate
+  -e INTEGRIOS_OPERATOR_KEY_ROTATION_SECRET='<replacement-secret>' \
+  admin operator-key rotate
 ```
 
 Rotation atomically revokes the previous live key and creates its replacement. The command prints
@@ -78,9 +78,9 @@ docker compose run --rm worker secrets validate --tenant acme --connection <conn
 The command exits `0` when all selected references resolve, `1` when any do not, and `2` for an
 invalid selection or startup configuration. It prints no resolved values.
 
-Ingress source-verification values use the separate `INTEGRIOS_SOURCE_SECRETS_DIR` mount at
-`/run/secrets/integrios/source`. With the configuration backend, Ingress reads
-`SourceSecrets:<tenant-slug>:<reference>`. Admin resolves no secret values, Ingress has
+Ingestion source-verification values use the separate `INTEGRIOS_SOURCE_SECRETS_DIR` mount at
+`/run/secrets/integrios/source`. With the configuration backend, Ingestion reads
+`SourceSecrets:<tenant-slug>:<reference>`. Admin resolves no secret values, Ingestion has
 no access to destination-authentication values, and Worker has no access to source-verification
 values.
 
@@ -120,12 +120,12 @@ Migrations run automatically via the `migrate` one-shot on every `up`.
 ## Using a managed Postgres
 
 Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
-`migrate`, `bootstrap`, `ingress`, `admin`, and `worker` at your database.
+`migrate`, `bootstrap`, `ingestion`, `admin`, and `worker` at your database.
 
 ## Using SQL Server 2022+
 
 Use an externally managed SQL Server 2022 or later, remove the bundled `postgres` service, and adjust the
-`migrate` dependency. On `migrate`, `bootstrap`, `ingress`, `admin`, and `worker`, replace the
+`migrate` dependency. On `migrate`, `bootstrap`, `ingestion`, `admin`, and `worker`, replace the
 PostgreSQL connection setting with:
 
 ```yaml
@@ -142,7 +142,7 @@ see [Database backends](../docs/database-backends.md) for the queue-locking poli
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| ingress | 5231 | Webhook/event intake (data plane) |
+| ingestion | 5231 | Webhook/event intake (data plane) |
 | admin   | 5150 | Tenant and config management (control plane) |
 
 The worker exposes no HTTP port.

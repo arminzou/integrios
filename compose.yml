@@ -32,7 +32,7 @@ services:
 
   bootstrap:
     # Same command as production. What makes this stack dev-only is the well-known dev secret
-    # defaulted below (override via .env / INTEGRIOS_BOOTSTRAP_ADMIN_SECRET), plus the bundled
+    # defaulted below (override via .env / INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET), plus the bundled
     # MockSink/Grafana. Never deploy this compose file unchanged to a public/prod environment;
     # see deploy/ for the production reference.
     build:
@@ -47,17 +47,17 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
       DOTNET_ENVIRONMENT: Development
-      INTEGRIOS_BOOTSTRAP_ADMIN_SECRET: ${INTEGRIOS_BOOTSTRAP_ADMIN_SECRET:-admin_bootstrap_secret}
+      INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET: ${INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET:-operator_bootstrap_secret}
     command: ["bootstrap"]
 
-  ingress:
+  ingestion:
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PROJECT: Integrios.Ingress
+        PROJECT: Integrios.Ingestion
         MOUNT_ROOT: /run/secrets/integrios/source
-    image: ${INTEGRIOS_INGRESS_IMAGE:-integrios-ingress:dev}
+    image: ${INTEGRIOS_INGESTION_IMAGE:-integrios-ingestion:dev}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -67,7 +67,7 @@ services:
     volumes:
       - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/source}:/run/secrets/integrios/source:ro
     ports:
-      - "${INTEGRIOS_INGRESS_PORT:-5231}:8080"
+      - "${INTEGRIOS_INGESTION_PORT:-5231}:8080"
 
   admin:
     build:
@@ -82,7 +82,7 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
       DOTNET_ENVIRONMENT: Development
-      Integrios__PublicIngressBaseUri: ${INTEGRIOS_PUBLIC_INGRESS_BASE_URI:-http://localhost:5231}
+      Integrios__PublicIngestionBaseUri: ${INTEGRIOS_PUBLIC_INGESTION_BASE_URI:-http://localhost:5231}
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
 

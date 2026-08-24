@@ -9,7 +9,7 @@ and reliable HTTP delivery with retries, dead-lettering, replay, and auditable d
 ## Features
 
 - Durable event intake behind a transactional-outbox acceptance boundary, so no accepted event is lost
-- ApiKey-authenticated generic intake with Tenant isolation
+- TenantApiKey-authenticated generic intake with Tenant isolation
 - Topic/subscription routing with optional JSONata payload transforms
 - Authenticated HTTP JSON delivery using open, API-key-header, or bearer-token authentication
 - Reliable async delivery with bounded retries, dead-lettering, and replay
@@ -20,7 +20,7 @@ and reliable HTTP delivery with retries, dead-lettering, replay, and auditable d
 
 ## Architecture
 
-Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, connections, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingress` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
+Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, connections, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingestion` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
 
 A **Connector** is a reusable, deployment-wide declarative HTTP contract. A **Connection** is a
 Tenant-owned configured instance of one Connector, so the same Connector can serve many Tenants
@@ -38,7 +38,7 @@ Prerequisite: Docker.
 make up
 ```
 
-This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingress on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md).
+This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingestion on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md).
 
 ## Documentation
 
@@ -63,7 +63,7 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 
 ## Use Cases
 
-- A durable HTTP ingress hub for Event producers around payments, CRM, support, commerce, and internal systems
+- A durable HTTP ingestion hub for Event producers around payments, CRM, support, commerce, and internal systems
 - Tenant-scoped fan-out of one event stream to multiple destinations with per-subscription logic
 - Reliable buffering and recovery during downstream outages or rate limiting
 - Auditable event and delivery history for compliance and incident response

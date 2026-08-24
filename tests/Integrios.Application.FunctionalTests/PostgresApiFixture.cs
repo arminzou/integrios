@@ -1,4 +1,4 @@
-extern alias IngressHost;
+extern alias IngestionHost;
 
 using System.Data.Common;
 using System.Security.Cryptography;
@@ -25,7 +25,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;
 
-    public WebApplicationFactory<IngressHost::Program> WebFactory { get; private set; } = null!;
+    public WebApplicationFactory<IngestionHost::Program> WebFactory { get; private set; } = null!;
     public string ConnectionString => database.ConnectionString;
     internal DbConnection CreateConnection() => database.CreateConnection();
     internal DbContextOptions<IntegriosDbContext> CreateOptions() => database.CreateOptions();
@@ -65,7 +65,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 (@TenantAId, 'test-tenant-a', 'Test Tenant A', 'active', {{{now}}}, {{{now}}}),
                 (@TenantBId, 'test-tenant-b', 'Test Tenant B', 'active', {{{now}}}, {{{now}}});
 
-            INSERT INTO api_keys (id, tenant_id, name, key_prefix, key_hash, status, created_at)
+            INSERT INTO tenant_api_keys (id, tenant_id, name, key_prefix, key_hash, status, created_at)
             VALUES
                 (@CredentialAId, @TenantAId, 'test-ingest-key-a', @KeyPrefixA, @KeyHashA, 'active', {{{now}}}),
                 (@CredentialBId, @TenantBId, 'test-ingest-key-b', @KeyPrefixB, @KeyHashB, 'active', {{{now}}});
@@ -145,8 +145,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         Guid sourceId = Guid.NewGuid();
         await ExecuteAsync(
-            "INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status) VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'event_api', '{}'::jsonb, 'active')",
-            new { SourceId = sourceId, TenantId = tenantId, ConnectionId = connectionId, TopicId = topicId });
+            $"INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status) VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'event_api', {database.Json("@Configuration")}, 'active')",
+            new { SourceId = sourceId, TenantId = tenantId, ConnectionId = connectionId, TopicId = topicId, Configuration = "{}" });
         return sourceId;
     }
 
@@ -214,8 +214,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         return (await connection.ExecuteScalarAsync<T>(sql, parameters))!;
     }
 
-    private WebApplicationFactory<IngressHost::Program> BuildWebFactory() =>
-        new WebApplicationFactory<IngressHost::Program>().WithWebHostBuilder(builder =>
+    private WebApplicationFactory<IngestionHost::Program> BuildWebFactory() =>
+        new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
             builder.UseSetting("Database:Provider", database.Provider);

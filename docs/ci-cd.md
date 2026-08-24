@@ -20,7 +20,7 @@ qualification mandatory before publishing a release:
 The main and release tiers publish images to GitHub Container Registry (GHCR) under:
 
 ```
-ghcr.io/<owner>/<repo>/ingress
+ghcr.io/<owner>/<repo>/ingestion
 ghcr.io/<owner>/<repo>/admin
 ghcr.io/<owner>/<repo>/worker
 ```
@@ -29,7 +29,7 @@ Main images are tagged with the commit SHA, branch name, and `latest`. Release i
 tagged with the commit SHA and, for `v*` tags, semantic-version tags. Each image includes
 an SBOM and build provenance attestation.
 
-The three services are separate images because each contains only its own host. Ingress, Admin,
+The three services are separate images because each contains only its own host. Ingestion, Admin,
 and Worker compose different capabilities — Worker resolves delivery secrets and Admin never
 does — so keeping them in one image would reduce that separation to configuration. All three are
 built from a single `docker/Dockerfile`, which selects the host through a `PROJECT` build
@@ -39,7 +39,7 @@ place.
 **The published images are a matched set.** A given version tag assumes all three services run
 that same version against a database migrated to the schema they expect. Nothing at runtime
 prevents mixing versions, and a release that changes the schema will misbehave if only some
-services are rolled forward. Deploy Ingress, Admin, and Worker together, from the same tag or
+services are rolled forward. Deploy Ingestion, Admin, and Worker together, from the same tag or
 digest set, and run migrations before starting them. The deployment reference in
 `deploy/compose.yml` enforces this by resolving all three images from a single
 `INTEGRIOS_VERSION`; keep that property if you adapt it.
@@ -47,7 +47,7 @@ digest set, and run migrations before starting them. The deployment reference in
 Successful release runs retain a downloadable evidence artifact for 90 days. It contains
 the workflow and commit identity, .NET and dependency versions, exact qualification
 commands, test logs and TRX results, resolved external image digests, and the published
-Ingress, Admin, and Worker image digests.
+Ingestion, Admin, and Worker image digests.
 
 The repository pins its .NET SDK, NuGet dependency graph, container versions, and
 third-party GitHub Actions. Action references use immutable commit SHAs with a readable

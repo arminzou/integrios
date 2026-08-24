@@ -25,8 +25,8 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     command: ["database", "migrate"]
 
-  # Idempotent one-shot: creates the built-in catalog and, only if no live deployment-wide AdminKey
-  # exists, the first admin key. Production fails closed unless the Operator supplies a secret.
+  # Idempotent one-shot: creates the built-in catalog and, only if no live deployment-wide OperatorKey
+  # exists, the first operator key. Production fails closed unless the Operator supplies a secret.
   bootstrap:
     image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.2.0}
     depends_on:
@@ -35,11 +35,11 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       DOTNET_ENVIRONMENT: Production
-      INTEGRIOS_BOOTSTRAP_ADMIN_SECRET: ${INTEGRIOS_BOOTSTRAP_ADMIN_SECRET:-}
+      INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET: ${INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET:-}
     command: ["bootstrap"]
 
-  ingress:
-    image: ghcr.io/arminzou/integrios/ingress:${INTEGRIOS_VERSION:-0.2.0}
+  ingestion:
+    image: ghcr.io/arminzou/integrios/ingestion:${INTEGRIOS_VERSION:-0.2.0}
     restart: unless-stopped
     depends_on:
       bootstrap:
@@ -50,7 +50,7 @@ services:
     volumes:
       - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/source}:/run/secrets/integrios/source:ro
     ports:
-      - "${INTEGRIOS_INGRESS_PORT:-5231}:8080"
+      - "${INTEGRIOS_INGESTION_PORT:-5231}:8080"
 
   admin:
     image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.2.0}
@@ -60,7 +60,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      Integrios__PublicIngressBaseUri: ${INTEGRIOS_PUBLIC_INGRESS_BASE_URI}
+      Integrios__PublicIngestionBaseUri: ${INTEGRIOS_PUBLIC_INGESTION_BASE_URI}
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
 

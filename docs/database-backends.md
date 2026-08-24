@@ -9,7 +9,7 @@ configuration. SQL Server 2022+ is the Microsoft-stack reference deployment.
 | PostgreSQL | `postgres` or omitted | `ConnectionStrings__Postgres` |
 | SQL Server 2022+ | `sqlserver` | `ConnectionStrings__SqlServer` |
 
-Set the same provider and connection string on the migration one-shot, Admin, Ingress, and Worker.
+Set the same provider and connection string on the migration one-shot, Admin, Ingestion, and Worker.
 For example:
 
 ```text

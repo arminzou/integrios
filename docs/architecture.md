@@ -16,16 +16,16 @@ platform, API gateway, or multi-protocol runtime.
 ```mermaid
 flowchart LR
     Operator[Operator] -->|configures| Admin[Admin<br/>control plane]
-    Producer[External Event producer] -->|generic Event + ApiKey| Ingress[Ingress<br/>data plane]
-    Adapter[Verified-webhook<br/>source adapter] -->|verified, normalized Event| Ingress
+    Producer[External Event producer] -->|generic Event + TenantApiKey| Ingestion[Ingestion<br/>data plane]
+    Adapter[Verified-webhook<br/>source adapter] -->|verified, normalized Event| Ingestion
     Admin --> DB[(PostgreSQL or SQL Server 2022+)]
-    Ingress -->|Event + outbox<br/>one transaction| DB
+    Ingestion -->|Event + outbox<br/>one transaction| DB
     DB -->|fanout work| Worker[Worker]
     Worker -->|generic HTTP delivery| Destinations[HTTP destinations]
     Worker -->|attempt state,<br/>retry and DLQ| DB
 ```
 
-External Event producers and generic ApiKey intake remain the universal source path. A source
+External Event producers and generic TenantApiKey intake remain the universal source path. A source
 Connection may additionally select the generic verified-webhook source adapter through its
 Connector's manifest, which verifies and normalizes a provider's HTTP request before it crosses
 the same durable Event-acceptance boundary; see [the GitHub-to-Slack
@@ -39,7 +39,7 @@ Integrios separates platform intent from runtime execution.
 Connection configuration and secret references, Topic and Subscription authoring, and transform
 preview. Tenants never receive control-plane authority.
 
-**Data plane** (`Integrios.Ingress` and `Integrios.Worker`): request authentication and Tenant
+**Data plane** (`Integrios.Ingestion` and `Integrios.Worker`): request authentication and Tenant
 resolution, source-Connection and Topic validation, durable Event acceptance, fanout, transformation,
 HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
 
@@ -50,7 +50,7 @@ at runtime.
 ## Core model
 
 - **Tenant** is the top-level ownership and isolation boundary.
-- **ApiKey** is an Integrios-issued machine credential for generic Event intake and resolves one
+- **TenantApiKey** is an Integrios-issued machine credential for generic Event intake and resolves one
   Tenant.
 - **Connector** is a deployment-wide reusable declarative HTTP contract for an external-system
   class. It may be built in or Operator-authored, is shared across Tenants, and contains no Tenant
@@ -80,7 +80,7 @@ flow, or small service—that:
 
 - owns source-system credentials and provider-specific adaptation
 - converts the source change to the generic Integrios Event contract
-- authenticates to Integrios with an ApiKey
+- authenticates to Integrios with an TenantApiKey
 - identifies a configured source Connection and an allowed Topic
 
 A generic, platform-supplied **verified-webhook source adapter** lets an Operator-authored
@@ -133,12 +133,12 @@ Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
 
 ## Core processing flow
 
-1. An external Event producer sends the generic Event contract to Ingress and authenticates with an
-   ApiKey, or the generic verified-webhook source adapter verifies and normalizes a provider HTTP
-   request before Ingress ever sees an Event contract.
-2. Ingress resolves the Tenant and validates or derives the active source Connection and its Topic
+1. An external Event producer sends the generic Event contract to Ingestion and authenticates with an
+   TenantApiKey, or the generic verified-webhook source adapter verifies and normalizes a provider HTTP
+   request before Ingestion ever sees an Event contract.
+2. Ingestion resolves the Tenant and validates or derives the active source Connection and its Topic
    association.
-3. One database transaction writes the canonical Event and its outbox row before Ingress
+3. One database transaction writes the canonical Event and its outbox row before Ingestion
    acknowledges acceptance.
 4. Worker fanout reads matching active Subscriptions and creates one SubscriptionDelivery for each.
 5. Each SubscriptionDelivery is claimed independently, transformed, and sent through the generic
@@ -156,12 +156,12 @@ availability and avoids a database/message-transport dual write.
 
 ### Idempotency and source provenance
 
-Generic callers provide a `sourceConnectionId` and may provide an `idempotencyKey`. Ingress accepts
+Generic callers provide a `sourceConnectionId` and may provide an `idempotencyKey`. Ingestion accepts
 the source Connection only when it belongs to the authenticated Tenant, is active, uses a
 source-capable Connector, and may publish to the selected Topic. Repeated submissions with the
 same Tenant-scoped idempotency key resolve to the same accepted Event.
 
-Provider credentials and webhook secrets are not Integrios ApiKeys. Connections store logical
+Provider credentials and webhook secrets are not Integrios TenantApiKeys. Connections store logical
 secret references; the Operator materializes their values through the deployment's secret provider,
 and Worker resolves them immediately before an attempt without persisting the values.
 
@@ -178,7 +178,7 @@ and indeterminate attempts preserve ambiguity rather than reporting a false conf
 
 ## Scaling and observability
 
-Ingress instances are stateless and Worker replicas safely claim disjoint work with PostgreSQL
+Ingestion instances are stateless and Worker replicas safely claim disjoint work with PostgreSQL
 `FOR UPDATE SKIP LOCKED` or equivalent SQL Server locking hints. The configured database is the
 durable backbone; another transport should be introduced only when measured scale or operational
 pressure justifies it.

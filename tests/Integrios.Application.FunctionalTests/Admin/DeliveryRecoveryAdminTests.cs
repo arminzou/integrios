@@ -29,7 +29,7 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
     }
 
     [Fact]
-    public async Task AdminKey_CanInspectAndReplayOneDeadLetteredDelivery()
+    public async Task OperatorKey_CanInspectAndReplayOneDeadLetteredDelivery()
     {
         var (eventId, deliveryId) = await fixture.SeedDeadLetteredDeliveryAsync();
         string route = $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries";

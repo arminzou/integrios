@@ -912,7 +912,7 @@
           "OpenTelemetry.Instrumentation.SqlClient": "[1.15.2, )"
         }
       },
-      "integrios.ingress": {
+      "integrios.ingestion": {
         "type": "Project",
         "dependencies": {
           "Integrios.Application": "[1.0.0, )",

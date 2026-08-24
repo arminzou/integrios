@@ -7,5 +7,5 @@ internal sealed class UnavailableSourceVerificationSecretResolver : ISourceVerif
     public string ProviderName => "unavailable";
 
     public Task<string> ResolveAsync(TenantSecretScope tenant, string secretReference, CancellationToken cancellationToken) =>
-        throw new InvalidOperationException("Source-verification secret resolution is available only in the Ingress process.");
+        throw new InvalidOperationException("Source-verification secret resolution is available only in the Ingestion process.");
 }

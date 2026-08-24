@@ -24,7 +24,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
     [Fact]
     public async Task PackagedSystem_QualifiesGitHubToSlackGoldenPath()
     {
-        string githubConnectorId = await ApplyExampleManifestAsync("github");
+        const string githubConnectorId = "00000000-0000-0000-0000-000000000002";
         string slackConnectorId = await ApplyExampleManifestAsync("slack");
 
         string tenantSlug = $"golden-{Suffix()}";
@@ -33,8 +33,8 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
         const string githubSecret = "qualification-github-secret";
         await fixture.WriteSourceSecretAsync(tenantSlug, GitHubSecretReference, githubSecret);
         Guid githubConnection = await CreateGitHubConnectionAsync(tenant, githubConnectorId);
-        Guid topic = await CreateTopicAsync(tenant, "github-events", [githubConnection]);
-        string callbackPath = await GetCallbackPathAsync(tenant, topic);
+        Guid topic = await CreateTopicAsync(tenant, "github-events");
+        string callbackPath = await CreateWebhookSourceAsync(tenant, githubConnection, topic);
 
         await fixture.WriteSecretAsync(tenantSlug, SlackSecretReference, "xoxb-qualification-token");
         Guid slackConnection = await CreateSlackConnectionAsync(tenant, slackConnectorId);
@@ -131,11 +131,20 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateTopicAsync(Guid tenant, string name, IReadOnlyList<Guid> sources)
+    private async Task<Guid> CreateTopicAsync(Guid tenant, string name)
     {
         using HttpResponseMessage response = await PostAdminAsync(
-            $"/admin/tenants/{tenant}/topics", new { name, source_connection_ids = sources });
+            $"/admin/tenants/{tenant}/topics", new { name });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
+    }
+
+    private async Task<string> CreateWebhookSourceAsync(Guid tenant, Guid connection, Guid topic)
+    {
+        using HttpResponseMessage response = await PostAdminAsync(
+            $"/admin/tenants/{tenant}/sources",
+            new { connection_id = connection, topic_id = topic, type = "webhook", configuration = new { source_contract = "github_webhook" } });
+        JsonElement source = await AssertJsonAsync(response, HttpStatusCode.Created);
+        return $"/webhooks/github/{source.GetProperty("configuration").GetProperty("callback_id").GetString()}";
     }
 
     private async Task<Guid> CreateSlackSubscriptionAsync(Guid tenant, Guid topic, Guid destination)
@@ -148,7 +157,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
                 match_rules = new { event_type = "github.push" },
                 destination_connection_id = destination,
                 order_index = 0,
-                transform = new
+                mapping = new
                 {
                     engine = "jsonata",
                     version = "1",
@@ -157,15 +166,6 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
                 http_delivery = new { version = 1, method = "POST", headers = new { }, body = "json" },
             });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
-    }
-
-    private async Task<string> GetCallbackPathAsync(Guid tenant, Guid topic)
-    {
-        using HttpRequestMessage request = new(HttpMethod.Get, $"/admin/tenants/{tenant}/topics/{topic}");
-        request.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
-        using HttpResponseMessage response = await fixture.AdminClient.SendAsync(request);
-        JsonElement body = await AssertJsonAsync(response, HttpStatusCode.OK);
-        return body.GetProperty("sources")[0].GetProperty("endpoint").GetProperty("callback_path").GetString()!;
     }
 
     private async Task<Guid> SendSignedPushAsync(string callbackPath, string secret)
@@ -186,7 +186,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
         request.Headers.TryAddWithoutValidation("X-GitHub-Delivery", $"delivery-{Suffix()}");
         request.Headers.TryAddWithoutValidation("X-GitHub-Event", "push");
 
-        using HttpResponseMessage response = await fixture.IngressClient.SendAsync(request);
+        using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Accepted);
         return body.GetProperty("event_id").GetGuid();
     }

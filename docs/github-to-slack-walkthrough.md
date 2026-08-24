@@ -1,7 +1,7 @@
 # Walkthrough: GitHub to Slack
 
 Drive a verified GitHub webhook through Integrios and deliver a transformed Slack message,
-entirely through the Admin and Ingress APIs. This exercises the platform's generic
+entirely through the Admin and Ingestion APIs. This exercises the platform's generic
 verified-webhook source adapter, Operator-authored Connectors, and logical HTTP-outcome
 evaluation on one concrete path — it is not a GitHub-specific or Slack-specific runtime feature.
 
@@ -13,8 +13,8 @@ and will not automate (see [Non-goals](#non-goals)).
 
 - The local stack running (`make up`; see [setup.md](setup.md)) with a public HTTPS URL that
   GitHub can reach. A local Compose stack is not reachable from GitHub's servers — use a tunnel
-  (for example `ngrok http 5231`) and set `Integrios__PublicIngressBaseUri` to that public HTTPS
-  origin before creating the source endpoint below, or deploy Ingress somewhere public first. See
+  (for example `ngrok http 5231`) and set `Integrios__PublicIngestionBaseUri` to that public HTTPS
+  origin before creating the source endpoint below, or deploy Ingestion somewhere public first. See
   [setup.md](setup.md#production-deployment) for a production reference.
 - A GitHub repository or organization you can add a webhook to.
 - A Slack workspace and a bot token (`xoxb-...`) with the `chat:write` scope, invited to the
@@ -43,7 +43,7 @@ against it references below.
 
 ```bash
 ADMIN=http://localhost:5150
-AUTH="Authorization: AdminKey global_admin_key:admin_bootstrap_secret"
+AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
 
 GITHUB_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/github/versions/1" -H "$AUTH" \
   -H 'Content-Type: application/json' --data-binary @examples/connectors/github-v1.json | jq -r .id)
@@ -108,7 +108,7 @@ CALLBACK_URL=$(curl -s "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC" -H "$AUTH" \
 echo "$CALLBACK_URL"
 ```
 
-`callback_url` is derived from the deployment's configured `Integrios__PublicIngressBaseUri`; see
+`callback_url` is derived from the deployment's configured `Integrios__PublicIngestionBaseUri`; see
 [Prerequisites](#prerequisites) if this doesn't already point at a GitHub-reachable HTTPS origin.
 
 ## 5. Configure the GitHub webhook (manual, external)
@@ -174,24 +174,24 @@ before relying on this in a real workspace.
 
 ## 8. Push and observe
 
-An ApiKey is required to inspect an Event through Ingress's authenticated `/events/{id}` endpoint,
+An TenantApiKey is required to inspect an Event through Ingestion's authenticated `/events/{id}` endpoint,
 even though GitHub itself never presents one — GitHub authenticates through source verification,
-not ApiKey. Create one now so you can look up the Event this webhook produces:
+not TenantApiKey. Create one now so you can look up the Event this webhook produces:
 
 ```bash
-TOKEN=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/api-keys" -H "$AUTH" \
+TOKEN=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/tenant-api-keys" -H "$AUTH" \
   -H 'Content-Type: application/json' -d '{"name":"acme-inspect"}' | jq -r .token)
 ```
 
-Push a commit to the repository. GitHub delivers the webhook to `callback_url`; Ingress verifies
+Push a commit to the repository. GitHub delivers the webhook to `callback_url`; Ingestion verifies
 the signature, derives `github.push` as the Event type, and durably accepts it before responding.
 Worker fans it out to the `push-to-slack` Subscription, transforms the payload, and delivers it to
-Slack. There is no list-recent-Events endpoint, so pull the accepted `event_id` from the Ingress
+Slack. There is no list-recent-Events endpoint, so pull the accepted `event_id` from the Ingestion
 acceptance log line:
 
 ```bash
-EVENT=$(docker compose logs ingress --no-color | grep -oE 'Accepted webhook event [0-9a-f-]+' | tail -1 | awk '{print $NF}')
-curl -s "http://localhost:5231/events/$EVENT" -H "Authorization: ApiKey $TOKEN" | jq
+EVENT=$(docker compose logs ingestion --no-color | grep -oE 'Accepted webhook event [0-9a-f-]+' | tail -1 | awk '{print $NF}')
+curl -s "http://localhost:5231/events/$EVENT" -H "Authorization: TenantApiKey $TOKEN" | jq
 ```
 
 A `delivery_attempts[].status` of `succeeded` with `response_status_code: 200` means Slack accepted
@@ -201,7 +201,7 @@ HTTP 200 attempt means Slack returned `ok: false`, which the `json_boolean` succ
 
 ## Recovery notes
 
-- **GitHub delivery failures**: Integrios does not control GitHub's redelivery. If Ingress is
+- **GitHub delivery failures**: Integrios does not control GitHub's redelivery. If Ingestion is
   unreachable or the deployment restarts mid-request, use GitHub's own **Webhooks → Recent
   Deliveries → Redeliver** to resend the exact same request; endpoint-scoped deduplication on
   `X-GitHub-Delivery` means a redelivered request that already succeeded is accepted as a duplicate,

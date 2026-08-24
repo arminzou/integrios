@@ -8,8 +8,8 @@ public sealed class ApplicationArchitectureTests
 {
     private static readonly HashSet<string> ApprovedPortNamespaces =
     [
-        "Integrios.Application.AdminKeys",
-        "Integrios.Application.ApiKeys",
+        "Integrios.Application.OperatorKeys",
+        "Integrios.Application.TenantApiKeys",
         "Integrios.Application.Auth",
         "Integrios.Application.Connections",
         "Integrios.Application.Delivery",

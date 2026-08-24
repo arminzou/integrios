@@ -45,8 +45,8 @@ public sealed class DatabaseProviderRegistrationTests
             context.Model.FindEntityType(typeof(DeliveryAttempt))?.GetTableName());
         Assert.Equal("outbox", context.Model.FindEntityType(typeof(OutboxEntry))?.GetTableName());
 
-        var adminKey = context.Model.FindEntityType(typeof(AdminKey))!;
-        Assert.Null(adminKey.FindProperty("TenantId"));
+        var operatorKey = context.Model.FindEntityType(typeof(OperatorKey))!;
+        Assert.Null(operatorKey.FindProperty("TenantId"));
         Assert.False(context.Model.FindEntityType(typeof(TopicSource))!.FindProperty("Status")!.IsNullable);
         Assert.False(context.Model.FindEntityType(typeof(SourceEndpoint))!.FindProperty("Status")!.IsNullable);
 
@@ -74,7 +74,7 @@ public sealed class DatabaseProviderRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddAdminInfrastructureServices(BuildConfiguration("sqlserver"));
-        services.AddIngressInfrastructureServices(BuildConfiguration("sqlserver"));
+        services.AddIngestionInfrastructureServices(BuildConfiguration("sqlserver"));
 
         using ServiceProvider provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using IServiceScope scope = provider.CreateScope();

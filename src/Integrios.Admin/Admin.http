@@ -1,5 +1,5 @@
 @baseUrl = {{ADMIN_BASE_URL}}
-@operatorKey = Authorization: AdminKey global_admin_key:admin_bootstrap_secret
+@operatorKey = Authorization: OperatorKey global_operator_key:operator_bootstrap_secret
 @webhookIntId = 00000000-0000-0000-0000-000000000001
 
 # Local-only connector IDs seeded for manual verification.
@@ -18,8 +18,8 @@
 # Read this file top to bottom. It is a control-plane walkthrough.
 #
 # Data flow refresher:
-# 1. Admin creates tenant-owned config: API keys, connections, topics, subscriptions.
-# 2. Ingress accepts events using the tenant API key.
+# 1. Admin creates tenant-owned config: TenantApiKeys, connections, topics, subscriptions.
+# 2. Ingestion accepts events using the tenant API key.
 # 3. Topic decides which source connections may publish to that stream.
 # 4. Worker reads accepted events, matches subscriptions, applies any transform,
 #    and delivers to each destination connection.
@@ -31,13 +31,13 @@ GET {{baseUrl}}/health
 
 ###
 # Step 0a - Auth probe
-# Expect 401 because Admin endpoints require the bootstrap admin key.
+# Expect 401 because Admin endpoints require the bootstrap operator key.
 GET {{baseUrl}}/admin/tenants
 
 ###
 # Step 1 - Inspect the connector catalog
 # This shows the platform-level connection types the control plane knows about.
-# The webhook connector and deployment-wide AdminKey below come from the `bootstrap` one-shot
+# The webhook connector and deployment-wide OperatorKey below come from the `bootstrap` one-shot
 # (`Integrios.Admin bootstrap`, run automatically by `make up`), not from migrations.
 GET {{baseUrl}}/admin/connectors
 {{operatorKey}}
@@ -93,33 +93,33 @@ GET {{baseUrl}}/admin/tenants/{{tenantId}}
 
 ###
 # Step 3 - Create a data-plane API key
-# Ingress uses this key to authenticate event writes for this tenant.
-# @name createApiKey
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
+# Ingestion uses this key to authenticate event writes for this tenant.
+# @name createTenantApiKey
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "acme-ingress",
-  "description": "Ingress automation key"
+  "name": "acme-ingestion",
+  "description": "Ingestion automation key"
 }
 
 ###
-@apiKeyId = {{createApiKey.response.body.$.apiKey.id}}
+@tenantApiKeyId = {{createTenantApiKey.response.body.$.tenant_api_key.id}}
 
 # After this request, copy the returned token into:
-# src/Integrios.Ingress/.env
+# src/Integrios.Ingestion/.env
 #
-# INGRESS_API_KEY=<token>
+# INGESTION_TENANT_API_KEY=<token>
 
 ###
 # Step 3a - List tenant API keys
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys
 {{operatorKey}}
 
 ###
 # Step 3b - Fetch the created API key metadata
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys/{{tenantApiKeyId}}
 {{operatorKey}}
 
 ###
@@ -453,7 +453,7 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}/d
 
 ###
 # Step 9h - Revoke the data-plane API key
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/api-keys/{{apiKeyId}}/revoke
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys/{{tenantApiKeyId}}/revoke
 {{operatorKey}}
 
 ###

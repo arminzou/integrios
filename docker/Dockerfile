@@ -35,7 +35,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Directory an operator mounts credential material into, empty when the service resolves none.
-# Admin validates references without resolving them, and the Ingress and Worker boundaries stay
+# Admin validates references without resolving them, and the Ingestion and Worker boundaries stay
 # separate, so each image creates only the mount root its own host reads. Named without the word
 # "secret" so the BuildKit SecretsUsedInArgOrEnv check does not flag this path as a credential.
 ARG MOUNT_ROOT=
