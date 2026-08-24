@@ -94,8 +94,9 @@ public static class DependencyInjection
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
         services.AddSingleton<IActiveTenantApiKeyLookup, ActiveTenantApiKeyLookup>();
-        services.AddSingleton<ISourceTopicLookup, IntakeTopicResolver>();
+        services.AddSingleton<IEventApiSourceResolver, EventApiSourceResolver>();
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
+        services.AddTransformEvaluationServices();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IEventAcceptance, SqlServerEventAcceptance>();
         else

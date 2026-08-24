@@ -7,7 +7,6 @@ using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
-using Integrios.Ingestion.Endpoints;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -105,18 +104,15 @@ public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
 
     private Task<HttpResponseMessage> PostEventsAsync(string? authHeader)
     {
-        IngestEventRequest request = new()
+        var request = new
         {
-            SourceEventId = "evt_test_1",
-            SourceId = Guid.NewGuid(),
-            TopicName = "payments",
-            EventType = "payment.created",
-            Payload = JsonDocument.Parse("""{"paymentId":"pay_1","amount":1200}""").RootElement.Clone(),
-            Metadata = JsonDocument.Parse("""{"source":"tests"}""").RootElement.Clone(),
-            IdempotencyKey = "idem-test"
+            source_event_id = "evt_test_1",
+            event_type = "payment.created",
+            payload = JsonDocument.Parse("""{"paymentId":"pay_1","amount":1200}""").RootElement.Clone(),
+            metadata = JsonDocument.Parse("""{"source":"tests"}""").RootElement.Clone(),
         };
 
-        HttpRequestMessage message = new(HttpMethod.Post, "/events")
+        HttpRequestMessage message = new(HttpMethod.Post, $"/events?source_id={Guid.NewGuid()}")
         {
             Content = JsonContent.Create(request, options: HostJson.Options)
         };

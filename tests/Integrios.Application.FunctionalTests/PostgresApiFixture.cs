@@ -86,7 +86,11 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 KeyHashA = secretHashA,
                 KeyHashB = secretHashB,
                 SourceConnectorId,
-                SourceManifest = TestConnectorManifest.Create("test_source", "Test Source", "source")
+                SourceManifest = TestConnectorManifest.Create(
+                    "test_source", "Test Source", "source",
+                    declarativeSourceContract: true,
+                    sourceMappingExpression:
+                        "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload, \"metadata\": metadata }")
             });
     }
 
@@ -135,23 +139,40 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         return connectionId;
     }
 
-    public Task AssociateSourceAsync(Guid tenantId, Guid topicId, Guid connectionId) =>
-        ExecuteAsync(
-            "INSERT INTO topic_sources (tenant_id,topic_id,connection_id) VALUES (@TenantId,@TopicId,@ConnectionId)",
-            new { TenantId = tenantId, TopicId = topicId, ConnectionId = connectionId });
+    // Seeds a Connection bound to a purpose-built Connector manifest (schema/mapping shape the
+    // caller controls), for scenarios SeedSourceConnectionAsync's fixed test manifest can't cover.
+    public async Task<Guid> SeedConnectorConnectionAsync(Guid tenantId, string connectorKey, string manifestJson)
+    {
+        Guid connectorId = Guid.NewGuid();
+        await ExecuteAsync($$$"""
+            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,
+                name,direction,status,manifest,created_at,updated_at)
+            VALUES (@Id,@Key,1,1,@Key,'source','active',
+                {{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}})
+            """, new { Id = connectorId, Key = connectorKey, Manifest = manifestJson });
 
-    public async Task<Guid> CreateEventApiSourceAsync(Guid tenantId, Guid connectionId, Guid topicId)
+        Guid connectionId = Guid.NewGuid();
+        await ExecuteAsync($$$"""
+            INSERT INTO connections (id,tenant_id,connector_id,name,config,status,created_at,updated_at)
+            VALUES (@Id,@TenantId,@ConnectorId,@Name,{{{database.Json("@Config")}}},'active',{{{database.Now}}},{{{database.Now}}})
+            """, new
+            {
+                Id = connectionId, TenantId = tenantId, ConnectorId = connectorId,
+                Name = connectorKey, Config = "{}"
+            });
+        return connectionId;
+    }
+
+    public async Task<Guid> CreateEventApiSourceAsync(
+        Guid tenantId, Guid connectionId, Guid topicId,
+        string configuration = """{"source_contract":"event_json"}""")
     {
         Guid sourceId = Guid.NewGuid();
         await ExecuteAsync(
             $"INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status) VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'event_api', {database.Json("@Configuration")}, 'active')",
-            new { SourceId = sourceId, TenantId = tenantId, ConnectionId = connectionId, TopicId = topicId, Configuration = "{}" });
+            new { SourceId = sourceId, TenantId = tenantId, ConnectionId = connectionId, TopicId = topicId, Configuration = configuration });
         return sourceId;
     }
-
-    public Task RetireSourceAsync(Guid tenantId, Guid topicId, Guid connectionId) =>
-        ExecuteAsync($"UPDATE topic_sources SET status='inactive',inactive_at={database.Now} WHERE tenant_id=@TenantId AND topic_id=@TopicId AND connection_id=@ConnectionId",
-            new { TenantId = tenantId, TopicId = topicId, ConnectionId = connectionId });
 
     public Task<Guid?> GetEventSourceIdAsync(Guid eventId) =>
         ScalarAsync<Guid?>("SELECT source_id FROM events WHERE id=@Id", new { Id = eventId });

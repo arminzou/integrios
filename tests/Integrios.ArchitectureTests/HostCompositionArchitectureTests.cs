@@ -36,7 +36,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IConnectorCatalog)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
-        [typeof(ISourceTopicLookup)] = [Host.Ingestion],
+        [typeof(IEventApiSourceResolver)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
@@ -46,7 +46,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ISubscriptionRepository)] = [Host.Admin],
         [typeof(ITenantRepository)] = [Host.Admin],
         [typeof(ITopicRepository)] = [Host.Admin],
-        [typeof(ITransformEvaluator)] = [Host.Admin, Host.Worker]
+        [typeof(ITransformEvaluator)] = [Host.Admin, Host.Worker, Host.Ingestion]
     };
 
     [Fact]
@@ -253,7 +253,7 @@ public sealed class HostCompositionArchitectureTests
 
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
-        AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
+        AssertOmits<IEventApiSourceResolver>(scope.ServiceProvider);
         AssertOmits<ISecretValidationCatalog>(scope.ServiceProvider);
         AssertOmits<IOutboxFanout>(scope.ServiceProvider);
         AssertOmits<IEventDeliveryQueue>(scope.ServiceProvider);
@@ -273,7 +273,7 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddIngestionInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IActiveTenantApiKeyLookup>(provider);
-        AssertResolves<ISourceTopicLookup>(provider);
+        AssertResolves<IEventApiSourceResolver>(provider);
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
@@ -291,7 +291,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IEventDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
         AssertOmits<IDestinationAuthenticatorRegistry>(provider);
-        AssertOmits<ITransformEvaluator>(provider);
+        AssertResolves<ITransformEvaluator>(provider);
         AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
         AssertOmits<IDeadLetterReplay>(provider);
         AssertResolves<ISourceVerificationSecretResolver>(provider);
@@ -329,7 +329,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<ITenantEventLookup>(scope.ServiceProvider);
         AssertOmits<ITopicRepository>(scope.ServiceProvider);
-        AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
+        AssertOmits<IEventApiSourceResolver>(scope.ServiceProvider);
         AssertOmits<IDeadLetterReplay>(scope.ServiceProvider);
         AssertOmits<IConnectorCatalog>(scope.ServiceProvider);
         AssertOmits<IConnectorManifestStore>(scope.ServiceProvider);

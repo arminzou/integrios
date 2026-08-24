@@ -101,28 +101,45 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
 
         var response = await client.SendAsync(AuthorizedRequest(new
         {
-            topic_name = "payments",
             event_type = "payment.created",
             payload = new { amount = 42 }
-        }));
+        }, sourceId: null));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task PostEvent_InvalidSourceTopicCombination_Returns422()
+    public async Task PostEvent_UnknownSourceId_Returns404()
     {
         (var tenantApiKey, var tenant) = TenantApiKeyAuthHandlerTests.BuildValidTenantApiKey(TenantApiKeyAuthHandlerTests.TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
-        fixture.TopicRepository.ResolvedTopicId = null;
+        fixture.EventApiSourceResolver.Result = null;
 
         var response = await client.SendAsync(AuthorizedRequest(new
         {
-            source_id = Guid.NewGuid(),
-            topic_name = "payments",
             event_type = "payment.created",
             payload = new { amount = 42 }
-        }));
+        }, sourceId: Guid.NewGuid()));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvent_PassthroughContractMissingEventType_Returns422()
+    {
+        (var tenantApiKey, var tenant) = TenantApiKeyAuthHandlerTests.BuildValidTenantApiKey(TenantApiKeyAuthHandlerTests.TestToken);
+        fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
+        fixture.EventApiSourceResolver.Result = new ResolvedEventApiSource
+        {
+            TopicId = Guid.NewGuid(),
+            SourceContractSchema = null,
+            SourceMapping = null,
+        };
+
+        var response = await client.SendAsync(AuthorizedRequest(new
+        {
+            payload = new { amount = 42 }
+        }, sourceId: Guid.NewGuid()));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -143,9 +160,10 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static HttpRequestMessage AuthorizedRequest(object body)
+    private static HttpRequestMessage AuthorizedRequest(object body, Guid? sourceId)
     {
-        var message = new HttpRequestMessage(HttpMethod.Post, "/events")
+        string uri = sourceId is { } id ? $"/events?source_id={id}" : "/events";
+        var message = new HttpRequestMessage(HttpMethod.Post, uri)
         {
             Content = JsonContent.Create(body)
         };

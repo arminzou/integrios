@@ -6,7 +6,6 @@ using System.Text.Json;
 using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
-using IngestionHost::Integrios.Ingestion.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
 
@@ -31,9 +30,9 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task InitializeAsync()
     {
         await fixture.ResetDataAsync();
-        Guid sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "payments-source");
+        Guid connectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "payments-source");
         defaultTopicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
-        defaultSourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, sourceConnectionId, defaultTopicId);
+        defaultSourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
         client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -49,9 +48,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task PostEvents_PersistsEventAndOutbox()
     {
-        var request = BuildRequest(idempotencyKey: "idem-evt-1");
-
-        var response = await PostEventAsync(request);
+        var response = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt_src_123"));
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
 
@@ -67,10 +64,21 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
+    public async Task PostEvents_TopicIsDerivedFromSource_NotCallerInput()
+    {
+        var response = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-topic-derived"));
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
+        Assert.NotNull(body);
+
+        Assert.Equal(defaultTopicId, await fixture.GetEventTopicIdAsync(body.EventId));
+    }
+
+    [Fact]
     public async Task GetEventsById_ReturnsEvent_WhenEventExists()
     {
-        var request = BuildRequest(idempotencyKey: "idem-evt-read-1");
-        var postResponse = await PostEventAsync(request);
+        var postResponse = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-read-1"));
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
         var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
@@ -89,8 +97,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task GetEventsById_ReturnsRoutedStatus_WhenEventRouted()
     {
-        var request = BuildRequest(idempotencyKey: "idem-evt-fannedout-1");
-        var postResponse = await PostEventAsync(request);
+        var postResponse = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-fannedout-1"));
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
         var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
@@ -120,8 +127,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task GetEventsById_OtherTenant_Returns404()
     {
-        var request = BuildRequest(idempotencyKey: "idem-evt-tenant-isolation");
-        var postResponse = await PostEventAsync(request);
+        var postResponse = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-tenant-isolation"));
         Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
 
         var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
@@ -132,17 +138,17 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task PostEvents_DuplicateIdempotencyKey_IsSuppressed()
+    public async Task PostEvents_DuplicateSourceEventId_IsSuppressed()
     {
-        var request = BuildRequest(idempotencyKey: "idem-evt-dup");
+        var body = BuildBody(sourceEventId: "evt-dup");
 
-        var firstResponse = await PostEventAsync(request);
+        var firstResponse = await PostEventAsync(defaultSourceId, body);
         Assert.Equal(HttpStatusCode.Accepted, firstResponse.StatusCode);
         var firstBody = await firstResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(firstBody);
         Assert.False(firstBody.AlreadyAccepted);
 
-        var secondResponse = await PostEventAsync(request);
+        var secondResponse = await PostEventAsync(defaultSourceId, body);
         Assert.Equal(HttpStatusCode.Accepted, secondResponse.StatusCode);
         var secondBody = await secondResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(secondBody);
@@ -156,9 +162,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task PostEvents_AttributesEventToAuthenticatedTenant()
     {
-        var request = BuildRequest(idempotencyKey: "idem-evt-tenant-write");
-
-        var response = await PostEventAsync(request);
+        var response = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-tenant-write"));
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
@@ -169,123 +173,171 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task PostEvents_WithTopicName_StoresTopicIdOnEvent()
-    {
-        var request = new IngestEventRequest
-        {
-            TopicName = "payments",
-            SourceId = defaultSourceId,
-            EventType = "payment.created",
-            Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
-        };
-
-        var response = await PostEventAsync(request);
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(body);
-
-        var storedTopicId = await fixture.GetEventTopicIdAsync(body.EventId);
-        Assert.Equal(defaultTopicId, storedTopicId);
-    }
-
-    [Fact]
-    public async Task PostEvents_WithUnknownTopicName_Returns422()
-    {
-        var request = new IngestEventRequest
-        {
-            TopicName = "nonexistent-topic",
-            SourceId = defaultSourceId,
-            EventType = "payment.created",
-            Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
-        };
-
-        var response = await PostEventAsync(request);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PostEvents_WithUnassociatedSourceConnection_Returns422()
-    {
-        var sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "unassociated-source");
-        var request = BuildRequest("idem-unassociated") with { SourceId = sourceConnectionId };
-
-        var response = await PostEventAsync(request);
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PostEvents_WithInactiveSourceConnection_Returns422()
-    {
-        var sourceConnectionId = await fixture.SeedSourceConnectionAsync(
-            fixture.TenantAId, "inactive-source", status: "disabled");
-        await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
-        var request = BuildRequest("idem-inactive") with { SourceId = sourceConnectionId };
-
-        var response = await PostEventAsync(request);
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PostEvents_WithDestinationOnlySourceConnection_Returns422()
-    {
-        var sourceConnectionId = await fixture.SeedSourceConnectionAsync(
-            fixture.TenantAId, "destination-only", direction: "destination");
-        await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
-        var request = BuildRequest("idem-destination-only") with { SourceId = sourceConnectionId };
-
-        var response = await PostEventAsync(request);
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PostEvents_WithOtherTenantSourceConnection_Returns422()
-    {
-        var sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantBId, "other-tenant-source");
-        var request = BuildRequest("idem-other-tenant") with { SourceId = sourceConnectionId };
-
-        var response = await PostEventAsync(request);
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PostEvents_WithRetiredSourceAssociation_Returns422()
-    {
-        var sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "retired-source");
-        await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
-        await fixture.RetireSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
-        var request = BuildRequest("idem-retired") with { SourceId = sourceConnectionId };
-
-        var response = await PostEventAsync(request);
-
-        // A retired association is a tombstone, so intake must reject it the same way it rejects
-        // one that never existed — not resolve the Topic and fail on the database trigger.
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-    }
-
-    private IngestEventRequest BuildRequest(string idempotencyKey)
-    {
-        return new IngestEventRequest
-        {
-            SourceEventId = "evt_src_123",
-            SourceId = defaultSourceId,
-            TopicName = "payments",
-            EventType = "payment.created",
-            Payload = JsonDocument.Parse("""{"paymentId":"pay_123","amount":1200}""").RootElement.Clone(),
-            Metadata = JsonDocument.Parse("""{"source":"connector-tests"}""").RootElement.Clone(),
-            IdempotencyKey = idempotencyKey
-        };
-    }
-
-    private Task<HttpResponseMessage> PostEventAsync(IngestEventRequest request)
+    public async Task PostEvents_MissingSourceId_Returns400()
     {
         var message = new HttpRequestMessage(HttpMethod.Post, "/events")
         {
-            Content = JsonContent.Create(request, options: HostJson.Options)
+            Content = JsonContent.Create(BuildBody(sourceEventId: "evt-no-source"), options: HostJson.Options)
+        };
+        message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
+
+        var response = await client.SendAsync(message);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_UnknownSourceId_Returns404()
+    {
+        var response = await PostEventAsync(Guid.NewGuid(), BuildBody(sourceEventId: "evt-unknown-source"));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_WithInactiveConnection_Returns404()
+    {
+        var connectionId = await fixture.SeedSourceConnectionAsync(
+            fixture.TenantAId, "inactive-source", status: "disabled");
+        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
+
+        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-inactive-connection"));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_WithDestinationOnlyConnection_Returns404()
+    {
+        var connectionId = await fixture.SeedSourceConnectionAsync(
+            fixture.TenantAId, "destination-only", direction: "destination");
+        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
+
+        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-destination-only"));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_WithOtherTenantSourceId_Returns404()
+    {
+        var connectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantBId, "other-tenant-source");
+        var topicId = await fixture.SeedTopicAsync(fixture.TenantBId, "other-tenant-topic");
+        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantBId, connectionId, topicId);
+
+        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-other-tenant"));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_MalformedJson_Returns400()
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={defaultSourceId}")
+        {
+            Content = new StringContent("{not valid json", System.Text.Encoding.UTF8, "application/json")
+        };
+        message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
+
+        var response = await client.SendAsync(message);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_UnsupportedMediaType_Returns415()
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={defaultSourceId}")
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "text/plain")
+        };
+        message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
+
+        var response = await client.SendAsync(message);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_PassthroughContractWithUnsupportedField_Returns422()
+    {
+        // topic_name is not an allowed Source-contract output field: a passthrough (no-mapping)
+        // contract rejects it outright, so the caller cannot smuggle Topic selection back into
+        // the request through the body.
+        Guid sourceId = await SeedContractSourceAsync("passthrough_unsupported_field_test", sourceContractHasMapping: false);
+
+        var response = await PostEventAsync(sourceId, new
+        {
+            event_type = "payment.created",
+            topic_name = "payments",
+            payload = new { amount = 500 },
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_SchemaInvalidInput_Returns422()
+    {
+        JsonElement schema = JsonSerializer.Deserialize<JsonElement>(
+            """{"type":"object","properties":{"event_type":{"type":"string"}},"required":["event_type"],"additionalProperties":true}""");
+        Guid sourceId = await SeedContractSourceAsync(
+            "schema_test", sourceContractSchema: schema);
+
+        var response = await PostEventAsync(sourceId, new
+        {
+            // event_type must be a string per the declared schema; a number violates it.
+            event_type = 42,
+            payload = new { amount = 500 },
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_MappingEvaluationFailure_Returns422()
+    {
+        Guid sourceId = await SeedContractSourceAsync(
+            "mapping_failure_test", sourceMappingExpression: "$error(\"boom\")");
+
+        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-mapping-failure"));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostEvents_PassthroughContractMissingEventType_Returns422()
+    {
+        Guid sourceId = await SeedContractSourceAsync("passthrough_test", sourceContractHasMapping: false);
+
+        var response = await PostEventAsync(sourceId, new { payload = new { amount = 500 } });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    private async Task<Guid> SeedContractSourceAsync(
+        string connectorKey,
+        bool sourceContractHasMapping = true,
+        string sourceMappingExpression = "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload, \"metadata\": metadata }",
+        JsonElement? sourceContractSchema = null)
+    {
+        string manifest = TestConnectorManifest.Create(
+            connectorKey, connectorKey, "source",
+            declarativeSourceContract: true,
+            sourceContractHasMapping: sourceContractHasMapping,
+            sourceMappingExpression: sourceMappingExpression,
+            sourceContractSchema: sourceContractSchema);
+        Guid connectionId = await fixture.SeedConnectorConnectionAsync(fixture.TenantAId, connectorKey, manifest);
+
+        return await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
+    }
+
+    private static object BuildBody(string? sourceEventId) => new
+    {
+        event_type = "payment.created",
+        source_event_id = sourceEventId,
+        payload = new { paymentId = "pay_123", amount = 1200 },
+        metadata = new { source = "connector-tests" },
+    };
+
+    private Task<HttpResponseMessage> PostEventAsync(Guid sourceId, object body)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={sourceId}")
+        {
+            Content = JsonContent.Create(body, options: HostJson.Options)
         };
         message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
         return client.SendAsync(message);

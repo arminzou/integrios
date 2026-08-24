@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Integrios.Application.Ingestion;
 using Integrios.Ingestion.Auth;
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Integrios.Ingestion.Endpoints;
 
@@ -16,22 +18,15 @@ public sealed class EventsEndpoints : IEndpointGroup
     }
 
     private static async Task<IResult> IngestEvent(
-        IngestEventRequest request,
+        [FromQuery(Name = "source_id")] Guid sourceId,
+        [FromBody] JsonElement request,
         HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
         var tenantContext = httpContext.GetTenantContext();
         var response = await mediator.Send(
-            new IngestEventCommand(
-                tenantContext.Tenant.Id,
-                request.SourceId,
-                request.TopicName,
-                request.SourceEventId,
-                request.EventType,
-                request.Payload,
-                request.Metadata,
-                request.IdempotencyKey),
+            new IngestEventCommand(tenantContext.Tenant.Id, sourceId, request),
             cancellationToken);
         return Results.Accepted($"/events/{response.EventId}", response);
     }

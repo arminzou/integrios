@@ -1,5 +1,6 @@
 using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Ingestion;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
@@ -22,21 +23,26 @@ public sealed class ApiTestAppFixture : IDisposable
     public StubActiveTenantApiKeyLookup TenantApiKeyRepository { get; } = new();
     public StubEventAcceptance EventAcceptance { get; } = new();
     public StubTenantEventLookup EventLookup { get; } = new();
-    public StubIntakeTopicResolver TopicRepository { get; } = new();
+    public StubEventApiSourceResolver EventApiSourceResolver { get; } = new();
     public StubSourceEndpointResolver SourceEndpointResolver { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
     public ApiTestAppFixture()
     {
         Factory = new CustomApiFactory(
-            TenantApiKeyRepository, EventAcceptance, EventLookup, TopicRepository, SourceEndpointResolver);
+            TenantApiKeyRepository, EventAcceptance, EventLookup, EventApiSourceResolver, SourceEndpointResolver);
     }
 
     public void Reset()
     {
         TenantApiKeyRepository.Result = null;
         EventLookup.GetEventResult = null;
-        TopicRepository.ResolvedTopicId = Guid.NewGuid();
+        EventApiSourceResolver.Result = new ResolvedEventApiSource
+        {
+            TopicId = Guid.NewGuid(),
+            SourceContractSchema = null,
+            SourceMapping = new TransformSpec("jsonata", "1", "{ \"event_type\": \"event\", \"payload\": $ }"),
+        };
         SourceEndpointResolver.Result = null;
         EventAcceptance.LastSubmission = null;
     }
@@ -51,7 +57,7 @@ internal sealed class CustomApiFactory(
     StubActiveTenantApiKeyLookup tenantApiKeyRepository,
     StubEventAcceptance eventAcceptance,
     StubTenantEventLookup eventLookup,
-    StubIntakeTopicResolver topicRepository,
+    StubEventApiSourceResolver eventApiSourceResolver,
     StubSourceEndpointResolver sourceEndpointResolver) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -71,7 +77,7 @@ internal sealed class CustomApiFactory(
             services.AddSingleton<IActiveTenantApiKeyLookup>(tenantApiKeyRepository);
             services.AddSingleton<IEventAcceptance>(eventAcceptance);
             services.AddSingleton<ITenantEventLookup>(eventLookup);
-            services.AddSingleton<ISourceTopicLookup>(topicRepository);
+            services.AddSingleton<IEventApiSourceResolver>(eventApiSourceResolver);
             services.AddSingleton<ISourceEndpointResolver>(sourceEndpointResolver);
         });
     }
@@ -136,10 +142,10 @@ public sealed class StubTenantEventLookup : ITenantEventLookup
     }
 }
 
-public sealed class StubIntakeTopicResolver : ISourceTopicLookup
+public sealed class StubEventApiSourceResolver : IEventApiSourceResolver
 {
-    public Guid? ResolvedTopicId { get; set; } = Guid.NewGuid();
+    public ResolvedEventApiSource? Result { get; set; }
 
-    public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string name, Guid sourceConnectionId, CancellationToken ct)
-        => Task.FromResult(ResolvedTopicId);
+    public Task<ResolvedEventApiSource?> ResolveAsync(Guid tenantId, Guid sourceId, CancellationToken cancellationToken)
+        => Task.FromResult(Result);
 }

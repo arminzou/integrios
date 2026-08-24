@@ -2,6 +2,7 @@ using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Telemetry;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using MediatR;
@@ -44,7 +45,8 @@ public sealed class IngestMetricsTests
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddProvider(capturing));
         services.AddApplicationServices();
-        services.AddSingleton<ISourceTopicLookup>(new FakeIntakeTopicResolver());
+        services.AddSingleton<IEventApiSourceResolver>(new FakeEventApiSourceResolver());
+        services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         services.AddSingleton<IEventAcceptance>(new FakeEventAcceptance(alreadyAccepted: false));
         var mediator = services.BuildServiceProvider().GetRequiredService<IMediator>();
 
@@ -80,7 +82,7 @@ public sealed class IngestMetricsTests
         var topicId = Guid.NewGuid();
         var acceptance = new FakeEventAcceptance(alreadyAccepted: false);
         var command = MakeCommand();
-        var mediator = BuildMediator(acceptance, new FakeIntakeTopicResolver(topicId));
+        var mediator = BuildMediator(acceptance, new FakeEventApiSourceResolver(topicId));
 
         await mediator.Send(command);
 
@@ -88,22 +90,14 @@ public sealed class IngestMetricsTests
         Assert.Equal(command.TenantId, submission.TenantId);
         Assert.Equal(topicId, submission.TopicId);
         Assert.Equal(command.SourceId, submission.SourceId);
-        Assert.Equal(command.SourceEventId, submission.SourceEventId);
-        Assert.Equal(command.EventType, submission.EventType);
-        Assert.Equal(command.Payload.GetRawText(), submission.Payload.GetRawText());
-        Assert.Equal(command.Metadata, submission.Metadata);
-        Assert.Equal(command.IdempotencyKey, submission.IdempotencyKey);
+        Assert.Equal("payment.created", submission.EventType);
+        Assert.Equal(command.RawInput.GetProperty("amount").GetInt32(), submission.Payload.GetProperty("amount").GetInt32());
     }
 
     private static IngestEventCommand MakeCommand() => new(
         Guid.NewGuid(),
         SourceId,
-        "payments",
-        SourceEventId: null,
-        "payment.created",
-        JsonDocument.Parse("{\"amount\":42}").RootElement,
-        Metadata: null,
-        IdempotencyKey: null);
+        JsonDocument.Parse("{\"amount\":42}").RootElement);
 
     private static IMediator BuildMediator(bool alreadyAccepted) => BuildMediator(new EventAcceptance
     {
@@ -114,24 +108,47 @@ public sealed class IngestMetricsTests
     });
 
     private static IMediator BuildMediator(EventAcceptance acceptance) =>
-        BuildMediator(new FakeEventAcceptance(acceptance), new FakeIntakeTopicResolver());
+        BuildMediator(new FakeEventAcceptance(acceptance), new FakeEventApiSourceResolver());
 
     private static IMediator BuildMediator(
         IEventAcceptance eventAcceptance,
-        ISourceTopicLookup topicResolver)
+        IEventApiSourceResolver sourceResolver)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddApplicationServices();
-        services.AddSingleton(topicResolver);
+        services.AddSingleton(sourceResolver);
+        services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         services.AddSingleton(eventAcceptance);
         return services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
-    private sealed class FakeIntakeTopicResolver(Guid? topicId = null) : ISourceTopicLookup
+    // Wraps every raw input document as { event_type: "payment.created", payload: <input> },
+    // mirroring the built-in http Connector's identity `event_json` contract closely enough for
+    // these metrics/wiring tests, without pulling in the real JSONata engine.
+    private sealed class FakeTransformEvaluator : ITransformEvaluator
     {
-        public Task<Guid?> FindActiveSourceTopicAsync(Guid tenantId, string topicName, Guid sourceConnectionId, CancellationToken cancellationToken)
-            => Task.FromResult<Guid?>(topicId ?? Guid.NewGuid());
+        public string? ValidateExpression(TransformSpec transform) => null;
+
+        public string Evaluate(TransformSpec transform, string payloadJson, TransformContext context) =>
+            Wrap(payloadJson);
+
+        public string Evaluate(TransformSpec transform, string payloadJson, JsonElement? context) =>
+            Wrap(payloadJson);
+
+        private static string Wrap(string payloadJson) =>
+            $$"""{"event_type":"payment.created","payload":{{payloadJson}}}""";
+    }
+
+    private sealed class FakeEventApiSourceResolver(Guid? topicId = null) : IEventApiSourceResolver
+    {
+        public Task<ResolvedEventApiSource?> ResolveAsync(Guid tenantId, Guid sourceId, CancellationToken cancellationToken) =>
+            Task.FromResult<ResolvedEventApiSource?>(new ResolvedEventApiSource
+            {
+                TopicId = topicId ?? Guid.NewGuid(),
+                SourceContractSchema = null,
+                SourceMapping = new TransformSpec("fake", "1", ""),
+            });
     }
 
     private sealed class FakeEventAcceptance : IEventAcceptance

@@ -19,6 +19,9 @@ public static class TestConnectorManifest
         bool? allowUnverified = null,
         bool verifiedWebhookSourceContract = false,
         bool declarativeSourceContract = false,
+        bool sourceContractHasMapping = true,
+        string sourceMappingExpression = "{ \"event_type\": \"event\", \"payload\": $ }",
+        JsonElement? sourceContractSchema = null,
         string? httpSuccessJson = null)
     {
         JsonElement emptySchema = JsonSerializer.Deserialize<JsonElement>(
@@ -77,12 +80,15 @@ public static class TestConnectorManifest
                         Key = "event_json",
                         ContractVersion = 1,
                         Config = JsonSerializer.Deserialize<JsonElement>("{}"),
-                        Mapping = new ConnectorSourceMappingManifest
-                        {
-                            Engine = "jsonata",
-                            Version = "1",
-                            Expression = "{ \"event_type\": \"event\", \"payload\": $ }",
-                        },
+                        Schema = sourceContractSchema,
+                        Mapping = sourceContractHasMapping
+                            ? new ConnectorSourceMappingManifest
+                            {
+                                Engine = "jsonata",
+                                Version = "1",
+                                Expression = sourceMappingExpression,
+                            }
+                            : null,
                     },
                 ]
                 : [],
