@@ -1,6 +1,5 @@
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
-using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Topics;
 
@@ -8,7 +7,6 @@ public sealed record TopicDto(
     Guid Id,
     Guid TenantId,
     string Name,
-    IReadOnlyList<TopicSourceDto> Sources,
     string Status,
     string? Description,
     DateTimeOffset CreatedAt,
@@ -18,7 +16,6 @@ public sealed record TopicDto(
         t.Id,
         t.TenantId,
         t.Name,
-        t.Sources.Select(TopicSourceDto.From).ToList(),
         t.Status.ToString().ToLowerInvariant(),
         t.Description,
         t.CreatedAt,

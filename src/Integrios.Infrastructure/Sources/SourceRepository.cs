@@ -45,11 +45,10 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
         return affected == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);
     }
 
-    public Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
-        context.Sources.Where(source => source.TenantId == tenantId && source.Id == id && source.Status == SourceStatus.Active)
+    public async Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
+        await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id && source.Status == SourceStatus.Active)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(source => source.Status, SourceStatus.Revoked)
                 .SetProperty(source => source.RevokedAt, DateTimeOffset.UtcNow)
-                .SetProperty(source => source.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken)
-            .ContinueWith(task => task.Result > 0, cancellationToken);
+                .SetProperty(source => source.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken) > 0;
 }

@@ -1,5 +1,4 @@
 using Integrios.Domain.Enums;
-using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Domain.Entities;
 
@@ -8,7 +7,6 @@ public sealed record Topic
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
     public required string Name { get; init; }
-    public required IReadOnlyList<TopicSource> Sources { get; init; }
     public required OperationalStatus Status { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }

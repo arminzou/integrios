@@ -95,7 +95,6 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
 
         var topic = await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         Assert.NotNull(topic);
-        Assert.Equal([sourceConnection.Id], topic.Sources.Select(s => s.ConnectionId));
 
         var subscriptionResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,

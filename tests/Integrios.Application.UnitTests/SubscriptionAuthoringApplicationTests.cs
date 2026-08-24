@@ -109,7 +109,6 @@ public sealed class SubscriptionAuthoringApplicationTests
             Id = topicId,
             TenantId = tenantId,
             Name = "payments",
-            Sources = [],
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -197,13 +196,13 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
             Task.FromResult<Topic?>(topic);
 
-        public Task<Topic> CreateAsync(Guid tenantId, string name, string? description, IReadOnlyList<Guid> sourceConnectionIds, CancellationToken ct = default) =>
+        public Task<Topic> CreateAsync(Guid tenantId, string name, string? description, CancellationToken ct = default) =>
             Task.FromResult(topic);
 
         public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct = default) =>
             Task.FromResult<(IReadOnlyList<Topic>, string?)>(([topic], null));
 
-        public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? name, string? description, IReadOnlyList<Guid>? sourceConnectionIds, CancellationToken ct = default) =>
+        public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? name, string? description, CancellationToken ct = default) =>
             Task.FromResult<Topic?>(topic);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>

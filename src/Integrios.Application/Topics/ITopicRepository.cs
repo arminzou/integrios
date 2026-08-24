@@ -1,12 +1,10 @@
 using Integrios.Domain.Entities;
-using Integrios.Domain.Enums;
-using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Topics;
 
 public interface ITopicRepository
 {
-    Task<Topic> CreateAsync(Guid tenantId, string name, string? description, IReadOnlyList<Guid> sourceConnectionIds, CancellationToken ct);
+    Task<Topic> CreateAsync(Guid tenantId, string name, string? description, CancellationToken ct);
     Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct);
     Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct);
     Task<Topic?> UpdateAsync(
@@ -14,7 +12,6 @@ public interface ITopicRepository
         Guid id,
         string? name,
         string? description,
-        IReadOnlyList<Guid>? sourceConnectionIds,
         CancellationToken ct);
     Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct);
 }

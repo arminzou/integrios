@@ -20,8 +20,13 @@ public sealed class SourcesEndpoints : IEndpointGroup
 
     private static async Task<IResult> CreateSource(Guid tenantId, CreateSourceRequest request, IMediator mediator, CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse<SourceType>(request.Type, true, out SourceType type))
-            throw new SourceValidationException("Source type must be event_api, webhook, or queue.");
+        SourceType type = request.Type switch
+        {
+            "event_api" => SourceType.EventApi,
+            "webhook" => SourceType.Webhook,
+            "queue" => SourceType.Queue,
+            _ => throw new SourceValidationException("Source type must be event_api, webhook, or queue.")
+        };
         SourceDto source = await mediator.Send(new CreateSourceCommand(tenantId, request.ConnectionId, request.TopicId, type, request.Configuration), cancellationToken);
         return Results.Created($"/admin/tenants/{tenantId}/sources/{source.Id}", source);
     }

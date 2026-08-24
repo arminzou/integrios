@@ -245,11 +245,12 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
         {
             var repository = new Integrios.Infrastructure.Topics.TopicRepository(context);
             var topic = await repository.CreateAsync(
-                seed.TenantId, "payments", null, [seed.ConnectionId], CancellationToken.None);
+                seed.TenantId, "payments", null, CancellationToken.None);
             seed = seed with { TopicId = topic.Id };
-            Assert.Single(topic.Sources);
-            Assert.NotNull(topic.Sources[0].Endpoint);
         }
+        await connection.ExecuteAsync(
+            "INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @ConnectionId)",
+            new { seed.TenantId, seed.TopicId, seed.ConnectionId });
 
         await connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (id, topic_id, tenant_id, name, match_rules, destination_connection_id,

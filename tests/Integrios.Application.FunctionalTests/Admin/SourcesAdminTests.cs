@@ -1,0 +1,95 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Integrios.Application.Connectors;
+using Integrios.Application.Connections;
+using Integrios.Admin.Endpoints;
+using Integrios.Application.Sources;
+using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Integrios.Application.FunctionalTests.Admin;
+
+public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
+{
+    private HttpClient client = null!;
+
+    public async Task InitializeAsync()
+    {
+        await fixture.ResetAsync();
+        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+    }
+
+    public Task DisposeAsync()
+    {
+        client.Dispose();
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task SourceLifecycle_CreatesListsUpdatesAndPermanentlyRevokesWebhook()
+    {
+        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid topicId = await CreateTopicAsync();
+        var configuration = new { source_contract = "event_json" };
+        var request = new { connection_id = connectionId, topic_id = topicId, type = "webhook", configuration };
+
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", request));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+        Assert.True(source.Configuration.TryGetProperty("callback_id", out _));
+
+        SourceListDto listed = (await (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/sources", null))).Content.ReadFromJsonAsync<SourceListDto>(HostJson.Options))!;
+        Assert.Equal(source.Id, Assert.Single(listed.Items).Id);
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new { configuration }));
+        SourceDto updated = (await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+        Assert.Equal(source.Configuration.GetProperty("callback_id").GetString(), updated.Configuration.GetProperty("callback_id").GetString());
+
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(AdminRequest(HttpMethod.Delete, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", null))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new { configuration }))).StatusCode);
+    }
+
+    [Fact]
+    public async Task SourceAuthoring_CreatesEventApiAndQueueSources()
+    {
+        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage eventApi = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connection_id = connectionId,
+            topic_id = topicId,
+            type = "event_api",
+            configuration = new { source_contract = "event_json" }
+        }));
+        HttpResponseMessage queue = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connection_id = connectionId,
+            topic_id = topicId,
+            type = "queue",
+            configuration = new { source_contract = "event_json", transport = "azure_service_bus", @namespace = "example.servicebus.windows.net", queue_name = "events", authentication = new { scheme = "azure_identity" } }
+        }));
+
+        Assert.Equal(HttpStatusCode.Created, eventApi.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, queue.StatusCode);
+    }
+
+    private async Task<Guid> CreateTopicAsync()
+    {
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", new { name = "source-topic" }));
+        return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!.Id;
+    }
+
+    private async Task<Guid> CreateSourceConnectionAsync()
+    {
+        using JsonDocument document = JsonDocument.Parse(TestConnectorManifest.Create("source_test", "Source test", "source", declarativeSourceContract: true));
+        HttpResponseMessage connectorResponse = await client.SendAsync(AdminRequest(HttpMethod.Put, "/admin/connectors/source_test/versions/1", document.RootElement));
+        ConnectorDto connector = (await connectorResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+        HttpResponseMessage connectionResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/connections",
+            new { connector_id = connector.Id, name = "source-test", config = new { }, source_verification = (object?)null, destination_authentication = (object?)null }));
+        return (await connectionResponse.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options))!.Id;
+    }
+}

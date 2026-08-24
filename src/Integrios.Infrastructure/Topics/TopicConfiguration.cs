@@ -36,8 +36,6 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");
 
-        entity.Ignore(e => e.Sources);
-
         entity.HasOne<Tenant>().WithMany()
             .HasForeignKey(d => d.TenantId)
             .OnDelete(DeleteBehavior.ClientSetNull)
