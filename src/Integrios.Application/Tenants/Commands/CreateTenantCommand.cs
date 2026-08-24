@@ -1,5 +1,6 @@
-using Integrios.Domain.Common;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 
 namespace Integrios.Application.Tenants;

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Events;
-using Integrios.Domain.Connections;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Connectors;
 

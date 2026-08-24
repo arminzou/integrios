@@ -26,7 +26,7 @@ namespace Integrios.Migrations.Postgres.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Integrios.Domain.Connections.Connection", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -105,7 +105,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Delivery.DeliveryAttempt", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.DeliveryAttempt", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -179,7 +179,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Delivery.SubscriptionDelivery", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.SubscriptionDelivery", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -288,7 +288,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Events.Event", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Event", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -360,7 +360,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("events", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Connectors.Connector", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Connector", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -442,7 +442,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Subscriptions.Subscription", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Subscription", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -519,7 +519,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("subscriptions", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Tenants.AdminKey", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.AdminKey", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -564,7 +564,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("admin_keys", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Tenants.ApiKey", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.ApiKey", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -632,7 +632,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("api_keys", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Tenants.Tenant", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -687,7 +687,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Topics.SourceEndpoint", b =>
+            modelBuilder.Entity("Integrios.Domain.ValueObjects.SourceEndpoint", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -751,7 +751,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Topics.Topic", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Topic", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -803,7 +803,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("topics", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Topics.TopicSource", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.TopicSource", b =>
                 {
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
@@ -901,93 +901,93 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("outbox", (string)null);
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Connections.Connection", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>
                 {
-                    b.HasOne("Integrios.Domain.Connectors.Connector", null)
+                    b.HasOne("Integrios.Domain.Entities.Connector", null)
                         .WithMany()
                         .HasForeignKey("ConnectorId")
                         .IsRequired()
                         .HasConstraintName("connections_connector_id_fkey");
 
-                    b.HasOne("Integrios.Domain.Tenants.Tenant", null)
+                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .IsRequired()
                         .HasConstraintName("connections_tenant_id_fkey");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Delivery.DeliveryAttempt", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.DeliveryAttempt", b =>
                 {
-                    b.HasOne("Integrios.Domain.Delivery.SubscriptionDelivery", null)
+                    b.HasOne("Integrios.Domain.Entities.SubscriptionDelivery", null)
                         .WithMany()
                         .HasForeignKey("SubscriptionDeliveryId")
                         .IsRequired()
                         .HasConstraintName("delivery_attempts_subscription_delivery_id_fkey");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Delivery.SubscriptionDelivery", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.SubscriptionDelivery", b =>
                 {
-                    b.HasOne("Integrios.Domain.Connections.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Connection", null)
                         .WithMany()
                         .HasForeignKey("DestinationConnectionId")
                         .IsRequired()
                         .HasConstraintName("subscription_deliveries_destination_connection_id_fkey");
 
-                    b.HasOne("Integrios.Domain.Events.Event", null)
+                    b.HasOne("Integrios.Domain.Entities.Event", null)
                         .WithMany()
                         .HasForeignKey("EventId")
                         .IsRequired()
                         .HasConstraintName("subscription_deliveries_event_id_fkey");
 
-                    b.HasOne("Integrios.Domain.Subscriptions.Subscription", null)
+                    b.HasOne("Integrios.Domain.Entities.Subscription", null)
                         .WithMany()
                         .HasForeignKey("SubscriptionId")
                         .IsRequired()
                         .HasConstraintName("subscription_deliveries_subscription_id_fkey");
 
-                    b.HasOne("Integrios.Domain.Delivery.DeliveryAttempt", null)
+                    b.HasOne("Integrios.Domain.Entities.DeliveryAttempt", null)
                         .WithMany()
                         .HasForeignKey("Id", "ActiveAttemptId")
                         .HasPrincipalKey("SubscriptionDeliveryId", "Id")
                         .HasConstraintName("fk_subscription_deliveries_active_attempt");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Events.Event", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Event", b =>
                 {
-                    b.HasOne("Integrios.Domain.Tenants.Tenant", null)
+                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .IsRequired()
                         .HasConstraintName("events_tenant_id_fkey");
 
-                    b.HasOne("Integrios.Domain.Connections.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Connection", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "SourceConnectionId")
                         .HasPrincipalKey("TenantId", "Id")
                         .HasConstraintName("fk_events_source_connection_tenant");
 
-                    b.HasOne("Integrios.Domain.Topics.Topic", null)
+                    b.HasOne("Integrios.Domain.Entities.Topic", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "TopicId")
                         .HasPrincipalKey("TenantId", "Id")
                         .HasConstraintName("fk_events_topic_tenant");
 
-                    b.HasOne("Integrios.Domain.Topics.TopicSource", null)
+                    b.HasOne("Integrios.Domain.Entities.TopicSource", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "TopicId", "SourceConnectionId")
                         .HasConstraintName("fk_events_topic_source");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Subscriptions.Subscription", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Subscription", b =>
                 {
-                    b.HasOne("Integrios.Domain.Connections.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Connection", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "DestinationConnectionId")
                         .HasPrincipalKey("TenantId", "Id")
                         .IsRequired()
                         .HasConstraintName("fk_subscriptions_destination_connection_tenant");
 
-                    b.HasOne("Integrios.Domain.Topics.Topic", null)
+                    b.HasOne("Integrios.Domain.Entities.Topic", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "TopicId")
                         .HasPrincipalKey("TenantId", "Id")
@@ -995,43 +995,43 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasConstraintName("fk_subscriptions_topic_tenant");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Tenants.ApiKey", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.ApiKey", b =>
                 {
-                    b.HasOne("Integrios.Domain.Tenants.Tenant", null)
+                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .IsRequired()
                         .HasConstraintName("api_credentials_tenant_id_fkey");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Topics.SourceEndpoint", b =>
+            modelBuilder.Entity("Integrios.Domain.ValueObjects.SourceEndpoint", b =>
                 {
-                    b.HasOne("Integrios.Domain.Topics.TopicSource", null)
+                    b.HasOne("Integrios.Domain.Entities.TopicSource", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "TopicId", "ConnectionId")
                         .IsRequired()
                         .HasConstraintName("fk_source_endpoints_topic_source");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Topics.Topic", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.Topic", b =>
                 {
-                    b.HasOne("Integrios.Domain.Tenants.Tenant", null)
+                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .IsRequired()
                         .HasConstraintName("pipelines_tenant_id_fkey");
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Topics.TopicSource", b =>
+            modelBuilder.Entity("Integrios.Domain.Entities.TopicSource", b =>
                 {
-                    b.HasOne("Integrios.Domain.Connections.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Connection", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "ConnectionId")
                         .HasPrincipalKey("TenantId", "Id")
                         .IsRequired()
                         .HasConstraintName("fk_topic_sources_connection_tenant");
 
-                    b.HasOne("Integrios.Domain.Topics.Topic", null)
+                    b.HasOne("Integrios.Domain.Entities.Topic", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "TopicId")
                         .HasPrincipalKey("TenantId", "Id")
@@ -1042,7 +1042,7 @@ namespace Integrios.Migrations.Postgres.Migrations
 
             modelBuilder.Entity("Integrios.Infrastructure.Outbox.OutboxEntry", b =>
                 {
-                    b.HasOne("Integrios.Domain.Events.Event", null)
+                    b.HasOne("Integrios.Domain.Entities.Event", null)
                         .WithMany()
                         .HasForeignKey("EventId")
                         .IsRequired()

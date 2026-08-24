@@ -1,7 +1,8 @@
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Events;
-using Integrios.Domain.Connections;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Events;

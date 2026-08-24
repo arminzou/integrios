@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Integrios.Domain.Events;
+namespace Integrios.Domain.Enums;
 
 // Serialized as snake_case strings (see EventStatusJsonConverter). The integer backing is not
 // a contract; member order and value are meaningless.

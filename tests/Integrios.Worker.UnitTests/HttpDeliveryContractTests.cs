@@ -3,8 +3,8 @@ using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Transforms;
-using Integrios.Domain.Connections;
-using Integrios.Domain.Subscriptions;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Auth;
 
 namespace Integrios.Worker.UnitTests;

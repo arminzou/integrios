@@ -1,5 +1,6 @@
 using System.Text.Json;
-using Integrios.Domain.Connections;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Events;
 

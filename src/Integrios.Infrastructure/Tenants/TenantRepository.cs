@@ -1,8 +1,9 @@
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;
 using Integrios.Application.Tenants;
-using Integrios.Domain.Common;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;

@@ -1,6 +1,7 @@
-using Integrios.Domain.Common;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
-namespace Integrios.Domain.Connectors;
+namespace Integrios.Domain.Entities;
 
 public sealed record Connector
 {

@@ -1,4 +1,4 @@
-namespace Integrios.Domain.Tenants;
+namespace Integrios.Domain.Entities;
 
 public sealed record AdminKey
 {

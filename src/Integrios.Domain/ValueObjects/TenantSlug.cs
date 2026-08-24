@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Integrios.Domain.Tenants;
+namespace Integrios.Domain.ValueObjects;
 
 public static partial class TenantSlug
 {

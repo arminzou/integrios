@@ -1,4 +1,4 @@
-namespace Integrios.Domain.Common;
+namespace Integrios.Domain.Enums;
 
 public enum OperationalStatus
 {

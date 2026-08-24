@@ -1,8 +1,8 @@
 using Integrios.Application.ApiKeys;
 using Integrios.Application.Events;
-using Integrios.Domain.Common;
-using Integrios.Domain.Events;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;

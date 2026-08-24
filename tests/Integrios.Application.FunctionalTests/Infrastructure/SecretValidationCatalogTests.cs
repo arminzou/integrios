@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Domain.Common;
+using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Secrets;
 

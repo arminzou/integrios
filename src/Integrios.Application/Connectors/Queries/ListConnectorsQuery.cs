@@ -1,4 +1,6 @@
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 
 namespace Integrios.Application.Connectors;

@@ -1,4 +1,4 @@
-namespace Integrios.Domain.Delivery;
+namespace Integrios.Domain.Enums;
 
 public enum SubscriptionDeliveryStatus
 {

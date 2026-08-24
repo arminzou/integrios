@@ -1,5 +1,6 @@
 using Integrios.Application.Delivery;
-using Integrios.Domain.Delivery;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 
 namespace Integrios.Worker.UnitTests;
 

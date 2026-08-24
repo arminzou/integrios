@@ -5,7 +5,9 @@ using Integrios.Application.Bootstrap;
 using Integrios.Application.Delivery;
 using Integrios.Application.Connectors;
 using Integrios.Application.Transforms;
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.UnitTests;
 

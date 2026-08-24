@@ -1,5 +1,6 @@
 using Integrios.Application.Telemetry;
-using Integrios.Domain.Events;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

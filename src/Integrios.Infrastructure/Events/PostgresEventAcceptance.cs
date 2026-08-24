@@ -1,12 +1,13 @@
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Events;
-using Integrios.Domain.Events;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
-using DomainEvent = Integrios.Domain.Events.Event;
+using DomainEvent = Integrios.Domain.Entities.Event;
 
 namespace Integrios.Infrastructure.Events;
 

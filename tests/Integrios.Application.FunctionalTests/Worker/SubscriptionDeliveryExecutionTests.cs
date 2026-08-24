@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Integrios.Application.Delivery;
-using Integrios.Domain.Delivery;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 
 namespace Integrios.Application.FunctionalTests.Worker;
 

@@ -1,6 +1,6 @@
-using Integrios.Domain.Common;
+using Integrios.Domain.Enums;
 
-namespace Integrios.Domain.Tenants;
+namespace Integrios.Domain.Entities;
 
 public sealed record ApiKey
 {

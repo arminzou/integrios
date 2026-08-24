@@ -1,5 +1,7 @@
 using Integrios.Application.Connectors;
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

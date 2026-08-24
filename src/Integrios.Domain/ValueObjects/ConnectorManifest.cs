@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Integrios.Domain.Connectors;
+namespace Integrios.Domain.ValueObjects;
 
 public sealed record ConnectorManifest
 {

@@ -1,6 +1,7 @@
 using System.Text.Json;
+using Integrios.Domain.Enums;
 
-namespace Integrios.Domain.Delivery;
+namespace Integrios.Domain.Entities;
 
 public sealed record DeliveryAttempt
 {

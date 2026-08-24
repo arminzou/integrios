@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Text.Json;
-using Integrios.Domain.Connections;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 

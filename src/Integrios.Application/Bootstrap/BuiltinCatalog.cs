@@ -1,5 +1,7 @@
 using System.Text.Json;
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Bootstrap;
 

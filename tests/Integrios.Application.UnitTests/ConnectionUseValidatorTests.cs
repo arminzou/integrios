@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Integrios.Application.Connections;
-using Integrios.Domain.Common;
-using Integrios.Domain.Connections;
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Auth;
 
 namespace Integrios.Application.UnitTests;

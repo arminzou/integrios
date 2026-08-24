@@ -1,7 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using Integrios.Application.Events;
-using Integrios.Domain.Events;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
 

@@ -6,8 +6,9 @@ using Integrios.Application.Secrets;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
-using Integrios.Domain.Connections;
-using Integrios.Domain.Delivery;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

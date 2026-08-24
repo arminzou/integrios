@@ -1,4 +1,5 @@
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 
 namespace Integrios.Application.ApiKeys;

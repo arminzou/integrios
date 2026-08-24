@@ -1,6 +1,7 @@
 using System.Text.Json;
+using Integrios.Domain.Enums;
 
-namespace Integrios.Domain.Events;
+namespace Integrios.Domain.Entities;
 
 public sealed record Event
 {

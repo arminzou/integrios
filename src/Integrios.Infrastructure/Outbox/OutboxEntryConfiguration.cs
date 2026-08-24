@@ -1,8 +1,9 @@
-using Integrios.Domain.Events;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using DomainEvent = Integrios.Domain.Events.Event;
+using DomainEvent = Integrios.Domain.Entities.Event;
 
 namespace Integrios.Infrastructure.Outbox;
 

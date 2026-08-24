@@ -2,7 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Integrios.Application.Delivery;
-using Integrios.Domain.Delivery;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Delivery;
 
 namespace Integrios.Worker.UnitTests;

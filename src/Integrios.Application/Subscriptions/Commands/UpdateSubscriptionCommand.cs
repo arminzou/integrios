@@ -3,9 +3,9 @@ using Integrios.Application.Auth;
 using Integrios.Application.Connections;
 using Integrios.Application.Connectors;
 using Integrios.Application.Transforms;
-using Integrios.Domain.Common;
-using Integrios.Domain.Connectors;
-using Integrios.Domain.Subscriptions;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 
 namespace Integrios.Application.Subscriptions;

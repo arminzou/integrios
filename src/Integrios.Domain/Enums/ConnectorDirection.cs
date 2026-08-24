@@ -1,4 +1,4 @@
-namespace Integrios.Domain.Connectors;
+namespace Integrios.Domain.Enums;
 
 public enum ConnectorDirection
 {

@@ -1,6 +1,7 @@
 using System.Data;
 using Integrios.Application.AdminKeys;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

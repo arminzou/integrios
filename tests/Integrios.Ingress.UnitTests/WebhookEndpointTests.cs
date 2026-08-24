@@ -3,7 +3,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Integrios.Application.Events;
-using Integrios.Domain.Connections;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.Ingress.UnitTests;

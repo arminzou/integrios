@@ -1,7 +1,8 @@
 using Integrios.Application.Connections;
 using Integrios.Application.Connectors;
-using Integrios.Domain.Connections;
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 
 namespace Integrios.Application.Topics;

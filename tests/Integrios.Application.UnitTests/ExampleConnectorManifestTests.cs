@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Integrios.Application.Connectors;
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Auth;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Transforms;

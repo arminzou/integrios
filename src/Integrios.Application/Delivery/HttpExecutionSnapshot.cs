@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
-using Integrios.Domain.Connections;
-using Integrios.Domain.Subscriptions;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Delivery;
 

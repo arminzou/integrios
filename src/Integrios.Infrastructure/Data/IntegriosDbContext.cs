@@ -1,15 +1,10 @@
-using Integrios.Domain.Common;
-using Integrios.Domain.Connections;
-using Integrios.Domain.Delivery;
-using Integrios.Domain.Events;
-using Integrios.Domain.Connectors;
-using Integrios.Domain.Subscriptions;
-using Integrios.Domain.Tenants;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
-using DomainEvent = Integrios.Domain.Events.Event;
+using DomainEvent = Integrios.Domain.Entities.Event;
 
 namespace Integrios.Infrastructure.Data;
 

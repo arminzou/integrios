@@ -1,4 +1,5 @@
-using Integrios.Domain.Delivery;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

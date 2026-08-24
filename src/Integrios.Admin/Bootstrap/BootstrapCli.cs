@@ -1,6 +1,8 @@
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
-using Integrios.Domain.Connectors;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;

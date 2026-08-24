@@ -1,6 +1,7 @@
 using Dapper;
 using Integrios.Application.Events;
-using Integrios.Domain.Events;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Events;

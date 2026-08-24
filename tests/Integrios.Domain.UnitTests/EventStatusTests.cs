@@ -1,5 +1,6 @@
 using System.Text.Json;
-using Integrios.Domain.Events;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 
 namespace Integrios.Domain.UnitTests;
 

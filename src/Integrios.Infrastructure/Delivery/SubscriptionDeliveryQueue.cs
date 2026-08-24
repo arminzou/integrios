@@ -1,6 +1,7 @@
 using Dapper;
 using Integrios.Application.Delivery;
-using Integrios.Domain.Delivery;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;
 using Microsoft.Data.SqlClient;
 using Npgsql;

@@ -1,7 +1,8 @@
 using Integrios.Application.ApiKeys;
 using Integrios.Application.Common.Pagination;
-using Integrios.Domain.Common;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

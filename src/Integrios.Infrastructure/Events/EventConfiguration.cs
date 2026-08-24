@@ -1,10 +1,9 @@
-using Integrios.Domain.Connections;
-using Integrios.Domain.Events;
-using Integrios.Domain.Tenants;
-using Integrios.Domain.Topics;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using DomainEvent = Integrios.Domain.Events.Event;
+using DomainEvent = Integrios.Domain.Entities.Event;
 
 namespace Integrios.Infrastructure.Events;
 

@@ -1,7 +1,8 @@
 using System.Text.Json;
-using Integrios.Domain.Common;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
-namespace Integrios.Domain.Subscriptions;
+namespace Integrios.Domain.Entities;
 
 public sealed record Subscription
 {

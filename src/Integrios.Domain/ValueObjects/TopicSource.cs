@@ -1,10 +1,6 @@
-namespace Integrios.Domain.Topics;
+using Integrios.Domain.Enums;
 
-public enum TopicSourceStatus
-{
-    Active = 0,
-    Inactive = 1,
-}
+namespace Integrios.Domain.ValueObjects;
 
 public sealed record TopicSource
 {

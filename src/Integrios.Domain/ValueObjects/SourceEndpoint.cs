@@ -1,4 +1,4 @@
-namespace Integrios.Domain.Topics;
+namespace Integrios.Domain.ValueObjects;
 
 public sealed record SourceEndpoint
 {

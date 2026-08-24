@@ -1,7 +1,8 @@
 using Dapper;
 using Integrios.Application.AdminKeys;
 using Integrios.Application.Connections;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.AdminKeys;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;

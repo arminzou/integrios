@@ -1,8 +1,9 @@
 using System.Text.Json;
 using Integrios.Application.Common.Pagination;
 using Integrios.Application.Subscriptions;
-using Integrios.Domain.Common;
-using Integrios.Domain.Subscriptions;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

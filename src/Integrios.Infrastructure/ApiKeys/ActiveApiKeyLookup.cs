@@ -1,8 +1,9 @@
 using Dapper;
 using Integrios.Application.ApiKeys;
 using Integrios.Infrastructure.Data;
-using Integrios.Domain.Common;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Infrastructure.ApiKeys;
 

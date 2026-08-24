@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Transforms;
-using Integrios.Domain.Subscriptions;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Subscriptions;
 

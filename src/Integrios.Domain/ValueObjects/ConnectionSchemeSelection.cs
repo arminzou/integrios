@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Integrios.Domain.Connections;
+namespace Integrios.Domain.ValueObjects;
 
 public sealed record ConnectionSchemeSelection
 {

@@ -1,5 +1,5 @@
-using Integrios.Domain.Connections;
-using Integrios.Domain.Tenants;
+using Integrios.Domain.Entities;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Secrets;
 

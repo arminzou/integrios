@@ -1,4 +1,5 @@
-using Integrios.Domain.Events;
+using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 
 namespace Integrios.Application.Events;
 
