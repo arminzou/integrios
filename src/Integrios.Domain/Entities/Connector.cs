@@ -11,7 +11,6 @@ public sealed record Connector
     public required int ManifestSchemaVersion { get; init; }
     public required string Name { get; init; }
     public required ConnectorDirection Direction { get; init; }
-    public required IReadOnlyList<string> SupportedAuthSchemes { get; init; }
     public required OperationalStatus Status { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }

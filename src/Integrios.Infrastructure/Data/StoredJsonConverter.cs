@@ -2,7 +2,6 @@ using System.Linq.Expressions;
 using System.Text.Json;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Integrios.Infrastructure.Data;
@@ -38,9 +37,3 @@ internal sealed class NullableJsonElementStoredConverter()
     private static JsonElement DeserializeElement(string value) =>
         JsonDocument.Parse(value).RootElement.Clone();
 }
-
-internal sealed class StringListValueComparer()
-    : ValueComparer<IReadOnlyList<string>>(
-        (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
-        value => value == null ? 0 : value.Aggregate(0, (hash, item) => HashCode.Combine(hash, item)),
-        value => value == null ? null! : value.ToArray());

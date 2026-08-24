@@ -72,9 +72,9 @@ public sealed class PostgresApiFixture : IAsyncLifetime
 
             INSERT INTO connectors (
                 id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                supported_auth_schemes, status, manifest, created_at, updated_at)
+                status, manifest, created_at, updated_at)
             VALUES (@SourceConnectorId, 'test_source', 1, 1, 'Test Source', 'source',
-                {{{database.Json("@SupportedAuthSchemes")}}}, 'active', {{{database.Json("@SourceManifest")}}}, {{{now}}}, {{{now}}});
+                'active', {{{database.Json("@SourceManifest")}}}, {{{now}}}, {{{now}}});
             """, new
             {
                 TenantAId,
@@ -86,7 +86,6 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 KeyHashA = secretHashA,
                 KeyHashB = secretHashB,
                 SourceConnectorId,
-                SupportedAuthSchemes = "[]",
                 SourceManifest = TestConnectorManifest.Create("test_source", "Test Source", "source")
             });
     }
@@ -114,12 +113,12 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             string key = $"test_{direction}_{connectorId:N}";
             await ExecuteAsync($$$"""
                 INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,
-                    name,direction,supported_auth_schemes,status,manifest,created_at,updated_at)
-                VALUES (@Id,@Key,1,1,@Key,@Direction,{{{database.Json("@Schemes")}}},'active',
+                    name,direction,status,manifest,created_at,updated_at)
+                VALUES (@Id,@Key,1,1,@Key,@Direction,'active',
                     {{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}})
                 """, new
                 {
-                    Id = connectorId, Key = key, Direction = direction, Schemes = "[]",
+                    Id = connectorId, Key = key, Direction = direction,
                     Manifest = TestConnectorManifest.Create(key, key, direction)
                 });
         }
@@ -168,8 +167,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         Guid subscriptionId = Guid.NewGuid();
         await ExecuteAsync($$$"""
             INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
-                supported_auth_schemes,status,manifest)
-            VALUES (@ConnectorId,'http',1,1,'HTTP','both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}});
+                status,manifest)
+            VALUES (@ConnectorId,'http',1,1,'HTTP','both','active',{{{database.Json("@Manifest")}}});
             INSERT INTO connections (id,tenant_id,connector_id,name,config,status)
             VALUES (@ConnectionId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
             INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','active');
@@ -183,7 +182,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             """, new
             {
                 ConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                Schemes = "[]", Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
+                Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
                 ConnectionId = connectionId, TenantId = tenantId, Config = "{\"base_uri\":\"http://test/sink\"}",
                 TopicId = topicId, SubscriptionId = subscriptionId,
                 MatchRules = "{\"event_types\":[\"payment.created\"]}",

@@ -51,7 +51,9 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         Connector http = Assert.Single(first, i => i.Key == "http");
         Assert.Equal(BuiltinCatalog.HttpId, http.Id);
         Assert.Equal(ConnectorDirection.Both, http.Direction);
-        Assert.Equal(["api_key_header", "bearer_token"], http.SupportedAuthSchemes.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["api_key_header", "bearer_token"],
+            http.Manifest.DestinationAuthentication.Schemes.Select(s => s.Scheme).Order(StringComparer.Ordinal));
         Assert.Equal("event_json", Assert.Single(http.Manifest.SourceContracts).Key);
         JsonElement destinationSchema = http.Manifest.DestinationConfigurationSchema!.Value;
         Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString());
@@ -89,11 +91,11 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         await ExecuteAsync($$$"""
             INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                supported_auth_schemes, status, description, manifest)
+                status, description, manifest)
             VALUES (
-                @Id, 'http', 1, 1, 'HTTP', 'both', {{{fixture.Json("@Schemes")}}}, 'active',
+                @Id, 'http', 1, 1, 'HTTP', 'both', 'active',
                 'Generic HTTP source or destination.', {{{fixture.Json("@Manifest")}}})
-            """, new { Id = unexpectedId, Schemes = "[]", Manifest = manifest });
+            """, new { Id = unexpectedId, Manifest = manifest });
 
         var exception = await Assert.ThrowsAsync<ConnectorVersionConflictException>(
             () => mediator.Send(new BootstrapBuiltinsCommand()));

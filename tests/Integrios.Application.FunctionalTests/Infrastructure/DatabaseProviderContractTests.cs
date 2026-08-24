@@ -184,14 +184,14 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
         Database.Provider == "postgres"
             ? """
               INSERT INTO connectors (id, key, contract_version, manifest_schema_version, name, direction,
-                  supported_auth_schemes, status, created_at, updated_at, manifest)
-              VALUES (gen_random_uuid(), 'bad_json', 1, 1, 'Bad JSON', 'source', '[]'::jsonb, 'active',
+                  status, created_at, updated_at, manifest)
+              VALUES (gen_random_uuid(), 'bad_json', 1, 1, 'Bad JSON', 'source', 'active',
                   now(), now(), '[]'::jsonb)
               """
             : """
               INSERT INTO connectors (id, [key], contract_version, manifest_schema_version, name, direction,
-                  supported_auth_schemes, status, created_at, updated_at, manifest)
-              VALUES (NEWID(), N'bad_json', 1, 1, N'Bad JSON', N'source', N'[]', N'active',
+                  status, created_at, updated_at, manifest)
+              VALUES (NEWID(), N'bad_json', 1, 1, N'Bad JSON', N'source', N'active',
                   SYSUTCDATETIME(), SYSUTCDATETIME(), N'[]')
               """);
 
@@ -220,13 +220,12 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             new { seed.TenantId });
         await connection.ExecuteAsync($$$"""
             INSERT INTO connectors (id, {{{Database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                supported_auth_schemes, status, created_at, updated_at, manifest)
+                status, created_at, updated_at, manifest)
             VALUES (@ConnectorId, 'test_http', 1, 1, 'Provider Contract Source', 'both',
-                {{{Database.Json("@Schemes")}}}, 'active', {{{now}}}, {{{now}}}, {{{Database.Json("@ManifestJson")}}})
+                'active', {{{now}}}, {{{now}}}, {{{Database.Json("@ManifestJson")}}})
             """, new
         {
             seed.ConnectorId,
-            Schemes = "[]",
             ManifestJson = Manifest("Provider Contract Source").GetRawText()
         });
         await connection.ExecuteAsync($$$"""

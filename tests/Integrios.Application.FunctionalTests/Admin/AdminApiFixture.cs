@@ -143,10 +143,10 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
             INSERT INTO connectors (
                 id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                supported_auth_schemes, status, manifest)
+                status, manifest)
             VALUES (
                 @ConnectorId, 'http', 1, 1, 'HTTP', 'both',
-                {{{database.Json("@SupportedAuthSchemes")}}}, 'active', {{{json}}});
+                'active', {{{json}}});
 
             INSERT INTO connections (id, tenant_id, connector_id, name, config, status)
             VALUES (@SourceConnectionId, @TenantId, @ConnectorId, 'source',
@@ -161,7 +161,6 @@ public sealed class AdminApiFixture : IAsyncLifetime
                 TenantId,
                 OtherTenantId,
                 ConnectorId = HttpConnectorId,
-                SupportedAuthSchemes = "[\"api_key_header\",\"bearer_token\"]",
                 Manifest = ConnectorManifestParser.ToJson(
                     BuiltinCatalog.All.Single(item => item.Id == BuiltinCatalog.HttpId).Manifest).GetRawText(),
                 SourceConnectionId,

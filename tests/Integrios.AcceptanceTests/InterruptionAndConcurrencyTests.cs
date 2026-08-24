@@ -407,7 +407,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     private async Task InstallQualificationConnectorAsync() => await fixture.ExecuteAsync($$"""
         INSERT INTO connectors (
             id, key, contract_version, manifest_schema_version, name, direction,
-            supported_auth_schemes, status, description, manifest)
+            status, description, manifest)
         VALUES (
             '{{ApiKeyConnectorId}}',
             'qualification_resilience_api_key',
@@ -415,7 +415,6 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             1,
             'Qualification resilience API key',
             'destination',
-            '["api_key_header"]',
             'active',
             'Qualification-only resilience connector',
             '{{TestConnectorManifest.Create(

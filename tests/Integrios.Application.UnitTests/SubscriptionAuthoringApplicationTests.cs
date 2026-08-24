@@ -134,7 +134,6 @@ public sealed class SubscriptionAuthoringApplicationTests
             ManifestSchemaVersion = 1,
             Name = "Test Connector",
             Direction = direction,
-            SupportedAuthSchemes = [],
             Status = OperationalStatus.Active,
             Manifest = new ConnectorManifest
             {

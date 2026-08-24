@@ -55,9 +55,6 @@ public sealed class DatabaseProviderRegistrationTests
         Assert.Equal(
             "in_flight",
             status.GetTypeMapping().Converter!.ConvertToProvider(EventDeliveryStatus.InFlight));
-        Assert.IsType<StringListValueComparer>(context.Model.FindEntityType(typeof(Connector))!
-            .FindProperty(nameof(Connector.SupportedAuthSchemes))!
-            .GetValueComparer());
     }
 
     [Fact]
@@ -86,17 +83,6 @@ public sealed class DatabaseProviderRegistrationTests
         Assert.IsType<SqlServerConnectionAuthoringLock>(provider.GetRequiredService<IConnectionAuthoringLock>());
         Assert.IsType<SqlServerEventAcceptance>(provider.GetRequiredService<IEventAcceptance>());
         Assert.IsType<SqlServerConnectorManifestStore>(scope.ServiceProvider.GetRequiredService<IConnectorManifestStore>());
-    }
-
-    [Fact]
-    public void StringListValueComparer_UsesStructuralEqualityAndSnapshots()
-    {
-        var comparer = new StringListValueComparer();
-        IReadOnlyList<string> values = ["api_key_header", "bearer_token"];
-
-        Assert.True(comparer.Equals(values, values.ToArray()));
-        Assert.False(comparer.Equals(values, ["bearer_token", "api_key_header"]));
-        Assert.NotSame(values, comparer.Snapshot(values));
     }
 
     private static IConfiguration BuildConfiguration(string provider) =>

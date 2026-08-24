@@ -63,10 +63,11 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
             "SELECT name || '|' || direction || '|' || status FROM connectors WHERE key = 'http'"));
         Assert.Equal(2, await DatabaseLifecycleFixture.ScalarAsync<int>(
             database,
-            "SELECT jsonb_array_length(supported_auth_schemes) FROM connectors WHERE key = 'http'"));
+            "SELECT jsonb_array_length(manifest->'destination_authentication'->'schemes') FROM connectors WHERE key = 'http'"));
         Assert.True(await DatabaseLifecycleFixture.ScalarAsync<bool>(
             database,
-            "SELECT supported_auth_schemes @> '[\"api_key_header\", \"bearer_token\"]'::jsonb FROM connectors WHERE key = 'http'"));
+            "SELECT (SELECT jsonb_agg(s->>'scheme') FROM jsonb_array_elements(manifest->'destination_authentication'->'schemes') s) "
+            + "@> '[\"api_key_header\", \"bearer_token\"]'::jsonb FROM connectors WHERE key = 'http'"));
         Assert.Equal(Hash(suppliedSecret), await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL"));

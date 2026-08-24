@@ -226,11 +226,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             connectorId = Guid.NewGuid();
             await ExecuteAsync($$$"""
                 INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
-                    supported_auth_schemes,status,manifest)
-                VALUES (@Id,@ConnectorKey,1,1,@ConnectorKey,'both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}})
+                    status,manifest)
+                VALUES (@Id,@ConnectorKey,1,1,@ConnectorKey,'both','active',{{{database.Json("@Manifest")}}})
                 """, new
                 {
-                    Id = connectorId.Value, ConnectorKey = connectorKey, Schemes = "[]",
+                    Id = connectorId.Value, ConnectorKey = connectorKey,
                     Manifest = TestConnectorManifest.Create(connectorKey, connectorKey, "both", httpSuccessJson: httpSuccessJson)
                 });
         }
@@ -301,8 +301,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         string hash = "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(TenantToken))).ToLowerInvariant();
         return connection.ExecuteAsync($$$"""
             INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
-                supported_auth_schemes,status,manifest)
-            VALUES (@ConnectorId,'http',1,1,'HTTP','both',{{{database.Json("@Schemes")}}},'active',{{{database.Json("@Manifest")}}});
+                status,manifest)
+            VALUES (@ConnectorId,'http',1,1,'HTTP','both','active',{{{database.Json("@Manifest")}}});
             INSERT INTO tenants (id,slug,name,status,created_at,updated_at) VALUES
                 (@TenantId,'test-routing-tenant','Test Routing Tenant','active',{{{database.Now}}},{{{database.Now}}}),
                 (@OrphanTenantId,'test-orphan-tenant','Test Orphan Tenant','active',{{{database.Now}}},{{{database.Now}}});
@@ -325,7 +325,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskConnectionId,1,'active');
             """, new
         {
-            ConnectorId = HttpConnectorId, Schemes = "[]", Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
+            ConnectorId = HttpConnectorId, Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
             TenantId, OrphanTenantId, TenantApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
             SourceConnectionId, OrphanSourceConnectionId, SourceId, OrphanSourceId, LedgerConnectionId, RiskConnectionId,
             EmptyConfig = "{}", LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),

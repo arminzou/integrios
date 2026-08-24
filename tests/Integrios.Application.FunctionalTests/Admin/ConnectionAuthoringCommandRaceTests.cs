@@ -191,10 +191,10 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
         await connection.ExecuteAsync($$$"""
             INSERT INTO connectors (
                 id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                supported_auth_schemes, status, manifest)
+                status, manifest)
             VALUES (
                 @ConnectorId, 'race_destination', 1, 1, 'Race Destination', 'destination',
-                {{{fixture.Json("@Schemes")}}}, 'active', {{{fixture.Json("@Manifest")}}});
+                'active', {{{fixture.Json("@Manifest")}}});
 
             INSERT INTO connections (
                 id, tenant_id, connector_id, name, config,
@@ -213,7 +213,6 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             ConnectionId = connectionId,
             TopicId = topicId,
             fixture.TenantId,
-            Schemes = "[\"api_key_header\",\"bearer_token\"]",
             Config = "{\"base_uri\":\"https://example.test/race\"}",
             Authentication = "{\"scheme\":\"bearer_token\",\"config\":{},\"secret_refs\":{\"token\":\"race_bearer_token\"}}",
             Manifest = TestConnectorManifest.Create("race_destination", "Race Destination", "destination",

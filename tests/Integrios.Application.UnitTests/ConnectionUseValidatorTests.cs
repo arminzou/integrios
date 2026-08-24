@@ -177,7 +177,6 @@ public sealed class ConnectionUseValidatorTests
             ManifestSchemaVersion = 1,
             Name = "Provider",
             Direction = Enum.Parse<ConnectorDirection>(direction, true),
-            SupportedAuthSchemes = manifest.DestinationAuthentication.Schemes.Select(s => s.Scheme).ToArray(),
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

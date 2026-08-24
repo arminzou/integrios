@@ -47,10 +47,6 @@ internal sealed class ConnectorConfiguration : IEntityTypeConfiguration<Connecto
         entity.Property(e => e.Status)
             .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
-        entity.Property(e => e.SupportedAuthSchemes)
-            .HasDefaultValueSql("'[]'::jsonb")
-            .HasColumnType("jsonb")
-            .HasColumnName("supported_auth_schemes");
         entity.Property(e => e.UpdatedAt)
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");

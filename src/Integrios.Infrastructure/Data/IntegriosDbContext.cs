@@ -50,8 +50,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<StoredJsonConverter<ConnectorManifest>>();
         configurationBuilder.Properties<HttpDeliveryConfiguration>()
             .HaveConversion<StoredJsonConverter<HttpDeliveryConfiguration>>();
-        configurationBuilder.Properties<IReadOnlyList<string>>()
-            .HaveConversion<StoredJsonConverter<IReadOnlyList<string>>, StringListValueComparer>();
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -135,9 +133,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.ToTable("connectors", table =>
             {
                 table.UseSqlOutputClause(false);
-                table.HasCheckConstraint(
-                    "ck_connectors_supported_auth_schemes_json",
-                    "ISJSON(supported_auth_schemes, VALUE) = 1");
                 table.HasCheckConstraint("ck_connectors_manifest_object", "ISJSON(manifest, OBJECT) = 1");
                 table.HasCheckConstraint(
                     "ck_connectors_manifest_identity",
@@ -148,7 +143,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Manifest).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
-            entity.Property(e => e.SupportedAuthSchemes).HasDefaultValueSql(JsonDefault("[]")).HasColumnType(jsonType);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 
