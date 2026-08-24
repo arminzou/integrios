@@ -171,7 +171,7 @@ public sealed class SecretValidationCliTests
         ConnectorId = Guid.NewGuid(),
         Name = "Destination",
         Config = JsonSerializer.Deserialize<JsonElement>("{}"),
-        DestinationAuthentication = new ConnectionSchemeSelection
+        DestinationAuthentication = new DestinationAuthentication
         {
             Scheme = "bearer",
             Config = JsonSerializer.Deserialize<JsonElement>("{}"),

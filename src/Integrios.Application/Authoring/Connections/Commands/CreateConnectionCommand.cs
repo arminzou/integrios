@@ -13,8 +13,8 @@ public sealed record CreateConnectionCommand(
     Guid ConnectorId,
     string Name,
     JsonElement Config,
-    ConnectionSchemeSelectionInput? SourceVerification,
-    ConnectionSchemeSelectionInput? DestinationAuthentication,
+    SourceVerificationInput? SourceVerification,
+    DestinationAuthenticationInput? DestinationAuthentication,
     string? Environment,
     string? Description) : IRequest<ConnectionDto>;
 
@@ -39,10 +39,10 @@ internal sealed class CreateConnectionCommandHandler(
             ConnectorId = command.ConnectorId,
             Name = command.Name,
             Config = config,
-            SourceVerification = ConnectionSchemeSelectionValidator.ValidateSource(
+            SourceVerification = ConnectionSchemeValidator.ValidateSource(
                 connector,
                 command.SourceVerification),
-            DestinationAuthentication = ConnectionSchemeSelectionValidator.ValidateDestination(
+            DestinationAuthentication = ConnectionSchemeValidator.ValidateDestination(
                 connector,
                 command.DestinationAuthentication,
                 authSchemeRegistry),

@@ -37,7 +37,7 @@ public sealed class AuthenticatedDispatchTests
                 MakeWorkItem(
                     id: deliveryId,
                     tenantId: tenantId,
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "api_key_header",
                         Config = TenantApiKeyConfig,
@@ -79,7 +79,7 @@ public sealed class AuthenticatedDispatchTests
             ClaimedItems =
             [
                 MakeWorkItem(
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "api_key_header",
                         Config = TenantApiKeyConfig,
@@ -119,7 +119,7 @@ public sealed class AuthenticatedDispatchTests
             [
                 MakeWorkItem(
                     connectorKey: connectorKey,
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "api_key_header",
                         Config = TenantApiKeyConfig,
@@ -166,7 +166,7 @@ public sealed class AuthenticatedDispatchTests
             ClaimedItems =
             [
                 MakeWorkItem(
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "leaky_scheme",
                         Config = EmptyObject,
@@ -207,7 +207,7 @@ public sealed class AuthenticatedDispatchTests
                 MakeWorkItem(
                     id: deliveryId,
                     connectorKey: connectorKey,
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "api_key_header",
                         Config = TenantApiKeyConfig,
@@ -249,7 +249,7 @@ public sealed class AuthenticatedDispatchTests
             [
                 MakeWorkItem(
                     id: deliveryId,
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "api_key_header",
                         Config = TenantApiKeyConfig,
@@ -291,7 +291,7 @@ public sealed class AuthenticatedDispatchTests
                     attemptId: attemptId,
                     attemptNumber: attemptNumber,
                     eventId: eventId,
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "api_key_header",
                         Config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"Integrios-Event-Id"}"""),
@@ -326,7 +326,7 @@ public sealed class AuthenticatedDispatchTests
             ClaimedItems =
             [
                 MakeWorkItem(
-                    auth: new ConnectionSchemeSelection
+                    auth: new DestinationAuthentication
                     {
                         Scheme = "unsupported",
                         Config = JsonSerializer.Deserialize<JsonElement>("{}"),
@@ -401,7 +401,7 @@ public sealed class AuthenticatedDispatchTests
         Guid? destinationConnectionId = null,
         Guid? tenantId = null,
         string connectorKey = "erp_system",
-        ConnectionSchemeSelection? auth = null,
+        DestinationAuthentication? auth = null,
         string? authJson = null)
         => new(
             id ?? Guid.NewGuid(),
@@ -421,7 +421,7 @@ public sealed class AuthenticatedDispatchTests
             BuildSnapshotJson(auth, authJson),
             null);
 
-    private static string BuildSnapshotJson(ConnectionSchemeSelection? auth, string? authJson)
+    private static string BuildSnapshotJson(DestinationAuthentication? auth, string? authJson)
     {
         string? destinationAuthSegment = authJson ?? (auth is null ? null : JsonSerializer.Serialize(auth, StoredJson.Options));
         string destinationAuthProperty = destinationAuthSegment is null ? "" : $"\"destination_authentication\":{destinationAuthSegment},";

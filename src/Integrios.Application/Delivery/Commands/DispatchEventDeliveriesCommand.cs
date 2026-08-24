@@ -261,7 +261,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         }
 
         IDestinationAuthenticator? handler = null;
-        ConnectionSchemeSelection? destinationAuth = snapshot.DestinationAuthentication;
+        DestinationAuthentication? destinationAuth = snapshot.DestinationAuthentication;
         Dictionary<string, string> secrets = [];
         string? resolvingReference = null;
 

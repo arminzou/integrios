@@ -140,7 +140,7 @@ public sealed class HttpDeliveryContractTests
     public void Authoring_RejectsSelectedAuthenticationOwnedHeaderCaseInsensitively()
     {
         var configuration = Configuration(headers: new Dictionary<string, string> { ["x-api-key"] = "static" });
-        ConnectionSchemeSelection selection = Selection(
+        DestinationAuthentication selection = Selection(
             "api_key_header",
             """{"header_name":"X-API-KEY"}""",
             """{"api_key":"destination_key"}""");
@@ -209,7 +209,7 @@ public sealed class HttpDeliveryContractTests
             Body = body
         };
 
-    private static ConnectionSchemeSelection Selection(string scheme, string config, string secretRefs) => new()
+    private static DestinationAuthentication Selection(string scheme, string config, string secretRefs) => new()
     {
         Scheme = scheme,
         Config = JsonSerializer.Deserialize<JsonElement>(config),

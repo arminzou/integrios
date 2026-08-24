@@ -21,8 +21,8 @@ public sealed class ConnectionUseValidatorTests
             destinationSchemes: [Scheme("bearer_token", secrets: ["token"])]);
         Connection connection = ConnectionFor(
             Json("""{"workspace":"acme","base_uri":"https://example.test/hook"}"""),
-            source: Selection("github_hmac_sha256", "webhook_secret", "github_webhook_secret"),
-            destination: Selection("bearer_token", "token", "slack_token"));
+            source: SourceSelection("github_hmac_sha256", "webhook_secret", "github_webhook_secret"),
+            destination: DestinationSelection("bearer_token", "token", "slack_token"));
 
         ConnectionUseValidator.ValidateSourceReadiness(connection, connector);
         ConnectionUseValidator.ValidateDestinationReadiness(connection, connector, AuthenticationSchemes);
@@ -109,7 +109,7 @@ public sealed class ConnectionUseValidatorTests
         Connector connector = ConnectorFor(
             "destination",
             destinationSchemes: [Scheme("api_key_header", config: ["header_name"], secrets: ["api_key"])]);
-        var input = new ConnectionSchemeSelectionInput
+        var input = new DestinationAuthenticationInput
         {
             Scheme = "api_key_header",
             Config = Json($$"""{"header_name":"{{headerName}}"}"""),
@@ -117,7 +117,7 @@ public sealed class ConnectionUseValidatorTests
         };
 
         Assert.Throws<ConnectionValidationException>(
-            () => ConnectionSchemeSelectionValidator.ValidateDestination(connector, input, AuthenticationSchemes));
+            () => ConnectionSchemeValidator.ValidateDestination(connector, input, AuthenticationSchemes));
     }
 
     [Fact]
@@ -126,14 +126,14 @@ public sealed class ConnectionUseValidatorTests
         Connector connector = ConnectorFor(
             "destination",
             destinationSchemes: [Scheme("api_key_header", config: ["header_name"], secrets: ["api_key"])]);
-        var input = new ConnectionSchemeSelectionInput
+        var input = new DestinationAuthenticationInput
         {
             Scheme = "api_key_header",
             Config = Json("""{"header_name":"Authorization"}"""),
             SecretRefs = Json("""{"api_key":"destination_key"}""")
         };
 
-        ConnectionSchemeSelection? selection = ConnectionSchemeSelectionValidator.ValidateDestination(
+        DestinationAuthentication? selection = ConnectionSchemeValidator.ValidateDestination(
             connector,
             input,
             AuthenticationSchemes);
@@ -186,8 +186,8 @@ public sealed class ConnectionUseValidatorTests
 
     private static Connection ConnectionFor(
         JsonElement config,
-        ConnectionSchemeSelection? source = null,
-        ConnectionSchemeSelection? destination = null,
+        SourceVerification? source = null,
+        DestinationAuthentication? destination = null,
         OperationalStatus status = OperationalStatus.Active) => new()
         {
             Id = Guid.NewGuid(),
@@ -202,7 +202,14 @@ public sealed class ConnectionUseValidatorTests
             UpdatedAt = DateTimeOffset.UtcNow,
         };
 
-    private static ConnectionSchemeSelection Selection(string scheme, string field, string reference) => new()
+    private static SourceVerification SourceSelection(string scheme, string field, string reference) => new()
+    {
+        Scheme = scheme,
+        Config = Json("{}"),
+        SecretRefs = Json($$"""{"{{field}}":"{{reference}}"}"""),
+    };
+
+    private static DestinationAuthentication DestinationSelection(string scheme, string field, string reference) => new()
     {
         Scheme = scheme,
         Config = Json("{}"),

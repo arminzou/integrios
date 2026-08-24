@@ -15,8 +15,8 @@ public interface IConnectionRepository
         Guid id,
         string name,
         JsonElement config,
-        ConnectionSchemeSelection? sourceVerification,
-        ConnectionSchemeSelection? destinationAuthentication,
+        SourceVerification? sourceVerification,
+        DestinationAuthentication? destinationAuthentication,
         string? environment,
         string? description,
         CancellationToken cancellationToken);

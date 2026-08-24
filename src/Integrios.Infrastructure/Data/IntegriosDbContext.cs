@@ -44,8 +44,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<SnakeCaseEnumConverter<ConnectorDirection>>();
         configurationBuilder.Properties<EventDeliveryStatus>()
             .HaveConversion<SnakeCaseEnumConverter<EventDeliveryStatus>>();
-        configurationBuilder.Properties<ConnectionSchemeSelection>()
-            .HaveConversion<StoredJsonConverter<ConnectionSchemeSelection>>();
+        configurationBuilder.Properties<SourceVerification>()
+            .HaveConversion<StoredJsonConverter<SourceVerification>>();
+        configurationBuilder.Properties<DestinationAuthentication>()
+            .HaveConversion<StoredJsonConverter<DestinationAuthentication>>();
         configurationBuilder.Properties<ConnectorManifest>()
             .HaveConversion<StoredJsonConverter<ConnectorManifest>>();
         configurationBuilder.Properties<HttpDeliveryConfiguration>()

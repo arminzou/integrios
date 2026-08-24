@@ -109,8 +109,8 @@ internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnec
         Guid id,
         string name,
         JsonElement config,
-        ConnectionSchemeSelection? sourceVerification,
-        ConnectionSchemeSelection? destinationAuthentication,
+        SourceVerification? sourceVerification,
+        DestinationAuthentication? destinationAuthentication,
         string? environment,
         string? description,
         CancellationToken cancellationToken)

@@ -29,8 +29,8 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
                 request.ConnectorId,
                 request.Name,
                 request.Config,
-                request.SourceVerification?.ToInput(),
-                request.DestinationAuthentication?.ToInput(),
+                request.SourceVerification?.ToSourceVerificationInput(),
+                request.DestinationAuthentication?.ToDestinationAuthenticationInput(),
                 request.Environment,
                 request.Description),
             cancellationToken);
@@ -75,8 +75,8 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
                 id,
                 request.Name,
                 request.Config,
-                request.SourceVerification?.ToInput(),
-                request.DestinationAuthentication?.ToInput(),
+                request.SourceVerification?.ToSourceVerificationInput(),
+                request.DestinationAuthentication?.ToDestinationAuthenticationInput(),
                 request.Environment,
                 request.Description),
             cancellationToken);
@@ -117,7 +117,14 @@ internal sealed record ConnectionSchemeSelectionRequest(
     JsonElement Config,
     JsonElement SecretRefs)
 {
-    public ConnectionSchemeSelectionInput ToInput() => new()
+    public SourceVerificationInput ToSourceVerificationInput() => new()
+    {
+        Scheme = Scheme,
+        Config = Config,
+        SecretRefs = SecretRefs
+    };
+
+    public DestinationAuthenticationInput ToDestinationAuthenticationInput() => new()
     {
         Scheme = Scheme,
         Config = Config,

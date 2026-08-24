@@ -151,7 +151,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 ?? throw new InvalidOperationException("Stored HTTP delivery configuration is invalid."),
             DestinationAuthentication = string.IsNullOrWhiteSpace(destinationAuthJson)
                 ? null
-                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(destinationAuthJson, StoredJson.Options),
+                : JsonSerializer.Deserialize<DestinationAuthentication>(destinationAuthJson, StoredJson.Options),
             HttpSuccess = string.IsNullOrWhiteSpace(httpSuccessJson) || httpSuccessJson == "null"
                 ? null
                 : JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccessJson, StoredJson.Options)

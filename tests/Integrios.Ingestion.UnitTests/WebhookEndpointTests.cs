@@ -160,7 +160,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         SourceId = Guid.NewGuid(),
         ConnectionId = Guid.NewGuid(),
         ConnectorKey = "github",
-        SourceVerification = new ConnectionSchemeSelection
+        SourceVerification = new SourceVerification
         {
             Scheme = "hmac_sha256",
             Config = JsonSerializer.Deserialize<JsonElement>("{}"),

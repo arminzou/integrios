@@ -14,8 +14,8 @@ public sealed record UpdateConnectionCommand(
     Guid Id,
     string Name,
     JsonElement Config,
-    ConnectionSchemeSelectionInput? SourceVerification,
-    ConnectionSchemeSelectionInput? DestinationAuthentication,
+    SourceVerificationInput? SourceVerification,
+    DestinationAuthenticationInput? DestinationAuthentication,
     string? Environment,
     string? Description
 ) : IRequest<ConnectionDto?>;
@@ -42,10 +42,10 @@ internal sealed class UpdateConnectionCommandHandler(
             ?? throw new ConnectionValidationException("The specified connector does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;
-        ConnectionSchemeSelection? sourceVerification = ConnectionSchemeSelectionValidator.ValidateSource(
+        SourceVerification? sourceVerification = ConnectionSchemeValidator.ValidateSource(
             connector,
             command.SourceVerification);
-        ConnectionSchemeSelection? destinationAuthentication = ConnectionSchemeSelectionValidator.ValidateDestination(
+        DestinationAuthentication? destinationAuthentication = ConnectionSchemeValidator.ValidateDestination(
             connector,
             command.DestinationAuthentication,
             authSchemeRegistry);

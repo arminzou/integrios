@@ -20,5 +20,5 @@ public sealed record ResolvedSourceEndpoint
     public required Guid SourceId { get; init; }
     public required Guid ConnectionId { get; init; }
     public required string ConnectorKey { get; init; }
-    public required ConnectionSchemeSelection SourceVerification { get; init; }
+    public required SourceVerification SourceVerification { get; init; }
 }

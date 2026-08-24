@@ -15,7 +15,9 @@ internal static class ConnectionUseValidator
 
         ValidateConfiguration(connection.Config, connector.Manifest.SourceConfigurationSchema, "source");
         RequireSelection(
-            connection.SourceVerification,
+            connection.SourceVerification is null
+                ? null
+                : (connection.SourceVerification.Scheme, connection.SourceVerification.Config, connection.SourceVerification.SecretRefs),
             connector.Manifest.SourceVerification.Schemes,
             connector.Manifest.SourceVerification.AllowUnverified,
             "source verification");
@@ -32,15 +34,17 @@ internal static class ConnectionUseValidator
         ValidateConfiguration(connection.Config, connector.Manifest.DestinationConfigurationSchema, "destination");
         ValidateDestinationBaseUri(connection.Config);
 
-        ConnectionSchemeSelection? selection = RequireSelection(
-            connection.DestinationAuthentication,
+        (string Scheme, JsonElement Config, JsonElement SecretRefs)? selection = RequireSelection(
+            connection.DestinationAuthentication is null
+                ? null
+                : (connection.DestinationAuthentication.Scheme, connection.DestinationAuthentication.Config, connection.DestinationAuthentication.SecretRefs),
             connector.Manifest.DestinationAuthentication.Schemes,
             connector.Manifest.DestinationAuthentication.AllowUnauthenticated,
             "destination authentication");
-        if (selection is not null && !registry.TryGet(selection.Scheme, out _))
+        if (selection is not null && !registry.TryGet(selection.Value.Scheme, out _))
         {
             throw new ConnectionValidationException(
-                $"Destination authentication scheme '{selection.Scheme}' is not implemented.");
+                $"Destination authentication scheme '{selection.Value.Scheme}' is not implemented.");
         }
     }
 
@@ -59,8 +63,8 @@ internal static class ConnectionUseValidator
         ValidateDestinationReadiness(connection, connector, registry);
     }
 
-    private static ConnectionSchemeSelection? RequireSelection(
-        ConnectionSchemeSelection? selection,
+    private static (string Scheme, JsonElement Config, JsonElement SecretRefs)? RequireSelection(
+        (string Scheme, JsonElement Config, JsonElement SecretRefs)? selection,
         IReadOnlyList<ConnectorSchemeManifest> supportedSchemes,
         bool allowAbsent,
         string use)
@@ -78,13 +82,13 @@ internal static class ConnectionUseValidator
                 $"This Connector does not support a {use} selection.");
 
         ConnectorSchemeManifest? declaration = supportedSchemes.SingleOrDefault(
-            scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
+            scheme => scheme.Scheme.Equals(selection.Value.Scheme, StringComparison.OrdinalIgnoreCase));
         if (declaration is null)
             throw new ConnectionValidationException(
-                $"{use} scheme '{selection.Scheme}' is not supported by this Connector.");
+                $"{use} scheme '{selection.Value.Scheme}' is not supported by this Connector.");
 
-        ValidateRequiredFields(selection.Config, declaration.RequiredConfig, use, "config");
-        ValidateRequiredFields(selection.SecretRefs, declaration.RequiredSecretRefs, use, "secret_refs");
+        ValidateRequiredFields(selection.Value.Config, declaration.RequiredConfig, use, "config");
+        ValidateRequiredFields(selection.Value.SecretRefs, declaration.RequiredSecretRefs, use, "secret_refs");
         return selection;
     }
 

@@ -11,8 +11,8 @@ public sealed record ConnectionDto
     public required Guid ConnectorId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
-    public ConnectionSchemeSelectionDto? SourceVerification { get; init; }
-    public ConnectionSchemeSelectionDto? DestinationAuthentication { get; init; }
+    public SourceVerificationDto? SourceVerification { get; init; }
+    public DestinationAuthenticationDto? DestinationAuthentication { get; init; }
     public required string Status { get; init; }
     public string? Environment { get; init; }
     public string? Description { get; init; }
@@ -26,8 +26,8 @@ public sealed record ConnectionDto
         ConnectorId = connection.ConnectorId,
         Name = connection.Name,
         Config = connection.Config,
-        SourceVerification = ConnectionSchemeSelectionDto.From(connection.SourceVerification),
-        DestinationAuthentication = ConnectionSchemeSelectionDto.From(connection.DestinationAuthentication),
+        SourceVerification = SourceVerificationDto.From(connection.SourceVerification),
+        DestinationAuthentication = DestinationAuthenticationDto.From(connection.DestinationAuthentication),
         Status = connection.Status.ToString().ToLowerInvariant(),
         Environment = connection.Environment,
         Description = connection.Description,

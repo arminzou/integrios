@@ -7,45 +7,63 @@ using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Authoring.Connections;
 
-internal static partial class ConnectionSchemeSelectionValidator
+internal static partial class ConnectionSchemeValidator
 {
     private static readonly JsonElement EmptyObject = JsonSerializer.Deserialize<JsonElement>("{}");
 
-    public static ConnectionSchemeSelection? ValidateSource(
+    public static SourceVerification? ValidateSource(
         Connector connector,
-        ConnectionSchemeSelectionInput? selection)
+        SourceVerificationInput? selection)
     {
-        EnsureDirection(connector, source: true, selection);
-        return Validate(
+        EnsureDirection(connector, source: true, selection is not null);
+        (string Scheme, JsonElement Config, JsonElement SecretRefs)? fields = Validate(
             connector,
-            selection,
+            selection is null ? null : (selection.Scheme, selection.Config, selection.SecretRefs),
             connector.Manifest.SourceVerification.Schemes,
             "source verification",
             handler: null);
+
+        return fields is null
+            ? null
+            : new SourceVerification
+            {
+                Scheme = fields.Value.Scheme,
+                Config = fields.Value.Config,
+                SecretRefs = fields.Value.SecretRefs
+            };
     }
 
-    public static ConnectionSchemeSelection? ValidateDestination(
+    public static DestinationAuthentication? ValidateDestination(
         Connector connector,
-        ConnectionSchemeSelectionInput? selection,
+        DestinationAuthenticationInput? selection,
         IDestinationAuthenticatorRegistry registry)
     {
-        EnsureDirection(connector, source: false, selection);
+        EnsureDirection(connector, source: false, selection is not null);
         IDestinationAuthenticator? handler = null;
         if (selection is not null && !registry.TryGet(selection.Scheme, out handler))
             throw new ConnectionValidationException(
                 $"Destination authentication scheme '{selection.Scheme}' is not implemented.");
 
-        return Validate(
+        (string Scheme, JsonElement Config, JsonElement SecretRefs)? fields = Validate(
             connector,
-            selection,
+            selection is null ? null : (selection.Scheme, selection.Config, selection.SecretRefs),
             connector.Manifest.DestinationAuthentication.Schemes,
             "destination authentication",
             handler);
+
+        return fields is null
+            ? null
+            : new DestinationAuthentication
+            {
+                Scheme = fields.Value.Scheme,
+                Config = fields.Value.Config,
+                SecretRefs = fields.Value.SecretRefs
+            };
     }
 
-    private static ConnectionSchemeSelection? Validate(
+    private static (string Scheme, JsonElement Config, JsonElement SecretRefs)? Validate(
         Connector connector,
-        ConnectionSchemeSelectionInput? selection,
+        (string Scheme, JsonElement Config, JsonElement SecretRefs)? selection,
         IReadOnlyList<ConnectorSchemeManifest> supportedSchemes,
         string capability,
         IDestinationAuthenticator? handler)
@@ -54,15 +72,15 @@ internal static partial class ConnectionSchemeSelectionValidator
             return null;
 
         ConnectorSchemeManifest? declared = supportedSchemes.SingleOrDefault(
-            scheme => scheme.Scheme.Equals(selection.Scheme, StringComparison.OrdinalIgnoreCase));
+            scheme => scheme.Scheme.Equals(selection.Value.Scheme, StringComparison.OrdinalIgnoreCase));
         if (declared is null)
         {
             throw new ConnectionValidationException(
-                $"{capability} scheme '{selection.Scheme}' is not supported by connector '{connector.Key}'.");
+                $"{capability} scheme '{selection.Value.Scheme}' is not supported by connector '{connector.Key}'.");
         }
 
-        JsonElement config = NormalizeObject(selection.Config);
-        JsonElement secretRefs = NormalizeObject(selection.SecretRefs);
+        JsonElement config = NormalizeObject(selection.Value.Config);
+        JsonElement secretRefs = NormalizeObject(selection.Value.SecretRefs);
 
         EnsureRequiredFields(config, declared.RequiredConfig, capability, "config");
         EnsureRequiredFields(secretRefs, declared.RequiredSecretRefs, capability, "secret_refs");
@@ -70,20 +88,15 @@ internal static partial class ConnectionSchemeSelectionValidator
             EnsureOwnedHeadersAreSafe(handler, config);
         EnsureSecretReferencesAreSafe(secretRefs);
 
-        return new ConnectionSchemeSelection
-        {
-            Scheme = declared.Scheme,
-            Config = config,
-            SecretRefs = secretRefs
-        };
+        return (declared.Scheme, config, secretRefs);
     }
 
     private static void EnsureDirection(
         Connector connector,
         bool source,
-        ConnectionSchemeSelectionInput? selection)
+        bool hasSelection)
     {
-        if (selection is null)
+        if (!hasSelection)
             return;
 
         bool capable = source

@@ -18,7 +18,7 @@ public sealed record HttpExecutionSnapshot
     public required HttpDeliveryConfiguration Request { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ConnectionSchemeSelection? DestinationAuthentication { get; init; }
+    public DestinationAuthentication? DestinationAuthentication { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public HttpSuccessRule? HttpSuccess { get; init; }

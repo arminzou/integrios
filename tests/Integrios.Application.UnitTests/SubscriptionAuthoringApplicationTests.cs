@@ -223,7 +223,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ConnectionUsage(false, false));
 
-        public Task<Connection?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement config, ConnectionSchemeSelection? sourceVerification, ConnectionSchemeSelection? destinationAuthentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
+        public Task<Connection?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement config, SourceVerification? sourceVerification, DestinationAuthentication? destinationAuthentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Connection?>(connection);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>

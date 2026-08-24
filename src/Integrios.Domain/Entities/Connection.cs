@@ -11,8 +11,8 @@ public sealed record Connection
     public required Guid ConnectorId { get; init; }
     public required string Name { get; init; }
     public required JsonElement Config { get; init; }
-    public ConnectionSchemeSelection? SourceVerification { get; init; }
-    public ConnectionSchemeSelection? DestinationAuthentication { get; init; }
+    public SourceVerification? SourceVerification { get; init; }
+    public DestinationAuthentication? DestinationAuthentication { get; init; }
     public required OperationalStatus Status { get; init; }
     public string? Environment { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }

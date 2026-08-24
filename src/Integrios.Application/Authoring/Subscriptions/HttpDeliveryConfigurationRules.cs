@@ -56,7 +56,7 @@ internal static class HttpDeliveryConfigurationRules
 
     public static void ValidateAuthenticationHeaderCollisions(
         HttpDeliveryConfiguration config,
-        ConnectionSchemeSelection? destinationAuthentication,
+        DestinationAuthentication? destinationAuthentication,
         IDestinationAuthenticatorRegistry authSchemeRegistry)
     {
         if (destinationAuthentication is null)

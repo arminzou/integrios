@@ -270,7 +270,7 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
         "race-destination",
         Json("""{"base_uri":"https://example.test/race"}"""),
         null,
-        new ConnectionSchemeSelectionInput
+        new DestinationAuthenticationInput
         {
             Scheme = "api_key_header",
             Config = Json("""{"header_name":"X-Api-Key"}"""),
