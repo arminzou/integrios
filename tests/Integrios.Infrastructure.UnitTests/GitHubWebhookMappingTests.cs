@@ -26,4 +26,16 @@ public sealed class GitHubWebhookMappingTests
         Assert.Equal("delivery-1", output.SourceEventId);
         Assert.Equal("octocat", output.Payload.GetProperty("pusher").GetProperty("name").GetString());
     }
+
+    // Without a guard the concatenation yields the bare prefix "github.", which the output
+    // validator accepts as a non-empty string — a silently malformed event type.
+    [Fact]
+    public void Evaluate_MissingEventHeader_Fails()
+    {
+        JsonElement context = JsonSerializer.Deserialize<JsonElement>(
+            """{"headers":{"x-github-delivery":"delivery-1"}}""");
+
+        Assert.Throws<TransformEvaluationException>(
+            () => SourceMappingOutputValidator.Validate(evaluator.Evaluate(Mapping, "{}", context)));
+    }
 }

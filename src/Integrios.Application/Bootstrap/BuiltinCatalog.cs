@@ -16,16 +16,21 @@ public static class BuiltinCatalog
     public const int GitHubContractVersion = 1;
     public static readonly Guid DataverseId = Guid.Parse("00000000-0000-0000-0000-000000000003");
 
-    // Requires PrimaryEntityName (bounds the derived event type) and OperationId (the source
-    // identity); global messages carry no primary entity and are rejected rather than silently
-    // producing a malformed event type.
     // event_type derives from the (lower-cased) X-GitHub-Event header only; GitHub's own action
     // segment (e.g. issues.opened) is a documented, deliberately deferred enhancement, not required
     // by any current voe success criterion. source_event_id is the raw X-GitHub-Delivery header.
+    // A missing event header is rejected rather than concatenated into the bare prefix "github.",
+    // which the output validator would accept as a non-empty event type.
     public const string GitHubWebhookMapping =
-        "{ \"event_type\": \"github.\" & $context.headers.`x-github-event`, "
-        + "\"source_event_id\": $context.headers.`x-github-delivery`, \"payload\": $ }";
+        """
+        $exists($context.headers.`x-github-event`) and $context.headers.`x-github-event` != ""
+          ? { "event_type": "github." & $context.headers.`x-github-event`, "source_event_id": $context.headers.`x-github-delivery`, "payload": $ }
+          : $error("GitHub webhook requires a non-empty X-GitHub-Event header.")
+        """;
 
+    // Requires PrimaryEntityName (bounds the derived event type) and OperationId (the source
+    // identity); global messages carry no primary entity and are rejected rather than silently
+    // producing a malformed event type.
     public const string RemoteExecutionContextMapping =
         """
         $exists(PrimaryEntityName) and PrimaryEntityName != "" and $exists(OperationId)
