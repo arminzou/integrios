@@ -10,57 +10,101 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Infrastructure.Events;
 
-// V1: one processor per active azure_service_bus queue Source, loaded once at startup and never
-// dynamically reconciled. When no compatible Source exists, no ServiceBusClient is created, so an
-// HTTP-only deployment needs no Azure credentials or running Azure client. Azure SDK types stay
-// entirely inside this host-edge class; everything it hands to Application (tenant/topic/source ids,
-// the parsed JSON body) is a plain CLR/JSON type.
+// Read from configuration once, at registration, rather than injected as IConfiguration: the
+// receiver's dependencies stay real ports, so the host-composition tests can build the container
+// without standing up a configuration root.
+internal sealed record QueueReconcileInterval(TimeSpan Value);
+
+// One processor per active azure_service_bus queue Source, reconciled against the catalog on an
+// interval so control-plane changes take effect without an Ingestion restart. When no compatible
+// Source exists, no ServiceBusClient is created, so an HTTP-only deployment needs no Azure
+// credentials or running Azure client. Azure SDK types stay entirely inside this host-edge class;
+// everything it hands to Application (tenant/topic/source ids, the parsed JSON body) is a plain
+// CLR/JSON type.
 internal sealed class AzureServiceBusQueueReceiver(
     IQueueSourceCatalog catalog,
     ISourceVerificationSecretResolver secretResolver,
     IServiceProvider serviceProvider,
+    QueueReconcileInterval reconcileInterval,
     ILogger<AzureServiceBusQueueReceiver> logger)
-    : IHostedService
+    : BackgroundService
 {
-    private readonly List<(ServiceBusClient Client, ServiceBusProcessor Processor)> active = [];
+    private readonly Dictionary<Guid, RunningProcessor> active = [];
     private readonly SemaphoreSlim lifecycleGate = new(1, 1);
 
-    // WebApplicationFactory<Program>-hosted tests can observe IHostedService.StartAsync/StopAsync
-    // more than once against the same instance; guard against overlapping calls mutating `active`
-    // concurrently (production hosting only ever calls each once, so this is pure defense).
-    public async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        using PeriodicTimer timer = new(reconcileInterval.Value);
+        try
+        {
+            do
+            {
+                try
+                {
+                    await ReconcileAsync(stoppingToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // A failed pass must not end the loop: the catalog query or one broker being
+                    // unreachable is transient, and the next tick retries the whole desired state.
+                    logger.LogError(exception, "Azure Service Bus queue Source reconciliation failed; retrying.");
+                }
+            }
+            while (await timer.WaitForNextTickAsync(stoppingToken));
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown.
+        }
+    }
+
+    // WebApplicationFactory<Program>-hosted tests can observe the hosted-service lifecycle more than
+    // once against the same instance, and reconciliation itself runs concurrently with shutdown;
+    // the gate is the single writer lock over `active`.
+    private async Task ReconcileAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<ResolvedQueueSource> desired =
+            await catalog.ListActiveAzureServiceBusSourcesAsync(cancellationToken);
+        Dictionary<Guid, ResolvedQueueSource> desiredById = desired.ToDictionary(source => source.SourceId);
+
         await lifecycleGate.WaitAsync(cancellationToken);
         try
         {
-            IReadOnlyList<ResolvedQueueSource> sources =
-                await catalog.ListActiveAzureServiceBusSourcesAsync(cancellationToken);
-
-            foreach (ResolvedQueueSource source in sources)
+            foreach (Guid sourceId in active.Keys.ToArray())
             {
-                ServiceBusClient client = await CreateClientAsync(source, cancellationToken);
-                ServiceBusProcessor processor = client.CreateProcessor(source.QueueName, new ServiceBusProcessorOptions
+                RunningProcessor running = active[sourceId];
+                if (desiredById.TryGetValue(sourceId, out ResolvedQueueSource? source)
+                    && source.Revision == running.Revision)
                 {
-                    ReceiveMode = ServiceBusReceiveMode.PeekLock,
-                    AutoCompleteMessages = false,
-                    MaxConcurrentCalls = 1,
-                    PrefetchCount = 0,
-                });
-                processor.ProcessMessageAsync += args => ProcessMessageAsync(source, args);
-                processor.ProcessErrorAsync += args =>
-                {
-                    logger.LogError(
-                        args.Exception,
-                        "Service Bus processor error for queue Source {SourceId} ({ErrorSource}).",
-                        source.SourceId, args.ErrorSource);
-                    return Task.CompletedTask;
-                };
-                await processor.StartProcessingAsync(cancellationToken);
-                active.Add((client, processor));
+                    continue;
+                }
+
+                await StopProcessorAsync(running, cancellationToken);
+                active.Remove(sourceId);
+                logger.LogInformation("Stopped Azure Service Bus processor for queue Source {SourceId}.", sourceId);
             }
 
-            if (sources.Count > 0)
-                logger.LogInformation("Started {Count} Azure Service Bus queue Source processor(s).", sources.Count);
+            foreach (ResolvedQueueSource source in desired)
+            {
+                if (active.ContainsKey(source.SourceId))
+                    continue;
+
+                try
+                {
+                    active[source.SourceId] = await StartProcessorAsync(source, cancellationToken);
+                    logger.LogInformation(
+                        "Started Azure Service Bus processor for queue Source {SourceId}.", source.SourceId);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // One unusable Source (an unresolvable secret, a queue that does not exist) must
+                    // not stop the others or the host; the next pass retries it.
+                    logger.LogError(
+                        exception,
+                        "Could not start Azure Service Bus processor for queue Source {SourceId}; retrying.",
+                        source.SourceId);
+                }
+            }
         }
         finally
         {
@@ -68,13 +112,58 @@ internal sealed class AzureServiceBusQueueReceiver(
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    private async Task<RunningProcessor> StartProcessorAsync(
+        ResolvedQueueSource source,
+        CancellationToken cancellationToken)
     {
-        await lifecycleGate.WaitAsync(CancellationToken.None);
-        (ServiceBusClient Client, ServiceBusProcessor Processor)[] snapshot;
+        ServiceBusClient client = await CreateClientAsync(source, cancellationToken);
+        ServiceBusProcessor processor = client.CreateProcessor(source.QueueName, new ServiceBusProcessorOptions
+        {
+            ReceiveMode = ServiceBusReceiveMode.PeekLock,
+            AutoCompleteMessages = false,
+            MaxConcurrentCalls = 1,
+            PrefetchCount = 0,
+        });
+        processor.ProcessMessageAsync += args => ProcessMessageAsync(source, args);
+        processor.ProcessErrorAsync += args =>
+        {
+            logger.LogError(
+                args.Exception,
+                "Service Bus processor error for queue Source {SourceId} ({ErrorSource}).",
+                source.SourceId, args.ErrorSource);
+            return Task.CompletedTask;
+        };
+
         try
         {
-            snapshot = [.. active];
+            await processor.StartProcessingAsync(cancellationToken);
+        }
+        catch
+        {
+            await processor.DisposeAsync();
+            await client.DisposeAsync();
+            throw;
+        }
+
+        return new RunningProcessor(source.Revision, client, processor);
+    }
+
+    private static async Task StopProcessorAsync(RunningProcessor running, CancellationToken cancellationToken)
+    {
+        await running.Processor.StopProcessingAsync(cancellationToken);
+        await running.Processor.DisposeAsync();
+        await running.Client.DisposeAsync();
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+
+        await lifecycleGate.WaitAsync(CancellationToken.None);
+        RunningProcessor[] snapshot;
+        try
+        {
+            snapshot = [.. active.Values];
             active.Clear();
         }
         finally
@@ -82,13 +171,11 @@ internal sealed class AzureServiceBusQueueReceiver(
             lifecycleGate.Release();
         }
 
-        foreach ((ServiceBusClient client, ServiceBusProcessor processor) in snapshot)
-        {
-            await processor.StopProcessingAsync(cancellationToken);
-            await processor.DisposeAsync();
-            await client.DisposeAsync();
-        }
+        foreach (RunningProcessor running in snapshot)
+            await StopProcessorAsync(running, cancellationToken);
     }
+
+    private sealed record RunningProcessor(string Revision, ServiceBusClient Client, ServiceBusProcessor Processor);
 
     private async Task<ServiceBusClient> CreateClientAsync(ResolvedQueueSource source, CancellationToken cancellationToken)
     {

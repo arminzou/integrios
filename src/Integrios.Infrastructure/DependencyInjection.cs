@@ -99,6 +99,8 @@ public static class DependencyInjection
         services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
         services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
         services.AddSingleton<IQueueSourceCatalog, QueueSourceCatalog>();
+        services.AddSingleton(new QueueReconcileInterval(TimeSpan.FromSeconds(
+            configuration.GetValue<int?>("Integrios:QueueSources:ReconcileSeconds") ?? 30)));
         services.AddHostedService<AzureServiceBusQueueReceiver>();
         services.AddTransformEvaluationServices();
         if (databaseProvider == DatabaseProvider.SqlServer)

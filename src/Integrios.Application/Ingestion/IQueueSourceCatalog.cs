@@ -3,8 +3,8 @@ using Integrios.Application.Transforms;
 
 namespace Integrios.Application.Ingestion;
 
-// Loaded once at Ingestion startup, not resolved per message: V1 queue receivers are
-// startup-loaded and restart-activated, not dynamically reconciled.
+// The desired set of running queue processors, re-read on a reconcile interval rather than per
+// message: a message is processed against the facts its processor resolved when it started.
 public interface IQueueSourceCatalog
 {
     Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(CancellationToken cancellationToken);
@@ -12,6 +12,11 @@ public interface IQueueSourceCatalog
 
 public sealed record ResolvedQueueSource
 {
+    // Opaque fingerprint of everything this record was resolved from. A processor whose Revision no
+    // longer matches the catalog is recycled, which is what makes an edited Source or a republished
+    // Connector manifest take effect without a restart.
+    public required string Revision { get; init; }
+
     public required Guid TenantId { get; init; }
     public required string TenantSlug { get; init; }
     public required Guid TopicId { get; init; }

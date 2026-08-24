@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Ingestion;
@@ -62,6 +64,13 @@ internal sealed class QueueSourceCatalog(IDbConnectionFactory connectionFactory)
         public string SourceConfigurationJson { get; init; } = "{}";
         public string ManifestJson { get; init; } = "";
 
+        // Both JSON documents this row was built from, hashed together: any edit to the Source
+        // configuration or to the Connector manifest it draws its contract from changes the value,
+        // and nothing else does. Cheaper and harder to forget than comparing resolved fields.
+        private string RevisionOf() => Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes($"{SourceConfigurationJson}{ManifestJson}")));
+
+
         public ResolvedQueueSource? ToResolvedQueueSource()
         {
             JsonElement configuration = JsonSerializer.Deserialize<JsonElement>(SourceConfigurationJson);
@@ -91,6 +100,7 @@ internal sealed class QueueSourceCatalog(IDbConnectionFactory connectionFactory)
 
             return new ResolvedQueueSource
             {
+                Revision = RevisionOf(),
                 TenantId = TenantId,
                 TenantSlug = TenantSlug,
                 TopicId = TopicId,
