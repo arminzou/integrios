@@ -22,7 +22,7 @@ public sealed class HttpDeliveryContractTests
             Body = "json"
         };
 
-        string json = JsonSerializer.Serialize(configuration, ConnectionSchemeSelection.StoredJson);
+        string json = JsonSerializer.Serialize(configuration, StoredJson.Options);
 
         Assert.Equal(
             """{"version":1,"method":"PATCH","path":"contacts","headers":{"X-Operation":"upsert"},"body":"json"}""",
@@ -46,7 +46,7 @@ public sealed class HttpDeliveryContractTests
     public void Configuration_RejectsUnknownMembers(string json)
     {
         Assert.Throws<JsonException>(
-            () => JsonSerializer.Deserialize<HttpDeliveryConfiguration>(json, ConnectionSchemeSelection.StoredJson));
+            () => JsonSerializer.Deserialize<HttpDeliveryConfiguration>(json, StoredJson.Options));
     }
 
     [Theory]

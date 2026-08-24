@@ -423,7 +423,7 @@ public sealed class AuthenticatedDispatchTests
 
     private static string BuildSnapshotJson(ConnectionSchemeSelection? auth, string? authJson)
     {
-        string? destinationAuthSegment = authJson ?? (auth is null ? null : JsonSerializer.Serialize(auth, ConnectionSchemeSelection.StoredJson));
+        string? destinationAuthSegment = authJson ?? (auth is null ? null : JsonSerializer.Serialize(auth, StoredJson.Options));
         string destinationAuthProperty = destinationAuthSegment is null ? "" : $"\"destination_authentication\":{destinationAuthSegment},";
         const string request = """{"version":1,"method":"POST","headers":{},"body":"json"}""";
         return "{\"version\":1,\"base_uri\":\"https://erp.example/webhook\"," + destinationAuthProperty + "\"request\":" + request + "}";

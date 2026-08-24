@@ -93,7 +93,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 ConnectionId = ConnectionId,
                 ConnectorKey = ConnectorKey,
                 SourceVerification = JsonSerializer.Deserialize<ConnectionSchemeSelection>(
-                    SourceVerificationJson, ConnectionSchemeSelection.StoredJson)!,
+                    SourceVerificationJson, StoredJson.Options)!,
             };
         }
     }

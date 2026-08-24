@@ -98,7 +98,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 Request = subscription.HttpDelivery,
                 DestinationAuthentication = connection.DestinationAuthentication,
                 HttpSuccess = connector.Manifest.HttpSuccess is { } httpSuccess
-                    ? JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccess.GetRawText(), ConnectionSchemeSelection.StoredJson)
+                    ? JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccess.GetRawText(), StoredJson.Options)
                     : null,
             };
             return new SubscriptionRoutingCandidate(
@@ -108,7 +108,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 subscription.MatchRules.GetRawText(),
                 subscription.MappingConfig?.GetRawText(),
                 connector.Key,
-                JsonSerializer.Serialize(snapshot, ConnectionSchemeSelection.StoredJson));
+                JsonSerializer.Serialize(snapshot, StoredJson.Options));
         }).ToList();
     }
 

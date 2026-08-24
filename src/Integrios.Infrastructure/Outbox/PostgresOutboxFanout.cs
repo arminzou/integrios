@@ -147,16 +147,16 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         {
             Version = HttpExecutionSnapshot.CurrentVersion,
             BaseUri = destinationUrl,
-            Request = JsonSerializer.Deserialize<HttpDeliveryConfiguration>(httpDeliveryJson, ConnectionSchemeSelection.StoredJson)
+            Request = JsonSerializer.Deserialize<HttpDeliveryConfiguration>(httpDeliveryJson, StoredJson.Options)
                 ?? throw new InvalidOperationException("Stored HTTP delivery configuration is invalid."),
             DestinationAuthentication = string.IsNullOrWhiteSpace(destinationAuthJson)
                 ? null
-                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(destinationAuthJson, ConnectionSchemeSelection.StoredJson),
+                : JsonSerializer.Deserialize<ConnectionSchemeSelection>(destinationAuthJson, StoredJson.Options),
             HttpSuccess = string.IsNullOrWhiteSpace(httpSuccessJson) || httpSuccessJson == "null"
                 ? null
-                : JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccessJson, ConnectionSchemeSelection.StoredJson)
+                : JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccessJson, StoredJson.Options)
         };
-        return JsonSerializer.Serialize(snapshot, ConnectionSchemeSelection.StoredJson);
+        return JsonSerializer.Serialize(snapshot, StoredJson.Options);
     }
 
     private static async Task<int> InsertDeliveriesAsync(

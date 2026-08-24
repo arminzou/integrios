@@ -92,11 +92,11 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
         var snapshot = await fixture.GetEventDeliverySnapshotAsync(eventId);
         Assert.Equal("webhook", snapshot.ConnectorKey);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
-            snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+            snapshot.HttpExecutionSnapshotJson, StoredJson.Options)!;
         Assert.Equal(WorkerRoutingFixture.LedgerSinkUrl, executionSnapshot.BaseUri);
         using var expectedAuth = JsonDocument.Parse(originalAuth);
         using var actualAuth = JsonSerializer.SerializeToDocument(
-            executionSnapshot.DestinationAuthentication, ConnectionSchemeSelection.StoredJson);
+            executionSnapshot.DestinationAuthentication, StoredJson.Options);
         Assert.True(JsonElement.DeepEquals(expectedAuth.RootElement, actualAuth.RootElement));
         using var expectedTransform = JsonDocument.Parse(originalTransform);
         using var actualMapping = JsonDocument.Parse(snapshot.MappingConfigJson!);
@@ -128,7 +128,7 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
 
         var laterSnapshot = await fixture.GetEventDeliverySnapshotAsync(laterEventId);
         HttpExecutionSnapshot laterExecutionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
-            laterSnapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+            laterSnapshot.HttpExecutionSnapshotJson, StoredJson.Options)!;
         Assert.Equal("http://changed-sink/ledger", laterExecutionSnapshot.BaseUri);
         Assert.Equal("changed_webhook", laterSnapshot.ConnectorKey);
     }
@@ -151,7 +151,7 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
         // while connector_key stays populated from the inner-joined connector.
         var snapshot = await fixture.GetEventDeliverySnapshotAsync(eventId);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
-            snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+            snapshot.HttpExecutionSnapshotJson, StoredJson.Options)!;
         Assert.Equal(string.Empty, executionSnapshot.BaseUri);
         Assert.Equal("http", snapshot.ConnectorKey);
     }
@@ -172,7 +172,7 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
 
         var snapshot = await fixture.GetEventDeliverySnapshotAsync(eventId);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
-            snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
+            snapshot.HttpExecutionSnapshotJson, StoredJson.Options)!;
 
         Assert.NotNull(executionSnapshot.HttpSuccess);
         Assert.Equal("json_boolean", executionSnapshot.HttpSuccess.Evaluator);

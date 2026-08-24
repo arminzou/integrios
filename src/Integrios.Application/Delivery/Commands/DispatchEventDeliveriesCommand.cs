@@ -218,7 +218,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         try
         {
             HttpExecutionSnapshot snapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
-                row.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)
+                row.HttpExecutionSnapshotJson, StoredJson.Options)
                 ?? throw new DeliveryConfigurationException("HTTP execution snapshot is invalid.");
             if (snapshot.Version != HttpExecutionSnapshot.CurrentVersion)
                 throw new DeliveryConfigurationException($"Unsupported HTTP execution snapshot version '{snapshot.Version}'.");

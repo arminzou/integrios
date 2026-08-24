@@ -7,7 +7,7 @@ namespace Integrios.Application.Delivery;
 // Correlates the destination base_uri, request shape, and destination authentication that a
 // EventDelivery was fanned out with, so every retry replays the exact request the first
 // attempt would have made even if the Subscription or Connection changes afterward. Serialize and
-// deserialize with ConnectionSchemeSelection.StoredJson - see HttpDeliveryConfiguration for why.
+// deserialize with StoredJson.Options - see HttpDeliveryConfiguration for why.
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record HttpExecutionSnapshot
 {

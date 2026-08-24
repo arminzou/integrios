@@ -10,13 +10,13 @@ internal sealed class StoredJsonConverter<T>()
     : ValueConverter<T, string>(ToProviderExpression, FromProviderExpression)
 {
     private static readonly Expression<Func<T, string>> ToProviderExpression =
-        value => JsonSerializer.Serialize(value, ConnectionSchemeSelection.StoredJson);
+        value => JsonSerializer.Serialize(value, StoredJson.Options);
 
     private static readonly Expression<Func<string, T>> FromProviderExpression =
         value => Deserialize(value);
 
     private static T Deserialize(string value) =>
-        JsonSerializer.Deserialize<T>(value, ConnectionSchemeSelection.StoredJson)
+        JsonSerializer.Deserialize<T>(value, StoredJson.Options)
         ?? throw new JsonException($"Could not deserialize {typeof(T).Name}.");
 }
 
