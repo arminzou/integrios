@@ -4,29 +4,29 @@ using MediatR;
 
 namespace Integrios.Application.Subscriptions;
 
-public sealed record PreviewTransformQuery(
+public sealed record PreviewMappingQuery(
     JsonElement Transform,
     JsonElement SampleInput,
-    JsonElement? SampleContext) : IRequest<PreviewTransformResult>;
+    JsonElement? SampleContext) : IRequest<PreviewMappingResult>;
 
-public sealed record PreviewTransformResult(string? Error, string? OutputJson);
+public sealed record PreviewMappingResult(string? Error, string? OutputJson);
 
-internal sealed class PreviewTransformQueryHandler(ITransformEvaluator evaluator)
-    : IRequestHandler<PreviewTransformQuery, PreviewTransformResult>
+internal sealed class PreviewMappingQueryHandler(ITransformEvaluator evaluator)
+    : IRequestHandler<PreviewMappingQuery, PreviewMappingResult>
 {
-    public Task<PreviewTransformResult> Handle(
-        PreviewTransformQuery query,
+    public Task<PreviewMappingResult> Handle(
+        PreviewMappingQuery query,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        string? error = TransformConfigValidator.Validate(
+        string? error = MappingConfigValidator.Validate(
             query.Transform,
             evaluator,
             "transform",
             out TransformSpec? transform);
         if (error is not null)
-            return Task.FromResult(new PreviewTransformResult(error, null));
+            return Task.FromResult(new PreviewMappingResult(error, null));
         if (transform is null)
             throw new InvalidOperationException("Transform validation succeeded without a parsed transform.");
 
@@ -38,13 +38,13 @@ internal sealed class PreviewTransformQueryHandler(ITransformEvaluator evaluator
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(new PreviewTransformResult(
+            return Task.FromResult(new PreviewMappingResult(
                 null,
                 evaluator.Evaluate(transform, inputJson, context)));
         }
         catch (TransformEvaluationException exception)
         {
-            return Task.FromResult(new PreviewTransformResult(exception.Message, null));
+            return Task.FromResult(new PreviewMappingResult(exception.Message, null));
         }
     }
 

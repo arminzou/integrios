@@ -101,7 +101,7 @@ internal sealed class VerifiedWebhookIngressAdapter(ISourceVerificationSecretRes
         {
             TenantId = context.TenantId,
             TopicId = context.TopicId,
-            SourceConnectionId = context.SourceConnectionId,
+            SourceId = context.SourceId,
             SourceEventId = deliveryId,
             EventType = eventType,
             Payload = payload,

@@ -25,7 +25,7 @@ public sealed class EventsEndpoints : IEndpointGroup
         var response = await mediator.Send(
             new IngestEventCommand(
                 tenantContext.Tenant.Id,
-                request.SourceConnectionId,
+                request.SourceId,
                 request.TopicName,
                 request.SourceEventId,
                 request.EventType,

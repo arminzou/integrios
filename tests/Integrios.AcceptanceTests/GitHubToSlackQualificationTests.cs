@@ -41,7 +41,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
         Guid subscription = await CreateSlackSubscriptionAsync(tenant, topic, slackConnection);
 
         // Scenario 1: Slack's ok:true confirms a real success, traversing Event, Topic,
-        // Subscription, SubscriptionDelivery, and DeliveryAttempt from one realistically signed
+        // Subscription, EventDelivery, and DeliveryAttempt from one realistically signed
         // GitHub request.
         await SetSlackModeAsync(new { ok = true });
         Guid succeeded = await SendSignedPushAsync(callbackPath, githubSecret);
@@ -217,18 +217,18 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
     private async Task<long> AttemptCountAsync(Guid eventId, Guid subscriptionId) =>
         await fixture.ScalarAsync<long>(
             $"SELECT COUNT(*) FROM delivery_attempts da "
-            + "JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id "
+            + "JOIN event_deliveries sd ON sd.id = da.event_delivery_id "
             + $"WHERE sd.event_id = '{eventId}' AND sd.subscription_id = '{subscriptionId}' AND da.status <> 'in_progress'");
 
     private async Task<(DateTime DeliverAfter, DateTime CompletedAt)> ReadRetryTimingAsync(
         Guid eventId, Guid subscriptionId)
     {
         DateTime deliverAfter = await fixture.ScalarAsync<DateTime>(
-            "SELECT deliver_after FROM subscription_deliveries "
+            "SELECT deliver_after FROM event_deliveries "
             + $"WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'");
         DateTime completedAt = await fixture.ScalarAsync<DateTime>(
-            "SELECT completed_at FROM delivery_attempts WHERE subscription_delivery_id = "
-            + $"(SELECT id FROM subscription_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}') "
+            "SELECT completed_at FROM delivery_attempts WHERE event_delivery_id = "
+            + $"(SELECT id FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}') "
             + "ORDER BY attempt_number DESC LIMIT 1");
         return (deliverAfter, completedAt);
     }
@@ -236,7 +236,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
     private async Task WaitForDeliveryStatusAsync(Guid eventId, Guid subscriptionId, string expected) =>
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>(
-                $"SELECT status FROM subscription_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'")
+                $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'")
             == expected);
 
     private async Task WaitForAttemptCountAsync(Guid eventId, Guid subscriptionId, int minimum) =>

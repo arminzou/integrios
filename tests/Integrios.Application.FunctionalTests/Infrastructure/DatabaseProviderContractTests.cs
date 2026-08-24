@@ -26,7 +26,7 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     {
         await using DbConnection connection = await fixture.OpenAsync();
         Assert.Equal(fixture.ExpectedJsonStorageTypes, await fixture.GetJsonStorageTypesAsync(connection));
-        Assert.Equal(2, await fixture.GetRuntimeTriggerCountAsync(connection));
+        Assert.Equal(1, await fixture.GetRuntimeTriggerCountAsync(connection));
     }
 
     [Fact]
@@ -80,9 +80,9 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
         await connection.ExecuteAsync(
-            $"UPDATE topic_sources SET status='inactive', inactive_at={fixture.Database.Now} " +
-            "WHERE tenant_id=@TenantId AND topic_id=@TopicId AND connection_id=@ConnectionId",
-            new { seed.TenantId, seed.TopicId, seed.ConnectionId });
+            $"UPDATE sources SET status='revoked', revoked_at={fixture.Database.Now} " +
+            "WHERE tenant_id=@TenantId AND id=@SourceId",
+            new { seed.TenantId, seed.SourceId });
 
         await Assert.ThrowsAsync<EventAcceptanceException>(() => fixture.Acceptance().AcceptAsync(
             DatabaseProviderFixture.Submission(seed, "retired-source"), null, CancellationToken.None));
@@ -211,7 +211,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
 
     internal async Task<ProviderContractSeed> SeedAsync(DbConnection connection)
     {
-        var seed = new ProviderContractSeed(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var seed = new ProviderContractSeed(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         string now = Database.Now;
 
         await connection.ExecuteAsync(
@@ -248,9 +248,10 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
                 seed.TenantId, "payments", null, CancellationToken.None);
             seed = seed with { TopicId = topic.Id };
         }
-        await connection.ExecuteAsync(
-            "INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @ConnectionId)",
-            new { seed.TenantId, seed.TopicId, seed.ConnectionId });
+        await connection.ExecuteAsync($$$"""
+            INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status)
+            VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'event_api', {{{Database.Json("@SourceConfig")}}}, 'active')
+            """, new { seed.SourceId, seed.TenantId, seed.ConnectionId, seed.TopicId, SourceConfig = "{}" });
 
         await connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (id, topic_id, tenant_id, name, match_rules, destination_connection_id,
@@ -274,7 +275,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
     {
         TenantId = seed.TenantId,
         TopicId = seed.TopicId,
-        SourceConnectionId = seed.ConnectionId,
+        SourceId = seed.SourceId,
         EventType = "payment.created",
         Payload = Json("""{"amount":42}"""),
         IdempotencyKey = idempotencyKey,
@@ -301,4 +302,5 @@ internal sealed record ProviderContractSeed(
     Guid ConnectorId,
     Guid ConnectionId,
     Guid TopicId,
-    Guid SubscriptionId);
+    Guid SubscriptionId,
+    Guid SourceId);

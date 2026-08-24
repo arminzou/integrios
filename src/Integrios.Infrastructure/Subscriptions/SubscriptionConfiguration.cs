@@ -41,9 +41,9 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");
         entity.Property(e => e.TopicId).HasColumnName("topic_id");
-        entity.Property(e => e.TransformConfig)
+        entity.Property(e => e.MappingConfig)
             .HasColumnType("jsonb")
-            .HasColumnName("transform_config");
+            .HasColumnName("mapping_config");
         entity.Property(e => e.UpdatedAt)
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");

@@ -24,7 +24,7 @@ internal static class SubscriptionAuthoringRules
         if (transformConfig is null || transformConfig.Value.ValueKind == JsonValueKind.Null)
             return;
 
-        string? error = TransformConfigValidator.Validate(
+        string? error = MappingConfigValidator.Validate(
             transformConfig.Value,
             transformEvaluator,
             "transform",

@@ -49,7 +49,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
             : await LoadCandidatesAsync(context, row.TopicId.Value, cancellationToken);
         IReadOnlyList<SubscriptionFanoutTarget> targets =
             SubscriptionRoutingEvaluator.SelectTargets(row.EventType, candidates);
-        EventStatus status = targets.Count == 0 ? EventStatus.Unrouted : EventStatus.FannedOut;
+        EventStatus status = targets.Count == 0 ? EventStatus.Unrouted : EventStatus.Routed;
         int insertedCount = await InsertDeliveriesAsync(
             connection, dbTransaction, row.EventId, targets, activity?.Id, cancellationToken);
 
@@ -107,7 +107,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 subscription.DestinationConnectionId,
                 subscription.OrderIndex,
                 subscription.MatchRules.GetRawText(),
-                subscription.TransformConfig?.GetRawText(),
+                subscription.MappingConfig?.GetRawText(),
                 connector.Key,
                 JsonSerializer.Serialize(snapshot, ConnectionSchemeSelection.StoredJson));
         }).ToList();
@@ -126,14 +126,14 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
         {
             inserted += await connection.ExecuteScalarAsync<int>(new CommandDefinition(
                 """
-                MERGE subscription_deliveries WITH (HOLDLOCK) AS target
+                MERGE event_deliveries WITH (HOLDLOCK) AS target
                 USING (VALUES (@EventId, @SubscriptionId)) AS source(event_id, subscription_id)
                    ON target.event_id = source.event_id AND target.subscription_id = source.subscription_id
                 WHEN NOT MATCHED THEN
                     INSERT (event_id, subscription_id, destination_connection_id, connector_key,
-                            http_execution_snapshot, transform_config_snapshot, traceparent)
+                            http_execution_snapshot, mapping_config_snapshot, traceparent)
                     VALUES (@EventId, @SubscriptionId, @DestinationConnectionId, @ConnectorKey,
-                            @HttpExecutionSnapshotJson, @TransformConfigJson, @Traceparent)
+                            @HttpExecutionSnapshotJson, @MappingConfigJson, @Traceparent)
                 OUTPUT CASE WHEN $action = 'INSERT' THEN 1 ELSE 0 END;
                 """,
                 new
@@ -143,7 +143,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                     target.DestinationConnectionId,
                     target.ConnectorKey,
                     target.HttpExecutionSnapshotJson,
-                    target.TransformConfigJson,
+                    target.MappingConfigJson,
                     Traceparent = traceparent,
                 },
                 transaction,

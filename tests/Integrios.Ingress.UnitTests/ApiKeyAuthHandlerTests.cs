@@ -108,7 +108,7 @@ public sealed class ApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
         IngestEventRequest request = new()
         {
             SourceEventId = "evt_test_1",
-            SourceConnectionId = Guid.NewGuid(),
+            SourceId = Guid.NewGuid(),
             TopicName = "payments",
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"paymentId":"pay_1","amount":1200}""").RootElement.Clone(),

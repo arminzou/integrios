@@ -37,7 +37,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
                 TenantId = endpoint.TenantId,
                 TenantSlug = endpoint.TenantSlug,
                 TopicId = endpoint.TopicId,
-                SourceConnectionId = endpoint.ConnectionId,
+                SourceId = endpoint.SourceId,
                 EndpointId = command.EndpointId,
                 ConnectorKey = endpoint.ConnectorKey,
                 AdapterConfig = endpoint.SourceAdapterConfig,
@@ -51,7 +51,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
         var activity = Activity.Current;
         activity?.SetTag("tenant_id", endpoint.TenantId);
         activity?.SetTag("topic_id", endpoint.TopicId);
-        activity?.SetTag("source_connection_id", endpoint.ConnectionId);
+        activity?.SetTag("source_id", endpoint.SourceId);
 
         var accepted = await eventAcceptance.AcceptAsync(submission, activity?.Id, cancellationToken);
 
@@ -62,7 +62,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
             ["event_id"] = accepted.EventId,
             ["tenant_id"] = endpoint.TenantId,
             ["topic_id"] = endpoint.TopicId,
-            ["source_connection_id"] = endpoint.ConnectionId
+            ["source_id"] = endpoint.SourceId
         });
 
         if (!accepted.AlreadyAccepted)

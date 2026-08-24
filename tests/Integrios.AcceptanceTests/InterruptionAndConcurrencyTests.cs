@@ -61,14 +61,14 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
             await WaitForAsync(async () =>
                 await fixture.ScalarAsync<long>(
-                    $"SELECT COUNT(*) FROM subscription_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND sd.status = 'succeeded'") == eventCount);
+                    $"SELECT COUNT(*) FROM event_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND sd.status = 'succeeded'") == eventCount);
 
             Assert.Equal(eventCount, await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM events WHERE tenant_id = '{pipeline.TenantId}' AND event_type = '{pipeline.EventType}' AND status = 'fanned_out'"));
+                $"SELECT COUNT(*) FROM events WHERE tenant_id = '{pipeline.TenantId}' AND event_type = '{pipeline.EventType}' AND status = 'routed'"));
             Assert.Equal(eventCount, await fixture.ScalarAsync<long>(
                 $"SELECT COUNT(*) FROM outbox o JOIN events e ON e.id = o.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND o.processed_at IS NOT NULL"));
             Assert.Equal(0, await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM (SELECT sd.event_id, sd.subscription_id FROM subscription_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' GROUP BY sd.event_id, sd.subscription_id HAVING COUNT(*) > 1) duplicates"));
+                $"SELECT COUNT(*) FROM (SELECT sd.event_id, sd.subscription_id FROM event_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' GROUP BY sd.event_id, sd.subscription_id HAVING COUNT(*) > 1) duplicates"));
 
             foreach (string worker in workers)
                 Assert.Contains("Fanned out Event", await fixture.GetContainerLogsAsync(worker), StringComparison.Ordinal);
@@ -108,7 +108,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         Guid eventId = await IngestAsync(pipeline, new { restart = true });
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
+                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
 
         using HttpResponseMessage reset = await fixture.MockSinkClient.DeleteAsync($"/control/{pipeline.SinkName}");
         Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
@@ -121,7 +121,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
         await WaitForDeliveryStatusAsync(eventId, "succeeded");
         Assert.True(await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}'") >= 2);
+            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'") >= 2);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             workerStopped = true;
             await fixture.ReplaceSecretWithFileAsync(pipeline.TenantSlug, secretReference, "recovered-secret");
             await fixture.ExecuteAsync(
-                $"UPDATE subscription_deliveries SET lease_expires_at = now() - interval '1 second' WHERE event_id = '{eventId}' AND status = 'in_flight'");
+                $"UPDATE event_deliveries SET lease_expires_at = now() - interval '1 second' WHERE event_id = '{eventId}' AND status = 'in_flight'");
             await fixture.StartWorkerAsync();
             workerStopped = false;
 
@@ -206,9 +206,9 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             await WaitForAsync(async () => await ReceiptCountAsync(pipeline.SinkName) == 1);
             await WaitForDeliveryStatusAsync(eventId, "in_flight");
             Guid deliveryId = await fixture.ScalarAsync<Guid>(
-                $"SELECT id FROM subscription_deliveries WHERE event_id = '{eventId}'");
+                $"SELECT id FROM event_deliveries WHERE event_id = '{eventId}'");
             Guid firstAttemptId = await fixture.ScalarAsync<Guid>(
-                $"SELECT id FROM delivery_attempts WHERE subscription_delivery_id = '{deliveryId}' AND attempt_number = 1");
+                $"SELECT id FROM delivery_attempts WHERE event_delivery_id = '{deliveryId}' AND attempt_number = 1");
 
             await fixture.KillWorkerAsync();
             workerStopped = true;
@@ -230,7 +230,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             Assert.Equal(["indeterminate", "succeeded"], await AttemptStatusesAsync(eventId));
 
             Guid secondAttemptId = await fixture.ScalarAsync<Guid>(
-                $"SELECT id FROM delivery_attempts WHERE subscription_delivery_id = '{deliveryId}' AND attempt_number = 2");
+                $"SELECT id FROM delivery_attempts WHERE event_delivery_id = '{deliveryId}' AND attempt_number = 2");
             await AssertReceiptHeadersAsync(
                 pipeline.SinkName,
                 new Dictionary<string, string>
@@ -467,13 +467,13 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         TimeSpan? timeout = null) =>
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>(
-                $"SELECT status FROM subscription_deliveries WHERE event_id = '{eventId}'") == expected,
+                $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}'") == expected,
             timeout);
 
     private async Task<string[]> AttemptStatusesAsync(Guid eventId)
     {
         string statuses = await fixture.ScalarAsync<string>(
-            $"SELECT string_agg(da.status, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}'");
+            $"SELECT string_agg(da.status, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'");
         return statuses.Split(',');
     }
 

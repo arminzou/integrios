@@ -38,8 +38,8 @@ public sealed class DatabaseProviderRegistrationTests
         Assert.Equal("tenants", context.Model.FindEntityType(typeof(Tenant))?.GetTableName());
         Assert.Equal("events", context.Model.FindEntityType(typeof(Event))?.GetTableName());
         Assert.Equal(
-            "subscription_deliveries",
-            context.Model.FindEntityType(typeof(SubscriptionDelivery))?.GetTableName());
+            "event_deliveries",
+            context.Model.FindEntityType(typeof(EventDelivery))?.GetTableName());
         Assert.Equal(
             "delivery_attempts",
             context.Model.FindEntityType(typeof(DeliveryAttempt))?.GetTableName());
@@ -50,11 +50,11 @@ public sealed class DatabaseProviderRegistrationTests
         Assert.False(context.Model.FindEntityType(typeof(TopicSource))!.FindProperty("Status")!.IsNullable);
         Assert.False(context.Model.FindEntityType(typeof(SourceEndpoint))!.FindProperty("Status")!.IsNullable);
 
-        var status = context.Model.FindEntityType(typeof(SubscriptionDelivery))!
-            .FindProperty(nameof(SubscriptionDelivery.Status))!;
+        var status = context.Model.FindEntityType(typeof(EventDelivery))!
+            .FindProperty(nameof(EventDelivery.Status))!;
         Assert.Equal(
             "in_flight",
-            status.GetTypeMapping().Converter!.ConvertToProvider(SubscriptionDeliveryStatus.InFlight));
+            status.GetTypeMapping().Converter!.ConvertToProvider(EventDeliveryStatus.InFlight));
         Assert.IsType<StringListValueComparer>(context.Model.FindEntityType(typeof(Connector))!
             .FindProperty(nameof(Connector.SupportedAuthSchemes))!
             .GetValueComparer());

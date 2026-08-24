@@ -32,7 +32,7 @@ public static class DependencyInjection
             typeof(ISourceRepository),
             typeof(ITenantRepository),
             typeof(ITopicRepository),
-            typeof(ReplaySubscriptionDeliveryCommand)));
+            typeof(ReplayEventDeliveryCommand)));
 
     public static IServiceCollection AddIngressApplicationServices(this IServiceCollection services)
         => AddApplicationServices(
@@ -44,7 +44,7 @@ public static class DependencyInjection
             services,
             type => IsInCapability(
                 type,
-                typeof(ISubscriptionDeliveryQueue),
+                typeof(IEventDeliveryQueue),
                 typeof(IOutboxFanout),
                 typeof(IDestinationAuthenticationSecretResolver)));
 

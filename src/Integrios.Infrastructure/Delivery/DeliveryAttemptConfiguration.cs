@@ -28,12 +28,12 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
                 + "OR (status <> 'in_progress' AND completed_at IS NOT NULL))");
         });
 
-        entity.HasIndex(e => new { e.SubscriptionDeliveryId, e.AttemptNumber }, "idx_delivery_attempts_delivery");
+        entity.HasIndex(e => new { e.EventDeliveryId, e.AttemptNumber }, "idx_delivery_attempts_delivery");
 
-        entity.HasAlternateKey(e => new { e.SubscriptionDeliveryId, e.Id })
+        entity.HasAlternateKey(e => new { e.EventDeliveryId, e.Id })
             .HasName("uq_delivery_attempts_delivery_id");
 
-        entity.HasAlternateKey(e => new { e.SubscriptionDeliveryId, e.AttemptNumber })
+        entity.HasAlternateKey(e => new { e.EventDeliveryId, e.AttemptNumber })
             .HasName("uq_delivery_attempts_delivery_number");
 
         entity.Property(e => e.Id)
@@ -52,11 +52,11 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
             .HasDefaultValueSql("now()")
             .HasColumnName("started_at");
         entity.Property(e => e.Status).HasColumnName("status");
-        entity.Property(e => e.SubscriptionDeliveryId).HasColumnName("subscription_delivery_id");
+        entity.Property(e => e.EventDeliveryId).HasColumnName("event_delivery_id");
 
-        entity.HasOne<SubscriptionDelivery>().WithMany()
-            .HasForeignKey(d => d.SubscriptionDeliveryId)
+        entity.HasOne<EventDelivery>().WithMany()
+            .HasForeignKey(d => d.EventDeliveryId)
             .OnDelete(DeleteBehavior.ClientSetNull)
-            .HasConstraintName("delivery_attempts_subscription_delivery_id_fkey");
+            .HasConstraintName("delivery_attempts_event_delivery_id_fkey");
     }
 }

@@ -31,7 +31,7 @@ public sealed class AuthenticatedDispatchTests
     {
         Guid deliveryId = Guid.NewGuid();
         Guid tenantId = Guid.NewGuid();
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
             ClaimedItems =
             [
@@ -51,7 +51,7 @@ public sealed class AuthenticatedDispatchTests
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
@@ -59,7 +59,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         await secretResolver.Received(1).ResolveAsync(
             Arg.Is<TenantSecretScope>(scope => scope.Id == tenantId && scope.Slug == "test-tenant"),
@@ -67,7 +67,7 @@ public sealed class AuthenticatedDispatchTests
             Arg.Any<CancellationToken>());
         Assert.True(deliveryClient.Headers.TryGetValue("X-Api-Key", out string? headerValue));
         Assert.Equal("secret-value", headerValue);
-        Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, Assert.Single(queue.Finalizations).Disposition);
+        Assert.Equal(EventDeliveryDisposition.Succeeded, Assert.Single(queue.Finalizations).Disposition);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class AuthenticatedDispatchTests
     {
         const string resolvedSecret = "super-secret-value";
         var loggerProvider = new CapturingLoggerProvider();
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
             ClaimedItems =
             [
@@ -91,7 +91,7 @@ public sealed class AuthenticatedDispatchTests
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
@@ -99,7 +99,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
         Assert.DoesNotContain(resolvedSecret, completion.RequestPayloadJson!);
@@ -114,7 +114,7 @@ public sealed class AuthenticatedDispatchTests
         const string connectorKey = "request_construction_observability";
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
         var loggerProvider = new CapturingLoggerProvider();
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
             ClaimedItems =
             [
@@ -128,11 +128,11 @@ public sealed class AuthenticatedDispatchTests
                     })
             ]
         };
-        queue.FinalizationResult = Applied(SubscriptionDeliveryDisposition.RetryScheduled);
+        queue.FinalizationResult = Applied(EventDeliveryDisposition.RetryScheduled);
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
@@ -140,7 +140,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
         Assert.False(completion.Succeeded);
@@ -161,9 +161,9 @@ public sealed class AuthenticatedDispatchTests
     {
         const string resolvedSecret = "super-secret-value";
         var loggerProvider = new CapturingLoggerProvider();
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
-            FinalizationResult = Applied(SubscriptionDeliveryDisposition.RetryScheduled),
+            FinalizationResult = Applied(EventDeliveryDisposition.RetryScheduled),
             ClaimedItems =
             [
                 MakeWorkItem(
@@ -178,7 +178,7 @@ public sealed class AuthenticatedDispatchTests
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new LeakyAuthSchemeHandler()]));
@@ -186,7 +186,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
         Assert.Equal(DeliveryFailurePhase.RequestConstruction, completion.FailurePhase);
@@ -201,7 +201,7 @@ public sealed class AuthenticatedDispatchTests
         const string connectorKey = "secret_resolution_observability";
         Guid deliveryId = Guid.NewGuid();
         var loggerProvider = new CapturingLoggerProvider();
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
             ClaimedItems =
             [
@@ -216,11 +216,11 @@ public sealed class AuthenticatedDispatchTests
                     })
             ]
         };
-        queue.FinalizationResult = Applied(SubscriptionDeliveryDisposition.RetryScheduled);
+        queue.FinalizationResult = Applied(EventDeliveryDisposition.RetryScheduled);
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
@@ -228,12 +228,12 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
         Assert.False(completion.Succeeded);
         Assert.Equal(DeliveryFailurePhase.SecretResolution, completion.FailurePhase);
-        Assert.Equal(SubscriptionDeliveryDisposition.RetryScheduled, Assert.Single(queue.Finalizations).Disposition);
+        Assert.Equal(EventDeliveryDisposition.RetryScheduled, Assert.Single(queue.Finalizations).Disposition);
         Assert.True(loggerProvider.AnyMessageContains("failure_phase=secret_resolution"));
         Assert.Single(
             metrics.ForInstrument("integrios_delivery_secret_resolution_failures"),
@@ -244,7 +244,7 @@ public sealed class AuthenticatedDispatchTests
     public async Task Dispatch_MissingSecret_UsesDeadLetterDispositionReportedByFinalization()
     {
         Guid deliveryId = Guid.NewGuid();
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
             ClaimedItems =
             [
@@ -258,11 +258,11 @@ public sealed class AuthenticatedDispatchTests
                     })
             ]
         };
-        queue.FinalizationResult = Applied(SubscriptionDeliveryDisposition.DeadLettered);
+        queue.FinalizationResult = Applied(EventDeliveryDisposition.DeadLettered);
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
@@ -270,9 +270,9 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Equal(SubscriptionDeliveryDisposition.DeadLettered, Assert.Single(queue.Finalizations).Disposition);
+        Assert.Equal(EventDeliveryDisposition.DeadLettered, Assert.Single(queue.Finalizations).Disposition);
     }
 
     [Fact]
@@ -283,7 +283,7 @@ public sealed class AuthenticatedDispatchTests
         Guid eventId = Guid.NewGuid();
         const int attemptNumber = 17;
         var deliveryClient = new CapturingDeliveryClient(new DeliveryResult(true, 200));
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
             ClaimedItems =
             [
@@ -303,14 +303,14 @@ public sealed class AuthenticatedDispatchTests
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "cannot-overwrite" }));
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         Assert.Equal(eventId.ToString(), deliveryClient.Headers["Integrios-Event-Id"]);
         Assert.Equal(deliveryId.ToString(), deliveryClient.Headers["Integrios-Delivery-Id"]);
@@ -321,9 +321,9 @@ public sealed class AuthenticatedDispatchTests
     [Fact]
     public async Task Dispatch_UnknownAuthScheme_FinalizesRequestConstructionFailure()
     {
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
-            FinalizationResult = Applied(SubscriptionDeliveryDisposition.RetryScheduled),
+            FinalizationResult = Applied(EventDeliveryDisposition.RetryScheduled),
             ClaimedItems =
             [
                 MakeWorkItem(
@@ -338,14 +338,14 @@ public sealed class AuthenticatedDispatchTests
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
         Assert.False(completion.Succeeded);
@@ -355,23 +355,23 @@ public sealed class AuthenticatedDispatchTests
     [Fact]
     public async Task Dispatch_MalformedAuthSnapshot_FinalizesRequestConstructionFailure()
     {
-        var queue = new FakeSubscriptionDeliveryQueue
+        var queue = new FakeEventDeliveryQueue
         {
-            FinalizationResult = Applied(SubscriptionDeliveryDisposition.RetryScheduled),
+            FinalizationResult = Applied(EventDeliveryDisposition.RetryScheduled),
             ClaimedItems = [MakeWorkItem(authJson: "[]")]
         };
         var deliveryClient = new CapturingDeliveryClient(new DeliveryResult(true, 200));
 
         IMediator mediator = BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(queue);
+            services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
         });
 
-        await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
         Assert.False(completion.Succeeded);
@@ -393,7 +393,7 @@ public sealed class AuthenticatedDispatchTests
     private static IAuthSchemeRegistry CreateRegistry() =>
         new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]);
 
-    private static SubscriptionDeliveryWorkItem MakeWorkItem(
+    private static EventDeliveryWorkItem MakeWorkItem(
         Guid? id = null,
         Guid? attemptId = null,
         int attemptNumber = 1,
@@ -430,18 +430,18 @@ public sealed class AuthenticatedDispatchTests
         return "{\"version\":1,\"base_uri\":\"https://erp.example/webhook\"," + destinationAuthProperty + "\"request\":" + request + "}";
     }
 
-    private sealed class FakeSubscriptionDeliveryQueue : ISubscriptionDeliveryQueue
+    private sealed class FakeEventDeliveryQueue : IEventDeliveryQueue
     {
-        public IReadOnlyList<SubscriptionDeliveryWorkItem> ClaimedItems { get; init; } = [];
-        public DeliveryFinalizationResult FinalizationResult { get; set; } = Applied(SubscriptionDeliveryDisposition.Succeeded);
+        public IReadOnlyList<EventDeliveryWorkItem> ClaimedItems { get; init; } = [];
+        public DeliveryFinalizationResult FinalizationResult { get; set; } = Applied(EventDeliveryDisposition.Succeeded);
         public List<DeliveryAttemptCompletion> Completions { get; } = [];
         public List<DeliveryFinalizationResult> Finalizations { get; } = [];
         private int claimIndex;
 
-        public Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<SubscriptionDeliveryClaimResult?>(
+        public Task<EventDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<EventDeliveryClaimResult?>(
                 claimIndex < ClaimedItems.Count
-                    ? new ClaimedSubscriptionDelivery(ClaimedItems[claimIndex++])
+                    ? new ClaimedEventDelivery(ClaimedItems[claimIndex++])
                     : null);
 
         public Task<DeliveryFinalizationResult> FinalizeAsync(DeliveryAttemptCompletion completion, CancellationToken cancellationToken = default)
@@ -453,7 +453,7 @@ public sealed class AuthenticatedDispatchTests
 
     }
 
-    private static DeliveryFinalizationResult Applied(SubscriptionDeliveryDisposition disposition) =>
+    private static DeliveryFinalizationResult Applied(EventDeliveryDisposition disposition) =>
         new(DeliveryFinalizationStatus.Applied, disposition);
 
     // Mirrors framework header validation, which embeds the offending value in its message.

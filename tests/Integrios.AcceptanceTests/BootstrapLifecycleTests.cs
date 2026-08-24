@@ -18,13 +18,13 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Equal(0, secondMigrate.ExitCode);
         Assert.Equal(1L, await DatabaseLifecycleFixture.ScalarAsync<long>(
             database, "SELECT COUNT(*) FROM \"__EFMigrationsHistory\""));
-        Assert.Equal("text|NO", await ColumnShapeAsync(database, "subscription_deliveries", "connector_key"));
-        Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscription_deliveries", "http_execution_snapshot"));
+        Assert.Equal("text|NO", await ColumnShapeAsync(database, "event_deliveries", "connector_key"));
+        Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "event_deliveries", "http_execution_snapshot"));
         Assert.Equal("jsonb|NO", await ColumnShapeAsync(database, "subscriptions", "http_delivery"));
-        Assert.Equal(0L, await CountColumnsAsync(database, "subscription_deliveries", "destination_url", "destination_auth"));
-        Assert.Equal("uuid|YES", await ColumnShapeAsync(database, "subscription_deliveries", "active_attempt_id"));
-        Assert.Equal("timestamp with time zone|YES", await ColumnShapeAsync(database, "subscription_deliveries", "lease_expires_at"));
-        Assert.Equal("uuid|NO", await ColumnShapeAsync(database, "delivery_attempts", "subscription_delivery_id"));
+        Assert.Equal(0L, await CountColumnsAsync(database, "event_deliveries", "destination_url", "destination_auth"));
+        Assert.Equal("uuid|YES", await ColumnShapeAsync(database, "event_deliveries", "active_attempt_id"));
+        Assert.Equal("timestamp with time zone|YES", await ColumnShapeAsync(database, "event_deliveries", "lease_expires_at"));
+        Assert.Equal("uuid|NO", await ColumnShapeAsync(database, "delivery_attempts", "event_delivery_id"));
         Assert.Equal("text|YES", await ColumnShapeAsync(database, "delivery_attempts", "failure_phase"));
         Assert.Equal(0L, await CountColumnsAsync(database, "subscriptions", "delivery_policy", "dlq_enabled"));
         Assert.Equal(0L, await CountColumnsAsync(database, "admin_keys", "tenant_id"));

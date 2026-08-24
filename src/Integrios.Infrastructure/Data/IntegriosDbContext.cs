@@ -20,7 +20,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
     public DbSet<Source> Sources => Set<Source>();
     public DbSet<SourceEndpoint> SourceEndpoints => Set<SourceEndpoint>();
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
-    public DbSet<SubscriptionDelivery> SubscriptionDeliveries => Set<SubscriptionDelivery>();
+    public DbSet<EventDelivery> EventDeliveries => Set<EventDelivery>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<TopicSource> TopicSources => Set<TopicSource>();
@@ -42,8 +42,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<SnakeCaseEnumConverter<DeliveryAttemptStatus>>();
         configurationBuilder.Properties<ConnectorDirection>()
             .HaveConversion<SnakeCaseEnumConverter<ConnectorDirection>>();
-        configurationBuilder.Properties<SubscriptionDeliveryStatus>()
-            .HaveConversion<SnakeCaseEnumConverter<SubscriptionDeliveryStatus>>();
+        configurationBuilder.Properties<EventDeliveryStatus>()
+            .HaveConversion<SnakeCaseEnumConverter<EventDeliveryStatus>>();
         configurationBuilder.Properties<ConnectionSchemeSelection>()
             .HaveConversion<StoredJsonConverter<ConnectionSchemeSelection>>();
         configurationBuilder.Properties<ConnectorManifest>()
@@ -118,7 +118,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.ToTable("events", table =>
             {
                 table.UseSqlOutputClause(false);
-                table.HasCheckConstraint("ck_events_source_connection_required", "source_connection_id IS NOT NULL");
+                table.HasCheckConstraint("ck_events_source_required", "source_id IS NOT NULL");
                 table.HasCheckConstraint("ck_events_payload_json", "ISJSON(payload, VALUE) = 1");
                 table.HasCheckConstraint(
                     "ck_events_metadata_json",
@@ -192,8 +192,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 table.HasCheckConstraint("ck_subscriptions_match_rules_json", "ISJSON(match_rules, VALUE) = 1");
                 table.HasCheckConstraint("ck_subscriptions_http_delivery_json", "ISJSON(http_delivery, VALUE) = 1");
                 table.HasCheckConstraint(
-                    "ck_subscriptions_transform_config_json",
-                    "transform_config IS NULL OR ISJSON(transform_config, VALUE) = 1");
+                    "ck_subscriptions_mapping_config_json",
+                    "mapping_config IS NULL OR ISJSON(mapping_config, VALUE) = 1");
             });
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.HttpDelivery)
@@ -201,30 +201,30 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 .HasColumnType(jsonType);
             entity.Property(e => e.MatchRules).HasDefaultValueSql(JsonDefault("{}")).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
-            entity.Property(e => e.TransformConfig).HasColumnType(jsonType);
+            entity.Property(e => e.MappingConfig).HasColumnType(jsonType);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 
-        modelBuilder.Entity<SubscriptionDelivery>(entity =>
+        modelBuilder.Entity<EventDelivery>(entity =>
         {
-            entity.ToTable("subscription_deliveries", table =>
+            entity.ToTable("event_deliveries", table =>
             {
                 table.HasCheckConstraint(
-                    "ck_subscription_deliveries_http_execution_snapshot_json",
+                    "ck_event_deliveries_http_execution_snapshot_json",
                     "ISJSON(http_execution_snapshot, VALUE) = 1");
                 table.HasCheckConstraint(
-                    "ck_subscription_deliveries_transform_config_snapshot_json",
-                    "transform_config_snapshot IS NULL OR ISJSON(transform_config_snapshot, VALUE) = 1");
+                    "ck_event_deliveries_mapping_config_snapshot_json",
+                    "mapping_config_snapshot IS NULL OR ISJSON(mapping_config_snapshot, VALUE) = 1");
             });
             entity.HasIndex(
                     e => new { e.Status, e.LeaseExpiresAt, e.DeliverAfter, e.CreatedAt },
-                    "idx_subscription_deliveries_claimable")
+                    "idx_event_deliveries_claimable")
                 .HasFilter("(status IN (N'pending', N'in_flight'))");
             entity.Property(e => e.Id).HasDefaultValueSql(generatedGuid);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.HttpExecutionSnapshot).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("pending"));
-            entity.Property(e => e.TransformConfigSnapshot).HasColumnType(jsonType);
+            entity.Property(e => e.MappingConfigSnapshot).HasColumnType(jsonType);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 

@@ -55,7 +55,7 @@ public sealed class WorkerHostStartupTests
             .Select(service => service.GetType())
             .ToArray();
         Assert.Contains(typeof(OutboxFanoutWorker), hostedTypes);
-        Assert.Contains(typeof(SubscriptionDeliveryWorker), hostedTypes);
+        Assert.Contains(typeof(EventDeliveryWorker), hostedTypes);
         Assert.Equal(2, hostedTypes.Length);
         Assert.Equal(
             provider.GetRequiredService<DeliveryExecutionOptions>().ShutdownGracePeriod,

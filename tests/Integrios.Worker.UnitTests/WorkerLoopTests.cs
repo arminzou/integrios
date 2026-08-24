@@ -45,9 +45,9 @@ public sealed class WorkerLoopTests
             loggerFactory.CreateLogger<OutboxFanoutWorker>(),
             new FanoutLoopOptions(10, TimeSpan.FromSeconds(2)),
             delay);
-        var delivery = new SubscriptionDeliveryWorker(
+        var delivery = new EventDeliveryWorker(
             RunDelivery,
-            loggerFactory.CreateLogger<SubscriptionDeliveryWorker>(),
+            loggerFactory.CreateLogger<EventDeliveryWorker>(),
             new DeliveryLoopOptions(25, TimeSpan.FromSeconds(2)),
             delay);
 
@@ -69,14 +69,14 @@ public sealed class WorkerLoopTests
     {
         using var cancellation = new CancellationTokenSource();
         var deliveryFinalized = NewSignal();
-        var deliveryQueue = new WorkerTransportAbstractionsTests.FakeSubscriptionDeliveryQueue
+        var deliveryQueue = new WorkerTransportAbstractionsTests.FakeEventDeliveryQueue
         {
             ClaimedItems = [WorkerTransportAbstractionsTests.MakeWorkItem()],
             FinalizationSignal = deliveryFinalized
         };
         var mediator = WorkerTransportAbstractionsTests.BuildMediator(services =>
         {
-            services.AddSingleton<ISubscriptionDeliveryQueue>(deliveryQueue);
+            services.AddSingleton<IEventDeliveryQueue>(deliveryQueue);
             services.AddSingleton<IDeliveryClient>(
                 new WorkerTransportAbstractionsTests.FakeDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<Integrios.Application.Transforms.ITransformEvaluator>(
@@ -93,9 +93,9 @@ public sealed class WorkerLoopTests
             loggerFactory.CreateLogger<OutboxFanoutWorker>(),
             new FanoutLoopOptions(10, TimeSpan.FromSeconds(2)),
             delay);
-        var delivery = new SubscriptionDeliveryWorker(
+        var delivery = new EventDeliveryWorker(
             mediator,
-            loggerFactory.CreateLogger<SubscriptionDeliveryWorker>(),
+            loggerFactory.CreateLogger<EventDeliveryWorker>(),
             new DeliveryLoopOptions(25, TimeSpan.FromSeconds(2)),
             delay);
 
@@ -138,9 +138,9 @@ public sealed class WorkerLoopTests
         var delay = new CancellingDelay(cancellation);
         var loggerProvider = new CapturingLoggerProvider();
         using ILoggerFactory loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(loggerProvider));
-        var worker = new SubscriptionDeliveryWorker(
+        var worker = new EventDeliveryWorker(
             _ => Task.FromException<int>(new InvalidOperationException("delivery failed")),
-            loggerFactory.CreateLogger<SubscriptionDeliveryWorker>(),
+            loggerFactory.CreateLogger<EventDeliveryWorker>(),
             new DeliveryLoopOptions(25, TimeSpan.FromMilliseconds(456)),
             delay);
 
@@ -180,7 +180,7 @@ public sealed class WorkerLoopTests
         var fanout = new SignalingOutboxFanout();
         var deliveryClient = new BlockingDeliveryClient();
         var deliveryFinalized = NewSignal();
-        var deliveryQueue = new WorkerTransportAbstractionsTests.FakeSubscriptionDeliveryQueue
+        var deliveryQueue = new WorkerTransportAbstractionsTests.FakeEventDeliveryQueue
         {
             ClaimedItems = [WorkerTransportAbstractionsTests.MakeWorkItem()],
             FinalizationSignal = deliveryFinalized
@@ -188,7 +188,7 @@ public sealed class WorkerLoopTests
         IMediator mediator = WorkerTransportAbstractionsTests.BuildMediator(services =>
         {
             services.AddSingleton<IOutboxFanout>(fanout);
-            services.AddSingleton<ISubscriptionDeliveryQueue>(deliveryQueue);
+            services.AddSingleton<IEventDeliveryQueue>(deliveryQueue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(
                 WorkerTransportAbstractionsTests.CreateTransformEvaluator());
@@ -253,15 +253,15 @@ public sealed class WorkerLoopTests
         var sender = new RecordingSender();
         var delay = new CancellingDelay(cancellation);
         using ILoggerFactory loggerFactory = LoggerFactory.Create(_ => { });
-        var worker = new SubscriptionDeliveryWorker(
+        var worker = new EventDeliveryWorker(
             sender,
-            loggerFactory.CreateLogger<SubscriptionDeliveryWorker>(),
+            loggerFactory.CreateLogger<EventDeliveryWorker>(),
             new DeliveryLoopOptions(13, TimeSpan.FromSeconds(2)),
             delay);
 
         await worker.RunAsync(cancellation.Token);
 
-        var command = Assert.IsType<DispatchSubscriptionDeliveriesCommand>(Assert.Single(sender.Requests));
+        var command = Assert.IsType<DispatchEventDeliveriesCommand>(Assert.Single(sender.Requests));
         Assert.Equal(13, command.BatchSize);
     }
 

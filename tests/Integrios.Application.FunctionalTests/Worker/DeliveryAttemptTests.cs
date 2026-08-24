@@ -22,9 +22,9 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         var details = await fixture.GetEventDetailsAsync(eventId);
         Assert.NotNull(details);
         var attempt = Assert.Single(details.DeliveryAttempts);
-        var delivery = Assert.Single(await fixture.GetSubscriptionDeliveriesAsync(eventId));
+        var delivery = Assert.Single(await fixture.GetEventDeliveriesAsync(eventId));
         Assert.Equal(1, attempt.AttemptNumber);
-        Assert.Equal(delivery.Id, attempt.SubscriptionDeliveryId);
+        Assert.Equal(delivery.Id, attempt.EventDeliveryId);
         Assert.Equal("succeeded", attempt.Status);
         Assert.Equal(200, attempt.ResponseStatusCode);
         Assert.Null(attempt.ErrorMessage);
@@ -114,7 +114,7 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         Assert.NotNull(details);
         var attempt = Assert.Single(details.DeliveryAttempts);
         Assert.Equal(eventId.ToString(), call.Headers["Integrios-Event-Id"]);
-        Assert.Equal(attempt.SubscriptionDeliveryId.ToString(), call.Headers["Integrios-Delivery-Id"]);
+        Assert.Equal(attempt.EventDeliveryId.ToString(), call.Headers["Integrios-Delivery-Id"]);
         Assert.Equal(attempt.AttemptId.ToString(), call.Headers["Integrios-Attempt-Id"]);
         Assert.Equal(attempt.AttemptNumber.ToString(), call.Headers["Integrios-Attempt-Number"]);
         Assert.NotEqual("must-not-win", call.Headers["Integrios-Delivery-Id"]);

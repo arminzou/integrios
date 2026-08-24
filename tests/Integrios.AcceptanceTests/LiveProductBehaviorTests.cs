@@ -160,7 +160,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>($"SELECT status FROM events WHERE id = '{first.Id}'") == "unrouted");
         Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM subscription_deliveries WHERE event_id = '{first.Id}'"));
+            $"SELECT COUNT(*) FROM event_deliveries WHERE event_id = '{first.Id}'"));
     }
 
     private async Task AssertFanoutTransformsAndAuthenticatedDeliveryAsync(
@@ -212,13 +212,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await WaitForDeliveryStatusAsync(accepted.Id, bearerSubscription, "succeeded");
 
         Assert.Equal(3L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM subscription_deliveries WHERE event_id = '{accepted.Id}'"));
+            $"SELECT COUNT(*) FROM event_deliveries WHERE event_id = '{accepted.Id}'"));
         await AssertReceiptBodyAsync("transform", "{\"kind\":\"payment.created\",\"amount\":42,\"topic\":\"payments\"}");
         await AssertReceiptHeaderAsync("api-auth", "X-Api-Key", "api-key-value");
         await AssertReceiptHeaderAsync("bearer-auth", "Authorization", "Bearer bearer-token-value");
 
         string snapshots = await fixture.ScalarAsync<string>(
-            $"SELECT string_agg(COALESCE((http_execution_snapshot->'destination_authentication')::text, 'open'), '|') FROM subscription_deliveries WHERE event_id = '{accepted.Id}'");
+            $"SELECT string_agg(COALESCE((http_execution_snapshot->'destination_authentication')::text, 'open'), '|') FROM event_deliveries WHERE event_id = '{accepted.Id}'");
         Assert.Contains("api_key_header", snapshots, StringComparison.Ordinal);
         Assert.Contains("bearer_token", snapshots, StringComparison.Ordinal);
         Assert.DoesNotContain("api-key-value", snapshots, StringComparison.Ordinal);
@@ -248,21 +248,21 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await WaitForDeliveryStatusAsync(accepted.Id, successSubscription, "succeeded");
         await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "dead_lettered");
         Assert.Equal(3, await fixture.ScalarAsync<int>(
-            $"SELECT lifetime_attempt_count FROM subscription_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'"));
+            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'"));
 
         using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
         Assert.Equal(HttpStatusCode.OK, recover.StatusCode);
         Guid failureDelivery = await fixture.ScalarAsync<Guid>(
-            $"SELECT id FROM subscription_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'");
+            $"SELECT id FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'");
         using HttpResponseMessage replay = await SendAdminAsync(
             HttpMethod.Post,
             $"/admin/tenants/{tenant.Id}/events/{accepted.Id}/deliveries/{failureDelivery}/replay");
         Assert.Equal(HttpStatusCode.Accepted, replay.StatusCode);
         await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "succeeded");
         Assert.Equal(4, await fixture.ScalarAsync<int>(
-            $"SELECT lifetime_attempt_count FROM subscription_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'"));
+            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'"));
         Assert.Equal("1,2,3,4", await fixture.ScalarAsync<string>(
-            $"SELECT string_agg(da.attempt_number::text, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{failureSubscription}'"));
+            $"SELECT string_agg(da.attempt_number::text, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{failureSubscription}'"));
 
         Guid snapshotDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "snapshot-destination", "http://mocksink:8080/sink/snapshot");
@@ -299,7 +299,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, source, "payments", "runtime.transform", new { value = 1 });
         await WaitForAttemptCountAsync(runtimeEvent.Id, runtimeSubscription, 1);
         Assert.Equal("transform", await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{runtimeEvent.Id}' AND sd.subscription_id = '{runtimeSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{runtimeEvent.Id}' AND sd.subscription_id = '{runtimeSubscription}' ORDER BY da.attempt_number LIMIT 1"));
     }
 
     private async Task AssertDestinationBoundaryAsync(TenantContext tenant, Guid source, Guid topic)
@@ -347,13 +347,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, source, "payments", "redirect.test", new { value = 1 });
         await WaitForAttemptCountAsync(redirected.Id, redirectSubscription, 1);
         Assert.Equal(307, await fixture.ScalarAsync<int>(
-            $"SELECT da.response_status_code FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+            $"SELECT da.response_status_code FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1"));
         // Recording the 307 is not enough: a redirect must also be a failed delivery, otherwise the
         // Worker would be treating an unvisited destination as a satisfied one.
         Assert.Equal("http", await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1"));
         Assert.NotEqual("succeeded", await fixture.ScalarAsync<string>(
-            $"SELECT status FROM subscription_deliveries WHERE event_id = '{redirected.Id}' AND subscription_id = '{redirectSubscription}'"));
+            $"SELECT status FROM event_deliveries WHERE event_id = '{redirected.Id}' AND subscription_id = '{redirectSubscription}'"));
         Assert.Equal(0, await ReceiptCountAsync("redirect-target"));
 
         Guid slowDestination = await CreateConnectionAsync(
@@ -369,9 +369,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, source, "payments", "slow.test", new { value = 1 });
         await WaitForAttemptCountAsync(slowEvent.Id, slowSubscription, 1);
         Assert.Equal("http", await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1"));
         Assert.Equal("Request timed out", await fixture.ScalarAsync<string>(
-            $"SELECT da.error_message FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+            $"SELECT da.error_message FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1"));
 
         // Leaving the sink slow would make every later retry of this subscription hold a delivery
         // slot for the full outbound timeout, eating into the evidence budget of later sections.
@@ -407,7 +407,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         }
 
         Assert.Equal("succeeded", await fixture.ScalarAsync<string>(
-            $"SELECT status FROM subscription_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{subscription}'"));
+            $"SELECT status FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{subscription}'"));
     }
 
     private async Task AssertSecretProvidersAsync()
@@ -638,7 +638,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, source, sink, $"{sink}.test", new { sink });
         await WaitForAttemptCountAsync(accepted.Id, subscription, 1);
         Assert.Equal(expectedPhase, await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{subscription}' ORDER BY da.attempt_number LIMIT 1"));
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{subscription}' ORDER BY da.attempt_number LIMIT 1"));
         Assert.Equal(0, await ReceiptCountAsync(sink));
     }
 
@@ -724,12 +724,12 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private async Task WaitForDeliveryStatusAsync(Guid eventId, Guid subscriptionId, string expected) =>
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>(
-                $"SELECT status FROM subscription_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'") == expected);
+                $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'") == expected);
 
     private async Task WaitForAttemptCountAsync(Guid eventId, Guid subscriptionId, int minimum) =>
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}' AND sd.subscription_id = '{subscriptionId}' AND da.status <> 'in_progress'") >= minimum);
+                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND sd.subscription_id = '{subscriptionId}' AND da.status <> 'in_progress'") >= minimum);
 
     private static async Task WaitForAsync(Func<Task<bool>> condition)
     {

@@ -5,11 +5,11 @@ using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.FunctionalTests.Worker;
 
-public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
+public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
 {
     private readonly WorkerRoutingFixture fixture;
 
-    public TransformDeliveryTests(WorkerRoutingFixture fixture)
+    public MappingDeliveryTests(WorkerRoutingFixture fixture)
     {
         this.fixture = fixture;
     }
@@ -34,7 +34,7 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         Assert.NotEqual("{\"test\":true}", deliveredPayload);
         Assert.False(string.IsNullOrWhiteSpace(deliveredPayload));
 
-        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
         Assert.Single(deliveries);
         Assert.Equal("succeeded", deliveries[0].Status);
     }
@@ -52,7 +52,7 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         // Transform failure is treated as delivery failure: no HTTP call made
         Assert.Empty(fixture.DeliveryClient.Calls);
 
-        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
         Assert.Single(deliveries);
         Assert.Equal("pending", deliveries[0].Status);
         Assert.Equal(1, deliveries[0].AttemptCount);
@@ -89,7 +89,7 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
             changedAuth,
             "changed_webhook");
 
-        var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
+        var snapshot = await fixture.GetEventDeliverySnapshotAsync(eventId);
         Assert.Equal("webhook", snapshot.ConnectorKey);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
@@ -99,8 +99,8 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
             executionSnapshot.DestinationAuthentication, ConnectionSchemeSelection.StoredJson);
         Assert.True(JsonElement.DeepEquals(expectedAuth.RootElement, actualAuth.RootElement));
         using var expectedTransform = JsonDocument.Parse(originalTransform);
-        using var actualTransform = JsonDocument.Parse(snapshot.TransformConfigJson!);
-        Assert.True(JsonElement.DeepEquals(expectedTransform.RootElement, actualTransform.RootElement));
+        using var actualMapping = JsonDocument.Parse(snapshot.MappingConfigJson!);
+        Assert.True(JsonElement.DeepEquals(expectedTransform.RootElement, actualMapping.RootElement));
 
         fixture.DeliveryClient.ShouldSucceed = false;
         Assert.Equal(1, await fixture.RunDeliveryBatchAsync());
@@ -126,7 +126,7 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         Assert.Equal("false", laterAttempt.Payload);
         Assert.Equal("changed-value", laterAttempt.Headers["X-Changed-Key"]);
 
-        var laterSnapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(laterEventId);
+        var laterSnapshot = await fixture.GetEventDeliverySnapshotAsync(laterEventId);
         HttpExecutionSnapshot laterExecutionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             laterSnapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
         Assert.Equal("http://changed-sink/ledger", laterExecutionSnapshot.BaseUri);
@@ -144,12 +144,12 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         // fanout transaction and head-of-line blocked the outbox.
         Assert.Equal(1, await fixture.RunFanoutBatchAsync());
 
-        var delivery = Assert.Single(await fixture.GetSubscriptionDeliveriesAsync(eventId));
+        var delivery = Assert.Single(await fixture.GetEventDeliveriesAsync(eventId));
         Assert.Equal("pending", delivery.Status);
 
         // A destination without a url normalizes to an empty snapshot url (never a NOT NULL stall),
         // while connector_key stays populated from the inner-joined connector.
-        var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
+        var snapshot = await fixture.GetEventDeliverySnapshotAsync(eventId);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
         Assert.Equal(string.Empty, executionSnapshot.BaseUri);
@@ -170,7 +170,7 @@ public sealed class TransformDeliveryTests : IClassFixture<WorkerRoutingFixture>
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
         Assert.Equal(1, await fixture.RunFanoutBatchAsync());
 
-        var snapshot = await fixture.GetSubscriptionDeliverySnapshotAsync(eventId);
+        var snapshot = await fixture.GetEventDeliverySnapshotAsync(eventId);
         HttpExecutionSnapshot executionSnapshot = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
             snapshot.HttpExecutionSnapshotJson, ConnectionSchemeSelection.StoredJson)!;
 

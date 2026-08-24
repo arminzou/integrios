@@ -35,7 +35,7 @@ public sealed class DeliveryRecoveryEndpoints : IEndpointGroup
         CancellationToken cancellationToken)
     {
         DeadLetterReplayResult result = await mediator.Send(
-            new ReplaySubscriptionDeliveryCommand(tenantId, eventId, deliveryId),
+            new ReplayEventDeliveryCommand(tenantId, eventId, deliveryId),
             cancellationToken);
 
         return result switch

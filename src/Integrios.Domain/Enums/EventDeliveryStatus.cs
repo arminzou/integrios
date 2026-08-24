@@ -1,6 +1,6 @@
 namespace Integrios.Domain.Enums;
 
-public enum SubscriptionDeliveryStatus
+public enum EventDeliveryStatus
 {
     Pending,
     InFlight,

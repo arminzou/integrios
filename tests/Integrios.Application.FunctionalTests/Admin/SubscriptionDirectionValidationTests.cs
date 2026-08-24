@@ -274,7 +274,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         string Name,
         JsonElement MatchRules,
         Guid DestinationConnectionId,
-        JsonElement? TransformConfig,
+        JsonElement? MappingConfig,
         string Status,
         int OrderIndex,
         string? Description,

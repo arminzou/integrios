@@ -10,7 +10,7 @@ internal sealed class IntakeTopicResolver(IDbConnectionFactory connectionFactory
     public async Task<Guid?> FindActiveSourceTopicAsync(
         Guid tenantId,
         string topicName,
-        Guid sourceConnectionId,
+        Guid sourceId,
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -22,24 +22,24 @@ internal sealed class IntakeTopicResolver(IDbConnectionFactory connectionFactory
                 $"""
                 SELECT {top}t.id
                 FROM topics t
-                JOIN topic_sources ts
-                  ON ts.tenant_id = t.tenant_id
-                 AND ts.topic_id = t.id
+                JOIN sources s
+                  ON s.tenant_id = t.tenant_id
+                 AND s.topic_id = t.id
                 JOIN connections c
-                  ON c.tenant_id = ts.tenant_id
-                 AND c.id = ts.connection_id
+                  ON c.tenant_id = s.tenant_id
+                 AND c.id = s.connection_id
                 JOIN connectors i ON i.id = c.connector_id
                 WHERE t.tenant_id = @TenantId
                   AND t.name = @TopicName
                   AND t.status = 'active'
-                  AND ts.status = 'active'
-                  AND c.id = @SourceConnectionId
+                  AND s.id = @SourceId
+                  AND s.status = 'active'
                   AND c.status = 'active'
                   AND i.status = 'active'
                   AND i.direction IN ('source', 'both')
                 {limit}
                 """,
-                new { TenantId = tenantId, TopicName = topicName, SourceConnectionId = sourceConnectionId },
+                new { TenantId = tenantId, TopicName = topicName, SourceId = sourceId },
                 cancellationToken: cancellationToken));
     }
 }

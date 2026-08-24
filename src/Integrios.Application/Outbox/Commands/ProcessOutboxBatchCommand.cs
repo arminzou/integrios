@@ -41,7 +41,7 @@ internal sealed class ProcessOutboxBatchCommandHandler(
 
             metrics.RecordFanoutRowsCreated(result.InsertedCount);
             logger.LogInformation(
-                "Fanned out Event {EventId} to {MatchedCount} Subscription(s) ({InsertedCount} new SubscriptionDelivery rows).",
+                "Fanned out Event {EventId} to {MatchedCount} Subscription(s) ({InsertedCount} new EventDelivery rows).",
                 result.EventId,
                 result.MatchedCount,
                 result.InsertedCount);

@@ -3,9 +3,9 @@ using Integrios.Domain.Enums;
 
 namespace Integrios.Application.Delivery;
 
-public interface ISubscriptionDeliveryQueue
+public interface IEventDeliveryQueue
 {
-    Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
+    Task<EventDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
         CancellationToken cancellationToken);
 
     Task<DeliveryFinalizationResult> FinalizeAsync(
@@ -13,21 +13,21 @@ public interface ISubscriptionDeliveryQueue
         CancellationToken cancellationToken);
 }
 
-public abstract record SubscriptionDeliveryClaimResult;
+public abstract record EventDeliveryClaimResult;
 
-public sealed record ClaimedSubscriptionDelivery(SubscriptionDeliveryWorkItem WorkItem)
-    : SubscriptionDeliveryClaimResult;
+public sealed record ClaimedEventDelivery(EventDeliveryWorkItem WorkItem)
+    : EventDeliveryClaimResult;
 
-public sealed record RecoveredSubscriptionDeliveryDeadLetter(
+public sealed record RecoveredEventDeliveryDeadLetter(
     Guid DeliveryId,
     Guid AttemptId,
     int AttemptNumber,
     Guid EventId,
     Guid SubscriptionId,
     string ConnectorKey)
-    : SubscriptionDeliveryClaimResult;
+    : EventDeliveryClaimResult;
 
-public sealed record SubscriptionDeliveryWorkItem(
+public sealed record EventDeliveryWorkItem(
     Guid Id,
     Guid AttemptId,
     int AttemptNumber,
@@ -40,7 +40,7 @@ public sealed record SubscriptionDeliveryWorkItem(
     string EventType,
     string? TopicName,
     DateTimeOffset AcceptedAt,
-    string? TransformConfigSnapshot,
+    string? MappingConfigSnapshot,
     string ConnectorKey,
     string HttpExecutionSnapshotJson,
     string? Traceparent);
@@ -63,7 +63,7 @@ public enum DeliveryFinalizationStatus
     OwnershipLost = 1
 }
 
-public enum SubscriptionDeliveryDisposition
+public enum EventDeliveryDisposition
 {
     Succeeded = 0,
     RetryScheduled = 1,
@@ -72,4 +72,4 @@ public enum SubscriptionDeliveryDisposition
 
 public sealed record DeliveryFinalizationResult(
     DeliveryFinalizationStatus Status,
-    SubscriptionDeliveryDisposition? Disposition = null);
+    EventDeliveryDisposition? Disposition = null);

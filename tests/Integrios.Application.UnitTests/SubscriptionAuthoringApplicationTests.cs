@@ -30,7 +30,7 @@ public sealed class SubscriptionAuthoringApplicationTests
     }
 
     [Fact]
-    public async Task CreateSubscription_InvalidTransformConfig_IsRejectedThroughMediator()
+    public async Task CreateSubscription_InvalidMappingConfig_IsRejectedThroughMediator()
     {
         await using AuthoringHarness harness = new(transformValidationError: "invalid transform expression");
 

@@ -37,7 +37,7 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
             .HasColumnType("jsonb")
             .HasColumnName("payload");
         entity.Property(e => e.ProcessedAt).HasColumnName("processed_at");
-        entity.Property(e => e.SourceConnectionId).HasColumnName("source_connection_id");
+        entity.Property(e => e.SourceId).HasColumnName("source_id");
         entity.Property(e => e.SourceEventId).HasColumnName("source_event_id");
         entity.Property(e => e.Status)
             .HasConversion(value => EventStatusMap.ToDbValue(value), value => EventStatusMap.FromDbValue(value))
@@ -51,18 +51,15 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
             .OnDelete(DeleteBehavior.ClientSetNull)
             .HasConstraintName("events_tenant_id_fkey");
 
-        entity.HasOne<Connection>().WithMany()
+        entity.HasOne<Source>().WithMany()
             .HasPrincipalKey(p => new { p.TenantId, p.Id })
-            .HasForeignKey(d => new { d.TenantId, d.SourceConnectionId })
-            .HasConstraintName("fk_events_source_connection_tenant");
+            .HasForeignKey(d => new { d.TenantId, d.SourceId })
+            .HasConstraintName("fk_events_source_tenant");
 
         entity.HasOne<Topic>().WithMany()
             .HasPrincipalKey(p => new { p.TenantId, p.Id })
             .HasForeignKey(d => new { d.TenantId, d.TopicId })
             .HasConstraintName("fk_events_topic_tenant");
 
-        entity.HasOne<TopicSource>().WithMany()
-            .HasForeignKey(d => new { d.TenantId, d.TopicId, d.SourceConnectionId })
-            .HasConstraintName("fk_events_topic_source");
     }
 }

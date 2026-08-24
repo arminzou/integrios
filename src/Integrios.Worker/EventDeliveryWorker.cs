@@ -3,21 +3,21 @@ using MediatR;
 
 namespace Integrios.Worker;
 
-internal sealed class SubscriptionDeliveryWorker : BackgroundService
+internal sealed class EventDeliveryWorker : BackgroundService
 {
     private readonly Func<CancellationToken, Task<int>> runBatch;
-    private readonly ILogger<SubscriptionDeliveryWorker> logger;
+    private readonly ILogger<EventDeliveryWorker> logger;
     private readonly DeliveryLoopOptions options;
     private readonly IWorkerLoopDelay delay;
 
-    public SubscriptionDeliveryWorker(
+    public EventDeliveryWorker(
         ISender sender,
-        ILogger<SubscriptionDeliveryWorker> logger,
+        ILogger<EventDeliveryWorker> logger,
         DeliveryLoopOptions options,
         IWorkerLoopDelay delay)
         : this(
             cancellationToken => sender.Send(
-                new DispatchSubscriptionDeliveriesCommand(options.BatchSize),
+                new DispatchEventDeliveriesCommand(options.BatchSize),
                 cancellationToken),
             logger,
             options,
@@ -25,9 +25,9 @@ internal sealed class SubscriptionDeliveryWorker : BackgroundService
     {
     }
 
-    internal SubscriptionDeliveryWorker(
+    internal EventDeliveryWorker(
         Func<CancellationToken, Task<int>> runBatch,
-        ILogger<SubscriptionDeliveryWorker> logger,
+        ILogger<EventDeliveryWorker> logger,
         DeliveryLoopOptions options,
         IWorkerLoopDelay delay)
     {
@@ -41,7 +41,7 @@ internal sealed class SubscriptionDeliveryWorker : BackgroundService
 
     internal Task RunAsync(CancellationToken stoppingToken) =>
         WorkerLoop.RunAsync(
-            nameof(SubscriptionDeliveryWorker),
+            nameof(EventDeliveryWorker),
             runBatch,
             options.IdlePollInterval,
             delay,

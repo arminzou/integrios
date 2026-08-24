@@ -23,7 +23,7 @@ internal static class WorkerHostServices
         services.AddSingleton(DeliveryLoopOptions.FromConfiguration(configuration));
         services.AddSingleton<IWorkerLoopDelay, WorkerLoopDelay>();
         services.AddHostedService<OutboxFanoutWorker>();
-        services.AddHostedService<SubscriptionDeliveryWorker>();
+        services.AddHostedService<EventDeliveryWorker>();
 
         return services;
     }

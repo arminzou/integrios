@@ -38,8 +38,8 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
         EventDto? history = await historyResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
         Assert.NotNull(history);
-        SubscriptionDeliveryDto delivery = Assert.Single(history.SubscriptionDeliveries);
-        Assert.Equal(deliveryId, delivery.SubscriptionDeliveryId);
+        EventDeliveryDto delivery = Assert.Single(history.EventDeliveries);
+        Assert.Equal(deliveryId, delivery.EventDeliveryId);
         Assert.Equal("dead_lettered", delivery.Status);
         Assert.Equal("failed", Assert.Single(history.DeliveryAttempts).Status);
 

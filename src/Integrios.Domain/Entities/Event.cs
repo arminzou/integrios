@@ -8,7 +8,7 @@ public sealed record Event
     public required Guid Id { get; init; }
     public required Guid TenantId { get; init; }
     public Guid? TopicId { get; init; }
-    public Guid? SourceConnectionId { get; init; }
+    public Guid? SourceId { get; init; }
     public string? SourceEventId { get; init; }
     public required string EventType { get; init; }
     public required JsonElement Payload { get; init; }

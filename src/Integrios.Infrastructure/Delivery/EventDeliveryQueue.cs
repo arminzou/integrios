@@ -8,10 +8,10 @@ using Npgsql;
 
 namespace Integrios.Infrastructure.Delivery;
 
-internal sealed class SubscriptionDeliveryQueue(
+internal sealed class EventDeliveryQueue(
     IDbConnectionFactory connectionFactory,
     DeliveryExecutionOptions options,
-    DeliveryOutcomePolicy outcomePolicy) : ISubscriptionDeliveryQueue
+    DeliveryOutcomePolicy outcomePolicy) : IEventDeliveryQueue
 {
     private static readonly TimeSpan[] FinalizationRetryDelays =
     [
@@ -19,18 +19,18 @@ internal sealed class SubscriptionDeliveryQueue(
         TimeSpan.FromMilliseconds(200)
     ];
 
-    internal async Task<SubscriptionDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken)
+    internal async Task<EventDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken)
     {
         while (true)
         {
-            SubscriptionDeliveryClaimResult? result = await ClaimNextWithRecoveryAsync(cancellationToken);
+            EventDeliveryClaimResult? result = await ClaimNextWithRecoveryAsync(cancellationToken);
             switch (result)
             {
                 case null:
                     return null;
-                case ClaimedSubscriptionDelivery claimed:
+                case ClaimedEventDelivery claimed:
                     return claimed.WorkItem;
-                case RecoveredSubscriptionDeliveryDeadLetter:
+                case RecoveredEventDeliveryDeadLetter:
                     continue;
                 default:
                     throw new InvalidOperationException($"Unknown delivery claim result '{result.GetType().Name}'.");
@@ -38,7 +38,7 @@ internal sealed class SubscriptionDeliveryQueue(
         }
     }
 
-    public async Task<SubscriptionDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
+    public async Task<EventDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -53,11 +53,11 @@ internal sealed class SubscriptionDeliveryQueue(
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
                     sd.active_attempt_id AS ActiveAttemptId, sd.connector_key AS ConnectorKey,
                     sd.http_execution_snapshot AS HttpExecutionSnapshotJson,
-                    sd.transform_config_snapshot AS TransformConfigSnapshot, sd.traceparent AS Traceparent,
+                    sd.mapping_config_snapshot AS MappingConfigSnapshot, sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId, tenant.slug AS TenantSlug, e.payload AS PayloadJson,
                     e.event_type AS EventType, e.accepted_at AS AcceptedAt, t.name AS TopicName,
                     SYSUTCDATETIME() AS DatabaseNow
-                FROM subscription_deliveries sd WITH (UPDLOCK, ROWLOCK, READPAST, READCOMMITTEDLOCK)
+                FROM event_deliveries sd WITH (UPDLOCK, ROWLOCK, READPAST, READCOMMITTEDLOCK)
                 JOIN events e ON e.id=sd.event_id
                 JOIN tenants tenant ON tenant.id=e.tenant_id
                 LEFT JOIN topics t ON t.id=e.topic_id
@@ -80,7 +80,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     sd.active_attempt_id AS ActiveAttemptId,
                     sd.connector_key AS ConnectorKey,
                     sd.http_execution_snapshot::text AS HttpExecutionSnapshotJson,
-                    sd.transform_config_snapshot AS TransformConfigSnapshot,
+                    sd.mapping_config_snapshot AS MappingConfigSnapshot,
                     sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId,
                     tenant.slug AS TenantSlug,
@@ -89,7 +89,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     e.accepted_at AS AcceptedAt,
                     t.name AS TopicName,
                     now() AS DatabaseNow
-                FROM subscription_deliveries sd
+                FROM event_deliveries sd
                 JOIN events e ON e.id = sd.event_id
                 JOIN tenants tenant ON tenant.id = e.tenant_id
                 LEFT JOIN topics t ON t.id = e.topic_id
@@ -122,7 +122,7 @@ internal sealed class SubscriptionDeliveryQueue(
                         completed_at = @DatabaseNow,
                         error_message = 'Lease expired before the owning worker finalized this attempt.'
                     WHERE id = @ActiveAttemptId
-                      AND subscription_delivery_id = @Id
+                      AND event_delivery_id = @Id
                       AND status = 'in_progress';
                     SELECT @@ROWCOUNT;
                     """
@@ -132,7 +132,7 @@ internal sealed class SubscriptionDeliveryQueue(
                         completed_at = @DatabaseNow,
                         error_message = 'Lease expired before the owning worker finalized this attempt.'
                     WHERE id = @ActiveAttemptId
-                      AND subscription_delivery_id = @Id
+                      AND event_delivery_id = @Id
                       AND status = 'in_progress';
                     """,
                 row,
@@ -151,12 +151,12 @@ internal sealed class SubscriptionDeliveryQueue(
                 row.RetryCycleAttemptCount,
                 row.DatabaseNow);
 
-            if (recoveryDecision.Disposition == SubscriptionDeliveryDisposition.DeadLettered)
+            if (recoveryDecision.Disposition == EventDeliveryDisposition.DeadLettered)
             {
                 await connection.ExecuteAsync(
                 new CommandDefinition(
                     """
-                        UPDATE subscription_deliveries
+                        UPDATE event_deliveries
                         SET status = 'dead_lettered',
                             active_attempt_id = NULL,
                             lease_expires_at = NULL,
@@ -170,7 +170,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     cancellationToken: cancellationToken));
 
                 await transaction.CommitAsync(cancellationToken);
-                return new RecoveredSubscriptionDeliveryDeadLetter(
+                return new RecoveredEventDeliveryDeadLetter(
                     row.Id,
                     row.ActiveAttemptId!.Value,
                     row.LifetimeAttemptCount,
@@ -192,7 +192,7 @@ internal sealed class SubscriptionDeliveryQueue(
             $"""
                 INSERT INTO delivery_attempts (
                     id,
-                    subscription_delivery_id,
+                    event_delivery_id,
                     attempt_number,
                     status,
                     started_at)
@@ -203,7 +203,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     'in_progress',
                     @DatabaseNow);
 
-                UPDATE subscription_deliveries
+                UPDATE event_deliveries
                 SET status = 'in_flight',
                     lifetime_attempt_count = @AttemptNumber,
                     retry_cycle_attempt_count = @RetryCycleAttemptCount,
@@ -228,7 +228,7 @@ internal sealed class SubscriptionDeliveryQueue(
 
         await transaction.CommitAsync(cancellationToken);
 
-        return new ClaimedSubscriptionDelivery(new SubscriptionDeliveryWorkItem(
+        return new ClaimedEventDelivery(new EventDeliveryWorkItem(
             row.Id,
             attemptId,
             attemptNumber,
@@ -241,7 +241,7 @@ internal sealed class SubscriptionDeliveryQueue(
             row.EventType ?? string.Empty,
             row.TopicName,
             row.AcceptedAt,
-            row.TransformConfigSnapshot,
+            row.MappingConfigSnapshot,
             row.ConnectorKey ?? string.Empty,
             row.HttpExecutionSnapshotJson ?? string.Empty,
             row.Traceparent));
@@ -283,7 +283,7 @@ internal sealed class SubscriptionDeliveryQueue(
                 ? """
                 SELECT id AS Id, status AS Status, active_attempt_id AS ActiveAttemptId,
                        retry_cycle_attempt_count AS RetryCycleAttemptCount, SYSUTCDATETIME() AS DatabaseNow
-                FROM subscription_deliveries WITH (UPDLOCK, ROWLOCK)
+                FROM event_deliveries WITH (UPDLOCK, ROWLOCK)
                 WHERE id = @DeliveryId;
                 """
                 : """
@@ -293,7 +293,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     active_attempt_id AS ActiveAttemptId,
                     retry_cycle_attempt_count AS RetryCycleAttemptCount,
                     now() AS DatabaseNow
-                FROM subscription_deliveries
+                FROM event_deliveries
                 WHERE id = @DeliveryId
                 FOR UPDATE;
                 """,
@@ -323,7 +323,7 @@ internal sealed class SubscriptionDeliveryQueue(
                 SET status = @AttemptStatus, failure_phase = @FailurePhase,
                     request_payload = @RequestPayloadJson, response_status_code = @ResponseStatusCode,
                     response_body = @ResponseBody, error_message = @ErrorMessage, completed_at = @DatabaseNow
-                WHERE id = @AttemptId AND subscription_delivery_id = @DeliveryId AND status = N'in_progress';
+                WHERE id = @AttemptId AND event_delivery_id = @DeliveryId AND status = N'in_progress';
                 SELECT @@ROWCOUNT;
                 """
                 : """
@@ -336,7 +336,7 @@ internal sealed class SubscriptionDeliveryQueue(
                     error_message = @ErrorMessage,
                     completed_at = @DatabaseNow
                 WHERE id = @AttemptId
-                  AND subscription_delivery_id = @DeliveryId
+                  AND event_delivery_id = @DeliveryId
                   AND status = 'in_progress';
                 """,
                 new
@@ -366,16 +366,16 @@ internal sealed class SubscriptionDeliveryQueue(
 
         string deliveryStatus = decision.Disposition switch
         {
-            SubscriptionDeliveryDisposition.Succeeded => "succeeded",
-            SubscriptionDeliveryDisposition.RetryScheduled => "pending",
-            SubscriptionDeliveryDisposition.DeadLettered => "dead_lettered",
+            EventDeliveryDisposition.Succeeded => "succeeded",
+            EventDeliveryDisposition.RetryScheduled => "pending",
+            EventDeliveryDisposition.DeadLettered => "dead_lettered",
             _ => throw new ArgumentOutOfRangeException()
         };
 
         int advanced = await connection.ExecuteAsync(
             new CommandDefinition(
                 """
-                UPDATE subscription_deliveries
+                UPDATE event_deliveries
                 SET status = @DeliveryStatus,
                     active_attempt_id = NULL,
                     lease_expires_at = NULL,
@@ -454,7 +454,7 @@ internal sealed class SubscriptionDeliveryQueue(
         public string? EventType { get; init; }
         public string? TopicName { get; init; }
         public DateTimeOffset AcceptedAt { get; init; }
-        public string? TransformConfigSnapshot { get; init; }
+        public string? MappingConfigSnapshot { get; init; }
         public string? ConnectorKey { get; init; }
         public string? HttpExecutionSnapshotJson { get; init; }
         public string? Traceparent { get; init; }

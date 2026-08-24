@@ -61,7 +61,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
             : await LoadCandidatesAsync(connection, dbTransaction, row.TopicId.Value, cancellationToken);
         var targets = SubscriptionRoutingEvaluator.SelectTargets(row.EventType, candidates);
 
-        var status = targets.Count == 0 ? EventStatus.Unrouted : EventStatus.FannedOut;
+        var status = targets.Count == 0 ? EventStatus.Unrouted : EventStatus.Routed;
         var insertedCount = await InsertDeliveriesAsync(
             connection,
             dbTransaction,
@@ -108,7 +108,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     s.destination_connection_id AS DestinationConnectionId,
                     s.order_index AS OrderIndex,
                     s.match_rules::text AS MatchRulesJson,
-                    s.transform_config::text AS TransformConfigJson,
+                    s.mapping_config::text AS MappingConfigJson,
                     s.http_delivery::text AS HttpDeliveryJson,
                     COALESCE(c.config->>'base_uri', '') AS DestinationUrl,
                     i.key AS ConnectorKey,
@@ -130,7 +130,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 row.DestinationConnectionId,
                 row.OrderIndex,
                 row.MatchRulesJson,
-                row.TransformConfigJson,
+                row.MappingConfigJson,
                 row.ConnectorKey,
                 BuildHttpExecutionSnapshotJson(
                     row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson, row.HttpSuccessJson)))
@@ -174,13 +174,13 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         return await connection.ExecuteAsync(
             new CommandDefinition(
                 """
-                INSERT INTO subscription_deliveries (
+                INSERT INTO event_deliveries (
                     event_id,
                     subscription_id,
                     destination_connection_id,
                     connector_key,
                     http_execution_snapshot,
-                    transform_config_snapshot,
+                    mapping_config_snapshot,
                     traceparent)
                 VALUES (
                     @EventId,
@@ -188,7 +188,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     @DestinationConnectionId,
                     @ConnectorKey,
                     @HttpExecutionSnapshotJson::jsonb,
-                    @TransformConfigJson::jsonb,
+                    @MappingConfigJson::jsonb,
                     @Traceparent)
                 ON CONFLICT (event_id, subscription_id) DO NOTHING
                 """,
@@ -199,7 +199,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     target.DestinationConnectionId,
                     target.ConnectorKey,
                     target.HttpExecutionSnapshotJson,
-                    target.TransformConfigJson,
+                    target.MappingConfigJson,
                     Traceparent = traceparent
                 }),
                 transaction,
@@ -221,7 +221,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         public Guid DestinationConnectionId { get; init; }
         public int OrderIndex { get; init; }
         public string? MatchRulesJson { get; init; }
-        public string? TransformConfigJson { get; init; }
+        public string? MappingConfigJson { get; init; }
         public string HttpDeliveryJson { get; init; } = "{}";
         public string DestinationUrl { get; init; } = string.Empty;
         public string ConnectorKey { get; init; } = string.Empty;

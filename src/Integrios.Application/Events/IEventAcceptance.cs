@@ -16,7 +16,7 @@ public sealed record EventSubmission
 {
     public required Guid TenantId { get; init; }
     public required Guid TopicId { get; init; }
-    public required Guid SourceConnectionId { get; init; }
+    public required Guid SourceId { get; init; }
     public string? SourceEventId { get; init; }
     public required string EventType { get; init; }
     public required JsonElement Payload { get; init; }

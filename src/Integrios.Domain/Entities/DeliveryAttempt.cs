@@ -6,7 +6,7 @@ namespace Integrios.Domain.Entities;
 public sealed record DeliveryAttempt
 {
     public required Guid Id { get; init; }
-    public required Guid SubscriptionDeliveryId { get; init; }
+    public required Guid EventDeliveryId { get; init; }
     public required int AttemptNumber { get; init; }
     public required DeliveryAttemptStatus Status { get; init; }
     public JsonElement? RequestPayload { get; init; }

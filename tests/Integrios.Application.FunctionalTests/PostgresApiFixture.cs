@@ -141,12 +141,21 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             "INSERT INTO topic_sources (tenant_id,topic_id,connection_id) VALUES (@TenantId,@TopicId,@ConnectionId)",
             new { TenantId = tenantId, TopicId = topicId, ConnectionId = connectionId });
 
+    public async Task<Guid> CreateEventApiSourceAsync(Guid tenantId, Guid connectionId, Guid topicId)
+    {
+        Guid sourceId = Guid.NewGuid();
+        await ExecuteAsync(
+            "INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status) VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'event_api', '{}'::jsonb, 'active')",
+            new { SourceId = sourceId, TenantId = tenantId, ConnectionId = connectionId, TopicId = topicId });
+        return sourceId;
+    }
+
     public Task RetireSourceAsync(Guid tenantId, Guid topicId, Guid connectionId) =>
         ExecuteAsync($"UPDATE topic_sources SET status='inactive',inactive_at={database.Now} WHERE tenant_id=@TenantId AND topic_id=@TopicId AND connection_id=@ConnectionId",
             new { TenantId = tenantId, TopicId = topicId, ConnectionId = connectionId });
 
-    public Task<Guid?> GetEventSourceConnectionIdAsync(Guid eventId) =>
-        ScalarAsync<Guid?>("SELECT source_connection_id FROM events WHERE id=@Id", new { Id = eventId });
+    public Task<Guid?> GetEventSourceIdAsync(Guid eventId) =>
+        ScalarAsync<Guid?>("SELECT source_id FROM events WHERE id=@Id", new { Id = eventId });
 
     public Task ForceEventStatusAsync(Guid eventId, string status) =>
         ExecuteAsync("UPDATE events SET status=@Status WHERE id=@Id", new { Status = status, Id = eventId });
@@ -166,7 +175,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','active');
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status)
             VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@MatchRules")}}},@ConnectionId,0,'active');
-            INSERT INTO subscription_deliveries
+            INSERT INTO event_deliveries
                 (event_id,subscription_id,destination_connection_id,http_execution_snapshot,connector_key,
                  status,lifetime_attempt_count,retry_cycle_attempt_count,failed_at)
             VALUES (@EventId,@SubscriptionId,@ConnectionId,{{{database.Json("@Snapshot")}}},'http',
@@ -189,7 +198,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public Task<int> GetEventCountAsync() => ScalarAsync<int>("SELECT COUNT(*) FROM events");
     public Task<int> GetOutboxCountAsync() => ScalarAsync<int>("SELECT COUNT(*) FROM outbox");
     public Task<string?> GetDeliveryStatusAsync(Guid eventId) =>
-        ScalarAsync<string?>("SELECT status FROM subscription_deliveries WHERE event_id=@Id", new { Id = eventId });
+        ScalarAsync<string?>("SELECT status FROM event_deliveries WHERE event_id=@Id", new { Id = eventId });
 
     private async Task ExecuteAsync(string sql, object? parameters = null)
     {

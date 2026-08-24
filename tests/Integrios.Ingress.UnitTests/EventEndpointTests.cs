@@ -60,7 +60,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
                 new DeliveryAttemptDto
                 {
                     AttemptId = attemptId,
-                    SubscriptionDeliveryId = Guid.NewGuid(),
+                    EventDeliveryId = Guid.NewGuid(),
                     SubscriptionId = Guid.NewGuid(),
                     DestinationConnectionId = Guid.NewGuid(),
                     AttemptNumber = 1,
@@ -85,7 +85,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
         Assert.Equal(expected.FailedAt, body.FailedAt);
         DeliveryAttemptDto attempt = Assert.Single(body.DeliveryAttempts);
         Assert.Equal(attemptId, attempt.AttemptId);
-        Assert.Equal(expected.DeliveryAttempts[0].SubscriptionDeliveryId, attempt.SubscriptionDeliveryId);
+        Assert.Equal(expected.DeliveryAttempts[0].EventDeliveryId, attempt.EventDeliveryId);
         Assert.Equal(expected.DeliveryAttempts[0].SubscriptionId, attempt.SubscriptionId);
         Assert.Equal(expected.DeliveryAttempts[0].DestinationConnectionId, attempt.DestinationConnectionId);
         Assert.Equal(1, attempt.AttemptNumber);
@@ -94,7 +94,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
     }
 
     [Fact]
-    public async Task PostEvent_MissingSourceConnectionId_Returns400()
+    public async Task PostEvent_MissingSourceId_Returns400()
     {
         (var apiKey, var tenant) = ApiKeyAuthHandlerTests.BuildValidApiKey(ApiKeyAuthHandlerTests.TestToken);
         fixture.ApiKeyRepository.Result = (apiKey, tenant);
@@ -118,7 +118,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
 
         var response = await client.SendAsync(AuthorizedRequest(new
         {
-            source_connection_id = Guid.NewGuid(),
+            source_id = Guid.NewGuid(),
             topic_name = "payments",
             event_type = "payment.created",
             payload = new { amount = 42 }

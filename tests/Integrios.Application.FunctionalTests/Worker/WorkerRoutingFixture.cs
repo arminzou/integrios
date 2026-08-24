@@ -43,9 +43,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private static readonly Guid OrphanTenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000009");
     private static readonly Guid SourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
     private static readonly Guid OrphanSourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000008");
+    private static readonly Guid SourceId = Guid.Parse("cccccccc-0000-0000-0000-00000000000a");
+    private static readonly Guid OrphanSourceId = Guid.Parse("cccccccc-0000-0000-0000-00000000000b");
     private static readonly Guid LedgerConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000003");
     private static readonly Guid RiskConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000004");
     private static readonly Guid TopicId = Guid.Parse("cccccccc-0000-0000-0000-000000000005");
+    private static readonly Guid OrphanTopicId = Guid.Parse("cccccccc-0000-0000-0000-00000000000c");
 
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;
@@ -60,7 +63,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public FakeDeliveryClient DeliveryClient { get; } = new();
     public MutableSecretResolver SecretResolver { get; } = new();
     private string ConnectionString => database.ConnectionString;
-    internal SubscriptionDeliveryQueue DeliveryQueue { get; private set; } = null!;
+    internal EventDeliveryQueue DeliveryQueue { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
@@ -72,7 +75,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             .BuildServiceProvider();
         var connectionFactory = infrastructureProvider.GetRequiredService<IDbConnectionFactory>();
         var outboxFanout = infrastructureProvider.GetRequiredService<IOutboxFanout>();
-        DeliveryQueue = (SubscriptionDeliveryQueue)infrastructureProvider.GetRequiredService<ISubscriptionDeliveryQueue>();
+        DeliveryQueue = (EventDeliveryQueue)infrastructureProvider.GetRequiredService<IEventDeliveryQueue>();
         dbContext = new IntegriosDbContext(database.CreateOptions());
         deadLetterReplay = new DeadLetterReplay(connectionFactory);
         subscriptionRepository = new SubscriptionRepository(dbContext);
@@ -85,7 +88,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton(subscriptionRepository);
         services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
         services.AddSingleton(infrastructureProvider.GetRequiredService<DeliveryExecutionOptions>());
-        services.AddSingleton<ISubscriptionDeliveryQueue>(DeliveryQueue);
+        services.AddSingleton<IEventDeliveryQueue>(DeliveryQueue);
         services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
         services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
         services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
@@ -119,19 +122,19 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task<int> RunWorkerBatchAsync()
     {
         await mediator.Send(new ProcessOutboxBatchCommand(10));
-        return await mediator.Send(new DispatchSubscriptionDeliveriesCommand(25));
+        return await mediator.Send(new DispatchEventDeliveriesCommand(25));
     }
 
     public Task<int> RunFanoutBatchAsync(int batchSize = 10) => mediator.Send(new ProcessOutboxBatchCommand(batchSize));
-    public Task<int> RunDeliveryBatchAsync(int batchSize = 25) => mediator.Send(new DispatchSubscriptionDeliveriesCommand(batchSize));
+    public Task<int> RunDeliveryBatchAsync(int batchSize = 25) => mediator.Send(new DispatchEventDeliveriesCommand(batchSize));
 
-    public async Task<IReadOnlyList<SubscriptionDeliveryState>> GetSubscriptionDeliveriesAsync(Guid eventId) =>
+    public async Task<IReadOnlyList<EventDeliveryState>> GetEventDeliveriesAsync(Guid eventId) =>
         (await QueryAsync<DeliveryRow>(
             """
             SELECT id AS Id, subscription_id AS SubscriptionId, status AS Status,
                 lifetime_attempt_count AS LifetimeAttemptCount, retry_cycle_attempt_count AS RetryCycleAttemptCount,
                 active_attempt_id AS ActiveAttemptId, lease_expires_at AS LeaseExpiresAt, deliver_after AS DeliverAfter
-            FROM subscription_deliveries WHERE event_id=@EventId ORDER BY created_at
+            FROM event_deliveries WHERE event_id=@EventId ORDER BY created_at
             """, new { EventId = eventId })).Select(ToState).ToList();
 
     public async Task<Guid> FanoutSingleDeliveryAsync(string eventType = "payment.created")
@@ -139,13 +142,13 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         Guid eventId = await InsertEventAndOutboxAsync(eventType);
         int processed = await RunFanoutBatchAsync();
         if (processed != 1) throw new InvalidOperationException($"Expected one Event to fan out, but processed {processed}.");
-        return Assert.Single(await GetSubscriptionDeliveriesAsync(eventId)).Id;
+        return Assert.Single(await GetEventDeliveriesAsync(eventId)).Id;
     }
 
     public async Task ForceLeaseExpiredAsync(Guid deliveryId)
     {
         int updated = await ExecuteAsync(
-            $"UPDATE subscription_deliveries SET lease_expires_at={database.OneSecondAgo} WHERE id=@DeliveryId AND status='in_flight'",
+            $"UPDATE event_deliveries SET lease_expires_at={database.OneSecondAgo} WHERE id=@DeliveryId AND status='in_flight'",
             new { DeliveryId = deliveryId });
         if (updated != 1) throw new InvalidOperationException($"Delivery {deliveryId} did not have an active lease to expire.");
     }
@@ -153,42 +156,42 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public async Task<IReadOnlyList<DeliveryAttemptState>> GetDeliveryAttemptsAsync(Guid deliveryId) =>
         (await QueryAsync<AttemptRow>(
             """
-            SELECT id AS Id, subscription_delivery_id AS SubscriptionDeliveryId, attempt_number AS AttemptNumber,
+            SELECT id AS Id, event_delivery_id AS EventDeliveryId, attempt_number AS AttemptNumber,
                 status AS Status, failure_phase AS FailurePhase, completed_at AS CompletedAt
-            FROM delivery_attempts WHERE subscription_delivery_id=@DeliveryId ORDER BY attempt_number
+            FROM delivery_attempts WHERE event_delivery_id=@DeliveryId ORDER BY attempt_number
             """, new { DeliveryId = deliveryId })).Select(row => new DeliveryAttemptState(
-                row.Id, row.SubscriptionDeliveryId, row.AttemptNumber, row.Status, row.FailurePhase, Offset(row.CompletedAt))).ToList();
+                row.Id, row.EventDeliveryId, row.AttemptNumber, row.Status, row.FailurePhase, Offset(row.CompletedAt))).ToList();
 
-    public async Task<SubscriptionDeliveryState> GetSubscriptionDeliveryAsync(Guid deliveryId)
+    public async Task<EventDeliveryState> GetEventDeliveryAsync(Guid deliveryId)
     {
         DeliveryRow? row = (await QueryAsync<DeliveryRow>(
             """
             SELECT id AS Id, subscription_id AS SubscriptionId, status AS Status,
                 lifetime_attempt_count AS LifetimeAttemptCount, retry_cycle_attempt_count AS RetryCycleAttemptCount,
                 active_attempt_id AS ActiveAttemptId, lease_expires_at AS LeaseExpiresAt, deliver_after AS DeliverAfter
-            FROM subscription_deliveries WHERE id=@DeliveryId
+            FROM event_deliveries WHERE id=@DeliveryId
             """, new { DeliveryId = deliveryId })).SingleOrDefault();
-        return row is null ? throw new InvalidOperationException($"No SubscriptionDelivery exists with id {deliveryId}.") : ToState(row);
+        return row is null ? throw new InvalidOperationException($"No EventDelivery exists with id {deliveryId}.") : ToState(row);
     }
 
-    public Task<int> GetSubscriptionDeliveryCountAsync(Guid eventId) =>
-        ScalarAsync<int>("SELECT COUNT(*) FROM subscription_deliveries WHERE event_id=@EventId", new { EventId = eventId });
+    public Task<int> GetEventDeliveryCountAsync(Guid eventId) =>
+        ScalarAsync<int>("SELECT COUNT(*) FROM event_deliveries WHERE event_id=@EventId", new { EventId = eventId });
 
     public Task ForceDeliveryRetryNowAsync(Guid eventId) => ExecuteAsync(
-        $"UPDATE subscription_deliveries SET deliver_after={database.OneSecondAgo} WHERE event_id=@EventId AND status='pending'",
+        $"UPDATE event_deliveries SET deliver_after={database.OneSecondAgo} WHERE event_id=@EventId AND status='pending'",
         new { EventId = eventId });
 
     public async Task<Guid> InsertEventAndOutboxAsync(string eventType)
     {
         Guid eventId = Guid.NewGuid();
-        await InsertEventRowAsync(eventId, TenantId, SourceConnectionId, eventType, TopicId);
+        await InsertEventRowAsync(eventId, TenantId, SourceId, eventType, TopicId);
         return eventId;
     }
 
     public async Task<Guid> InsertOrphanEventAndOutboxAsync(string eventType)
     {
         Guid eventId = Guid.NewGuid();
-        await InsertEventRowAsync(eventId, OrphanTenantId, OrphanSourceConnectionId, eventType, null);
+        await InsertEventRowAsync(eventId, OrphanTenantId, OrphanSourceId, eventType, null);
         return eventId;
     }
 
@@ -213,7 +216,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         $"UPDATE outbox SET deliver_after={database.OneSecondAgo} WHERE event_id=@EventId", new { EventId = eventId });
 
     public Task SetSubscriptionTransformByNameAsync(string subscriptionName, string? transformConfigJson) => ExecuteAsync(
-        $"UPDATE subscriptions SET transform_config={database.Json("@Config")} WHERE name=@Name",
+        $"UPDATE subscriptions SET mapping_config={database.Json("@Config")} WHERE name=@Name",
         new { Config = transformConfigJson, Name = subscriptionName });
 
     public async Task UpdateLedgerExecutionConfigurationAsync(
@@ -252,15 +255,15 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         $"UPDATE connections SET config={database.Json("@Config")} WHERE id=@LedgerConnectionId",
         new { Config = "{}", LedgerConnectionId });
 
-    public async Task<SubscriptionDeliverySnapshot> GetSubscriptionDeliverySnapshotAsync(Guid eventId)
+    public async Task<EventDeliverySnapshot> GetEventDeliverySnapshotAsync(Guid eventId)
     {
         SnapshotRow row = (await QueryAsync<SnapshotRow>($$$"""
             SELECT {{{database.JsonText("http_execution_snapshot")}}} AS HttpExecutionSnapshotJson,
-                connector_key AS ConnectorKey, {{{database.JsonText("transform_config_snapshot")}}} AS TransformConfigJson
-            FROM subscription_deliveries WHERE event_id=@EventId
+                connector_key AS ConnectorKey, {{{database.JsonText("mapping_config_snapshot")}}} AS MappingConfigJson
+            FROM event_deliveries WHERE event_id=@EventId
             """, new { EventId = eventId })).SingleOrDefault()
-            ?? throw new InvalidOperationException($"No SubscriptionDelivery exists for Event {eventId}.");
-        return new(row.HttpExecutionSnapshotJson, row.ConnectorKey, row.TransformConfigJson);
+            ?? throw new InvalidOperationException($"No EventDelivery exists for Event {eventId}.");
+        return new(row.HttpExecutionSnapshotJson, row.ConnectorKey, row.MappingConfigJson);
     }
 
     public async Task<SubscriptionDto> UpdateLedgerHttpDeliveryAsync(HttpDeliveryConfiguration httpDelivery)
@@ -273,7 +276,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             ?? throw new InvalidOperationException("The ledger Subscription could not be loaded.");
         Subscription? updated = await subscriptionRepository.UpdateAsync(
             TenantId, identity.TopicId, identity.Id, existing.Name, existing.MatchRules,
-            existing.DestinationConnectionId, existing.TransformConfig, httpDelivery,
+            existing.DestinationConnectionId, existing.MappingConfig, httpDelivery,
             existing.OrderIndex, existing.Description, CancellationToken.None);
         return SubscriptionDto.From(updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated."));
     }
@@ -282,19 +285,19 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         Guid eventId,
         Guid deliveryId,
         CancellationToken cancellationToken = default) =>
-        mediator.Send(new ReplaySubscriptionDeliveryCommand(TenantId, eventId, deliveryId), cancellationToken);
+        mediator.Send(new ReplayEventDeliveryCommand(TenantId, eventId, deliveryId), cancellationToken);
     public Task<EventDto?> GetEventDetailsAsync(Guid eventId, CancellationToken cancellationToken = default) =>
         eventLookup.GetByIdAsync(TenantId, eventId, cancellationToken);
 
     private Task InsertEventRowAsync(
-        Guid eventId, Guid tenantId, Guid sourceConnectionId, string eventType, Guid? topicId)
+        Guid eventId, Guid tenantId, Guid sourceId, string eventType, Guid? topicId)
     {
         string payload = JsonSerializer.Serialize(new { test = true });
         return ExecuteAsync($$$"""
-            INSERT INTO events (id,tenant_id,topic_id,source_connection_id,event_type,payload,status,accepted_at)
-            VALUES (@Id,@TenantId,@TopicId,@SourceConnectionId,@EventType,{{{database.Json("@Payload")}}},'accepted',{{{database.Now}}});
+            INSERT INTO events (id,tenant_id,topic_id,source_id,event_type,payload,status,accepted_at)
+            VALUES (@Id,@TenantId,@TopicId,@SourceId,@EventType,{{{database.Json("@Payload")}}},'accepted',{{{database.Now}}});
             INSERT INTO outbox (event_id,payload) VALUES (@Id,{{{database.Json("@Payload")}}});
-            """, new { Id = eventId, TenantId = tenantId, TopicId = topicId, SourceConnectionId = sourceConnectionId, EventType = eventType, Payload = payload });
+            """, new { Id = eventId, TenantId = tenantId, TopicId = topicId, SourceId = sourceId, EventType = eventType, Payload = payload });
     }
 
     private Task SeedRoutingDataAsync(DbConnection connection)
@@ -314,7 +317,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@OrphanSourceConnectionId,@OrphanTenantId,@ConnectorId,'orphan-source',{{{database.Json("@EmptyConfig")}}},'active'),
                 (@LedgerConnectionId,@TenantId,@ConnectorId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'active'),
                 (@RiskConnectionId,@TenantId,@ConnectorId,'risk-sink',{{{database.Json("@RiskConfig")}}},'active');
-            INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'test-topic','active');
+            INSERT INTO topics (id,tenant_id,name,status) VALUES
+                (@TopicId,@TenantId,'test-topic','active'),
+                (@OrphanTopicId,@OrphanTenantId,'orphan-topic','active');
+            INSERT INTO sources (id,tenant_id,connection_id,topic_id,type,configuration,status) VALUES
+                (@SourceId,@TenantId,@SourceConnectionId,@TopicId,'event_api',{{{database.Json("@EmptyConfig")}}},'active'),
+                (@OrphanSourceId,@OrphanTenantId,@OrphanSourceConnectionId,@OrphanTopicId,'event_api',{{{database.Json("@EmptyConfig")}}},'active');
             INSERT INTO topic_sources (tenant_id,topic_id,connection_id) VALUES (@TenantId,@TopicId,@SourceConnectionId);
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status) VALUES
                 (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerConnectionId,0,'active'),
@@ -323,9 +331,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         {
             ConnectorId = HttpConnectorId, Schemes = "[]", Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
             TenantId, OrphanTenantId, ApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
-            SourceConnectionId, OrphanSourceConnectionId, LedgerConnectionId, RiskConnectionId,
+            SourceConnectionId, OrphanSourceConnectionId, SourceId, OrphanSourceId, LedgerConnectionId, RiskConnectionId,
             EmptyConfig = "{}", LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),
-            RiskConfig = JsonSerializer.Serialize(new { base_uri = RiskSinkUrl }), TopicId,
+            RiskConfig = JsonSerializer.Serialize(new { base_uri = RiskSinkUrl }), TopicId, OrphanTopicId,
             LedgerSubscriptionId = Guid.NewGuid(), RiskSubscriptionId = Guid.NewGuid(),
             LedgerRules = "{\"event_types\":[\"payment.created\",\"payment.settled\",\"payment.multi\"]}",
             RiskRules = "{\"event_types\":[\"payment.authorized\",\"payment.multi\"]}"
@@ -377,16 +385,16 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         BEGIN
             RAISE EXCEPTION 'injected claim failure';
         END $$;
-        CREATE TRIGGER test_fail_delivery_claim BEFORE UPDATE ON subscription_deliveries
+        CREATE TRIGGER test_fail_delivery_claim BEFORE UPDATE ON event_deliveries
             FOR EACH ROW WHEN (OLD.status = 'pending' AND NEW.status = 'in_flight')
             EXECUTE FUNCTION test_fail_delivery_claim();
         """,
         """
-        DROP TRIGGER IF EXISTS test_fail_delivery_claim ON subscription_deliveries;
+        DROP TRIGGER IF EXISTS test_fail_delivery_claim ON event_deliveries;
         DROP FUNCTION IF EXISTS test_fail_delivery_claim();
         """,
         """
-        CREATE TRIGGER test_fail_delivery_claim ON subscription_deliveries AFTER UPDATE AS
+        CREATE TRIGGER test_fail_delivery_claim ON event_deliveries AFTER UPDATE AS
         BEGIN
             IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON i.id=d.id
                 WHERE d.status=N'pending' AND i.status=N'in_flight')
@@ -402,16 +410,16 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         BEGIN
             RAISE EXCEPTION 'injected finalization failure';
         END $$;
-        CREATE TRIGGER test_fail_delivery_finalization BEFORE UPDATE ON subscription_deliveries
+        CREATE TRIGGER test_fail_delivery_finalization BEFORE UPDATE ON event_deliveries
             FOR EACH ROW WHEN (OLD.status = 'in_flight' AND NEW.status <> 'in_flight')
             EXECUTE FUNCTION test_fail_delivery_finalization();
         """,
         """
-        DROP TRIGGER IF EXISTS test_fail_delivery_finalization ON subscription_deliveries;
+        DROP TRIGGER IF EXISTS test_fail_delivery_finalization ON event_deliveries;
         DROP FUNCTION IF EXISTS test_fail_delivery_finalization();
         """,
         """
-        CREATE TRIGGER test_fail_delivery_finalization ON subscription_deliveries AFTER UPDATE AS
+        CREATE TRIGGER test_fail_delivery_finalization ON event_deliveries AFTER UPDATE AS
         BEGIN
             IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON i.id=d.id
                 WHERE d.status=N'in_flight' AND i.status<>N'in_flight')
@@ -488,7 +496,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                     "SELECT COUNT(*) FROM ##finalization_retry_signal WITH (NOLOCK)") > 0,
                 "Finalization did not reach the SQL Server deadlock barrier within five seconds.");
             await blocker.ExecuteAsync(
-                "UPDATE subscription_deliveries SET updated_at=updated_at WHERE status=N'in_flight'",
+                "UPDATE event_deliveries SET updated_at=updated_at WHERE status=N'in_flight'",
                 transaction: transaction).WaitAsync(TimeSpan.FromSeconds(5));
             await transaction.RollbackAsync();
             await actionTask;
@@ -509,11 +517,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal async Task RunExpiredLeaseRaceAsync(bool finalizationWins)
     {
         Guid deliveryId = await FanoutSingleDeliveryAsync();
-        SubscriptionDeliveryWorkItem first = Assert.IsType<SubscriptionDeliveryWorkItem>(
+        EventDeliveryWorkItem first = Assert.IsType<EventDeliveryWorkItem>(
             await DeliveryQueue.ClaimNextAsync(CancellationToken.None));
         await ForceLeaseExpiredAsync(deliveryId);
 
-        (DeliveryFinalizationResult finalization, SubscriptionDeliveryWorkItem? reclaim) =
+        (DeliveryFinalizationResult finalization, EventDeliveryWorkItem? reclaim) =
             database.Provider == "postgres"
                 ? await RunPostgresExpiredLeaseRaceAsync(first, finalizationWins)
                 : await RunSqlServerExpiredLeaseRaceAsync(first, finalizationWins);
@@ -521,9 +529,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         if (finalizationWins)
         {
             Assert.Equal(DeliveryFinalizationStatus.Applied, finalization.Status);
-            Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, finalization.Disposition);
+            Assert.Equal(EventDeliveryDisposition.Succeeded, finalization.Disposition);
             Assert.Null(reclaim);
-            Assert.Equal("succeeded", (await GetSubscriptionDeliveryAsync(deliveryId)).Status);
+            Assert.Equal("succeeded", (await GetEventDeliveryAsync(deliveryId)).Status);
             Assert.Equal("succeeded", Assert.Single(await GetDeliveryAttemptsAsync(deliveryId)).Status);
             return;
         }
@@ -536,8 +544,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             (await GetDeliveryAttemptsAsync(deliveryId)).Select(attempt => attempt.Status));
     }
 
-    private async Task<(DeliveryFinalizationResult, SubscriptionDeliveryWorkItem?)>
-        RunPostgresExpiredLeaseRaceAsync(SubscriptionDeliveryWorkItem first, bool finalizationWins)
+    private async Task<(DeliveryFinalizationResult, EventDeliveryWorkItem?)>
+        RunPostgresExpiredLeaseRaceAsync(EventDeliveryWorkItem first, bool finalizationWins)
     {
         const long advisoryLockKey = 8_931_047_221;
         string blockedStatus = finalizationWins ? "succeeded" : "indeterminate";
@@ -559,7 +567,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await barrier.OpenAsync();
         await barrier.ExecuteScalarAsync("SELECT pg_advisory_lock(@LockKey)", new { LockKey = advisoryLockKey });
         Task<DeliveryFinalizationResult>? finalizationTask = null;
-        Task<SubscriptionDeliveryWorkItem?>? reclaimTask = null;
+        Task<EventDeliveryWorkItem?>? reclaimTask = null;
 
         try
         {
@@ -592,7 +600,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                             SELECT 1 FROM pg_stat_activity
                             WHERE datname = current_database()
                               AND wait_event_type = 'Lock'
-                              AND query LIKE '%FROM subscription_deliveries%FOR UPDATE%')
+                              AND query LIKE '%FROM event_deliveries%FOR UPDATE%')
                         """);
                 }, "The stale finalization did not block behind the PostgreSQL reclaim transaction.");
             }
@@ -613,8 +621,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         }
     }
 
-    private async Task<(DeliveryFinalizationResult, SubscriptionDeliveryWorkItem?)>
-        RunSqlServerExpiredLeaseRaceAsync(SubscriptionDeliveryWorkItem first, bool finalizationWins)
+    private async Task<(DeliveryFinalizationResult, EventDeliveryWorkItem?)>
+        RunSqlServerExpiredLeaseRaceAsync(EventDeliveryWorkItem first, bool finalizationWins)
     {
         const string resource = "delivery-race";
         string blockedStatus = finalizationWins ? "succeeded" : "indeterminate";
@@ -642,7 +650,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             new { Resource = resource });
         bool barrierHeld = true;
         Task<DeliveryFinalizationResult>? finalizationTask = null;
-        Task<SubscriptionDeliveryWorkItem?>? reclaimTask = null;
+        Task<EventDeliveryWorkItem?>? reclaimTask = null;
 
         try
         {
@@ -691,7 +699,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         }
     }
 
-    private static DeliveryAttemptCompletion Success(SubscriptionDeliveryWorkItem item) =>
+    private static DeliveryAttemptCompletion Success(EventDeliveryWorkItem item) =>
         new(item.Id, item.AttemptId, true, null, item.PayloadJson, 200, null, null);
 
     private static async Task WaitUntilAsync(Func<Task<bool>> condition, string timeoutMessage)
@@ -743,7 +751,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await connection.OpenAsync();
         return await connection.QueryAsync<T>(sql, parameters);
     }
-    private static SubscriptionDeliveryState ToState(DeliveryRow row) => new(
+    private static EventDeliveryState ToState(DeliveryRow row) => new(
         row.Id, row.SubscriptionId, row.Status, row.LifetimeAttemptCount, row.RetryCycleAttemptCount,
         row.ActiveAttemptId, Offset(row.LeaseExpiresAt), Offset(row.DeliverAfter));
     private static DateTimeOffset? Offset(object? value) => value switch
@@ -768,18 +776,18 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private sealed record AttemptRow
     {
         public Guid Id { get; init; }
-        public Guid SubscriptionDeliveryId { get; init; }
+        public Guid EventDeliveryId { get; init; }
         public int AttemptNumber { get; init; }
         public string Status { get; init; } = string.Empty;
         public string? FailurePhase { get; init; }
         public object? CompletedAt { get; init; }
     }
     private sealed record OutboxRetryRow { public int AttemptCount { get; init; } public object? DeliverAfter { get; init; } }
-    private sealed record SnapshotRow { public string HttpExecutionSnapshotJson { get; init; } = string.Empty; public string ConnectorKey { get; init; } = string.Empty; public string? TransformConfigJson { get; init; } }
+    private sealed record SnapshotRow { public string HttpExecutionSnapshotJson { get; init; } = string.Empty; public string ConnectorKey { get; init; } = string.Empty; public string? MappingConfigJson { get; init; } }
     private sealed record SubscriptionIdentity { public Guid Id { get; init; } public Guid TopicId { get; init; } }
 }
 
-public sealed record SubscriptionDeliveryState(
+public sealed record EventDeliveryState(
     Guid Id, Guid SubscriptionId, string Status, int LifetimeAttemptCount,
     int RetryCycleAttemptCount, Guid? ActiveAttemptId, DateTimeOffset? LeaseExpiresAt, DateTimeOffset? DeliverAfter)
 {
@@ -787,11 +795,11 @@ public sealed record SubscriptionDeliveryState(
 }
 
 public sealed record DeliveryAttemptState(
-    Guid Id, Guid SubscriptionDeliveryId, int AttemptNumber, string Status,
+    Guid Id, Guid EventDeliveryId, int AttemptNumber, string Status,
     string? FailurePhase, DateTimeOffset? CompletedAt);
 
-public sealed record SubscriptionDeliverySnapshot(
-    string HttpExecutionSnapshotJson, string ConnectorKey, string? TransformConfigJson);
+public sealed record EventDeliverySnapshot(
+    string HttpExecutionSnapshotJson, string ConnectorKey, string? MappingConfigJson);
 
 public sealed class FakeDeliveryClient : IDeliveryClient
 {

@@ -37,7 +37,7 @@ internal sealed class PreviewSourceContractQueryHandler(ITransformEvaluator eval
             }
         }
 
-        string? mappingError = TransformConfigValidator.Validate(
+        string? mappingError = MappingConfigValidator.Validate(
             query.Mapping, evaluator, "mapping", out TransformSpec? mapping);
         if (mappingError is not null || mapping is null)
             return Task.FromResult(new PreviewSourceContractResult(mappingError, null));

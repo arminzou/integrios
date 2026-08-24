@@ -19,7 +19,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     private readonly string tenantBAuthHeaderValue;
     private HttpClient client = null!;
     private Guid defaultTopicId;
-    private Guid defaultSourceConnectionId;
+    private Guid defaultSourceId;
 
     public EventsAcceptanceBoundaryTests(PostgresApiFixture fixture)
     {
@@ -31,9 +31,9 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task InitializeAsync()
     {
         await fixture.ResetDataAsync();
-        defaultSourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "payments-source");
+        Guid sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "payments-source");
         defaultTopicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
-        await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, defaultSourceConnectionId);
+        defaultSourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, sourceConnectionId, defaultTopicId);
         client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -63,7 +63,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Assert.Equal(1, await fixture.GetEventCountAsync());
         Assert.Equal(1, await fixture.GetOutboxCountAsync());
 
-        Assert.Equal(defaultSourceConnectionId, await fixture.GetEventSourceConnectionIdAsync(body.EventId));
+        Assert.Equal(defaultSourceId, await fixture.GetEventSourceIdAsync(body.EventId));
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task GetEventsById_ReturnsFannedOutStatus_WhenEventFannedOut()
+    public async Task GetEventsById_ReturnsRoutedStatus_WhenEventRouted()
     {
         var request = BuildRequest(idempotencyKey: "idem-evt-fannedout-1");
         var postResponse = await PostEventAsync(request);
@@ -96,18 +96,18 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         Assert.NotNull(postBody);
 
-        await fixture.ForceEventStatusAsync(postBody.EventId, "fanned_out");
+        await fixture.ForceEventStatusAsync(postBody.EventId, "routed");
 
         var getResponse = await GetEventAsync(postBody.EventId);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
         var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
         Assert.NotNull(getBody);
-        Assert.Equal(EventStatus.FannedOut, getBody.Status);
+        Assert.Equal(EventStatus.Routed, getBody.Status);
 
         // Wire format: status is the canonical snake_case string, not the enum's integer.
         var raw = await (await GetEventAsync(postBody.EventId)).Content.ReadAsStringAsync();
-        Assert.Contains("\"status\":\"fanned_out\"", raw);
+        Assert.Contains("\"status\":\"routed\"", raw);
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var request = new IngestEventRequest
         {
             TopicName = "payments",
-            SourceConnectionId = defaultSourceConnectionId,
+            SourceId = defaultSourceId,
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
         };
@@ -195,7 +195,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var request = new IngestEventRequest
         {
             TopicName = "nonexistent-topic",
-            SourceConnectionId = defaultSourceConnectionId,
+            SourceId = defaultSourceId,
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"amount":500}""").RootElement.Clone(),
         };
@@ -208,7 +208,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task PostEvents_WithUnassociatedSourceConnection_Returns422()
     {
         var sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "unassociated-source");
-        var request = BuildRequest("idem-unassociated") with { SourceConnectionId = sourceConnectionId };
+        var request = BuildRequest("idem-unassociated") with { SourceId = sourceConnectionId };
 
         var response = await PostEventAsync(request);
 
@@ -221,7 +221,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var sourceConnectionId = await fixture.SeedSourceConnectionAsync(
             fixture.TenantAId, "inactive-source", status: "disabled");
         await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
-        var request = BuildRequest("idem-inactive") with { SourceConnectionId = sourceConnectionId };
+        var request = BuildRequest("idem-inactive") with { SourceId = sourceConnectionId };
 
         var response = await PostEventAsync(request);
 
@@ -234,7 +234,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var sourceConnectionId = await fixture.SeedSourceConnectionAsync(
             fixture.TenantAId, "destination-only", direction: "destination");
         await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
-        var request = BuildRequest("idem-destination-only") with { SourceConnectionId = sourceConnectionId };
+        var request = BuildRequest("idem-destination-only") with { SourceId = sourceConnectionId };
 
         var response = await PostEventAsync(request);
 
@@ -245,7 +245,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task PostEvents_WithOtherTenantSourceConnection_Returns422()
     {
         var sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantBId, "other-tenant-source");
-        var request = BuildRequest("idem-other-tenant") with { SourceConnectionId = sourceConnectionId };
+        var request = BuildRequest("idem-other-tenant") with { SourceId = sourceConnectionId };
 
         var response = await PostEventAsync(request);
 
@@ -258,7 +258,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var sourceConnectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "retired-source");
         await fixture.AssociateSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
         await fixture.RetireSourceAsync(fixture.TenantAId, defaultTopicId, sourceConnectionId);
-        var request = BuildRequest("idem-retired") with { SourceConnectionId = sourceConnectionId };
+        var request = BuildRequest("idem-retired") with { SourceId = sourceConnectionId };
 
         var response = await PostEventAsync(request);
 
@@ -272,7 +272,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         return new IngestEventRequest
         {
             SourceEventId = "evt_src_123",
-            SourceConnectionId = defaultSourceConnectionId,
+            SourceId = defaultSourceId,
             TopicName = "payments",
             EventType = "payment.created",
             Payload = JsonDocument.Parse("""{"paymentId":"pay_123","amount":1200}""").RootElement.Clone(),

@@ -29,7 +29,7 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
             tenantId = submission.TenantId,
             submission.EventType,
             submission.SourceEventId,
-            submission.SourceConnectionId,
+            submission.SourceId,
             submission.IdempotencyKey,
             submission.Payload,
             submission.Metadata,
@@ -43,13 +43,19 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
 
         try
         {
+            bool activeSource = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+                "SELECT EXISTS (SELECT 1 FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status='active')",
+                new { submission.TenantId, submission.SourceId, submission.TopicId }, dbTransaction, cancellationToken: cancellationToken));
+            if (!activeSource)
+                throw new EventAcceptanceException("The Source is not active for the requested Topic.");
+
             await connection.ExecuteAsync(new CommandDefinition(
                 """
                 INSERT INTO events (
-                    id, tenant_id, topic_id, source_connection_id, source_event_id,
+                    id, tenant_id, topic_id, source_id, source_event_id,
                     event_type, payload, metadata, idempotency_key, status, accepted_at)
                 VALUES (
-                    @EventId, @TenantId, @TopicId, @SourceConnectionId, @SourceEventId,
+                    @EventId, @TenantId, @TopicId, @SourceId, @SourceEventId,
                     @EventType, CAST(@PayloadJson AS jsonb), CAST(@MetadataJson AS jsonb),
                     @IdempotencyKey, 'accepted', @AcceptedAt)
                 """,
@@ -58,7 +64,7 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
                     EventId = eventId,
                     submission.TenantId,
                     submission.TopicId,
-                    submission.SourceConnectionId,
+                    submission.SourceId,
                     submission.SourceEventId,
                     submission.EventType,
                     PayloadJson = payloadJson,

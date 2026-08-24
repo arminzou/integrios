@@ -12,15 +12,15 @@ internal static class ConsistencyContractAssertions
         Assert.Equal(1, processedCounts.Sum());
         Assert.Equal(1, await getDeliveryCount(eventId));
         Assert.True(await isOutboxProcessed(eventId));
-        Assert.Equal("fanned_out", await getEventStatus(eventId));
+        Assert.Equal("routed", await getEventStatus(eventId));
     }
 
     internal static async Task ClaimFailureRollsBackAsync(
         Guid deliveryId,
-        Func<Guid, Task<SubscriptionDeliveryState>> getDelivery,
+        Func<Guid, Task<EventDeliveryState>> getDelivery,
         Func<Guid, Task<IReadOnlyList<DeliveryAttemptState>>> getAttempts)
     {
-        SubscriptionDeliveryState delivery = await getDelivery(deliveryId);
+        EventDeliveryState delivery = await getDelivery(deliveryId);
         Assert.Equal("pending", delivery.Status);
         Assert.Equal(0, delivery.LifetimeAttemptCount);
         Assert.Equal(0, delivery.RetryCycleAttemptCount);
@@ -31,10 +31,10 @@ internal static class ConsistencyContractAssertions
     internal static async Task FinalizationFailureRollsBackAsync(
         Guid deliveryId,
         Guid attemptId,
-        Func<Guid, Task<SubscriptionDeliveryState>> getDelivery,
+        Func<Guid, Task<EventDeliveryState>> getDelivery,
         Func<Guid, Task<IReadOnlyList<DeliveryAttemptState>>> getAttempts)
     {
-        SubscriptionDeliveryState delivery = await getDelivery(deliveryId);
+        EventDeliveryState delivery = await getDelivery(deliveryId);
         Assert.Equal("in_flight", delivery.Status);
         Assert.Equal(attemptId, delivery.ActiveAttemptId);
         Assert.NotNull(delivery.LeaseExpiresAt);

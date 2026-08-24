@@ -30,7 +30,7 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
         await ConsistencyContractAssertions.FanoutProcessesOnceAsync(
             eventId,
             processedCounts,
-            fixture.GetSubscriptionDeliveryCountAsync,
+            fixture.GetEventDeliveryCountAsync,
             fixture.IsOutboxRowProcessedAsync,
             fixture.GetEventStatusAsync);
     }
@@ -47,13 +47,13 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
 
         Assert.Equal(0, await fixture.RunFanoutBatchAsync(1));
         Assert.False(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal(0, await fixture.GetSubscriptionDeliveryCountAsync(eventId));
+        Assert.Equal(0, await fixture.GetEventDeliveryCountAsync(eventId));
 
         await ownerTransaction.RollbackAsync();
 
         Assert.Equal(1, await fixture.RunFanoutBatchAsync(1));
         Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal(1, await fixture.GetSubscriptionDeliveryCountAsync(eventId));
+        Assert.Equal(1, await fixture.GetEventDeliveryCountAsync(eventId));
     }
 
     [Fact]
@@ -67,13 +67,13 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
 
             Assert.False(await fixture.IsOutboxRowProcessedAsync(eventId));
             Assert.Equal("accepted", await fixture.GetEventStatusAsync(eventId));
-            Assert.Equal(0, await fixture.GetSubscriptionDeliveryCountAsync(eventId));
+            Assert.Equal(0, await fixture.GetEventDeliveryCountAsync(eventId));
         });
 
         Assert.Equal(1, await fixture.RunFanoutBatchAsync(1));
         Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal("fanned_out", await fixture.GetEventStatusAsync(eventId));
-        Assert.Equal(1, await fixture.GetSubscriptionDeliveryCountAsync(eventId));
+        Assert.Equal("routed", await fixture.GetEventStatusAsync(eventId));
+        Assert.Equal(1, await fixture.GetEventDeliveryCountAsync(eventId));
     }
 
     [Fact]
@@ -88,19 +88,19 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
 
         Assert.Equal(eventCount, fanoutCounts.Sum());
         Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM outbox WHERE processed_at IS NOT NULL"));
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM events WHERE status = 'fanned_out'"));
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM subscription_deliveries"));
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM events WHERE status = 'routed'"));
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM event_deliveries"));
         Assert.Equal(0, await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM (SELECT event_id, subscription_id FROM subscription_deliveries GROUP BY event_id, subscription_id HAVING COUNT(*) > 1) duplicates"));
+            "SELECT COUNT(*) FROM (SELECT event_id, subscription_id FROM event_deliveries GROUP BY event_id, subscription_id HAVING COUNT(*) > 1) duplicates"));
 
         int[] deliveryCounts = await Task.WhenAll(DeliverUntilEmptyAsync(), DeliverUntilEmptyAsync())
             .WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(eventCount, deliveryCounts.Sum());
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM subscription_deliveries WHERE status = 'succeeded'"));
+        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM event_deliveries WHERE status = 'succeeded'"));
         Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM delivery_attempts WHERE status = 'succeeded'"));
         Assert.Equal(0, await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM (SELECT subscription_delivery_id, attempt_number FROM delivery_attempts GROUP BY subscription_delivery_id, attempt_number HAVING COUNT(*) > 1) duplicates"));
+            "SELECT COUNT(*) FROM (SELECT event_delivery_id, attempt_number FROM delivery_attempts GROUP BY event_delivery_id, attempt_number HAVING COUNT(*) > 1) duplicates"));
 
         async Task<int> FanoutUntilEmptyAsync()
         {
@@ -131,7 +131,7 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
                         null),
                     CancellationToken.None);
                 Assert.Equal(DeliveryFinalizationStatus.Applied, result.Status);
-                Assert.Equal(SubscriptionDeliveryDisposition.Succeeded, result.Disposition);
+                Assert.Equal(EventDeliveryDisposition.Succeeded, result.Disposition);
                 total++;
             }
             return total;

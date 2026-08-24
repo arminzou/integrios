@@ -17,7 +17,7 @@ public sealed record CreateSubscriptionCommand(
     string Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
-    JsonElement? TransformConfig,
+    JsonElement? MappingConfig,
     HttpDeliveryConfiguration HttpDelivery,
     int OrderIndex,
     string? Description) : IRequest<SubscriptionDto?>;
@@ -33,7 +33,7 @@ internal sealed class CreateSubscriptionCommandHandler(
 {
     public async Task<SubscriptionDto?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
     {
-        SubscriptionAuthoringRules.Validate(command.MatchRules, command.TransformConfig, command.HttpDelivery, transformEvaluator);
+        SubscriptionAuthoringRules.Validate(command.MatchRules, command.MappingConfig, command.HttpDelivery, transformEvaluator);
 
         var topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken);
         if (topic is null)
@@ -53,7 +53,7 @@ internal sealed class CreateSubscriptionCommandHandler(
             command.Name,
             command.MatchRules,
             command.DestinationConnectionId,
-            command.TransformConfig,
+            command.MappingConfig,
             command.HttpDelivery,
             command.OrderIndex,
             command.Description,

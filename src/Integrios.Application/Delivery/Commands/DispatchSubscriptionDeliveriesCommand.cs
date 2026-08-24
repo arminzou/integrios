@@ -14,29 +14,29 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Delivery;
 
-public sealed record DispatchSubscriptionDeliveriesCommand(int BatchSize) : IRequest<int>;
+public sealed record DispatchEventDeliveriesCommand(int BatchSize) : IRequest<int>;
 
-internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
-    ISubscriptionDeliveryQueue deliveryQueue,
+internal sealed class DispatchEventDeliveriesCommandHandler(
+    IEventDeliveryQueue deliveryQueue,
     IDeliveryClient deliveryClient,
     ITransformEvaluator transformEvaluator,
     IAuthSchemeRegistry authSchemeRegistry,
     IDestinationAuthenticationSecretResolver secretResolver,
     DeliveryExecutionOptions executionOptions,
     IntegriosMetrics metrics,
-    ILogger<DispatchSubscriptionDeliveriesCommandHandler> logger) : IRequestHandler<DispatchSubscriptionDeliveriesCommand, int>
+    ILogger<DispatchEventDeliveriesCommandHandler> logger) : IRequestHandler<DispatchEventDeliveriesCommand, int>
 {
-    public async Task<int> Handle(DispatchSubscriptionDeliveriesCommand command, CancellationToken cancellationToken)
+    public async Task<int> Handle(DispatchEventDeliveriesCommand command, CancellationToken cancellationToken)
     {
         int processedCount = 0;
 
         while (processedCount < command.BatchSize && !cancellationToken.IsCancellationRequested)
         {
-            SubscriptionDeliveryClaimResult? claim = await deliveryQueue.ClaimNextWithRecoveryAsync(cancellationToken);
+            EventDeliveryClaimResult? claim = await deliveryQueue.ClaimNextWithRecoveryAsync(cancellationToken);
             if (claim is null)
                 break;
 
-            if (claim is RecoveredSubscriptionDeliveryDeadLetter recovered)
+            if (claim is RecoveredEventDeliveryDeadLetter recovered)
             {
                 metrics.RecordDeliveryDeadLettered(recovered.ConnectorKey);
                 logger.LogWarning(
@@ -49,10 +49,10 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                 continue;
             }
 
-            if (claim is not ClaimedSubscriptionDelivery claimed)
+            if (claim is not ClaimedEventDelivery claimed)
                 throw new InvalidOperationException($"Unknown delivery claim result '{claim.GetType().Name}'.");
 
-            SubscriptionDeliveryWorkItem row = claimed.WorkItem;
+            EventDeliveryWorkItem row = claimed.WorkItem;
 
             try
             {
@@ -73,7 +73,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
         return processedCount;
     }
 
-    private async Task DispatchAsync(SubscriptionDeliveryWorkItem row)
+    private async Task DispatchAsync(EventDeliveryWorkItem row)
     {
         using var attemptDeadline = new CancellationTokenSource(executionOptions.AttemptDeadline);
         CancellationToken cancellationToken = attemptDeadline.Token;
@@ -146,7 +146,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     }
 
     private async Task FinalizeAsync(
-        SubscriptionDeliveryWorkItem row,
+        EventDeliveryWorkItem row,
         string? requestPayload,
         DeliveryResult result,
         TimeSpan duration,
@@ -186,7 +186,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
 
         switch (finalization.Disposition)
         {
-            case SubscriptionDeliveryDisposition.Succeeded:
+            case EventDeliveryDisposition.Succeeded:
                 metrics.RecordDeliverySucceeded(row.ConnectorKey);
                 logger.LogInformation(
                     "Delivery succeeded for attempt_id={AttemptId}, delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
@@ -195,11 +195,11 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
                     row.SubscriptionId,
                     row.EventId);
                 break;
-            case SubscriptionDeliveryDisposition.RetryScheduled:
+            case EventDeliveryDisposition.RetryScheduled:
                 metrics.RecordDeliveryFailed(row.ConnectorKey, HttpStatusClass(result));
                 LogFailure(row, result, failurePhase, "scheduled for retry");
                 break;
-            case SubscriptionDeliveryDisposition.DeadLettered:
+            case EventDeliveryDisposition.DeadLettered:
                 metrics.RecordDeliveryDeadLettered(row.ConnectorKey);
                 LogFailure(row, result, failurePhase, "dead-lettered");
                 break;
@@ -213,7 +213,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     // would make a later rule change start failing deliveries that are already in flight, which is
     // the exact drift the snapshot exists to prevent. Only the format version is checked, because a
     // future version may mean something this build cannot execute.
-    private static HttpExecutionSnapshot ReadSnapshot(SubscriptionDeliveryWorkItem row)
+    private static HttpExecutionSnapshot ReadSnapshot(EventDeliveryWorkItem row)
     {
         try
         {
@@ -235,7 +235,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     }
 
     private async Task<OutboundHttpMessage> BuildOutboundRequestAsync(
-        SubscriptionDeliveryWorkItem row,
+        EventDeliveryWorkItem row,
         HttpExecutionSnapshot snapshot,
         string? transformedPayload,
         CancellationToken cancellationToken)
@@ -322,7 +322,7 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
     }
 
     private void LogFailure(
-        SubscriptionDeliveryWorkItem row,
+        EventDeliveryWorkItem row,
         DeliveryResult result,
         DeliveryFailurePhase? failurePhase,
         string disposition)
@@ -364,16 +364,16 @@ internal sealed class DispatchSubscriptionDeliveriesCommandHandler(
             _ => "error"
         };
 
-    private (string? payload, string? error) ApplyTransform(SubscriptionDeliveryWorkItem row)
+    private (string? payload, string? error) ApplyTransform(EventDeliveryWorkItem row)
     {
-        if (string.IsNullOrWhiteSpace(row.TransformConfigSnapshot))
+        if (string.IsNullOrWhiteSpace(row.MappingConfigSnapshot))
         {
             return (row.PayloadJson, null);
         }
 
         try
         {
-            using var doc = JsonDocument.Parse(row.TransformConfigSnapshot);
+            using var doc = JsonDocument.Parse(row.MappingConfigSnapshot);
             JsonElement root = doc.RootElement;
             if (!root.TryGetProperty("engine", out JsonElement engineEl)
                 || !root.TryGetProperty("version", out JsonElement versionEl)

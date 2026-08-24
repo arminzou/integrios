@@ -10,7 +10,7 @@ public enum EventStatus
 {
     Accepted,
     Processing,
-    FannedOut,
+    Routed,
     Unrouted,
     Failed,
     DeadLettered
@@ -25,7 +25,7 @@ public static class EventStatusMap
         {
             [EventStatus.Accepted] = "accepted",
             [EventStatus.Processing] = "processing",
-            [EventStatus.FannedOut] = "fanned_out",
+            [EventStatus.Routed] = "routed",
             [EventStatus.Unrouted] = "unrouted",
             [EventStatus.Failed] = "failed",
             [EventStatus.DeadLettered] = "dead_lettered",

@@ -13,5 +13,5 @@ public sealed record IngestEventRequest
     // Tenant-scoped deduplication key for acceptance-boundary idempotency.
     public string? IdempotencyKey { get; init; }
     public required string TopicName { get; init; }
-    public required Guid SourceConnectionId { get; init; }
+    public required Guid SourceId { get; init; }
 }

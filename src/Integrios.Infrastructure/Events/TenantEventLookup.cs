@@ -39,11 +39,11 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
         if (row is null)
             return null;
 
-        var deliveries = await connection.QueryAsync<SubscriptionDeliveryRow>(
+        var deliveries = await connection.QueryAsync<EventDeliveryRow>(
             new CommandDefinition(
                 """
                 SELECT
-                    id                        AS SubscriptionDeliveryId,
+                    id                        AS EventDeliveryId,
                     subscription_id           AS SubscriptionId,
                     destination_connection_id AS DestinationConnectionId,
                     status                    AS Status,
@@ -51,7 +51,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                     retry_cycle_attempt_count AS RetryCycleAttemptCount,
                     deliver_after             AS DeliverAfter,
                     failed_at                 AS FailedAt
-                FROM subscription_deliveries
+                FROM event_deliveries
                 WHERE event_id = @EventId
                 ORDER BY id;
                 """,
@@ -63,7 +63,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                 """
                 SELECT
                     da.id                        AS AttemptId,
-                    sd.id                        AS SubscriptionDeliveryId,
+                    sd.id                        AS EventDeliveryId,
                     sd.subscription_id           AS SubscriptionId,
                     sd.destination_connection_id AS DestinationConnectionId,
                     da.attempt_number            AS AttemptNumber,
@@ -74,7 +74,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                     da.started_at                AS StartedAt,
                     da.completed_at              AS CompletedAt
                 FROM delivery_attempts da
-                JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id
+                JOIN event_deliveries sd ON sd.id = da.event_delivery_id
                 WHERE sd.event_id = @EventId
                 ORDER BY sd.id, da.attempt_number, da.started_at;
                 """,
@@ -84,7 +84,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
         var attemptDtos = attempts.Select(a => new DeliveryAttemptDto
         {
             AttemptId = a.AttemptId,
-            SubscriptionDeliveryId = a.SubscriptionDeliveryId,
+            EventDeliveryId = a.EventDeliveryId,
             SubscriptionId = a.SubscriptionId,
             DestinationConnectionId = a.DestinationConnectionId,
             AttemptNumber = a.AttemptNumber,
@@ -102,9 +102,9 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
             FailedAt = row.FailedAt,
-            SubscriptionDeliveries = deliveries.Select(delivery => new SubscriptionDeliveryDto
+            EventDeliveries = deliveries.Select(delivery => new EventDeliveryDto
             {
-                SubscriptionDeliveryId = delivery.SubscriptionDeliveryId,
+                EventDeliveryId = delivery.EventDeliveryId,
                 SubscriptionId = delivery.SubscriptionId,
                 DestinationConnectionId = delivery.DestinationConnectionId,
                 Status = delivery.Status,
@@ -129,7 +129,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
     private sealed record DeliveryAttemptRow
     {
         public Guid AttemptId { get; init; }
-        public Guid SubscriptionDeliveryId { get; init; }
+        public Guid EventDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
         public Guid DestinationConnectionId { get; init; }
         public int AttemptNumber { get; init; }
@@ -141,9 +141,9 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
         public DateTimeOffset? CompletedAt { get; init; }
     }
 
-    private sealed record SubscriptionDeliveryRow
+    private sealed record EventDeliveryRow
     {
-        public Guid SubscriptionDeliveryId { get; init; }
+        public Guid EventDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
         public Guid DestinationConnectionId { get; init; }
         public string Status { get; init; } = "";

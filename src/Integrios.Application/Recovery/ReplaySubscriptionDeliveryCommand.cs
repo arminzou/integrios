@@ -3,21 +3,21 @@ using MediatR;
 
 namespace Integrios.Application.Recovery;
 
-public sealed record ReplaySubscriptionDeliveryCommand(
+public sealed record ReplayEventDeliveryCommand(
     Guid TenantId,
     Guid EventId,
-    Guid SubscriptionDeliveryId)
+    Guid EventDeliveryId)
     : IRequest<DeadLetterReplayResult>;
 
-internal sealed class ReplaySubscriptionDeliveryCommandHandler(IDeadLetterReplay deadLetterReplay)
-    : IRequestHandler<ReplaySubscriptionDeliveryCommand, DeadLetterReplayResult>
+internal sealed class ReplayEventDeliveryCommandHandler(IDeadLetterReplay deadLetterReplay)
+    : IRequestHandler<ReplayEventDeliveryCommand, DeadLetterReplayResult>
 {
     public Task<DeadLetterReplayResult> Handle(
-        ReplaySubscriptionDeliveryCommand command,
+        ReplayEventDeliveryCommand command,
         CancellationToken cancellationToken) =>
         deadLetterReplay.ReplayAsync(
             command.TenantId,
             command.EventId,
-            command.SubscriptionDeliveryId,
+            command.EventDeliveryId,
             cancellationToken);
 }

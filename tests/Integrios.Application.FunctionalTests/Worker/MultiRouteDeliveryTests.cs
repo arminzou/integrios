@@ -24,7 +24,7 @@ public sealed class MultiRouteDeliveryTests : IClassFixture<WorkerRoutingFixture
         Assert.Contains(fixture.DeliveryClient.Calls, c => c.Url == WorkerRoutingFixture.LedgerSinkUrl);
         Assert.Contains(fixture.DeliveryClient.Calls, c => c.Url == WorkerRoutingFixture.RiskSinkUrl);
 
-        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
         Assert.Equal(2, deliveries.Count);
         Assert.All(deliveries, d => Assert.Equal("succeeded", d.Status));
 
@@ -44,8 +44,8 @@ public sealed class MultiRouteDeliveryTests : IClassFixture<WorkerRoutingFixture
         // Outbox is processed after Stage 1 regardless of per-subscription outcomes
         Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
 
-        // Each subscription_delivery has its own retry state — independent failure isolation
-        var deliveries = await fixture.GetSubscriptionDeliveriesAsync(eventId);
+        // Each event_delivery has its own retry state — independent failure isolation
+        var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
         Assert.Equal(2, deliveries.Count);
         Assert.All(deliveries, d =>
         {

@@ -12,7 +12,7 @@ namespace Integrios.Worker.UnitTests;
 
 public sealed class IngestMetricsTests
 {
-    private static readonly Guid SourceConnectionId = Guid.NewGuid();
+    private static readonly Guid SourceId = Guid.NewGuid();
 
     [Fact]
     public async Task IngestEventCommand_OnAcceptance_IncrementsEventsIngested()
@@ -87,7 +87,7 @@ public sealed class IngestMetricsTests
         EventSubmission submission = Assert.IsType<EventSubmission>(acceptance.LastSubmission);
         Assert.Equal(command.TenantId, submission.TenantId);
         Assert.Equal(topicId, submission.TopicId);
-        Assert.Equal(command.SourceConnectionId, submission.SourceConnectionId);
+        Assert.Equal(command.SourceId, submission.SourceId);
         Assert.Equal(command.SourceEventId, submission.SourceEventId);
         Assert.Equal(command.EventType, submission.EventType);
         Assert.Equal(command.Payload.GetRawText(), submission.Payload.GetRawText());
@@ -97,7 +97,7 @@ public sealed class IngestMetricsTests
 
     private static IngestEventCommand MakeCommand() => new(
         Guid.NewGuid(),
-        SourceConnectionId,
+        SourceId,
         "payments",
         SourceEventId: null,
         "payment.created",

@@ -5,7 +5,7 @@ namespace Integrios.Application.Transforms;
 
 // Shared by Subscription transform and Source-contract mapping authoring: both declare the same
 // {engine, version, expression} document shape and reuse the one JSONata evaluator.
-internal static class TransformConfigValidator
+internal static class MappingConfigValidator
 {
     private const int MaxExpressionBytes = 64 * 1024;
 

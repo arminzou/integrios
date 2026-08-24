@@ -8,6 +8,7 @@ using Integrios.Application.Events;
 using Integrios.Application.Connectors;
 using Integrios.Application.Outbox;
 using Integrios.Application.Secrets;
+using Integrios.Application.Sources;
 using Integrios.Application.Subscriptions;
 using Integrios.Application.Tenants;
 using Integrios.Application.Topics;
@@ -45,7 +46,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingress],
         [typeof(ISecretValidationCatalog)] = [Host.Worker],
-        [typeof(ISubscriptionDeliveryQueue)] = [Host.Worker],
+        [typeof(ISourceRepository)] = [Host.Admin],
+        [typeof(IEventDeliveryQueue)] = [Host.Worker],
         [typeof(ISubscriptionRepository)] = [Host.Admin],
         [typeof(ITenantRepository)] = [Host.Admin],
         [typeof(ITopicRepository)] = [Host.Admin],
@@ -174,7 +176,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ISourceTopicLookup>(scope.ServiceProvider);
         AssertOmits<ISecretValidationCatalog>(scope.ServiceProvider);
         AssertOmits<IOutboxFanout>(scope.ServiceProvider);
-        AssertOmits<ISubscriptionDeliveryQueue>(scope.ServiceProvider);
+        AssertOmits<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertOmits<IDeliveryClient>(scope.ServiceProvider);
         AssertOmits<IDestinationAuthenticationSecretResolver>(scope.ServiceProvider);
         AssertOmits<ISourceVerificationSecretResolver>(scope.ServiceProvider);
@@ -209,7 +211,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
         AssertOmits<IOutboxFanout>(provider);
-        AssertOmits<ISubscriptionDeliveryQueue>(provider);
+        AssertOmits<IEventDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
         AssertOmits<IAuthSchemeRegistry>(provider);
         AssertOmits<ITransformEvaluator>(provider);
@@ -231,7 +233,7 @@ public sealed class HostCompositionArchitectureTests
 
         AssertResolves<ISecretValidationCatalog>(scope.ServiceProvider);
         AssertResolves<IOutboxFanout>(provider);
-        AssertResolves<ISubscriptionDeliveryQueue>(scope.ServiceProvider);
+        AssertResolves<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertResolves<IDeliveryClient>(scope.ServiceProvider);
         AssertResolves<IAuthSchemeRegistry>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);

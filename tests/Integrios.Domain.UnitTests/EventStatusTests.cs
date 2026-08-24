@@ -15,7 +15,7 @@ public class EventStatusTests
 
     [Theory]
     [InlineData(EventStatus.Accepted, "accepted")]
-    [InlineData(EventStatus.FannedOut, "fanned_out")]
+    [InlineData(EventStatus.Routed, "routed")]
     [InlineData(EventStatus.Unrouted, "unrouted")]
     [InlineData(EventStatus.DeadLettered, "dead_lettered")]
     public void DbValue_IsSnakeCase(EventStatus status, string expected)
@@ -24,8 +24,8 @@ public class EventStatusTests
     [Fact]
     public void JsonConverter_SerializesAsSnakeCaseString()
     {
-        Assert.Equal("\"fanned_out\"", JsonSerializer.Serialize(EventStatus.FannedOut));
-        Assert.Equal(EventStatus.FannedOut, JsonSerializer.Deserialize<EventStatus>("\"fanned_out\""));
+        Assert.Equal("\"routed\"", JsonSerializer.Serialize(EventStatus.Routed));
+        Assert.Equal(EventStatus.Routed, JsonSerializer.Deserialize<EventStatus>("\"routed\""));
     }
 
     [Fact]

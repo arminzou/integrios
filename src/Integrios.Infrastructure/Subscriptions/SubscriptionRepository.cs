@@ -45,7 +45,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             Name = name,
             MatchRules = matchRules,
             DestinationConnectionId = destinationConnectionId,
-            TransformConfig = NormalizeNullableJson(transformConfig),
+            MappingConfig = NormalizeNullableJson(transformConfig),
             HttpDelivery = httpDelivery,
             Status = OperationalStatus.Active,
             OrderIndex = orderIndex,
@@ -140,7 +140,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
                     .SetProperty(subscription => subscription.Name, name)
                     .SetProperty(subscription => subscription.MatchRules, matchRules)
                     .SetProperty(subscription => subscription.DestinationConnectionId, destinationConnectionId)
-                    .SetProperty(subscription => subscription.TransformConfig, NormalizeNullableJson(transformConfig))
+                    .SetProperty(subscription => subscription.MappingConfig, NormalizeNullableJson(transformConfig))
                     .SetProperty(subscription => subscription.HttpDelivery, httpDelivery)
                     .SetProperty(subscription => subscription.OrderIndex, orderIndex)
                     .SetProperty(subscription => subscription.Description, description)

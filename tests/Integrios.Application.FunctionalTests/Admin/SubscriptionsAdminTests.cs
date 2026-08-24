@@ -274,7 +274,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
         string eventType,
         int orderIndex = 10,
         string? description = null,
-        JsonElement? transform = null)
+        JsonElement? mapping = null)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -286,7 +286,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = orderIndex,
                 description,
-                transform
+                mapping
             }));
 
         response.EnsureSuccessStatusCode();
@@ -319,17 +319,17 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 1,
-                transform = transformElement
+                mapping = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
-        Assert.NotNull(body.TransformConfig);
-        Assert.Equal("jsonata", body.TransformConfig.Value.GetProperty("engine").GetString());
-        Assert.Equal("1", body.TransformConfig.Value.GetProperty("version").GetString());
-        Assert.Equal("$.amount", body.TransformConfig.Value.GetProperty("expression").GetString());
+        Assert.NotNull(body.MappingConfig);
+        Assert.Equal("jsonata", body.MappingConfig.Value.GetProperty("engine").GetString());
+        Assert.Equal("1", body.MappingConfig.Value.GetProperty("version").GetString());
+        Assert.Equal("$.amount", body.MappingConfig.Value.GetProperty("expression").GetString());
     }
 
     [Fact]
@@ -346,14 +346,14 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 1,
-                transform = (object?)null
+                mapping = (object?)null
             }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
-        Assert.Null(body.TransformConfig);
+        Assert.Null(body.MappingConfig);
     }
 
     [Fact]
@@ -374,15 +374,15 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 10,
-                transform = transformElement
+                mapping = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
-        Assert.NotNull(body.TransformConfig);
-        Assert.Equal("$.amount * 2", body.TransformConfig.Value.GetProperty("expression").GetString());
+        Assert.NotNull(body.MappingConfig);
+        Assert.Equal("$.amount * 2", body.MappingConfig.Value.GetProperty("expression").GetString());
     }
 
     [Fact]
@@ -391,7 +391,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
         var topic = await CreateTopicAsync("payments");
         var transformJson = """{"engine":"jsonata","version":"1","expression":"$.amount"}""";
         var transformElement = JsonDocument.Parse(transformJson).RootElement;
-        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created", transform: transformElement);
+        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created", mapping: transformElement);
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -402,14 +402,14 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 10,
-                transform = (object?)null
+                mapping = (object?)null
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         Assert.NotNull(body);
-        Assert.Null(body.TransformConfig);
+        Assert.Null(body.MappingConfig);
     }
 
     [Theory]
@@ -428,7 +428,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 1,
-                transform = transformElement
+                mapping = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -450,7 +450,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 1,
-                transform = transformElement
+                mapping = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -472,7 +472,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 1,
-                transform = transformElement
+                mapping = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -493,7 +493,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 1,
-                transform = transformElement
+                mapping = transformElement
             }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -512,7 +512,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = fixture.SourceConnectionId,
                 order_index = 10,
-                transform = new
+                mapping = new
                 {
                     engine = "jsonata",
                     version = "1",
@@ -525,14 +525,14 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
     }
 
     [Fact]
-    public async Task PreviewTransform_InvalidConfig_ReturnsBadRequestWithErrorBody()
+    public async Task PreviewMapping_InvalidConfig_ReturnsBadRequestWithErrorBody()
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             "/admin/transform/preview",
             new
             {
-                transform = new { engine = "jsonata", version = "1" },
+                mapping = new { engine = "jsonata", version = "1" },
                 sample_input = new { amount = 42 }
             }));
 
@@ -542,14 +542,14 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
     }
 
     [Fact]
-    public async Task PreviewTransform_EvaluationFailure_ReturnsBadRequestWithErrorBody()
+    public async Task PreviewMapping_EvaluationFailure_ReturnsBadRequestWithErrorBody()
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             "/admin/transform/preview",
             new
             {
-                transform = new
+                mapping = new
                 {
                     engine = "jsonata",
                     version = "1",
@@ -669,7 +669,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
         string Name,
         JsonElement MatchRules,
         Guid DestinationConnectionId,
-        JsonElement? TransformConfig,
+        JsonElement? MappingConfig,
         string Status,
         int OrderIndex,
         string? Description,

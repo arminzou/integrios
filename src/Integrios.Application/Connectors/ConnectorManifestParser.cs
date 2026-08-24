@@ -248,7 +248,7 @@ public static partial class ConnectorManifestParser
                 if (declaresMapping)
                 {
                     JsonElement mappingDocument = entryDocument.GetProperty("mapping");
-                    string? mappingError = TransformConfigValidator.Validate(
+                    string? mappingError = MappingConfigValidator.Validate(
                         mappingDocument, mappingEvaluator, $"{path}.mapping", out _);
                     if (mappingError is not null)
                         throw Invalid(mappingError);

@@ -8,7 +8,7 @@ namespace Integrios.Application.Events;
 
 public sealed record IngestEventCommand(
     Guid TenantId,
-    Guid SourceConnectionId,
+    Guid SourceId,
     string TopicName,
     string? SourceEventId,
     string EventType,
@@ -29,7 +29,7 @@ internal sealed class IngestEventCommandHandler(
         var topicId = await topicResolver.FindActiveSourceTopicAsync(
                 command.TenantId,
                 command.TopicName,
-                command.SourceConnectionId,
+                command.SourceId,
                 cancellationToken)
             ?? throw new EventAcceptanceException(
                 "The source connection must be active, source-capable, belong to this tenant, and be associated with the selected topic.");
@@ -39,7 +39,7 @@ internal sealed class IngestEventCommandHandler(
         var activity = Activity.Current;
         activity?.SetTag("tenant_id", command.TenantId);
         activity?.SetTag("topic_id", topicId);
-        activity?.SetTag("source_connection_id", command.SourceConnectionId);
+        activity?.SetTag("source_id", command.SourceId);
         activity?.SetTag("idempotency_key", command.IdempotencyKey);
 
         var accepted = await eventAcceptance.AcceptAsync(
@@ -47,7 +47,7 @@ internal sealed class IngestEventCommandHandler(
             {
                 TenantId = command.TenantId,
                 TopicId = topicId,
-                SourceConnectionId = command.SourceConnectionId,
+                SourceId = command.SourceId,
                 SourceEventId = command.SourceEventId,
                 EventType = command.EventType,
                 Payload = command.Payload,
@@ -64,7 +64,7 @@ internal sealed class IngestEventCommandHandler(
             ["event_id"] = accepted.EventId,
             ["tenant_id"] = command.TenantId,
             ["topic_id"] = topicId,
-            ["source_connection_id"] = command.SourceConnectionId
+            ["source_id"] = command.SourceId
         });
 
         if (!accepted.AlreadyAccepted)

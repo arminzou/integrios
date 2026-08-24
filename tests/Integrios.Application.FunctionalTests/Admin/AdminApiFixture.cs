@@ -65,6 +65,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         Guid destinationConnectionId = Guid.NewGuid();
         Guid subscriptionId = Guid.NewGuid();
         Guid eventId = Guid.NewGuid();
+        Guid sourceId = Guid.NewGuid();
         Guid deliveryId = Guid.NewGuid();
         Guid attemptId = Guid.NewGuid();
 
@@ -75,25 +76,27 @@ public sealed class AdminApiFixture : IAsyncLifetime
             VALUES (@DestinationConnectionId, @TenantId, @ConnectorId, @DestinationName,
                 {{{database.Json("@DestinationConfig")}}}, 'active');
             INSERT INTO topics (id, tenant_id, name, status) VALUES (@TopicId, @TenantId, @TopicName, 'active');
-            INSERT INTO topic_sources (tenant_id, topic_id, connection_id) VALUES (@TenantId, @TopicId, @SourceConnectionId);
+            INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status)
+            VALUES (@SourceId, @TenantId, @SourceConnectionId, @TopicId, 'event_api', {{{database.Json("@SourceConfig")}}}, 'active');
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
             VALUES (@SubscriptionId, @TenantId, @TopicId, @SubscriptionName,
                 {{{database.Json("@MatchRules")}}}, @DestinationConnectionId, 0, 'active');
-            INSERT INTO events (id, tenant_id, topic_id, source_connection_id, event_type, payload, status)
-            VALUES (@EventId, @TenantId, @TopicId, @SourceConnectionId, 'recovery.test',
-                {{{database.Json("@Payload")}}}, 'fanned_out');
-            INSERT INTO subscription_deliveries
+            INSERT INTO events (id, tenant_id, topic_id, source_id, event_type, payload, status)
+            VALUES (@EventId, @TenantId, @TopicId, @SourceId, 'recovery.test',
+                {{{database.Json("@Payload")}}}, 'routed');
+            INSERT INTO event_deliveries
                 (id, event_id, subscription_id, destination_connection_id, http_execution_snapshot, connector_key,
                  status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
             VALUES (@DeliveryId, @EventId, @SubscriptionId, @DestinationConnectionId,
                 {{{database.Json("@Snapshot")}}}, 'http', 'dead_lettered', 1, 1, {{{database.Now}}});
             INSERT INTO delivery_attempts
-                (id, subscription_delivery_id, attempt_number, status, failure_phase, started_at, completed_at)
+                (id, event_delivery_id, attempt_number, status, failure_phase, started_at, completed_at)
             VALUES (@AttemptId, @DeliveryId, 1, 'failed', 'http', {{{database.Now}}}, {{{database.Now}}});
             """, new
         {
             TenantId,
             SourceConnectionId,
+            SourceId = sourceId,
             ConnectorId = HttpConnectorId,
             DestinationConnectionId = destinationConnectionId,
             TopicId = topicId,
@@ -107,6 +110,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
             DestinationConfig = "{\"base_uri\":\"http://localhost:5054/sink/recovery\"}",
             MatchRules = "{\"event_types\":[\"recovery.test\"]}",
             Payload = "{\"recovery\":true}",
+            SourceConfig = "{}",
             Snapshot = "{\"version\":1,\"base_uri\":\"http://localhost:5054/sink/recovery\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}"
         });
 
@@ -118,7 +122,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         return await connection.ExecuteScalarAsync<string?>(
-            "SELECT status FROM subscription_deliveries WHERE id = @DeliveryId",
+            "SELECT status FROM event_deliveries WHERE id = @DeliveryId",
             new { DeliveryId = deliveryId });
     }
 

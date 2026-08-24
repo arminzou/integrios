@@ -8,7 +8,7 @@ public enum DeliveryOutcomeKind
 }
 
 public sealed record DeliveryOutcomeDecision(
-    SubscriptionDeliveryDisposition Disposition,
+    EventDeliveryDisposition Disposition,
     DateTimeOffset? DeliverAfter = null);
 
 public sealed class DeliveryOutcomePolicy(RetryPolicy retryPolicy)
@@ -21,15 +21,15 @@ public sealed class DeliveryOutcomePolicy(RetryPolicy retryPolicy)
         TimeSpan? retryAfter = null)
     {
         if (outcome == DeliveryOutcomeKind.Succeeded)
-            return new(SubscriptionDeliveryDisposition.Succeeded);
+            return new(EventDeliveryDisposition.Succeeded);
 
         if (isTerminal || retryCycleAttemptCount >= retryPolicy.MaxAttempts)
-            return new(SubscriptionDeliveryDisposition.DeadLettered);
+            return new(EventDeliveryDisposition.DeadLettered);
 
         var deliverAfter = outcome == DeliveryOutcomeKind.Indeterminate
             ? databaseNow
             : databaseNow + (retryAfter ?? retryPolicy.CalculateBackoff(retryCycleAttemptCount));
 
-        return new(SubscriptionDeliveryDisposition.RetryScheduled, deliverAfter);
+        return new(EventDeliveryDisposition.RetryScheduled, deliverAfter);
     }
 }

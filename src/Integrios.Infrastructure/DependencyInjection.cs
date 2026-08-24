@@ -133,7 +133,7 @@ public static class DependencyInjection
             services.AddSingleton<IOutboxFanout, SqlServerOutboxFanout>();
         else
             services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
-        services.AddSingleton<ISubscriptionDeliveryQueue, SubscriptionDeliveryQueue>();
+        services.AddSingleton<IEventDeliveryQueue, EventDeliveryQueue>();
         services.AddDestinationAuthenticationServices();
         services.AddTransformEvaluationServices();
         services.TryAddSingleton<IDestinationAuthenticationSecretResolver, UnavailableDestinationAuthenticationSecretResolver>();

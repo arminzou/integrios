@@ -10,18 +10,18 @@ public sealed class TransformEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(PreviewTransform, "/preview");
+        group.MapPost(PreviewMapping, "/preview");
     }
 
     // Stateless dry-run: evaluate a transform against a sample payload so an author can see the
     // output before saving. No tenant data is read, so any authenticated admin may call it.
-    private static async Task<IResult> PreviewTransform(
+    private static async Task<IResult> PreviewMapping(
         TransformPreviewRequest request,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        PreviewTransformResult result = await mediator.Send(
-            new PreviewTransformQuery(request.Transform, request.SampleInput, request.SampleContext),
+        PreviewMappingResult result = await mediator.Send(
+            new PreviewMappingQuery(request.Transform, request.SampleInput, request.SampleContext),
             cancellationToken);
         if (result.Error is not null)
             return Results.BadRequest(new { error = result.Error });

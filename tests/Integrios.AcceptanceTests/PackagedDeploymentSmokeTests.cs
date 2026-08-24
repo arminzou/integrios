@@ -140,21 +140,21 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
+                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
 
         using HttpResponseMessage successMode = await fixture.MockSinkClient.DeleteAsync($"/control/{sinkName}");
         Assert.Equal(HttpStatusCode.OK, successMode.StatusCode);
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>(
-                $"SELECT status FROM subscription_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
+                $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
         Assert.True(await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}'") >= 2);
+            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'") >= 2);
 
         Guid deliveryId = await fixture.ScalarAsync<Guid>(
-            $"SELECT id FROM subscription_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'");
+            $"SELECT id FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'");
         string traceparent = await fixture.ScalarAsync<string>(
-            $"SELECT traceparent FROM subscription_deliveries WHERE id = '{deliveryId}'");
+            $"SELECT traceparent FROM event_deliveries WHERE id = '{deliveryId}'");
         string traceId = traceparent.Split('-')[1];
 
         IReadOnlyList<ExportedSpan> traceSpans = [];
@@ -259,9 +259,9 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 $"blocked-{suffix}");
             await WaitForAsync(async () =>
                 await fixture.ScalarAsync<long>(
-                    $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'") == 1);
+                    $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'") == 1);
             Guid blockedAttemptId = await fixture.ScalarAsync<Guid>(
-                $"SELECT da.id FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'");
+                $"SELECT da.id FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'");
 
             Guid independentEventId = await IngestEventAsync(
                 apiToken,
@@ -282,13 +282,13 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             {
                 await WaitForAsync(async () =>
                     await fixture.ScalarAsync<long>(
-                        $"SELECT COUNT(*) FROM delivery_attempts da JOIN subscription_deliveries sd ON sd.id = da.subscription_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'in_progress'") == 0);
+                        $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'in_progress'") == 0);
             }
         }
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>(
-                $"SELECT status FROM subscription_deliveries WHERE subscription_id = '{subscriptionId}' ORDER BY created_at DESC LIMIT 1") == "succeeded");
+                $"SELECT status FROM event_deliveries WHERE subscription_id = '{subscriptionId}' ORDER BY created_at DESC LIMIT 1") == "succeeded");
     }
 
     private async Task<Guid> PostAdminForIdAsync(string path, object body) =>
