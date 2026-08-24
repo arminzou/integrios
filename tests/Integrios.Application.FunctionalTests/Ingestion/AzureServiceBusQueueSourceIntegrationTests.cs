@@ -170,7 +170,40 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
         throw new TimeoutException($"No Event appeared for source_event_id '{sourceEventId}' within 30s.");
     }
 
-    internal static async Task<Guid> SeedAsync(FunctionalDatabase database)
+    internal static string QueueSourceConfigurationJson() => JsonSerializer.Serialize(new
+    {
+        source_contract = "event_json",
+        transport = "azure_service_bus",
+        @namespace = "sb-emulator",
+        queue_name = QueueName,
+        authentication = new { scheme = "connection_string", secret_ref = SecretReference },
+    });
+
+    // A Source is active or permanently revoked, so a test that needs a Source to appear mid-run
+    // inserts its own row rather than flipping a status back and forth.
+    internal static async Task InsertQueueSourceAsync(
+        FunctionalDatabase database,
+        SeededQueueSource seeded,
+        Guid sourceId)
+    {
+        await using DbConnection connection = database.CreateConnection();
+        await connection.OpenAsync();
+        await connection.ExecuteAsync($$$"""
+            INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status)
+            VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'queue',
+                {{{database.Json("@SourceConfiguration")}}}, 'active');
+            """,
+            new
+            {
+                SourceId = sourceId,
+                seeded.TenantId,
+                seeded.ConnectionId,
+                seeded.TopicId,
+                SourceConfiguration = QueueSourceConfigurationJson(),
+            });
+    }
+
+    internal static async Task<SeededQueueSource> SeedAsync(FunctionalDatabase database, bool includeSource = true)
     {
         Guid tenantIdValue = Guid.NewGuid();
         Guid connectorId = Guid.NewGuid();
@@ -182,15 +215,6 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
             declarativeSourceContract: true,
             sourceMappingExpression:
                 "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload }");
-        string sourceConfiguration = JsonSerializer.Serialize(new
-        {
-            source_contract = "event_json",
-            transport = "azure_service_bus",
-            @namespace = "sb-emulator",
-            queue_name = QueueName,
-            authentication = new { scheme = "connection_string", secret_ref = SecretReference },
-        });
-
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
@@ -208,10 +232,6 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
 
             INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at)
             VALUES (@TopicId, @TenantId, 'sb-topic', 'active', {{{database.Now}}}, {{{database.Now}}});
-
-            INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status)
-            VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'queue',
-                {{{database.Json("@SourceConfiguration")}}}, 'active');
             """,
             new
             {
@@ -222,11 +242,13 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
                 ConnectionId = connectionId,
                 Config = "{}",
                 TopicId = topicId,
-                SourceId = sourceId,
-                SourceConfiguration = sourceConfiguration,
             });
 
-        return tenantIdValue;
+        var seeded = new SeededQueueSource(tenantIdValue, connectorId, connectionId, topicId, sourceId);
+        if (includeSource)
+            await InsertQueueSourceAsync(database, seeded, sourceId);
+
+        return seeded;
     }
 
     private async Task<T> QuerySingleAsync<T>(string sql, object parameters)
@@ -246,6 +268,13 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
     private sealed record EventRow(Guid TenantId, string EventType, string Status);
 }
 
+internal sealed record SeededQueueSource(
+    Guid TenantId,
+    Guid ConnectorId,
+    Guid ConnectionId,
+    Guid TopicId,
+    Guid SourceId);
+
 public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
 {
     private const string EmulatorImage =
@@ -264,7 +293,7 @@ public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
     {
         await Database.StartAsync();
         await ServiceBus.StartAsync();
-        TenantId = await AzureServiceBusQueueSourceIntegrationTests.SeedAsync(Database);
+        TenantId = (await AzureServiceBusQueueSourceIntegrationTests.SeedAsync(Database)).TenantId;
 
         factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
