@@ -75,6 +75,63 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Assert.Equal(HttpStatusCode.Created, queue.StatusCode);
     }
 
+    // Queue authentication the receiver cannot build a client for must fail the authoring call.
+    // Left to Ingestion it surfaces at host startup instead, where a single unusable Source stops
+    // the whole data plane from starting.
+    [Theory]
+    [InlineData("entra_id", null)]
+    [InlineData("connection_string", null)]
+    public async Task QueueSourceAuthoring_RejectsAuthenticationTheReceiverCannotUse(
+        string scheme,
+        string? secretReference)
+    {
+        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connection_id = connectionId,
+            topic_id = topicId,
+            type = "queue",
+            configuration = new
+            {
+                source_contract = "event_json",
+                transport = "azure_service_bus",
+                @namespace = "example.servicebus.windows.net",
+                queue_name = "events",
+                authentication = new { scheme, secret_ref = secretReference },
+            }
+        }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    // azure_identity draws its credential from the ambient chain, so a secret reference alongside it
+    // is dead configuration that reads as if a secret were in use.
+    [Fact]
+    public async Task QueueSourceAuthoring_RejectsSecretReferenceOnAzureIdentity()
+    {
+        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connection_id = connectionId,
+            topic_id = topicId,
+            type = "queue",
+            configuration = new
+            {
+                source_contract = "event_json",
+                transport = "azure_service_bus",
+                @namespace = "example.servicebus.windows.net",
+                queue_name = "events",
+                authentication = new { scheme = "azure_identity", secret_ref = "sb_connection_string" },
+            }
+        }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
     private async Task<Guid> CreateTopicAsync()
     {
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", new { name = "source-topic" }));

@@ -63,8 +63,40 @@ internal static class SourceAuthoringValidator
             {
                 throw new SourceValidationException("Queue Source configuration requires namespace, queue_name, and authentication.");
             }
+
+            ValidateQueueAuthentication(authentication);
         }
 
         return sourceContract;
+    }
+
+    // Queue processors are startup-loaded, so authentication the receiver cannot build a client for
+    // fails the Ingestion host at its next restart rather than the call that wrote it. These are the
+    // schemes AzureServiceBusQueueReceiver.CreateClientAsync implements, and the secret each needs;
+    // the two lists move together.
+    private static void ValidateQueueAuthentication(JsonElement authentication)
+    {
+        string? scheme = authentication.TryGetProperty("scheme", out JsonElement schemeElement)
+            && schemeElement.ValueKind == JsonValueKind.String
+                ? schemeElement.GetString()
+                : null;
+        bool hasSecretReference = authentication.TryGetProperty("secret_ref", out JsonElement secretRef)
+            && secretRef.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(secretRef.GetString());
+
+        switch (scheme)
+        {
+            case "connection_string" when !hasSecretReference:
+                throw new SourceValidationException(
+                    "Queue Source connection_string authentication requires a secret_ref.");
+            case "azure_identity" when hasSecretReference:
+                throw new SourceValidationException(
+                    "Queue Source azure_identity authentication draws an ambient credential and takes no secret_ref.");
+            case "connection_string" or "azure_identity":
+                return;
+            default:
+                throw new SourceValidationException(
+                    $"Queue Source authentication scheme '{scheme}' is not supported; use connection_string or azure_identity.");
+        }
     }
 }
