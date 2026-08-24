@@ -119,15 +119,13 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new { mode = "fail" });
         Assert.Equal(HttpStatusCode.OK, failMode.StatusCode);
 
-        using var ingest = new HttpRequestMessage(HttpMethod.Post, "/events")
+        using var ingest = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={sourceId}")
         {
             Content = JsonContent.Create(new
             {
-                source_id = sourceId,
-                topic_name = $"payments-{suffix}",
                 event_type = "payment.created",
+                source_event_id = $"qualification-{suffix}",
                 payload = new { paymentId = $"pay-{suffix}", amount = 1200 },
-                idempotency_key = $"qualification-{suffix}"
             })
         };
         ingest.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
@@ -256,7 +254,6 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             blockedEventId = await IngestEventAsync(
                 apiToken,
                 sourceId,
-                topicName,
                 "delivery.blocked",
                 $"blocked-{suffix}");
             await WaitForAsync(async () =>
@@ -268,7 +265,6 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             Guid independentEventId = await IngestEventAsync(
                 apiToken,
                 sourceId,
-                topicName,
                 "fanout.independent",
                 $"independent-{suffix}");
 
@@ -310,19 +306,16 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     private async Task<Guid> IngestEventAsync(
         string apiToken,
         Guid sourceId,
-        string topicName,
         string eventType,
-        string idempotencyKey)
+        string sourceEventId)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/events")
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={sourceId}")
         {
             Content = JsonContent.Create(new
             {
-                source_id = sourceId,
-                topic_name = topicName,
                 event_type = eventType,
-                payload = new { idempotencyKey },
-                idempotency_key = idempotencyKey
+                source_event_id = sourceEventId,
+                payload = new { sourceEventId },
             })
         };
         request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");

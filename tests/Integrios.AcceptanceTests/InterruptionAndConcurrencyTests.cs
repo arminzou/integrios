@@ -430,15 +430,13 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         object payload,
         string? idempotencyKey = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/events")
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={pipeline.SourceId}")
         {
             Content = JsonContent.Create(new
             {
-                source_id = pipeline.SourceId,
-                topic_name = pipeline.TopicName,
                 event_type = pipeline.EventType,
+                source_event_id = idempotencyKey ?? $"resilience-{Guid.NewGuid():N}",
                 payload,
-                idempotency_key = idempotencyKey ?? $"resilience-{Guid.NewGuid():N}"
             })
         };
         request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {pipeline.ApiToken}");

@@ -663,14 +663,12 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage response = await SendIngestionAsync(
             tenant,
             HttpMethod.Post,
-            "/events",
+            $"/events?source_id={sourceId}",
             new
             {
-                source_id = sourceId,
-                topic_name = topicName,
                 event_type = eventType,
+                source_event_id = idempotencyKey ?? $"qualification-{Guid.NewGuid():N}",
                 payload,
-                idempotency_key = idempotencyKey ?? $"qualification-{Guid.NewGuid():N}"
             });
         JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Accepted);
         return new EventAcceptance(
@@ -683,16 +681,16 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage response = await SendIngestionAsync(
             tenant,
             HttpMethod.Post,
-            "/events",
+            $"/events?source_id={sourceId}",
             new
             {
-                source_id = sourceId,
-                topic_name = topicName,
                 event_type = "rejected.test",
+                source_event_id = $"qualification-{Guid.NewGuid():N}",
                 payload = new { rejected = true },
-                idempotency_key = $"qualification-{Guid.NewGuid():N}"
             });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        // An inactive/foreign/unassociated Source id no longer resolves at all, so rejection is now
+        // 404 (matches the webhook/queue "no active Source" convention), not 422.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private async Task<HttpResponseMessage> PostAdminAsync(string path, object body) =>

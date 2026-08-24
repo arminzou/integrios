@@ -144,7 +144,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
             $"/admin/tenants/{tenant}/sources",
             new { connection_id = connection, topic_id = topic, type = "webhook", configuration = new { source_contract = "github_webhook" } });
         JsonElement source = await AssertJsonAsync(response, HttpStatusCode.Created);
-        return $"/webhooks/github/{source.GetProperty("configuration").GetProperty("callback_id").GetString()}";
+        return $"/webhooks/{source.GetProperty("configuration").GetProperty("callback_id").GetString()}";
     }
 
     private async Task<Guid> CreateSlackSubscriptionAsync(Guid tenant, Guid topic, Guid destination)
