@@ -59,6 +59,39 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
     }
 
     [Fact]
+    public async Task PostWebhook_DefaultHmacShape_VerifiesWithNoConfigOverride()
+    {
+        // No header_name/prefix/encoding in Config: the platform default (X-Hub-Signature-256,
+        // "sha256=" prefix, hex) applies, per ConnectorManifestParser.ValidatePlatformSchemes
+        // requiring hmac_sha256 to declare no required config.
+        Guid callbackId = Guid.NewGuid();
+        ResolvedSourceEndpoint endpoint = BuildResolvedEndpoint() with
+        {
+            SourceVerification = new SourceVerification
+            {
+                Scheme = "hmac_sha256",
+                Config = JsonSerializer.Deserialize<JsonElement>("{}"),
+                SecretRefs = JsonSerializer.Deserialize<JsonElement>(
+                    $$"""{"secret":"{{ApiTestAppFixture.WebhookSecretReference}}"}"""),
+            },
+        };
+        fixture.SourceEndpointResolver.Result = endpoint;
+
+        string body = """{"action":"opened"}""";
+        string signature = "sha256=" + SignBody(body);
+        HttpRequestMessage request = new(HttpMethod.Post, $"/webhooks/{callbackId}")
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation("X-Hub-Signature-256", signature);
+        request.Headers.TryAddWithoutValidation(EventTypeHeaderName, "issue.opened");
+        request.Headers.TryAddWithoutValidation(DeliveryIdHeaderName, "delivery-default");
+
+        HttpResponseMessage response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostWebhook_NoVerificationConfigured_SkipsVerificationAndAccepts()
     {
         Guid callbackId = Guid.NewGuid();
@@ -166,7 +199,9 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         SourceVerification = new SourceVerification
         {
             Scheme = "hmac_sha256",
-            Config = JsonSerializer.Deserialize<JsonElement>($$"""{"header_name":"{{SignatureHeaderName}}","encoding":"hex"}"""),
+            // Overrides the platform default (X-Hub-Signature-256 / "sha256=" prefix / hex) via
+            // optional Config keys, proving the shape stays per-Connector-overridable.
+            Config = JsonSerializer.Deserialize<JsonElement>($$"""{"header_name":"{{SignatureHeaderName}}","encoding":"hex","prefix":""}"""),
             SecretRefs = JsonSerializer.Deserialize<JsonElement>(
                 $$"""{"secret":"{{ApiTestAppFixture.WebhookSecretReference}}"}"""),
         },

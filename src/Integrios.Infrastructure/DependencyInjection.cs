@@ -98,6 +98,8 @@ public static class DependencyInjection
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
         services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
         services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
+        services.AddSingleton<IQueueSourceCatalog, QueueSourceCatalog>();
+        services.AddHostedService<AzureServiceBusQueueReceiver>();
         services.AddTransformEvaluationServices();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IEventAcceptance, SqlServerEventAcceptance>();

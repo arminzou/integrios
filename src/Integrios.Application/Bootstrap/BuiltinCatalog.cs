@@ -14,6 +14,17 @@ public static class BuiltinCatalog
     public static readonly Guid HttpId = Guid.Parse("00000000-0000-0000-0000-000000000001");
     public static readonly Guid GitHubId = Guid.Parse("00000000-0000-0000-0000-000000000002");
     public const int GitHubContractVersion = 1;
+    public static readonly Guid DataverseId = Guid.Parse("00000000-0000-0000-0000-000000000003");
+
+    // Requires PrimaryEntityName (bounds the derived event type) and OperationId (the source
+    // identity); global messages carry no primary entity and are rejected rather than silently
+    // producing a malformed event type.
+    public const string RemoteExecutionContextMapping =
+        """
+        $exists(PrimaryEntityName) and PrimaryEntityName != "" and $exists(OperationId)
+          ? { "event_type": "dataverse." & PrimaryEntityName & "." & MessageName, "source_event_id": OperationId, "payload": $ }
+          : $error("Dataverse remote_execution_context_json requires a non-global PrimaryEntityName and an OperationId.")
+        """;
 
     public static readonly IReadOnlyList<BuiltinConnector> All =
     [
@@ -96,6 +107,38 @@ public static class BuiltinCatalog
                 {
                     Name = "GitHub",
                     Description = "GitHub webhook source.",
+                },
+            }),
+        new BuiltinConnector(
+            DataverseId,
+            new ConnectorManifest
+            {
+                ManifestSchemaVersion = 1,
+                Key = "dataverse",
+                ContractVersion = 1,
+                Direction = "source",
+                SourceConfigurationSchema = EmptyObjectSchema(),
+                SourceVerification = new ConnectorSourceVerificationManifest { AllowUnverified = true },
+                DestinationAuthentication = new ConnectorDestinationAuthenticationManifest { AllowUnauthenticated = true },
+                SourceContracts =
+                [
+                    new ConnectorSourceContractManifest
+                    {
+                        Key = "remote_execution_context_json",
+                        ContractVersion = 1,
+                        Config = JsonSerializer.Deserialize<JsonElement>("{}"),
+                        Mapping = new ConnectorSourceMappingManifest
+                        {
+                            Engine = "jsonata",
+                            Version = "1",
+                            Expression = RemoteExecutionContextMapping,
+                        },
+                    },
+                ],
+                Presentation = new ConnectorPresentationManifest
+                {
+                    Name = "Dataverse",
+                    Description = "Dataverse RemoteExecutionContext queue source.",
                 },
             }),
     ];

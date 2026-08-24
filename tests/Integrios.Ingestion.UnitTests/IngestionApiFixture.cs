@@ -25,12 +25,14 @@ public sealed class ApiTestAppFixture : IDisposable
     public StubTenantEventLookup EventLookup { get; } = new();
     public StubEventApiSourceResolver EventApiSourceResolver { get; } = new();
     public StubSourceEndpointResolver SourceEndpointResolver { get; } = new();
+    public StubQueueSourceCatalog QueueSourceCatalog { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
     public ApiTestAppFixture()
     {
         Factory = new CustomApiFactory(
-            TenantApiKeyRepository, EventAcceptance, EventLookup, EventApiSourceResolver, SourceEndpointResolver);
+            TenantApiKeyRepository, EventAcceptance, EventLookup, EventApiSourceResolver, SourceEndpointResolver,
+            QueueSourceCatalog);
     }
 
     public void Reset()
@@ -58,7 +60,8 @@ internal sealed class CustomApiFactory(
     StubEventAcceptance eventAcceptance,
     StubTenantEventLookup eventLookup,
     StubEventApiSourceResolver eventApiSourceResolver,
-    StubSourceEndpointResolver sourceEndpointResolver) : WebApplicationFactory<Program>
+    StubSourceEndpointResolver sourceEndpointResolver,
+    StubQueueSourceCatalog queueSourceCatalog) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -79,6 +82,7 @@ internal sealed class CustomApiFactory(
             services.AddSingleton<ITenantEventLookup>(eventLookup);
             services.AddSingleton<IEventApiSourceResolver>(eventApiSourceResolver);
             services.AddSingleton<ISourceEndpointResolver>(sourceEndpointResolver);
+            services.AddSingleton<IQueueSourceCatalog>(queueSourceCatalog);
         });
     }
 }
@@ -147,4 +151,13 @@ public sealed class StubEventApiSourceResolver : IEventApiSourceResolver
 
     public Task<ResolvedEventApiSource?> ResolveAsync(Guid tenantId, Guid sourceId, CancellationToken cancellationToken)
         => Task.FromResult(Result);
+}
+
+// Always empty: these host-composition tests never need a live Azure Service Bus client, and an
+// empty catalog is exactly the "no compatible Source exists" HTTP-only path the queue receiver
+// hosted service is required to handle without touching Azure at all.
+public sealed class StubQueueSourceCatalog : IQueueSourceCatalog
+{
+    public Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ResolvedQueueSource>>([]);
 }

@@ -39,6 +39,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IEventApiSourceResolver)] = [Host.Ingestion],
         [typeof(ISourceVerifier)] = [Host.Ingestion],
         [typeof(ISourceVerifierRegistry)] = [Host.Ingestion],
+        [typeof(IQueueSourceCatalog)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
@@ -279,6 +280,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<ISourceVerifier>(provider);
         AssertResolves<ISourceVerifierRegistry>(provider);
+        AssertResolves<IQueueSourceCatalog>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
 
