@@ -7,7 +7,6 @@ using System.Text.Json.Nodes;
 namespace Integrios.AcceptanceTests;
 
 [Collection(PackagedDeploymentCollection.Name)]
-[Trait("Category", "Qualification")]
 public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixture)
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
@@ -24,7 +23,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.Equal(1L, await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL"));
 
-        const string sinkName = "qualification-harness";
+        const string sinkName = "acceptance-harness";
         const string headerValue = "expected-value";
         const string body = "{\"event\":\"packaged-deployment\"}";
 
@@ -35,7 +34,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
-        delivery.Headers.Add("X-Qualification", headerValue);
+        delivery.Headers.Add("X-Acceptance", headerValue);
         using HttpResponseMessage delivered = await fixture.MockSinkClient.SendAsync(delivery);
         Assert.Equal(HttpStatusCode.OK, delivered.StatusCode);
 
@@ -48,12 +47,12 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.Equal($"/sink/{sinkName}", receipt.GetProperty("path").GetString());
         Assert.Equal(body, receipt.GetProperty("body").GetString());
         Assert.Contains(
-            "X-Qualification",
+            "X-Acceptance",
             receipt.GetProperty("headerNames").EnumerateArray().Select(value => value.GetString()));
 
         using HttpResponseMessage headerAssertion = await fixture.MockSinkClient.PostAsJsonAsync(
             $"/receipts/{sinkName}/assert-headers",
-            new { headers = new Dictionary<string, string> { ["X-Qualification"] = headerValue } });
+            new { headers = new Dictionary<string, string> { ["X-Acceptance"] = headerValue } });
         string assertionEvidence = await headerAssertion.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.OK, headerAssertion.StatusCode);
         Assert.Contains("\"matched\":true", assertionEvidence, StringComparison.Ordinal);
@@ -75,10 +74,10 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
 
         Guid tenantId = await PostAdminForIdAsync(
             "/admin/tenants",
-            new { slug = tenantSlug, name = "OTLP qualification", environment = "production" });
+            new { slug = tenantSlug, name = "OTLP acceptance", environment = "production" });
         string apiToken = await PostAdminForPropertyAsync(
             $"/admin/tenants/{tenantId}/tenant-api-keys",
-            new { name = "qualification-ingestion" },
+            new { name = "acceptance-ingestion" },
             "token");
 
         Guid sourceConnectionId = await PostAdminForIdAsync(
@@ -86,7 +85,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new
             {
                 connector_id = "00000000-0000-0000-0000-000000000001",
-                name = "qualification-source",
+                name = "acceptance-source",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
                 environment = "production"
             });
@@ -95,7 +94,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new
             {
                 connector_id = "00000000-0000-0000-0000-000000000001",
-                name = "qualification-destination",
+                name = "acceptance-destination",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"
             });
@@ -109,7 +108,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
-                name = "qualification-retry",
+                name = "acceptance-retry",
                 match_rules = new { event_type = "payment.created" },
                 destination_connection_id = destinationConnectionId
             });
@@ -124,7 +123,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             Content = JsonContent.Create(new
             {
                 event_type = "payment.created",
-                source_event_id = $"qualification-{suffix}",
+                source_event_id = $"acceptance-{suffix}",
                 payload = new { paymentId = $"pay-{suffix}", amount = 1200 },
             })
         };
@@ -191,7 +190,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Assert.Contains(eventId.ToString(), workerLogs, StringComparison.Ordinal);
         Assert.Contains(deliveryId.ToString(), workerLogs, StringComparison.Ordinal);
         Assert.Contains(subscriptionId.ToString(), workerLogs, StringComparison.Ordinal);
-        Assert.DoesNotContain("qualification-admin-secret", workerLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain("acceptance-admin-secret", workerLogs, StringComparison.Ordinal);
         Assert.DoesNotContain(apiToken, workerLogs, StringComparison.Ordinal);
     }
 

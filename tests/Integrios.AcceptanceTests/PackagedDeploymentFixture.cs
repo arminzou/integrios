@@ -54,9 +54,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_DESTINATION_SECRETS_DIR"] = secretsDirectory,
             ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceVerificationSecretsDirectory,
             ["POSTGRES_USER"] = "integrios",
-            ["POSTGRES_PASSWORD"] = "qualification_postgres",
-            ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "qualification-admin-secret",
-            ["INTEGRIOS_PUBLIC_INGESTION_BASE_URI"] = "https://qualification.example.test",
+            ["POSTGRES_PASSWORD"] = "acceptance_postgres",
+            ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "acceptance-admin-secret",
+            ["INTEGRIOS_PUBLIC_INGESTION_BASE_URI"] = "https://acceptance.example.test",
             ["INTEGRIOS_BOOTSTRAP_IMAGE"] = $"{projectName}-bootstrap",
             ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
             ["INTEGRIOS_INGESTION_IMAGE"] = $"{projectName}-ingestion",
@@ -69,7 +69,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public HttpClient IngestionClient { get; private set; } = null!;
     public HttpClient MockSinkClient { get; private set; } = null!;
     public HttpClient WorkerMetricsClient { get; private set; } = null!;
-    public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:qualification-admin-secret";
+    public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:acceptance-admin-secret";
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
     {
@@ -77,7 +77,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         Port = postgresPort,
         Database = "integrios",
         Username = "integrios",
-        Password = "qualification_postgres",
+        Password = "acceptance_postgres",
         Timeout = 5,
         Pooling = false,
     }.ConnectionString;
@@ -167,7 +167,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         string path = Path.Combine(tenantDirectory, reference);
         File.Delete(path);
 
-        string containerPath = $"/var/lib/integrios-qualification/secrets/{tenantSlug}/{reference}";
+        string containerPath = $"/var/lib/integrios-acceptance/secrets/{tenantSlug}/{reference}";
         ComposeResult result = await RunComposeAsync(
             TimeSpan.FromSeconds(30),
             "exec",
@@ -211,8 +211,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         string? configurationOnlySecret = null)
     {
         environment["INTEGRIOS_DESTINATION_SECRETS_PROVIDER"] = provider;
-        environment["INTEGRIOS_QUALIFICATION_CONFIG_SHARED_SECRET"] = configurationSharedSecret ?? string.Empty;
-        environment["INTEGRIOS_QUALIFICATION_CONFIG_ONLY_SECRET"] = configurationOnlySecret ?? string.Empty;
+        environment["INTEGRIOS_ACCEPTANCE_CONFIG_SHARED_SECRET"] = configurationSharedSecret ?? string.Empty;
+        environment["INTEGRIOS_ACCEPTANCE_CONFIG_ONLY_SECRET"] = configurationOnlySecret ?? string.Empty;
 
         ComposeResult result = await RunComposeAsync(
             TimeSpan.FromMinutes(2),
@@ -611,7 +611,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "--no-TTY",
             "postgres",
             "cat",
-            "/var/lib/integrios-qualification/otel/traces.jsonl");
+            "/var/lib/integrios-acceptance/otel/traces.jsonl");
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"Could not read trace artifacts: {result.Output}");
         return result.StandardOutput;

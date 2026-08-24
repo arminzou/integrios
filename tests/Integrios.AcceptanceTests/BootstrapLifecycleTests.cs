@@ -2,14 +2,13 @@ using static Integrios.AcceptanceTests.DatabaseLifecycleAssertions;
 
 namespace Integrios.AcceptanceTests;
 
-[Trait("Category", "Qualification")]
 public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
     : IClassFixture<DatabaseLifecycleFixture>
 {
     [Fact]
     public async Task FreshDatabase_RepeatedEfMigrationAndProductionBootstrap_AreSafeAndIdempotent()
     {
-        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        AcceptanceDatabase database = await fixture.CreateDatabaseAsync();
 
         BootstrapProcessResult firstMigrate = await DatabaseLifecycleFixture.RunDatabaseMigrationAsync(database);
         BootstrapProcessResult secondMigrate = await DatabaseLifecycleFixture.RunDatabaseMigrationAsync(database);
@@ -39,7 +38,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         Assert.Equal(0L, await CountAsync(database, "connectors"));
         Assert.Equal(0L, await CountAsync(database, "operator_keys"));
 
-        const string suppliedSecret = "qualification-production-secret";
+        const string suppliedSecret = "acceptance-production-secret";
         BootstrapProcessResult firstBootstrap =
             await DatabaseLifecycleFixture.RunProductionBootstrapAsync(database, suppliedSecret);
 
@@ -74,7 +73,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
     [Fact]
     public async Task OperatorKeyRotation_RequiresOutOfBandSecretAndDoesNotDiscloseIt()
     {
-        QualificationDatabase database = await fixture.CreateDatabaseAsync();
+        AcceptanceDatabase database = await fixture.CreateDatabaseAsync();
         Assert.Equal(0, (await DatabaseLifecycleFixture.RunDatabaseMigrationAsync(database)).ExitCode);
 
         BootstrapProcessResult beforeBootstrap =

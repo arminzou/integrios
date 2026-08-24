@@ -8,7 +8,6 @@ using Npgsql;
 namespace Integrios.AcceptanceTests;
 
 [Collection(PackagedDeploymentCollection.Name)]
-[Trait("Category", "ResilienceQualification")]
 public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fixture)
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
@@ -44,16 +43,16 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             // by luck of scheduling.
             await fixture.ExecuteAsync(
                 """
-                CREATE FUNCTION qualification_slow_fanout() RETURNS trigger LANGUAGE plpgsql AS $$
+                CREATE FUNCTION acceptance_slow_fanout() RETURNS trigger LANGUAGE plpgsql AS $$
                 BEGIN
                     IF OLD.processed_at IS NULL AND NEW.processed_at IS NOT NULL THEN
                         PERFORM pg_sleep(0.05);
                     END IF;
                     RETURN NEW;
                 END $$;
-                CREATE TRIGGER qualification_slow_fanout
+                CREATE TRIGGER acceptance_slow_fanout
                     BEFORE UPDATE ON outbox
-                    FOR EACH ROW EXECUTE FUNCTION qualification_slow_fanout();
+                    FOR EACH ROW EXECUTE FUNCTION acceptance_slow_fanout();
                 """);
 
             workers.Add(await fixture.StartAdditionalWorkerAsync());
@@ -86,8 +85,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
             await SafeExecuteAsync(
                 """
-                DROP TRIGGER IF EXISTS qualification_slow_fanout ON outbox;
-                DROP FUNCTION IF EXISTS qualification_slow_fanout();
+                DROP TRIGGER IF EXISTS acceptance_slow_fanout ON outbox;
+                DROP FUNCTION IF EXISTS acceptance_slow_fanout();
                 """);
 
             if (workerStopped)
@@ -131,7 +130,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
         try
         {
-            await InstallQualificationConnectorAsync();
+            await InstallAcceptanceConnectorAsync();
             await fixture.RecreateWorkerAsync("file");
 
             string suffix = Suffix();
@@ -190,16 +189,16 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
             await fixture.ExecuteAsync(
                 $$"""
-                CREATE FUNCTION qualification_block_success_finalization() RETURNS trigger LANGUAGE plpgsql AS $$
+                CREATE FUNCTION acceptance_block_success_finalization() RETURNS trigger LANGUAGE plpgsql AS $$
                 BEGIN
                     IF OLD.status = 'in_progress' AND NEW.status = 'succeeded' THEN
                         PERFORM pg_advisory_xact_lock({{PostSendBarrierKey}});
                     END IF;
                     RETURN NEW;
                 END $$;
-                CREATE TRIGGER qualification_block_success_finalization
+                CREATE TRIGGER acceptance_block_success_finalization
                     BEFORE UPDATE ON delivery_attempts
-                    FOR EACH ROW EXECUTE FUNCTION qualification_block_success_finalization();
+                    FOR EACH ROW EXECUTE FUNCTION acceptance_block_success_finalization();
                 """);
 
             Guid eventId = await IngestAsync(pipeline, new { phase = "after-send" });
@@ -268,8 +267,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     private async Task DropPostSendBarrierAsync() => await fixture.ExecuteAsync(
         $"""
         SET lock_timeout = '{(int)CleanupLockTimeout.TotalSeconds}s';
-        DROP TRIGGER IF EXISTS qualification_block_success_finalization ON delivery_attempts;
-        DROP FUNCTION IF EXISTS qualification_block_success_finalization();
+        DROP TRIGGER IF EXISTS acceptance_block_success_finalization ON delivery_attempts;
+        DROP FUNCTION IF EXISTS acceptance_block_success_finalization();
         """);
 
     private async Task SafeDropPostSendBarrierAsync()
@@ -404,22 +403,22 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             name);
     }
 
-    private async Task InstallQualificationConnectorAsync() => await fixture.ExecuteAsync($$"""
+    private async Task InstallAcceptanceConnectorAsync() => await fixture.ExecuteAsync($$"""
         INSERT INTO connectors (
             id, key, contract_version, manifest_schema_version, name, direction,
             status, description, manifest)
         VALUES (
             '{{ApiKeyConnectorId}}',
-            'qualification_resilience_api_key',
+            'acceptance_resilience_api_key',
             1,
             1,
-            'Qualification resilience API key',
+            'Acceptance resilience API key',
             'destination',
             'active',
-            'Qualification-only resilience connector',
+            'Acceptance-only resilience connector',
             '{{TestConnectorManifest.Create(
-                "qualification_resilience_api_key",
-                "Qualification resilience API key",
+                "acceptance_resilience_api_key",
+                "Acceptance resilience API key",
                 "destination",
                 ["api_key_header"])}}'::jsonb)
         ON CONFLICT (id) DO NOTHING;

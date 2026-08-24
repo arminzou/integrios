@@ -24,9 +24,9 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
 
     public Task DisposeAsync() => postgres.DisposeAsync().AsTask();
 
-    public async Task<QualificationDatabase> CreateDatabaseAsync()
+    public async Task<AcceptanceDatabase> CreateDatabaseAsync()
     {
-        string databaseName = $"qualification_{Guid.NewGuid():N}";
+        string databaseName = $"acceptance_{Guid.NewGuid():N}";
 
         await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
         {
@@ -40,10 +40,10 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             Database = databaseName,
         }.ConnectionString;
 
-        return new QualificationDatabase(databaseName, connectionString);
+        return new AcceptanceDatabase(databaseName, connectionString);
     }
 
-    public static async Task<T> ScalarAsync<T>(QualificationDatabase database, string sql)
+    public static async Task<T> ScalarAsync<T>(AcceptanceDatabase database, string sql)
     {
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
@@ -53,7 +53,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
     }
 
     public static Task<BootstrapProcessResult> RunProductionBootstrapAsync(
-        QualificationDatabase database,
+        AcceptanceDatabase database,
         string? secret) =>
         RunAdminProcessAsync(
             database,
@@ -67,7 +67,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
                 ["ASPNETCORE_ENVIRONMENT"] = "Production",
             });
 
-    public static Task<BootstrapProcessResult> RunDatabaseMigrationAsync(QualificationDatabase database) =>
+    public static Task<BootstrapProcessResult> RunDatabaseMigrationAsync(AcceptanceDatabase database) =>
         RunAdminProcessAsync(
             database,
             ["database", "migrate"],
@@ -76,7 +76,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             "Database migration");
 
     public static Task<BootstrapProcessResult> RunOperatorKeyRotationAsync(
-        QualificationDatabase database,
+        AcceptanceDatabase database,
         string? secret) =>
         RunAdminProcessAsync(
             database,
@@ -86,7 +86,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             "OperatorKey rotation");
 
     private static async Task<BootstrapProcessResult> RunAdminProcessAsync(
-        QualificationDatabase database,
+        AcceptanceDatabase database,
         IReadOnlyList<string> arguments,
         string secretVariable,
         string? secret,
@@ -136,7 +136,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
 
 }
 
-public sealed record QualificationDatabase(string Name, string ConnectionString);
+public sealed record AcceptanceDatabase(string Name, string ConnectionString);
 
 public sealed record BootstrapProcessResult(int ExitCode, string StandardOutput, string StandardError)
 {

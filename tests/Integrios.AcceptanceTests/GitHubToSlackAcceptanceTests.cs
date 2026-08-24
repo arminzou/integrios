@@ -8,13 +8,12 @@ using System.Text.Json;
 namespace Integrios.AcceptanceTests;
 
 // i7a.10: proves the packaged golden path end to end against real images, migrations, and
-// deployment configuration, extending the existing qualification harness and MockSink rather than
+// deployment configuration, extending the existing acceptance harness and MockSink rather than
 // standing up a second end-to-end framework. GitHub and Slack are simulated by a realistically
 // signed request and a provider-capable MockSink response respectively; no live provider is
 // contacted.
 [Collection(PackagedDeploymentCollection.Name)]
-[Trait("Category", "Qualification")]
-public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fixture)
+public sealed class GitHubToSlackAcceptanceTests(PackagedDeploymentFixture fixture)
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
@@ -30,13 +29,13 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
         string tenantSlug = $"golden-{Suffix()}";
         Guid tenant = await CreateTenantAsync(tenantSlug);
 
-        const string githubSecret = "qualification-github-secret";
+        const string githubSecret = "acceptance-github-secret";
         await fixture.WriteSourceSecretAsync(tenantSlug, GitHubSecretReference, githubSecret);
         Guid githubConnection = await CreateGitHubConnectionAsync(tenant, githubConnectorId);
         Guid topic = await CreateTopicAsync(tenant, "github-events");
         string callbackPath = await CreateWebhookSourceAsync(tenant, githubConnection, topic);
 
-        await fixture.WriteSecretAsync(tenantSlug, SlackSecretReference, "xoxb-qualification-token");
+        await fixture.WriteSecretAsync(tenantSlug, SlackSecretReference, "xoxb-acceptance-token");
         Guid slackConnection = await CreateSlackConnectionAsync(tenant, slackConnectorId);
         Guid subscription = await CreateSlackSubscriptionAsync(tenant, topic, slackConnection);
 
@@ -87,7 +86,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
     private async Task<Guid> CreateTenantAsync(string slug)
     {
         using HttpResponseMessage response = await PostAdminAsync(
-            "/admin/tenants", new { slug, name = $"Qualification {slug}", environment = "production" });
+            "/admin/tenants", new { slug, name = $"Acceptance {slug}", environment = "production" });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
@@ -259,7 +258,7 @@ public sealed class GitHubToSlackQualificationTests(PackagedDeploymentFixture fi
             }
             await Task.Delay(PollInterval);
         }
-        throw new TimeoutException($"Qualification evidence was not ready within {EvidenceTimeout}. {lastException?.Message}");
+        throw new TimeoutException($"Acceptance evidence was not ready within {EvidenceTimeout}. {lastException?.Message}");
     }
 
     private async Task<HttpResponseMessage> PostAdminAsync(string path, object body)

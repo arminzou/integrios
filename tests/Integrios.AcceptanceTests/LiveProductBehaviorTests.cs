@@ -7,7 +7,6 @@ using System.Text.Json;
 namespace Integrios.AcceptanceTests;
 
 [Collection(PackagedDeploymentCollection.Name)]
-[Trait("Category", "Qualification")]
 public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 {
     private const string HttpConnectorId = "00000000-0000-0000-0000-000000000001";
@@ -20,7 +19,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task PackagedSystem_QualifiesLiveProductBehaviorMatrix()
     {
-        await InstallQualificationConnectorsAsync();
+        await InstallAcceptanceConnectorsAsync();
         await AssertControlPlaneAuthorityAsync();
 
         TenantContext primary = await CreateTenantAsync($"matrix-{Suffix()}");
@@ -294,7 +293,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         Guid runtimeDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "runtime-transform", "http://mocksink:8080/sink/runtime-transform");
         Guid runtimeSubscription = await CreateSubscriptionAsync(
-            tenant, topic, "runtime-transform", runtimeDestination, "runtime.transform", Jsonata("$error(\"qualification runtime failure\")"));
+            tenant, topic, "runtime-transform", runtimeDestination, "runtime.transform", Jsonata("$error(\"acceptance runtime failure\")"));
         EventAcceptance runtimeEvent = await IngestAsync(
             tenant, source, "payments", "runtime.transform", new { value = 1 });
         await WaitForAttemptCountAsync(runtimeEvent.Id, runtimeSubscription, 1);
@@ -381,7 +380,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
     private async Task AssertDrainBeforeChangeAsync()
     {
-        TenantContext tenant = await CreateTenantAsync("qualification-drain");
+        TenantContext tenant = await CreateTenantAsync("acceptance-drain");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "drain");
         Guid sourceConnection = await fixture.ScalarAsync<Guid>($"SELECT connection_id FROM sources WHERE id = '{source}'");
         Guid destination = await CreateConnectionAsync(
@@ -413,8 +412,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
     private async Task AssertSecretProvidersAsync()
     {
-        TenantContext fileA = await CreateTenantAsync("qualification-file-a");
-        TenantContext fileB = await CreateTenantAsync("qualification-file-b");
+        TenantContext fileA = await CreateTenantAsync("acceptance-file-a");
+        TenantContext fileB = await CreateTenantAsync("acceptance-file-b");
         await fixture.WriteSecretAsync(fileA.Slug, "shared_secret", "file-a-value");
         await fixture.WriteSecretAsync(fileB.Slug, "shared_secret", "file-b-value");
         await fixture.RecreateWorkerAsync("file");
@@ -422,7 +421,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await AssertAuthenticatedTenantDeliveryAsync(fileA, "file-a", "shared_secret", "file-a-value");
         await AssertAuthenticatedTenantDeliveryAsync(fileB, "file-b", "shared_secret", "file-b-value");
 
-        TenantContext rotation = await CreateTenantAsync("qualification-rotation");
+        TenantContext rotation = await CreateTenantAsync("acceptance-rotation");
         fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v1", "rotation-v1");
         (Guid rotationSource, Guid rotationTopic) = await CreateSourceTopicAsync(rotation, "rotation");
         Guid rotationDestination = await CreateConnectionAsync(
@@ -442,7 +441,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await WaitForDeliveryStatusAsync(rotationEvent.Id, rotationSubscription, "succeeded");
         await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v2");
 
-        TenantContext configuration = await CreateTenantAsync("qualification-config");
+        TenantContext configuration = await CreateTenantAsync("acceptance-config");
         await fixture.WriteSecretAsync(configuration.Slug, "shared_secret", "wrong-file-value");
         await fixture.RecreateWorkerAsync("configuration", "configuration-value", "configuration-only-value");
         await AssertAuthenticatedTenantDeliveryAsync(
@@ -455,7 +454,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             new Dictionary<string, string?>
             {
                 ["Integrios__DestinationSecrets__Provider"] = "configuration",
-                ["DestinationSecrets__qualification-config__shared_secret"] = "configuration-value"
+                ["DestinationSecrets__acceptance-config__shared_secret"] = "configuration-value"
             },
             "secrets", "validate", "--tenant", configuration.Slug);
         Assert.Equal(1, configCli.ExitCode);
@@ -533,14 +532,14 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         }
     }
 
-    private async Task InstallQualificationConnectorsAsync() => await fixture.ExecuteAsync($$"""
+    private async Task InstallAcceptanceConnectorsAsync() => await fixture.ExecuteAsync($$"""
         INSERT INTO connectors (
             id, key, contract_version, manifest_schema_version, name, direction,
             status, description, manifest)
         VALUES
-            ('{{ApiKeyConnectorId}}', 'qualification_api_key', 1, 1, 'Qualification API key', 'destination', 'active', 'Qualification-only connector', '{{TestConnectorManifest.Create("qualification_api_key", "Qualification API key", "destination", ["api_key_header"])}}'::jsonb),
-            ('{{BearerConnectorId}}', 'qualification_bearer', 1, 1, 'Qualification bearer', 'destination', 'active', 'Qualification-only connector', '{{TestConnectorManifest.Create("qualification_bearer", "Qualification bearer", "destination", ["bearer_token"])}}'::jsonb),
-            ('{{SourceOnlyConnectorId}}', 'qualification_source', 1, 1, 'Qualification source', 'source', 'active', 'Qualification-only connector', '{{TestConnectorManifest.Create("qualification_source", "Qualification source", "source")}}'::jsonb)
+            ('{{ApiKeyConnectorId}}', 'acceptance_api_key', 1, 1, 'Acceptance API key', 'destination', 'active', 'Acceptance-only connector', '{{TestConnectorManifest.Create("acceptance_api_key", "Acceptance API key", "destination", ["api_key_header"])}}'::jsonb),
+            ('{{BearerConnectorId}}', 'acceptance_bearer', 1, 1, 'Acceptance bearer', 'destination', 'active', 'Acceptance-only connector', '{{TestConnectorManifest.Create("acceptance_bearer", "Acceptance bearer", "destination", ["bearer_token"])}}'::jsonb),
+            ('{{SourceOnlyConnectorId}}', 'acceptance_source', 1, 1, 'Acceptance source', 'source', 'active', 'Acceptance-only connector', '{{TestConnectorManifest.Create("acceptance_source", "Acceptance source", "source")}}'::jsonb)
         ON CONFLICT (id) DO NOTHING;
         """);
 
@@ -548,13 +547,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             "/admin/tenants",
-            new { slug, name = $"Qualification {slug}", environment = "production" });
+            new { slug, name = $"Acceptance {slug}", environment = "production" });
         JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Created);
         Guid id = body.GetProperty("id").GetGuid();
 
         using HttpResponseMessage tenantApiKey = await PostAdminAsync(
             $"/admin/tenants/{id}/tenant-api-keys",
-            new { name = "qualification-ingestion" });
+            new { name = "acceptance-ingestion" });
         JsonElement tenantApiKeyBody = await AssertJsonAsync(tenantApiKey, HttpStatusCode.Created);
         Assert.False(tenantApiKeyBody.GetProperty("tenant_api_key").TryGetProperty("scopes", out _));
         return new TenantContext(
@@ -667,7 +666,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             new
             {
                 event_type = eventType,
-                source_event_id = idempotencyKey ?? $"qualification-{Guid.NewGuid():N}",
+                source_event_id = idempotencyKey ?? $"acceptance-{Guid.NewGuid():N}",
                 payload,
             });
         JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Accepted);
@@ -685,7 +684,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             new
             {
                 event_type = "rejected.test",
-                source_event_id = $"qualification-{Guid.NewGuid():N}",
+                source_event_id = $"acceptance-{Guid.NewGuid():N}",
                 payload = new { rejected = true },
             });
         // An inactive/foreign/unassociated Source id no longer resolves at all, so rejection is now
@@ -756,7 +755,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             }
             await Task.Delay(PollInterval);
         }
-        throw new TimeoutException($"Qualification evidence was not ready within {EvidenceTimeout}. {lastException?.Message}");
+        throw new TimeoutException($"Acceptance evidence was not ready within {EvidenceTimeout}. {lastException?.Message}");
     }
 
     private async Task AssertReceiptHeaderAsync(string sink, string name, string value)

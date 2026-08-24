@@ -6,7 +6,7 @@ namespace Integrios.AcceptanceTests;
 
 internal static class DatabaseLifecycleAssertions
 {
-    public static async Task ExecuteAsync(QualificationDatabase database, string sql)
+    public static async Task ExecuteAsync(AcceptanceDatabase database, string sql)
     {
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
@@ -15,13 +15,13 @@ internal static class DatabaseLifecycleAssertions
     }
 
     public static Task<long> CountAsync(
-        QualificationDatabase database,
+        AcceptanceDatabase database,
         string table,
         string where = "TRUE") =>
         DatabaseLifecycleFixture.ScalarAsync<long>(database, $"SELECT COUNT(*) FROM {table} WHERE {where}");
 
     public static Task<string> ColumnShapeAsync(
-        QualificationDatabase database,
+        AcceptanceDatabase database,
         string table,
         string column) =>
         DatabaseLifecycleFixture.ScalarAsync<string>(
@@ -29,7 +29,7 @@ internal static class DatabaseLifecycleAssertions
             $"SELECT data_type || '|' || is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '{table}' AND column_name = '{column}'");
 
     public static Task<long> CountColumnsAsync(
-        QualificationDatabase database,
+        AcceptanceDatabase database,
         string table,
         params string[] columns)
     {
