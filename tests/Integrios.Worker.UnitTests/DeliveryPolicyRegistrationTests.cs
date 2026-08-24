@@ -1,5 +1,5 @@
 using Integrios.Application;
-using Integrios.Application.OperatorKeys;
+using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Delivery;
 using Integrios.Infrastructure;
 using Microsoft.Extensions.Configuration;

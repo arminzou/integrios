@@ -1,4 +1,4 @@
-using Integrios.Application.Topics;
+using Integrios.Application.Authoring.Topics;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;

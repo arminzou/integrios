@@ -1,4 +1,4 @@
-using Integrios.Application.Outbox;
+using Integrios.Application.Delivery;
 using MediatR;
 
 namespace Integrios.Worker;

@@ -3,7 +3,7 @@ extern alias IngestionHost;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using IngestionHost::Integrios.Ingestion.Endpoints;

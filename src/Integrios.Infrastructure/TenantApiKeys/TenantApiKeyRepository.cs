@@ -1,4 +1,4 @@
-using Integrios.Application.TenantApiKeys;
+using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;

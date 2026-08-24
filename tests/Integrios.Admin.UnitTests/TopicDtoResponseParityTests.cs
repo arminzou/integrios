@@ -1,6 +1,6 @@
 using System.Reflection;
 using Integrios.Admin.Endpoints;
-using Integrios.Application.Topics;
+using Integrios.Application.Authoring.Topics;
 
 namespace Integrios.Admin.UnitTests;
 

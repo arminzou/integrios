@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.Connectors;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;

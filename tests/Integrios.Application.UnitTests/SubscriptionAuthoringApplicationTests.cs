@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.Application.Auth;
-using Integrios.Application.Connections;
-using Integrios.Application.Connectors;
-using Integrios.Application.Subscriptions;
-using Integrios.Application.Topics;
+using Integrios.Application.Delivery;
+using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Authoring.Subscriptions;
+using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
@@ -79,7 +79,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(connectorId)));
             services.AddSingleton<IConnectionAuthoringLock>(new NoOpConnectionAuthoringLock());
             services.AddSingleton<IConnectorCatalog>(new FakeConnectorCatalog(Connector(connectorId, destinationDirection)));
-            services.AddSingleton<IAuthSchemeRegistry>(new EmptyAuthSchemeRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(new EmptyAuthSchemeRegistry());
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator(transformValidationError));
             provider = services.BuildServiceProvider();
             Mediator = provider.GetRequiredService<IMediator>();
@@ -166,12 +166,12 @@ public sealed class SubscriptionAuthoringApplicationTests
         return evaluator;
     }
 
-    private sealed class EmptyAuthSchemeRegistry : IAuthSchemeRegistry
+    private sealed class EmptyAuthSchemeRegistry : IDestinationAuthenticatorRegistry
     {
-        public IAuthSchemeHandler GetRequired(string scheme) =>
+        public IDestinationAuthenticator GetRequired(string scheme) =>
             throw new InvalidOperationException($"Unexpected scheme '{scheme}'.");
 
-        public bool TryGet(string scheme, out IAuthSchemeHandler handler)
+        public bool TryGet(string scheme, out IDestinationAuthenticator handler)
         {
             handler = null!;
             return false;

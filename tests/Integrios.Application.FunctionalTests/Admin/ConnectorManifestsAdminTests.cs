@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Connectors;
+using Integrios.Application.Authoring.Connectors;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
 

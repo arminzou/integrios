@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.TenantApiKeys;
+using Integrios.Application.Authoring.TenantApiKeys;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
 

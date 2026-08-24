@@ -1,10 +1,10 @@
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Connections;
-using Integrios.Application.Connectors;
-using Integrios.Application.Subscriptions;
-using Integrios.Application.Sources;
-using Integrios.Application.Tenants;
-using Integrios.Application.Topics;
+using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Authoring.Subscriptions;
+using Integrios.Application.Authoring.Sources;
+using Integrios.Application.Authoring.Tenants;
+using Integrios.Application.Authoring.Topics;
 using Microsoft.AspNetCore.Diagnostics;
 
 namespace Integrios.Admin.ErrorHandling;

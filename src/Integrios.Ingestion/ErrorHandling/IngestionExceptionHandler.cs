@@ -1,4 +1,4 @@
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Microsoft.AspNetCore.Diagnostics;
 
 namespace Integrios.Ingestion.ErrorHandling;

@@ -5,7 +5,7 @@ using System.Text.Json;
 using Dapper;
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
-using Integrios.Application.Connectors;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;

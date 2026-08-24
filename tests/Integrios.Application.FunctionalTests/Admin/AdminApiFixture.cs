@@ -2,7 +2,7 @@ using System.Data.Common;
 using Dapper;
 using Integrios.Admin;
 using Integrios.Application.Bootstrap;
-using Integrios.Application.Connectors;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;

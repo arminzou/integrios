@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using Integrios.Application.Connections;
+using Integrios.Application.Authoring.Connections;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Application.FunctionalTests.Admin;

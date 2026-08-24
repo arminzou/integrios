@@ -1,4 +1,4 @@
-using Integrios.Application.Topics;
+using Integrios.Application.Authoring.Topics;
 using Integrios.Infrastructure.Data;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;

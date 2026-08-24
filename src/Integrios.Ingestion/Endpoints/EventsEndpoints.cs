@@ -1,4 +1,4 @@
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Integrios.Ingestion.Auth;
 using MediatR;
 

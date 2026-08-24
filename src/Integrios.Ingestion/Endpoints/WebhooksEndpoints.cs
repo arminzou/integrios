@@ -1,4 +1,4 @@
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using MediatR;
 
 namespace Integrios.Ingestion.Endpoints;

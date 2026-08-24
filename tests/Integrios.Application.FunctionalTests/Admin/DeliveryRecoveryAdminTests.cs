@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 

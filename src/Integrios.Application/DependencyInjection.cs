@@ -1,52 +1,37 @@
-using Integrios.Application.TenantApiKeys;
-using Integrios.Application.Bootstrap;
-using Integrios.Application.Connections;
 using Integrios.Application.Delivery;
-using Integrios.Application.Events;
-using Integrios.Application.Connectors;
-using Integrios.Application.Outbox;
-using Integrios.Application.Recovery;
-using Integrios.Application.Secrets;
-using Integrios.Application.Subscriptions;
-using Integrios.Application.Sources;
 using Integrios.Application.Telemetry;
-using Integrios.Application.Tenants;
-using Integrios.Application.Topics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Application;
 
 public static class DependencyInjection
 {
+    private const string GroupRoot = "Integrios.Application.";
+    private const string Admin = "Admin";
+    private const string Ingestion = "Ingestion";
+    private const string Worker = "Worker";
+
+    // Handlers whose owning host differs from their responsibility group. Cross-group ownership is
+    // declared here and nowhere else: a handler listed for one host is excluded from every other
+    // host's group match, so a group namespace can never silently claim or lose one. Operator
+    // replay and delivery recovery are Delivery-domain work owned by Admin. See ADR-0038.
+    private static readonly Dictionary<Type, string> CrossGroupOwners = new()
+    {
+        [typeof(ReplayEventDeliveryCommandHandler)] = Admin,
+        [typeof(GetEventDeliveryRecoveryQueryHandler)] = Admin
+    };
+
     internal static IServiceCollection AddApplicationServices(this IServiceCollection services)
         => AddApplicationServices(services, static _ => true);
 
     public static IServiceCollection AddAdminApplicationServices(this IServiceCollection services)
-        => AddApplicationServices(services, type => IsInCapability(
-            type,
-            typeof(ITenantApiKeyRepository),
-            typeof(BootstrapBuiltinsCommand),
-            typeof(IConnectionRepository),
-            typeof(IConnectorCatalog),
-            typeof(ISubscriptionRepository),
-            typeof(ISourceRepository),
-            typeof(ITenantRepository),
-            typeof(ITopicRepository),
-            typeof(ReplayEventDeliveryCommand)));
+        => AddApplicationServices(services, OwnedBy(Admin, "Authoring", "Bootstrap"));
 
     public static IServiceCollection AddIngestionApplicationServices(this IServiceCollection services)
-        => AddApplicationServices(
-            services,
-            type => IsInCapability(type, typeof(IEventAcceptance)));
+        => AddApplicationServices(services, OwnedBy(Ingestion, "Ingestion"));
 
     public static IServiceCollection AddWorkerApplicationServices(this IServiceCollection services)
-        => AddApplicationServices(
-            services,
-            type => IsInCapability(
-                type,
-                typeof(IEventDeliveryQueue),
-                typeof(IOutboxFanout),
-                typeof(IDestinationAuthenticationSecretResolver)));
+        => AddApplicationServices(services, OwnedBy(Worker, "Delivery"));
 
     private static IServiceCollection AddApplicationServices(
         IServiceCollection services,
@@ -66,11 +51,18 @@ public static class DependencyInjection
         return services;
     }
 
-    private static bool IsInCapability(Type type, params Type[] capabilityAnchors) =>
-        type.Namespace is string typeNamespace
-        && capabilityAnchors.Any(anchor =>
-            anchor.Namespace is string capabilityNamespace
-            && (typeNamespace.Equals(capabilityNamespace, StringComparison.Ordinal)
-                || typeNamespace.StartsWith(capabilityNamespace + ".", StringComparison.Ordinal)));
+    private static Func<Type, bool> OwnedBy(string host, params string[] groups)
+    {
+        string[] prefixes = [.. groups.Select(group => GroupRoot + group)];
 
+        return type => CrossGroupOwners.TryGetValue(type, out string? owner)
+            ? owner == host
+            : IsInGroup(type, prefixes);
+    }
+
+    private static bool IsInGroup(Type type, string[] prefixes) =>
+        type.Namespace is string typeNamespace
+        && prefixes.Any(prefix =>
+            typeNamespace.Equals(prefix, StringComparison.Ordinal)
+            || typeNamespace.StartsWith(prefix + ".", StringComparison.Ordinal));
 }

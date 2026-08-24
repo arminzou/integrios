@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.TenantApiKeys;
-using Integrios.Application.Connections;
-using Integrios.Application.Tenants;
+using Integrios.Application.Authoring.TenantApiKeys;
+using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Tenants;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;

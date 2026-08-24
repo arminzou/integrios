@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Application.Subscriptions;
+using Integrios.Application.Authoring.Subscriptions;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;

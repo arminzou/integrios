@@ -1,17 +1,15 @@
 using Integrios.Application;
-using Integrios.Application.OperatorKeys;
-using Integrios.Application.TenantApiKeys;
-using Integrios.Application.Auth;
-using Integrios.Application.Connections;
+using Integrios.Application.Authoring.OperatorKeys;
+using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Delivery;
-using Integrios.Application.Events;
-using Integrios.Application.Connectors;
-using Integrios.Application.Outbox;
+using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Ingestion;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Secrets;
-using Integrios.Application.Sources;
-using Integrios.Application.Subscriptions;
-using Integrios.Application.Tenants;
-using Integrios.Application.Topics;
+using Integrios.Application.Authoring.Sources;
+using Integrios.Application.Authoring.Subscriptions;
+using Integrios.Application.Authoring.Tenants;
+using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Transforms;
 using Integrios.Infrastructure;
 using Microsoft.Extensions.Configuration;
@@ -27,8 +25,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IOperatorKeyLifecycle)] = [Host.Admin],
         [typeof(ITenantApiKeyRepository)] = [Host.Admin],
         [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
-        [typeof(IAuthSchemeHandler)] = [Host.Admin, Host.Worker],
-        [typeof(IAuthSchemeRegistry)] = [Host.Admin, Host.Worker],
+        [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
+        [typeof(IDestinationAuthenticatorRegistry)] = [Host.Admin, Host.Worker],
         [typeof(IConnectionRepository)] = [Host.Admin],
         [typeof(IConnectionAuthoringLock)] = [Host.Admin],
         [typeof(IDeadLetterReplay)] = [Host.Admin],
@@ -91,6 +89,92 @@ public sealed class HostCompositionArchitectureTests
                 owners.Length == 1,
                 $"{handler.ImplementationType.FullName} as {handler.ServiceType} must be registered by exactly one host; found: {string.Join(", ", owners)}.");
         }
+    }
+
+    // The responsibility group a handler lives in is its production owner. This is the assertion
+    // that makes the grouping load-bearing: EveryApplicationHandler_IsRegisteredByExactlyOneProductionHost
+    // is satisfied by any single owner, so on its own it cannot see a handler whose group says one
+    // host while a different host registers it. That gap is the silent-ownership-transfer path
+    // ADR-0038 accepted before the 2026-08-24 amendment.
+    private static readonly IReadOnlyDictionary<string, Host> GroupOwners = new Dictionary<string, Host>
+    {
+        ["Integrios.Application.Authoring"] = Host.Admin,
+        ["Integrios.Application.Bootstrap"] = Host.Admin,
+        ["Integrios.Application.Ingestion"] = Host.Ingestion,
+        ["Integrios.Application.Delivery"] = Host.Worker
+    };
+
+    // Mirrors CrossGroupOwners in Application's DependencyInjection. Both lists exist so that a
+    // cross-group ownership change has to be stated twice, deliberately, rather than drifting.
+    private static readonly IReadOnlyDictionary<string, Host> CrossGroupHandlerOwners =
+        new Dictionary<string, Host>
+        {
+            ["ReplayEventDeliveryCommandHandler"] = Host.Admin,
+            ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin
+        };
+
+    [Fact]
+    public void EveryHandlerGroup_MapsToTheHostThatRegistersIt()
+    {
+        using ServiceProvider admin = BuildProvider(
+            services => services.AddAdminApplicationServices(),
+            services => services.AddAdminInfrastructureServices(BuildConfiguration()));
+        using ServiceProvider ingestion = BuildProvider(
+            services => services.AddIngestionApplicationServices(),
+            services => services.AddIngestionInfrastructureServices(BuildConfiguration()));
+        using ServiceProvider worker = BuildProvider(
+            services => services.AddWorkerApplicationServices(),
+            services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
+        using IServiceScope adminScope = admin.CreateScope();
+        using IServiceScope ingestionScope = ingestion.CreateScope();
+        using IServiceScope workerScope = worker.CreateScope();
+
+        (Host Host, IServiceProvider Provider)[] hosts =
+        [
+            (Host.Admin, adminScope.ServiceProvider),
+            (Host.Ingestion, ingestionScope.ServiceProvider),
+            (Host.Worker, workerScope.ServiceProvider)
+        ];
+
+        ApplicationArchitectureTests.HandlerRegistration[] handlers =
+            ApplicationArchitectureTests.HandlerRegistrations().ToArray();
+        Assert.NotEmpty(handlers);
+
+        foreach (ApplicationArchitectureTests.HandlerRegistration handler in handlers)
+        {
+            Host[] actual = hosts
+                .Where(host => host.Provider
+                    .GetServices(handler.ServiceType)
+                    .Any(instance => instance?.GetType() == handler.ImplementationType))
+                .Select(host => host.Host)
+                .ToArray();
+
+            Host expected = ExpectedOwner(handler.ImplementationType);
+
+            Assert.True(
+                actual.Length == 1 && actual[0] == expected,
+                $"{handler.ImplementationType.FullName} belongs to a group owned by {expected} but "
+                + $"was registered by [{string.Join(", ", actual)}]. Group boundary is host "
+                + "boundary; a handler owned by another host must be declared in CrossGroupOwners "
+                + "in Application's DependencyInjection and mirrored in CrossGroupHandlerOwners here.");
+        }
+    }
+
+    private static Host ExpectedOwner(Type handlerType)
+    {
+        if (CrossGroupHandlerOwners.TryGetValue(handlerType.Name, out Host declaredOwner))
+            return declaredOwner;
+
+        KeyValuePair<string, Host>[] matches = GroupOwners
+            .Where(group => ApplicationArchitectureTests.IsInGroup(handlerType.Namespace, group.Key))
+            .ToArray();
+
+        Assert.True(
+            matches.Length == 1,
+            $"{handlerType.FullName} must live in exactly one owning responsibility group; "
+            + $"matched {matches.Length}. Shared groups hold no handlers.");
+
+        return matches[0].Value;
     }
 
     [Fact]
@@ -162,7 +246,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
         AssertResolves<ITopicRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
-        AssertResolves<IAuthSchemeRegistry>(scope.ServiceProvider);
+        AssertResolves<IDestinationAuthenticatorRegistry>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
         AssertResolves<ITenantEventLookup>(scope.ServiceProvider);
         AssertResolves<IDeadLetterReplay>(scope.ServiceProvider);
@@ -206,7 +290,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IOutboxFanout>(provider);
         AssertOmits<IEventDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
-        AssertOmits<IAuthSchemeRegistry>(provider);
+        AssertOmits<IDestinationAuthenticatorRegistry>(provider);
         AssertOmits<ITransformEvaluator>(provider);
         AssertOmits<IDestinationAuthenticationSecretResolver>(provider);
         AssertOmits<IDeadLetterReplay>(provider);
@@ -228,7 +312,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IOutboxFanout>(provider);
         AssertResolves<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertResolves<IDeliveryClient>(scope.ServiceProvider);
-        AssertResolves<IAuthSchemeRegistry>(scope.ServiceProvider);
+        AssertResolves<IDestinationAuthenticatorRegistry>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
         AssertResolves<IDestinationAuthenticationSecretResolver>(scope.ServiceProvider);
         AssertOmits<ISourceVerificationSecretResolver>(scope.ServiceProvider);

@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.TenantApiKeys;
+using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Infrastructure.Data;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;

@@ -3,7 +3,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using Dapper;
-using Integrios.Application.Connections;
+using Integrios.Application.Authoring.Connections;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

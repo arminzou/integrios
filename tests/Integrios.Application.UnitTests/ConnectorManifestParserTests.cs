@@ -1,9 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Integrios.Application.Auth;
-using Integrios.Application.Bootstrap;
 using Integrios.Application.Delivery;
-using Integrios.Application.Connectors;
+using Integrios.Application.Bootstrap;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
@@ -484,28 +483,28 @@ public sealed class ConnectorManifestParserTests
             MappingEvaluator,
             ConnectorManifestApplyAuthority.Operator);
 
-    private sealed class FakeAuthSchemeRegistry : IAuthSchemeRegistry
+    private sealed class FakeAuthSchemeRegistry : IDestinationAuthenticatorRegistry
     {
-        private static readonly IReadOnlyDictionary<string, IAuthSchemeHandler> Handlers =
-            new Dictionary<string, IAuthSchemeHandler>(StringComparer.OrdinalIgnoreCase)
+        private static readonly IReadOnlyDictionary<string, IDestinationAuthenticator> Handlers =
+            new Dictionary<string, IDestinationAuthenticator>(StringComparer.OrdinalIgnoreCase)
             {
                 ["api_key_header"] = new FakeAuthSchemeHandler("api_key_header", ["header_name"], ["api_key"]),
                 ["bearer_token"] = new FakeAuthSchemeHandler("bearer_token", [], ["token"]),
             };
 
-        public IAuthSchemeHandler GetRequired(string scheme) =>
-            Handlers.TryGetValue(scheme, out IAuthSchemeHandler? handler)
+        public IDestinationAuthenticator GetRequired(string scheme) =>
+            Handlers.TryGetValue(scheme, out IDestinationAuthenticator? handler)
                 ? handler
                 : throw new InvalidOperationException();
 
-        public bool TryGet(string scheme, out IAuthSchemeHandler handler) =>
+        public bool TryGet(string scheme, out IDestinationAuthenticator handler) =>
             Handlers.TryGetValue(scheme, out handler!);
     }
 
     private sealed record FakeAuthSchemeHandler(
         string Name,
         IReadOnlyList<string> RequiredConfigFields,
-        IReadOnlyList<string> RequiredSecretFields) : IAuthSchemeHandler
+        IReadOnlyList<string> RequiredSecretFields) : IDestinationAuthenticator
     {
         public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config) => [];
 

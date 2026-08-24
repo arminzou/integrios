@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Connections;
-using Integrios.Application.Subscriptions;
+using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Connections;

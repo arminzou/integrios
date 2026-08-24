@@ -1,11 +1,10 @@
 using System.Text.Json;
-using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
-using Integrios.Application.Subscriptions;
+using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
-using Integrios.Infrastructure.Auth;
+using Integrios.Infrastructure.Delivery;
 
 namespace Integrios.Worker.UnitTests;
 
@@ -145,7 +144,7 @@ public sealed class HttpDeliveryContractTests
             "api_key_header",
             """{"header_name":"X-API-KEY"}""",
             """{"api_key":"destination_key"}""");
-        IAuthSchemeRegistry registry = new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler()]);
+        IDestinationAuthenticatorRegistry registry = new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator()]);
 
         var error = Assert.Throws<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(

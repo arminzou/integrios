@@ -1,9 +1,9 @@
 using System.Text.Json;
-using Integrios.Application.Connectors;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
-using Integrios.Infrastructure.Auth;
+using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Transforms;
 
@@ -48,7 +48,7 @@ public sealed class ExampleConnectorManifestTests
 
         return ConnectorManifestParser.Parse(
             document,
-            new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]),
+            new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]),
             new JsonataTransformEvaluator(),
             ConnectorManifestApplyAuthority.Operator);
     }

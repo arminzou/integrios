@@ -1,5 +1,4 @@
 using Integrios.Application.Delivery;
-using Integrios.Application.Outbox;
 using Integrios.Application.Transforms;
 using MediatR;
 using Microsoft.Extensions.Configuration;

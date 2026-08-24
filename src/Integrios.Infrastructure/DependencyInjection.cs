@@ -1,24 +1,21 @@
 using Integrios.Application;
-using Integrios.Application.OperatorKeys;
-using Integrios.Application.TenantApiKeys;
-using Integrios.Application.Auth;
-using Integrios.Application.Connections;
+using Integrios.Application.Authoring.OperatorKeys;
+using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Delivery;
-using Integrios.Application.Events;
-using Integrios.Application.Connectors;
-using Integrios.Application.Outbox;
+using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Ingestion;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Secrets;
-using Integrios.Application.Subscriptions;
-using Integrios.Application.Sources;
-using Integrios.Application.Tenants;
-using Integrios.Application.Topics;
+using Integrios.Application.Authoring.Subscriptions;
+using Integrios.Application.Authoring.Sources;
+using Integrios.Application.Authoring.Tenants;
+using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Transforms;
 using Integrios.Infrastructure.OperatorKeys;
 using Integrios.Infrastructure.TenantApiKeys;
-using Integrios.Infrastructure.Auth;
+using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
-using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Events;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Outbox;
@@ -192,9 +189,9 @@ public static class DependencyInjection
 
     private static IServiceCollection AddDestinationAuthenticationServices(this IServiceCollection services)
     {
-        services.AddSingleton<IAuthSchemeHandler, ApiKeyHeaderAuthSchemeHandler>();
-        services.AddSingleton<IAuthSchemeHandler, BearerTokenAuthSchemeHandler>();
-        services.AddSingleton<IAuthSchemeRegistry, AuthSchemeRegistry>();
+        services.AddSingleton<IDestinationAuthenticator, ApiKeyHeaderAuthenticator>();
+        services.AddSingleton<IDestinationAuthenticator, BearerTokenAuthenticator>();
+        services.AddSingleton<IDestinationAuthenticatorRegistry, DestinationAuthenticatorRegistry>();
 
         return services;
     }

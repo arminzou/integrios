@@ -1,6 +1,6 @@
 using System.Data.Common;
 using Dapper;
-using Integrios.Application.Connections;
+using Integrios.Application.Authoring.Connections;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

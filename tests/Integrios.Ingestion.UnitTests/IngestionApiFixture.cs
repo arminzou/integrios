@@ -1,5 +1,5 @@
-using Integrios.Application.TenantApiKeys;
-using Integrios.Application.Events;
+using Integrios.Application.Authoring.TenantApiKeys;
+using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;

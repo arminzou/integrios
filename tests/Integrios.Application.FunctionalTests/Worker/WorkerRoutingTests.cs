@@ -1,5 +1,4 @@
 using Integrios.Application.Delivery;
-using Integrios.Application.Outbox;
 
 namespace Integrios.Application.FunctionalTests.Worker;
 

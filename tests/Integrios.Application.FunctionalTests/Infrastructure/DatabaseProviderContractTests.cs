@@ -1,8 +1,8 @@
 using System.Data.Common;
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Events;
-using Integrios.Application.Connectors;
+using Integrios.Application.Ingestion;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;

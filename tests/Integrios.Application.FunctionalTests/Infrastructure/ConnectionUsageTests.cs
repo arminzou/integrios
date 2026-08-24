@@ -1,6 +1,6 @@
 using Dapper;
-using Integrios.Application.OperatorKeys;
-using Integrios.Application.Connections;
+using Integrios.Application.Authoring.OperatorKeys;
+using Integrios.Application.Authoring.Connections;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;

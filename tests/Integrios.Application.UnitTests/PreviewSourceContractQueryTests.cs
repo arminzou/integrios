@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.Application.Connectors;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Transforms;
 using Integrios.Infrastructure.Transforms;
 using MediatR;

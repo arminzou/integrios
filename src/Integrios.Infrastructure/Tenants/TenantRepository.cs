@@ -1,6 +1,6 @@
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;
-using Integrios.Application.Tenants;
+using Integrios.Application.Authoring.Tenants;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;

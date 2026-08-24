@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Common.Pagination;
-using Integrios.Application.Connections;
+using Integrios.Application.Authoring.Connections;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;

@@ -1,4 +1,4 @@
-using Integrios.Application.Outbox;
+using Integrios.Application.Delivery;
 
 namespace Integrios.Worker.UnitTests;
 

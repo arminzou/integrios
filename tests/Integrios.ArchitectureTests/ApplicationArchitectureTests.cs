@@ -6,34 +6,43 @@ namespace Integrios.ArchitectureTests;
 
 public sealed class ApplicationArchitectureTests
 {
-    private static readonly HashSet<string> ApprovedPortNamespaces =
+    // Groups, not capabilities: a new capability inside an approved group no longer needs listing
+    // here, because PortOwners in HostCompositionArchitectureTests forces explicit host-ownership
+    // review for every public port regardless of where it lives. See ADR-0038 (2026-08-24).
+    private static readonly string[] ApprovedPortGroups =
     [
-        "Integrios.Application.OperatorKeys",
-        "Integrios.Application.TenantApiKeys",
-        "Integrios.Application.Auth",
-        "Integrios.Application.Connections",
+        "Integrios.Application.Authoring",
+        "Integrios.Application.Ingestion",
         "Integrios.Application.Delivery",
-        "Integrios.Application.Events",
-        "Integrios.Application.Connectors",
-        "Integrios.Application.Outbox",
         "Integrios.Application.Secrets",
-        "Integrios.Application.Sources",
-        "Integrios.Application.Subscriptions",
-        "Integrios.Application.Tenants",
-        "Integrios.Application.Topics",
         "Integrios.Application.Transforms"
     ];
 
     [Fact]
-    public void PublicApplicationPorts_LiveInApprovedCapabilityNamespaces()
+    public void PublicApplicationPorts_LiveInApprovedResponsibilityGroups()
     {
         Type[] publicPorts = ApplicationAssembly.GetExportedTypes()
             .Where(type => type.IsInterface)
             .ToArray();
 
         Assert.NotEmpty(publicPorts);
-        Assert.All(publicPorts, port => Assert.Contains(port.Namespace ?? string.Empty, ApprovedPortNamespaces));
+
+        string[] offenders = publicPorts
+            .Where(port => !ApprovedPortGroups.Any(group => IsInGroup(port.Namespace, group)))
+            .Select(port => port.FullName!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            "Every public Application port lives in an approved responsibility group. "
+            + $"Found: {string.Join(", ", offenders)}");
     }
+
+    internal static bool IsInGroup(string? candidateNamespace, string group) =>
+        candidateNamespace is not null
+        && (candidateNamespace.Equals(group, StringComparison.Ordinal)
+            || candidateNamespace.StartsWith(group + ".", StringComparison.Ordinal));
 
     [Fact]
     public void ApplicationTypes_AreNeverNamedResponse()

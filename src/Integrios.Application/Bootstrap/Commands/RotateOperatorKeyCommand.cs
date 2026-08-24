@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using Integrios.Application.OperatorKeys;
+using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using MediatR;

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Application.Subscriptions;
+using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using MediatR;

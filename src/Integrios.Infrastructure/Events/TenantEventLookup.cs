@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;

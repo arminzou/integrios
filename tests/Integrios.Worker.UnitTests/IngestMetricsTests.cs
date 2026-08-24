@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;

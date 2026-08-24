@@ -1,4 +1,4 @@
-using Integrios.Application.Tenants;
+using Integrios.Application.Authoring.Tenants;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;

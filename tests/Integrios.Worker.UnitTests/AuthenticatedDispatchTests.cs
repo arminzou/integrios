@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
 using Integrios.Application.Telemetry;
@@ -8,7 +7,7 @@ using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
-using Integrios.Infrastructure.Auth;
+using Integrios.Infrastructure.Delivery;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -54,7 +53,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(secretResolver);
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
@@ -94,7 +93,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
@@ -135,7 +134,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
@@ -181,7 +180,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new LeakyAuthSchemeHandler()]));
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(new DestinationAuthenticatorRegistry([new LeakyAuthSchemeHandler()]));
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_token"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
@@ -223,7 +222,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
@@ -265,7 +264,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
             services.AddSingleton<ILoggerProvider>(new CapturingLoggerProvider());
         });
@@ -306,7 +305,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_api_key"] = "cannot-overwrite" }));
         });
 
@@ -341,7 +340,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
         });
 
@@ -367,7 +366,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
-            services.AddSingleton<IAuthSchemeRegistry>(CreateRegistry());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
         });
 
@@ -390,8 +389,8 @@ public sealed class AuthenticatedDispatchTests
         return services.BuildServiceProvider().GetRequiredService<IMediator>();
     }
 
-    private static IAuthSchemeRegistry CreateRegistry() =>
-        new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]);
+    private static IDestinationAuthenticatorRegistry CreateRegistry() =>
+        new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]);
 
     private static EventDeliveryWorkItem MakeWorkItem(
         Guid? id = null,
@@ -457,7 +456,7 @@ public sealed class AuthenticatedDispatchTests
         new(DeliveryFinalizationStatus.Applied, disposition);
 
     // Mirrors framework header validation, which embeds the offending value in its message.
-    private sealed class LeakyAuthSchemeHandler : IAuthSchemeHandler
+    private sealed class LeakyAuthSchemeHandler : IDestinationAuthenticator
     {
         public string Name => "leaky_scheme";
         public IReadOnlyList<string> RequiredConfigFields => [];

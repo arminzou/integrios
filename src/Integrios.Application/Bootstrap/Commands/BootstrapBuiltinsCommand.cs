@@ -1,5 +1,5 @@
-using Integrios.Application.Connectors;
-using Integrios.Application.Auth;
+using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Delivery;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
@@ -12,7 +12,7 @@ public sealed record BootstrapBuiltinsCommand : IRequest<IReadOnlyList<Connector
 
 internal sealed class BootstrapBuiltinsCommandHandler(
     IConnectorManifestStore manifestStore,
-    IAuthSchemeRegistry authenticationSchemes,
+    IDestinationAuthenticatorRegistry authenticationSchemes,
     ITransformEvaluator mappingEvaluator)
     : IRequestHandler<BootstrapBuiltinsCommand, IReadOnlyList<Connector>>
 {

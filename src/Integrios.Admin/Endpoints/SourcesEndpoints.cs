@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Application.Sources;
+using Integrios.Application.Authoring.Sources;
 using Integrios.Domain.Enums;
 using MediatR;
 

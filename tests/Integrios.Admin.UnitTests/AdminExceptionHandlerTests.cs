@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Integrios.Admin.ErrorHandling;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Connections;
-using Integrios.Application.Subscriptions;
-using Integrios.Application.Tenants;
-using Integrios.Application.Topics;
+using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Subscriptions;
+using Integrios.Application.Authoring.Tenants;
+using Integrios.Application.Authoring.Topics;
 using Microsoft.AspNetCore.Http;
 
 namespace Integrios.Admin.UnitTests;

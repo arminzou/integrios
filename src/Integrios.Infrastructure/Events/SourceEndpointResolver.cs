@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Bootstrap;
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;

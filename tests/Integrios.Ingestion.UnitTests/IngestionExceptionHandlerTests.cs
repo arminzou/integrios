@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Application.Events;
+using Integrios.Application.Ingestion;
 using Integrios.Ingestion.ErrorHandling;
 using Microsoft.AspNetCore.Http;
 

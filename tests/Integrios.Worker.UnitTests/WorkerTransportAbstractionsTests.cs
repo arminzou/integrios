@@ -1,15 +1,13 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.Application.Auth;
 using Integrios.Application.Delivery;
-using Integrios.Application.Outbox;
 using Integrios.Application.Secrets;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
-using Integrios.Infrastructure.Auth;
+using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Transforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -613,7 +611,7 @@ public sealed class WorkerTransportAbstractionsTests
         services.AddLogging();
         services.AddApplicationServices();
         services.AddSingleton(DeliveryExecutionOptions.Default);
-        services.AddSingleton<IAuthSchemeRegistry>(new AuthSchemeRegistry([new ApiKeyHeaderAuthSchemeHandler(), new BearerTokenAuthSchemeHandler()]));
+        services.AddSingleton<IDestinationAuthenticatorRegistry>(new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
         services.AddSingleton<IDestinationAuthenticationSecretResolver>(new NullSecretResolver());
         registerTestDoubles(services);
         return services.BuildServiceProvider().GetRequiredService<IMediator>();

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Delivery;
-using Integrios.Application.Outbox;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
