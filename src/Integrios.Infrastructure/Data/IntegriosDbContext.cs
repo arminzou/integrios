@@ -17,6 +17,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
     public DbSet<DomainEvent> Events => Set<DomainEvent>();
     public DbSet<Connector> Connectors => Set<Connector>();
     public DbSet<OutboxEntry> Outboxes => Set<OutboxEntry>();
+    public DbSet<Source> Sources => Set<Source>();
     public DbSet<SourceEndpoint> SourceEndpoints => Set<SourceEndpoint>();
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<SubscriptionDelivery> SubscriptionDeliveries => Set<SubscriptionDelivery>();
@@ -31,6 +32,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<SnakeCaseEnumConverter<OperationalStatus>>();
         configurationBuilder.Properties<TopicSourceStatus>()
             .HaveConversion<SnakeCaseEnumConverter<TopicSourceStatus>>();
+        configurationBuilder.Properties<SourceStatus>()
+            .HaveConversion<SnakeCaseEnumConverter<SourceStatus>>();
+        configurationBuilder.Properties<SourceType>()
+            .HaveConversion<SnakeCaseEnumConverter<SourceType>>();
         configurationBuilder.Properties<DeliveryFailurePhase>()
             .HaveConversion<SnakeCaseEnumConverter<DeliveryFailurePhase>>();
         configurationBuilder.Properties<DeliveryAttemptStatus>()
@@ -166,6 +171,18 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 .HasFilter("(status = N'active')");
             entity.Property(e => e.Id).HasDefaultValueSql(generatedGuid);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+        });
+
+        modelBuilder.Entity<Source>(entity =>
+        {
+            entity.ToTable("sources", table =>
+            {
+                table.HasCheckConstraint("ck_sources_configuration_json", "ISJSON(configuration, VALUE) = 1");
+            });
+            entity.Property(e => e.Configuration).HasColumnType(jsonType);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 
         modelBuilder.Entity<Subscription>(entity =>

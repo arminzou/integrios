@@ -8,6 +8,7 @@ using Integrios.Application.Outbox;
 using Integrios.Application.Recovery;
 using Integrios.Application.Secrets;
 using Integrios.Application.Subscriptions;
+using Integrios.Application.Sources;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Tenants;
 using Integrios.Application.Topics;
@@ -28,6 +29,7 @@ public static class DependencyInjection
             typeof(IConnectionRepository),
             typeof(IConnectorCatalog),
             typeof(ISubscriptionRepository),
+            typeof(ISourceRepository),
             typeof(ITenantRepository),
             typeof(ITopicRepository),
             typeof(ReplaySubscriptionDeliveryCommand)));

@@ -2,6 +2,7 @@ using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Connections;
 using Integrios.Application.Connectors;
 using Integrios.Application.Subscriptions;
+using Integrios.Application.Sources;
 using Integrios.Application.Tenants;
 using Integrios.Application.Topics;
 using Microsoft.AspNetCore.Diagnostics;
@@ -24,6 +25,7 @@ public sealed class AdminExceptionHandler : IExceptionHandler
             ConnectorManifestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             ConnectorVersionConflictException => (StatusCodes.Status409Conflict, exception.Message),
             TopicValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
+            SourceValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             SubscriptionValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
             BadHttpRequestException badRequest => (badRequest.StatusCode, "The request body is invalid."),
             _ => null

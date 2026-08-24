@@ -9,6 +9,7 @@ using Integrios.Application.Connectors;
 using Integrios.Application.Outbox;
 using Integrios.Application.Secrets;
 using Integrios.Application.Subscriptions;
+using Integrios.Application.Sources;
 using Integrios.Application.Tenants;
 using Integrios.Application.Topics;
 using Integrios.Application.Transforms;
@@ -23,6 +24,7 @@ using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Outbox;
 using Integrios.Infrastructure.Secrets;
 using Integrios.Infrastructure.Subscriptions;
+using Integrios.Infrastructure.Sources;
 using Integrios.Infrastructure.Tenants;
 using Integrios.Infrastructure.Topics;
 using Integrios.Infrastructure.Transforms;
@@ -78,6 +80,7 @@ public static class DependencyInjection
         else
             services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
         services.AddScoped<ITopicRepository, TopicRepository>();
+        services.AddScoped<ISourceRepository, SourceRepository>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();

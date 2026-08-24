@@ -43,14 +43,14 @@ internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnec
         Guid id,
         CancellationToken cancellationToken)
     {
-        bool source = await context.TopicSources.AsNoTracking().AnyAsync(
-            topicSource =>
-                topicSource.TenantId == tenantId
-                && topicSource.ConnectionId == id
-                && topicSource.Status == TopicSourceStatus.Active
+        bool source = await context.Sources.AsNoTracking().AnyAsync(
+            source =>
+                source.TenantId == tenantId
+                && source.ConnectionId == id
+                && source.Status == SourceStatus.Active
                 && context.Topics.Any(topic =>
                     topic.TenantId == tenantId
-                    && topic.Id == topicSource.TopicId
+                    && topic.Id == source.TopicId
                     && topic.Status == OperationalStatus.Active),
             cancellationToken);
         bool destination = await context.Subscriptions.AsNoTracking().AnyAsync(
