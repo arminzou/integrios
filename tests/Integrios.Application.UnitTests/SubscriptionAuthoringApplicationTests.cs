@@ -22,11 +22,11 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         await using AuthoringHarness harness = new();
 
-        var exception = await Assert.ThrowsAsync<SubscriptionValidationException>(() =>
+        var exception = await Should.ThrowAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command(matchRules: Json("{}"))));
 
-        Assert.Contains("matchRules", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, harness.SubscriptionRepository.CreateCalls);
+        exception.Message.ShouldContain("matchRules", Case.Sensitive);
+        harness.SubscriptionRepository.CreateCalls.ShouldBe(0);
     }
 
     [Fact]
@@ -34,11 +34,11 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         await using AuthoringHarness harness = new(transformValidationError: "invalid transform expression");
 
-        var exception = await Assert.ThrowsAsync<SubscriptionValidationException>(() =>
+        var exception = await Should.ThrowAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command(transformConfig: ValidTransform())));
 
-        Assert.Equal("invalid transform expression", exception.Message);
-        Assert.Equal(0, harness.SubscriptionRepository.CreateCalls);
+        exception.Message.ShouldBe("invalid transform expression");
+        harness.SubscriptionRepository.CreateCalls.ShouldBe(0);
     }
 
     [Fact]
@@ -46,11 +46,11 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         await using AuthoringHarness harness = new(destinationDirection: ConnectorDirection.Source);
 
-        var exception = await Assert.ThrowsAsync<SubscriptionValidationException>(() =>
+        var exception = await Should.ThrowAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command()));
 
-        Assert.Contains("direction permits destination use", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, harness.SubscriptionRepository.CreateCalls);
+        exception.Message.ShouldContain("direction permits destination use", Case.Sensitive);
+        harness.SubscriptionRepository.CreateCalls.ShouldBe(0);
     }
 
     private static JsonElement Json(string value) =>

@@ -36,10 +36,10 @@ public sealed class ConnectionUseValidatorTests
             destinationSchemes: [Scheme("bearer_token", secrets: ["token"])]);
         Connection connection = ConnectionFor(Json("""{"base_uri":"https://example.test/hook"}"""));
 
-        ConnectionValidationException exception = Assert.Throws<ConnectionValidationException>(
+        ConnectionValidationException exception = Should.Throw<ConnectionValidationException>(
             () => ConnectionUseValidator.ValidateDestinationReadiness(connection, connector, AuthenticationSchemes));
 
-        Assert.Contains("requires a destination authentication selection", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("requires a destination authentication selection", Case.Sensitive);
     }
 
     [Fact]
@@ -50,10 +50,10 @@ public sealed class ConnectionUseValidatorTests
             sourceSchema: Json("""{"type":"object","properties":{"repository":{"type":"string","minLength":1}},"required":["repository"],"additionalProperties":false}"""));
         Connection connection = ConnectionFor(Json("""{"unexpected":true}"""));
 
-        ConnectionValidationException exception = Assert.Throws<ConnectionValidationException>(
+        ConnectionValidationException exception = Should.Throw<ConnectionValidationException>(
             () => ConnectionUseValidator.ValidateSourceReadiness(connection, connector));
 
-        Assert.Contains("field 'repository' is required", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("field 'repository' is required", Case.Sensitive);
     }
 
     [Fact]
@@ -75,10 +75,10 @@ public sealed class ConnectionUseValidatorTests
             Json("""{"base_uri":"https://example.test/hook"}"""),
             status: OperationalStatus.Disabled);
 
-        ConnectionValidationException exception = Assert.Throws<ConnectionValidationException>(
+        ConnectionValidationException exception = Should.Throw<ConnectionValidationException>(
             () => ConnectionUseValidator.ValidateDestinationAuthoring(connection, connector, AuthenticationSchemes));
 
-        Assert.Contains("must be active", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("must be active", Case.Sensitive);
     }
 
     [Fact]
@@ -87,11 +87,11 @@ public sealed class ConnectionUseValidatorTests
         Connector connector = ConnectorFor("destination");
         Connection connection = ConnectionFor(Json("""{"base_uri":"ftp://example.test/hook"}"""));
 
-        ConnectionValidationException exception = Assert.Throws<ConnectionValidationException>(
+        ConnectionValidationException exception = Should.Throw<ConnectionValidationException>(
             () => ConnectionUseValidator.ValidateDestinationReadiness(connection, connector, AuthenticationSchemes));
 
-        Assert.Contains("HTTP or HTTPS", exception.Message, StringComparison.Ordinal);
-        Assert.NotEqual("http", connector.Key);
+        exception.Message.ShouldContain("HTTP or HTTPS", Case.Sensitive);
+        connector.Key.ShouldNotBe("http");
     }
 
     [Theory]
@@ -116,7 +116,7 @@ public sealed class ConnectionUseValidatorTests
             SecretRefs = Json("""{"api_key":"destination_key"}""")
         };
 
-        Assert.Throws<ConnectionValidationException>(
+        Should.Throw<ConnectionValidationException>(
             () => ConnectionSchemeValidator.ValidateDestination(connector, input, AuthenticationSchemes));
     }
 
@@ -138,7 +138,7 @@ public sealed class ConnectionUseValidatorTests
             input,
             AuthenticationSchemes);
 
-        Assert.Equal("Authorization", selection!.Config.GetProperty("header_name").GetString());
+        selection!.Config.GetProperty("header_name").GetString().ShouldBe("Authorization");
     }
 
     private static Connector ConnectorFor(

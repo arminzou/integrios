@@ -21,9 +21,9 @@ public sealed class DataverseSourceMappingTests
         string outputJson = evaluator.Evaluate(Mapping, input, (System.Text.Json.JsonElement?)null);
         SourceContractOutput output = SourceMappingOutputValidator.Validate(outputJson);
 
-        Assert.Equal("dataverse.account.Create", output.EventType);
-        Assert.Equal("11111111-1111-1111-1111-111111111111", output.SourceEventId);
-        Assert.Equal(1, output.Payload.GetProperty("Depth").GetInt32());
+        output.EventType.ShouldBe("dataverse.account.Create");
+        output.SourceEventId.ShouldBe("11111111-1111-1111-1111-111111111111");
+        output.Payload.GetProperty("Depth").GetInt32().ShouldBe(1);
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public sealed class DataverseSourceMappingTests
     {
         const string input = """{"MessageName":"Create","OperationId":"11111111-1111-1111-1111-111111111111"}""";
 
-        Assert.Throws<TransformEvaluationException>(
+        Should.Throw<TransformEvaluationException>(
             () => evaluator.Evaluate(Mapping, input, (System.Text.Json.JsonElement?)null));
     }
 
@@ -40,7 +40,7 @@ public sealed class DataverseSourceMappingTests
     {
         const string input = """{"PrimaryEntityName":"","MessageName":"Create","OperationId":"11111111-1111-1111-1111-111111111111"}""";
 
-        Assert.Throws<TransformEvaluationException>(
+        Should.Throw<TransformEvaluationException>(
             () => evaluator.Evaluate(Mapping, input, (System.Text.Json.JsonElement?)null));
     }
 
@@ -49,7 +49,7 @@ public sealed class DataverseSourceMappingTests
     {
         const string input = """{"PrimaryEntityName":"account","MessageName":"Create"}""";
 
-        Assert.Throws<TransformEvaluationException>(
+        Should.Throw<TransformEvaluationException>(
             () => evaluator.Evaluate(Mapping, input, (System.Text.Json.JsonElement?)null));
     }
 }

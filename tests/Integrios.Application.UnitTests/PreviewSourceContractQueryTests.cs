@@ -29,12 +29,12 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             "{ \"event_type\": \"payment.created\", \"payload\": $ }",
             "{\"amount\":1200}");
 
-        Assert.Null(result.Error);
+        result.Error.ShouldBeNull();
         using var document = JsonDocument.Parse(result.OutputJson!);
-        Assert.Equal("payment.created", document.RootElement.GetProperty("event_type").GetString());
-        Assert.Equal(1200, document.RootElement.GetProperty("payload").GetProperty("amount").GetInt32());
-        Assert.False(document.RootElement.TryGetProperty("source_event_id", out _));
-        Assert.False(document.RootElement.TryGetProperty("metadata", out _));
+        document.RootElement.GetProperty("event_type").GetString().ShouldBe("payment.created");
+        document.RootElement.GetProperty("payload").GetProperty("amount").GetInt32().ShouldBe(1200);
+        document.RootElement.TryGetProperty("source_event_id", out _).ShouldBeFalse();
+        document.RootElement.TryGetProperty("metadata", out _).ShouldBeFalse();
     }
 
     [Fact]
@@ -45,9 +45,9 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             "{}",
             """{"event_type":"dataverse.contact.updated"}""");
 
-        Assert.Null(result.Error);
+        result.Error.ShouldBeNull();
         using var document = JsonDocument.Parse(result.OutputJson!);
-        Assert.Equal("dataverse.contact.updated", document.RootElement.GetProperty("event_type").GetString());
+        document.RootElement.GetProperty("event_type").GetString().ShouldBe("dataverse.contact.updated");
     }
 
     [Fact]
@@ -57,8 +57,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             "{ \"event_type\": \"x\", \"payload\": $, \"routing_key\": \"nope\" }",
             "{}");
 
-        Assert.Contains("unsupported field 'routing_key'", result.Error, StringComparison.Ordinal);
-        Assert.Null(result.OutputJson);
+        result.Error!.ShouldContain("unsupported field 'routing_key'", Case.Sensitive);
+        result.OutputJson.ShouldBeNull();
     }
 
     [Fact]
@@ -68,8 +68,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             "{ \"payload\": $ }",
             "{}");
 
-        Assert.Contains("event_type", result.Error, StringComparison.Ordinal);
-        Assert.Null(result.OutputJson);
+        result.Error!.ShouldContain("event_type", Case.Sensitive);
+        result.OutputJson.ShouldBeNull();
     }
 
     [Fact]
@@ -81,8 +81,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             Json("{}"),
             null));
 
-        Assert.Contains("amount", result.Error, StringComparison.Ordinal);
-        Assert.Null(result.OutputJson);
+        result.Error!.ShouldContain("amount", Case.Sensitive);
+        result.OutputJson.ShouldBeNull();
     }
 
     [Fact]
@@ -90,8 +90,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
     {
         PreviewSourceContractResult result = await RunMapping("{ \"event_type\": ", "{}");
 
-        Assert.NotNull(result.Error);
-        Assert.Null(result.OutputJson);
+        result.Error.ShouldNotBeNull();
+        result.OutputJson.ShouldBeNull();
     }
 
     public void Dispose() => provider.Dispose();

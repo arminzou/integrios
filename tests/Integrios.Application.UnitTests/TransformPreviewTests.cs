@@ -27,9 +27,9 @@ public sealed class TransformPreviewTests : IDisposable
     {
         PreviewMappingResult result = await RunExpr("{ \"amount\": amount }", "{\"amount\":1200}");
 
-        Assert.Null(result.Error);
+        result.Error.ShouldBeNull();
         using var document = JsonDocument.Parse(result.OutputJson!);
-        Assert.Equal(1200, document.RootElement.GetProperty("amount").GetInt32());
+        document.RootElement.GetProperty("amount").GetInt32().ShouldBe(1200);
     }
 
     [Fact]
@@ -39,9 +39,9 @@ public sealed class TransformPreviewTests : IDisposable
             "{ \"amount\": payload.amount }",
             "{\"amount\":1200}");
 
-        Assert.Null(result.Error);
+        result.Error.ShouldBeNull();
         using var document = JsonDocument.Parse(result.OutputJson!);
-        Assert.False(document.RootElement.TryGetProperty("amount", out _));
+        document.RootElement.TryGetProperty("amount", out _).ShouldBeFalse();
     }
 
     [Fact]
@@ -49,9 +49,9 @@ public sealed class TransformPreviewTests : IDisposable
     {
         PreviewMappingResult result = await RunExpr("{ \"et\": $context.event_type }", "{}");
 
-        Assert.Null(result.Error);
+        result.Error.ShouldBeNull();
         using var document = JsonDocument.Parse(result.OutputJson!);
-        Assert.Equal("sample.event", document.RootElement.GetProperty("et").GetString());
+        document.RootElement.GetProperty("et").GetString().ShouldBe("sample.event");
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class TransformPreviewTests : IDisposable
             "{\"event_type\":\"payment.created\"}");
 
         using var document = JsonDocument.Parse(result.OutputJson!);
-        Assert.Equal("payment.created", document.RootElement.GetProperty("et").GetString());
+        document.RootElement.GetProperty("et").GetString().ShouldBe("payment.created");
     }
 
     [Fact]
@@ -71,8 +71,8 @@ public sealed class TransformPreviewTests : IDisposable
     {
         PreviewMappingResult result = await RunExpr("{ \"amount\": ", "{}");
 
-        Assert.NotNull(result.Error);
-        Assert.Null(result.OutputJson);
+        result.Error.ShouldNotBeNull();
+        result.OutputJson.ShouldBeNull();
     }
 
     [Fact]
@@ -83,8 +83,8 @@ public sealed class TransformPreviewTests : IDisposable
             Json("{}"),
             null));
 
-        Assert.Contains("expression", result.Error);
-        Assert.Null(result.OutputJson);
+        result.Error!.ShouldContain("expression", Case.Sensitive);
+        result.OutputJson.ShouldBeNull();
     }
 
     [Fact]
@@ -94,8 +94,8 @@ public sealed class TransformPreviewTests : IDisposable
             "amount + $context.event_type",
             "{\"amount\":1200}");
 
-        Assert.NotNull(result.Error);
-        Assert.Null(result.OutputJson);
+        result.Error.ShouldNotBeNull();
+        result.OutputJson.ShouldBeNull();
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class TransformPreviewTests : IDisposable
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+        await Should.ThrowAsync<OperationCanceledException>(() =>
             mediator.Send(
                 new PreviewMappingQuery(
                     Json("""{"engine":"jsonata","version":"1","expression":"amount"}"""),

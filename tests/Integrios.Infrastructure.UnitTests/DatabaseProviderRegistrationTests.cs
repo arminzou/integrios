@@ -27,43 +27,39 @@ public sealed class DatabaseProviderRegistrationTests
         using IServiceScope scope = provider.CreateScope();
 
         IntegriosDbContext context = scope.ServiceProvider.GetRequiredService<IntegriosDbContext>();
-        Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
+        context.Database.ProviderName.ShouldBe("Npgsql.EntityFrameworkCore.PostgreSQL");
         var entityTypes = context.Model.GetEntityTypes().ToArray();
         string[] tables = entityTypes.Select(entity => entity.GetTableName()!).ToArray();
-        Assert.Contains("tenants", tables);
-        Assert.All(
-            entityTypes.Where(entity => entity.ClrType != typeof(OutboxEntry)),
-            entity => Assert.StartsWith("Integrios.Domain.", entity.ClrType.Namespace));
+        tables.ShouldContain("tenants");
+        foreach (var entity in entityTypes.Where(entity => entity.ClrType != typeof(OutboxEntry)))
+            entity.ClrType.Namespace!.ShouldStartWith("Integrios.Domain.", Case.Sensitive);
 
-        Assert.Equal("tenants", context.Model.FindEntityType(typeof(Tenant))?.GetTableName());
-        Assert.Equal("events", context.Model.FindEntityType(typeof(Event))?.GetTableName());
-        Assert.Equal(
-            "event_deliveries",
-            context.Model.FindEntityType(typeof(EventDelivery))?.GetTableName());
-        Assert.Equal(
-            "delivery_attempts",
-            context.Model.FindEntityType(typeof(DeliveryAttempt))?.GetTableName());
-        Assert.Equal("outbox", context.Model.FindEntityType(typeof(OutboxEntry))?.GetTableName());
+        context.Model.FindEntityType(typeof(Tenant))?.GetTableName().ShouldBe("tenants");
+        context.Model.FindEntityType(typeof(Event))?.GetTableName().ShouldBe("events");
+        context.Model.FindEntityType(typeof(EventDelivery))?.GetTableName().ShouldBe(
+            "event_deliveries");
+        context.Model.FindEntityType(typeof(DeliveryAttempt))?.GetTableName().ShouldBe(
+            "delivery_attempts");
+        context.Model.FindEntityType(typeof(OutboxEntry))?.GetTableName().ShouldBe("outbox");
 
         var operatorKey = context.Model.FindEntityType(typeof(OperatorKey))!;
-        Assert.Null(operatorKey.FindProperty("TenantId"));
-        Assert.False(context.Model.FindEntityType(typeof(TopicSource))!.FindProperty("Status")!.IsNullable);
-        Assert.False(context.Model.FindEntityType(typeof(SourceEndpoint))!.FindProperty("Status")!.IsNullable);
+        operatorKey.FindProperty("TenantId").ShouldBeNull();
+        context.Model.FindEntityType(typeof(TopicSource))!.FindProperty("Status")!.IsNullable.ShouldBeFalse();
+        context.Model.FindEntityType(typeof(SourceEndpoint))!.FindProperty("Status")!.IsNullable.ShouldBeFalse();
 
         var status = context.Model.FindEntityType(typeof(EventDelivery))!
             .FindProperty(nameof(EventDelivery.Status))!;
-        Assert.Equal(
-            "in_flight",
-            status.GetTypeMapping().Converter!.ConvertToProvider(EventDeliveryStatus.InFlight));
+        status.GetTypeMapping().Converter!.ConvertToProvider(EventDeliveryStatus.InFlight).ShouldBe(
+            "in_flight");
     }
 
     [Fact]
     public void UnsupportedProvider_IsRejectedAtRegistration()
     {
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
             new ServiceCollection().AddAdminInfrastructureServices(BuildConfiguration("sqlite")));
 
-        Assert.Equal("Database:Provider 'sqlite' is not supported.", exception.Message);
+        exception.Message.ShouldBe("Database:Provider 'sqlite' is not supported.");
     }
 
     [Fact]
@@ -77,12 +73,12 @@ public sealed class DatabaseProviderRegistrationTests
         using IServiceScope scope = provider.CreateScope();
         IntegriosDbContext context = scope.ServiceProvider.GetRequiredService<IntegriosDbContext>();
 
-        Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", context.Database.ProviderName);
-        Assert.Equal("nvarchar(max)", context.Model.FindEntityType(typeof(Event))!
-            .FindProperty(nameof(Event.Payload))!.GetColumnType());
-        Assert.IsType<SqlServerConnectionAuthoringLock>(provider.GetRequiredService<IConnectionAuthoringLock>());
-        Assert.IsType<SqlServerEventAcceptance>(provider.GetRequiredService<IEventAcceptance>());
-        Assert.IsType<SqlServerConnectorManifestStore>(scope.ServiceProvider.GetRequiredService<IConnectorManifestStore>());
+        context.Database.ProviderName.ShouldBe("Microsoft.EntityFrameworkCore.SqlServer");
+        context.Model.FindEntityType(typeof(Event))!
+            .FindProperty(nameof(Event.Payload))!.GetColumnType().ShouldBe("nvarchar(max)");
+        provider.GetRequiredService<IConnectionAuthoringLock>().ShouldBeOfType<SqlServerConnectionAuthoringLock>();
+        provider.GetRequiredService<IEventAcceptance>().ShouldBeOfType<SqlServerEventAcceptance>();
+        scope.ServiceProvider.GetRequiredService<IConnectorManifestStore>().ShouldBeOfType<SqlServerConnectorManifestStore>();
     }
 
     private static IConfiguration BuildConfiguration(string provider) =>

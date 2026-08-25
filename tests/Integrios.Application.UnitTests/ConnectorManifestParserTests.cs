@@ -42,9 +42,9 @@ public sealed class ConnectorManifestParserTests
             }
             """));
 
-        Assert.Equal("example_api", manifest.Key);
-        Assert.Equal(2, manifest.ContractVersion);
-        Assert.Equal("bearer_token", Assert.Single(manifest.DestinationAuthentication.Schemes).Scheme);
+        manifest.Key.ShouldBe("example_api");
+        manifest.ContractVersion.ShouldBe(2);
+        manifest.DestinationAuthentication.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("bearer_token");
     }
 
     [Theory]
@@ -59,10 +59,10 @@ public sealed class ConnectorManifestParserTests
             $"\"type\": \"string\", \"{keyword}\": \"unsupported\"",
             StringComparison.Ordinal);
 
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
+        var exception = Should.Throw<ConnectorManifestValidationException>(
             () => Parse(Json(json)));
 
-        Assert.Contains("unsupported JSON Schema keyword", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("unsupported JSON Schema keyword", Case.Sensitive);
     }
 
     [Fact]
@@ -73,10 +73,10 @@ public sealed class ConnectorManifestParserTests
             "\"type\": \"object\", \"properties\": {}",
             StringComparison.Ordinal);
 
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
+        var exception = Should.Throw<ConnectorManifestValidationException>(
             () => Parse(Json(json)));
 
-        Assert.Contains("nested object schemas", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("nested object schemas", Case.Sensitive);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class ConnectorManifestParserTests
             "\"manifest_schema_version\": 1, \"extension\": true,",
             StringComparison.Ordinal);
 
-        Assert.Throws<ConnectorManifestValidationException>(
+        Should.Throw<ConnectorManifestValidationException>(
             () => Parse(Json(json)));
     }
 
@@ -103,7 +103,7 @@ public sealed class ConnectorManifestParserTests
             .Replace("\"contract_version\": 1", $"\"contract_version\": {version}", StringComparison.Ordinal)
             .Replace("\"direction\": \"destination\"", $"\"direction\": \"{direction}\"", StringComparison.Ordinal);
 
-        Assert.Throws<ConnectorManifestValidationException>(
+        Should.Throw<ConnectorManifestValidationException>(
             () => Parse(Json(json)));
     }
 
@@ -115,10 +115,10 @@ public sealed class ConnectorManifestParserTests
             "\"destination_authentication\": { \"allow_unauthenticated\": true, \"schemes\": [{\"scheme\":\"bearer_token\",\"required_config\":[],\"required_secret_refs\":[]}] }",
             StringComparison.Ordinal);
 
-        var exception = Assert.Throws<ConnectorManifestValidationException>(
+        var exception = Should.Throw<ConnectorManifestValidationException>(
             () => Parse(Json(json)));
 
-        Assert.Contains("not a supported platform contract", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("not a supported platform contract", Case.Sensitive);
     }
 
     [Fact]
@@ -126,28 +126,28 @@ public sealed class ConnectorManifestParserTests
     {
         var manifest = Parse(Json(ManifestWithSourceContract("verified_webhook", schemeName: "hmac_sha256")));
 
-        Assert.Equal("verified_webhook", Assert.Single(manifest.SourceContracts).Key);
-        Assert.Equal("hmac_sha256", Assert.Single(manifest.SourceVerification.Schemes).Scheme);
+        manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("verified_webhook");
+        manifest.SourceVerification.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("hmac_sha256");
     }
 
     [Fact]
     public void BuiltinHttpDestinationSchema_RejectsUnknownConfiguration()
     {
-        BuiltinConnector http = Assert.Single(BuiltinCatalog.All, item => item.Manifest.Key == "http");
+        BuiltinConnector http = BuiltinCatalog.All.Where(item => item.Manifest.Key == "http").ShouldHaveSingleItem();
         JsonElement schema = http.Manifest.DestinationConfigurationSchema!.Value;
 
-        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+        schema.GetProperty("additionalProperties").GetBoolean().ShouldBeFalse();
     }
 
     [Fact]
     public void BuiltinGitHub_IsPinnedToTheCompiledWebhookContract()
     {
-        BuiltinConnector github = Assert.Single(BuiltinCatalog.All, item => item.Manifest.Key == "github");
+        BuiltinConnector github = BuiltinCatalog.All.Where(item => item.Manifest.Key == "github").ShouldHaveSingleItem();
 
-        Assert.Equal(BuiltinCatalog.GitHubId, github.Id);
-        Assert.Equal(BuiltinCatalog.GitHubContractVersion, github.Manifest.ContractVersion);
-        Assert.Equal("github_webhook", Assert.Single(github.Manifest.SourceContracts).Key);
-        Assert.Equal("hmac_sha256", Assert.Single(github.Manifest.SourceVerification.Schemes).Scheme);
+        github.Id.ShouldBe(BuiltinCatalog.GitHubId);
+        github.Manifest.ContractVersion.ShouldBe(BuiltinCatalog.GitHubContractVersion);
+        github.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("github_webhook");
+        github.Manifest.SourceVerification.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("hmac_sha256");
     }
 
     [Fact]
@@ -159,10 +159,10 @@ public sealed class ConnectorManifestParserTests
 
         var manifest = Parse(Json(json));
 
-        ConnectorSourceContractManifest entry = Assert.Single(manifest.SourceContracts);
-        Assert.Equal("event_json", entry.Key);
-        Assert.True(entry.Schema.HasValue);
-        Assert.Equal("jsonata", entry.Mapping!.Engine);
+        ConnectorSourceContractManifest entry = manifest.SourceContracts.ShouldHaveSingleItem();
+        entry.Key.ShouldBe("event_json");
+        entry.Schema.HasValue.ShouldBeTrue();
+        entry.Mapping!.Engine.ShouldBe("jsonata");
     }
 
     [Fact]
@@ -172,9 +172,9 @@ public sealed class ConnectorManifestParserTests
             schema: null,
             mapping: """{"engine":"jsonata","version":"1","expression":"{ "}""");
 
-        var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(json)));
+        var exception = Should.Throw<ConnectorManifestValidationException>(() => Parse(Json(json)));
 
-        Assert.Contains("Invalid JSONata expression", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("Invalid JSONata expression", Case.Sensitive);
     }
 
     private static string ManifestWithDeclarativeSourceContract(string? schema, string? mapping) => $$"""
@@ -223,9 +223,9 @@ public sealed class ConnectorManifestParserTests
         var second = Parse(Json(ValidManifest()
             .Replace("Example API", "Improved Name", StringComparison.Ordinal)));
 
-        Assert.True(JsonElement.DeepEquals(
+        JsonElement.DeepEquals(
             ConnectorManifestParser.ToFunctionalJson(first),
-            ConnectorManifestParser.ToFunctionalJson(second)));
+            ConnectorManifestParser.ToFunctionalJson(second)).ShouldBeTrue();
     }
 
     [Fact]
@@ -250,9 +250,9 @@ public sealed class ConnectorManifestParserTests
                 ]
                 """)));
 
-        Assert.True(JsonElement.DeepEquals(
+        JsonElement.DeepEquals(
             ConnectorManifestParser.ToFunctionalJson(first),
-            ConnectorManifestParser.ToFunctionalJson(second)));
+            ConnectorManifestParser.ToFunctionalJson(second)).ShouldBeTrue();
     }
 
     [Fact]
@@ -265,20 +265,20 @@ public sealed class ConnectorManifestParserTests
             schema: """{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"required":["a","b"],"additionalProperties":true}""",
             mapping: null)));
 
-        Assert.True(JsonElement.DeepEquals(
+        JsonElement.DeepEquals(
             ConnectorManifestParser.ToFunctionalJson(first),
-            ConnectorManifestParser.ToFunctionalJson(second)));
+            ConnectorManifestParser.ToFunctionalJson(second)).ShouldBeTrue();
     }
 
     [Fact]
     public void Parse_RejectsDuplicateEnumValues()
     {
-        var exception = Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(SetManifest(
+        var exception = Should.Throw<ConnectorManifestValidationException>(() => Parse(Json(SetManifest(
             required: "[\"base_uri\"]",
             values: "[\"eu\",\"us\",\"us\"]",
             schemes: "[]"))));
 
-        Assert.Contains("enum must contain unique values", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("enum must contain unique values", Case.Sensitive);
     }
 
     [Fact]
@@ -289,7 +289,7 @@ public sealed class ConnectorManifestParserTests
             "\"http_success\":{\"evaluator\":\"json_boolean\",\"field\":\"ok\",\"expected\":true,\"diagnostic_field\":\"error\",\"max_body_bytes\":65536},\"presentation\":",
             StringComparison.Ordinal);
 
-        Assert.NotNull(Parse(Json(json)).HttpSuccess);
+        Parse(Json(json)).HttpSuccess.ShouldNotBeNull();
     }
 
     [Fact]
@@ -300,7 +300,7 @@ public sealed class ConnectorManifestParserTests
             "{ \"type\": \"number\", \"minimum\": 1e100 }",
             StringComparison.Ordinal);
 
-        Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(json)));
+        Should.Throw<ConnectorManifestValidationException>(() => Parse(Json(json)));
     }
 
     [Fact]
@@ -309,7 +309,7 @@ public sealed class ConnectorManifestParserTests
         JsonObject manifest = JsonNode.Parse(ValidManifest())!.AsObject();
         manifest["destination_configuration_schema"] = null;
 
-        Assert.Throws<ConnectorManifestValidationException>(() => Parse(Json(manifest.ToJsonString())));
+        Should.Throw<ConnectorManifestValidationException>(() => Parse(Json(manifest.ToJsonString())));
     }
 
     [Fact]
@@ -322,7 +322,7 @@ public sealed class ConnectorManifestParserTests
         // [JsonPropertyName] surfaces here as an unexpected camelCase name. These
         // assertions also fail when a new manifest property is added without being
         // populated below, keeping the round trip exercised over the whole contract.
-        Assert.Equal(
+        stored.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).ShouldBe(
             [
                 "contract_version",
                 "destination_authentication",
@@ -335,29 +335,24 @@ public sealed class ConnectorManifestParserTests
                 "source_configuration_schema",
                 "source_contracts",
                 "source_verification",
-            ],
-            stored.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            ["authoring_presets", "description", "event_types", "name"],
-            stored.GetProperty("presentation").EnumerateObject()
-                .Select(property => property.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            ["allow_unauthenticated", "schemes"],
-            stored.GetProperty("destination_authentication").EnumerateObject()
-                .Select(property => property.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            ["required_config", "required_secret_refs", "scheme"],
-            stored.GetProperty("destination_authentication").GetProperty("schemes")[0].EnumerateObject()
-                .Select(property => property.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            ["config", "contract_version", "key"],
-            stored.GetProperty("source_contracts")[0].EnumerateObject()
-                .Select(property => property.Name).Order(StringComparer.Ordinal));
+            ]);
+        stored.GetProperty("presentation").EnumerateObject()
+            .Select(property => property.Name).Order(StringComparer.Ordinal)
+            .ShouldBe(["authoring_presets", "description", "event_types", "name"]);
+        stored.GetProperty("destination_authentication").EnumerateObject()
+            .Select(property => property.Name).Order(StringComparer.Ordinal)
+            .ShouldBe(["allow_unauthenticated", "schemes"]);
+        stored.GetProperty("destination_authentication").GetProperty("schemes")[0].EnumerateObject()
+            .Select(property => property.Name).Order(StringComparer.Ordinal)
+            .ShouldBe(["required_config", "required_secret_refs", "scheme"]);
+        stored.GetProperty("source_contracts")[0].EnumerateObject()
+            .Select(property => property.Name).Order(StringComparer.Ordinal)
+            .ShouldBe(["config", "contract_version", "key"]);
 
         ConnectorManifest rehydrated =
             ConnectorManifestParser.DeserializeStored(stored.GetRawText());
 
-        Assert.True(JsonElement.DeepEquals(stored, ConnectorManifestParser.ToJson(rehydrated)));
+        JsonElement.DeepEquals(stored, ConnectorManifestParser.ToJson(rehydrated)).ShouldBeTrue();
     }
 
     private static string ValidManifest() => """

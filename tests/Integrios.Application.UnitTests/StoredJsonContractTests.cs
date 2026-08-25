@@ -37,16 +37,16 @@ public sealed partial class StoredJsonContractTests
         ConnectorManifest manifest = ConnectorManifestParser.DeserializeStored(stored);
         JsonElement written = ConnectorManifestParser.ToJson(manifest);
 
-        Assert.Equal(1, manifest.ManifestSchemaVersion);
-        Assert.Equal("github_webhook", Assert.Single(manifest.SourceContracts).Key);
-        Assert.Equal(["secret"], manifest.SourceVerification.Schemes[0].RequiredSecretRefs);
+        manifest.ManifestSchemaVersion.ShouldBe(1);
+        manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("github_webhook");
+        manifest.SourceVerification.Schemes[0].RequiredSecretRefs.ShouldBe(new[] { "secret" });
 
         AssertAllPropertyNamesAreSnakeCase(written, path: "$");
 
         JsonElement scheme = written.GetProperty("source_verification").GetProperty("schemes")[0];
-        Assert.True(scheme.TryGetProperty("required_secret_refs", out _));
-        Assert.True(written.GetProperty("presentation").TryGetProperty("event_types", out _));
-        Assert.True(written.GetProperty("source_contracts")[0].TryGetProperty("contract_version", out _));
+        scheme.TryGetProperty("required_secret_refs", out _).ShouldBeTrue();
+        written.GetProperty("presentation").TryGetProperty("event_types", out _).ShouldBeTrue();
+        written.GetProperty("source_contracts")[0].TryGetProperty("contract_version", out _).ShouldBeTrue();
     }
 
     // Stored keys are snake_case and stable; a flat top-level pin misses nested keys and breaks on
@@ -58,8 +58,7 @@ public sealed partial class StoredJsonContractTests
             case JsonValueKind.Object:
                 foreach (JsonProperty property in element.EnumerateObject())
                 {
-                    Assert.True(
-                        SnakeCase().IsMatch(property.Name),
+                    SnakeCase().IsMatch(property.Name).ShouldBeTrue(
                         $"Stored JSON keys must be snake_case. Found '{property.Name}' at {path}.{property.Name}.");
                     AssertAllPropertyNamesAreSnakeCase(property.Value, $"{path}.{property.Name}");
                 }

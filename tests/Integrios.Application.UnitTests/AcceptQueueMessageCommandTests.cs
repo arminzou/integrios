@@ -41,15 +41,15 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         IngestEventResult result = await mediator.Send(
             new AcceptQueueMessageCommand(tenantId, topicId, sourceId, null, IdentityMapping, input));
 
-        Assert.Equal(EventStatus.Accepted, result.Status);
-        Assert.NotNull(eventAcceptance.LastSubmission);
+        result.Status.ShouldBe(EventStatus.Accepted);
+        eventAcceptance.LastSubmission.ShouldNotBeNull();
         EventSubmission submission = eventAcceptance.LastSubmission!;
-        Assert.Equal(tenantId, submission.TenantId);
-        Assert.Equal(topicId, submission.TopicId);
-        Assert.Equal(sourceId, submission.SourceId);
-        Assert.Equal("order.created", submission.EventType);
-        Assert.Equal("op-1", submission.SourceEventId);
-        Assert.Equal($"service_bus:{sourceId}:op-1", submission.IdempotencyKey);
+        submission.TenantId.ShouldBe(tenantId);
+        submission.TopicId.ShouldBe(topicId);
+        submission.SourceId.ShouldBe(sourceId);
+        submission.EventType.ShouldBe("order.created");
+        submission.SourceEventId.ShouldBe("op-1");
+        submission.IdempotencyKey.ShouldBe($"service_bus:{sourceId}:op-1");
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         IngestEventResult result = await mediator.Send(
             new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, IdentityMapping, input));
 
-        Assert.True(result.AlreadyAccepted);
+        result.AlreadyAccepted.ShouldBeTrue();
     }
 
     [Fact]
@@ -72,9 +72,9 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
             """{"type":"object","properties":{"event_type":{"type":"string"}},"required":["event_type"],"additionalProperties":true}""").RootElement;
         JsonElement input = JsonDocument.Parse("""{"event_type":42,"payload":{}}""").RootElement;
 
-        await Assert.ThrowsAsync<EventAcceptanceException>(() => mediator.Send(
+        await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
             new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), schema, IdentityMapping, input)));
-        Assert.Null(eventAcceptance.LastSubmission);
+        eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
     [Fact]
@@ -83,9 +83,9 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         var failingMapping = new TransformSpec("jsonata", "1", "$error(\"boom\")");
         JsonElement input = JsonDocument.Parse("""{"a":1}""").RootElement;
 
-        await Assert.ThrowsAsync<EventAcceptanceException>(() => mediator.Send(
+        await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
             new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, failingMapping, input)));
-        Assert.Null(eventAcceptance.LastSubmission);
+        eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
     [Fact]
@@ -93,9 +93,9 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
     {
         JsonElement input = JsonDocument.Parse("""{"payload":{}}""").RootElement;
 
-        await Assert.ThrowsAsync<EventAcceptanceException>(() => mediator.Send(
+        await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
             new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, input)));
-        Assert.Null(eventAcceptance.LastSubmission);
+        eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
     private sealed class FakeEventAcceptance : IEventAcceptance

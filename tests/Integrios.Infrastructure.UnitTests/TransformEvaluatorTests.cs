@@ -27,9 +27,9 @@ public class TransformEvaluatorTests
 
         using var doc = JsonDocument.Parse(output);
         var root = doc.RootElement;
-        Assert.Equal("payment.created", root.GetProperty("type").GetString());
-        Assert.Equal(1200, root.GetProperty("amount").GetInt32());
-        Assert.Equal("payments", root.GetProperty("topic").GetString());
+        root.GetProperty("type").GetString().ShouldBe("payment.created");
+        root.GetProperty("amount").GetInt32().ShouldBe(1200);
+        root.GetProperty("topic").GetString().ShouldBe("payments");
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class TransformEvaluatorTests
         var output = evaluator.Evaluate(Jsonata("{ \"amount\": payload.amount }"), "{\"amount\":1200}", Context);
 
         using var doc = JsonDocument.Parse(output);
-        Assert.False(doc.RootElement.TryGetProperty("amount", out _));
+        doc.RootElement.TryGetProperty("amount", out _).ShouldBeFalse();
     }
 
     [Fact]
@@ -54,9 +54,9 @@ public class TransformEvaluatorTests
 
         using var doc = JsonDocument.Parse(output);
         var root = doc.RootElement;
-        Assert.Equal("payment.created", root.GetProperty("et").GetString());
-        Assert.Equal("payments", root.GetProperty("tn").GetString());
-        Assert.StartsWith("2026-06-01T00:00:00", root.GetProperty("at").GetString());
+        root.GetProperty("et").GetString().ShouldBe("payment.created");
+        root.GetProperty("tn").GetString().ShouldBe("payments");
+        root.GetProperty("at").GetString()!.ShouldStartWith("2026-06-01T00:00:00", Case.Sensitive);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class TransformEvaluatorTests
         var output = evaluator.Evaluate(Jsonata("{ \"type\": $context.event_type }"), "{}", context);
 
         using var doc = JsonDocument.Parse(output);
-        Assert.Equal("payment.created", doc.RootElement.GetProperty("type").GetString());
+        doc.RootElement.GetProperty("type").GetString().ShouldBe("payment.created");
     }
 
     // --- Output shapes ---
@@ -75,13 +75,13 @@ public class TransformEvaluatorTests
     [Fact]
     public void Evaluate_ReturnsScalar_WhenExpressionSelectsAField()
     {
-        Assert.Equal("1200", evaluator.Evaluate(Jsonata("amount"), "{\"amount\":1200}", Context));
+        evaluator.Evaluate(Jsonata("amount"), "{\"amount\":1200}", Context).ShouldBe("1200");
     }
 
     [Fact]
     public void Evaluate_AccessesNestedPayloadFields()
     {
-        Assert.Equal("\"c1\"", evaluator.Evaluate(Jsonata("customer.id"), "{\"customer\":{\"id\":\"c1\"}}", Context));
+        evaluator.Evaluate(Jsonata("customer.id"), "{\"customer\":{\"id\":\"c1\"}}", Context).ShouldBe("\"c1\"");
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class TransformEvaluatorTests
         var output = evaluator.Evaluate(Jsonata("{ \"note\": memo }"), "{\"amount\":1200}", Context);
 
         using var doc = JsonDocument.Parse(output);
-        Assert.False(doc.RootElement.TryGetProperty("note", out _));
+        doc.RootElement.TryGetProperty("note", out _).ShouldBeFalse();
     }
 
     // --- Failure paths (all surface as TransformEvaluationException, never a raw crash) ---
@@ -100,14 +100,14 @@ public class TransformEvaluatorTests
     [Fact]
     public void Evaluate_Throws_OnUncompilableExpression()
     {
-        Assert.Throws<TransformEvaluationException>(
+        Should.Throw<TransformEvaluationException>(
             () => evaluator.Evaluate(Jsonata("{ \"x\": "), "{}", Context));
     }
 
     [Fact]
     public void Evaluate_Throws_OnUnparseablePayload()
     {
-        Assert.Throws<TransformEvaluationException>(
+        Should.Throw<TransformEvaluationException>(
             () => evaluator.Evaluate(Jsonata("amount"), "not-json", Context));
     }
 
@@ -115,7 +115,7 @@ public class TransformEvaluatorTests
     public void Evaluate_Throws_OnRuntimeTypeError()
     {
         // Valid syntax, but adding a number to a string is a runtime type error in JSONata.
-        Assert.Throws<TransformEvaluationException>(
+        Should.Throw<TransformEvaluationException>(
             () => evaluator.Evaluate(Jsonata("amount + $context.event_type"), "{\"amount\":1200}", Context));
     }
 
@@ -124,10 +124,10 @@ public class TransformEvaluatorTests
     [Fact]
     public void ValidateExpression_AcceptsValid_RejectsBadInput()
     {
-        Assert.Null(evaluator.ValidateExpression(Jsonata("{ \"amount\": amount }")));
-        Assert.NotNull(evaluator.ValidateExpression(Jsonata("{ \"amount\": ")));  // syntax error
-        Assert.NotNull(evaluator.ValidateExpression(new TransformSpec("xslt", "1", "amount")));    // unsupported engine
-        Assert.NotNull(evaluator.ValidateExpression(new TransformSpec("jsonata", "2", "amount"))); // unsupported version
+        evaluator.ValidateExpression(Jsonata("{ \"amount\": amount }")).ShouldBeNull();
+        evaluator.ValidateExpression(Jsonata("{ \"amount\": ")).ShouldNotBeNull();  // syntax error
+        evaluator.ValidateExpression(new TransformSpec("xslt", "1", "amount")).ShouldNotBeNull();    // unsupported engine
+        evaluator.ValidateExpression(new TransformSpec("jsonata", "2", "amount")).ShouldNotBeNull(); // unsupported version
     }
 
     // Proves the exact expression published in docs/github-to-slack-walkthrough.md against a
@@ -150,9 +150,8 @@ public class TransformEvaluatorTests
 
         using var doc = JsonDocument.Parse(output);
         var root = doc.RootElement;
-        Assert.Equal("#deploys", root.GetProperty("channel").GetString());
-        Assert.Equal(
-            "octocat pushed to acme/widgets: fix: correct off-by-one in retry backoff",
-            root.GetProperty("text").GetString());
+        root.GetProperty("channel").GetString().ShouldBe("#deploys");
+        root.GetProperty("text").GetString().ShouldBe(
+            "octocat pushed to acme/widgets: fix: correct off-by-one in retry backoff");
     }
 }

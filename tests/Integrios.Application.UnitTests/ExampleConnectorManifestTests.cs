@@ -20,11 +20,11 @@ public sealed class ExampleConnectorManifestTests
     {
         ConnectorManifest manifest = ParseExample("github-v1.json");
 
-        Assert.Equal("github", manifest.Key);
-        Assert.Equal("source", manifest.Direction);
-        Assert.Equal("verified_webhook", Assert.Single(manifest.SourceContracts).Key);
-        Assert.Equal("hmac_sha256", Assert.Single(manifest.SourceVerification.Schemes).Scheme);
-        Assert.False(manifest.SourceVerification.AllowUnverified);
+        manifest.Key.ShouldBe("github");
+        manifest.Direction.ShouldBe("source");
+        manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("verified_webhook");
+        manifest.SourceVerification.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("hmac_sha256");
+        manifest.SourceVerification.AllowUnverified.ShouldBeFalse();
     }
 
     [Fact]
@@ -32,13 +32,13 @@ public sealed class ExampleConnectorManifestTests
     {
         ConnectorManifest manifest = ParseExample("slack-v1.json");
 
-        Assert.Equal("slack", manifest.Key);
-        Assert.Equal("destination", manifest.Direction);
-        Assert.Equal("bearer_token", Assert.Single(manifest.DestinationAuthentication.Schemes).Scheme);
-        Assert.False(manifest.DestinationAuthentication.AllowUnauthenticated);
-        Assert.True(manifest.HttpSuccess.HasValue);
-        Assert.Equal("json_boolean", manifest.HttpSuccess!.Value.GetProperty("evaluator").GetString());
-        Assert.Equal("ok", manifest.HttpSuccess.Value.GetProperty("field").GetString());
+        manifest.Key.ShouldBe("slack");
+        manifest.Direction.ShouldBe("destination");
+        manifest.DestinationAuthentication.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("bearer_token");
+        manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBeFalse();
+        manifest.HttpSuccess.HasValue.ShouldBeTrue();
+        manifest.HttpSuccess!.Value.GetProperty("evaluator").GetString().ShouldBe("json_boolean");
+        manifest.HttpSuccess.Value.GetProperty("field").GetString().ShouldBe("ok");
     }
 
     private static ConnectorManifest ParseExample(string fileName)

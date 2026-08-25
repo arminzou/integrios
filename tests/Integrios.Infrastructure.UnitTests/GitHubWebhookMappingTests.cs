@@ -22,9 +22,9 @@ public sealed class GitHubWebhookMappingTests
         string outputJson = evaluator.Evaluate(Mapping, input, context);
         SourceContractOutput output = SourceMappingOutputValidator.Validate(outputJson);
 
-        Assert.Equal("github.push", output.EventType);
-        Assert.Equal("delivery-1", output.SourceEventId);
-        Assert.Equal("octocat", output.Payload.GetProperty("pusher").GetProperty("name").GetString());
+        output.EventType.ShouldBe("github.push");
+        output.SourceEventId.ShouldBe("delivery-1");
+        output.Payload.GetProperty("pusher").GetProperty("name").GetString().ShouldBe("octocat");
     }
 
     // Without a guard the concatenation yields the bare prefix "github.", which the output
@@ -35,7 +35,7 @@ public sealed class GitHubWebhookMappingTests
         JsonElement context = JsonSerializer.Deserialize<JsonElement>(
             """{"headers":{"x-github-delivery":"delivery-1"}}""");
 
-        Assert.Throws<TransformEvaluationException>(
+        Should.Throw<TransformEvaluationException>(
             () => SourceMappingOutputValidator.Validate(evaluator.Evaluate(Mapping, "{}", context)));
     }
 }
