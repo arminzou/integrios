@@ -27,7 +27,7 @@ team points it at their own stack. Licensed under MIT.
 - `src/Integrios.Worker` owns outbox polling, fanout to subscriptions, delivery, and retry/DLQ behavior.
 - `src/Integrios.MockSink` provides a controllable local sink for testing and demos. Not part of the deployable product.
 - `src/Integrios.Domain` holds core domain types and shared contracts.
-- `tests/` contains unit and integration test projects.
+- `tests/` contains the `Unit`, `Functional`, `Acceptance`, and `Architecture` test projects.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` contain the
   provider-specific EF Core migrations.
 - `docs/` is for public documentation only.
@@ -111,7 +111,7 @@ dotnet build Integrios.slnx
 dotnet test Integrios.slnx
 
 # Run one test project
-dotnet test tests/Integrios.Ingestion.Tests/Integrios.Ingestion.Tests.csproj
+dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj
 
 # Run one service
 dotnet run --project src/Integrios.Ingestion
@@ -162,6 +162,18 @@ Style:
 - when changing behavior, add or update tests where practical
 - prefer targeted tests for narrow changes and full-suite runs for broader changes
 - if you skip verification, say so explicitly
+
+Test suite shape (current counts as of 2026-08-25):
+
+- Seven container-free projects run on every edit: `ArchitectureTests` (24) plus the six `Unit`
+  projects (Domain 13, Application 164, Infrastructure 103, Admin 13, Ingestion 26, Worker 29).
+- `FunctionalTests` (195 per provider) needs Docker via Testcontainers; run it once per provider
+  (PostgreSQL and SQL Server).
+- `AcceptanceTests` (21) needs Docker Compose and built images; it is the packaged release gate.
+
+CI jobs are `verify`, `functional`, `acceptance`, and `package`. `run_kind` is workflow metadata
+(`main`, `nightly`, `release`) that selects which retained gates run; it is not an xUnit trait,
+category, or project axis. Do not partition a test project with traits or category filters.
 
 Default verification:
 
