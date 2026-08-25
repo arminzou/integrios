@@ -32,8 +32,8 @@ catalog).
 ## 1. Apply the example Connector manifests
 
 The [`examples/connectors/`](../examples/connectors/) directory carries the exact
-machine-validated manifests this walkthrough uses. `github-v1.json` selects the authoring-safe
-`verified_webhook` v1 source adapter; `slack-v1.json` is generic HTTP with bearer-token
+machine-validated manifests this walkthrough uses. `github.json` selects the authoring-safe
+`verified_webhook` Source contract; `slack.json` is generic HTTP with bearer-token
 authentication and a `json_boolean` success rule, because Slack's `chat.postMessage` can return
 HTTP 200 for a request it rejected. Apply is idempotent — a missing version is created, and
 re-applying the identical manifest is a no-op.
@@ -46,10 +46,10 @@ ADMIN=http://localhost:5150
 AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
 
 GITHUB_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/github/versions/1" -H "$AUTH" \
-  -H 'Content-Type: application/json' --data-binary @examples/connectors/github-v1.json | jq -r .id)
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/github.json | jq -r .id)
 
 SLACK_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/slack/versions/1" -H "$AUTH" \
-  -H 'Content-Type: application/json' --data-binary @examples/connectors/slack-v1.json | jq -r .id)
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/slack.json | jq -r .id)
 ```
 
 Bootstrap installs neither: only the deployment-wide generic `http` Connector is built in. These
@@ -197,7 +197,7 @@ curl -s "http://localhost:5231/events/$EVENT" -H "Authorization: TenantApiKey $T
 A `delivery_attempts[].status` of `succeeded` with `response_status_code: 200` means Slack accepted
 and confirmed the message logically (`ok: true`); a `dead_lettered` SubscriptionDelivery despite an
 HTTP 200 attempt means Slack returned `ok: false`, which the `json_boolean` success rule in
-`slack-v1.json` classifies as a terminal delivery failure rather than a false success.
+`slack.json` classifies as a terminal delivery failure rather than a false success.
 
 ## Recovery notes
 

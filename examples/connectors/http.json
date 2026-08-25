@@ -1,0 +1,51 @@
+{
+  "manifest_schema_version": 1,
+  "key": "http",
+  "contract_version": 1,
+  "direction": "both",
+  "source_configuration_schema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": true
+  },
+  "destination_configuration_schema": {
+    "type": "object",
+    "properties": {
+      "base_uri": { "type": "string", "format": "uri" }
+    },
+    "required": ["base_uri"],
+    "additionalProperties": false
+  },
+  "source_verification": {
+    "allow_unverified": true,
+    "schemes": []
+  },
+  "destination_authentication": {
+    "allow_unauthenticated": true,
+    "schemes": [
+      {
+        "scheme": "api_key_header",
+        "required_config": ["header_name"],
+        "required_secret_refs": ["api_key"]
+      },
+      {
+        "scheme": "bearer_token",
+        "required_config": [],
+        "required_secret_refs": ["token"]
+      }
+    ]
+  },
+  "source_contracts": [
+    {
+      "key": "event_json",
+      "contract_version": 1,
+      "config": {}
+    }
+  ],
+  "presentation": {
+    "name": "HTTP",
+    "description": "Generic Event API input and HTTP delivery using the platform's ordinary source and destination capabilities.",
+    "event_types": [],
+    "authoring_presets": []
+  }
+}

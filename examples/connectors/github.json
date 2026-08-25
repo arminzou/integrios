@@ -26,19 +26,17 @@
     {
       "key": "verified_webhook",
       "contract_version": 1,
-      "config": {
-        "signature_header": "X-Hub-Signature-256",
-        "signature_encoding": "hex",
-        "signature_prefix": "sha256=",
-        "delivery_id_header": "X-GitHub-Delivery",
-        "event_type_header": "X-GitHub-Event",
-        "event_type_action_field": "action"
+      "config": {},
+      "mapping": {
+        "engine": "jsonata",
+        "version": "1",
+        "expression": "($event := $context.headers.`x-github-event`; $delivery := $context.headers.`x-github-delivery`; $action := action; $exists($event) and $event != \"\" and $exists($delivery) and $delivery != \"\" ? { \"event_type\": \"github.\" & $event & ($exists($action) and $action != \"\" ? \".\" & $action : \"\"), \"source_event_id\": $delivery, \"payload\": $ } : $error(\"GitHub webhook requires non-empty X-GitHub-Event and X-GitHub-Delivery headers.\"))"
       }
     }
   ],
   "presentation": {
     "name": "GitHub",
-    "description": "Verified GitHub repository or organization webhooks, delivered through the generic verified-webhook adapter. Configure the webhook manually in GitHub with this Connection's callback URL and shared secret; Integrios never provisions or manages the GitHub side.",
+    "description": "Verified GitHub repository or organization webhooks. Configure the webhook manually in GitHub with this Connection's callback URL and shared secret; Integrios never provisions or manages the GitHub side.",
     "event_types": [
       "github.push",
       "github.ping",

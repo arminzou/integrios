@@ -1,0 +1,37 @@
+{
+  "manifest_schema_version": 1,
+  "key": "dataverse",
+  "contract_version": 1,
+  "direction": "source",
+  "source_configuration_schema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": true
+  },
+  "source_verification": {
+    "allow_unverified": true,
+    "schemes": []
+  },
+  "destination_authentication": {
+    "allow_unauthenticated": true,
+    "schemes": []
+  },
+  "source_contracts": [
+    {
+      "key": "remote_execution_context_json",
+      "contract_version": 1,
+      "config": {},
+      "mapping": {
+        "engine": "jsonata",
+        "version": "1",
+        "expression": "$exists(PrimaryEntityName) and PrimaryEntityName != \"\" and $exists(MessageName) and MessageName != \"\" and $exists(OperationId) ? { \"event_type\": \"dataverse.\" & PrimaryEntityName & \".\" & MessageName, \"source_event_id\": OperationId, \"payload\": $ } : $error(\"Dataverse remote_execution_context_json requires non-empty PrimaryEntityName and MessageName plus an OperationId.\")"
+      }
+    }
+  ],
+  "presentation": {
+    "name": "Dataverse",
+    "description": "Dataverse RemoteExecutionContext messages received through an Operator-configured Queue Source.",
+    "event_types": [],
+    "authoring_presets": []
+  }
+}

@@ -88,7 +88,7 @@ Connector manifest opt into provider HTTP intake without adding or rebuilding In
 manifest supplies signature header, encoding, delivery-identity header, and Event-type-derivation
 header as data; the adapter verifies HMAC-SHA256 over the exact raw request body before parsing,
 derives a provider-qualified Event type (for example `github.issues.opened`) from that data, and
-retains the JSON payload unchanged. The `github-v1` example under
+retains the JSON payload unchanged. The `github.json` example under
 [`examples/connectors/`](../examples/connectors/) is a real, machine-validated instance of this,
 not a hypothetical. A curated set of provider-specific *compiled* built-in adapters may be added
 later for contracts that don't fit the generic adapter's closed shape; every adapter, generic or
