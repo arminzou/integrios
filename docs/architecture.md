@@ -35,7 +35,7 @@ walkthrough](github-to-slack-walkthrough.md) for a concrete, currently-shipped e
 
 Integrios separates platform intent from runtime execution.
 
-**Control plane** (`Integrios.Admin`): Operator-owned Tenant lifecycle, Connector catalog,
+**Control plane** (`Integrios.Admin`): Operator-owned Tenant lifecycle, Connector authoring,
 Connection configuration and secret references, Topic and Subscription authoring, and transform
 preview. Tenants never receive control-plane authority.
 
@@ -96,7 +96,7 @@ compiled, crosses the same durable Event-acceptance seam.
 
 Operator-authored Connectors cannot load runtime code — the verified-webhook adapter's behavior is
 entirely platform-owned, and a manifest only supplies bounded configuration data for it. Polling
-remains external Event-producer behavior. Integrios does not commit to a broad provider catalog or
+remains external Event-producer behavior. Integrios does not commit to a broad provider set or
 an in-process plugin system.
 
 ## Destination model

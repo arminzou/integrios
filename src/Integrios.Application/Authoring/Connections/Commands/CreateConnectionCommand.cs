@@ -20,7 +20,7 @@ public sealed record CreateConnectionCommand(
 
 internal sealed class CreateConnectionCommandHandler(
     IConnectionRepository repository,
-    IConnectorCatalog connectorCatalog,
+    IConnectorReader connectorReader,
     IDestinationAuthenticatorRegistry authSchemeRegistry)
     : IRequestHandler<CreateConnectionCommand, ConnectionDto>
 {
@@ -28,7 +28,7 @@ internal sealed class CreateConnectionCommandHandler(
 
     public async Task<ConnectionDto> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
     {
-        Connector connector = await connectorCatalog.GetByIdAsync(command.ConnectorId, cancellationToken)
+        Connector connector = await connectorReader.GetByIdAsync(command.ConnectorId, cancellationToken)
             ?? throw new ConnectionValidationException("The specified connector does not exist.");
 
         JsonElement config = command.Config.ValueKind == JsonValueKind.Undefined ? EmptyObject : command.Config;

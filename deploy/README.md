@@ -22,8 +22,8 @@ and `worker` start.
 
 ## Bootstrap semantics
 
-The `bootstrap` service is idempotent and safe to re-run. It creates the built-in connector
-catalog and, only if no live deployment-wide OperatorKey exists yet, the first OperatorKey.
+The `bootstrap` service is idempotent and safe to re-run. It creates no Connectors and, only if no
+live deployment-wide OperatorKey exists yet, creates the first OperatorKey.
 
 The OperatorKey secret comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`. Production bootstrap requires a
 non-empty Operator-supplied value and never prints the secret. The OperatorKey credential format is:

@@ -33,17 +33,17 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingestion],
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingestion],
-        [typeof(IConnectorCatalog)] = [Host.Admin],
+        [typeof(IConnectorReader)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
         [typeof(IEventApiSourceResolver)] = [Host.Ingestion],
         [typeof(ISourceVerifier)] = [Host.Ingestion],
         [typeof(ISourceVerifierRegistry)] = [Host.Ingestion],
-        [typeof(IQueueSourceCatalog)] = [Host.Ingestion],
+        [typeof(IQueueSourceReader)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
-        [typeof(ISecretValidationCatalog)] = [Host.Worker],
+        [typeof(ISecretValidationReader)] = [Host.Worker],
         [typeof(ISourceRepository)] = [Host.Admin],
         [typeof(IEventDeliveryQueue)] = [Host.Worker],
         [typeof(ISubscriptionRepository)] = [Host.Admin],
@@ -238,7 +238,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IOperatorKeyLifecycle>(scope.ServiceProvider);
         AssertResolves<ITenantApiKeyRepository>(scope.ServiceProvider);
         AssertResolves<ITenantRepository>(scope.ServiceProvider);
-        AssertResolves<IConnectorCatalog>(scope.ServiceProvider);
+        AssertResolves<IConnectorReader>(scope.ServiceProvider);
         AssertResolves<IConnectorManifestStore>(scope.ServiceProvider);
         AssertResolves<IConnectionRepository>(scope.ServiceProvider);
         AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
@@ -252,7 +252,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<IEventApiSourceResolver>(scope.ServiceProvider);
-        AssertOmits<ISecretValidationCatalog>(scope.ServiceProvider);
+        AssertOmits<ISecretValidationReader>(scope.ServiceProvider);
         AssertOmits<IOutboxFanout>(scope.ServiceProvider);
         AssertOmits<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertOmits<IDeliveryClient>(scope.ServiceProvider);
@@ -275,7 +275,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<ISourceVerifier>(provider);
         AssertResolves<ISourceVerifierRegistry>(provider);
-        AssertResolves<IQueueSourceCatalog>(provider);
+        AssertResolves<IQueueSourceReader>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
 
@@ -283,7 +283,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IOperatorKeyLifecycle>(provider);
         AssertOmits<ITenantApiKeyRepository>(provider);
         AssertOmits<ITenantRepository>(provider);
-        AssertOmits<IConnectorCatalog>(provider);
+        AssertOmits<IConnectorReader>(provider);
         AssertOmits<IConnectorManifestStore>(provider);
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
@@ -309,7 +309,7 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
         using IServiceScope scope = provider.CreateScope();
 
-        AssertResolves<ISecretValidationCatalog>(scope.ServiceProvider);
+        AssertResolves<ISecretValidationReader>(scope.ServiceProvider);
         AssertResolves<IOutboxFanout>(provider);
         AssertResolves<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertResolves<IDeliveryClient>(scope.ServiceProvider);
@@ -332,7 +332,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITopicRepository>(scope.ServiceProvider);
         AssertOmits<IEventApiSourceResolver>(scope.ServiceProvider);
         AssertOmits<IDeadLetterReplay>(scope.ServiceProvider);
-        AssertOmits<IConnectorCatalog>(scope.ServiceProvider);
+        AssertOmits<IConnectorReader>(scope.ServiceProvider);
         AssertOmits<IConnectorManifestStore>(scope.ServiceProvider);
         AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
     }

@@ -149,7 +149,7 @@ public sealed class SecretValidationCliTests
     {
         var services = new ServiceCollection();
         services.AddWorkerApplicationServices();
-        services.AddSingleton<ISecretValidationCatalog>(new FakeSecretValidationCatalog(tenants, connections));
+        services.AddSingleton<ISecretValidationReader>(new FakeSecretValidationReader(tenants, connections));
         services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(secrets));
         return services.BuildServiceProvider();
     }
@@ -198,9 +198,9 @@ public sealed class SecretValidationCliTests
         return resolver;
     }
 
-    private sealed class FakeSecretValidationCatalog(
+    private sealed class FakeSecretValidationReader(
         IReadOnlyList<Tenant> tenants,
-        IReadOnlyList<Connection> connections) : ISecretValidationCatalog
+        IReadOnlyList<Connection> connections) : ISecretValidationReader
     {
         public Task<Tenant?> FindTenantBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
             Task.FromResult(tenants.SingleOrDefault(item => item.Slug == slug));

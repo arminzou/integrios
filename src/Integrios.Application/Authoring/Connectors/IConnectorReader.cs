@@ -4,7 +4,7 @@ using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Authoring.Connectors;
 
-public interface IConnectorCatalog
+public interface IConnectorReader
 {
     Task<Connector?> GetByIdAsync(
         Guid id,

@@ -5,7 +5,7 @@ namespace Integrios.Application.Ingestion;
 
 // The desired set of running queue processors, re-read on a reconcile interval rather than per
 // message: a message is processed against the facts its processor resolved when it started.
-public interface IQueueSourceCatalog
+public interface IQueueSourceReader
 {
     Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(CancellationToken cancellationToken);
 }
@@ -13,7 +13,7 @@ public interface IQueueSourceCatalog
 public sealed record ResolvedQueueSource
 {
     // Opaque fingerprint of everything this record was resolved from. A processor whose Revision no
-    // longer matches the catalog is recycled, which is what makes an edited Source or a republished
+    // longer matches the reader is recycled, which is what makes an edited Source or a republished
     // Connector manifest take effect without a restart.
     public required string Revision { get; init; }
 

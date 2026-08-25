@@ -27,7 +27,7 @@ internal sealed class CreateSubscriptionCommandHandler(
     ITopicRepository topicRepository,
     IConnectionRepository connectionRepository,
     IConnectionAuthoringLock authoringLock,
-    IConnectorCatalog connectorCatalog,
+    IConnectorReader connectorReader,
     IDestinationAuthenticatorRegistry authSchemeRegistry,
     ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionDto?>
 {
@@ -75,7 +75,7 @@ internal sealed class CreateSubscriptionCommandHandler(
                 "The specified destination connection does not exist for this tenant.");
         }
 
-        Connector? connector = await connectorCatalog.GetByIdAsync(connection.ConnectorId, cancellationToken);
+        Connector? connector = await connectorReader.GetByIdAsync(connection.ConnectorId, cancellationToken);
         if (connector is null)
         {
             throw new SubscriptionValidationException(

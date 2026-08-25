@@ -26,7 +26,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     IConnectionRepository connectionRepository,
     IConnectionAuthoringLock authoringLock,
-    IConnectorCatalog connectorCatalog,
+    IConnectorReader connectorReader,
     IDestinationAuthenticatorRegistry authSchemeRegistry,
     ITransformEvaluator transformEvaluator) : IRequestHandler<UpdateSubscriptionCommand, SubscriptionDto?>
 {
@@ -79,7 +79,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
                 "The specified destination connection does not exist for this tenant.");
         }
 
-        Connector? connector = await connectorCatalog.GetByIdAsync(connection.ConnectorId, cancellationToken);
+        Connector? connector = await connectorReader.GetByIdAsync(connection.ConnectorId, cancellationToken);
         if (connector is null)
         {
             throw new SubscriptionValidationException(

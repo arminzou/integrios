@@ -27,7 +27,7 @@ Integrios does not provision or manage the GitHub webhook, does not perform GitH
 installation, and does not perform Slack's interactive OAuth flow. The Operator configures both
 provider sides manually, once, using values this walkthrough produces. This matches the shipped
 model: [architecture.md](architecture.md) describes why (no runtime plugins, no broad provider
-catalog).
+set).
 
 ## 1. Apply the example Connector manifests
 

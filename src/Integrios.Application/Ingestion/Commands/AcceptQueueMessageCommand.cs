@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Ingestion;
 
-// The queue receiver already resolved its Source once at startup (V1 catalog is startup-loaded,
+// The queue receiver already resolved its Source once at startup (V1 reader is startup-loaded,
 // not reconciled per message), so this command carries the resolved Source facts directly rather
 // than a Source id to look up again per message.
 public sealed record AcceptQueueMessageCommand(

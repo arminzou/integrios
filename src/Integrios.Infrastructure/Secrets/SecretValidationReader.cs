@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Integrios.Infrastructure.Secrets;
 
-internal sealed class SecretValidationCatalog(IntegriosDbContext context) : ISecretValidationCatalog
+internal sealed class SecretValidationReader(IntegriosDbContext context) : ISecretValidationReader
 {
     public Task<Tenant?> FindTenantBySlugAsync(
         string slug,

@@ -5,11 +5,11 @@ using Integrios.Infrastructure.Secrets;
 
 namespace Integrios.FunctionalTests.Infrastructure;
 
-public sealed class SecretValidationCatalogTests : IClassFixture<PostgresApiFixture>, IAsyncLifetime
+public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixture>, IAsyncLifetime
 {
     private readonly PostgresApiFixture fixture;
 
-    public SecretValidationCatalogTests(PostgresApiFixture fixture)
+    public SecretValidationReaderTests(PostgresApiFixture fixture)
     {
         this.fixture = fixture;
     }
@@ -19,7 +19,7 @@ public sealed class SecretValidationCatalogTests : IClassFixture<PostgresApiFixt
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Catalog_OwnsActiveEnumeration_ButFindsDisabledSelections()
+    public async Task Reader_OwnsActiveEnumeration_ButFindsDisabledSelections()
     {
         Guid activeConnectionId = await fixture.SeedSourceConnectionAsync(
             fixture.TenantAId,
@@ -40,18 +40,18 @@ public sealed class SecretValidationCatalogTests : IClassFixture<PostgresApiFixt
         }
 
         await using var context = new IntegriosDbContext(fixture.CreateOptions());
-        var catalog = new SecretValidationCatalog(context);
+        var reader = new SecretValidationReader(context);
 
-        var selectedTenant = await catalog.FindTenantBySlugAsync("test-tenant-b", CancellationToken.None);
+        var selectedTenant = await reader.FindTenantBySlugAsync("test-tenant-b", CancellationToken.None);
         selectedTenant.ShouldNotBeNull();
         selectedTenant.Status.ShouldBe(OperationalStatus.Disabled);
-        (await catalog.ListActiveTenantsAsync(CancellationToken.None)).ShouldNotContain(tenant => tenant.Id == fixture.TenantBId);
+        (await reader.ListActiveTenantsAsync(CancellationToken.None)).ShouldNotContain(tenant => tenant.Id == fixture.TenantBId);
 
-        var selectedConnection = await catalog.FindConnectionAsync(fixture.TenantAId, disabledConnectionId, CancellationToken.None);
+        var selectedConnection = await reader.FindConnectionAsync(fixture.TenantAId, disabledConnectionId, CancellationToken.None);
         selectedConnection.ShouldNotBeNull();
         selectedConnection.Status.ShouldBe(OperationalStatus.Disabled);
 
-        var activeConnections = await catalog.ListActiveConnectionsAsync(fixture.TenantAId, CancellationToken.None);
+        var activeConnections = await reader.ListActiveConnectionsAsync(fixture.TenantAId, CancellationToken.None);
         activeConnections.ShouldContain(connection => connection.Id == activeConnectionId);
         activeConnections.ShouldNotContain(connection => connection.Id == disabledConnectionId);
     }

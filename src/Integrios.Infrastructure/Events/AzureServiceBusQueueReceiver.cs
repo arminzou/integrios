@@ -17,14 +17,14 @@ namespace Integrios.Infrastructure.Events;
 // without standing up a configuration root.
 internal sealed record QueueReconcileInterval(TimeSpan Value);
 
-// One processor per active azure_service_bus queue Source, reconciled against the catalog on an
+// One processor per active azure_service_bus queue Source, reconciled against the reader on an
 // interval so control-plane changes take effect without an Ingestion restart. When no compatible
 // Source exists, no ServiceBusClient is created, so an HTTP-only deployment needs no Azure
 // credentials or running Azure client. Azure SDK types stay entirely inside this host-edge class;
 // everything it hands to Application (tenant/topic/source ids, the parsed JSON body) is a plain
 // CLR/JSON type.
 internal sealed class AzureServiceBusQueueReceiver(
-    IQueueSourceCatalog catalog,
+    IQueueSourceReader reader,
     ISourceVerificationSecretResolver secretResolver,
     IServiceProvider serviceProvider,
     QueueReconcileInterval reconcileInterval,
@@ -54,7 +54,7 @@ internal sealed class AzureServiceBusQueueReceiver(
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
-                    // A failed pass must not end the loop: the catalog query or one broker being
+                    // A failed pass must not end the loop: the reader query or one broker being
                     // unreachable is transient, and the next tick retries the whole desired state.
                     logger.LogError(exception, "Azure Service Bus queue Source reconciliation failed; retrying.");
                 }
@@ -73,7 +73,7 @@ internal sealed class AzureServiceBusQueueReceiver(
     private async Task ReconcileAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<ResolvedQueueSource> desired =
-            await catalog.ListActiveAzureServiceBusSourcesAsync(cancellationToken);
+            await reader.ListActiveAzureServiceBusSourcesAsync(cancellationToken);
         Dictionary<Guid, ResolvedQueueSource> desiredById = desired.ToDictionary(source => source.SourceId);
 
         await lifecycleGate.WaitAsync(cancellationToken);

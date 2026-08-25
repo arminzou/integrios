@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Integrios.Infrastructure.Connectors;
 
-internal sealed class ConnectorCatalog(IntegriosDbContext context) : IConnectorCatalog
+internal sealed class ConnectorReader(IntegriosDbContext context) : IConnectorReader
 {
     public Task<Connector?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Connectors.AsNoTracking().SingleOrDefaultAsync(

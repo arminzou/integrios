@@ -15,7 +15,7 @@ internal sealed class CreateSourceCommandHandler(
     ISourceRepository sourceRepository,
     IConnectionRepository connectionRepository,
     IConnectionAuthoringLock authoringLock,
-    IConnectorCatalog connectorCatalog,
+    IConnectorReader connectorReader,
     ITopicRepository topicRepository)
     : IRequestHandler<CreateSourceCommand, SourceDto>
 {
@@ -28,7 +28,7 @@ internal sealed class CreateSourceCommandHandler(
             ?? throw new SourceValidationException("Source Topic must exist in the same Tenant.");
         if (topic.Status != OperationalStatus.Active)
             throw new SourceValidationException("Source Topic must be active.");
-        Connector connector = await connectorCatalog.GetByIdAsync(connection.ConnectorId, cancellationToken)
+        Connector connector = await connectorReader.GetByIdAsync(connection.ConnectorId, cancellationToken)
             ?? throw new SourceValidationException("Source Connection references a Connector that does not exist.");
         SourceAuthoringValidator.Validate(command.Type, command.Configuration, connection, connector);
         JsonElement configuration = command.Type == SourceType.Webhook

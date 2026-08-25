@@ -26,7 +26,7 @@ public sealed record SecretValidationReport(IReadOnlyList<SecretValidationResult
 public sealed class SecretValidationSelectionException(string message) : Exception(message);
 
 internal sealed class ValidateSecretsCommandHandler(
-    ISecretValidationCatalog catalog,
+    ISecretValidationReader reader,
     IDestinationAuthenticationSecretResolver secretResolver) : IRequestHandler<ValidateSecretsCommand, SecretValidationReport>
 {
     public async Task<SecretValidationReport> Handle(
@@ -98,7 +98,7 @@ internal sealed class ValidateSecretsCommandHandler(
     {
         if (command.TenantSlug is not null)
         {
-            Tenant? tenant = await catalog.FindTenantBySlugAsync(command.TenantSlug, cancellationToken);
+            Tenant? tenant = await reader.FindTenantBySlugAsync(command.TenantSlug, cancellationToken);
             if (tenant is null)
                 throw new SecretValidationSelectionException("The selected Tenant does not exist.");
             if (tenant.Status != OperationalStatus.Active)
@@ -106,7 +106,7 @@ internal sealed class ValidateSecretsCommandHandler(
             return [tenant];
         }
 
-        return await catalog.ListActiveTenantsAsync(cancellationToken);
+        return await reader.ListActiveTenantsAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyList<Connection>> SelectConnectionsAsync(
@@ -116,7 +116,7 @@ internal sealed class ValidateSecretsCommandHandler(
     {
         if (connectionId is not null)
         {
-            Connection? connection = await catalog.FindConnectionAsync(
+            Connection? connection = await reader.FindConnectionAsync(
                 tenant.Id,
                 connectionId.Value,
                 cancellationToken);
@@ -125,7 +125,7 @@ internal sealed class ValidateSecretsCommandHandler(
                 : [connection];
         }
 
-        return await catalog.ListActiveConnectionsAsync(tenant.Id, cancellationToken);
+        return await reader.ListActiveConnectionsAsync(tenant.Id, cancellationToken);
     }
 
     private static IEnumerable<string> SecretReferences(Connection connection)

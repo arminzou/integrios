@@ -10,9 +10,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class QueueSourceCatalog(
+internal sealed class QueueSourceReader(
     IDbConnectionFactory connectionFactory,
-    ILogger<QueueSourceCatalog> logger) : IQueueSourceCatalog
+    ILogger<QueueSourceReader> logger) : IQueueSourceReader
 {
     public async Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(
         CancellationToken cancellationToken)

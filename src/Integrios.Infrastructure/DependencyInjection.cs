@@ -66,7 +66,7 @@ public static class DependencyInjection
         services.AddScoped<IOperatorKeyLifecycle>(provider => provider.GetRequiredService<OperatorKeyRepository>());
         services.AddScoped<ITenantApiKeyRepository, TenantApiKeyRepository>();
         services.AddScoped<ITenantRepository, TenantRepository>();
-        services.AddScoped<IConnectorCatalog, ConnectorCatalog>();
+        services.AddScoped<IConnectorReader, ConnectorReader>();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddScoped<IConnectorManifestStore, SqlServerConnectorManifestStore>();
         else
@@ -98,7 +98,7 @@ public static class DependencyInjection
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
         services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
         services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
-        services.AddSingleton<IQueueSourceCatalog, QueueSourceCatalog>();
+        services.AddSingleton<IQueueSourceReader, QueueSourceReader>();
         services.AddSingleton(new QueueReconcileInterval(TimeSpan.FromSeconds(
             configuration.GetValue<int?>("Integrios:QueueSources:ReconcileSeconds") ?? 30)));
         services.AddHostedService<AzureServiceBusQueueReceiver>();
@@ -128,7 +128,7 @@ public static class DependencyInjection
             deliveryOptions.RetryMaxAttempts));
         services.AddSingleton<DeliveryOutcomePolicy>();
 
-        services.AddScoped<ISecretValidationCatalog, SecretValidationCatalog>();
+        services.AddScoped<ISecretValidationReader, SecretValidationReader>();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IOutboxFanout, SqlServerOutboxFanout>();
         else

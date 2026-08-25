@@ -4,7 +4,7 @@ using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Delivery;
 
-public interface ISecretValidationCatalog
+public interface ISecretValidationReader
 {
     Task<Tenant?> FindTenantBySlugAsync(
         string slug,

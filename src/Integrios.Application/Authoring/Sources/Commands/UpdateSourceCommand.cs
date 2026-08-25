@@ -9,7 +9,7 @@ namespace Integrios.Application.Authoring.Sources;
 
 public sealed record UpdateSourceCommand(Guid TenantId, Guid Id, JsonElement Configuration) : IRequest<SourceDto?>;
 
-internal sealed class UpdateSourceCommandHandler(ISourceRepository sourceRepository, IConnectionRepository connectionRepository, IConnectorCatalog connectorCatalog)
+internal sealed class UpdateSourceCommandHandler(ISourceRepository sourceRepository, IConnectionRepository connectionRepository, IConnectorReader connectorReader)
     : IRequestHandler<UpdateSourceCommand, SourceDto?>
 {
     public async Task<SourceDto?> Handle(UpdateSourceCommand command, CancellationToken cancellationToken)
@@ -19,7 +19,7 @@ internal sealed class UpdateSourceCommandHandler(ISourceRepository sourceReposit
             return null;
         Connection connection = await connectionRepository.GetByIdAsync(command.TenantId, source.ConnectionId, cancellationToken)
             ?? throw new SourceValidationException("Source Connection must exist in the same Tenant.");
-        Connector connector = await connectorCatalog.GetByIdAsync(connection.ConnectorId, cancellationToken)
+        Connector connector = await connectorReader.GetByIdAsync(connection.ConnectorId, cancellationToken)
             ?? throw new SourceValidationException("Source Connection references a Connector that does not exist.");
         SourceAuthoringValidator.Validate(source.Type, command.Configuration, connection, connector);
         JsonElement configuration = source.Type == Domain.Enums.SourceType.Webhook

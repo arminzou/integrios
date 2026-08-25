@@ -78,7 +78,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             services.AddSingleton<ITopicRepository>(new FakeTopicRepository(Topic()));
             services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(connectorId)));
             services.AddSingleton<IConnectionAuthoringLock>(new NoOpConnectionAuthoringLock());
-            services.AddSingleton<IConnectorCatalog>(new FakeConnectorCatalog(Connector(connectorId, destinationDirection)));
+            services.AddSingleton<IConnectorReader>(new FakeConnectorReader(Connector(connectorId, destinationDirection)));
             services.AddSingleton<IDestinationAuthenticatorRegistry>(new EmptyAuthSchemeRegistry());
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator(transformValidationError));
             provider = services.BuildServiceProvider();
@@ -230,7 +230,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             Task.FromResult(true);
     }
 
-    private sealed class FakeConnectorCatalog(Connector connector) : IConnectorCatalog
+    private sealed class FakeConnectorReader(Connector connector) : IConnectorReader
     {
         public Task<Connector?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Connector?>(connector);

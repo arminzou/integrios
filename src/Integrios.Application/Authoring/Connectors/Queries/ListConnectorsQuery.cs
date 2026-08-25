@@ -7,12 +7,12 @@ namespace Integrios.Application.Authoring.Connectors;
 
 public sealed record ListConnectorsQuery(string? AfterCursor, int Limit) : IRequest<ConnectorListDto>;
 
-internal sealed class ListConnectorsQueryHandler(IConnectorCatalog connectorCatalog)
+internal sealed class ListConnectorsQueryHandler(IConnectorReader connectorReader)
     : IRequestHandler<ListConnectorsQuery, ConnectorListDto>
 {
     public async Task<ConnectorListDto> Handle(ListConnectorsQuery query, CancellationToken cancellationToken)
     {
-        (IReadOnlyList<Connector> items, string? nextCursor) = await connectorCatalog.ListAsync(
+        (IReadOnlyList<Connector> items, string? nextCursor) = await connectorReader.ListAsync(
             query.AfterCursor, query.Limit, cancellationToken);
 
         return new ConnectorListDto
