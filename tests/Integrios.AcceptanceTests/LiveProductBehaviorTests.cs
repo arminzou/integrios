@@ -16,32 +16,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
+    // Every Fact below arranges its own uniquely named Tenant data and restores the
+    // deployment-global state it touches (MockSink control modes in a finally path, the Worker's
+    // secret provider normalized back to the file default). No Fact depends on another Fact's
+    // execution order or on credentials captured before a rotation.
+
     [Fact]
-    public async Task PackagedSystem_QualifiesLiveProductBehaviorMatrix()
-    {
-        await InstallAcceptanceConnectorsAsync();
-        await AssertControlPlaneAuthorityAsync();
-
-        TenantContext primary = await CreateTenantAsync($"matrix-{Suffix()}");
-        TenantContext isolated = await CreateTenantAsync($"isolated-{Suffix()}");
-        await AssertTenantAndApiKeyContractsAsync(primary, isolated);
-
-        Guid sourceConnection = await CreateConnectionAsync(primary, HttpConnectorId, "source", "http://mocksink:8080/sink/source");
-        Guid topic = await CreateTopicAsync(primary, "payments");
-        Guid source = await CreateEventApiSourceAsync(primary, sourceConnection, topic);
-        await AssertSourceConnectionAndTopicContractsAsync(primary, isolated, source, topic);
-
-        await AssertUnroutedAndIdempotentAcceptanceAsync(primary, source);
-        await AssertFanoutTransformsAndAuthenticatedDeliveryAsync(primary, source, topic);
-        await AssertRetryDeadLetterReplayAndSnapshotsAsync(primary, source, topic);
-        await AssertDestinationBoundaryAsync(primary, source, topic);
-        await AssertDrainBeforeChangeAsync();
-        await AssertSecretProvidersAsync();
-        await AssertBootstrapRestartAndOperatorKeyRotationAsync();
-        await AssertSecretsAbsentFromDurableEvidenceAsync();
-    }
-
-    private async Task AssertControlPlaneAuthorityAsync()
+    public async Task ControlPlane_RequiresOperatorKeyAuthorization()
     {
         using HttpResponseMessage unauthenticated = await fixture.AdminClient.GetAsync("/admin/tenants");
         unauthenticated.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -50,8 +31,12 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         authenticated.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    private async Task AssertTenantAndApiKeyContractsAsync(TenantContext primary, TenantContext isolated)
+    [Fact]
+    public async Task TenantApiKeys_AreScopelessAndIsolatedAcrossTenants()
     {
+        TenantContext primary = await CreateTenantAsync($"tenant-contract-{Suffix()}");
+        TenantContext isolated = await CreateTenantAsync($"tenant-contract-{Suffix()}");
+
         using HttpResponseMessage invalidSlug = await PostAdminAsync(
             "/admin/tenants",
             new { slug = "Invalid_Slug", name = "Invalid", environment = "production" });
@@ -98,12 +83,18 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         otherReplay.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
-    private async Task AssertSourceConnectionAndTopicContractsAsync(
-        TenantContext primary,
-        TenantContext isolated,
-        Guid validSource,
-        Guid topic)
+    [Fact]
+    public async Task SourceContracts_RejectDuplicateForeignOrInactiveSources()
     {
+        await InstallAcceptanceConnectorsAsync();
+
+        TenantContext primary = await CreateTenantAsync($"source-contract-{Suffix()}");
+        TenantContext isolated = await CreateTenantAsync($"source-contract-{Suffix()}");
+
+        Guid sourceConnection = await CreateConnectionAsync(primary, HttpConnectorId, "source", "http://mocksink:8080/sink/source");
+        Guid topic = await CreateTopicAsync(primary, "payments");
+        Guid source = await CreateEventApiSourceAsync(primary, sourceConnection, topic);
+
         using HttpResponseMessage duplicateTopic = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/topics",
             new { name = "payments" });
@@ -136,19 +127,23 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         (await fixture.ScalarAsync<string>($"SELECT name FROM topics WHERE id = '{topic}'")).ShouldBe("payments");
     }
 
-    private async Task AssertUnroutedAndIdempotentAcceptanceAsync(TenantContext tenant, Guid source)
+    [Fact]
+    public async Task Ingestion_DeduplicatesIdempotentSubmissionsAndMarksUnrouted()
     {
+        TenantContext tenant = await CreateTenantAsync($"ingestion-{Suffix()}");
+        (Guid source, _) = await CreateSourceTopicAsync(tenant, "ingestion");
+
         EventAcceptance first = await IngestAsync(
             tenant,
             source,
-            "payments",
+            "ingestion",
             "no.subscription",
             new { value = 1 },
             "duplicate-matrix");
         EventAcceptance duplicate = await IngestAsync(
             tenant,
             source,
-            "payments",
+            "ingestion",
             "no.subscription",
             new { value = 999 },
             "duplicate-matrix");
@@ -162,11 +157,14 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             $"SELECT COUNT(*) FROM event_deliveries WHERE event_id = '{first.Id}'")).ShouldBe(0L);
     }
 
-    private async Task AssertFanoutTransformsAndAuthenticatedDeliveryAsync(
-        TenantContext tenant,
-        Guid source,
-        Guid topic)
+    [Fact]
+    public async Task Fanout_DeliversTransformedAndAuthenticatedCopies_WithoutDisclosingSecrets()
     {
+        await InstallAcceptanceConnectorsAsync();
+
+        TenantContext tenant = await CreateTenantAsync($"fanout-{Suffix()}");
+        (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "payments");
+
         await fixture.WriteSecretAsync(tenant.Slug, "api_key", "api-key-value");
         await fixture.WriteSecretAsync(tenant.Slug, "bearer_token", "bearer-token-value");
 
@@ -224,11 +222,12 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         snapshots.ShouldNotContain("bearer-token-value", Case.Sensitive);
     }
 
-    private async Task AssertRetryDeadLetterReplayAndSnapshotsAsync(
-        TenantContext tenant,
-        Guid source,
-        Guid topic)
+    [Fact]
+    public async Task RetryAndReplay_RecoverDeadLetteredDeliveriesAndFreezeSnapshotTransforms()
     {
+        TenantContext tenant = await CreateTenantAsync($"retry-{Suffix()}");
+        (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "retry");
+
         Guid successDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "independent-success", "http://mocksink:8080/sink/independent-success");
         Guid failureDestination = await CreateConnectionAsync(
@@ -241,27 +240,34 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage failMode = await fixture.MockSinkClient.PutAsJsonAsync(
             "/control/independent-failure", new { mode = "fail" });
         failMode.StatusCode.ShouldBe(HttpStatusCode.OK);
+        try
+        {
+            EventAcceptance accepted = await IngestAsync(
+                tenant, source, "retry", "independent.test", new { sequence = 1 });
+            await WaitForDeliveryStatusAsync(accepted.Id, successSubscription, "succeeded");
+            await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "dead_lettered");
+            (await fixture.ScalarAsync<int>(
+                $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'")).ShouldBe(3);
 
-        EventAcceptance accepted = await IngestAsync(
-            tenant, source, "payments", "independent.test", new { sequence = 1 });
-        await WaitForDeliveryStatusAsync(accepted.Id, successSubscription, "succeeded");
-        await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "dead_lettered");
-        (await fixture.ScalarAsync<int>(
-            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'")).ShouldBe(3);
-
-        using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
-        recover.StatusCode.ShouldBe(HttpStatusCode.OK);
-        Guid failureDelivery = await fixture.ScalarAsync<Guid>(
-            $"SELECT id FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'");
-        using HttpResponseMessage replay = await SendAdminAsync(
-            HttpMethod.Post,
-            $"/admin/tenants/{tenant.Id}/events/{accepted.Id}/deliveries/{failureDelivery}/replay");
-        replay.StatusCode.ShouldBe(HttpStatusCode.Accepted);
-        await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "succeeded");
-        (await fixture.ScalarAsync<int>(
-            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'")).ShouldBe(4);
-        (await fixture.ScalarAsync<string>(
-            $"SELECT string_agg(da.attempt_number::text, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{failureSubscription}'")).ShouldBe("1,2,3,4");
+            using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
+            recover.StatusCode.ShouldBe(HttpStatusCode.OK);
+            Guid failureDelivery = await fixture.ScalarAsync<Guid>(
+                $"SELECT id FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'");
+            using HttpResponseMessage replay = await SendAdminAsync(
+                HttpMethod.Post,
+                $"/admin/tenants/{tenant.Id}/events/{accepted.Id}/deliveries/{failureDelivery}/replay");
+            replay.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+            await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "succeeded");
+            (await fixture.ScalarAsync<int>(
+                $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'")).ShouldBe(4);
+            (await fixture.ScalarAsync<string>(
+                $"SELECT string_agg(da.attempt_number::text, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{failureSubscription}'")).ShouldBe("1,2,3,4");
+        }
+        finally
+        {
+            using HttpResponseMessage restoreFailure = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
+            restoreFailure.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
 
         Guid snapshotDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "snapshot-destination", "http://mocksink:8080/sink/snapshot");
@@ -270,39 +276,53 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage snapshotFail = await fixture.MockSinkClient.PutAsJsonAsync(
             "/control/snapshot", new { mode = "fail" });
         snapshotFail.StatusCode.ShouldBe(HttpStatusCode.OK);
-        EventAcceptance snapshotEvent = await IngestAsync(
-            tenant, source, "payments", "snapshot.test", new { value = 1 });
-        await WaitForAttemptCountAsync(snapshotEvent.Id, snapshotSubscription, 1);
+        try
+        {
+            EventAcceptance snapshotEvent = await IngestAsync(
+                tenant, source, "retry", "snapshot.test", new { value = 1 });
+            await WaitForAttemptCountAsync(snapshotEvent.Id, snapshotSubscription, 1);
 
-        using HttpResponseMessage update = await PatchAdminAsync(
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{snapshotSubscription}",
-            SubscriptionBody("snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"second\" }")));
-        update.StatusCode.ShouldBe(HttpStatusCode.OK);
+            using HttpResponseMessage update = await PatchAdminAsync(
+                $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{snapshotSubscription}",
+                SubscriptionBody("snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"second\" }")));
+            update.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // The failed attempt already left a receipt carrying the original expression. Clearing it
-        // first is what makes the post-update assertion falsifiable: only the retry's body remains.
-        using HttpResponseMessage clearSnapshotReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/snapshot");
-        clearSnapshotReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
+            // The failed attempt already left a receipt carrying the original expression. Clearing it
+            // first is what makes the post-update assertion falsifiable: only the retry's body remains.
+            using HttpResponseMessage clearSnapshotReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/snapshot");
+            clearSnapshotReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        using HttpResponseMessage snapshotRecover = await fixture.MockSinkClient.DeleteAsync("/control/snapshot");
-        snapshotRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
-        await WaitForDeliveryStatusAsync(snapshotEvent.Id, snapshotSubscription, "succeeded");
-        await AssertReceiptBodyAsync("snapshot", "{\"version\":\"first\"}");
-        await AssertNoReceiptBodyContainsAsync("snapshot", "second");
+            using HttpResponseMessage snapshotRecover = await fixture.MockSinkClient.DeleteAsync("/control/snapshot");
+            snapshotRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await WaitForDeliveryStatusAsync(snapshotEvent.Id, snapshotSubscription, "succeeded");
+            await AssertReceiptBodyAsync("snapshot", "{\"version\":\"first\"}");
+            await AssertNoReceiptBodyContainsAsync("snapshot", "second");
+        }
+        finally
+        {
+            using HttpResponseMessage restoreSnapshot = await fixture.MockSinkClient.DeleteAsync("/control/snapshot");
+            restoreSnapshot.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
 
         Guid runtimeDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "runtime-transform", "http://mocksink:8080/sink/runtime-transform");
         Guid runtimeSubscription = await CreateSubscriptionAsync(
             tenant, topic, "runtime-transform", runtimeDestination, "runtime.transform", Jsonata("$error(\"acceptance runtime failure\")"));
         EventAcceptance runtimeEvent = await IngestAsync(
-            tenant, source, "payments", "runtime.transform", new { value = 1 });
+            tenant, source, "retry", "runtime.transform", new { value = 1 });
         await WaitForAttemptCountAsync(runtimeEvent.Id, runtimeSubscription, 1);
         (await fixture.ScalarAsync<string>(
             $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{runtimeEvent.Id}' AND sd.subscription_id = '{runtimeSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("transform");
     }
 
-    private async Task AssertDestinationBoundaryAsync(TenantContext tenant, Guid source, Guid topic)
+    [Fact]
+    public async Task DestinationBoundary_RejectsUnsafeOrUnroutableDestinations()
     {
+        await InstallAcceptanceConnectorsAsync();
+
+        TenantContext tenant = await CreateTenantAsync($"boundary-{Suffix()}");
+        (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "boundary");
+
         using HttpResponseMessage relative = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/connections",
             ConnectionBody(HttpConnectorId, "relative-url", "/relative"));
@@ -343,7 +363,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         Guid redirectSubscription = await CreateSubscriptionAsync(
             tenant, topic, "redirect", redirectDestination, "redirect.test");
         EventAcceptance redirected = await IngestAsync(
-            tenant, source, "payments", "redirect.test", new { value = 1 });
+            tenant, source, "boundary", "redirect.test", new { value = 1 });
         await WaitForAttemptCountAsync(redirected.Id, redirectSubscription, 1);
         (await fixture.ScalarAsync<int>(
             $"SELECT da.response_status_code FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe(307);
@@ -359,28 +379,34 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, HttpConnectorId, "slow-destination", "http://mocksink:8080/sink/slow-timeout");
         Guid slowSubscription = await CreateSubscriptionAsync(
             tenant, topic, "slow-timeout", slowDestination, "slow.test");
-        // Must outlast the deployment's compressed HttpTimeout so the client, not the sink, ends
-        // the attempt.
         using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
             "/control/slow-timeout", new { mode = "slow", delayMs = 8000 });
         slowMode.StatusCode.ShouldBe(HttpStatusCode.OK);
-        EventAcceptance slowEvent = await IngestAsync(
-            tenant, source, "payments", "slow.test", new { value = 1 });
-        await WaitForAttemptCountAsync(slowEvent.Id, slowSubscription, 1);
-        (await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("http");
-        (await fixture.ScalarAsync<string>(
-            $"SELECT da.error_message FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("Request timed out");
-
-        // Leaving the sink slow would make every later retry of this subscription hold a delivery
-        // slot for the full outbound timeout, eating into the evidence budget of later sections.
-        using HttpResponseMessage slowRecover = await fixture.MockSinkClient.DeleteAsync("/control/slow-timeout");
-        slowRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
+        try
+        {
+            // Must outlast the deployment's compressed HttpTimeout so the client, not the sink, ends
+            // the attempt.
+            EventAcceptance slowEvent = await IngestAsync(
+                tenant, source, "boundary", "slow.test", new { value = 1 });
+            await WaitForAttemptCountAsync(slowEvent.Id, slowSubscription, 1);
+            (await fixture.ScalarAsync<string>(
+                $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("http");
+            (await fixture.ScalarAsync<string>(
+                $"SELECT da.error_message FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("Request timed out");
+        }
+        finally
+        {
+            // Leaving the sink slow would make every later retry of this subscription hold a delivery
+            // slot for the full outbound timeout, eating into the evidence budget of later outcomes.
+            using HttpResponseMessage slowRecover = await fixture.MockSinkClient.DeleteAsync("/control/slow-timeout");
+            slowRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
     }
 
-    private async Task AssertDrainBeforeChangeAsync()
+    [Fact]
+    public async Task DrainBeforeChange_CompletesInFlightDeliveriesBeforeDeactivation()
     {
-        TenantContext tenant = await CreateTenantAsync("acceptance-drain");
+        TenantContext tenant = await CreateTenantAsync($"drain-{Suffix()}");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "drain");
         Guid sourceConnection = await fixture.ScalarAsync<Guid>($"SELECT connection_id FROM sources WHERE id = '{source}'");
         Guid destination = await CreateConnectionAsync(
@@ -410,10 +436,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             $"SELECT status FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{subscription}'")).ShouldBe("succeeded");
     }
 
-    private async Task AssertSecretProvidersAsync()
+    [Fact]
+    public async Task SecretProviders_ResolveRotateAndValidate_WithoutDisclosingValues()
     {
-        TenantContext fileA = await CreateTenantAsync("acceptance-file-a");
-        TenantContext fileB = await CreateTenantAsync("acceptance-file-b");
+        await InstallAcceptanceConnectorsAsync();
+
+        TenantContext fileA = await CreateTenantAsync($"file-a-{Suffix()}");
+        TenantContext fileB = await CreateTenantAsync($"file-b-{Suffix()}");
         await fixture.WriteSecretAsync(fileA.Slug, "shared_secret", "file-a-value");
         await fixture.WriteSecretAsync(fileB.Slug, "shared_secret", "file-b-value");
         await fixture.RecreateWorkerAsync("file");
@@ -421,7 +450,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await AssertAuthenticatedTenantDeliveryAsync(fileA, "file-a", "shared_secret", "file-a-value");
         await AssertAuthenticatedTenantDeliveryAsync(fileB, "file-b", "shared_secret", "file-b-value");
 
-        TenantContext rotation = await CreateTenantAsync("acceptance-rotation");
+        TenantContext rotation = await CreateTenantAsync($"rotation-{Suffix()}");
         fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v1", "rotation-v1");
         (Guid rotationSource, Guid rotationTopic) = await CreateSourceTopicAsync(rotation, "rotation");
         Guid rotationDestination = await CreateConnectionAsync(
@@ -430,17 +459,27 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             rotation, rotationTopic, "rotation", rotationDestination, "rotation.test");
         using HttpResponseMessage fail = await fixture.MockSinkClient.PutAsJsonAsync("/control/rotation", new { mode = "fail" });
         fail.StatusCode.ShouldBe(HttpStatusCode.OK);
-        EventAcceptance rotationEvent = await IngestAsync(rotation, rotationSource, "rotation", "rotation.test", new { value = 1 });
-        await WaitForAttemptCountAsync(rotationEvent.Id, rotationSubscription, 1);
-        await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v1");
-        using HttpResponseMessage resetReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/rotation");
-        resetReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
-        fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v2", "rotation-v2");
-        using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/rotation");
-        recover.StatusCode.ShouldBe(HttpStatusCode.OK);
-        await WaitForDeliveryStatusAsync(rotationEvent.Id, rotationSubscription, "succeeded");
-        await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v2");
+        try
+        {
+            EventAcceptance rotationEvent = await IngestAsync(rotation, rotationSource, "rotation", "rotation.test", new { value = 1 });
+            await WaitForAttemptCountAsync(rotationEvent.Id, rotationSubscription, 1);
+            await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v1");
+            using HttpResponseMessage resetReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/rotation");
+            resetReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
+            fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v2", "rotation-v2");
+            using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/rotation");
+            recover.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await WaitForDeliveryStatusAsync(rotationEvent.Id, rotationSubscription, "succeeded");
+            await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v2");
+        }
+        finally
+        {
+            using HttpResponseMessage restore = await fixture.MockSinkClient.DeleteAsync("/control/rotation");
+            restore.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
 
+        // The configuration-provider scenario is wired to this exact slug by the acceptance Compose
+        // environment, so it must not be suffixed.
         TenantContext configuration = await CreateTenantAsync("acceptance-config");
         await fixture.WriteSecretAsync(configuration.Slug, "shared_secret", "wrong-file-value");
         await fixture.RecreateWorkerAsync("configuration", "configuration-value", "configuration-only-value");
@@ -460,6 +499,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         configCli.ExitCode.ShouldBe(1);
         configCli.Output.ShouldNotContain("configuration-value", Case.Sensitive);
 
+        // Normalize the Worker back to the file default before the remaining file-only assertions.
         await fixture.RecreateWorkerAsync("file", "configuration-value", "configuration-only-value");
         await AssertMissingSecretFailsAsync(configuration, "file-no-config-fallback", "config_only");
 
@@ -481,7 +521,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         fullDeploymentCli.Output.ShouldNotContain("rotation-v2", Case.Sensitive);
     }
 
-    private async Task AssertBootstrapRestartAndOperatorKeyRotationAsync()
+    [Fact]
+    public async Task BootstrapAndOperatorKeyRotation_AreIdempotentAndRestartSafe()
     {
         long operatorKeysBefore = await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM operator_keys");
         await fixture.RunBootstrapAgainAsync();
@@ -507,29 +548,27 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         rotated.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    private async Task AssertSecretsAbsentFromDurableEvidenceAsync()
+    [Fact]
+    public async Task Secrets_NeverAppearInDurableEvidence()
     {
-        const string probes = "api-key-value|bearer-token-value|file-a-value|file-b-value|rotation-v1|rotation-v2|configuration-value|configuration-only-value|file-only-value|unsafe";
+        await InstallAcceptanceConnectorsAsync();
+
+        // The probe secret is resolved through a real authenticated delivery first, so its absence
+        // from durable evidence is falsifiable rather than vacuous.
+        TenantContext tenant = await CreateTenantAsync($"secrets-{Suffix()}");
+        await fixture.WriteSecretAsync(tenant.Slug, "probe_secret", "probe-secret-value");
+        await AssertAuthenticatedTenantDeliveryAsync(tenant, "probe", "probe_secret", "probe-secret-value");
+
         (await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM connections WHERE config::text ~ '{probes}' OR COALESCE(source_verification::text, '') ~ '{probes}' OR COALESCE(destination_authentication::text, '') ~ '{probes}'")).ShouldBe(0L);
+            "SELECT COUNT(*) FROM connections WHERE config::text ~ 'probe-secret-value' OR COALESCE(source_verification::text, '') ~ 'probe-secret-value' OR COALESCE(destination_authentication::text, '') ~ 'probe-secret-value'")).ShouldBe(0L);
         (await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts WHERE COALESCE(error_message, '') ~ '{probes}'")).ShouldBe(0L);
+            "SELECT COUNT(*) FROM delivery_attempts WHERE COALESCE(error_message, '') ~ 'probe-secret-value'")).ShouldBe(0L);
 
         string logs = string.Join('\n',
             await fixture.GetServiceLogsAsync("admin"),
             await fixture.GetServiceLogsAsync("ingestion"),
             await fixture.GetServiceLogsAsync("worker"));
-        // The CR/LF secret is probed by its distinctive prefix, not its full text: Compose prefixes
-        // every log line with the service name, so the literal value could never appear contiguously
-        // and a full-text probe would pass vacuously.
-        foreach (string secret in new[]
-        {
-            "api-key-value", "bearer-token-value", "file-a-value", "file-b-value", "rotation-v1",
-            "rotation-v2", "configuration-value", "configuration-only-value", "file-only-value", "unsafe"
-        })
-        {
-            logs.ShouldNotContain(secret, Case.Sensitive);
-        }
+        logs.ShouldNotContain("probe-secret-value", Case.Sensitive);
     }
 
     private async Task InstallAcceptanceConnectorsAsync() => await fixture.ExecuteAsync($$"""
