@@ -2,7 +2,6 @@ using System.Data.Common;
 using Dapper;
 using Integrios.Admin;
 using Integrios.Application.Bootstrap;
-using Integrios.Application.Authoring.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
@@ -21,15 +20,12 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string GlobalOperatorAuthHeader = $"OperatorKey {GlobalOperatorPublicKey}:{GlobalOperatorSecret}";
     public const string InvalidOperatorAuthHeader = "OperatorKey unknown_operator_key:unsupported-secret";
 
-    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid HttpConnectorId = Guid.NewGuid();
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;
 
     public WebApplicationFactory<Program> WebFactory { get; private set; } = null!;
     public string ConnectionString => database.ConnectionString;
-    internal string PresentationDriftExpression => database.Provider == "postgres"
-        ? "jsonb_set(jsonb_set(manifest, '{presentation,name}', '\"Drifted\"'), '{presentation,description}', '\"Drifted description\"')"
-        : "JSON_MODIFY(JSON_MODIFY(manifest, '$.presentation.name', 'Drifted'), '$.presentation.description', 'Drifted description')";
     internal DbConnection CreateConnection() => database.CreateConnection();
     internal string Json(string parameter) => database.Json(parameter);
     internal string JsonText(string column) => database.JsonText(column);
@@ -161,8 +157,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
                 TenantId,
                 OtherTenantId,
                 ConnectorId = HttpConnectorId,
-                Manifest = ConnectorManifestParser.ToJson(
-                    BuiltinCatalog.All.Single(item => item.Id == BuiltinCatalog.HttpId).Manifest).GetRawText(),
+                Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
                 SourceConnectionId,
                 Config = "{\"base_uri\":\"http://localhost:5054/sink/source\"}"
             });

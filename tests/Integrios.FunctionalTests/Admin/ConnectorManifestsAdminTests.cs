@@ -58,11 +58,13 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         renamed.Name.ShouldBe("Improved API");
 
         await ExecuteAsync("UPDATE connectors SET status = 'disabled' WHERE id = @Id", created.Id);
-        HttpResponseMessage disabledNoOpResponse = await ApplyAsync(1, renamedManifest);
-        ConnectorDto disabledNoOp = (await disabledNoOpResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        disabledNoOp.Status.ShouldBe("disabled");
+        JsonElement disabledRenamedManifest = Manifest(contractVersion: 1, name: "Disabled API");
+        HttpResponseMessage disabledRenameResponse = await ApplyAsync(1, disabledRenamedManifest);
+        ConnectorDto disabledRename = (await disabledRenameResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+        disabledRename.Name.ShouldBe("Disabled API");
+        disabledRename.Status.ShouldBe("disabled");
 
-        JsonElement functionalChange = Json(renamedManifest.GetRawText().Replace(
+        JsonElement functionalChange = Json(disabledRenamedManifest.GetRawText().Replace(
             "\"additionalProperties\":false",
             "\"additionalProperties\":true",
             StringComparison.Ordinal));
@@ -71,7 +73,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
 
         ConnectorDto retained = (await GetVersionAsync(1))!;
         retained.Manifest.GetProperty("presentation").GetProperty("name").GetString().ShouldBe(
-            "Improved API");
+            "Disabled API");
         retained.Manifest
             .GetProperty("destination_configuration_schema")
             .GetProperty("additionalProperties")
@@ -93,7 +95,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         list.Items.ShouldContain(item =>
             item.Id == created.Id &&
             item.ContractVersion == 1 &&
-            item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Improved API");
+            item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Disabled API");
         list.Items.ShouldContain(item =>
             item.Id == createdV2.Id &&
             item.ContractVersion == 2 &&

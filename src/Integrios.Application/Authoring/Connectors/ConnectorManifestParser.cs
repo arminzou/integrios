@@ -32,8 +32,7 @@ public static partial class ConnectorManifestParser
     public static ConnectorManifest Parse(
         JsonElement document,
         IDestinationAuthenticatorRegistry authenticationSchemes,
-        ITransformEvaluator mappingEvaluator,
-        ConnectorManifestApplyAuthority authority)
+        ITransformEvaluator mappingEvaluator)
     {
         if (document.ValueKind != JsonValueKind.Object)
             throw Invalid("The Connector manifest must be a JSON object.");
@@ -51,7 +50,7 @@ public static partial class ConnectorManifestParser
             throw Invalid($"The Connector manifest is invalid: {exception.Message}");
         }
 
-        Validate(manifest, document, authenticationSchemes, mappingEvaluator, authority);
+        Validate(manifest, document, authenticationSchemes, mappingEvaluator);
         return Canonicalize(manifest);
     }
 
@@ -88,8 +87,7 @@ public static partial class ConnectorManifestParser
         ConnectorManifest manifest,
         JsonElement document,
         IDestinationAuthenticatorRegistry authenticationSchemes,
-        ITransformEvaluator mappingEvaluator,
-        ConnectorManifestApplyAuthority authority)
+        ITransformEvaluator mappingEvaluator)
     {
         if (manifest.ManifestSchemaVersion != 1)
             throw Invalid("manifest_schema_version must be 1.");

@@ -22,7 +22,6 @@ internal sealed class SqlServerConnectorManifestStore(IntegriosDbContext context
 
     public async Task<ConnectorManifestStoreResult> ApplyAsync(
         ConnectorManifest manifest,
-        ConnectorManifestApplyAuthority authority,
         CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -45,7 +44,7 @@ internal sealed class SqlServerConnectorManifestStore(IntegriosDbContext context
         if (existing is null)
         {
             context.Connectors.Add(ConnectorManifestApply.NewConnector(
-                manifest, authority, DateTimeOffset.UtcNow));
+                manifest, DateTimeOffset.UtcNow));
             await context.SaveChangesAsync(cancellationToken);
             Connector persisted = await GetByVersionAsync(
                 manifest.Key, manifest.ContractVersion, cancellationToken)
@@ -54,8 +53,8 @@ internal sealed class SqlServerConnectorManifestStore(IntegriosDbContext context
             return new ConnectorManifestStoreResult(persisted, ConnectorManifestApplyOutcome.Created);
         }
 
-        ConnectorManifestApply.EnsureApplicable(existing, manifest, authority);
-        ManifestApplyDelta delta = ConnectorManifestApply.Diff(existing, manifest, authority);
+        ConnectorManifestApply.EnsureApplicable(existing, manifest);
+        ManifestApplyDelta delta = ConnectorManifestApply.Diff(existing, manifest);
         if (delta.NothingToWrite)
         {
             await transaction.CommitAsync(cancellationToken);
@@ -68,7 +67,6 @@ internal sealed class SqlServerConnectorManifestStore(IntegriosDbContext context
             SET name = @Name,
                 description = @Description,
                 manifest = JSON_MODIFY(manifest, '$.presentation', JSON_QUERY(@Presentation)),
-                status = @Status,
                 updated_at = @UpdatedAt
             WHERE id = @Id
             """,
@@ -77,7 +75,6 @@ internal sealed class SqlServerConnectorManifestStore(IntegriosDbContext context
                 manifest.Presentation.Name,
                 manifest.Presentation.Description,
                 Presentation = delta.PresentationJson.GetRawText(),
-                Status = delta.StatusValue,
                 UpdatedAt = DateTimeOffset.UtcNow,
                 existing.Id,
             },

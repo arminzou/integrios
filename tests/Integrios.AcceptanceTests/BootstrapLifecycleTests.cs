@@ -44,10 +44,8 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
 
         firstBootstrap.ExitCode.ShouldBe(0);
         firstBootstrap.Output.ShouldNotContain(suppliedSecret, Case.Sensitive);
-        (await CountAsync(database, "connectors", "key = 'http'")).ShouldBe(1L);
+        (await CountAsync(database, "connectors")).ShouldBe(0L);
         (await CountAsync(database, "operator_keys", "revoked_at IS NULL")).ShouldBe(1L);
-
-        await ExecuteAsync(database, "UPDATE connectors SET name = 'Drifted', status = 'disabled' WHERE key = 'http'");
 
         BootstrapProcessResult secondBootstrap =
             await DatabaseLifecycleFixture.RunProductionBootstrapAsync(database, "unused-second-secret");
@@ -55,16 +53,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         secondBootstrap.ExitCode.ShouldBe(0);
         secondBootstrap.StandardOutput.ShouldContain("no-op", Case.Insensitive);
         secondBootstrap.Output.ShouldNotContain("unused-second-secret", Case.Sensitive);
-        (await DatabaseLifecycleFixture.ScalarAsync<string>(
-            database,
-            "SELECT name || '|' || direction || '|' || status FROM connectors WHERE key = 'http'")).ShouldBe("HTTP|both|active");
-        (await DatabaseLifecycleFixture.ScalarAsync<int>(
-            database,
-            "SELECT jsonb_array_length(manifest->'destination_authentication'->'schemes') FROM connectors WHERE key = 'http'")).ShouldBe(2);
-        (await DatabaseLifecycleFixture.ScalarAsync<bool>(
-            database,
-            "SELECT (SELECT jsonb_agg(s->>'scheme') FROM jsonb_array_elements(manifest->'destination_authentication'->'schemes') s) "
-            + "@> '[\"api_key_header\", \"bearer_token\"]'::jsonb FROM connectors WHERE key = 'http'")).ShouldBeTrue();
+        (await CountAsync(database, "connectors")).ShouldBe(0L);
         (await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL")).ShouldBe(Hash(suppliedSecret));

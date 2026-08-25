@@ -27,12 +27,10 @@ internal sealed class ApplyConnectorManifestCommandHandler(
         ApplyConnectorManifestCommand command,
         CancellationToken cancellationToken)
     {
-        ConnectorManifestApplyAuthority authority = ConnectorManifestApplyAuthority.Operator;
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             command.Document,
             authenticationSchemes,
-            mappingEvaluator,
-            authority);
+            mappingEvaluator);
 
         if (!string.Equals(command.Key, manifest.Key, StringComparison.Ordinal)
             || command.ContractVersion != manifest.ContractVersion)
@@ -43,7 +41,6 @@ internal sealed class ApplyConnectorManifestCommandHandler(
 
         ConnectorManifestStoreResult applied = await store.ApplyAsync(
             manifest,
-            authority,
             cancellationToken);
 
         return new ApplyConnectorManifestResult(

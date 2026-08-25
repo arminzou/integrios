@@ -20,7 +20,6 @@ internal sealed class PostgresConnectorManifestStore(IntegriosDbContext context)
 
     public async Task<ConnectorManifestStoreResult> ApplyAsync(
         ConnectorManifest manifest,
-        ConnectorManifestApplyAuthority authority,
         CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -34,7 +33,7 @@ internal sealed class PostgresConnectorManifestStore(IntegriosDbContext context)
         if (existing is null)
         {
             context.Connectors.Add(ConnectorManifestApply.NewConnector(
-                manifest, authority, DateTimeOffset.UtcNow));
+                manifest, DateTimeOffset.UtcNow));
             await context.SaveChangesAsync(cancellationToken);
             Connector persisted = await GetByVersionAsync(
                 manifest.Key, manifest.ContractVersion, cancellationToken)
@@ -43,8 +42,8 @@ internal sealed class PostgresConnectorManifestStore(IntegriosDbContext context)
             return new ConnectorManifestStoreResult(persisted, ConnectorManifestApplyOutcome.Created);
         }
 
-        ConnectorManifestApply.EnsureApplicable(existing, manifest, authority);
-        ManifestApplyDelta delta = ConnectorManifestApply.Diff(existing, manifest, authority);
+        ConnectorManifestApply.EnsureApplicable(existing, manifest);
+        ManifestApplyDelta delta = ConnectorManifestApply.Diff(existing, manifest);
         if (delta.NothingToWrite)
         {
             await transaction.CommitAsync(cancellationToken);
@@ -58,7 +57,6 @@ internal sealed class PostgresConnectorManifestStore(IntegriosDbContext context)
             SET name = {manifest.Presentation.Name},
                 description = {manifest.Presentation.Description},
                 manifest = jsonb_set(manifest, ARRAY['presentation'], CAST({presentation} AS jsonb)),
-                status = {delta.StatusValue},
                 updated_at = {DateTimeOffset.UtcNow}
             WHERE id = {existing.Id}
             """,

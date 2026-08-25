@@ -101,7 +101,7 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
         ConnectorManifest renamed = ConnectorManifestParser.DeserializeStored(
             DatabaseProviderFixture.Manifest("Renamed Source").GetRawText());
         ConnectorManifestStoreResult result = await fixture.ManifestStore(context).ApplyAsync(
-            renamed, ConnectorManifestApplyAuthority.Operator, CancellationToken.None);
+            renamed, CancellationToken.None);
 
         result.Outcome.ShouldBe(ConnectorManifestApplyOutcome.PresentationReconciled);
         result.Connector.Name.ShouldBe("Renamed Source");

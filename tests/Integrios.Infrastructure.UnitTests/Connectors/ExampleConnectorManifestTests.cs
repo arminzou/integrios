@@ -139,8 +139,7 @@ public sealed class ExampleConnectorManifestTests
         return ConnectorManifestParser.Parse(
             document,
             new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]),
-            new JsonataTransformEvaluator(),
-            ConnectorManifestApplyAuthority.Operator);
+            new JsonataTransformEvaluator());
     }
 
     private static string ExamplesDirectory() =>

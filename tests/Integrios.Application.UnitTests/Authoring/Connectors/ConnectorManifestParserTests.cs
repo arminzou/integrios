@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Integrios.Application.Delivery;
-using Integrios.Application.Bootstrap;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
@@ -128,26 +127,6 @@ public sealed class ConnectorManifestParserTests
 
         manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("verified_webhook");
         manifest.SourceVerification.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("hmac_sha256");
-    }
-
-    [Fact]
-    public void BuiltinHttpDestinationSchema_RejectsUnknownConfiguration()
-    {
-        BuiltinConnector http = BuiltinCatalog.All.Where(item => item.Manifest.Key == "http").ShouldHaveSingleItem();
-        JsonElement schema = http.Manifest.DestinationConfigurationSchema!.Value;
-
-        schema.GetProperty("additionalProperties").GetBoolean().ShouldBeFalse();
-    }
-
-    [Fact]
-    public void BuiltinGitHub_IsPinnedToTheCompiledWebhookContract()
-    {
-        BuiltinConnector github = BuiltinCatalog.All.Where(item => item.Manifest.Key == "github").ShouldHaveSingleItem();
-
-        github.Id.ShouldBe(BuiltinCatalog.GitHubId);
-        github.Manifest.ContractVersion.ShouldBe(BuiltinCatalog.GitHubContractVersion);
-        github.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("github_webhook");
-        github.Manifest.SourceVerification.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("hmac_sha256");
     }
 
     [Fact]
@@ -315,7 +294,7 @@ public sealed class ConnectorManifestParserTests
     [Fact]
     public void StoredManifest_RoundTripsThroughTheCanonicalSerializerContract()
     {
-        ConnectorManifest parsed = ParseAsBootstrap(Json(MaximalManifest()));
+        ConnectorManifest parsed = Parse(Json(MaximalManifest()));
         JsonElement stored = ConnectorManifestParser.ToJson(parsed);
 
         // The persisted wire format is snake_case, so a property that loses its
@@ -464,19 +443,11 @@ public sealed class ConnectorManifestParserTests
 
     private static readonly ITransformEvaluator MappingEvaluator = new FakeMappingEvaluator();
 
-    private static ConnectorManifest ParseAsBootstrap(JsonElement document) =>
-        ConnectorManifestParser.Parse(
-            document,
-            new FakeAuthSchemeRegistry(),
-            MappingEvaluator,
-            ConnectorManifestApplyAuthority.Bootstrap(Guid.NewGuid()));
-
     private static ConnectorManifest Parse(JsonElement document) =>
         ConnectorManifestParser.Parse(
             document,
             new FakeAuthSchemeRegistry(),
-            MappingEvaluator,
-            ConnectorManifestApplyAuthority.Operator);
+            MappingEvaluator);
 
     private sealed class FakeAuthSchemeRegistry : IDestinationAuthenticatorRegistry
     {

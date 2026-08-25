@@ -1,14 +1,8 @@
-using Integrios.Tests.Shared;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Dapper;
 using Integrios.Application;
 using Integrios.Application.Bootstrap;
-using Integrios.Application.Authoring.Connectors;
-using Integrios.Domain.Entities;
-using Integrios.Domain.Enums;
-using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,67 +35,6 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     {
         provider.Dispose();
         return Task.CompletedTask;
-    }
-
-    [Fact]
-    public async Task BootstrapBuiltins_IsIdempotent_AndReconcilesPresentationAndStatusDrift()
-    {
-        IReadOnlyList<Connector> first = await mediator.Send(new BootstrapBuiltinsCommand());
-        first.Count.ShouldBe(3);
-        Connector http = first.Where(i => i.Key == "http").ShouldHaveSingleItem();
-        http.Id.ShouldBe(BuiltinCatalog.HttpId);
-        http.Direction.ShouldBe(ConnectorDirection.Both);
-        http.Manifest.DestinationAuthentication.Schemes.Select(s => s.Scheme).Order(StringComparer.Ordinal)
-            .ShouldBe(["api_key_header", "bearer_token"]);
-        http.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("event_json");
-        JsonElement destinationSchema = http.Manifest.DestinationConfigurationSchema!.Value;
-        destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString().ShouldBe("uri");
-        destinationSchema.GetProperty("required")[0].GetString().ShouldBe("base_uri");
-        Connector github = first.Where(i => i.Key == "github").ShouldHaveSingleItem();
-        github.Id.ShouldBe(BuiltinCatalog.GitHubId);
-        github.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("github_webhook");
-        Connector dataverse = first.Where(i => i.Key == "dataverse").ShouldHaveSingleItem();
-        dataverse.Id.ShouldBe(BuiltinCatalog.DataverseId);
-        dataverse.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("remote_execution_context_json");
-
-        await ExecuteAsync($$$"""
-            UPDATE connectors
-            SET name = 'Drifted',
-                description = 'Drifted description',
-                status = 'disabled',
-                manifest = {{{fixture.PresentationDriftExpression}}}
-            WHERE {{{fixture.KeyColumn}}} = 'http' AND contract_version = 1
-            """);
-
-        IReadOnlyList<Connector> second = await mediator.Send(new BootstrapBuiltinsCommand());
-        second.Count.ShouldBe(3);
-        Connector reconciled = second.Where(item => item.Key == "http").ShouldHaveSingleItem();
-        reconciled.Name.ShouldBe("HTTP");
-        reconciled.Status.ShouldBe(OperationalStatus.Active);
-
-        (await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'")).ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task BootstrapBuiltins_RejectsUnexpectedWellKnownIdentity()
-    {
-        await ExecuteAsync("DELETE FROM connections");
-        await ExecuteAsync("DELETE FROM connectors");
-        Guid unexpectedId = Guid.NewGuid();
-        string manifest = TestConnectorManifest.Create(
-            "http", "HTTP", "both", description: "Generic HTTP source or destination.");
-        await ExecuteAsync($$$"""
-            INSERT INTO connectors (
-                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                status, description, manifest)
-            VALUES (
-                @Id, 'http', 1, 1, 'HTTP', 'both', 'active',
-                'Generic HTTP source or destination.', {{{fixture.Json("@Manifest")}}})
-            """, new { Id = unexpectedId, Manifest = manifest });
-
-        var exception = await Should.ThrowAsync<ConnectorVersionConflictException>(
-            () => mediator.Send(new BootstrapBuiltinsCommand()));
-        exception.Message.ShouldContain("unexpected id", Case.Insensitive);
     }
 
     [Fact]
@@ -184,16 +117,17 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     }
 
     [Fact]
-    public async Task BootstrapBuiltinsAndOperatorKey_CreatesBuiltinsAndDeterministicKey()
+    public async Task BootstrapOperatorKey_LeavesConnectorsEmptyAndCreatesDeterministicKey()
     {
+        await ExecuteAsync("DELETE FROM connections");
+        await ExecuteAsync("DELETE FROM connectors");
         await DeleteGlobalOperatorKeysAsync();
 
-        await mediator.Send(new BootstrapBuiltinsCommand());
         BootstrapOperatorKeyResult keyResult = await mediator.Send(
             new BootstrapOperatorKeyCommand("global_operator_key", "operator_bootstrap_secret"));
         keyResult.Created.ShouldBeTrue();
 
-        (await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'")).ShouldBe(1);
+        (await CountAsync("connectors")).ShouldBe(0);
 
         string? secretHash = await ScalarAsync<string>(
             "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL");

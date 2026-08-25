@@ -15,10 +15,9 @@ internal static class ConnectorManifestApply
 {
     public static Connector NewConnector(
         ConnectorManifest manifest,
-        ConnectorManifestApplyAuthority authority,
         DateTimeOffset now) => new()
         {
-            Id = authority.RequiredConnectorId ?? Guid.NewGuid(),
+            Id = Guid.NewGuid(),
             Key = manifest.Key,
             ContractVersion = manifest.ContractVersion,
             ManifestSchemaVersion = manifest.ManifestSchemaVersion,
@@ -33,15 +32,8 @@ internal static class ConnectorManifestApply
 
     public static void EnsureApplicable(
         Connector existing,
-        ConnectorManifest manifest,
-        ConnectorManifestApplyAuthority authority)
+        ConnectorManifest manifest)
     {
-        if (authority.RequiredConnectorId is Guid requiredId && existing.Id != requiredId)
-        {
-            throw new ConnectorVersionConflictException(
-                $"Built-in Connector '{manifest.Key}' contract version {manifest.ContractVersion} exists with unexpected id '{existing.Id}'.");
-        }
-
         if (!JsonElement.DeepEquals(
                 ConnectorManifestParser.ToFunctionalJson(existing.Manifest),
                 ConnectorManifestParser.ToFunctionalJson(manifest)))
@@ -53,19 +45,14 @@ internal static class ConnectorManifestApply
 
     public static ManifestApplyDelta Diff(
         Connector existing,
-        ConnectorManifest manifest,
-        ConnectorManifestApplyAuthority authority)
+        ConnectorManifest manifest)
     {
         JsonElement presentationJson = ConnectorManifestParser.ToPresentationJson(manifest.Presentation);
         bool presentationChanged = !JsonElement.DeepEquals(
             ConnectorManifestParser.ToPresentationJson(existing.Manifest.Presentation), presentationJson);
-        bool statusChanged = authority.Mode == ConnectorManifestApplyMode.Bootstrap
-            && existing.Status != OperationalStatus.Active;
         return new ManifestApplyDelta(
             presentationJson,
-            presentationChanged,
-            statusChanged,
-            statusChanged ? OperationalStatus.Active : existing.Status);
+            presentationChanged);
     }
 
     public static ConnectorManifestApplyOutcome OutcomeFor(bool presentationChanged) =>
@@ -76,11 +63,7 @@ internal static class ConnectorManifestApply
 
 internal readonly record struct ManifestApplyDelta(
     JsonElement PresentationJson,
-    bool PresentationChanged,
-    bool StatusChanged,
-    OperationalStatus Status)
+    bool PresentationChanged)
 {
-    public bool NothingToWrite => !PresentationChanged && !StatusChanged;
-
-    public string StatusValue => Status.ToString().ToLowerInvariant();
+    public bool NothingToWrite => !PresentationChanged;
 }
