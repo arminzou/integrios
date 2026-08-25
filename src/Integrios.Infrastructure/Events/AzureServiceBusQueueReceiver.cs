@@ -1,8 +1,10 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Azure.Identity;
 using Azure.Messaging.ServiceBus;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
+using Integrios.Application.Telemetry;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -26,10 +28,17 @@ internal sealed class AzureServiceBusQueueReceiver(
     ISourceVerificationSecretResolver secretResolver,
     IServiceProvider serviceProvider,
     QueueReconcileInterval reconcileInterval,
+    IntegriosMetrics metrics,
     ILogger<AzureServiceBusQueueReceiver> logger)
     : BackgroundService
 {
+    // A broker that refuses the credential or cannot be reached does not fail StartProcessingAsync:
+    // the client connects lazily, so the processor looks started and then errors forever. Counting
+    // consecutive errors is what lets reconciliation notice and rebuild it.
+    private const int UnhealthyErrorThreshold = 5;
+
     private readonly Dictionary<Guid, RunningProcessor> active = [];
+    private readonly ConcurrentDictionary<Guid, int> consecutiveErrors = new();
     private readonly SemaphoreSlim lifecycleGate = new(1, 1);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -73,15 +82,25 @@ internal sealed class AzureServiceBusQueueReceiver(
             foreach (Guid sourceId in active.Keys.ToArray())
             {
                 RunningProcessor running = active[sourceId];
-                if (desiredById.TryGetValue(sourceId, out ResolvedQueueSource? source)
-                    && source.Revision == running.Revision)
-                {
+                bool wanted = desiredById.TryGetValue(sourceId, out ResolvedQueueSource? source)
+                    && source.Revision == running.Revision;
+                bool unhealthy = consecutiveErrors.GetValueOrDefault(sourceId) >= UnhealthyErrorThreshold;
+                if (wanted && !unhealthy)
                     continue;
-                }
 
                 await StopProcessorAsync(running, cancellationToken);
                 active.Remove(sourceId);
-                logger.LogInformation("Stopped Azure Service Bus processor for queue Source {SourceId}.", sourceId);
+                consecutiveErrors.TryRemove(sourceId, out _);
+                if (unhealthy && wanted)
+                {
+                    logger.LogWarning(
+                        "Rebuilding Azure Service Bus processor for queue Source {SourceId} after {Count} consecutive errors.",
+                        sourceId, UnhealthyErrorThreshold);
+                }
+                else
+                {
+                    logger.LogInformation("Stopped Azure Service Bus processor for queue Source {SourceId}.", sourceId);
+                }
             }
 
             foreach (ResolvedQueueSource source in desired)
@@ -117,20 +136,27 @@ internal sealed class AzureServiceBusQueueReceiver(
         CancellationToken cancellationToken)
     {
         ServiceBusClient client = await CreateClientAsync(source, cancellationToken);
-        ServiceBusProcessor processor = client.CreateProcessor(source.QueueName, new ServiceBusProcessorOptions
+        var options = new ServiceBusProcessorOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
             AutoCompleteMessages = false,
             MaxConcurrentCalls = 1,
             PrefetchCount = 0,
-        });
+        };
+        // A topic subscription is received exactly like a queue - same processor, same settlement -
+        // so only the entity address differs.
+        ServiceBusProcessor processor = source.QueueName is { } queueName
+            ? client.CreateProcessor(queueName, options)
+            : client.CreateProcessor(source.ServiceBusTopicName, source.ServiceBusSubscriptionName, options);
         processor.ProcessMessageAsync += args => ProcessMessageAsync(source, args);
         processor.ProcessErrorAsync += args =>
         {
+            int errors = consecutiveErrors.AddOrUpdate(source.SourceId, 1, (_, count) => count + 1);
+            metrics.RecordQueueSourceError("azure_service_bus");
             logger.LogError(
                 args.Exception,
-                "Service Bus processor error for queue Source {SourceId} ({ErrorSource}).",
-                source.SourceId, args.ErrorSource);
+                "Service Bus processor error for queue Source {SourceId} ({ErrorSource}); {Count} consecutive.",
+                source.SourceId, args.ErrorSource, errors);
             return Task.CompletedTask;
         };
 
@@ -225,6 +251,7 @@ internal sealed class AzureServiceBusQueueReceiver(
                     source.SourceContractSchema, source.SourceMapping, rawInput),
                 args.CancellationToken);
             await args.CompleteMessageAsync(args.Message, args.CancellationToken);
+            consecutiveErrors.TryRemove(source.SourceId, out _);
         }
         catch (EventAcceptanceException exception)
         {

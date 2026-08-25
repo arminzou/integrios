@@ -75,7 +75,7 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     }
 
     [Fact]
-    public async Task RetiredTopicSource_RejectsAcceptance()
+    public async Task RevokedSource_RejectsAcceptance()
     {
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);

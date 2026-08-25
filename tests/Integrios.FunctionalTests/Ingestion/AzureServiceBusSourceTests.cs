@@ -14,14 +14,21 @@ using Testcontainers.ServiceBus;
 
 namespace Integrios.FunctionalTests.Ingestion;
 
-// Real-broker integration: proves PeekLock completion, deterministic dead-lettering, transient
-// redelivery, and idempotent duplicate handling against the official Azure Service Bus emulator.
-public sealed class AzureServiceBusQueueSourceTests(AzureServiceBusQueueSourceFixture fixture)
-    : IClassFixture<AzureServiceBusQueueSourceFixture>
+// Real-broker integration against the official Azure Service Bus emulator, covering both entity
+// forms a queue Source can address: a queue, and a subscription on a topic. Proves PeekLock
+// completion, deterministic dead-lettering, transient redelivery, and idempotent duplicate
+// handling. The queue and the topic subscription share one contract and one settlement path;
+// only the entity address differs.
+public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixture)
+    : IClassFixture<AzureServiceBusSourceFixture>
 {
     internal const string TenantSlug = "sb-integration";
     internal const string SecretReference = "sb_connection_string";
     internal const string QueueName = "queue.1";
+    // subscription.3 is the emulator's only rule-free subscription, so it receives every message
+    // published to topic.1; the others carry correlation filters.
+    internal const string TopicEntityName = "topic.1";
+    internal const string SubscriptionEntityName = "subscription.3";
 
     [Fact]
     public async Task ValidMessage_CompletesAndCreatesEvent()
@@ -117,10 +124,28 @@ public sealed class AzureServiceBusQueueSourceTests(AzureServiceBusQueueSourceFi
         onlyEventId.ShouldBe(firstEventId);
     }
 
-    private async Task PublishAsync(object body)
+    // A topic subscription is a queue Source too: same contract, same settlement, only the entity
+    // address differs.
+    [Fact]
+    public async Task TopicSubscriptionMessage_CompletesAndCreatesEvent()
+    {
+        string sourceEventId = $"evt-{Guid.NewGuid():N}";
+        await PublishAsync(
+            new { event_type = "order.created", source_event_id = sourceEventId, payload = new { amount = 99 } },
+            TopicEntityName);
+
+        Guid eventId = await WaitForEventAsync(sourceEventId);
+
+        Guid attributedSource = await QuerySingleAsync<Guid>(
+            "SELECT source_id FROM events WHERE id=@Id",
+            new { Id = eventId });
+        attributedSource.ShouldBe(fixture.TopicSourceId);
+    }
+
+    private async Task PublishAsync(object body, string? entity = null)
     {
         await using ServiceBusClient client = new(fixture.ServiceBus.GetConnectionString());
-        ServiceBusSender sender = client.CreateSender(QueueName);
+        ServiceBusSender sender = client.CreateSender(entity ?? QueueName);
         await sender.SendMessageAsync(new ServiceBusMessage(JsonSerializer.Serialize(body, HostJson.Options)));
     }
 
@@ -174,9 +199,21 @@ public sealed class AzureServiceBusQueueSourceTests(AzureServiceBusQueueSourceFi
     {
         source_contract = "event_json",
         transport = "azure_service_bus",
-        @namespace = "sb-emulator",
-        queue_name = QueueName,
         authentication = new { scheme = "connection_string", secret_ref = SecretReference },
+        transport_config = new { @namespace = "sb-emulator", queue_name = QueueName },
+    });
+
+    internal static string TopicSourceConfigurationJson() => JsonSerializer.Serialize(new
+    {
+        source_contract = "event_json",
+        transport = "azure_service_bus",
+        authentication = new { scheme = "connection_string", secret_ref = SecretReference },
+        transport_config = new
+        {
+            @namespace = "sb-emulator",
+            topic_name = TopicEntityName,
+            subscription_name = SubscriptionEntityName,
+        },
     });
 
     // A Source is active or permanently revoked, so a test that needs a Source to appear mid-run
@@ -184,7 +221,8 @@ public sealed class AzureServiceBusQueueSourceTests(AzureServiceBusQueueSourceFi
     internal static async Task InsertQueueSourceAsync(
         FunctionalDatabase database,
         SeededQueueSource seeded,
-        Guid sourceId)
+        Guid sourceId,
+        string? configurationJson = null)
     {
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
@@ -199,7 +237,7 @@ public sealed class AzureServiceBusQueueSourceTests(AzureServiceBusQueueSourceFi
                 seeded.TenantId,
                 seeded.ConnectionId,
                 seeded.TopicId,
-                SourceConfiguration = QueueSourceConfigurationJson(),
+                SourceConfiguration = configurationJson ?? QueueSourceConfigurationJson(),
             });
     }
 
@@ -275,7 +313,7 @@ internal sealed record SeededQueueSource(
     Guid TopicId,
     Guid SourceId);
 
-public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
+public sealed class AzureServiceBusSourceFixture : IAsyncLifetime
 {
     private const string EmulatorImage =
         "mcr.microsoft.com/azure-messaging/servicebus-emulator@sha256:5a96d893b245031740f7d46e0fe5ff282d24b78c4b7d761dd57590f3f010a9b3";
@@ -286,6 +324,7 @@ public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
         .Build();
     internal FaultInjectingEventAcceptance EventAcceptance { get; private set; } = null!;
     internal Guid TenantId { get; private set; }
+    internal Guid TopicSourceId { get; } = Guid.NewGuid();
 
     private WebApplicationFactory<IngestionHost::Program> factory = null!;
 
@@ -293,7 +332,11 @@ public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
     {
         await Database.StartAsync();
         await ServiceBus.StartAsync();
-        TenantId = (await AzureServiceBusQueueSourceTests.SeedAsync(Database)).TenantId;
+        SeededQueueSource seeded = await AzureServiceBusSourceTests.SeedAsync(Database);
+        TenantId = seeded.TenantId;
+        await AzureServiceBusSourceTests.InsertQueueSourceAsync(
+            Database, seeded, TopicSourceId,
+            AzureServiceBusSourceTests.TopicSourceConfigurationJson());
 
         factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
@@ -304,7 +347,7 @@ public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    [$"SourceSecrets:{AzureServiceBusQueueSourceTests.TenantSlug}:{AzureServiceBusQueueSourceTests.SecretReference}"] =
+                    [$"SourceSecrets:{AzureServiceBusSourceTests.TenantSlug}:{AzureServiceBusSourceTests.SecretReference}"] =
                         ServiceBus.GetConnectionString(),
                 }));
             builder.ConfigureServices(services =>

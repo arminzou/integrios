@@ -16,8 +16,13 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
 {
     private readonly PostgreSqlContainer? postgres;
     private readonly MsSqlContainer? sqlServer;
-    public FunctionalDatabase()
+    private readonly bool migrateOnStart;
+
+    // migrateOnStart: false leaves the database empty so a caller can walk the migration history
+    // itself. Only the data-migration test needs it; everything else wants a migrated database.
+    public FunctionalDatabase(bool migrateOnStart = true)
     {
+        this.migrateOnStart = migrateOnStart;
         Provider = (Environment.GetEnvironmentVariable("INTEGRIOS_TEST_DATABASE_PROVIDER") ?? "postgres")
             .Trim().ToLowerInvariant();
         switch (Provider)
@@ -58,6 +63,9 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
     {
         if (postgres is not null) await postgres.StartAsync();
         else await sqlServer!.StartAsync();
+
+        if (!migrateOnStart)
+            return;
 
         using ServiceProvider provider = new ServiceCollection()
             .AddAdminInfrastructureServices(Configuration)

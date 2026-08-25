@@ -68,7 +68,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connection_id = connectionId,
             topic_id = topicId,
             type = "queue",
-            configuration = new { source_contract = "event_json", transport = "azure_service_bus", @namespace = "example.servicebus.windows.net", queue_name = "events", authentication = new { scheme = "azure_identity" } }
+            configuration = new { source_contract = "event_json", transport = "azure_service_bus", authentication = new { scheme = "azure_identity" }, transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" } }
         }));
 
         eventApi.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -97,9 +97,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             {
                 source_contract = "event_json",
                 transport = "azure_service_bus",
-                @namespace = "example.servicebus.windows.net",
-                queue_name = "events",
                 authentication = new { scheme, secret_ref = secretReference },
+                transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" },
             }
         }));
 
@@ -123,13 +122,119 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             {
                 source_contract = "event_json",
                 transport = "azure_service_bus",
-                @namespace = "example.servicebus.windows.net",
-                queue_name = "events",
                 authentication = new { scheme = "azure_identity", secret_ref = "sb_connection_string" },
+                transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" },
             }
         }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    // azure_identity has nothing but the namespace to locate the broker, so a bare name that the
+    // connection_string path would harmlessly ignore becomes a connect-time failure with no
+    // authoring-time signal. Not enforced for connection_string, where the host comes from the
+    // secret and the field is informational.
+    [Theory]
+    [InlineData("sb-integrios")]
+    [InlineData("https://sb-integrios.servicebus.windows.net")]
+    [InlineData("sb-integrios.servicebus.windows.net/queues")]
+    public async Task QueueSourceAuthoring_RejectsNonHostNamespaceForAzureIdentity(string ns)
+    {
+        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connection_id = connectionId,
+            topic_id = topicId,
+            type = "queue",
+            configuration = new
+            {
+                source_contract = "event_json",
+                transport = "azure_service_bus",
+                authentication = new { scheme = "azure_identity" },
+                transport_config = new { @namespace = ns, queue_name = "events" },
+            }
+        }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    // A Service Bus topic is consumed through one of its subscriptions, which behaves exactly like a
+    // queue. The keys are prefixed because a bare topic_name inside a Source configuration would read
+    // as the Integrios Topic the Source publishes to, which is a different thing entirely.
+    [Fact]
+    public async Task QueueSourceAuthoring_AcceptsTopicSubscriptionForm()
+    {
+        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connection_id = connectionId,
+            topic_id = topicId,
+            type = "queue",
+            configuration = new
+            {
+                source_contract = "event_json",
+                transport = "azure_service_bus",
+                authentication = new { scheme = "azure_identity" },
+                transport_config = new
+                {
+                    @namespace = "example.servicebus.windows.net",
+                    topic_name = "orders",
+                    subscription_name = "integrios",
+                },
+            }
+        }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Theory]
+    // both entity forms at once
+    [InlineData("events", "orders", "integrios")]
+    // neither
+    [InlineData(null, null, null)]
+    // topic without its subscription, and a subscription without its topic
+    [InlineData(null, "orders", null)]
+    [InlineData(null, null, "integrios")]
+    public async Task QueueSourceAuthoring_RequiresExactlyOneEntityForm(
+        string? queueName,
+        string? topicName,
+        string? subscriptionName)
+    {
+        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        var transportConfig = new Dictionary<string, object?>
+        {
+            ["namespace"] = "example.servicebus.windows.net",
+        };
+        if (queueName is not null)
+            transportConfig["queue_name"] = queueName;
+        if (topicName is not null)
+            transportConfig["topic_name"] = topicName;
+        if (subscriptionName is not null)
+            transportConfig["subscription_name"] = subscriptionName;
+
+        var configuration = new Dictionary<string, object?>
+        {
+            ["source_contract"] = "event_json",
+            ["transport"] = "azure_service_bus",
+            ["authentication"] = new { scheme = "azure_identity" },
+            ["transport_config"] = transportConfig,
+        };
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connection_id = connectionId,
+            topic_id = topicId,
+            type = "queue",
+            configuration,
+        }));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     private async Task<Guid> CreateTopicAsync()

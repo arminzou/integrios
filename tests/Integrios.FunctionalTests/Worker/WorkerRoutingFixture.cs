@@ -319,7 +319,6 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             INSERT INTO sources (id,tenant_id,connection_id,topic_id,type,configuration,status) VALUES
                 (@SourceId,@TenantId,@SourceConnectionId,@TopicId,'event_api',{{{database.Json("@EmptyConfig")}}},'active'),
                 (@OrphanSourceId,@OrphanTenantId,@OrphanSourceConnectionId,@OrphanTopicId,'event_api',{{{database.Json("@EmptyConfig")}}},'active');
-            INSERT INTO topic_sources (tenant_id,topic_id,connection_id) VALUES (@TenantId,@TopicId,@SourceConnectionId);
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status) VALUES
                 (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerConnectionId,0,'active'),
                 (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskConnectionId,1,'active');
