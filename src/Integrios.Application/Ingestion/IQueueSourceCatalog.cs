@@ -22,7 +22,12 @@ public sealed record ResolvedQueueSource
     public required Guid TopicId { get; init; }
     public required Guid SourceId { get; init; }
     public required string Namespace { get; init; }
-    public required string QueueName { get; init; }
+    // Exactly one entity form is populated, guaranteed by SourceAuthoringValidator: a queue, or a
+    // topic with the subscription consumed from it.
+    public required string? QueueName { get; init; }
+    // Named for the broker, not shortened: TopicId on this same record is the Integrios Topic.
+    public required string? ServiceBusTopicName { get; init; }
+    public required string? ServiceBusSubscriptionName { get; init; }
     public required QueueAuthentication Authentication { get; init; }
     public required JsonElement? SourceContractSchema { get; init; }
     public required TransformSpec? SourceMapping { get; init; }

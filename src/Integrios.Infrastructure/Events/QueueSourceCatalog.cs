@@ -6,10 +6,13 @@ using Integrios.Application.Ingestion;
 using Integrios.Application.Transforms;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
+using Microsoft.Extensions.Logging;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class QueueSourceCatalog(IDbConnectionFactory connectionFactory) : IQueueSourceCatalog
+internal sealed class QueueSourceCatalog(
+    IDbConnectionFactory connectionFactory,
+    ILogger<QueueSourceCatalog> logger) : IQueueSourceCatalog
 {
     public async Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(
         CancellationToken cancellationToken)
@@ -52,7 +55,23 @@ internal sealed class QueueSourceCatalog(IDbConnectionFactory connectionFactory)
         IEnumerable<SourceRow> rows = await connection.QueryAsync<SourceRow>(
             new CommandDefinition(sql, cancellationToken: cancellationToken));
 
-        return rows.Select(row => row.ToResolvedQueueSource()).Where(source => source is not null).ToList()!;
+        var resolved = new List<ResolvedQueueSource>();
+        foreach (SourceRow row in rows)
+        {
+            if (row.ToResolvedQueueSource() is { } source)
+            {
+                resolved.Add(source);
+                continue;
+            }
+
+            // An active queue Source the receiver cannot address is otherwise invisible: no
+            // processor, no error, no metric, and Admin still reports it active.
+            logger.LogWarning(
+                "Skipping queue Source {SourceId}: its configuration does not resolve to a Service Bus entity.",
+                row.SourceId);
+        }
+
+        return resolved;
     }
 
     private sealed record SourceRow
@@ -71,16 +90,35 @@ internal sealed class QueueSourceCatalog(IDbConnectionFactory connectionFactory)
             SHA256.HashData(Encoding.UTF8.GetBytes($"{SourceConfigurationJson}{ManifestJson}")));
 
 
+        private static string? ReadString(JsonElement element, string property) =>
+            element.TryGetProperty(property, out JsonElement value)
+            && value.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(value.GetString())
+                ? value.GetString()
+                : null;
+
         public ResolvedQueueSource? ToResolvedQueueSource()
         {
             JsonElement configuration = JsonSerializer.Deserialize<JsonElement>(SourceConfigurationJson);
             if (!configuration.TryGetProperty("source_contract", out JsonElement contractKeyElement)
-                || !configuration.TryGetProperty("namespace", out JsonElement namespaceElement)
-                || !configuration.TryGetProperty("queue_name", out JsonElement queueNameElement)
+                || !configuration.TryGetProperty("transport_config", out JsonElement transportConfig)
+                || transportConfig.ValueKind != JsonValueKind.Object
                 || !configuration.TryGetProperty("authentication", out JsonElement authenticationElement))
             {
                 return null;
             }
+
+            string? @namespace = ReadString(transportConfig, "namespace");
+            if (@namespace is null)
+                return null;
+
+            string? queueName = ReadString(transportConfig, "queue_name");
+            string? serviceBusTopicName = ReadString(transportConfig, "topic_name");
+            string? serviceBusSubscriptionName = ReadString(transportConfig, "subscription_name");
+            // Authoring guarantees exactly one form; a row that satisfies neither predates or evades
+            // that rule and is skipped rather than started against a half-specified entity.
+            if (queueName is null && (serviceBusTopicName is null || serviceBusSubscriptionName is null))
+                return null;
 
             ConnectorManifest manifest = JsonSerializer.Deserialize<ConnectorManifest>(
                 ManifestJson, StoredJson.Options)!;
@@ -105,8 +143,10 @@ internal sealed class QueueSourceCatalog(IDbConnectionFactory connectionFactory)
                 TenantSlug = TenantSlug,
                 TopicId = TopicId,
                 SourceId = SourceId,
-                Namespace = namespaceElement.GetString() ?? "",
-                QueueName = queueNameElement.GetString() ?? "",
+                Namespace = @namespace,
+                QueueName = queueName,
+                ServiceBusTopicName = serviceBusTopicName,
+                ServiceBusSubscriptionName = serviceBusSubscriptionName,
                 Authentication = new QueueAuthentication { Scheme = scheme, SecretReference = secretReference },
                 SourceContractSchema = contract.Schema,
                 SourceMapping = contract.Mapping is { } mapping
