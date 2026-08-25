@@ -10,9 +10,9 @@ namespace Integrios.AcceptanceTests;
 public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 {
     private string HttpConnectorId => fixture.HttpConnectorId.ToString();
-    private const string ApiKeyConnectorId = "11111111-1111-1111-1111-111111111111";
-    private const string BearerConnectorId = "22222222-2222-2222-2222-222222222222";
-    private const string SourceOnlyConnectorId = "33333333-3333-3333-3333-333333333333";
+    private string ApiKeyConnectorId => fixture.ApiKeyConnectorId.ToString();
+    private string BearerConnectorId => fixture.BearerConnectorId.ToString();
+    private string SourceOnlyConnectorId => fixture.SourceOnlyConnectorId.ToString();
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
@@ -86,8 +86,6 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task SourceContracts_RejectDuplicateForeignOrInactiveSources()
     {
-        await InstallAcceptanceConnectorsAsync();
-
         TenantContext primary = await CreateTenantAsync($"source-contract-{Suffix()}");
         TenantContext isolated = await CreateTenantAsync($"source-contract-{Suffix()}");
 
@@ -160,8 +158,6 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task Fanout_DeliversTransformedAndAuthenticatedCopies_WithoutDisclosingSecrets()
     {
-        await InstallAcceptanceConnectorsAsync();
-
         TenantContext tenant = await CreateTenantAsync($"fanout-{Suffix()}");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "payments");
 
@@ -318,8 +314,6 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task DestinationBoundary_RejectsUnsafeOrUnroutableDestinations()
     {
-        await InstallAcceptanceConnectorsAsync();
-
         TenantContext tenant = await CreateTenantAsync($"boundary-{Suffix()}");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "boundary");
 
@@ -439,8 +433,6 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task SecretProviders_ResolveRotateAndValidate_WithoutDisclosingValues()
     {
-        await InstallAcceptanceConnectorsAsync();
-
         TenantContext fileA = await CreateTenantAsync($"file-a-{Suffix()}");
         TenantContext fileB = await CreateTenantAsync($"file-b-{Suffix()}");
         await fixture.WriteSecretAsync(fileA.Slug, "shared_secret", "file-a-value");
@@ -556,8 +548,6 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task Secrets_NeverAppearInDurableEvidence()
     {
-        await InstallAcceptanceConnectorsAsync();
-
         // The probe secret is resolved through a real authenticated delivery first, so its absence
         // from durable evidence is falsifiable rather than vacuous.
         TenantContext tenant = await CreateTenantAsync($"secrets-{Suffix()}");
@@ -575,17 +565,6 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await fixture.GetServiceLogsAsync("worker"));
         logs.ShouldNotContain("probe-secret-value", Case.Sensitive);
     }
-
-    private async Task InstallAcceptanceConnectorsAsync() => await fixture.ExecuteAsync($$"""
-        INSERT INTO connectors (
-            id, key, contract_version, manifest_schema_version, name, direction,
-            status, description, manifest)
-        VALUES
-            ('{{ApiKeyConnectorId}}', 'acceptance_api_key', 1, 1, 'Acceptance API key', 'destination', 'active', 'Acceptance-only connector', '{{TestConnectorManifest.Create("acceptance_api_key", "Acceptance API key", "destination", ["api_key_header"])}}'::jsonb),
-            ('{{BearerConnectorId}}', 'acceptance_bearer', 1, 1, 'Acceptance bearer', 'destination', 'active', 'Acceptance-only connector', '{{TestConnectorManifest.Create("acceptance_bearer", "Acceptance bearer", "destination", ["bearer_token"])}}'::jsonb),
-            ('{{SourceOnlyConnectorId}}', 'acceptance_source', 1, 1, 'Acceptance source', 'source', 'active', 'Acceptance-only connector', '{{TestConnectorManifest.Create("acceptance_source", "Acceptance source", "source")}}'::jsonb)
-        ON CONFLICT (id) DO NOTHING;
-        """);
 
     private async Task<TenantContext> CreateTenantAsync(string slug)
     {

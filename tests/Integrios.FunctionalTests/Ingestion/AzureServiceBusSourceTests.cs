@@ -244,25 +244,21 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
     internal static async Task<SeededQueueSource> SeedAsync(FunctionalDatabase database, bool includeSource = true)
     {
         Guid tenantIdValue = Guid.NewGuid();
-        Guid connectorId = Guid.NewGuid();
+        Guid connectorId = await database.ApplyConnectorManifestAsync(
+            "sb_integration_test",
+            TestConnectorManifest.Create(
+                "sb_integration_test", "SB Integration Test", "source",
+                declarativeSourceContract: true,
+                sourceMappingExpression:
+                    "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload }"));
         Guid connectionId = Guid.NewGuid();
         Guid topicId = Guid.NewGuid();
         Guid sourceId = Guid.NewGuid();
-        string manifest = TestConnectorManifest.Create(
-            "sb_integration_test", "SB Integration Test", "source",
-            declarativeSourceContract: true,
-            sourceMappingExpression:
-                "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload }");
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES (@TenantId, @Slug, 'SB Integration', 'active', {{{database.Now}}}, {{{database.Now}}});
-
-            INSERT INTO connectors (id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version,
-                name, direction, status, manifest, created_at, updated_at)
-            VALUES (@ConnectorId, 'sb_integration_test', 1, 1, 'SB Integration Test', 'source',
-                'active', {{{database.Json("@Manifest")}}}, {{{database.Now}}}, {{{database.Now}}});
 
             INSERT INTO connections (id, tenant_id, connector_id, name, config, status, created_at, updated_at)
             VALUES (@ConnectionId, @TenantId, @ConnectorId, 'sb-connection', {{{database.Json("@Config")}}},
@@ -276,7 +272,6 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
                 TenantId = tenantIdValue,
                 Slug = TenantSlug,
                 ConnectorId = connectorId,
-                Manifest = manifest,
                 ConnectionId = connectionId,
                 Config = "{}",
                 TopicId = topicId,

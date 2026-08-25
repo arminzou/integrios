@@ -34,7 +34,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public const string LedgerSinkUrl = "http://test-sink/ledger";
     public const string RiskSinkUrl = "http://test-sink/risk";
 
-    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private Guid HttpConnectorId;
     private static readonly Guid TenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000001");
     private static readonly Guid OrphanTenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000009");
     private static readonly Guid SourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
@@ -222,18 +222,10 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             $"SELECT id FROM connectors WHERE {database.KeyColumn}=@ConnectorKey AND contract_version=1",
             new { ConnectorKey = connectorKey });
         if (connectorId is null)
-        {
-            connectorId = Guid.NewGuid();
-            await ExecuteAsync($$$"""
-                INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
-                    status,manifest)
-                VALUES (@Id,@ConnectorKey,1,1,@ConnectorKey,'both','active',{{{database.Json("@Manifest")}}})
-                """, new
-                {
-                    Id = connectorId.Value, ConnectorKey = connectorKey,
-                    Manifest = TestConnectorManifest.Create(connectorKey, connectorKey, "both", httpSuccessJson: httpSuccessJson)
-                });
-        }
+            connectorId = await database.ApplyConnectorManifestAsync(
+                connectorKey,
+                TestConnectorManifest.Create(
+                    connectorKey, connectorKey, "both", httpSuccessJson: httpSuccessJson));
         await ExecuteAsync($$$"""
             UPDATE connections SET config={{{database.Json("@Config")}}},
                 destination_authentication={{{database.Json("@DestinationAuth")}}}, connector_id=@ConnectorId
@@ -296,13 +288,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             """, new { Id = eventId, TenantId = tenantId, TopicId = topicId, SourceId = sourceId, EventType = eventType, Payload = payload });
     }
 
-    private Task SeedRoutingDataAsync(DbConnection connection)
+    private async Task SeedRoutingDataAsync(DbConnection connection)
     {
+        HttpConnectorId = await database.ApplyConnectorManifestAsync(
+            "http", TestConnectorManifest.Create("http", "HTTP", "both"));
         string hash = "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(TenantToken))).ToLowerInvariant();
-        return connection.ExecuteAsync($$$"""
-            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
-                status,manifest)
-            VALUES (@ConnectorId,'http',1,1,'HTTP','both','active',{{{database.Json("@Manifest")}}});
+        await connection.ExecuteAsync($$$"""
             INSERT INTO tenants (id,slug,name,status,created_at,updated_at) VALUES
                 (@TenantId,'test-routing-tenant','Test Routing Tenant','active',{{{database.Now}}},{{{database.Now}}}),
                 (@OrphanTenantId,'test-orphan-tenant','Test Orphan Tenant','active',{{{database.Now}}},{{{database.Now}}});
@@ -324,7 +315,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskConnectionId,1,'active');
             """, new
         {
-            ConnectorId = HttpConnectorId, Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
+            ConnectorId = HttpConnectorId,
             TenantId, OrphanTenantId, TenantApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
             SourceConnectionId, OrphanSourceConnectionId, SourceId, OrphanSourceId, LedgerConnectionId, RiskConnectionId,
             EmptyConfig = "{}", LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),

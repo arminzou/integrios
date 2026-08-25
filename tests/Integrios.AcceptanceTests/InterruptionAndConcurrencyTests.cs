@@ -14,7 +14,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     private static readonly TimeSpan LeaseRecoveryTimeout = TimeSpan.FromSeconds(150);
     private static readonly TimeSpan CleanupLockTimeout = TimeSpan.FromSeconds(10);
     private Guid HttpConnectorId => fixture.HttpConnectorId;
-    private static readonly Guid ApiKeyConnectorId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+    private Guid ApiKeyConnectorId => fixture.ApiKeyConnectorId;
 
     // Barrier key for the post-send window. Any constant works; it only has to be unique within
     // this deployment, and both the test session and the trigger must agree on it.
@@ -130,7 +130,6 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
         try
         {
-            await InstallAcceptanceConnectorAsync();
             await fixture.RecreateWorkerAsync("file");
 
             string suffix = Suffix();
@@ -402,27 +401,6 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             subscriptionId,
             name);
     }
-
-    private async Task InstallAcceptanceConnectorAsync() => await fixture.ExecuteAsync($$"""
-        INSERT INTO connectors (
-            id, key, contract_version, manifest_schema_version, name, direction,
-            status, description, manifest)
-        VALUES (
-            '{{ApiKeyConnectorId}}',
-            'acceptance_resilience_api_key',
-            1,
-            1,
-            'Acceptance resilience API key',
-            'destination',
-            'active',
-            'Acceptance-only resilience connector',
-            '{{TestConnectorManifest.Create(
-                "acceptance_resilience_api_key",
-                "Acceptance resilience API key",
-                "destination",
-                ["api_key_header"])}}'::jsonb)
-        ON CONFLICT (id) DO NOTHING;
-        """);
 
     private async Task<Guid> IngestAsync(
         Pipeline pipeline,

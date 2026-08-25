@@ -17,7 +17,7 @@ platform, API gateway, or multi-protocol runtime.
 flowchart LR
     Operator[Operator] -->|configures| Admin[Admin<br/>control plane]
     Producer[External Event producer] -->|generic Event + TenantApiKey| Ingestion[Ingestion<br/>data plane]
-    Adapter[Verified-webhook<br/>source adapter] -->|verified, normalized Event| Ingestion
+    Webhook[Verified-webhook<br/>Source capability] -->|verified, normalized Event| Ingestion
     Admin --> DB[(PostgreSQL or SQL Server 2022+)]
     Ingestion -->|Event + outbox<br/>one transaction| DB
     DB -->|fanout work| Worker[Worker]
@@ -26,7 +26,7 @@ flowchart LR
 ```
 
 External Event producers and generic TenantApiKey intake remain the universal source path. A source
-Connection may additionally select the generic verified-webhook source adapter through its
+Connection may additionally select the generic verified-webhook Source capability through its
 Connector's manifest, which verifies and normalizes a provider's HTTP request before it crosses
 the same durable Event-acceptance boundary; see [the GitHub-to-Slack
 walkthrough](github-to-slack-walkthrough.md) for a concrete, currently-shipped example.
@@ -53,8 +53,8 @@ at runtime.
 - **TenantApiKey** is an Integrios-issued machine credential for generic Event intake and resolves one
   Tenant.
 - **Connector** is a deployment-wide reusable declarative HTTP contract for an external-system
-  class. It may be built in or Operator-authored, is shared across Tenants, and contains no Tenant
-  data or Operator-authored executable code.
+  class. It is explicitly applied by the Operator, shared across Tenants, and contains no Tenant
+  data or executable code.
 - **Connection** is a Tenant-owned configured instance of one Connector. It owns Tenant-specific
   endpoint configuration plus separate source-verification and destination-authentication
   selections and secret references. Its source and destination roles are derived from Topic and
@@ -83,18 +83,17 @@ flow, or small service—that:
 - authenticates to Integrios with an TenantApiKey
 - identifies a configured source Connection and an allowed Topic
 
-A generic, platform-supplied **verified-webhook source adapter** lets an Operator-authored
+A generic, platform-supplied **verified-webhook Source capability** lets an Operator-authored
 Connector manifest opt into provider HTTP intake without adding or rebuilding Integrios code. The
 manifest supplies signature header, encoding, delivery-identity header, and Event-type-derivation
-header as data; the adapter verifies HMAC-SHA256 over the exact raw request body before parsing,
+header as data; the capability verifies HMAC-SHA256 over the exact raw request body before parsing,
 derives a provider-qualified Event type (for example `github.issues.opened`) from that data, and
 retains the JSON payload unchanged. The `github.json` example under
 [`examples/connectors/`](../examples/connectors/) is a real, machine-validated instance of this,
-not a hypothetical. A curated set of provider-specific *compiled* built-in adapters may be added
-later for contracts that don't fit the generic adapter's closed shape; every adapter, generic or
-compiled, crosses the same durable Event-acceptance seam.
+not a hypothetical. Providers that do not fit this closed shape use an external Event API client
+unless repeated demand justifies another provider-neutral platform capability.
 
-Operator-authored Connectors cannot load runtime code — the verified-webhook adapter's behavior is
+Operator-authored Connectors cannot load runtime code — verified-webhook behavior is
 entirely platform-owned, and a manifest only supplies bounded configuration data for it. Polling
 remains external Event-producer behavior. Integrios does not commit to a broad provider set or
 an in-process plugin system.
@@ -102,7 +101,7 @@ an in-process plugin system.
 ## Destination model
 
 HTTP(S) is the only destination protocol. One generic HTTP module executes every outbound request;
-there are no provider-specific destination adapters or destination-action domain objects.
+there are no provider-specific destination execution paths or destination-action domain objects.
 
 - a destination Connection owns the absolute base URI, authentication, Tenant-specific non-secret
   configuration, and secret references
@@ -134,7 +133,7 @@ Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
 ## Core processing flow
 
 1. An external Event producer sends the generic Event contract to Ingestion and authenticates with an
-   TenantApiKey, or the generic verified-webhook source adapter verifies and normalizes a provider HTTP
+   TenantApiKey, or the generic verified-webhook Source capability verifies and normalizes a provider HTTP
    request before Ingestion ever sees an Event contract.
 2. Ingestion resolves the Tenant and validates or derives the active source Connection and its Topic
    association.

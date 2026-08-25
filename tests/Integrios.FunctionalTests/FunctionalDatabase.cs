@@ -1,10 +1,14 @@
 using System.Data.Common;
+using System.Text.Json;
+using Integrios.Application;
+using Integrios.Application.Authoring.Connectors;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MediatR;
 using Npgsql;
 using Respawn;
 using Testcontainers.MsSql;
@@ -84,6 +88,18 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
         else builder.UseSqlServer(
             ConnectionString, options => options.MigrationsAssembly("Integrios.Migrations.SqlServer"));
         return builder.Options;
+    }
+
+    public async Task<Guid> ApplyConnectorManifestAsync(string key, string manifestJson)
+    {
+        using JsonDocument document = JsonDocument.Parse(manifestJson);
+        await using ServiceProvider provider = new ServiceCollection()
+            .AddAdminApplicationServices()
+            .AddAdminInfrastructureServices(Configuration)
+            .BuildServiceProvider();
+        ApplyConnectorManifestResult result = await provider.GetRequiredService<ISender>().Send(
+            new ApplyConnectorManifestCommand(key, 1, document.RootElement));
+        return result.Connector.Id;
     }
 
     public async Task<Respawner> CreateRespawnerAsync()

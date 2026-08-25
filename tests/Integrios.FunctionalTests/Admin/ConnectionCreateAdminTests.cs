@@ -170,21 +170,6 @@ public sealed class ConnectionCreateAdminTests : ConnectionAdminTestBase
     }
 
     [Fact]
-    public async Task CreateConnection_UnimplementedScheme_Returns422()
-    {
-        Guid connectorId = await InsertConnectorAsync("oauth_sink", ["oauth_client_credentials"]);
-
-        var response = await PostConnectionWithAuthAsync(
-            connectorId,
-            "erp-auth",
-            "oauth_client_credentials",
-            new { token_url = "https://auth.example/token" },
-            new { client_secret = "oauth_secret" });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
-    }
-
-    [Fact]
     public async Task CreateConnection_MissingRequiredConfig_Returns422()
     {
         Guid connectorId = await InsertConnectorAsync("missing_config_sink", ["api_key_header"]);

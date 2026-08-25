@@ -8,7 +8,7 @@ namespace Integrios.FunctionalTests.Admin;
 public abstract class ConnectionAdminTestBase : AdminApiTestBase, IClassFixture<AdminApiFixture>, IAsyncLifetime
 {
     protected readonly AdminApiFixture Fixture;
-    protected static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    protected Guid HttpConnectorId => Fixture.HttpConnectorId;
     protected HttpClient client = default!;
 
     protected ConnectionAdminTestBase(AdminApiFixture fixture) => Fixture = fixture;
@@ -59,26 +59,8 @@ public abstract class ConnectionAdminTestBase : AdminApiTestBase, IClassFixture<
         string[] supportedAuthSchemes,
         string direction = "destination")
     {
-        Guid id = Guid.NewGuid();
-        await using var connection = Fixture.CreateConnection();
-        await connection.OpenAsync();
-        await connection.ExecuteAsync($$$"""
-            INSERT INTO connectors (
-                id, {{{Fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                status, description, manifest, created_at, updated_at)
-            VALUES (
-                @Id, @Key, 1, 1, @Name, @Direction,
-                'active', 'test connector', {{{Fixture.Json("@Manifest")}}}, {{{Fixture.Now}}}, {{{Fixture.Now}}});
-            """, new
-            {
-                Id = id,
-                Key = key,
-                Name = key,
-                Direction = direction,
-                Manifest = TestConnectorManifest.Create(key, key, direction, supportedAuthSchemes)
-            });
-
-        return id;
+        return await Fixture.ApplyConnectorManifestAsync(
+            key, TestConnectorManifest.Create(key, key, direction, supportedAuthSchemes));
     }
 
     protected async Task<Guid> InsertConnectionAsync(Guid connectorId, string name)

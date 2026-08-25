@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Integrios.Tests.Shared;
 using Npgsql;
 
 namespace Integrios.AcceptanceTests;
@@ -73,6 +74,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public HttpClient WorkerMetricsClient { get; private set; } = null!;
     public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:acceptance-admin-secret";
     public Guid HttpConnectorId { get; private set; }
+    public Guid ApiKeyConnectorId { get; private set; }
+    public Guid BearerConnectorId { get; private set; }
+    public Guid SourceOnlyConnectorId { get; private set; }
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
     {
@@ -102,6 +106,15 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             await StartDeploymentAsync(buildImages: false);
             await AssertBootstrapStateAsync();
             HttpConnectorId = await ApplyExampleManifestAsync("http");
+            ApiKeyConnectorId = await ApplyConnectorManifestAsync(
+                "acceptance_api_key",
+                TestConnectorManifest.Create("acceptance_api_key", "Acceptance API key", "destination", ["api_key_header"]));
+            BearerConnectorId = await ApplyConnectorManifestAsync(
+                "acceptance_bearer",
+                TestConnectorManifest.Create("acceptance_bearer", "Acceptance bearer", "destination", ["bearer_token"]));
+            SourceOnlyConnectorId = await ApplyConnectorManifestAsync(
+                "acceptance_source",
+                TestConnectorManifest.Create("acceptance_source", "Acceptance source", "source"));
         }
         catch (Exception exception)
         {
@@ -146,7 +159,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public async Task<Guid> ApplyExampleManifestAsync(string key)
     {
         string path = Path.Combine(repoRoot, "examples", "connectors", $"{key}.json");
-        using var content = new StringContent(await File.ReadAllTextAsync(path), Encoding.UTF8, "application/json");
+        return await ApplyConnectorManifestAsync(key, await File.ReadAllTextAsync(path));
+    }
+
+    private async Task<Guid> ApplyConnectorManifestAsync(string key, string manifest)
+    {
+        using var content = new StringContent(manifest, Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Put, $"/admin/connectors/{key}/versions/1")
         {
             Content = content,

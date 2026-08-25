@@ -125,7 +125,7 @@ public sealed class IngestMetricsTests
     }
 
     // Wraps every raw input document as { event_type: "payment.created", payload: <input> },
-    // mirroring the built-in http Connector's identity `event_json` contract closely enough for
+    // mirroring the HTTP example's identity `event_json` contract closely enough for
     // these metrics/wiring tests, without pulling in the real JSONata engine.
     private sealed class FakeTransformEvaluator : ITransformEvaluator
     {

@@ -248,7 +248,7 @@ Validation prints references and resolution status, never values. Tenant slugs a
 labels up to 63 characters. References are flat lowercase names up to 63 characters using letters,
 digits, and underscores, and must begin with a letter or digit.
 
-Ingestion has a separate source-verification secret capability for built-in source adapters. Its file
+Ingestion has a separate source-verification secret capability for webhook Sources. Its file
 backend uses `/run/secrets/integrios/source/<tenant-slug>/<reference>` and its configuration backend
 reads `SourceSecrets:<tenant-slug>:<reference>`. When Ingestion runs directly, the default Windows
 root is `%ProgramData%\Integrios\secrets\source`; the selected directory must exist at startup.

@@ -182,19 +182,15 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
 
     private async Task<(Guid ConnectorId, Guid ConnectionId, Guid TopicId)> SeedGraphAsync()
     {
-        Guid connectorId = Guid.NewGuid();
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            "race_destination",
+            TestConnectorManifest.Create("race_destination", "Race Destination", "destination",
+                ["api_key_header", "bearer_token"]));
         Guid connectionId = Guid.NewGuid();
         Guid topicId = Guid.NewGuid();
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connectors (
-                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                status, manifest)
-            VALUES (
-                @ConnectorId, 'race_destination', 1, 1, 'Race Destination', 'destination',
-                'active', {{{fixture.Json("@Manifest")}}});
-
             INSERT INTO connections (
                 id, tenant_id, connector_id, name, config,
                 source_verification, destination_authentication, status)
@@ -213,9 +209,7 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             TopicId = topicId,
             fixture.TenantId,
             Config = "{\"base_uri\":\"https://example.test/race\"}",
-            Authentication = "{\"scheme\":\"bearer_token\",\"config\":{},\"secret_refs\":{\"token\":\"race_bearer_token\"}}",
-            Manifest = TestConnectorManifest.Create("race_destination", "Race Destination", "destination",
-                ["api_key_header", "bearer_token"])
+            Authentication = "{\"scheme\":\"bearer_token\",\"config\":{},\"secret_refs\":{\"token\":\"race_bearer_token\"}}"
         });
         return (connectorId, connectionId, topicId);
     }

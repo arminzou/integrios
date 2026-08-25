@@ -1,4 +1,7 @@
 using System.Data.Common;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using Dapper;
 using Integrios.Admin;
 using Integrios.Application.Bootstrap;
@@ -20,7 +23,6 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string GlobalOperatorAuthHeader = $"OperatorKey {GlobalOperatorPublicKey}:{GlobalOperatorSecret}";
     public const string InvalidOperatorAuthHeader = "OperatorKey unknown_operator_key:unsupported-secret";
 
-    private static readonly Guid HttpConnectorId = Guid.NewGuid();
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;
 
@@ -34,6 +36,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     internal IConfiguration Configuration => database.Configuration;
     public Guid TenantId { get; private set; }
     public Guid OtherTenantId { get; private set; }
+    public Guid HttpConnectorId { get; private set; }
     public Guid SourceConnectionId { get; private set; }
 
     public async Task InitializeAsync()
@@ -115,6 +118,20 @@ public sealed class AdminApiFixture : IAsyncLifetime
         return (eventId, deliveryId);
     }
 
+    public async Task<Guid> ApplyConnectorManifestAsync(string key, string manifestJson)
+    {
+        using HttpClient client = WebFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/admin/connectors/{key}/versions/1")
+        {
+            Content = new StringContent(manifestJson, Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation("Authorization", GlobalOperatorAuthHeader);
+        using HttpResponseMessage response = await client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("id").GetGuid();
+    }
+
     public async Task<string?> GetDeliveryStatusAsync(Guid deliveryId)
     {
         await using DbConnection connection = database.CreateConnection();
@@ -130,23 +147,11 @@ public sealed class AdminApiFixture : IAsyncLifetime
         OtherTenantId = Guid.NewGuid();
         SourceConnectionId = Guid.NewGuid();
         string now = database.Now;
-        string json = database.Json("@Manifest");
         await connection.ExecuteAsync($$$"""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES
                 (@TenantId, 'test-tenant', 'Test Tenant', 'active', {{{now}}}, {{{now}}}),
                 (@OtherTenantId, 'other-tenant', 'Other Tenant', 'active', {{{now}}}, {{{now}}});
-
-            INSERT INTO connectors (
-                id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                status, manifest)
-            VALUES (
-                @ConnectorId, 'http', 1, 1, 'HTTP', 'both',
-                'active', {{{json}}});
-
-            INSERT INTO connections (id, tenant_id, connector_id, name, config, status)
-            VALUES (@SourceConnectionId, @TenantId, @ConnectorId, 'source',
-                {{{database.Json("@Config")}}}, 'active');
 
             INSERT INTO operator_keys (public_key, secret_hash, name, created_at)
             VALUES ('global_operator_key',
@@ -156,9 +161,20 @@ public sealed class AdminApiFixture : IAsyncLifetime
             {
                 TenantId,
                 OtherTenantId,
-                ConnectorId = HttpConnectorId,
-                Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
+            });
+
+        HttpConnectorId = await ApplyConnectorManifestAsync(
+            "http", TestConnectorManifest.Create("http", "HTTP", "both"));
+
+        await connection.ExecuteAsync($$$"""
+            INSERT INTO connections (id, tenant_id, connector_id, name, config, status)
+            VALUES (@SourceConnectionId, @TenantId, @ConnectorId, 'source',
+                {{{database.Json("@Config")}}}, 'active');
+            """, new
+            {
                 SourceConnectionId,
+                TenantId,
+                ConnectorId = HttpConnectorId,
                 Config = "{\"base_uri\":\"http://localhost:5054/sink/source\"}"
             });
     }

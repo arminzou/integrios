@@ -2,7 +2,7 @@
 
 Drive a verified GitHub webhook through Integrios and deliver a transformed Slack message,
 entirely through the Admin and Ingestion APIs. This exercises the platform's generic
-verified-webhook source adapter, Operator-authored Connectors, and logical HTTP-outcome
+verified-webhook Source capability, Operator-authored Connectors, and HTTP success-rule
 evaluation on one concrete path — it is not a GitHub-specific or Slack-specific runtime feature.
 
 This walkthrough is API-driven. There is no Operator UI yet; every step below is a `curl` command
@@ -115,7 +115,7 @@ echo "$CALLBACK_URL"
 In the GitHub repository or organization's **Settings → Webhooks → Add webhook**:
 
 - **Payload URL**: the `callback_url` from step 4.
-- **Content type**: `application/json` — the verified-webhook adapter and this example's
+- **Content type**: `application/json` — the verified-webhook capability and this example's
   `event_type_header`/`event_type_action_field` configuration both assume JSON; GitHub's
   form-encoded content type is not accepted.
 - **Secret**: the exact value of `$GITHUB_SECRET` from step 3.

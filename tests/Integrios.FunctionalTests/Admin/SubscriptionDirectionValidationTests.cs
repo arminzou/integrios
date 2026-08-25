@@ -230,27 +230,12 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         Guid? tenantId = null,
         string[]? authenticationSchemes = null)
     {
-        Guid connectorId = Guid.NewGuid();
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            key, TestConnectorManifest.Create(key, key, direction, authenticationSchemes));
         Guid connectionId = Guid.NewGuid();
 
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
-        await connection.ExecuteAsync($$$"""
-            INSERT INTO connectors (
-                id, {{{fixture.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                status, description, manifest, created_at, updated_at)
-            VALUES (
-                @Id, @Key, 1, 1, @Name, @Direction,
-                'active', 'test connector', {{{fixture.Json("@Manifest")}}}, {{{fixture.Now}}}, {{{fixture.Now}}});
-            """, new
-        {
-            Id = connectorId,
-            Key = key,
-            Name = key,
-            Direction = direction,
-            Manifest = TestConnectorManifest.Create(key, key, direction, authenticationSchemes)
-        });
-
         await connection.ExecuteAsync($$$"""
             INSERT INTO connections (id, tenant_id, connector_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
             VALUES (@Id, @TenantId, @ConnectorId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});

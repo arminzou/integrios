@@ -18,7 +18,7 @@ namespace Integrios.FunctionalTests;
 // runtime provider is owned by FunctionalDatabase.
 public sealed class PostgresApiFixture : IAsyncLifetime
 {
-    private static readonly Guid SourceConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000101");
+    private Guid SourceConnectorId;
     public const string TenantAToken = "intg_aa11bb22cc33dd440011223344556677001122334455667700112233445566";
     public const string TenantBToken = "intg_ee55ff66aa77bb888877665544332211887766554433221188776655443322";
 
@@ -51,6 +51,14 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         await connection.OpenAsync();
         await respawner.ResetAsync(connection);
 
+        SourceConnectorId = await database.ApplyConnectorManifestAsync(
+            "test_source",
+            TestConnectorManifest.Create(
+                "test_source", "Test Source", "source",
+                declarativeSourceContract: true,
+                sourceMappingExpression:
+                    "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload, \"metadata\": metadata }"));
+
         TenantAId = Guid.NewGuid();
         TenantBId = Guid.NewGuid();
         var credentialAId = Guid.NewGuid();
@@ -70,11 +78,6 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 (@CredentialAId, @TenantAId, 'test-ingest-key-a', @KeyPrefixA, @KeyHashA, 'active', {{{now}}}),
                 (@CredentialBId, @TenantBId, 'test-ingest-key-b', @KeyPrefixB, @KeyHashB, 'active', {{{now}}});
 
-            INSERT INTO connectors (
-                id, {{{database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                status, manifest, created_at, updated_at)
-            VALUES (@SourceConnectorId, 'test_source', 1, 1, 'Test Source', 'source',
-                'active', {{{database.Json("@SourceManifest")}}}, {{{now}}}, {{{now}}});
             """, new
             {
                 TenantAId,
@@ -84,13 +87,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 KeyPrefixA = TenantAToken[..12],
                 KeyPrefixB = TenantBToken[..12],
                 KeyHashA = secretHashA,
-                KeyHashB = secretHashB,
-                SourceConnectorId,
-                SourceManifest = TestConnectorManifest.Create(
-                    "test_source", "Test Source", "source",
-                    declarativeSourceContract: true,
-                    sourceMappingExpression:
-                        "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload, \"metadata\": metadata }")
+                KeyHashB = secretHashB
             });
     }
 
@@ -111,20 +108,12 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public async Task<Guid> SeedSourceConnectionAsync(
         Guid tenantId, string name, string status = "active", string direction = "source")
     {
-        Guid connectorId = direction == "source" ? SourceConnectorId : Guid.NewGuid();
-        if (connectorId != SourceConnectorId)
+        Guid connectorId = SourceConnectorId;
+        if (direction != "source")
         {
-            string key = $"test_{direction}_{connectorId:N}";
-            await ExecuteAsync($$$"""
-                INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,
-                    name,direction,status,manifest,created_at,updated_at)
-                VALUES (@Id,@Key,1,1,@Key,@Direction,'active',
-                    {{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}})
-                """, new
-                {
-                    Id = connectorId, Key = key, Direction = direction,
-                    Manifest = TestConnectorManifest.Create(key, key, direction)
-                });
+            string key = $"test_{direction}_{Guid.NewGuid():N}";
+            connectorId = await database.ApplyConnectorManifestAsync(
+                key, TestConnectorManifest.Create(key, key, direction));
         }
 
         Guid connectionId = Guid.NewGuid();
@@ -143,13 +132,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     // caller controls), for scenarios SeedSourceConnectionAsync's fixed test manifest can't cover.
     public async Task<Guid> SeedConnectorConnectionAsync(Guid tenantId, string connectorKey, string manifestJson)
     {
-        Guid connectorId = Guid.NewGuid();
-        await ExecuteAsync($$$"""
-            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,
-                name,direction,status,manifest,created_at,updated_at)
-            VALUES (@Id,@Key,1,1,@Key,'source','active',
-                {{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}})
-            """, new { Id = connectorId, Key = connectorKey, Manifest = manifestJson });
+        Guid connectorId = await database.ApplyConnectorManifestAsync(connectorKey, manifestJson);
 
         Guid connectionId = Guid.NewGuid();
         await ExecuteAsync($$$"""
@@ -186,10 +169,9 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         Guid connectionId = Guid.NewGuid();
         Guid topicId = Guid.NewGuid();
         Guid subscriptionId = Guid.NewGuid();
+        Guid connectorId = await database.ApplyConnectorManifestAsync(
+            "http", TestConnectorManifest.Create("http", "HTTP", "both"));
         await ExecuteAsync($$$"""
-            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,
-                status,manifest)
-            VALUES (@ConnectorId,'http',1,1,'HTTP','both','active',{{{database.Json("@Manifest")}}});
             INSERT INTO connections (id,tenant_id,connector_id,name,config,status)
             VALUES (@ConnectionId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
             INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','active');
@@ -202,8 +184,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 'dead_lettered',3,3,{{{database.Now}}});
             """, new
             {
-                ConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                Manifest = TestConnectorManifest.Create("http", "HTTP", "both"),
+                ConnectorId = connectorId,
                 ConnectionId = connectionId, TenantId = tenantId, Config = "{\"base_uri\":\"http://test/sink\"}",
                 TopicId = topicId, SubscriptionId = subscriptionId,
                 MatchRules = "{\"event_types\":[\"payment.created\"]}",
