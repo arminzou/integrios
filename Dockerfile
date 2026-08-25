@@ -16,7 +16,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.102 AS build
 ARG PROJECT
 WORKDIR /src
 COPY Integrios.slnx .
-COPY global.json Directory.Build.props ./
+COPY global.json Directory.Build.props VERSION ./
 COPY src/ src/
 RUN dotnet restore "src/${PROJECT}/${PROJECT}.csproj" --locked-mode
 RUN dotnet publish "src/${PROJECT}/${PROJECT}.csproj" \
