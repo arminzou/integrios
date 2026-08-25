@@ -44,10 +44,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private async Task AssertControlPlaneAuthorityAsync()
     {
         using HttpResponseMessage unauthenticated = await fixture.AdminClient.GetAsync("/admin/tenants");
-        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+        unauthenticated.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         using HttpResponseMessage authenticated = await SendAdminAsync(HttpMethod.Get, "/admin/tenants");
-        Assert.Equal(HttpStatusCode.OK, authenticated.StatusCode);
+        authenticated.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task AssertTenantAndApiKeyContractsAsync(TenantContext primary, TenantContext isolated)
@@ -55,19 +55,19 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage invalidSlug = await PostAdminAsync(
             "/admin/tenants",
             new { slug = "Invalid_Slug", name = "Invalid", environment = "production" });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalidSlug.StatusCode);
+        invalidSlug.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         using HttpResponseMessage duplicateTenant = await PostAdminAsync(
             "/admin/tenants",
             new { slug = primary.Slug, name = "Duplicate", environment = "production" });
-        Assert.Equal(HttpStatusCode.Conflict, duplicateTenant.StatusCode);
+        duplicateTenant.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         using HttpResponseMessage tenantApiKeys = await SendAdminAsync(
             HttpMethod.Get,
             $"/admin/tenants/{primary.Id}/tenant-api-keys");
         string tenantApiKeysBody = await tenantApiKeys.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.OK, tenantApiKeys.StatusCode);
-        Assert.DoesNotContain("scope", tenantApiKeysBody, StringComparison.OrdinalIgnoreCase);
+        tenantApiKeys.StatusCode.ShouldBe(HttpStatusCode.OK);
+        tenantApiKeysBody.ShouldNotContain("scope", Case.Insensitive);
 
         using HttpResponseMessage spareKeyResponse = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/tenant-api-keys",
@@ -78,10 +78,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage revoke = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/tenant-api-keys/{spareKeyId}/revoke",
             new { });
-        Assert.Equal(HttpStatusCode.OK, revoke.StatusCode);
+        revoke.StatusCode.ShouldBe(HttpStatusCode.OK);
         using HttpResponseMessage revokedDataPlane = await SendIngestionAsync(
             spareContext, HttpMethod.Get, $"/events/{Guid.NewGuid()}");
-        Assert.Equal(HttpStatusCode.Unauthorized, revokedDataPlane.StatusCode);
+        revokedDataPlane.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         Guid sourceConnection = await CreateConnectionAsync(primary, HttpConnectorId, "tenant-read-source", "http://mocksink:8080/sink/read-source");
         Guid topic = await CreateTopicAsync(primary, "tenant-reads");
@@ -89,13 +89,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         EventAcceptance accepted = await IngestAsync(primary, source, "tenant-reads", "read.test", new { ok = true });
 
         using HttpResponseMessage ownRead = await SendIngestionAsync(primary, HttpMethod.Get, $"/events/{accepted.Id}");
-        Assert.Equal(HttpStatusCode.OK, ownRead.StatusCode);
+        ownRead.StatusCode.ShouldBe(HttpStatusCode.OK);
         using HttpResponseMessage otherRead = await SendIngestionAsync(isolated, HttpMethod.Get, $"/events/{accepted.Id}");
-        Assert.Equal(HttpStatusCode.NotFound, otherRead.StatusCode);
+        otherRead.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         using HttpResponseMessage otherReplay = await SendAdminAsync(
             HttpMethod.Get,
             $"/admin/tenants/{isolated.Id}/events/{accepted.Id}/deliveries");
-        Assert.Equal(HttpStatusCode.NotFound, otherReplay.StatusCode);
+        otherReplay.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     private async Task AssertSourceConnectionAndTopicContractsAsync(
@@ -107,7 +107,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage duplicateTopic = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/topics",
             new { name = "payments" });
-        Assert.Equal(HttpStatusCode.Conflict, duplicateTopic.StatusCode);
+        duplicateTopic.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         Guid isolatedConnection = await CreateConnectionAsync(isolated, HttpConnectorId, "isolated-source", "http://mocksink:8080/sink/isolated-source");
         Guid isolatedTopic = await CreateTopicAsync(isolated, "isolated-topic");
@@ -130,10 +130,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage deactivate = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/connections/{inactive}/deactivate",
             new { });
-        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+        deactivate.StatusCode.ShouldBe(HttpStatusCode.OK);
         await AssertAcceptanceRejectedAsync(primary, inactiveSource, "payments");
 
-        Assert.Equal("payments", await fixture.ScalarAsync<string>($"SELECT name FROM topics WHERE id = '{topic}'"));
+        (await fixture.ScalarAsync<string>($"SELECT name FROM topics WHERE id = '{topic}'")).ShouldBe("payments");
     }
 
     private async Task AssertUnroutedAndIdempotentAcceptanceAsync(TenantContext tenant, Guid source)
@@ -152,14 +152,14 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             "no.subscription",
             new { value = 999 },
             "duplicate-matrix");
-        Assert.Equal(first.Id, duplicate.Id);
-        Assert.False(first.AlreadyAccepted);
-        Assert.True(duplicate.AlreadyAccepted);
+        duplicate.Id.ShouldBe(first.Id);
+        first.AlreadyAccepted.ShouldBeFalse();
+        duplicate.AlreadyAccepted.ShouldBeTrue();
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>($"SELECT status FROM events WHERE id = '{first.Id}'") == "unrouted");
-        Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM event_deliveries WHERE event_id = '{first.Id}'"));
+        (await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM event_deliveries WHERE event_id = '{first.Id}'")).ShouldBe(0L);
     }
 
     private async Task AssertFanoutTransformsAndAuthenticatedDeliveryAsync(
@@ -186,18 +186,18 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 sampleInput = new { amount = 42 },
                 sampleContext = new { event_type = "payment.created", topic_name = "payments" }
             });
-        Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
+        preview.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         using HttpResponseMessage invalidTransform = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody("invalid-transform", transformedDestination, "payment.created", Jsonata("{")));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalidTransform.StatusCode);
+        invalidTransform.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         string oversizedExpression = new('x', 65537);
         using HttpResponseMessage oversizedTransform = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody("oversized-transform", transformedDestination, "payment.created", Jsonata(oversizedExpression)));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, oversizedTransform.StatusCode);
+        oversizedTransform.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         Guid transformedSubscription = await CreateSubscriptionAsync(
             tenant, topic, "transformed", transformedDestination, "payment.created", transform);
@@ -210,18 +210,18 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await WaitForDeliveryStatusAsync(accepted.Id, apiSubscription, "succeeded");
         await WaitForDeliveryStatusAsync(accepted.Id, bearerSubscription, "succeeded");
 
-        Assert.Equal(3L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM event_deliveries WHERE event_id = '{accepted.Id}'"));
+        (await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM event_deliveries WHERE event_id = '{accepted.Id}'")).ShouldBe(3L);
         await AssertReceiptBodyAsync("transform", "{\"kind\":\"payment.created\",\"amount\":42,\"topic\":\"payments\"}");
         await AssertReceiptHeaderAsync("api-auth", "X-Api-Key", "api-key-value");
         await AssertReceiptHeaderAsync("bearer-auth", "Authorization", "Bearer bearer-token-value");
 
         string snapshots = await fixture.ScalarAsync<string>(
             $"SELECT string_agg(COALESCE((http_execution_snapshot->'destination_authentication')::text, 'open'), '|') FROM event_deliveries WHERE event_id = '{accepted.Id}'");
-        Assert.Contains("api_key_header", snapshots, StringComparison.Ordinal);
-        Assert.Contains("bearer_token", snapshots, StringComparison.Ordinal);
-        Assert.DoesNotContain("api-key-value", snapshots, StringComparison.Ordinal);
-        Assert.DoesNotContain("bearer-token-value", snapshots, StringComparison.Ordinal);
+        snapshots.ShouldContain("api_key_header", Case.Sensitive);
+        snapshots.ShouldContain("bearer_token", Case.Sensitive);
+        snapshots.ShouldNotContain("api-key-value", Case.Sensitive);
+        snapshots.ShouldNotContain("bearer-token-value", Case.Sensitive);
     }
 
     private async Task AssertRetryDeadLetterReplayAndSnapshotsAsync(
@@ -240,28 +240,28 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
         using HttpResponseMessage failMode = await fixture.MockSinkClient.PutAsJsonAsync(
             "/control/independent-failure", new { mode = "fail" });
-        Assert.Equal(HttpStatusCode.OK, failMode.StatusCode);
+        failMode.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         EventAcceptance accepted = await IngestAsync(
             tenant, source, "payments", "independent.test", new { sequence = 1 });
         await WaitForDeliveryStatusAsync(accepted.Id, successSubscription, "succeeded");
         await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "dead_lettered");
-        Assert.Equal(3, await fixture.ScalarAsync<int>(
-            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'"));
+        (await fixture.ScalarAsync<int>(
+            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'")).ShouldBe(3);
 
         using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
-        Assert.Equal(HttpStatusCode.OK, recover.StatusCode);
+        recover.StatusCode.ShouldBe(HttpStatusCode.OK);
         Guid failureDelivery = await fixture.ScalarAsync<Guid>(
             $"SELECT id FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'");
         using HttpResponseMessage replay = await SendAdminAsync(
             HttpMethod.Post,
             $"/admin/tenants/{tenant.Id}/events/{accepted.Id}/deliveries/{failureDelivery}/replay");
-        Assert.Equal(HttpStatusCode.Accepted, replay.StatusCode);
+        replay.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         await WaitForDeliveryStatusAsync(accepted.Id, failureSubscription, "succeeded");
-        Assert.Equal(4, await fixture.ScalarAsync<int>(
-            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'"));
-        Assert.Equal("1,2,3,4", await fixture.ScalarAsync<string>(
-            $"SELECT string_agg(da.attempt_number::text, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{failureSubscription}'"));
+        (await fixture.ScalarAsync<int>(
+            $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'")).ShouldBe(4);
+        (await fixture.ScalarAsync<string>(
+            $"SELECT string_agg(da.attempt_number::text, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{failureSubscription}'")).ShouldBe("1,2,3,4");
 
         Guid snapshotDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "snapshot-destination", "http://mocksink:8080/sink/snapshot");
@@ -269,7 +269,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, topic, "snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"first\" }"));
         using HttpResponseMessage snapshotFail = await fixture.MockSinkClient.PutAsJsonAsync(
             "/control/snapshot", new { mode = "fail" });
-        Assert.Equal(HttpStatusCode.OK, snapshotFail.StatusCode);
+        snapshotFail.StatusCode.ShouldBe(HttpStatusCode.OK);
         EventAcceptance snapshotEvent = await IngestAsync(
             tenant, source, "payments", "snapshot.test", new { value = 1 });
         await WaitForAttemptCountAsync(snapshotEvent.Id, snapshotSubscription, 1);
@@ -277,15 +277,15 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage update = await PatchAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{snapshotSubscription}",
             SubscriptionBody("snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"second\" }")));
-        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        update.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // The failed attempt already left a receipt carrying the original expression. Clearing it
         // first is what makes the post-update assertion falsifiable: only the retry's body remains.
         using HttpResponseMessage clearSnapshotReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/snapshot");
-        Assert.Equal(HttpStatusCode.OK, clearSnapshotReceipts.StatusCode);
+        clearSnapshotReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         using HttpResponseMessage snapshotRecover = await fixture.MockSinkClient.DeleteAsync("/control/snapshot");
-        Assert.Equal(HttpStatusCode.OK, snapshotRecover.StatusCode);
+        snapshotRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
         await WaitForDeliveryStatusAsync(snapshotEvent.Id, snapshotSubscription, "succeeded");
         await AssertReceiptBodyAsync("snapshot", "{\"version\":\"first\"}");
         await AssertNoReceiptBodyContainsAsync("snapshot", "second");
@@ -297,8 +297,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         EventAcceptance runtimeEvent = await IngestAsync(
             tenant, source, "payments", "runtime.transform", new { value = 1 });
         await WaitForAttemptCountAsync(runtimeEvent.Id, runtimeSubscription, 1);
-        Assert.Equal("transform", await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{runtimeEvent.Id}' AND sd.subscription_id = '{runtimeSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+        (await fixture.ScalarAsync<string>(
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{runtimeEvent.Id}' AND sd.subscription_id = '{runtimeSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("transform");
     }
 
     private async Task AssertDestinationBoundaryAsync(TenantContext tenant, Guid source, Guid topic)
@@ -310,7 +310,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage relativeRejected = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody("relative-url", relativeBody.GetProperty("id").GetGuid(), "relative.test"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, relativeRejected.StatusCode);
+        relativeRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         using HttpResponseMessage ftp = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/connections",
@@ -319,19 +319,19 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage ftpRejected = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody("ftp-url", ftpBody.GetProperty("id").GetGuid(), "ftp.test"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, ftpRejected.StatusCode);
+        ftpRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         using HttpResponseMessage privateDestination = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/connections",
             ConnectionBody(HttpConnectorId, "operator-loopback", "http://127.0.0.1:1/private"));
-        Assert.Equal(HttpStatusCode.Created, privateDestination.StatusCode);
+        privateDestination.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         Guid sourceOnlyConnection = await CreateConnectionAsync(
             tenant, SourceOnlyConnectorId, "source-only-destination", "http://mocksink:8080/sink/source-only");
         using HttpResponseMessage directionRejected = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody("source-only", sourceOnlyConnection, "direction.test"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, directionRejected.StatusCode);
+        directionRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         await fixture.WriteSecretAsync(tenant.Slug, "redirect_secret", "redirect-secret-value");
         Guid redirectDestination = await CreateConnectionAsync(
@@ -345,15 +345,15 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         EventAcceptance redirected = await IngestAsync(
             tenant, source, "payments", "redirect.test", new { value = 1 });
         await WaitForAttemptCountAsync(redirected.Id, redirectSubscription, 1);
-        Assert.Equal(307, await fixture.ScalarAsync<int>(
-            $"SELECT da.response_status_code FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+        (await fixture.ScalarAsync<int>(
+            $"SELECT da.response_status_code FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe(307);
         // Recording the 307 is not enough: a redirect must also be a failed delivery, otherwise the
         // Worker would be treating an unvisited destination as a satisfied one.
-        Assert.Equal("http", await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1"));
-        Assert.NotEqual("succeeded", await fixture.ScalarAsync<string>(
-            $"SELECT status FROM event_deliveries WHERE event_id = '{redirected.Id}' AND subscription_id = '{redirectSubscription}'"));
-        Assert.Equal(0, await ReceiptCountAsync("redirect-target"));
+        (await fixture.ScalarAsync<string>(
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{redirected.Id}' AND sd.subscription_id = '{redirectSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("http");
+        (await fixture.ScalarAsync<string>(
+            $"SELECT status FROM event_deliveries WHERE event_id = '{redirected.Id}' AND subscription_id = '{redirectSubscription}'")).ShouldNotBe("succeeded");
+        (await ReceiptCountAsync("redirect-target")).ShouldBe(0);
 
         Guid slowDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "slow-destination", "http://mocksink:8080/sink/slow-timeout");
@@ -363,19 +363,19 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         // the attempt.
         using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
             "/control/slow-timeout", new { mode = "slow", delayMs = 8000 });
-        Assert.Equal(HttpStatusCode.OK, slowMode.StatusCode);
+        slowMode.StatusCode.ShouldBe(HttpStatusCode.OK);
         EventAcceptance slowEvent = await IngestAsync(
             tenant, source, "payments", "slow.test", new { value = 1 });
         await WaitForAttemptCountAsync(slowEvent.Id, slowSubscription, 1);
-        Assert.Equal("http", await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1"));
-        Assert.Equal("Request timed out", await fixture.ScalarAsync<string>(
-            $"SELECT da.error_message FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1"));
+        (await fixture.ScalarAsync<string>(
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("http");
+        (await fixture.ScalarAsync<string>(
+            $"SELECT da.error_message FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{slowEvent.Id}' AND sd.subscription_id = '{slowSubscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe("Request timed out");
 
         // Leaving the sink slow would make every later retry of this subscription hold a delivery
         // slot for the full outbound timeout, eating into the evidence budget of later sections.
         using HttpResponseMessage slowRecover = await fixture.MockSinkClient.DeleteAsync("/control/slow-timeout");
-        Assert.Equal(HttpStatusCode.OK, slowRecover.StatusCode);
+        slowRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task AssertDrainBeforeChangeAsync()
@@ -391,8 +391,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, source, "drain", "drain.test", new { value = 1 });
 
         await WaitForDeliveryStatusAsync(accepted.Id, subscription, "succeeded");
-        Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM outbox WHERE event_id = '{accepted.Id}' AND processed_at IS NULL"));
+        (await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM outbox WHERE event_id = '{accepted.Id}' AND processed_at IS NULL")).ShouldBe(0L);
 
         foreach (string path in new[]
         {
@@ -403,11 +403,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         })
         {
             using HttpResponseMessage deactivated = await PostAdminAsync(path, new { });
-            Assert.Equal(HttpStatusCode.OK, deactivated.StatusCode);
+            deactivated.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 
-        Assert.Equal("succeeded", await fixture.ScalarAsync<string>(
-            $"SELECT status FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{subscription}'"));
+        (await fixture.ScalarAsync<string>(
+            $"SELECT status FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{subscription}'")).ShouldBe("succeeded");
     }
 
     private async Task AssertSecretProvidersAsync()
@@ -429,15 +429,15 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         Guid rotationSubscription = await CreateSubscriptionAsync(
             rotation, rotationTopic, "rotation", rotationDestination, "rotation.test");
         using HttpResponseMessage fail = await fixture.MockSinkClient.PutAsJsonAsync("/control/rotation", new { mode = "fail" });
-        Assert.Equal(HttpStatusCode.OK, fail.StatusCode);
+        fail.StatusCode.ShouldBe(HttpStatusCode.OK);
         EventAcceptance rotationEvent = await IngestAsync(rotation, rotationSource, "rotation", "rotation.test", new { value = 1 });
         await WaitForAttemptCountAsync(rotationEvent.Id, rotationSubscription, 1);
         await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v1");
         using HttpResponseMessage resetReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/rotation");
-        Assert.Equal(HttpStatusCode.OK, resetReceipts.StatusCode);
+        resetReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
         fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v2", "rotation-v2");
         using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/rotation");
-        Assert.Equal(HttpStatusCode.OK, recover.StatusCode);
+        recover.StatusCode.ShouldBe(HttpStatusCode.OK);
         await WaitForDeliveryStatusAsync(rotationEvent.Id, rotationSubscription, "succeeded");
         await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v2");
 
@@ -457,8 +457,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 ["DestinationSecrets__acceptance-config__shared_secret"] = "configuration-value"
             },
             "secrets", "validate", "--tenant", configuration.Slug);
-        Assert.Equal(1, configCli.ExitCode);
-        Assert.DoesNotContain("configuration-value", configCli.Output, StringComparison.Ordinal);
+        configCli.ExitCode.ShouldBe(1);
+        configCli.Output.ShouldNotContain("configuration-value", Case.Sensitive);
 
         await fixture.RecreateWorkerAsync("file", "configuration-value", "configuration-only-value");
         await AssertMissingSecretFailsAsync(configuration, "file-no-config-fallback", "config_only");
@@ -469,51 +469,51 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         ComposeResult fileCli = await fixture.RunWorkerCommandAsync(
             new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
             "secrets", "validate", "--tenant", fileA.Slug);
-        Assert.Equal(0, fileCli.ExitCode);
-        Assert.DoesNotContain("file-a-value", fileCli.Output, StringComparison.Ordinal);
+        fileCli.ExitCode.ShouldBe(0);
+        fileCli.Output.ShouldNotContain("file-a-value", Case.Sensitive);
 
         ComposeResult fullDeploymentCli = await fixture.RunWorkerCommandAsync(
             new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
             "secrets", "validate", "--all");
-        Assert.Equal(1, fullDeploymentCli.ExitCode);
-        Assert.DoesNotContain("file-a-value", fullDeploymentCli.Output, StringComparison.Ordinal);
-        Assert.DoesNotContain("file-b-value", fullDeploymentCli.Output, StringComparison.Ordinal);
-        Assert.DoesNotContain("rotation-v2", fullDeploymentCli.Output, StringComparison.Ordinal);
+        fullDeploymentCli.ExitCode.ShouldBe(1);
+        fullDeploymentCli.Output.ShouldNotContain("file-a-value", Case.Sensitive);
+        fullDeploymentCli.Output.ShouldNotContain("file-b-value", Case.Sensitive);
+        fullDeploymentCli.Output.ShouldNotContain("rotation-v2", Case.Sensitive);
     }
 
     private async Task AssertBootstrapRestartAndOperatorKeyRotationAsync()
     {
         long operatorKeysBefore = await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM operator_keys");
         await fixture.RunBootstrapAgainAsync();
-        Assert.Equal(operatorKeysBefore, await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM operator_keys"));
-        Assert.Equal(1L, await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM connectors WHERE key = 'http'"));
+        (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM operator_keys")).ShouldBe(operatorKeysBefore);
+        (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM connectors WHERE key = 'http'")).ShouldBe(1L);
 
         await fixture.RestartProductServicesAsync();
         using HttpResponseMessage healthyAdmin = await fixture.AdminClient.GetAsync("/health");
         using HttpResponseMessage healthyIngestion = await fixture.IngestionClient.GetAsync("/health");
-        Assert.Equal(HttpStatusCode.OK, healthyAdmin.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, healthyIngestion.StatusCode);
+        healthyAdmin.StatusCode.ShouldBe(HttpStatusCode.OK);
+        healthyIngestion.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         string oldAuthorization = fixture.AdminAuthorization;
         string rotatedSecret = $"rotated-{Suffix()}";
         string publicKey = await fixture.RotateOperatorKeyAsync(rotatedSecret);
-        Assert.NotEqual("global_operator_key", publicKey);
+        publicKey.ShouldNotBe("global_operator_key");
 
         using var oldRequest = new HttpRequestMessage(HttpMethod.Get, "/admin/tenants");
         oldRequest.Headers.TryAddWithoutValidation("Authorization", oldAuthorization);
         using HttpResponseMessage revoked = await fixture.AdminClient.SendAsync(oldRequest);
-        Assert.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode);
+        revoked.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         using HttpResponseMessage rotated = await SendAdminAsync(HttpMethod.Get, "/admin/tenants");
-        Assert.Equal(HttpStatusCode.OK, rotated.StatusCode);
+        rotated.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task AssertSecretsAbsentFromDurableEvidenceAsync()
     {
         const string probes = "api-key-value|bearer-token-value|file-a-value|file-b-value|rotation-v1|rotation-v2|configuration-value|configuration-only-value|file-only-value|unsafe";
-        Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM connections WHERE config::text ~ '{probes}' OR COALESCE(source_verification::text, '') ~ '{probes}' OR COALESCE(destination_authentication::text, '') ~ '{probes}'"));
-        Assert.Equal(0L, await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts WHERE COALESCE(error_message, '') ~ '{probes}'"));
+        (await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM connections WHERE config::text ~ '{probes}' OR COALESCE(source_verification::text, '') ~ '{probes}' OR COALESCE(destination_authentication::text, '') ~ '{probes}'")).ShouldBe(0L);
+        (await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM delivery_attempts WHERE COALESCE(error_message, '') ~ '{probes}'")).ShouldBe(0L);
 
         string logs = string.Join('\n',
             await fixture.GetServiceLogsAsync("admin"),
@@ -528,7 +528,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             "rotation-v2", "configuration-value", "configuration-only-value", "file-only-value", "unsafe"
         })
         {
-            Assert.DoesNotContain(secret, logs, StringComparison.Ordinal);
+            logs.ShouldNotContain(secret, Case.Sensitive);
         }
     }
 
@@ -555,7 +555,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             $"/admin/tenants/{id}/tenant-api-keys",
             new { name = "acceptance-ingestion" });
         JsonElement tenantApiKeyBody = await AssertJsonAsync(tenantApiKey, HttpStatusCode.Created);
-        Assert.False(tenantApiKeyBody.GetProperty("tenant_api_key").TryGetProperty("scopes", out _));
+        tenantApiKeyBody.GetProperty("tenant_api_key").TryGetProperty("scopes", out _).ShouldBeFalse();
         return new TenantContext(
             id,
             slug,
@@ -646,9 +646,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         EventAcceptance accepted = await IngestAsync(
             tenant, source, sink, $"{sink}.test", new { sink });
         await WaitForAttemptCountAsync(accepted.Id, subscription, 1);
-        Assert.Equal(expectedPhase, await fixture.ScalarAsync<string>(
-            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{subscription}' ORDER BY da.attempt_number LIMIT 1"));
-        Assert.Equal(0, await ReceiptCountAsync(sink));
+        (await fixture.ScalarAsync<string>(
+            $"SELECT da.failure_phase FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{accepted.Id}' AND sd.subscription_id = '{subscription}' ORDER BY da.attempt_number LIMIT 1")).ShouldBe(expectedPhase);
+        (await ReceiptCountAsync(sink)).ShouldBe(0);
     }
 
     private async Task<EventAcceptance> IngestAsync(
@@ -689,7 +689,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             });
         // An inactive/foreign/unassociated Source id no longer resolves at all, so rejection is now
         // 404 (matches the webhook/queue "no active Source" convention), not 422.
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     private async Task<HttpResponseMessage> PostAdminAsync(string path, object body) =>
@@ -723,7 +723,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private static async Task<JsonElement> AssertJsonAsync(HttpResponseMessage response, HttpStatusCode expected)
     {
         string body = await response.Content.ReadAsStringAsync();
-        Assert.True(response.StatusCode == expected, $"Expected {(int)expected}, got {(int)response.StatusCode}: {body}");
+        (response.StatusCode == expected).ShouldBeTrue($"Expected {(int)expected}, got {(int)response.StatusCode}: {body}");
         using JsonDocument document = JsonDocument.Parse(body);
         return document.RootElement.Clone();
     }
@@ -764,16 +764,15 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             $"/receipts/{sink}/assert-headers",
             new { headers = new Dictionary<string, string> { [name] = value } });
         string body = await assertion.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.OK, assertion.StatusCode);
-        Assert.DoesNotContain(value, body, StringComparison.Ordinal);
+        assertion.StatusCode.ShouldBe(HttpStatusCode.OK);
+        body.ShouldNotContain(value, Case.Sensitive);
     }
 
     private async Task AssertReceiptBodyAsync(string sink, string expected)
     {
         using JsonDocument receipts = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>($"/receipts/{sink}")
             ?? throw new InvalidOperationException("MockSink returned no receipt evidence.");
-        Assert.Contains(
-            receipts.RootElement.GetProperty("receipts").EnumerateArray(),
+        receipts.RootElement.GetProperty("receipts").EnumerateArray().ShouldContain(
             receipt => JsonEquivalent(receipt.GetProperty("body").GetString()!, expected));
     }
 
@@ -781,8 +780,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         using JsonDocument receipts = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>($"/receipts/{sink}")
             ?? throw new InvalidOperationException("MockSink returned no receipt evidence.");
-        Assert.DoesNotContain(
-            receipts.RootElement.GetProperty("receipts").EnumerateArray(),
+        receipts.RootElement.GetProperty("receipts").EnumerateArray().ShouldNotContain(
             receipt => receipt.GetProperty("body").GetString()!.Contains(fragment, StringComparison.Ordinal));
     }
 

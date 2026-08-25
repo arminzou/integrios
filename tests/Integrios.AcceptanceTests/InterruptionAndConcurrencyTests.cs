@@ -62,15 +62,15 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
                 await fixture.ScalarAsync<long>(
                     $"SELECT COUNT(*) FROM event_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND sd.status = 'succeeded'") == eventCount);
 
-            Assert.Equal(eventCount, await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM events WHERE tenant_id = '{pipeline.TenantId}' AND event_type = '{pipeline.EventType}' AND status = 'routed'"));
-            Assert.Equal(eventCount, await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM outbox o JOIN events e ON e.id = o.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND o.processed_at IS NOT NULL"));
-            Assert.Equal(0, await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM (SELECT sd.event_id, sd.subscription_id FROM event_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' GROUP BY sd.event_id, sd.subscription_id HAVING COUNT(*) > 1) duplicates"));
+            (await fixture.ScalarAsync<long>(
+                $"SELECT COUNT(*) FROM events WHERE tenant_id = '{pipeline.TenantId}' AND event_type = '{pipeline.EventType}' AND status = 'routed'")).ShouldBe(eventCount);
+            (await fixture.ScalarAsync<long>(
+                $"SELECT COUNT(*) FROM outbox o JOIN events e ON e.id = o.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND o.processed_at IS NOT NULL")).ShouldBe(eventCount);
+            (await fixture.ScalarAsync<long>(
+                $"SELECT COUNT(*) FROM (SELECT sd.event_id, sd.subscription_id FROM event_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' GROUP BY sd.event_id, sd.subscription_id HAVING COUNT(*) > 1) duplicates")).ShouldBe(0);
 
             foreach (string worker in workers)
-                Assert.Contains("Fanned out Event", await fixture.GetContainerLogsAsync(worker), StringComparison.Ordinal);
+                (await fixture.GetContainerLogsAsync(worker)).ShouldContain("Fanned out Event", Case.Sensitive);
         }
         finally
         {
@@ -102,7 +102,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         using HttpResponseMessage fail = await fixture.MockSinkClient.PutAsJsonAsync(
             $"/control/{pipeline.SinkName}",
             new { mode = "fail" });
-        Assert.Equal(HttpStatusCode.OK, fail.StatusCode);
+        fail.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         Guid eventId = await IngestAsync(pipeline, new { restart = true });
         await WaitForAsync(async () =>
@@ -110,7 +110,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
                 $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
 
         using HttpResponseMessage reset = await fixture.MockSinkClient.DeleteAsync($"/control/{pipeline.SinkName}");
-        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+        reset.StatusCode.ShouldBe(HttpStatusCode.OK);
         await fixture.RestartPostgresAsync();
 
         // Restarting the product services is part of the interruption window, not a workaround:
@@ -119,8 +119,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         await fixture.RestartProductServicesAsync();
 
         await WaitForDeliveryStatusAsync(eventId, "succeeded");
-        Assert.True(await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'") >= 2);
+        ((await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'")) >= 2).ShouldBeTrue();
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
             Guid eventId = await IngestAsync(pipeline, new { phase = "before-http" });
             await WaitForDeliveryStatusAsync(eventId, "in_flight");
-            Assert.Equal(0, await ReceiptCountAsync(pipeline.SinkName));
+            (await ReceiptCountAsync(pipeline.SinkName)).ShouldBe(0);
 
             await fixture.KillWorkerAsync();
             workerStopped = true;
@@ -154,8 +154,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             workerStopped = false;
 
             await WaitForDeliveryStatusAsync(eventId, "succeeded");
-            Assert.Equal(["indeterminate", "succeeded"], await AttemptStatusesAsync(eventId));
-            Assert.Equal(1, await ReceiptCountAsync(pipeline.SinkName));
+            (await AttemptStatusesAsync(eventId)).ShouldBe(["indeterminate", "succeeded"]);
+            (await ReceiptCountAsync(pipeline.SinkName)).ShouldBe(1);
             await AssertReceiptHeadersAsync(
                 pipeline.SinkName,
                 new Dictionary<string, string> { ["X-Api-Key"] = "recovered-secret" });
@@ -225,8 +225,8 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             // No lease is force-expired here: recovering within the real lease window is itself
             // an acceptance criterion, which is why this scenario takes about two minutes.
             await WaitForDeliveryStatusAsync(eventId, "succeeded", LeaseRecoveryTimeout);
-            Assert.Equal(2, await ReceiptCountAsync(pipeline.SinkName));
-            Assert.Equal(["indeterminate", "succeeded"], await AttemptStatusesAsync(eventId));
+            (await ReceiptCountAsync(pipeline.SinkName)).ShouldBe(2);
+            (await AttemptStatusesAsync(eventId)).ShouldBe(["indeterminate", "succeeded"]);
 
             Guid secondAttemptId = await fixture.ScalarAsync<Guid>(
                 $"SELECT id FROM delivery_attempts WHERE event_delivery_id = '{deliveryId}' AND attempt_number = 2");
@@ -441,7 +441,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {pipeline.ApiToken}");
         using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         string body = await response.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         using JsonDocument document = JsonDocument.Parse(body);
         return document.RootElement.GetProperty("event_id").GetGuid();
     }
@@ -455,7 +455,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         request.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
         using HttpResponseMessage response = await fixture.AdminClient.SendAsync(request);
         string responseBody = await response.Content.ReadAsStringAsync();
-        Assert.True(response.IsSuccessStatusCode, $"POST {path} returned {(int)response.StatusCode}: {responseBody}");
+        response.IsSuccessStatusCode.ShouldBeTrue($"POST {path} returned {(int)response.StatusCode}: {responseBody}");
         using JsonDocument document = JsonDocument.Parse(responseBody);
         return document.RootElement.GetProperty(property).ToString();
     }
@@ -489,7 +489,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             $"/receipts/{sinkName}/assert-headers",
             new { headers });
         string body = await response.Content.ReadAsStringAsync();
-        Assert.True(response.IsSuccessStatusCode, $"Header assertion failed: {body}");
+        response.IsSuccessStatusCode.ShouldBeTrue($"Header assertion failed: {body}");
     }
 
     private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan? timeout = null)

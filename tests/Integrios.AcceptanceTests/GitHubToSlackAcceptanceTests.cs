@@ -53,7 +53,7 @@ public sealed class GitHubToSlackAcceptanceTests(PackagedDeploymentFixture fixtu
         await SetSlackModeAsync(new { ok = false, error = "channel_not_found" });
         Guid rejected = await SendSignedPushAsync(callbackPath, githubSecret);
         await WaitForDeliveryStatusAsync(rejected, subscription, "dead_lettered");
-        Assert.Equal(1L, await AttemptCountAsync(rejected, subscription));
+        (await AttemptCountAsync(rejected, subscription)).ShouldBe(1L);
 
         // Scenario 3: a bounded Retry-After on 429 is honored over the default 30s exponential
         // backoff. If it were ignored, deliver_after would land ~30s after completion instead of
@@ -63,8 +63,7 @@ public sealed class GitHubToSlackAcceptanceTests(PackagedDeploymentFixture fixtu
         Guid throttled = await SendSignedPushAsync(callbackPath, githubSecret);
         await WaitForAttemptCountAsync(throttled, subscription, 1);
         (DateTimeOffset deliverAfter, DateTimeOffset completedAt) = await ReadRetryTimingAsync(throttled, subscription);
-        Assert.True(
-            deliverAfter <= completedAt.AddSeconds(10),
+        (deliverAfter <= completedAt.AddSeconds(10)).ShouldBeTrue(
             $"Expected the 2s Retry-After to be honored instead of the 30s default backoff; "
             + $"deliver_after={deliverAfter:o}, completed_at={completedAt:o}");
 
@@ -195,21 +194,20 @@ public sealed class GitHubToSlackAcceptanceTests(PackagedDeploymentFixture fixtu
         using HttpResponseMessage response = await fixture.MockSinkClient.PutAsJsonAsync(
             "/control/slack",
             new { mode = "succeed", statusCode, body, retryAfterSeconds });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task ResetSlackReceiptsAsync()
     {
         using HttpResponseMessage response = await fixture.MockSinkClient.DeleteAsync("/receipts/slack");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task AssertSlackReceivedTransformedMessageAsync()
     {
         using JsonDocument receipts = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>("/receipts/slack")
             ?? throw new InvalidOperationException("MockSink returned no receipt evidence for slack.");
-        Assert.Contains(
-            receipts.RootElement.GetProperty("receipts").EnumerateArray(),
+        receipts.RootElement.GetProperty("receipts").EnumerateArray().ShouldContain(
             receipt => receipt.GetProperty("body").GetString()!.Contains("octocat pushed to acme/widgets", StringComparison.Ordinal));
     }
 
@@ -271,8 +269,7 @@ public sealed class GitHubToSlackAcceptanceTests(PackagedDeploymentFixture fixtu
     private static async Task<JsonElement> AssertJsonAsync(HttpResponseMessage response, params HttpStatusCode[] expected)
     {
         string body = await response.Content.ReadAsStringAsync();
-        Assert.True(
-            expected.Contains(response.StatusCode),
+        expected.Contains(response.StatusCode).ShouldBeTrue(
             $"Expected one of [{string.Join(", ", expected)}], got {(int)response.StatusCode}: {body}");
         using JsonDocument document = JsonDocument.Parse(body);
         return document.RootElement.Clone();

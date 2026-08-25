@@ -18,17 +18,17 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         await AssertHealthyAsync(fixture.IngestionClient);
         await AssertHealthyAsync(fixture.MockSinkClient);
 
-        Assert.Equal(1L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM connectors WHERE key = 'http' AND status = 'active'"));
-        Assert.Equal(1L, await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL"));
+        (await fixture.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM connectors WHERE key = 'http' AND status = 'active'")).ShouldBe(1L);
+        (await fixture.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL")).ShouldBe(1L);
 
         const string sinkName = "acceptance-harness";
         const string headerValue = "expected-value";
         const string body = "{\"event\":\"packaged-deployment\"}";
 
         using HttpResponseMessage resetBefore = await fixture.MockSinkClient.DeleteAsync($"/receipts/{sinkName}");
-        Assert.Equal(HttpStatusCode.OK, resetBefore.StatusCode);
+        resetBefore.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         using var delivery = new HttpRequestMessage(HttpMethod.Post, $"/sink/{sinkName}")
         {
@@ -36,33 +36,32 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         };
         delivery.Headers.Add("X-Acceptance", headerValue);
         using HttpResponseMessage delivered = await fixture.MockSinkClient.SendAsync(delivery);
-        Assert.Equal(HttpStatusCode.OK, delivered.StatusCode);
+        delivered.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         using JsonDocument receiptQuery = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>(
             $"/receipts/{sinkName}") ?? throw new InvalidOperationException("MockSink returned no receipt document.");
         JsonElement root = receiptQuery.RootElement;
-        Assert.Equal(1, root.GetProperty("count").GetInt32());
+        root.GetProperty("count").GetInt32().ShouldBe(1);
         JsonElement receipt = root.GetProperty("receipts")[0];
-        Assert.Equal("POST", receipt.GetProperty("method").GetString());
-        Assert.Equal($"/sink/{sinkName}", receipt.GetProperty("path").GetString());
-        Assert.Equal(body, receipt.GetProperty("body").GetString());
-        Assert.Contains(
-            "X-Acceptance",
-            receipt.GetProperty("headerNames").EnumerateArray().Select(value => value.GetString()));
+        receipt.GetProperty("method").GetString().ShouldBe("POST");
+        receipt.GetProperty("path").GetString().ShouldBe($"/sink/{sinkName}");
+        receipt.GetProperty("body").GetString().ShouldBe(body);
+        receipt.GetProperty("headerNames").EnumerateArray().Select(value => value.GetString()).ShouldContain(
+            "X-Acceptance");
 
         using HttpResponseMessage headerAssertion = await fixture.MockSinkClient.PostAsJsonAsync(
             $"/receipts/{sinkName}/assert-headers",
             new { headers = new Dictionary<string, string> { ["X-Acceptance"] = headerValue } });
         string assertionEvidence = await headerAssertion.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.OK, headerAssertion.StatusCode);
-        Assert.Contains("\"matched\":true", assertionEvidence, StringComparison.Ordinal);
-        Assert.DoesNotContain(headerValue, assertionEvidence, StringComparison.Ordinal);
+        headerAssertion.StatusCode.ShouldBe(HttpStatusCode.OK);
+        assertionEvidence.ShouldContain("\"matched\":true", Case.Sensitive);
+        assertionEvidence.ShouldNotContain(headerValue, Case.Sensitive);
 
         using HttpResponseMessage resetAfter = await fixture.MockSinkClient.DeleteAsync($"/receipts/{sinkName}");
-        Assert.Equal(HttpStatusCode.OK, resetAfter.StatusCode);
+        resetAfter.StatusCode.ShouldBe(HttpStatusCode.OK);
         using JsonDocument emptyQuery = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>(
             $"/receipts/{sinkName}") ?? throw new InvalidOperationException("MockSink returned no reset receipt document.");
-        Assert.Equal(0, emptyQuery.RootElement.GetProperty("count").GetInt32());
+        emptyQuery.RootElement.GetProperty("count").GetInt32().ShouldBe(0);
     }
 
     [Fact]
@@ -116,7 +115,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         using HttpResponseMessage failMode = await fixture.MockSinkClient.PutAsJsonAsync(
             $"/control/{sinkName}",
             new { mode = "fail" });
-        Assert.Equal(HttpStatusCode.OK, failMode.StatusCode);
+        failMode.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         using var ingest = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={sourceId}")
         {
@@ -130,7 +129,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         ingest.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
         using HttpResponseMessage accepted = await fixture.IngestionClient.SendAsync(ingest);
         string acceptedBody = await accepted.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+        accepted.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         using JsonDocument acceptedDocument = JsonDocument.Parse(acceptedBody);
         Guid eventId = acceptedDocument.RootElement.GetProperty("event_id").GetGuid();
 
@@ -139,13 +138,13 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
 
         using HttpResponseMessage successMode = await fixture.MockSinkClient.DeleteAsync($"/control/{sinkName}");
-        Assert.Equal(HttpStatusCode.OK, successMode.StatusCode);
+        successMode.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>(
                 $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
-        Assert.True(await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'") >= 2);
+        ((await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'")) >= 2).ShouldBeTrue();
 
         Guid deliveryId = await fixture.ScalarAsync<Guid>(
             $"SELECT id FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'");
@@ -167,31 +166,32 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 && traceSpans.Count(span => span.Name == "subscription.deliver") >= 2;
         });
 
-        ExportedSpan acceptanceSpan = Assert.Single(traceSpans, span => span.Name == "IngestEventCommand");
-        ExportedSpan fanoutSpan = Assert.Single(traceSpans, span => span.Name == "outbox.fanout");
+        ExportedSpan acceptanceSpan = traceSpans.Where(span => span.Name == "IngestEventCommand").ShouldHaveSingleItem();
+        ExportedSpan fanoutSpan = traceSpans.Where(span => span.Name == "outbox.fanout").ShouldHaveSingleItem();
         ExportedSpan[] deliverySpans = traceSpans.Where(span => span.Name == "subscription.deliver").ToArray();
-        Assert.Equal(acceptanceSpan.SpanId, fanoutSpan.ParentSpanId);
-        Assert.All(deliverySpans, span => Assert.Equal(fanoutSpan.SpanId, span.ParentSpanId));
+        fanoutSpan.ParentSpanId.ShouldBe(acceptanceSpan.SpanId);
+        foreach (var span in deliverySpans)
+            span.ParentSpanId.ShouldBe(fanoutSpan.SpanId);
 
         string ingestionMetrics = await fixture.IngestionClient.GetStringAsync("/metrics");
         string adminMetrics = await fixture.AdminClient.GetStringAsync("/metrics");
         string workerMetrics = await fixture.WorkerMetricsClient.GetStringAsync("/metrics");
-        Assert.Contains("integrios_events_ingested_total", ingestionMetrics, StringComparison.Ordinal);
-        Assert.Contains("http_server_request_duration", adminMetrics, StringComparison.Ordinal);
-        Assert.Contains("integrios_fanout_rows_created_total", workerMetrics, StringComparison.Ordinal);
-        Assert.Contains("integrios_deliveries_failed_total", workerMetrics, StringComparison.Ordinal);
-        Assert.Contains("integrios_deliveries_succeeded_total", workerMetrics, StringComparison.Ordinal);
-        Assert.Contains("integrios_delivery_attempt_duration_seconds", workerMetrics, StringComparison.Ordinal);
-        Assert.DoesNotContain("integrios_outbox_pending_depth", ingestionMetrics, StringComparison.Ordinal);
-        Assert.DoesNotContain("integrios_outbox_pending_depth", adminMetrics, StringComparison.Ordinal);
-        Assert.Contains("integrios_outbox_pending_depth", workerMetrics, StringComparison.Ordinal);
+        ingestionMetrics.ShouldContain("integrios_events_ingested_total", Case.Sensitive);
+        adminMetrics.ShouldContain("http_server_request_duration", Case.Sensitive);
+        workerMetrics.ShouldContain("integrios_fanout_rows_created_total", Case.Sensitive);
+        workerMetrics.ShouldContain("integrios_deliveries_failed_total", Case.Sensitive);
+        workerMetrics.ShouldContain("integrios_deliveries_succeeded_total", Case.Sensitive);
+        workerMetrics.ShouldContain("integrios_delivery_attempt_duration_seconds", Case.Sensitive);
+        ingestionMetrics.ShouldNotContain("integrios_outbox_pending_depth", Case.Sensitive);
+        adminMetrics.ShouldNotContain("integrios_outbox_pending_depth", Case.Sensitive);
+        workerMetrics.ShouldContain("integrios_outbox_pending_depth", Case.Sensitive);
 
         string workerLogs = await fixture.GetServiceLogsAsync("worker");
-        Assert.Contains(eventId.ToString(), workerLogs, StringComparison.Ordinal);
-        Assert.Contains(deliveryId.ToString(), workerLogs, StringComparison.Ordinal);
-        Assert.Contains(subscriptionId.ToString(), workerLogs, StringComparison.Ordinal);
-        Assert.DoesNotContain("acceptance-admin-secret", workerLogs, StringComparison.Ordinal);
-        Assert.DoesNotContain(apiToken, workerLogs, StringComparison.Ordinal);
+        workerLogs.ShouldContain(eventId.ToString(), Case.Sensitive);
+        workerLogs.ShouldContain(deliveryId.ToString(), Case.Sensitive);
+        workerLogs.ShouldContain(subscriptionId.ToString(), Case.Sensitive);
+        workerLogs.ShouldNotContain("acceptance-admin-secret", Case.Sensitive);
+        workerLogs.ShouldNotContain(apiToken, Case.Sensitive);
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
             $"/control/{sinkName}",
             new { mode = "slow", delayMs = 8000 });
-        Assert.Equal(HttpStatusCode.OK, slowMode.StatusCode);
+        slowMode.StatusCode.ShouldBe(HttpStatusCode.OK);
         Guid? blockedEventId = null;
 
         try
@@ -274,7 +274,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         finally
         {
             using HttpResponseMessage reset = await fixture.MockSinkClient.DeleteAsync($"/control/{sinkName}");
-            Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+            reset.StatusCode.ShouldBe(HttpStatusCode.OK);
             if (blockedEventId is { } eventId)
             {
                 await WaitForAsync(async () =>
@@ -297,7 +297,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         request.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
         using HttpResponseMessage response = await fixture.AdminClient.SendAsync(request);
         string responseBody = await response.Content.ReadAsStringAsync();
-        Assert.True(response.IsSuccessStatusCode, $"POST {path} returned {(int)response.StatusCode}: {responseBody}");
+        response.IsSuccessStatusCode.ShouldBeTrue($"POST {path} returned {(int)response.StatusCode}: {responseBody}");
         using JsonDocument document = JsonDocument.Parse(responseBody);
         return document.RootElement.GetProperty(property).ToString();
     }
@@ -320,7 +320,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
         using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         string responseBody = await response.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         using JsonDocument document = JsonDocument.Parse(responseBody);
         return document.RootElement.GetProperty("event_id").GetGuid();
     }
@@ -398,6 +398,6 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     private static async Task AssertHealthyAsync(HttpClient client)
     {
         using HttpResponseMessage response = await client.GetAsync("/health");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 }
