@@ -47,6 +47,16 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       Integrios__SourceSecrets__Provider: ${INTEGRIOS_SOURCE_SECRETS_PROVIDER:-file}
+      # Queue Sources using azure_identity draw an ambient credential through
+      # DefaultAzureCredential. Nothing below is set by default, so the working scheme out of the
+      # box is connection_string. To use azure_identity, give this container a credential the chain
+      # can resolve: attach a managed identity (AKS/Container Apps/VM), or supply an app
+      # registration through AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET. The identity
+      # needs the "Azure Service Bus Data Receiver" role on the namespace - subscription Owner does
+      # not grant data-plane access.
+      # AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      # AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      # AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
     volumes:
       - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/source}:/run/secrets/integrios/source:ro
     ports:
