@@ -40,31 +40,31 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
     {
         var response = await PostTenantApiKeyAsync("ingest-key");
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.NotNull(response.Headers.Location);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        response.Headers.Location.ShouldNotBeNull();
 
         var body = await response.Content.ReadFromJsonAsync<CreateTenantApiKeyResult>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal("ingest-key", body.TenantApiKey.Name);
-        Assert.Equal(fixture.TenantId, body.TenantApiKey.TenantId);
-        Assert.Equal("active", body.TenantApiKey.Status);
+        body.ShouldNotBeNull();
+        body.TenantApiKey.Name.ShouldBe("ingest-key");
+        body.TenantApiKey.TenantId.ShouldBe(fixture.TenantId);
+        body.TenantApiKey.Status.ShouldBe("active");
 
         // Token format: intg_<64hex>
-        Assert.StartsWith("intg_", body.Token, StringComparison.Ordinal);
-        Assert.Equal(69, body.Token.Length); // "intg_" (5) + 64 hex chars
+        body.Token.ShouldStartWith("intg_", Case.Sensitive);
+        body.Token.Length.ShouldBe(69); // "intg_" (5) + 64 hex chars
 
         // KeyPrefix is the display hint: first 12 chars of the token
-        Assert.Equal(body.Token[..12], body.TenantApiKey.KeyPrefix);
+        body.TenantApiKey.KeyPrefix.ShouldBe(body.Token[..12]);
     }
 
     [Fact]
     public async Task CreateTenantApiKey_ResponseDoesNotExposeScopes()
     {
         var response = await PostTenantApiKeyAsync("authority-contract-key");
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.False(body.RootElement.GetProperty("tenant_api_key").TryGetProperty("scopes", out _));
+        body.RootElement.GetProperty("tenant_api_key").TryGetProperty("scopes", out _).ShouldBeFalse();
     }
 
     // Get
@@ -77,13 +77,13 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}"));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<TenantApiKeyDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal(created.TenantApiKey.Id, body.Id);
-        Assert.Equal("get-test-key", body.Name);
-        Assert.Equal(created.TenantApiKey.KeyPrefix, body.KeyPrefix);
+        body.ShouldNotBeNull();
+        body.Id.ShouldBe(created.TenantApiKey.Id);
+        body.Name.ShouldBe("get-test-key");
+        body.KeyPrefix.ShouldBe(created.TenantApiKey.KeyPrefix);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{Guid.NewGuid()}"));
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var response = await client.SendAsync(InvalidAdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}"));
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // List
@@ -117,12 +117,13 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys"));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<TenantApiKeyListDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.True(body.Items.Count >= 2);
-        Assert.All(body.Items, k => Assert.StartsWith("intg_", k.KeyPrefix, StringComparison.Ordinal));
+        body.ShouldNotBeNull();
+        (body.Items.Count >= 2).ShouldBeTrue();
+        foreach (var k in body.Items)
+            k.KeyPrefix.ShouldStartWith("intg_", Case.Sensitive);
     }
 
     [Fact]
@@ -135,25 +136,25 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var page1 = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys?limit=2"));
-        Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
+        page1.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body1 = await page1.Content.ReadFromJsonAsync<TenantApiKeyListDto>(HostJson.Options);
-        Assert.NotNull(body1);
-        Assert.Equal(2, body1.Items.Count);
-        Assert.NotNull(body1.NextCursor);
+        body1.ShouldNotBeNull();
+        body1.Items.Count.ShouldBe(2);
+        body1.NextCursor.ShouldNotBeNull();
 
         var page2 = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys?limit=2&after={Uri.EscapeDataString(body1.NextCursor!)}"));
-        Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
+        page2.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body2 = await page2.Content.ReadFromJsonAsync<TenantApiKeyListDto>(HostJson.Options);
-        Assert.NotNull(body2);
-        Assert.True(body2.Items.Count >= 1);
+        body2.ShouldNotBeNull();
+        (body2.Items.Count >= 1).ShouldBeTrue();
 
         // Pages must not overlap
         var allIds = body1.Items.Select(k => k.Id).Concat(body2.Items.Select(k => k.Id)).ToList();
-        Assert.Equal(allIds.Count, allIds.Distinct().Count());
+        allIds.Distinct().Count().ShouldBe(allIds.Count);
     }
 
     // Revoke
@@ -166,16 +167,16 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var revokeResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}/revoke"));
-        Assert.Equal(HttpStatusCode.OK, revokeResponse.StatusCode);
+        revokeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var getResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}"));
-        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await getResponse.Content.ReadFromJsonAsync<TenantApiKeyDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal("disabled", body.Status);
+        body.ShouldNotBeNull();
+        body.Status.ShouldBe("disabled");
     }
 
     [Fact]
@@ -186,12 +187,12 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var first = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}/revoke"));
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var second = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}/revoke"));
-        Assert.Equal(HttpStatusCode.NotFound, second.StatusCode);
+        second.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -202,7 +203,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var response = await client.SendAsync(InvalidAdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}/revoke"));
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // Helpers

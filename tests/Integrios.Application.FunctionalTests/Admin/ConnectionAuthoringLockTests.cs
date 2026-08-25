@@ -23,9 +23,9 @@ public sealed class ConnectionAuthoringLockTests : IClassFixture<AdminApiFixture
 
         IAsyncDisposable firstLease = await authoringLock.AcquireAsync([connectionId], CancellationToken.None);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        await Assert.ThrowsAsync<ConnectionAuthoringConflictException>(
+        await Should.ThrowAsync<ConnectionAuthoringConflictException>(
             () => authoringLock.AcquireAsync([connectionId], CancellationToken.None));
-        Assert.InRange(stopwatch.Elapsed, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        stopwatch.Elapsed.ShouldBeInRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
 
         await firstLease.DisposeAsync();
         IAsyncDisposable secondLease = await authoringLock.AcquireAsync([connectionId], CancellationToken.None);
@@ -43,9 +43,9 @@ public sealed class ConnectionAuthoringLockTests : IClassFixture<AdminApiFixture
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+        await Should.ThrowAsync<OperationCanceledException>(
             () => authoringLock.AcquireAsync([connectionId], cancellation.Token));
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2));
+        (stopwatch.Elapsed < TimeSpan.FromSeconds(2)).ShouldBeTrue();
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class ConnectionAuthoringLockTests : IClassFixture<AdminApiFixture
         Guid secondId = ids[1];
 
         await using IAsyncDisposable heldLease = await authoringLock.AcquireAsync([secondId], CancellationToken.None);
-        await Assert.ThrowsAsync<ConnectionAuthoringConflictException>(
+        await Should.ThrowAsync<ConnectionAuthoringConflictException>(
             () => authoringLock.AcquireAsync([firstId, secondId], CancellationToken.None));
 
         await using IAsyncDisposable firstOnlyLease = await authoringLock.AcquireAsync([firstId], CancellationToken.None);

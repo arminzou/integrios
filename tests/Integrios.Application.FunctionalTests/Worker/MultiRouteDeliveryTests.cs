@@ -19,16 +19,17 @@ public sealed class MultiRouteDeliveryTests : IClassFixture<WorkerRoutingFixture
 
         var dispatched = await fixture.RunWorkerBatchAsync();
 
-        Assert.Equal(2, dispatched);
-        Assert.Equal(2, fixture.DeliveryClient.Calls.Count);
-        Assert.Contains(fixture.DeliveryClient.Calls, c => c.Url == WorkerRoutingFixture.LedgerSinkUrl);
-        Assert.Contains(fixture.DeliveryClient.Calls, c => c.Url == WorkerRoutingFixture.RiskSinkUrl);
+        dispatched.ShouldBe(2);
+        fixture.DeliveryClient.Calls.Count.ShouldBe(2);
+        fixture.DeliveryClient.Calls.ShouldContain(c => c.Url == WorkerRoutingFixture.LedgerSinkUrl);
+        fixture.DeliveryClient.Calls.ShouldContain(c => c.Url == WorkerRoutingFixture.RiskSinkUrl);
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Equal(2, deliveries.Count);
-        Assert.All(deliveries, d => Assert.Equal("succeeded", d.Status));
+        deliveries.Count.ShouldBe(2);
+        foreach (var d in deliveries)
+            d.Status.ShouldBe("succeeded");
 
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
     }
 
     [Fact]
@@ -39,19 +40,19 @@ public sealed class MultiRouteDeliveryTests : IClassFixture<WorkerRoutingFixture
 
         await fixture.RunWorkerBatchAsync();
 
-        Assert.Equal(2, fixture.DeliveryClient.Calls.Count);
+        fixture.DeliveryClient.Calls.Count.ShouldBe(2);
 
         // Outbox is processed after Stage 1 regardless of per-subscription outcomes
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
 
         // Each event_delivery has its own retry state — independent failure isolation
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Equal(2, deliveries.Count);
-        Assert.All(deliveries, d =>
+        deliveries.Count.ShouldBe(2);
+        foreach (var d in deliveries)
         {
-            Assert.Equal("pending", d.Status);
-            Assert.Equal(1, d.AttemptCount);
-            Assert.NotNull(d.DeliverAfter);
-        });
+            d.Status.ShouldBe("pending");
+            d.AttemptCount.ShouldBe(1);
+            d.DeliverAfter.ShouldNotBeNull();
+        }
     }
 }

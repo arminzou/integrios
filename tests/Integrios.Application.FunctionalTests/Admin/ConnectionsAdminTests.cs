@@ -33,15 +33,15 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     {
         var response = await PostConnectionAsync("erp-sink", "http://localhost:5054/sink/erp");
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.NotNull(response.Headers.Location);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        response.Headers.Location.ShouldNotBeNull();
         var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal(fixture.TenantId, body!.TenantId);
-        Assert.Equal("erp-sink", body.Name);
-        Assert.Equal("active", body.Status);
-        Assert.Null(body.SourceVerification);
-        Assert.Null(body.DestinationAuthentication);
+        body.ShouldNotBeNull();
+        body!.TenantId.ShouldBe(fixture.TenantId);
+        body.Name.ShouldBe("erp-sink");
+        body.Status.ShouldBe("active");
+        body.SourceVerification.ShouldBeNull();
+        body.DestinationAuthentication.ShouldBeNull();
     }
 
     [Theory]
@@ -52,7 +52,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     {
         var response = await PostConnectionAsync($"private-{Guid.NewGuid():N}", url);
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Theory]
@@ -64,7 +64,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
     {
         var response = await PostConnectionAsync($"invalid-{Guid.NewGuid():N}", url);
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { }
             }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { source_name = "orders" }
             }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -116,29 +116,29 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { header_name = "X-Api-Key" },
             new { api_key = "erp_api_key" });
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.NotNull(body!.DestinationAuthentication);
-        Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
-        Assert.Equal("X-Api-Key", body.DestinationAuthentication.Config.GetProperty("header_name").GetString());
+        body.ShouldNotBeNull();
+        body!.DestinationAuthentication.ShouldNotBeNull();
+        body.DestinationAuthentication!.Scheme.ShouldBe("api_key_header");
+        body.DestinationAuthentication.Config.GetProperty("header_name").GetString().ShouldBe("X-Api-Key");
     }
 
     [Fact]
     public async Task CreateConnection_DuplicateName_ReturnsConflict()
     {
         var first = await PostConnectionAsync("erp-sink", "http://localhost:5054/sink/erp");
-        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        first.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var second = await PostConnectionAsync("erp-sink", "http://localhost:5054/sink/erp-2");
-        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 
     [Fact]
     public async Task CreateConnection_SameName_DifferentTenant_ReturnsCreated()
     {
         var first = await PostConnectionAsync("erp-sink", "http://localhost:5054/sink/erp");
-        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        first.StatusCode.ShouldBe(HttpStatusCode.Created);
         Guid otherTenantId = await GetTenantIdBySlugAsync("other-tenant");
 
         var second = await client.SendAsync(AdminRequest(
@@ -151,7 +151,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { base_uri = "http://localhost:5054/sink/other" }
             }));
 
-        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        second.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { base_uri = "http://localhost:5054/sink/x" }
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { },
             new { token = "erp_token" });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { token_url = "https://auth.example/token" },
             new { client_secret = "oauth_secret" });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { },
             new { api_key = "erp_api_key" });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -227,7 +227,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { header_name = "X-Api-Key" },
             new { });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -242,7 +242,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { header_name = "X-Api-Key" },
             new { api_key = "Bad-Ref" });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Theory]
@@ -259,7 +259,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { header_name = "X-Api-Key" },
             new { api_key = reference });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Theory]
@@ -276,7 +276,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
             new { header_name = headerName },
             new { api_key = "erp_api_key" });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -294,7 +294,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { base_uri = "http://localhost:5054/sink/erp-auth" }
             }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -318,11 +318,11 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 }
             }));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.NotNull(body!.DestinationAuthentication);
-        Assert.Equal("api_key_header", body.DestinationAuthentication!.Scheme);
+        body.ShouldNotBeNull();
+        body!.DestinationAuthentication.ShouldNotBeNull();
+        body.DestinationAuthentication!.Scheme.ShouldBe("api_key_header");
     }
 
     [Fact]
@@ -339,7 +339,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { base_uri = "ftp://example.test/sink" }
             }));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -355,7 +355,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 name = "omitted-config"
             }));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -376,7 +376,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { source_name = "updated-orders" }
             }));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -400,7 +400,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 }
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -430,12 +430,12 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 destination_connection_id = created.Id,
                 order_index = 0
             }));
-        Assert.Equal(HttpStatusCode.Created, subscriptionResponse.StatusCode);
+        subscriptionResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         HttpResponseMessage deactivateResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/connections/{created.Id}/deactivate"));
-        Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
+        deactivateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         HttpResponseMessage rotateResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -451,7 +451,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                     secret_refs = new { api_key = "rotated_erp_api_key" }
                 }
             }));
-        Assert.Equal(HttpStatusCode.OK, rotateResponse.StatusCode);
+        rotateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         HttpResponseMessage updateResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -462,7 +462,7 @@ public sealed class ConnectionsAdminTests : AdminApiTestBase, IClassFixture<Admi
                 config = new { base_uri = "http://localhost:5054/sink/in-use-authentication" }
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, updateResponse.StatusCode);
+        updateResponse.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     private Task<HttpResponseMessage> PostConnectionAsync(string name, string url) =>

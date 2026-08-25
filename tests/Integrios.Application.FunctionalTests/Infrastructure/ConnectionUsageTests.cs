@@ -38,8 +38,8 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
             "global_operator_key",
             CancellationToken.None);
 
-        Assert.NotNull(key);
-        Assert.Equal("sha256:test", key.SecretHash);
+        key.ShouldNotBeNull();
+        key.SecretHash.ShouldBe("sha256:test");
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
 
         ConnectionUsage whileAssociated = await repository.GetUsageAsync(
             fixture.TenantAId, connectionId, CancellationToken.None);
-        Assert.True(whileAssociated.Source);
+        whileAssociated.Source.ShouldBeTrue();
 
         await context.Sources
             .Where(source => source.TenantId == fixture.TenantAId && source.ConnectionId == connectionId)
@@ -79,8 +79,8 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
         // when it is next updated.
         ConnectionUsage afterRetirement = await repository.GetUsageAsync(
             fixture.TenantAId, connectionId, CancellationToken.None);
-        Assert.False(afterRetirement.Source);
-        Assert.False(afterRetirement.Destination);
+        afterRetirement.Source.ShouldBeFalse();
+        afterRetirement.Destination.ShouldBeFalse();
     }
 
     private IntegriosDbContext CreateContext() => new(fixture.CreateOptions());

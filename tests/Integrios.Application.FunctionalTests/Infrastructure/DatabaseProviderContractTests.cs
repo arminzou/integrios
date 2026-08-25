@@ -25,8 +25,8 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     public async Task Baseline_UsesNativeJsonStorageAndKeepsRuntimeTriggers()
     {
         await using DbConnection connection = await fixture.OpenAsync();
-        Assert.Equal(fixture.ExpectedJsonStorageTypes, await fixture.GetJsonStorageTypesAsync(connection));
-        Assert.Equal(1, await fixture.GetRuntimeTriggerCountAsync(connection));
+        (await fixture.GetJsonStorageTypesAsync(connection)).ShouldBe(fixture.ExpectedJsonStorageTypes);
+        (await fixture.GetRuntimeTriggerCountAsync(connection)).ShouldBe(1);
     }
 
     [Fact]
@@ -34,9 +34,9 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     {
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
-        await Assert.ThrowsAnyAsync<DbException>(() => fixture.InsertInvalidManifestAsync(connection));
-        await Assert.ThrowsAnyAsync<DbException>(() => fixture.SetInvalidSourceVerificationAsync(connection, seed.ConnectionId));
-        await Assert.ThrowsAnyAsync<DbException>(() => fixture.SetMalformedConfigAsync(connection, seed.ConnectionId));
+        await Should.ThrowAsync<DbException>(() => fixture.InsertInvalidManifestAsync(connection));
+        await Should.ThrowAsync<DbException>(() => fixture.SetInvalidSourceVerificationAsync(connection, seed.ConnectionId));
+        await Should.ThrowAsync<DbException>(() => fixture.SetMalformedConfigAsync(connection, seed.ConnectionId));
     }
 
     [Fact]
@@ -53,9 +53,9 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
             null,
             CancellationToken.None);
 
-        Assert.Equal("42", await connection.ExecuteScalarAsync<string>(
+        (await connection.ExecuteScalarAsync<string>(
             $"SELECT {fixture.Database.JsonText("payload")} FROM events WHERE id=@EventId",
-            new { scalar.EventId }));
+            new { scalar.EventId })).ShouldBe("42");
     }
 
     [Fact]
@@ -70,8 +70,8 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
             acceptance.AcceptAsync(submission, null, CancellationToken.None),
             acceptance.AcceptAsync(submission, null, CancellationToken.None));
 
-        Assert.Single(accepted, result => result.AlreadyAccepted);
-        Assert.Single(accepted, result => !result.AlreadyAccepted);
+        accepted.Where(result => result.AlreadyAccepted).ShouldHaveSingleItem();
+        accepted.Where(result => !result.AlreadyAccepted).ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
             "WHERE tenant_id=@TenantId AND id=@SourceId",
             new { seed.TenantId, seed.SourceId });
 
-        await Assert.ThrowsAsync<EventAcceptanceException>(() => fixture.Acceptance().AcceptAsync(
+        await Should.ThrowAsync<EventAcceptanceException>(() => fixture.Acceptance().AcceptAsync(
             DatabaseProviderFixture.Submission(seed, "retired-source"), null, CancellationToken.None));
     }
 
@@ -93,7 +93,7 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     {
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
-        await Assert.ThrowsAnyAsync<DbException>(() => connection.ExecuteAsync(
+        await Should.ThrowAsync<DbException>(() => connection.ExecuteAsync(
             "UPDATE connectors SET direction='destination' WHERE id=@ConnectorId",
             new { seed.ConnectorId }));
 
@@ -103,8 +103,8 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
         ConnectorManifestStoreResult result = await fixture.ManifestStore(context).ApplyAsync(
             renamed, ConnectorManifestApplyAuthority.Operator, CancellationToken.None);
 
-        Assert.Equal(ConnectorManifestApplyOutcome.PresentationReconciled, result.Outcome);
-        Assert.Equal("Renamed Source", result.Connector.Name);
+        result.Outcome.ShouldBe(ConnectorManifestApplyOutcome.PresentationReconciled);
+        result.Connector.Name.ShouldBe("Renamed Source");
     }
 }
 

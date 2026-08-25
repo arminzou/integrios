@@ -49,7 +49,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
                 order_index = 10
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Theory]
@@ -71,7 +71,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
                 order_index = 10
             }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
                 order_index = 10
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
                 order_index = 10
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
                 order_index = 25
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
                 order_index = 25
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             DestinationConnectionId = destinationConnectionId
         });
 
-        await Assert.ThrowsAnyAsync<DbException>(() => insert);
+        await Should.ThrowAsync<DbException>(() => insert);
     }
 
     private async Task<AdminTopicResponse> CreateTopicAsync(string name)

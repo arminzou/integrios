@@ -43,17 +43,17 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
         await using var ownerConnection = fixture.CreateConnection();
         await ownerConnection.OpenAsync();
         await using var ownerTransaction = await ownerConnection.BeginTransactionAsync();
-        Assert.True(await fixture.LockOutboxRowAsync(ownerConnection, ownerTransaction, eventId));
+        (await fixture.LockOutboxRowAsync(ownerConnection, ownerTransaction, eventId)).ShouldBeTrue();
 
-        Assert.Equal(0, await fixture.RunFanoutBatchAsync(1));
-        Assert.False(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal(0, await fixture.GetEventDeliveryCountAsync(eventId));
+        (await fixture.RunFanoutBatchAsync(1)).ShouldBe(0);
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeFalse();
+        (await fixture.GetEventDeliveryCountAsync(eventId)).ShouldBe(0);
 
         await ownerTransaction.RollbackAsync();
 
-        Assert.Equal(1, await fixture.RunFanoutBatchAsync(1));
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal(1, await fixture.GetEventDeliveryCountAsync(eventId));
+        (await fixture.RunFanoutBatchAsync(1)).ShouldBe(1);
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
+        (await fixture.GetEventDeliveryCountAsync(eventId)).ShouldBe(1);
     }
 
     [Fact]
@@ -63,17 +63,17 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
 
         await fixture.WithOutboxCompletionFailureAsync(async () =>
         {
-            await Assert.ThrowsAnyAsync<DbException>(() => fixture.RunFanoutBatchAsync(1));
+            await Should.ThrowAsync<DbException>(() => fixture.RunFanoutBatchAsync(1));
 
-            Assert.False(await fixture.IsOutboxRowProcessedAsync(eventId));
-            Assert.Equal("accepted", await fixture.GetEventStatusAsync(eventId));
-            Assert.Equal(0, await fixture.GetEventDeliveryCountAsync(eventId));
+            (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeFalse();
+            (await fixture.GetEventStatusAsync(eventId)).ShouldBe("accepted");
+            (await fixture.GetEventDeliveryCountAsync(eventId)).ShouldBe(0);
         });
 
-        Assert.Equal(1, await fixture.RunFanoutBatchAsync(1));
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal("routed", await fixture.GetEventStatusAsync(eventId));
-        Assert.Equal(1, await fixture.GetEventDeliveryCountAsync(eventId));
+        (await fixture.RunFanoutBatchAsync(1)).ShouldBe(1);
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
+        (await fixture.GetEventStatusAsync(eventId)).ShouldBe("routed");
+        (await fixture.GetEventDeliveryCountAsync(eventId)).ShouldBe(1);
     }
 
     [Fact]
@@ -86,21 +86,21 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
         int[] fanoutCounts = await Task.WhenAll(FanoutUntilEmptyAsync(), FanoutUntilEmptyAsync())
             .WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.Equal(eventCount, fanoutCounts.Sum());
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM outbox WHERE processed_at IS NOT NULL"));
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM events WHERE status = 'routed'"));
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM event_deliveries"));
-        Assert.Equal(0, await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM (SELECT event_id, subscription_id FROM event_deliveries GROUP BY event_id, subscription_id HAVING COUNT(*) > 1) duplicates"));
+        fanoutCounts.Sum().ShouldBe(eventCount);
+        (await ScalarAsync<long>("SELECT COUNT(*) FROM outbox WHERE processed_at IS NOT NULL")).ShouldBe(eventCount);
+        (await ScalarAsync<long>("SELECT COUNT(*) FROM events WHERE status = 'routed'")).ShouldBe(eventCount);
+        (await ScalarAsync<long>("SELECT COUNT(*) FROM event_deliveries")).ShouldBe(eventCount);
+        (await ScalarAsync<long>(
+            "SELECT COUNT(*) FROM (SELECT event_id, subscription_id FROM event_deliveries GROUP BY event_id, subscription_id HAVING COUNT(*) > 1) duplicates")).ShouldBe(0);
 
         int[] deliveryCounts = await Task.WhenAll(DeliverUntilEmptyAsync(), DeliverUntilEmptyAsync())
             .WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.Equal(eventCount, deliveryCounts.Sum());
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM event_deliveries WHERE status = 'succeeded'"));
-        Assert.Equal(eventCount, await ScalarAsync<long>("SELECT COUNT(*) FROM delivery_attempts WHERE status = 'succeeded'"));
-        Assert.Equal(0, await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM (SELECT event_delivery_id, attempt_number FROM delivery_attempts GROUP BY event_delivery_id, attempt_number HAVING COUNT(*) > 1) duplicates"));
+        deliveryCounts.Sum().ShouldBe(eventCount);
+        (await ScalarAsync<long>("SELECT COUNT(*) FROM event_deliveries WHERE status = 'succeeded'")).ShouldBe(eventCount);
+        (await ScalarAsync<long>("SELECT COUNT(*) FROM delivery_attempts WHERE status = 'succeeded'")).ShouldBe(eventCount);
+        (await ScalarAsync<long>(
+            "SELECT COUNT(*) FROM (SELECT event_delivery_id, attempt_number FROM delivery_attempts GROUP BY event_delivery_id, attempt_number HAVING COUNT(*) > 1) duplicates")).ShouldBe(0);
 
         async Task<int> FanoutUntilEmptyAsync()
         {
@@ -130,8 +130,8 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
                         null,
                         null),
                     CancellationToken.None);
-                Assert.Equal(DeliveryFinalizationStatus.Applied, result.Status);
-                Assert.Equal(EventDeliveryDisposition.Succeeded, result.Disposition);
+                result.Status.ShouldBe(DeliveryFinalizationStatus.Applied);
+                result.Disposition.ShouldBe(EventDeliveryDisposition.Succeeded);
                 total++;
             }
             return total;

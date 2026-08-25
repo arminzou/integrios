@@ -31,73 +31,70 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
     {
         JsonElement version1 = Manifest(contractVersion: 1, name: "Example API");
         HttpResponseMessage createdResponse = await ApplyAsync(1, version1);
-        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
-        Assert.Equal(
-            "/admin/connectors/example_api/versions/1",
-            createdResponse.Headers.Location?.OriginalString);
+        createdResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        createdResponse.Headers.Location?.OriginalString.ShouldBe(
+            "/admin/connectors/example_api/versions/1");
         ConnectorDto created = (await createdResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        Assert.Equal(1, created.ContractVersion);
-        Assert.Equal("example_api", created.Manifest.GetProperty("key").GetString());
+        created.ContractVersion.ShouldBe(1);
+        created.Manifest.GetProperty("key").GetString().ShouldBe("example_api");
         JsonElement storedSchemes = created.Manifest.GetProperty("destination_authentication").GetProperty("schemes");
-        Assert.Equal(2, storedSchemes.GetArrayLength());
-        Assert.Equal("api_key_header", storedSchemes[0].GetProperty("scheme").GetString());
-        Assert.Equal("bearer_token", storedSchemes[1].GetProperty("scheme").GetString());
-        Assert.Equal(
-            "Example API",
-            created.Manifest.GetProperty("presentation").GetProperty("name").GetString());
+        storedSchemes.GetArrayLength().ShouldBe(2);
+        storedSchemes[0].GetProperty("scheme").GetString().ShouldBe("api_key_header");
+        storedSchemes[1].GetProperty("scheme").GetString().ShouldBe("bearer_token");
+        created.Manifest.GetProperty("presentation").GetProperty("name").GetString().ShouldBe(
+            "Example API");
 
         HttpResponseMessage unchangedResponse = await ApplyAsync(1, Reordered(version1));
-        Assert.Equal(HttpStatusCode.OK, unchangedResponse.StatusCode);
+        unchangedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         ConnectorDto unchanged = (await unchangedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        Assert.Equal(created.Id, unchanged.Id);
-        Assert.Equal(created.UpdatedAt, unchanged.UpdatedAt);
+        unchanged.Id.ShouldBe(created.Id);
+        unchanged.UpdatedAt.ShouldBe(created.UpdatedAt);
 
         JsonElement renamedManifest = Manifest(contractVersion: 1, name: "Improved API");
         HttpResponseMessage renamedResponse = await ApplyAsync(1, renamedManifest);
-        Assert.Equal(HttpStatusCode.OK, renamedResponse.StatusCode);
+        renamedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         ConnectorDto renamed = (await renamedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        Assert.Equal(created.Id, renamed.Id);
-        Assert.Equal("Improved API", renamed.Name);
+        renamed.Id.ShouldBe(created.Id);
+        renamed.Name.ShouldBe("Improved API");
 
         await ExecuteAsync("UPDATE connectors SET status = 'disabled' WHERE id = @Id", created.Id);
         HttpResponseMessage disabledNoOpResponse = await ApplyAsync(1, renamedManifest);
         ConnectorDto disabledNoOp = (await disabledNoOpResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        Assert.Equal("disabled", disabledNoOp.Status);
+        disabledNoOp.Status.ShouldBe("disabled");
 
         JsonElement functionalChange = Json(renamedManifest.GetRawText().Replace(
             "\"additionalProperties\":false",
             "\"additionalProperties\":true",
             StringComparison.Ordinal));
         HttpResponseMessage conflictResponse = await ApplyAsync(1, functionalChange);
-        Assert.Equal(HttpStatusCode.Conflict, conflictResponse.StatusCode);
+        conflictResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         ConnectorDto retained = (await GetVersionAsync(1))!;
-        Assert.Equal(
-            "Improved API",
-            retained.Manifest.GetProperty("presentation").GetProperty("name").GetString());
-        Assert.False(retained.Manifest
+        retained.Manifest.GetProperty("presentation").GetProperty("name").GetString().ShouldBe(
+            "Improved API");
+        retained.Manifest
             .GetProperty("destination_configuration_schema")
             .GetProperty("additionalProperties")
-            .GetBoolean());
+            .GetBoolean().ShouldBeFalse();
 
         JsonElement version2 = Manifest(contractVersion: 2, name: "Example API v2");
         HttpResponseMessage version2Response = await ApplyAsync(2, version2);
-        Assert.Equal(HttpStatusCode.Created, version2Response.StatusCode);
+        version2Response.StatusCode.ShouldBe(HttpStatusCode.Created);
         ConnectorDto createdV2 = (await version2Response.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        Assert.NotEqual(created.Id, createdV2.Id);
+        createdV2.Id.ShouldNotBe(created.Id);
 
-        Assert.Equal(2L, await CountAsync(
+        (await CountAsync(
             "connectors",
-            $"{fixture.KeyColumn} = 'example_api' AND contract_version IN (1, 2)"));
+            $"{fixture.KeyColumn} = 'example_api' AND contract_version IN (1, 2)")).ShouldBe(2L);
 
         using HttpResponseMessage listResponse = await SendAsync(HttpMethod.Get, "/admin/connectors");
-        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         ConnectorListDto list = (await listResponse.Content.ReadFromJsonAsync<ConnectorListDto>(HostJson.Options))!;
-        Assert.Contains(list.Items, item =>
+        list.Items.ShouldContain(item =>
             item.Id == created.Id &&
             item.ContractVersion == 1 &&
             item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Improved API");
-        Assert.Contains(list.Items, item =>
+        list.Items.ShouldContain(item =>
             item.Id == createdV2.Id &&
             item.ContractVersion == 2 &&
             item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Example API v2");
@@ -107,7 +104,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
     public async Task Apply_RejectsRouteIdentityMismatchAndAcceptsDeclarativeSourceContract()
     {
         HttpResponseMessage identityMismatch = await ApplyAsync(2, Manifest(contractVersion: 1, name: "Example API"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, identityMismatch.StatusCode);
+        identityMismatch.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         JsonElement sourceContract = Json(Manifest(1, "Example API").GetRawText().Replace(
             "\"direction\":\"destination\"",
@@ -116,7 +113,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
             + "\"source_contracts\":[{\"key\":\"event_json\",\"contract_version\":1,\"config\":{}}]",
             StringComparison.Ordinal));
         HttpResponseMessage sourceContractResponse = await ApplyAsync(1, sourceContract);
-        Assert.Equal(HttpStatusCode.Created, sourceContractResponse.StatusCode);
+        sourceContractResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -125,9 +122,9 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         JsonElement manifest = Manifest(1, "Example API");
         HttpResponseMessage[] responses = await Task.WhenAll(ApplyAsync(1, manifest), ApplyAsync(1, manifest));
 
-        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Created));
-        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
-        Assert.Equal(1L, await CountAsync("connectors", $"{fixture.KeyColumn} = 'example_api' AND contract_version = 1"));
+        responses.Count(response => response.StatusCode == HttpStatusCode.Created).ShouldBe(1);
+        responses.Count(response => response.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+        (await CountAsync("connectors", $"{fixture.KeyColumn} = 'example_api' AND contract_version = 1")).ShouldBe(1L);
     }
 
     private async Task<ConnectorDto?> GetVersionAsync(int contractVersion)
@@ -135,7 +132,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         using HttpResponseMessage response = await SendAsync(
             HttpMethod.Get,
             $"/admin/connectors/example_api/versions/{contractVersion}");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         return await response.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options);
     }
 

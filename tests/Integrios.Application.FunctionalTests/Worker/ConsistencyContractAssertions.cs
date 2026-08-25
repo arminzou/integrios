@@ -9,10 +9,10 @@ internal static class ConsistencyContractAssertions
         Func<Guid, Task<bool>> isOutboxProcessed,
         Func<Guid, Task<string?>> getEventStatus)
     {
-        Assert.Equal(1, processedCounts.Sum());
-        Assert.Equal(1, await getDeliveryCount(eventId));
-        Assert.True(await isOutboxProcessed(eventId));
-        Assert.Equal("routed", await getEventStatus(eventId));
+        processedCounts.Sum().ShouldBe(1);
+        (await getDeliveryCount(eventId)).ShouldBe(1);
+        (await isOutboxProcessed(eventId)).ShouldBeTrue();
+        (await getEventStatus(eventId)).ShouldBe("routed");
     }
 
     internal static async Task ClaimFailureRollsBackAsync(
@@ -21,11 +21,11 @@ internal static class ConsistencyContractAssertions
         Func<Guid, Task<IReadOnlyList<DeliveryAttemptState>>> getAttempts)
     {
         EventDeliveryState delivery = await getDelivery(deliveryId);
-        Assert.Equal("pending", delivery.Status);
-        Assert.Equal(0, delivery.LifetimeAttemptCount);
-        Assert.Equal(0, delivery.RetryCycleAttemptCount);
-        Assert.Null(delivery.ActiveAttemptId);
-        Assert.Empty(await getAttempts(deliveryId));
+        delivery.Status.ShouldBe("pending");
+        delivery.LifetimeAttemptCount.ShouldBe(0);
+        delivery.RetryCycleAttemptCount.ShouldBe(0);
+        delivery.ActiveAttemptId.ShouldBeNull();
+        (await getAttempts(deliveryId)).ShouldBeEmpty();
     }
 
     internal static async Task FinalizationFailureRollsBackAsync(
@@ -35,12 +35,12 @@ internal static class ConsistencyContractAssertions
         Func<Guid, Task<IReadOnlyList<DeliveryAttemptState>>> getAttempts)
     {
         EventDeliveryState delivery = await getDelivery(deliveryId);
-        Assert.Equal("in_flight", delivery.Status);
-        Assert.Equal(attemptId, delivery.ActiveAttemptId);
-        Assert.NotNull(delivery.LeaseExpiresAt);
+        delivery.Status.ShouldBe("in_flight");
+        delivery.ActiveAttemptId.ShouldBe(attemptId);
+        delivery.LeaseExpiresAt.ShouldNotBeNull();
 
-        DeliveryAttemptState attempt = Assert.Single(await getAttempts(deliveryId));
-        Assert.Equal("in_progress", attempt.Status);
-        Assert.Null(attempt.CompletedAt);
+        DeliveryAttemptState attempt = (await getAttempts(deliveryId)).ShouldHaveSingleItem();
+        attempt.Status.ShouldBe("in_progress");
+        attempt.CompletedAt.ShouldBeNull();
     }
 }

@@ -20,16 +20,16 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         await fixture.RunWorkerBatchAsync();
 
         var details = await fixture.GetEventDetailsAsync(eventId);
-        Assert.NotNull(details);
-        var attempt = Assert.Single(details.DeliveryAttempts);
-        var delivery = Assert.Single(await fixture.GetEventDeliveriesAsync(eventId));
-        Assert.Equal(1, attempt.AttemptNumber);
-        Assert.Equal(delivery.Id, attempt.EventDeliveryId);
-        Assert.Equal("succeeded", attempt.Status);
-        Assert.Equal(200, attempt.ResponseStatusCode);
-        Assert.Null(attempt.ErrorMessage);
-        Assert.NotEqual(default, attempt.StartedAt);
-        Assert.NotNull(attempt.CompletedAt);
+        details.ShouldNotBeNull();
+        var attempt = details.DeliveryAttempts.ShouldHaveSingleItem();
+        var delivery = (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem();
+        attempt.AttemptNumber.ShouldBe(1);
+        attempt.EventDeliveryId.ShouldBe(delivery.Id);
+        attempt.Status.ShouldBe("succeeded");
+        attempt.ResponseStatusCode.ShouldBe(200);
+        attempt.ErrorMessage.ShouldBeNull();
+        attempt.StartedAt.ShouldNotBe(default);
+        attempt.CompletedAt.ShouldNotBeNull();
     }
 
     [Fact]
@@ -41,14 +41,14 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         await fixture.RunWorkerBatchAsync();
 
         var details = await fixture.GetEventDetailsAsync(eventId);
-        Assert.NotNull(details);
-        var attempt = Assert.Single(details.DeliveryAttempts);
-        Assert.Equal(1, attempt.AttemptNumber);
-        Assert.Equal("failed", attempt.Status);
-        Assert.Equal("http", attempt.FailurePhase);
-        Assert.Equal(500, attempt.ResponseStatusCode);
-        Assert.NotEqual(default, attempt.StartedAt);
-        Assert.NotNull(attempt.CompletedAt);
+        details.ShouldNotBeNull();
+        var attempt = details.DeliveryAttempts.ShouldHaveSingleItem();
+        attempt.AttemptNumber.ShouldBe(1);
+        attempt.Status.ShouldBe("failed");
+        attempt.FailurePhase.ShouldBe("http");
+        attempt.ResponseStatusCode.ShouldBe(500);
+        attempt.StartedAt.ShouldNotBe(default);
+        attempt.CompletedAt.ShouldNotBeNull();
     }
 
     [Fact]
@@ -66,15 +66,15 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         await fixture.RunWorkerBatchAsync();
 
         var details = await fixture.GetEventDetailsAsync(eventId);
-        Assert.NotNull(details);
-        Assert.Equal(2, details.DeliveryAttempts.Count);
+        details.ShouldNotBeNull();
+        details.DeliveryAttempts.Count.ShouldBe(2);
 
         var first = details.DeliveryAttempts.Single(a => a.AttemptNumber == 1);
-        Assert.Equal("failed", first.Status);
+        first.Status.ShouldBe("failed");
 
         var second = details.DeliveryAttempts.Single(a => a.AttemptNumber == 2);
-        Assert.Equal("succeeded", second.Status);
-        Assert.Equal(200, second.ResponseStatusCode);
+        second.Status.ShouldBe("succeeded");
+        second.ResponseStatusCode.ShouldBe(200);
     }
 
     [Fact]
@@ -90,10 +90,10 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         await fixture.RunWorkerBatchAsync();
 
         var details = await fixture.GetEventDetailsAsync(eventId);
-        Assert.NotNull(details);
+        details.ShouldNotBeNull();
 
         var attemptNumbers = details.DeliveryAttempts.Select(a => a.AttemptNumber).ToList();
-        Assert.Equal(attemptNumbers.OrderBy(n => n).ToList(), attemptNumbers);
+        attemptNumbers.ShouldBe(attemptNumbers.OrderBy(n => n).ToList());
     }
 
     [Fact]
@@ -109,14 +109,14 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
 
         await fixture.RunWorkerBatchAsync();
 
-        DeliveryCall call = Assert.Single(fixture.DeliveryClient.Calls);
+        DeliveryCall call = fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
         var details = await fixture.GetEventDetailsAsync(eventId);
-        Assert.NotNull(details);
-        var attempt = Assert.Single(details.DeliveryAttempts);
-        Assert.Equal(eventId.ToString(), call.Headers["Integrios-Event-Id"]);
-        Assert.Equal(attempt.EventDeliveryId.ToString(), call.Headers["Integrios-Delivery-Id"]);
-        Assert.Equal(attempt.AttemptId.ToString(), call.Headers["Integrios-Attempt-Id"]);
-        Assert.Equal(attempt.AttemptNumber.ToString(), call.Headers["Integrios-Attempt-Number"]);
-        Assert.NotEqual("must-not-win", call.Headers["Integrios-Delivery-Id"]);
+        details.ShouldNotBeNull();
+        var attempt = details.DeliveryAttempts.ShouldHaveSingleItem();
+        call.Headers["Integrios-Event-Id"].ShouldBe(eventId.ToString());
+        call.Headers["Integrios-Delivery-Id"].ShouldBe(attempt.EventDeliveryId.ToString());
+        call.Headers["Integrios-Attempt-Id"].ShouldBe(attempt.AttemptId.ToString());
+        call.Headers["Integrios-Attempt-Number"].ShouldBe(attempt.AttemptNumber.ToString());
+        call.Headers["Integrios-Delivery-Id"].ShouldNotBe("must-not-win");
     }
 }

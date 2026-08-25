@@ -35,25 +35,25 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         string route = $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries";
 
         HttpResponseMessage historyResponse = await client.SendAsync(AdminRequest(HttpMethod.Get, route));
-        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        historyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         EventDto? history = await historyResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
-        Assert.NotNull(history);
-        EventDeliveryDto delivery = Assert.Single(history.EventDeliveries);
-        Assert.Equal(deliveryId, delivery.EventDeliveryId);
-        Assert.Equal("dead_lettered", delivery.Status);
-        Assert.Equal("failed", Assert.Single(history.DeliveryAttempts).Status);
+        history.ShouldNotBeNull();
+        EventDeliveryDto delivery = history.EventDeliveries.ShouldHaveSingleItem();
+        delivery.EventDeliveryId.ShouldBe(deliveryId);
+        delivery.Status.ShouldBe("dead_lettered");
+        history.DeliveryAttempts.ShouldHaveSingleItem().Status.ShouldBe("failed");
 
         HttpResponseMessage replayResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"{route}/{deliveryId}/replay"));
-        Assert.Equal(HttpStatusCode.Accepted, replayResponse.StatusCode);
-        Assert.Equal(route, replayResponse.Headers.Location?.ToString());
-        Assert.Equal("pending", await fixture.GetDeliveryStatusAsync(deliveryId));
+        replayResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        replayResponse.Headers.Location?.ToString().ShouldBe(route);
+        (await fixture.GetDeliveryStatusAsync(deliveryId)).ShouldBe("pending");
 
         HttpResponseMessage repeatedReplay = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"{route}/{deliveryId}/replay"));
-        Assert.Equal(HttpStatusCode.Conflict, repeatedReplay.StatusCode);
+        repeatedReplay.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 
     [Fact]
@@ -66,8 +66,8 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries/{otherDeliveryId}/replay"));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("dead_lettered", await fixture.GetDeliveryStatusAsync(otherDeliveryId));
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await fixture.GetDeliveryStatusAsync(otherDeliveryId)).ShouldBe("dead_lettered");
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
             HttpMethod.Post,
             $"/admin/tenants/{fixture.OtherTenantId}/events/{eventId}/deliveries/{deliveryId}/replay"));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("dead_lettered", await fixture.GetDeliveryStatusAsync(deliveryId));
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await fixture.GetDeliveryStatusAsync(deliveryId)).ShouldBe("dead_lettered");
     }
 }

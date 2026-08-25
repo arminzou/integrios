@@ -50,10 +50,10 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
                 environment = "production",
                 description = "Customer tenant"
             }));
-        Assert.Equal(HttpStatusCode.Created, tenantResponse.StatusCode);
+        tenantResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var tenant = await tenantResponse.Content.ReadFromJsonAsync<TenantDto>(HostJson.Options);
-        Assert.NotNull(tenant);
+        tenant.ShouldNotBeNull();
 
         var tenantApiKeyResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -63,12 +63,12 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
                 name = "acme-ingestion",
                 description = "Ingestion automation key"
             }));
-        Assert.Equal(HttpStatusCode.Created, tenantApiKeyResponse.StatusCode);
+        tenantApiKeyResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var tenantApiKey = await tenantApiKeyResponse.Content.ReadFromJsonAsync<CreateTenantApiKeyResult>(HostJson.Options);
-        Assert.NotNull(tenantApiKey);
-        Assert.False(string.IsNullOrWhiteSpace(tenantApiKey.Token));
-        Assert.Equal("acme-ingestion", tenantApiKey.TenantApiKey.Name);
+        tenantApiKey.ShouldNotBeNull();
+        string.IsNullOrWhiteSpace(tenantApiKey.Token).ShouldBeFalse();
+        tenantApiKey.TenantApiKey.Name.ShouldBe("acme-ingestion");
 
         var sourceConnection = await CreateConnectionAsync(
             tenant.Id,
@@ -91,10 +91,10 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
                 description = "Payment events",
                 source_connection_ids = new[] { sourceConnection.Id }
             }));
-        Assert.Equal(HttpStatusCode.Created, topicResponse.StatusCode);
+        topicResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var topic = await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
-        Assert.NotNull(topic);
+        topic.ShouldNotBeNull();
 
         var subscriptionResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -107,17 +107,17 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
                 order_index = 10,
                 description = "ERP sink"
             }));
-        Assert.Equal(HttpStatusCode.Created, subscriptionResponse.StatusCode);
+        subscriptionResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(subscription);
-        Assert.Equal(destinationConnection.Id, subscription.DestinationConnectionId);
+        subscription.ShouldNotBeNull();
+        subscription.DestinationConnectionId.ShouldBe(destinationConnection.Id);
 
         var listTopics = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{tenant.Id}/topics"));
-        Assert.Equal(HttpStatusCode.OK, listTopics.StatusCode);
+        listTopics.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var listSubscriptions = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{tenant.Id}/topics/{topic.Id}/subscriptions"));
-        Assert.Equal(HttpStatusCode.OK, listSubscriptions.StatusCode);
+        listSubscriptions.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
             "/admin/tenants",
             new { slug, name = "Boundary Tenant" }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Theory]
@@ -145,7 +145,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
             "/admin/tenants",
             new { slug, name = "Invalid Tenant" }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     private async Task<ConnectionDto> CreateConnectionAsync(Guid tenantId, string name, string url, string environment)

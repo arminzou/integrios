@@ -71,10 +71,9 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
 
         CommandOutcome[] outcomes = await Task.WhenAll(update, create).WaitAsync(timeout.Token);
 
-        Assert.Single(outcomes, outcome => outcome.Succeeded);
-        CommandOutcome failure = Assert.Single(outcomes, outcome => !outcome.Succeeded);
-        Assert.True(
-            failure.Exception is ConnectionValidationException or SubscriptionValidationException,
+        outcomes.Where(outcome => outcome.Succeeded).ShouldHaveSingleItem();
+        CommandOutcome failure = outcomes.Where(outcome => !outcome.Succeeded).ShouldHaveSingleItem();
+        (failure.Exception is ConnectionValidationException or SubscriptionValidationException).ShouldBeTrue(
             failure.Exception?.ToString());
 
         await using var connection = fixture.CreateConnection();
@@ -86,8 +85,9 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             FROM connections
             WHERE id = @ConnectionId
             """, new { ConnectionId = connectionId });
-        Assert.Equal(Convert.ToInt32(invariant.ActiveSubscriptions) > 0,
-            invariant.DestinationAuthentication is string);
+        bool hasDestinationAuth = (bool)(invariant.DestinationAuthentication is string);
+        int activeSubscriptions = Convert.ToInt32(invariant.ActiveSubscriptions);
+        hasDestinationAuth.ShouldBe(activeSubscriptions > 0);
     }
 
     [Fact]
@@ -100,16 +100,16 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
         IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
         var command = ChangeToApiKeyHeader(connectionId);
 
-        ConnectionValidationException exception = await Assert.ThrowsAsync<ConnectionValidationException>(
+        ConnectionValidationException exception = await Should.ThrowAsync<ConnectionValidationException>(
             () => mediator.Send(command));
-        Assert.Contains("X-Api-Key", exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("bearer_token", await GetDestinationAuthenticationSchemeAsync(connectionId));
+        exception.Message.ShouldContain("X-Api-Key", Case.Insensitive);
+        (await GetDestinationAuthenticationSchemeAsync(connectionId)).ShouldBe("bearer_token");
 
         await SetSubscriptionStatusAsync("header-owner", "disabled");
         ConnectionDto? updated = await mediator.Send(command);
 
-        Assert.NotNull(updated);
-        Assert.Equal("api_key_header", updated.DestinationAuthentication?.Scheme);
+        updated.ShouldNotBeNull();
+        updated.DestinationAuthentication?.Scheme.ShouldBe("api_key_header");
     }
 
     [Fact]
@@ -155,10 +155,9 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
 
         CommandOutcome[] outcomes = await Task.WhenAll(update, create).WaitAsync(timeout.Token);
 
-        Assert.Single(outcomes, outcome => outcome.Succeeded);
-        CommandOutcome failure = Assert.Single(outcomes, outcome => !outcome.Succeeded);
-        Assert.True(
-            failure.Exception is ConnectionValidationException or SubscriptionValidationException,
+        outcomes.Where(outcome => outcome.Succeeded).ShouldHaveSingleItem();
+        CommandOutcome failure = outcomes.Where(outcome => !outcome.Succeeded).ShouldHaveSingleItem();
+        (failure.Exception is ConnectionValidationException or SubscriptionValidationException).ShouldBeTrue(
             failure.Exception?.ToString());
 
         await using var connection = fixture.CreateConnection();
@@ -178,7 +177,7 @@ public sealed class ConnectionAuthoringCommandRaceTests : IClassFixture<AdminApi
             && auth.GetProperty("config").GetProperty("header_name").GetString() == "X-Api-Key";
         bool staticCollision = deliveries.Select(Json).Any(delivery =>
             delivery.GetProperty("headers").TryGetProperty("X-Api-Key", out _));
-        Assert.False(headerOwned && staticCollision);
+        (headerOwned && staticCollision).ShouldBeFalse();
     }
 
     private async Task<(Guid ConnectorId, Guid ConnectionId, Guid TopicId)> SeedGraphAsync()

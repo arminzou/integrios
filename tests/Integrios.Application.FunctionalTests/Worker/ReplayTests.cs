@@ -28,18 +28,18 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         await fixture.RunWorkerBatchAsync();
 
         var deadDeliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deadDeliveries);
-        Assert.Equal("dead_lettered", deadDeliveries[0].Status);
+        deadDeliveries.ShouldHaveSingleItem();
+        deadDeliveries[0].Status.ShouldBe("dead_lettered");
 
         var replayed = await fixture.ReplayAsync(eventId, deadDeliveries[0].Id);
 
-        Assert.Equal(DeadLetterReplayResult.Replayed, replayed);
+        replayed.ShouldBe(DeadLetterReplayResult.Replayed);
         var resetDeliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(resetDeliveries);
-        Assert.Equal("pending", resetDeliveries[0].Status);
-        Assert.Equal(RetryPolicy.DefaultMaxAttempts, resetDeliveries[0].LifetimeAttemptCount);
-        Assert.Equal(0, resetDeliveries[0].RetryCycleAttemptCount);
-        Assert.Null(resetDeliveries[0].DeliverAfter);
+        resetDeliveries.ShouldHaveSingleItem();
+        resetDeliveries[0].Status.ShouldBe("pending");
+        resetDeliveries[0].LifetimeAttemptCount.ShouldBe(RetryPolicy.DefaultMaxAttempts);
+        resetDeliveries[0].RetryCycleAttemptCount.ShouldBe(0);
+        resetDeliveries[0].DeliverAfter.ShouldBeNull();
     }
 
     [Fact]
@@ -48,10 +48,10 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
         await fixture.RunWorkerBatchAsync(); // succeeds — no failures to replay
 
-        var delivery = Assert.Single(await fixture.GetEventDeliveriesAsync(eventId));
+        var delivery = (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem();
         var replayed = await fixture.ReplayAsync(eventId, delivery.Id);
 
-        Assert.Equal(DeadLetterReplayResult.NotDeadLettered, replayed);
+        replayed.ShouldBe(DeadLetterReplayResult.NotDeadLettered);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
     {
         var nonExistentEventId = Guid.NewGuid();
         var replayed = await fixture.ReplayAsync(nonExistentEventId, Guid.NewGuid());
-        Assert.Equal(DeadLetterReplayResult.NotFound, replayed);
+        replayed.ShouldBe(DeadLetterReplayResult.NotFound);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         // The orphan Tenant's Event produces no deliveries. Replaying it as the main Tenant
         // must still return false because replay is Tenant-isolated.
         var replayed = await fixture.ReplayAsync(eventId, Guid.NewGuid());
-        Assert.Equal(DeadLetterReplayResult.NotFound, replayed);
+        replayed.ShouldBe(DeadLetterReplayResult.NotFound);
     }
 
     [Fact]
@@ -85,18 +85,18 @@ public sealed class ReplayTests : IClassFixture<WorkerRoutingFixture>, IAsyncLif
         }
         await fixture.RunWorkerBatchAsync();
 
-        var delivery = Assert.Single(await fixture.GetEventDeliveriesAsync(eventId));
-        Assert.Equal(DeadLetterReplayResult.Replayed, await fixture.ReplayAsync(eventId, delivery.Id));
+        var delivery = (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem();
+        (await fixture.ReplayAsync(eventId, delivery.Id)).ShouldBe(DeadLetterReplayResult.Replayed);
 
         fixture.DeliveryClient.Reset();
         fixture.DeliveryClient.ShouldSucceed = true;
 
         var dispatched = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(1, dispatched);
-        Assert.Single(fixture.DeliveryClient.Calls);
+        dispatched.ShouldBe(1);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deliveries);
-        Assert.Equal("succeeded", deliveries[0].Status);
+        deliveries.ShouldHaveSingleItem();
+        deliveries[0].Status.ShouldBe("succeeded");
     }
 }

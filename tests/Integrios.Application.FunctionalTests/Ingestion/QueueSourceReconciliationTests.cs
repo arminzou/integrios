@@ -48,12 +48,12 @@ public sealed class QueueSourceReconciliationTests(QueueSourceReconciliationFixt
         });
 
         Guid? eventId = await fixture.WaitForEventAsync(sourceEventId, Settle);
-        Assert.NotNull(eventId);
+        eventId.ShouldNotBeNull();
 
         Guid attributedSource = await fixture.QuerySingleAsync<Guid>(
             "SELECT source_id FROM events WHERE id=@Id",
             new { Id = eventId!.Value });
-        Assert.Equal(sourceId, attributedSource);
+        attributedSource.ShouldBe(sourceId);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class QueueSourceReconciliationTests(QueueSourceReconciliationFixt
         await fixture.CreateSourceAsync(sourceId);
         string consumed = $"evt-{Guid.NewGuid():N}";
         await fixture.PublishAsync(new { event_type = "order.created", source_event_id = consumed, payload = new { } });
-        Assert.NotNull(await fixture.WaitForEventAsync(consumed, Settle));
+        (await fixture.WaitForEventAsync(consumed, Settle)).ShouldNotBeNull();
 
         await fixture.RevokeSourceAsync(sourceId);
         await Task.Delay(fixture.ReconcileInterval * 3);
@@ -70,8 +70,8 @@ public sealed class QueueSourceReconciliationTests(QueueSourceReconciliationFixt
         string ignored = $"evt-{Guid.NewGuid():N}";
         await fixture.PublishAsync(new { event_type = "order.created", source_event_id = ignored, payload = new { } });
 
-        Assert.Null(await fixture.WaitForEventAsync(ignored, TimeSpan.FromSeconds(10)));
-        Assert.NotNull(await fixture.PeekAsync());
+        (await fixture.WaitForEventAsync(ignored, TimeSpan.FromSeconds(10))).ShouldBeNull();
+        (await fixture.PeekAsync()).ShouldNotBeNull();
     }
 
     // The revision key, not just add/remove: the Source is active throughout and only its
@@ -85,17 +85,17 @@ public sealed class QueueSourceReconciliationTests(QueueSourceReconciliationFixt
         await fixture.CreateSourceAsync(sourceId);
         string before = $"evt-{Guid.NewGuid():N}";
         await fixture.PublishAsync(new { event_type = "order.created", source_event_id = before, payload = new { } });
-        Assert.NotNull(await fixture.WaitForEventAsync(before, Settle));
+        (await fixture.WaitForEventAsync(before, Settle)).ShouldNotBeNull();
 
         await fixture.SetQueueNameAsync(sourceId, "queue.404");
         await Task.Delay(fixture.ReconcileInterval * 3);
 
         string whileRebound = $"evt-{Guid.NewGuid():N}";
         await fixture.PublishAsync(new { event_type = "order.created", source_event_id = whileRebound, payload = new { } });
-        Assert.Null(await fixture.WaitForEventAsync(whileRebound, TimeSpan.FromSeconds(10)));
+        (await fixture.WaitForEventAsync(whileRebound, TimeSpan.FromSeconds(10))).ShouldBeNull();
 
         await fixture.SetQueueNameAsync(sourceId, AzureServiceBusQueueSourceIntegrationTests.QueueName);
-        Assert.NotNull(await fixture.WaitForEventAsync(whileRebound, Settle));
+        (await fixture.WaitForEventAsync(whileRebound, Settle)).ShouldNotBeNull();
     }
 }
 

@@ -35,19 +35,19 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         var request = new { connection_id = connectionId, topic_id = topicId, type = "webhook", configuration };
 
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", request));
-        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        create.StatusCode.ShouldBe(HttpStatusCode.Created);
         SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
-        Assert.True(source.Configuration.TryGetProperty("callback_id", out _));
+        source.Configuration.TryGetProperty("callback_id", out _).ShouldBeTrue();
 
         SourceListDto listed = (await (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/sources", null))).Content.ReadFromJsonAsync<SourceListDto>(HostJson.Options))!;
-        Assert.Equal(source.Id, Assert.Single(listed.Items).Id);
+        listed.Items.ShouldHaveSingleItem().Id.ShouldBe(source.Id);
 
         HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new { configuration }));
         SourceDto updated = (await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
-        Assert.Equal(source.Configuration.GetProperty("callback_id").GetString(), updated.Configuration.GetProperty("callback_id").GetString());
+        updated.Configuration.GetProperty("callback_id").GetString().ShouldBe(source.Configuration.GetProperty("callback_id").GetString());
 
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(AdminRequest(HttpMethod.Delete, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", null))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new { configuration }))).StatusCode);
+        (await client.SendAsync(AdminRequest(HttpMethod.Delete, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", null))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.SendAsync(AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new { configuration }))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -71,8 +71,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             configuration = new { source_contract = "event_json", transport = "azure_service_bus", @namespace = "example.servicebus.windows.net", queue_name = "events", authentication = new { scheme = "azure_identity" } }
         }));
 
-        Assert.Equal(HttpStatusCode.Created, eventApi.StatusCode);
-        Assert.Equal(HttpStatusCode.Created, queue.StatusCode);
+        eventApi.StatusCode.ShouldBe(HttpStatusCode.Created);
+        queue.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     // Queue authentication the receiver cannot build a client for must fail the authoring call.
@@ -103,7 +103,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             }
         }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     // azure_identity draws its credential from the ambient chain, so a secret reference alongside it
@@ -129,7 +129,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             }
         }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     private async Task<Guid> CreateTopicAsync()

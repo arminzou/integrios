@@ -138,7 +138,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         Guid eventId = await InsertEventAndOutboxAsync(eventType);
         int processed = await RunFanoutBatchAsync();
         if (processed != 1) throw new InvalidOperationException($"Expected one Event to fan out, but processed {processed}.");
-        return Assert.Single(await GetEventDeliveriesAsync(eventId)).Id;
+        return (await GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Id;
     }
 
     public async Task ForceLeaseExpiredAsync(Guid deliveryId)
@@ -513,8 +513,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal async Task RunExpiredLeaseRaceAsync(bool finalizationWins)
     {
         Guid deliveryId = await FanoutSingleDeliveryAsync();
-        EventDeliveryWorkItem first = Assert.IsType<EventDeliveryWorkItem>(
-            await DeliveryQueue.ClaimNextAsync(CancellationToken.None));
+        EventDeliveryWorkItem first = (await DeliveryQueue.ClaimNextAsync(CancellationToken.None))
+            .ShouldBeOfType<EventDeliveryWorkItem>();
         await ForceLeaseExpiredAsync(deliveryId);
 
         (DeliveryFinalizationResult finalization, EventDeliveryWorkItem? reclaim) =
@@ -524,20 +524,19 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
         if (finalizationWins)
         {
-            Assert.Equal(DeliveryFinalizationStatus.Applied, finalization.Status);
-            Assert.Equal(EventDeliveryDisposition.Succeeded, finalization.Disposition);
-            Assert.Null(reclaim);
-            Assert.Equal("succeeded", (await GetEventDeliveryAsync(deliveryId)).Status);
-            Assert.Equal("succeeded", Assert.Single(await GetDeliveryAttemptsAsync(deliveryId)).Status);
+            finalization.Status.ShouldBe(DeliveryFinalizationStatus.Applied);
+            finalization.Disposition.ShouldBe(EventDeliveryDisposition.Succeeded);
+            reclaim.ShouldBeNull();
+            (await GetEventDeliveryAsync(deliveryId)).Status.ShouldBe("succeeded");
+            (await GetDeliveryAttemptsAsync(deliveryId)).ShouldHaveSingleItem().Status.ShouldBe("succeeded");
             return;
         }
 
-        Assert.Equal(DeliveryFinalizationStatus.OwnershipLost, finalization.Status);
-        Assert.NotNull(reclaim);
-        Assert.Equal(2, reclaim.AttemptNumber);
-        Assert.Equal(
-            ["indeterminate", "in_progress"],
-            (await GetDeliveryAttemptsAsync(deliveryId)).Select(attempt => attempt.Status));
+        finalization.Status.ShouldBe(DeliveryFinalizationStatus.OwnershipLost);
+        reclaim.ShouldNotBeNull();
+        reclaim.AttemptNumber.ShouldBe(2);
+        (await GetDeliveryAttemptsAsync(deliveryId)).Select(attempt => attempt.Status).ShouldBe(
+            ["indeterminate", "in_progress"]);
     }
 
     private async Task<(DeliveryFinalizationResult, EventDeliveryWorkItem?)>
@@ -582,7 +581,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             if (finalizationWins)
             {
                 reclaimTask = DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-                Assert.Null(await reclaimTask);
+                (await reclaimTask).ShouldBeNull();
             }
             else
             {
@@ -663,13 +662,13 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             if (finalizationWins)
             {
                 reclaimTask = DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-                Assert.Null(await reclaimTask);
+                (await reclaimTask).ShouldBeNull();
             }
             else
             {
                 finalizationTask = DeliveryQueue.FinalizeAsync(Success(first), CancellationToken.None);
                 await Task.Delay(100);
-                Assert.False(finalizationTask.IsCompleted);
+                finalizationTask.IsCompleted.ShouldBeFalse();
             }
 
             await barrier.ExecuteAsync(

@@ -42,7 +42,7 @@ public sealed class DatabaseTelemetryTests(DatabaseTelemetryFixture fixture)
             await using DbCommand command = connection.CreateCommand();
             command.CommandText = "SELECT 1";
             await command.ExecuteScalarAsync();
-            Assert.Contains(recorder.Completed, activity => activity.Kind == ActivityKind.Client);
+            recorder.Completed.ShouldContain(activity => activity.Kind == ActivityKind.Client);
         }
 
         IDbContextFactory<IntegriosDbContext> contextFactory =
@@ -51,7 +51,7 @@ public sealed class DatabaseTelemetryTests(DatabaseTelemetryFixture fixture)
         await context.Database.OpenConnectionAsync();
         recorder.Clear();
         await context.Database.ExecuteSqlRawAsync("SELECT 1");
-        Assert.Contains(recorder.Completed, activity => activity.Kind == ActivityKind.Client);
+        recorder.Completed.ShouldContain(activity => activity.Kind == ActivityKind.Client);
     }
 
     private sealed class RecordingActivityProcessor : BaseProcessor<Activity>

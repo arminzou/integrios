@@ -30,9 +30,9 @@ public sealed class TopicsAdminTests(AdminApiFixture fixture) : AdminApiTestBase
             $"/admin/tenants/{fixture.TenantId}/topics",
             new { name = "payments", description = "Payment events" }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
         AdminTopicResponse? topic = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
-        Assert.NotNull(topic);
-        Assert.Equal("payments", topic.Name);
+        topic.ShouldNotBeNull();
+        topic.Name.ShouldBe("payments");
     }
 }

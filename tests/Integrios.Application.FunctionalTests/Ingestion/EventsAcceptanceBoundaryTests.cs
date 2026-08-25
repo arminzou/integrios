@@ -49,92 +49,92 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task PostEvents_PersistsEventAndOutbox()
     {
         var response = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt_src_123"));
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.NotNull(response.Headers.Location);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        response.Headers.Location.ShouldNotBeNull();
 
         var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.False(body.AlreadyAccepted);
-        Assert.Equal(EventStatus.Accepted, body.Status);
+        body.ShouldNotBeNull();
+        body.AlreadyAccepted.ShouldBeFalse();
+        body.Status.ShouldBe(EventStatus.Accepted);
 
-        Assert.Equal(1, await fixture.GetEventCountAsync());
-        Assert.Equal(1, await fixture.GetOutboxCountAsync());
+        (await fixture.GetEventCountAsync()).ShouldBe(1);
+        (await fixture.GetOutboxCountAsync()).ShouldBe(1);
 
-        Assert.Equal(defaultSourceId, await fixture.GetEventSourceIdAsync(body.EventId));
+        (await fixture.GetEventSourceIdAsync(body.EventId)).ShouldBe(defaultSourceId);
     }
 
     [Fact]
     public async Task PostEvents_TopicIsDerivedFromSource_NotCallerInput()
     {
         var response = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-topic-derived"));
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(body);
+        body.ShouldNotBeNull();
 
-        Assert.Equal(defaultTopicId, await fixture.GetEventTopicIdAsync(body.EventId));
+        (await fixture.GetEventTopicIdAsync(body.EventId)).ShouldBe(defaultTopicId);
     }
 
     [Fact]
     public async Task GetEventsById_ReturnsEvent_WhenEventExists()
     {
         var postResponse = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-read-1"));
-        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
+        postResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(postBody);
+        postBody.ShouldNotBeNull();
 
         var getResponse = await GetEventAsync(postBody.EventId);
-        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
-        Assert.NotNull(getBody);
-        Assert.Equal(postBody.EventId, getBody.EventId);
-        Assert.Equal(EventStatus.Accepted, getBody.Status);
-        Assert.NotEqual(default, getBody.AcceptedAt);
+        getBody.ShouldNotBeNull();
+        getBody.EventId.ShouldBe(postBody.EventId);
+        getBody.Status.ShouldBe(EventStatus.Accepted);
+        getBody.AcceptedAt.ShouldNotBe(default);
     }
 
     [Fact]
     public async Task GetEventsById_ReturnsRoutedStatus_WhenEventRouted()
     {
         var postResponse = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-fannedout-1"));
-        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
+        postResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(postBody);
+        postBody.ShouldNotBeNull();
 
         await fixture.ForceEventStatusAsync(postBody.EventId, "routed");
 
         var getResponse = await GetEventAsync(postBody.EventId);
-        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var getBody = await getResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
-        Assert.NotNull(getBody);
-        Assert.Equal(EventStatus.Routed, getBody.Status);
+        getBody.ShouldNotBeNull();
+        getBody.Status.ShouldBe(EventStatus.Routed);
 
         // Wire format: status is the canonical snake_case string, not the enum's integer.
         var raw = await (await GetEventAsync(postBody.EventId)).Content.ReadAsStringAsync();
-        Assert.Contains("\"status\":\"routed\"", raw);
+        raw.ShouldContain("\"status\":\"routed\"", Case.Sensitive);
     }
 
     [Fact]
     public async Task GetEventsById_Returns404_WhenEventDoesNotExist()
     {
         var getResponse = await GetEventAsync(Guid.NewGuid());
-        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task GetEventsById_OtherTenant_Returns404()
     {
         var postResponse = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-tenant-isolation"));
-        Assert.Equal(HttpStatusCode.Accepted, postResponse.StatusCode);
+        postResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var postBody = await postResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(postBody);
+        postBody.ShouldNotBeNull();
 
         var getResponseForTenantB = await GetEventAsync(postBody.EventId, tenantBAuthHeaderValue);
-        Assert.Equal(HttpStatusCode.NotFound, getResponseForTenantB.StatusCode);
+        getResponseForTenantB.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -143,33 +143,33 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var body = BuildBody(sourceEventId: "evt-dup");
 
         var firstResponse = await PostEventAsync(defaultSourceId, body);
-        Assert.Equal(HttpStatusCode.Accepted, firstResponse.StatusCode);
+        firstResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         var firstBody = await firstResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(firstBody);
-        Assert.False(firstBody.AlreadyAccepted);
+        firstBody.ShouldNotBeNull();
+        firstBody.AlreadyAccepted.ShouldBeFalse();
 
         var secondResponse = await PostEventAsync(defaultSourceId, body);
-        Assert.Equal(HttpStatusCode.Accepted, secondResponse.StatusCode);
+        secondResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         var secondBody = await secondResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(secondBody);
-        Assert.True(secondBody.AlreadyAccepted);
-        Assert.Equal(firstBody.EventId, secondBody.EventId);
+        secondBody.ShouldNotBeNull();
+        secondBody.AlreadyAccepted.ShouldBeTrue();
+        secondBody.EventId.ShouldBe(firstBody.EventId);
 
-        Assert.Equal(1, await fixture.GetEventCountAsync());
-        Assert.Equal(1, await fixture.GetOutboxCountAsync());
+        (await fixture.GetEventCountAsync()).ShouldBe(1);
+        (await fixture.GetOutboxCountAsync()).ShouldBe(1);
     }
 
     [Fact]
     public async Task PostEvents_AttributesEventToAuthenticatedTenant()
     {
         var response = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-tenant-write"));
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var body = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
-        Assert.NotNull(body);
+        body.ShouldNotBeNull();
 
         var writtenTenantId = await fixture.GetEventTenantIdAsync(body.EventId);
-        Assert.Equal(fixture.TenantAId, writtenTenantId);
+        writtenTenantId.ShouldBe(fixture.TenantAId);
     }
 
     [Fact]
@@ -182,14 +182,14 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
 
         var response = await client.SendAsync(message);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]
     public async Task PostEvents_UnknownSourceId_Returns404()
     {
         var response = await PostEventAsync(Guid.NewGuid(), BuildBody(sourceEventId: "evt-unknown-source"));
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
 
         var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-inactive-connection"));
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
 
         var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-destination-only"));
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantBId, connectionId, topicId);
 
         var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-other-tenant"));
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
 
         var response = await client.SendAsync(message);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         message.Headers.TryAddWithoutValidation("Authorization", tenantAAuthHeaderValue);
 
         var response = await client.SendAsync(message);
-        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnsupportedMediaType);
     }
 
     [Fact]
@@ -266,7 +266,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
             payload = new { amount = 500 },
         });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
             payload = new { amount = 500 },
         });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -295,7 +295,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-mapping-failure"));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -305,7 +305,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         var response = await PostEventAsync(sourceId, new { payload = new { amount = 500 } });
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     private async Task<Guid> SeedContractSourceAsync(

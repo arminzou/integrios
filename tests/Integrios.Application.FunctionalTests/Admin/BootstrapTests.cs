@@ -47,23 +47,22 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     public async Task BootstrapBuiltins_IsIdempotent_AndReconcilesPresentationAndStatusDrift()
     {
         IReadOnlyList<Connector> first = await mediator.Send(new BootstrapBuiltinsCommand());
-        Assert.Equal(3, first.Count);
-        Connector http = Assert.Single(first, i => i.Key == "http");
-        Assert.Equal(BuiltinCatalog.HttpId, http.Id);
-        Assert.Equal(ConnectorDirection.Both, http.Direction);
-        Assert.Equal(
-            ["api_key_header", "bearer_token"],
-            http.Manifest.DestinationAuthentication.Schemes.Select(s => s.Scheme).Order(StringComparer.Ordinal));
-        Assert.Equal("event_json", Assert.Single(http.Manifest.SourceContracts).Key);
+        first.Count.ShouldBe(3);
+        Connector http = first.Where(i => i.Key == "http").ShouldHaveSingleItem();
+        http.Id.ShouldBe(BuiltinCatalog.HttpId);
+        http.Direction.ShouldBe(ConnectorDirection.Both);
+        http.Manifest.DestinationAuthentication.Schemes.Select(s => s.Scheme).Order(StringComparer.Ordinal)
+            .ShouldBe(["api_key_header", "bearer_token"]);
+        http.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("event_json");
         JsonElement destinationSchema = http.Manifest.DestinationConfigurationSchema!.Value;
-        Assert.Equal("uri", destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString());
-        Assert.Equal("base_uri", destinationSchema.GetProperty("required")[0].GetString());
-        Connector github = Assert.Single(first, i => i.Key == "github");
-        Assert.Equal(BuiltinCatalog.GitHubId, github.Id);
-        Assert.Equal("github_webhook", Assert.Single(github.Manifest.SourceContracts).Key);
-        Connector dataverse = Assert.Single(first, i => i.Key == "dataverse");
-        Assert.Equal(BuiltinCatalog.DataverseId, dataverse.Id);
-        Assert.Equal("remote_execution_context_json", Assert.Single(dataverse.Manifest.SourceContracts).Key);
+        destinationSchema.GetProperty("properties").GetProperty("base_uri").GetProperty("format").GetString().ShouldBe("uri");
+        destinationSchema.GetProperty("required")[0].GetString().ShouldBe("base_uri");
+        Connector github = first.Where(i => i.Key == "github").ShouldHaveSingleItem();
+        github.Id.ShouldBe(BuiltinCatalog.GitHubId);
+        github.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("github_webhook");
+        Connector dataverse = first.Where(i => i.Key == "dataverse").ShouldHaveSingleItem();
+        dataverse.Id.ShouldBe(BuiltinCatalog.DataverseId);
+        dataverse.Manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("remote_execution_context_json");
 
         await ExecuteAsync($$$"""
             UPDATE connectors
@@ -75,12 +74,12 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
             """);
 
         IReadOnlyList<Connector> second = await mediator.Send(new BootstrapBuiltinsCommand());
-        Assert.Equal(3, second.Count);
-        Connector reconciled = Assert.Single(second, item => item.Key == "http");
-        Assert.Equal("HTTP", reconciled.Name);
-        Assert.Equal(OperationalStatus.Active, reconciled.Status);
+        second.Count.ShouldBe(3);
+        Connector reconciled = second.Where(item => item.Key == "http").ShouldHaveSingleItem();
+        reconciled.Name.ShouldBe("HTTP");
+        reconciled.Status.ShouldBe(OperationalStatus.Active);
 
-        Assert.Equal(1, await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'"));
+        (await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'")).ShouldBe(1);
     }
 
     [Fact]
@@ -100,9 +99,9 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
                 'Generic HTTP source or destination.', {{{fixture.Json("@Manifest")}}})
             """, new { Id = unexpectedId, Manifest = manifest });
 
-        var exception = await Assert.ThrowsAsync<ConnectorVersionConflictException>(
+        var exception = await Should.ThrowAsync<ConnectorVersionConflictException>(
             () => mediator.Send(new BootstrapBuiltinsCommand()));
-        Assert.Contains("unexpected id", exception.Message, StringComparison.OrdinalIgnoreCase);
+        exception.Message.ShouldContain("unexpected id", Case.Insensitive);
     }
 
     [Fact]
@@ -111,13 +110,13 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         await DeleteGlobalOperatorKeysAsync();
 
         BootstrapOperatorKeyResult first = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", "test-secret"));
-        Assert.True(first.Created);
-        Assert.Null(first.GeneratedSecret);
+        first.Created.ShouldBeTrue();
+        first.GeneratedSecret.ShouldBeNull();
 
         BootstrapOperatorKeyResult second = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", "test-secret"));
-        Assert.False(second.Created);
+        second.Created.ShouldBeFalse();
 
-        Assert.Equal(1, await CountAsync("operator_keys", "revoked_at IS NULL"));
+        (await CountAsync("operator_keys", "revoked_at IS NULL")).ShouldBe(1);
     }
 
     [Fact]
@@ -126,8 +125,8 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         await DeleteGlobalOperatorKeysAsync();
 
         BootstrapOperatorKeyResult result = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", null));
-        Assert.True(result.Created);
-        Assert.False(string.IsNullOrWhiteSpace(result.GeneratedSecret));
+        result.Created.ShouldBeTrue();
+        string.IsNullOrWhiteSpace(result.GeneratedSecret).ShouldBeFalse();
     }
 
     [Fact]
@@ -138,8 +137,8 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         await DeleteGlobalOperatorKeysAsync();
 
         BootstrapOperatorKeyResult result = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", ""));
-        Assert.True(result.Created);
-        Assert.False(string.IsNullOrWhiteSpace(result.GeneratedSecret));
+        result.Created.ShouldBeTrue();
+        string.IsNullOrWhiteSpace(result.GeneratedSecret).ShouldBeFalse();
     }
 
     [Fact]
@@ -147,18 +146,18 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     {
         await DeleteGlobalOperatorKeysAsync();
         BootstrapOperatorKeyResult first = await mediator.Send(new BootstrapOperatorKeyCommand("global_operator_key", "first-secret"));
-        Assert.True(first.Created);
+        first.Created.ShouldBeTrue();
 
         RotateOperatorKeyResult rotate1 = await mediator.Send(new RotateOperatorKeyCommand("rotated-secret-1"));
-        Assert.NotEqual("global_operator_key", rotate1.PublicKey);
+        rotate1.PublicKey.ShouldNotBe("global_operator_key");
 
         RotateOperatorKeyResult rotate2 = await mediator.Send(new RotateOperatorKeyCommand("rotated-secret-2"));
-        Assert.NotEqual(rotate1.PublicKey, rotate2.PublicKey);
+        rotate2.PublicKey.ShouldNotBe(rotate1.PublicKey);
 
-        Assert.Equal(1, await CountAsync("operator_keys", "revoked_at IS NULL"));
-        Assert.Equal(3, await CountAsync("operator_keys")); // original + 2 rotations retained
-        Assert.Equal(Hash("rotated-secret-2"), await ScalarAsync<string>(
-            "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL"));
+        (await CountAsync("operator_keys", "revoked_at IS NULL")).ShouldBe(1);
+        (await CountAsync("operator_keys")).ShouldBe(3); // original + 2 rotations retained
+        (await ScalarAsync<string>(
+            "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL")).ShouldBe(Hash("rotated-secret-2"));
     }
 
     [Theory]
@@ -166,10 +165,10 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     [InlineData("   ")]
     public async Task RotateOperatorKey_RejectsMissingReplacementSecret(string secret)
     {
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Should.ThrowAsync<ArgumentException>(() =>
             mediator.Send(new RotateOperatorKeyCommand(secret)));
 
-        Assert.Equal(1, await CountAsync("operator_keys", "revoked_at IS NULL"));
+        (await CountAsync("operator_keys", "revoked_at IS NULL")).ShouldBe(1);
     }
 
     [Fact]
@@ -177,11 +176,11 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     {
         await DeleteGlobalOperatorKeysAsync();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Should.ThrowAsync<InvalidOperationException>(() =>
             mediator.Send(new RotateOperatorKeyCommand("replacement-secret")));
 
-        Assert.Contains("Run bootstrap before rotation", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, await CountAsync("operator_keys"));
+        exception.Message.ShouldContain("Run bootstrap before rotation", Case.Sensitive);
+        (await CountAsync("operator_keys")).ShouldBe(0);
     }
 
     [Fact]
@@ -192,15 +191,14 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
         await mediator.Send(new BootstrapBuiltinsCommand());
         BootstrapOperatorKeyResult keyResult = await mediator.Send(
             new BootstrapOperatorKeyCommand("global_operator_key", "operator_bootstrap_secret"));
-        Assert.True(keyResult.Created);
+        keyResult.Created.ShouldBeTrue();
 
-        Assert.Equal(1, await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'"));
+        (await CountAsync("connectors", $"{fixture.KeyColumn} = 'http'")).ShouldBe(1);
 
         string? secretHash = await ScalarAsync<string>(
             "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL");
-        Assert.Equal(
-            "sha256:e98f79daedd50eea3a83ba72c3cd33802bcb5432a6e6273d1fe0bf573dfe8420",
-            secretHash);
+        secretHash.ShouldBe(
+            "sha256:e98f79daedd50eea3a83ba72c3cd33802bcb5432a6e6273d1fe0bf573dfe8420");
     }
 
     private async Task DeleteGlobalOperatorKeysAsync() =>

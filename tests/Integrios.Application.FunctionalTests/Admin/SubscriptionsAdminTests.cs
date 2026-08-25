@@ -51,21 +51,21 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 description = "Primary ERP delivery"
             }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var responseJson = await response.Content.ReadAsStringAsync();
         using var responseDocument = JsonDocument.Parse(responseJson);
-        Assert.False(responseDocument.RootElement.TryGetProperty("dlq_enabled", out _));
+        responseDocument.RootElement.TryGetProperty("dlq_enabled", out _).ShouldBeFalse();
 
         var body = JsonSerializer.Deserialize<SubscriptionDto>(responseJson, HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal(topic.Id, body.TopicId);
-        Assert.Equal(fixture.TenantId, body.TenantId);
-        Assert.Equal("erp-sink", body.Name);
-        Assert.Equal(fixture.SourceConnectionId, body.DestinationConnectionId);
-        Assert.Equal(10, body.OrderIndex);
-        Assert.Equal("active", body.Status);
-        Assert.Equal("payment.created", body.MatchRules.GetProperty("event_type").GetString());
+        body.ShouldNotBeNull();
+        body.TopicId.ShouldBe(topic.Id);
+        body.TenantId.ShouldBe(fixture.TenantId);
+        body.Name.ShouldBe("erp-sink");
+        body.DestinationConnectionId.ShouldBe(fixture.SourceConnectionId);
+        body.OrderIndex.ShouldBe(10);
+        body.Status.ShouldBe("active");
+        body.MatchRules.GetProperty("event_type").GetString().ShouldBe("payment.created");
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 order_index = 0
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -98,12 +98,12 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}"));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal(created.Id, body.Id);
-        Assert.Equal("erp-sink", body.Name);
+        body.ShouldNotBeNull();
+        body.Id.ShouldBe(created.Id);
+        body.Name.ShouldBe("erp-sink");
     }
 
     [Fact]
@@ -117,22 +117,22 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
         var page1 = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2"));
-        Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
+        page1.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body1 = await page1.Content.ReadFromJsonAsync<SubscriptionListDto>(HostJson.Options);
-        Assert.NotNull(body1);
-        Assert.Equal(2, body1.Items.Count);
-        Assert.NotNull(body1.NextCursor);
+        body1.ShouldNotBeNull();
+        body1.Items.Count.ShouldBe(2);
+        body1.NextCursor.ShouldNotBeNull();
 
         var page2 = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2&after={Uri.EscapeDataString(body1.NextCursor!)}"));
-        Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
+        page2.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body2 = await page2.Content.ReadFromJsonAsync<SubscriptionListDto>(HostJson.Options);
-        Assert.NotNull(body2);
-        Assert.Single(body2.Items);
-        Assert.Null(body2.NextCursor);
+        body2.ShouldNotBeNull();
+        body2.Items.ShouldHaveSingleItem();
+        body2.NextCursor.ShouldBeNull();
     }
 
     [Fact]
@@ -146,11 +146,11 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions?limit=2"));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<SubscriptionListDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal(2, body.Items.Count);
-        Assert.Null(body.NextCursor);
+        body.ShouldNotBeNull();
+        body.Items.Count.ShouldBe(2);
+        body.NextCursor.ShouldBeNull();
     }
 
     [Theory]
@@ -177,7 +177,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Theory]
@@ -205,7 +205,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -226,13 +226,13 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 description = "Updated ERP delivery"
             }));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal("erp-sink-v2", body.Name);
-        Assert.Equal(25, body.OrderIndex);
-        Assert.Equal("payment.updated", body.MatchRules.GetProperty("event_type").GetString());
+        body.ShouldNotBeNull();
+        body.Name.ShouldBe("erp-sink-v2");
+        body.OrderIndex.ShouldBe(25);
+        body.MatchRules.GetProperty("event_type").GetString().ShouldBe("payment.updated");
     }
 
     [Fact]
@@ -244,16 +244,16 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
         var deactivate = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
-        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+        deactivate.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var get = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}"));
-        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        get.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await get.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal("disabled", body.Status);
+        body.ShouldNotBeNull();
+        body.Status.ShouldBe("disabled");
     }
 
     private async Task<AdminTopicResponse> CreateTopicAsync(string name)
@@ -322,14 +322,14 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.NotNull(body.MappingConfig);
-        Assert.Equal("jsonata", body.MappingConfig.Value.GetProperty("engine").GetString());
-        Assert.Equal("1", body.MappingConfig.Value.GetProperty("version").GetString());
-        Assert.Equal("$.amount", body.MappingConfig.Value.GetProperty("expression").GetString());
+        body.ShouldNotBeNull();
+        body.MappingConfig.ShouldNotBeNull();
+        body.MappingConfig.Value.GetProperty("engine").GetString().ShouldBe("jsonata");
+        body.MappingConfig.Value.GetProperty("version").GetString().ShouldBe("1");
+        body.MappingConfig.Value.GetProperty("expression").GetString().ShouldBe("$.amount");
     }
 
     [Fact]
@@ -349,11 +349,11 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = (object?)null
             }));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Null(body.MappingConfig);
+        body.ShouldNotBeNull();
+        body.MappingConfig.ShouldBeNull();
     }
 
     [Fact]
@@ -377,12 +377,12 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.NotNull(body.MappingConfig);
-        Assert.Equal("$.amount * 2", body.MappingConfig.Value.GetProperty("expression").GetString());
+        body.ShouldNotBeNull();
+        body.MappingConfig.ShouldNotBeNull();
+        body.MappingConfig.Value.GetProperty("expression").GetString().ShouldBe("$.amount * 2");
     }
 
     [Fact]
@@ -405,11 +405,11 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = (object?)null
             }));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Null(body.MappingConfig);
+        body.ShouldNotBeNull();
+        body.MappingConfig.ShouldBeNull();
     }
 
     [Theory]
@@ -431,7 +431,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Theory]
@@ -453,7 +453,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Theory]
@@ -475,7 +475,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -496,7 +496,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 mapping = transformElement
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -520,8 +520,8 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 }
             }));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Contains("64 KiB", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("64 KiB", Case.Sensitive);
     }
 
     [Fact]
@@ -536,9 +536,9 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 sample_input = new { amount = 42 }
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
-        Assert.Contains("expression", body.GetProperty("error").GetString());
+        body.GetProperty("error").GetString()!.ShouldContain("expression", Case.Sensitive);
     }
 
     [Fact]
@@ -558,9 +558,9 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 sample_input = new { amount = 42 }
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
-        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("error").GetString()));
+        string.IsNullOrWhiteSpace(body.GetProperty("error").GetString()).ShouldBeFalse();
     }
 
     [Fact]
@@ -584,7 +584,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 order_index = 10
             }));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -601,7 +601,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -620,7 +620,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 order_index = 1
             }));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -640,7 +640,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 order_index = 2
             }));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -659,7 +659,7 @@ public sealed class SubscriptionsAdminTests : AdminApiTestBase, IClassFixture<Ad
                 order_index = 2
             }));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     private sealed record SubscriptionDto(

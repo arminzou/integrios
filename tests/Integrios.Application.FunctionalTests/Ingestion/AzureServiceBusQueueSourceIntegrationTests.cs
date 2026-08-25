@@ -39,9 +39,9 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
         EventRow row = await QuerySingleAsync<EventRow>(
             "SELECT tenant_id AS TenantId, event_type AS EventType, status AS Status FROM events WHERE id=@Id",
             new { Id = eventId });
-        Assert.Equal(fixture.TenantId, row.TenantId);
-        Assert.Equal("order.created", row.EventType);
-        Assert.Equal("accepted", row.Status);
+        row.TenantId.ShouldBe(fixture.TenantId);
+        row.EventType.ShouldBe("order.created");
+        row.Status.ShouldBe("accepted");
 
         // Complete removes it from the active queue; nothing should be left to redeliver.
         await AssertQueueIsEmptyAsync();
@@ -58,13 +58,13 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
         await using ServiceBusReceiver receiver = client.CreateReceiver(
             QueueName, new ServiceBusReceiverOptions { SubQueue = SubQueue.DeadLetter });
         ServiceBusReceivedMessage? deadLettered = await ReceiveDeadLetterAsync(receiver);
-        Assert.NotNull(deadLettered);
-        Assert.Equal("source_rejection", deadLettered!.DeadLetterReason);
+        deadLettered.ShouldNotBeNull();
+        deadLettered!.DeadLetterReason.ShouldBe("source_rejection");
 
         long eventCount = await QuerySingleAsync<long>(
             "SELECT COUNT(*) FROM events WHERE tenant_id=@TenantId AND source_event_id=@SourceEventId",
             new { fixture.TenantId, SourceEventId = sourceEventId });
-        Assert.Equal(0, eventCount);
+        eventCount.ShouldBe(0);
         await receiver.CompleteMessageAsync(deadLettered);
     }
 
@@ -83,7 +83,7 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
 
         await WaitForEventAsync(sourceEventId);
 
-        Assert.Equal(2, fixture.EventAcceptance.AttemptsFor(sourceEventId));
+        fixture.EventAcceptance.AttemptsFor(sourceEventId).ShouldBe(2);
         await AssertQueueIsEmptyAsync();
     }
 
@@ -109,12 +109,12 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
         long eventCount = await QuerySingleAsync<long>(
             "SELECT COUNT(*) FROM events WHERE tenant_id=@TenantId AND source_event_id=@SourceEventId",
             new { fixture.TenantId, SourceEventId = sourceEventId });
-        Assert.Equal(1, eventCount);
+        eventCount.ShouldBe(1);
 
         Guid onlyEventId = await QuerySingleAsync<Guid>(
             "SELECT id FROM events WHERE tenant_id=@TenantId AND source_event_id=@SourceEventId",
             new { fixture.TenantId, SourceEventId = sourceEventId });
-        Assert.Equal(firstEventId, onlyEventId);
+        onlyEventId.ShouldBe(firstEventId);
     }
 
     private async Task PublishAsync(object body)
@@ -151,7 +151,7 @@ public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQu
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
 
-        Assert.Null(leftover);
+        leftover.ShouldBeNull();
     }
 
     private async Task<Guid> WaitForEventAsync(string sourceEventId)

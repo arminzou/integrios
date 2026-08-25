@@ -21,16 +21,16 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         var dispatched = await fixture.RunWorkerBatchAsync();
 
-        Assert.Equal(1, dispatched);
-        Assert.Single(fixture.DeliveryClient.Calls);
-        Assert.Equal(WorkerRoutingFixture.LedgerSinkUrl, fixture.DeliveryClient.Calls[0].Url);
+        dispatched.ShouldBe(1);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
+        fixture.DeliveryClient.Calls[0].Url.ShouldBe(WorkerRoutingFixture.LedgerSinkUrl);
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deliveries);
-        Assert.Equal("succeeded", deliveries[0].Status);
+        deliveries.ShouldHaveSingleItem();
+        deliveries[0].Status.ShouldBe("succeeded");
 
         // Outbox row is always processed after Stage 1 fanout
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
     }
 
     [Fact]
@@ -40,12 +40,12 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         await fixture.RunWorkerBatchAsync();
 
-        Assert.Single(fixture.DeliveryClient.Calls);
-        Assert.Equal(WorkerRoutingFixture.RiskSinkUrl, fixture.DeliveryClient.Calls[0].Url);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
+        fixture.DeliveryClient.Calls[0].Url.ShouldBe(WorkerRoutingFixture.RiskSinkUrl);
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deliveries);
-        Assert.Equal("succeeded", deliveries[0].Status);
+        deliveries.ShouldHaveSingleItem();
+        deliveries[0].Status.ShouldBe("succeeded");
     }
 
     [Fact]
@@ -56,14 +56,14 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         var dispatched = await fixture.RunWorkerBatchAsync();
 
         // Stage 1 finds no matching Subscription and terminally classifies the Event as unrouted.
-        Assert.Equal(0, dispatched);
-        Assert.Empty(fixture.DeliveryClient.Calls);
+        dispatched.ShouldBe(0);
+        fixture.DeliveryClient.Calls.ShouldBeEmpty();
 
         // No event_deliveries should have been created
-        Assert.Empty(await fixture.GetEventDeliveriesAsync(eventId));
+        (await fixture.GetEventDeliveriesAsync(eventId)).ShouldBeEmpty();
 
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
-        Assert.Equal("unrouted", await fixture.GetEventStatusAsync(eventId));
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
+        (await fixture.GetEventStatusAsync(eventId)).ShouldBe("unrouted");
     }
 
     [Fact]
@@ -73,10 +73,10 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         var dispatched = await fixture.RunWorkerBatchAsync();
 
-        Assert.Equal(0, dispatched);
-        Assert.Empty(await fixture.GetEventDeliveriesAsync(eventId));
-        Assert.Equal("unrouted", await fixture.GetEventStatusAsync(eventId));
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
+        dispatched.ShouldBe(0);
+        (await fixture.GetEventDeliveriesAsync(eventId)).ShouldBeEmpty();
+        (await fixture.GetEventStatusAsync(eventId)).ShouldBe("unrouted");
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
     }
 
     [Fact]
@@ -87,18 +87,18 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         await fixture.RunWorkerBatchAsync();
 
-        Assert.Single(fixture.DeliveryClient.Calls);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
 
         // Outbox is processed after Stage 1 regardless of dispatch outcome
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(eventId));
+        (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
 
         // Retry state lives on event_deliveries, scoped per-subscription
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deliveries);
-        Assert.Equal("pending", deliveries[0].Status);
-        Assert.Equal(1, deliveries[0].AttemptCount);
-        Assert.NotNull(deliveries[0].DeliverAfter);
-        Assert.True(deliveries[0].DeliverAfter > DateTimeOffset.UtcNow);
+        deliveries.ShouldHaveSingleItem();
+        deliveries[0].Status.ShouldBe("pending");
+        deliveries[0].AttemptCount.ShouldBe(1);
+        deliveries[0].DeliverAfter.ShouldNotBeNull();
+        (deliveries[0].DeliverAfter > DateTimeOffset.UtcNow).ShouldBeTrue();
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         // First attempt — fails, schedules retry on event_delivery
         await fixture.RunWorkerBatchAsync();
-        Assert.Single(fixture.DeliveryClient.Calls);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
 
         // Force the event_delivery's deliver_after to the past
         await fixture.ForceDeliveryRetryNowAsync(eventId);
@@ -117,12 +117,12 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         // Second attempt — should succeed
         var dispatched = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(1, dispatched);
-        Assert.Equal(2, fixture.DeliveryClient.Calls.Count);
+        dispatched.ShouldBe(1);
+        fixture.DeliveryClient.Calls.Count.ShouldBe(2);
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deliveries);
-        Assert.Equal("succeeded", deliveries[0].Status);
+        deliveries.ShouldHaveSingleItem();
+        deliveries[0].Status.ShouldBe("succeeded");
     }
 
     [Fact]
@@ -133,14 +133,14 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
 
         // First attempt — fails, schedules retry in the future
         await fixture.RunWorkerBatchAsync();
-        Assert.Single(fixture.DeliveryClient.Calls);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
 
         fixture.DeliveryClient.ShouldSucceed = true;
 
         // Second poll — event_delivery is not yet due, so no dispatch
         var dispatched = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(0, dispatched);
-        Assert.Single(fixture.DeliveryClient.Calls);
+        dispatched.ShouldBe(0);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -160,8 +160,8 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         await fixture.RunWorkerBatchAsync();
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deliveries);
-        Assert.Equal("dead_lettered", deliveries[0].Status);
+        deliveries.ShouldHaveSingleItem();
+        deliveries[0].Status.ShouldBe("dead_lettered");
     }
 
     [Fact]
@@ -181,8 +181,8 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         fixture.DeliveryClient.ShouldSucceed = true;
 
         var dispatched = await fixture.RunWorkerBatchAsync();
-        Assert.Equal(0, dispatched);
-        Assert.Empty(fixture.DeliveryClient.Calls);
+        dispatched.ShouldBe(0);
+        fixture.DeliveryClient.Calls.ShouldBeEmpty();
     }
 
     [Fact]
@@ -194,16 +194,16 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         await fixture.RunWorkerBatchAsync();
 
         // Only one delivery — the orphan tenant has no topic
-        Assert.Single(fixture.DeliveryClient.Calls);
+        fixture.DeliveryClient.Calls.ShouldHaveSingleItem();
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.Single(deliveries);
-        Assert.Equal("succeeded", deliveries[0].Status);
+        deliveries.ShouldHaveSingleItem();
+        deliveries[0].Status.ShouldBe("succeeded");
 
         // Orphan event got no event_deliveries (no topic match)
-        Assert.Empty(await fixture.GetEventDeliveriesAsync(orphanEventId));
+        (await fixture.GetEventDeliveriesAsync(orphanEventId)).ShouldBeEmpty();
         // Orphan outbox is processed (Stage 1 marks it processed even with no topic)
-        Assert.True(await fixture.IsOutboxRowProcessedAsync(orphanEventId));
+        (await fixture.IsOutboxRowProcessedAsync(orphanEventId)).ShouldBeTrue();
     }
 
     // The worker reads both the current { "event_type": "..." } shape and the
@@ -222,7 +222,8 @@ public sealed class WorkerRoutingTests : IClassFixture<WorkerRoutingFixture>, IA
         await fixture.RunWorkerBatchAsync();
 
         var deliveries = await fixture.GetEventDeliveriesAsync(eventId);
-        Assert.NotEmpty(deliveries);
-        Assert.All(deliveries, d => Assert.Equal("succeeded", d.Status));
+        deliveries.ShouldNotBeEmpty();
+        foreach (var d in deliveries)
+            d.Status.ShouldBe("succeeded");
     }
 }
