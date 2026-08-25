@@ -482,25 +482,30 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         // environment, so it must not be suffixed.
         TenantContext configuration = await CreateTenantAsync("acceptance-config");
         await fixture.WriteSecretAsync(configuration.Slug, "shared_secret", "wrong-file-value");
-        await fixture.RecreateWorkerAsync("configuration", "configuration-value", "configuration-only-value");
-        await AssertAuthenticatedTenantDeliveryAsync(
-            configuration, "configuration", "shared_secret", "configuration-value");
+        try
+        {
+            await fixture.RecreateWorkerAsync("configuration", "configuration-value", "configuration-only-value");
+            await AssertAuthenticatedTenantDeliveryAsync(
+                configuration, "configuration", "shared_secret", "configuration-value");
 
-        await fixture.WriteSecretAsync(configuration.Slug, "file_only", "file-only-value");
-        await AssertMissingSecretFailsAsync(configuration, "configuration-no-file-fallback", "file_only");
+            await fixture.WriteSecretAsync(configuration.Slug, "file_only", "file-only-value");
+            await AssertMissingSecretFailsAsync(configuration, "configuration-no-file-fallback", "file_only");
 
-        ComposeResult configCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?>
-            {
-                ["Integrios__DestinationSecrets__Provider"] = "configuration",
-                ["DestinationSecrets__acceptance-config__shared_secret"] = "configuration-value"
-            },
-            "secrets", "validate", "--tenant", configuration.Slug);
-        configCli.ExitCode.ShouldBe(1);
-        configCli.Output.ShouldNotContain("configuration-value", Case.Sensitive);
+            ComposeResult configCli = await fixture.RunWorkerCommandAsync(
+                new Dictionary<string, string?>
+                {
+                    ["Integrios__DestinationSecrets__Provider"] = "configuration",
+                    ["DestinationSecrets__acceptance-config__shared_secret"] = "configuration-value"
+                },
+                "secrets", "validate", "--tenant", configuration.Slug);
+            configCli.ExitCode.ShouldBe(1);
+            configCli.Output.ShouldNotContain("configuration-value", Case.Sensitive);
+        }
+        finally
+        {
+            await fixture.RecreateWorkerAsync("file", "configuration-value", "configuration-only-value");
+        }
 
-        // Normalize the Worker back to the file default before the remaining file-only assertions.
-        await fixture.RecreateWorkerAsync("file", "configuration-value", "configuration-only-value");
         await AssertMissingSecretFailsAsync(configuration, "file-no-config-fallback", "config_only");
 
         await fixture.WriteSecretAsync(configuration.Slug, "line_break", "unsafe\r\nvalue");

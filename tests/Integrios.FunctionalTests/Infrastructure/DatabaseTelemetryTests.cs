@@ -24,7 +24,7 @@ public sealed class DatabaseTelemetryTests(DatabaseTelemetryFixture fixture)
     : IClassFixture<DatabaseTelemetryFixture>
 {
     [Fact]
-    public async Task ConfiguredDatabaseDriversEmitClientActivities()
+    public async Task ExecuteCommand_WithConfiguredDatabaseTelemetry_EmitsClientActivity()
     {
         var recorder = new RecordingActivityProcessor();
         var services = new ServiceCollection();

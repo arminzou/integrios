@@ -13,7 +13,7 @@ namespace Integrios.AcceptanceTests;
 // signed request and a provider-capable MockSink response respectively; no live provider is
 // contacted.
 [Collection(PackagedDeploymentCollection.Name)]
-public sealed class GitHubToSlackAcceptanceTests(PackagedDeploymentFixture fixture)
+public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture)
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
