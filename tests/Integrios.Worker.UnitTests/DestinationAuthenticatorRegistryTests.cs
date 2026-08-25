@@ -15,7 +15,7 @@ public sealed class DestinationAuthenticatorRegistryTests
 
         IDestinationAuthenticator handler = registry.GetRequired("API_KEY_HEADER");
 
-        Assert.IsType<ApiKeyHeaderAuthenticator>(handler);
+        handler.ShouldBeOfType<ApiKeyHeaderAuthenticator>();
     }
 
     [Fact]
@@ -23,9 +23,9 @@ public sealed class DestinationAuthenticatorRegistryTests
     {
         IDestinationAuthenticatorRegistry registry = CreateRegistry();
 
-        var error = Assert.Throws<DeliveryConfigurationException>(() => registry.GetRequired("nope"));
+        var error = Should.Throw<DeliveryConfigurationException>(() => registry.GetRequired("nope"));
 
-        Assert.Contains("Unknown auth scheme 'nope'.", error.Message);
+        error.Message.ShouldContain("Unknown auth scheme 'nope'.", Case.Sensitive);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class DestinationAuthenticatorRegistryTests
 
         handler.Apply(headers, config, new Dictionary<string, string> { ["api_key"] = "secret-value" });
 
-        Assert.Equal("secret-value", headers["X-Api-Key"]);
+        headers["X-Api-Key"].ShouldBe("secret-value");
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class DestinationAuthenticatorRegistryTests
 
         handler.Apply(headers, EmptyObject, new Dictionary<string, string> { ["token"] = "secret-token" });
 
-        Assert.Equal("Bearer secret-token", headers["Authorization"]);
+        headers["Authorization"].ShouldBe("Bearer secret-token");
     }
 
     [Theory]
@@ -60,13 +60,12 @@ public sealed class DestinationAuthenticatorRegistryTests
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         JsonElement config = JsonSerializer.Deserialize<JsonElement>("""{"header_name":"X-Api-Key"}""");
 
-        var error = Assert.Throws<DeliveryConfigurationException>(
+        var error = Should.Throw<DeliveryConfigurationException>(
             () => handler.Apply(headers, config, new Dictionary<string, string> { ["api_key"] = apiKey }));
 
-        Assert.Equal(
-            "Auth secret field 'api_key' contains a line break, which is not permitted in an HTTP header value.",
-            error.Message);
-        Assert.False(headers.ContainsKey("X-Api-Key"));
+        error.Message.ShouldBe(
+            "Auth secret field 'api_key' contains a line break, which is not permitted in an HTTP header value.");
+        headers.ContainsKey("X-Api-Key").ShouldBeFalse();
     }
 
     [Theory]
@@ -77,13 +76,12 @@ public sealed class DestinationAuthenticatorRegistryTests
         var handler = new BearerTokenAuthenticator();
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        var error = Assert.Throws<DeliveryConfigurationException>(
+        var error = Should.Throw<DeliveryConfigurationException>(
             () => handler.Apply(headers, EmptyObject, new Dictionary<string, string> { ["token"] = token }));
 
-        Assert.Equal(
-            "Auth secret field 'token' contains a line break, which is not permitted in an HTTP header value.",
-            error.Message);
-        Assert.False(headers.ContainsKey("Authorization"));
+        error.Message.ShouldBe(
+            "Auth secret field 'token' contains a line break, which is not permitted in an HTTP header value.");
+        headers.ContainsKey("Authorization").ShouldBeFalse();
     }
 
     private static IDestinationAuthenticatorRegistry CreateRegistry()

@@ -22,8 +22,8 @@ public sealed class HttpDeliveryClientTests
         var client = new HttpDeliveryClient(new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(100) });
         var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
 
-        Assert.False(result.Succeeded);
-        Assert.True(result.IsTimeout);
+        result.Succeeded.ShouldBeFalse();
+        result.IsTimeout.ShouldBeTrue();
     }
 
     [Fact]
@@ -40,9 +40,9 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), null, cts.Token);
 
-        Assert.False(result.Succeeded);
-        Assert.False(result.IsTimeout);
-        Assert.Equal("Request was canceled.", result.Error);
+        result.Succeeded.ShouldBeFalse();
+        result.IsTimeout.ShouldBeFalse();
+        result.Error.ShouldBe("Request was canceled.");
     }
 
     [Fact]
@@ -54,9 +54,9 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.Http, result.FailurePhase);
-        Assert.Equal(diagnostic, result.Error);
+        result.Succeeded.ShouldBeFalse();
+        result.FailurePhase.ShouldBe(DeliveryFailurePhase.Http);
+        result.Error.ShouldBe(diagnostic);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public sealed class HttpDeliveryClientTests
         const string sensitiveValue = "sensitive-header-value";
         var handler = new StubHandler((request, _) =>
         {
-            Assert.True(request.Headers.TryGetValues("X-Api-Key", out IEnumerable<string>? values));
+            request.Headers.TryGetValues("X-Api-Key", out IEnumerable<string>? values).ShouldBeTrue();
             throw new FormatException($"Unexpected handler failure involving '{values.Single()}'.");
         });
         var client = new HttpDeliveryClient(new HttpClient(handler));
@@ -74,10 +74,10 @@ public sealed class HttpDeliveryClientTests
             Request("https://downstream.example", ("X-Api-Key", sensitiveValue)),
             null, CancellationToken.None);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.Http, result.FailurePhase);
-        Assert.Equal("Outbound HTTP request failed.", result.Error);
-        Assert.DoesNotContain(sensitiveValue, result.Error);
+        result.Succeeded.ShouldBeFalse();
+        result.FailurePhase.ShouldBe(DeliveryFailurePhase.Http);
+        result.Error.ShouldBe("Outbound HTTP request failed.");
+        result.Error!.ShouldNotContain(sensitiveValue, Case.Sensitive);
     }
 
     [Fact]
@@ -96,10 +96,10 @@ public sealed class HttpDeliveryClientTests
             Request("https://downstream.example", ("X-Api-Key", "secret")),
             null, CancellationToken.None);
 
-        Assert.True(result.Succeeded);
-        Assert.NotNull(captured);
-        Assert.True(captured!.Headers.TryGetValues("X-Api-Key", out IEnumerable<string>? values));
-        Assert.Equal(["secret"], values);
+        result.Succeeded.ShouldBeTrue();
+        captured.ShouldNotBeNull();
+        captured!.Headers.TryGetValues("X-Api-Key", out IEnumerable<string>? values).ShouldBeTrue();
+        values.ShouldBe(["secret"]);
     }
 
     [Theory]
@@ -115,9 +115,9 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request(url), null, CancellationToken.None);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(0, result.StatusCode);
-        Assert.Equal(DeliveryFailurePhase.RequestConstruction, result.FailurePhase);
+        result.Succeeded.ShouldBeFalse();
+        result.StatusCode.ShouldBe(0);
+        result.FailurePhase.ShouldBe(DeliveryFailurePhase.RequestConstruction);
     }
 
     [Fact]
@@ -129,8 +129,8 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
 
-        Assert.True(result.Succeeded);
-        Assert.Equal(200, result.StatusCode);
+        result.Succeeded.ShouldBeTrue();
+        result.StatusCode.ShouldBe(200);
     }
 
     [Fact]
@@ -146,10 +146,10 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(200, result.StatusCode);
-        Assert.Equal("channel_not_found", result.Error);
-        Assert.Equal(DeliveryFailurePhase.Http, result.FailurePhase);
+        result.Succeeded.ShouldBeFalse();
+        result.StatusCode.ShouldBe(200);
+        result.Error.ShouldBe("channel_not_found");
+        result.FailurePhase.ShouldBe(DeliveryFailurePhase.Http);
     }
 
     [Fact]
@@ -162,9 +162,9 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(200, result.StatusCode);
-        Assert.Equal(DeliveryFailurePhase.Http, result.FailurePhase);
+        result.Succeeded.ShouldBeFalse();
+        result.StatusCode.ShouldBe(200);
+        result.FailurePhase.ShouldBe(DeliveryFailurePhase.Http);
     }
 
     [Fact]
@@ -177,8 +177,8 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(404, result.StatusCode);
+        result.Succeeded.ShouldBeFalse();
+        result.StatusCode.ShouldBe(404);
     }
 
     [Theory]
@@ -196,7 +196,7 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
 
-        Assert.Equal(TimeSpan.FromSeconds(5), result.RetryAfter);
+        result.RetryAfter.ShouldBe(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
 
-        Assert.Equal(TimeSpan.FromMinutes(15), result.RetryAfter);
+        result.RetryAfter.ShouldBe(TimeSpan.FromMinutes(15));
     }
 
     [Fact]
@@ -228,7 +228,7 @@ public sealed class HttpDeliveryClientTests
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
 
-        Assert.Null(result.RetryAfter);
+        result.RetryAfter.ShouldBeNull();
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) => new(statusCode)

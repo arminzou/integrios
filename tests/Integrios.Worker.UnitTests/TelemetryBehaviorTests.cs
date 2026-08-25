@@ -16,9 +16,9 @@ public sealed class TelemetryBehaviorTests
 
         var result = await behavior.Handle(new PingRequest(), _ => Task.FromResult("pong"), CancellationToken.None);
 
-        Assert.Equal("pong", result);
+        result.ShouldBe("pong");
         var span = collector.Single("PingRequest");
-        Assert.Equal(ActivityStatusCode.Unset, span.Status);
+        span.Status.ShouldBe(ActivityStatusCode.Unset);
     }
 
     [Fact]
@@ -27,10 +27,10 @@ public sealed class TelemetryBehaviorTests
         using var collector = new ActivityCollector(ActivitySources.ApplicationName);
         var behavior = new TelemetryBehavior<PingRequest, string>();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Should.ThrowAsync<InvalidOperationException>(() =>
             behavior.Handle(new PingRequest(), _ => throw new InvalidOperationException("boom"), CancellationToken.None));
 
         var span = collector.Single("PingRequest");
-        Assert.Equal(ActivityStatusCode.Error, span.Status);
+        span.Status.ShouldBe(ActivityStatusCode.Error);
     }
 }

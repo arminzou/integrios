@@ -23,12 +23,12 @@ public sealed class OutboxDepthMetricsTests
 
         using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
         using ServiceProvider provider = services.BuildServiceProvider();
-        Assert.Single(provider.GetServices<IHostedService>());
+        provider.GetServices<IHostedService>().ShouldHaveSingleItem();
 
         metrics.CollectObservableInstruments();
 
-        Assert.Equal(0, connectionFactory.OpenCount);
-        Assert.Empty(metrics.ForInstrument("integrios_outbox_pending_depth"));
+        connectionFactory.OpenCount.ShouldBe(0);
+        metrics.ForInstrument("integrios_outbox_pending_depth").ShouldBeEmpty();
     }
 
     [Theory]
@@ -43,7 +43,7 @@ public sealed class OutboxDepthMetricsTests
             })
             .Build();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Should.Throw<InvalidOperationException>(() =>
             new ServiceCollection().AddOutboxDepthMetricsServices(configuration));
     }
 

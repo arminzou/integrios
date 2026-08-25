@@ -24,9 +24,8 @@ public sealed class HttpDeliveryContractTests
 
         string json = JsonSerializer.Serialize(configuration, StoredJson.Options);
 
-        Assert.Equal(
-            """{"version":1,"method":"PATCH","path":"contacts","headers":{"X-Operation":"upsert"},"body":"json"}""",
-            json);
+        json.ShouldBe(
+            """{"version":1,"method":"PATCH","path":"contacts","headers":{"X-Operation":"upsert"},"body":"json"}""");
     }
 
     [Fact]
@@ -34,10 +33,10 @@ public sealed class HttpDeliveryContractTests
     {
         var configuration = Configuration() with { Version = 2 };
 
-        var error = Assert.Throws<SubscriptionValidationException>(
+        var error = Should.Throw<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.Validate(configuration));
 
-        Assert.Equal("http_delivery.version must be 1.", error.Message);
+        error.Message.ShouldBe("http_delivery.version must be 1.");
     }
 
     [Theory]
@@ -45,7 +44,7 @@ public sealed class HttpDeliveryContractTests
     [InlineData("""{"version":1,"method":"POST","path_expression":{"engine":"jsonata","version":"1","expression":"id"},"headers":{},"body":"json"}""")]
     public void Configuration_RejectsUnknownMembers(string json)
     {
-        Assert.Throws<JsonException>(
+        Should.Throw<JsonException>(
             () => JsonSerializer.Deserialize<HttpDeliveryConfiguration>(json, StoredJson.Options));
     }
 
@@ -66,10 +65,10 @@ public sealed class HttpDeliveryContractTests
     [InlineData("")]
     public void Authoring_RejectsMethodsOutsideTheSelectedSet(string method)
     {
-        var error = Assert.Throws<SubscriptionValidationException>(
+        var error = Should.Throw<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.Validate(Configuration(method: method)));
 
-        Assert.Equal("http_delivery.method must be POST, PUT, PATCH, or DELETE.", error.Message);
+        error.Message.ShouldBe("http_delivery.method must be POST, PUT, PATCH, or DELETE.");
     }
 
     [Theory]
@@ -86,10 +85,10 @@ public sealed class HttpDeliveryContractTests
     [InlineData("")]
     public void Authoring_RejectsOtherBodyModes(string body)
     {
-        var error = Assert.Throws<SubscriptionValidationException>(
+        var error = Should.Throw<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.Validate(Configuration(body: body)));
 
-        Assert.Equal("http_delivery.body must be 'json' or 'none'.", error.Message);
+        error.Message.ShouldBe("http_delivery.body must be 'json' or 'none'.");
     }
 
     [Fact]
@@ -112,10 +111,10 @@ public sealed class HttpDeliveryContractTests
             ["X-Operation"] = null!
         });
 
-        var error = Assert.Throws<SubscriptionValidationException>(
+        var error = Should.Throw<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.Validate(configuration));
 
-        Assert.Equal("http_delivery header 'X-Operation' value must be a string.", error.Message);
+        error.Message.ShouldBe("http_delivery header 'X-Operation' value must be a string.");
     }
 
     [Theory]
@@ -130,10 +129,10 @@ public sealed class HttpDeliveryContractTests
     {
         var configuration = Configuration(headers: new Dictionary<string, string> { [name] = "value" });
 
-        var error = Assert.Throws<SubscriptionValidationException>(
+        var error = Should.Throw<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.Validate(configuration));
 
-        Assert.Contains("is reserved and cannot be configured", error.Message);
+        error.Message.ShouldContain("is reserved and cannot be configured", Case.Sensitive);
     }
 
     [Fact]
@@ -146,13 +145,13 @@ public sealed class HttpDeliveryContractTests
             """{"api_key":"destination_key"}""");
         IDestinationAuthenticatorRegistry registry = new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator()]);
 
-        var error = Assert.Throws<SubscriptionValidationException>(
+        var error = Should.Throw<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
                 configuration,
                 selection,
                 registry));
 
-        Assert.Equal("http_delivery header 'X-API-KEY' is owned by destination authentication.", error.Message);
+        error.Message.ShouldBe("http_delivery header 'X-API-KEY' is owned by destination authentication.");
     }
 
     [Theory]
@@ -166,7 +165,7 @@ public sealed class HttpDeliveryContractTests
         string relativeTarget,
         string expected)
     {
-        Assert.Equal(expected, HttpTargetComposer.Compose(baseUri, relativeTarget));
+        HttpTargetComposer.Compose(baseUri, relativeTarget).ShouldBe(expected);
     }
 
     [Theory]
@@ -178,7 +177,7 @@ public sealed class HttpDeliveryContractTests
 
         string result = HttpTargetComposer.Compose(baseUri, relativeTarget);
 
-        Assert.Equal(baseUri, result);
+        result.ShouldBe(baseUri);
     }
 
     [Theory]
@@ -192,7 +191,7 @@ public sealed class HttpDeliveryContractTests
     [InlineData("inside%2f..%2foutside")]
     public void Composition_RejectsTargetsThatEscapeOrAreNotRequestTargets(string relativeTarget)
     {
-        Assert.Throws<DeliveryConfigurationException>(
+        Should.Throw<DeliveryConfigurationException>(
             () => HttpTargetComposer.Compose("https://destination.test/base", relativeTarget));
     }
 

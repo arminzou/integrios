@@ -14,7 +14,7 @@ public sealed class OutboxWorkerBackoffTests
     {
         var policy = new RetryPolicy();
         var backoff = policy.CalculateBackoff(attemptCount);
-        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), backoff);
+        backoff.ShouldBe(TimeSpan.FromSeconds(expectedSeconds));
     }
 
     [Fact]
@@ -23,6 +23,6 @@ public sealed class OutboxWorkerBackoffTests
         var policy = new RetryPolicy();
         var backoff11 = policy.CalculateBackoff(11);
         var backoff12 = policy.CalculateBackoff(12);
-        Assert.Equal(backoff11, backoff12);
+        backoff12.ShouldBe(backoff11);
     }
 }

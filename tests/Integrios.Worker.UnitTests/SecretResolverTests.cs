@@ -23,8 +23,8 @@ public sealed class SecretResolverTests : IDisposable
         string tenantA = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None);
         string tenantB = await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key", CancellationToken.None);
 
-        Assert.Equal("first", tenantA);
-        Assert.Equal("second", tenantB);
+        tenantA.ShouldBe("first");
+        tenantB.ShouldBe("second");
     }
 
     // No real credential is defined to include an edge CR/LF (HTTP headers can't carry raw CRLF
@@ -37,8 +37,8 @@ public sealed class SecretResolverTests : IDisposable
         WriteSecret("tenant-a", "api_key", "\r\nvalue\r\n");
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
 
-        Assert.Equal(
-            "value", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
+        (await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None)).ShouldBe(
+            "value");
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class SecretResolverTests : IDisposable
         WriteSecret("tenant-a", "api_key", "\n");
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
 
-        await Assert.ThrowsAsync<SecretResolutionException>(
+        await Should.ThrowAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
     }
 
@@ -60,8 +60,8 @@ public sealed class SecretResolverTests : IDisposable
         });
         var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
 
-        Assert.Equal(
-            "value", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
+        (await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None)).ShouldBe(
+            "value");
     }
 
     [Fact]
@@ -71,9 +71,9 @@ public sealed class SecretResolverTests : IDisposable
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
         TenantSecretScope tenant = new(Guid.NewGuid(), "tenant-a");
 
-        Assert.Equal("before", await resolver.ResolveAsync(tenant, "api_key", CancellationToken.None));
+        (await resolver.ResolveAsync(tenant, "api_key", CancellationToken.None)).ShouldBe("before");
         WriteSecret("tenant-a", "api_key", "after");
-        Assert.Equal("after", await resolver.ResolveAsync(tenant, "api_key", CancellationToken.None));
+        (await resolver.ResolveAsync(tenant, "api_key", CancellationToken.None)).ShouldBe("after");
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class SecretResolverTests : IDisposable
 
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
 
-        Assert.Equal("linked-secret", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
+        (await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None)).ShouldBe("linked-secret");
     }
 
     [Theory]
@@ -107,12 +107,12 @@ public sealed class SecretResolverTests : IDisposable
         }
 
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
-        SecretResolutionException error = await Assert.ThrowsAsync<SecretResolutionException>(
+        SecretResolutionException error = await Should.ThrowAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
 
-        Assert.Equal("api_key", error.SecretReference);
-        Assert.Equal("file", error.ProviderName);
-        Assert.DoesNotContain("do-not-leak", error.Message);
+        error.SecretReference.ShouldBe("api_key");
+        error.ProviderName.ShouldBe("file");
+        error.Message.ShouldNotContain("do-not-leak", Case.Sensitive);
     }
 
     [Theory]
@@ -122,10 +122,10 @@ public sealed class SecretResolverTests : IDisposable
     public async Task FileResolver_RejectsInvalidReferenceBeforeReading(string reference)
     {
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);
-        SecretResolutionException error = await Assert.ThrowsAsync<SecretResolutionException>(
+        SecretResolutionException error = await Should.ThrowAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), reference, CancellationToken.None));
-        Assert.Equal("invalid", error.SecretReference);
-        Assert.DoesNotContain(reference, error.Message, StringComparison.Ordinal);
+        error.SecretReference.ShouldBe("invalid");
+        error.Message.ShouldNotContain(reference, Case.Sensitive);
     }
 
     [Fact]
@@ -138,8 +138,8 @@ public sealed class SecretResolverTests : IDisposable
         });
         var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
 
-        Assert.Equal("first", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
-        Assert.Equal("second", await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key", CancellationToken.None));
+        (await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None)).ShouldBe("first");
+        (await resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-b"), "api_key", CancellationToken.None)).ShouldBe("second");
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public sealed class SecretResolverTests : IDisposable
         });
         var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
 
-        await Assert.ThrowsAsync<SecretResolutionException>(
+        await Should.ThrowAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
     }
 
@@ -169,16 +169,16 @@ public sealed class SecretResolverTests : IDisposable
         using ServiceProvider provider = services.BuildServiceProvider();
 
         IDestinationAuthenticationSecretResolver resolver = provider.GetRequiredService<IDestinationAuthenticationSecretResolver>();
-        Assert.IsType<DestinationAuthenticationConfigurationSecretResolver>(resolver);
-        await Assert.ThrowsAsync<SecretResolutionException>(
+        resolver.ShouldBeOfType<DestinationAuthenticationConfigurationSecretResolver>();
+        await Should.ThrowAsync<SecretResolutionException>(
             () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "api_key", CancellationToken.None));
     }
 
     [Fact]
     public void DependencyInjection_UsesFileAndAcceptsExplicitConfiguration()
     {
-        Assert.True(Path.IsPathFullyQualified(DestinationAuthenticationMountedFileSecretResolver.DefaultRoot));
-        Assert.True(Path.IsPathFullyQualified(SourceVerificationMountedFileSecretResolver.DefaultRoot));
+        Path.IsPathFullyQualified(DestinationAuthenticationMountedFileSecretResolver.DefaultRoot).ShouldBeTrue();
+        Path.IsPathFullyQualified(SourceVerificationMountedFileSecretResolver.DefaultRoot).ShouldBeTrue();
         string expectedDestinationRoot = OperatingSystem.IsWindows()
             ? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -193,15 +193,15 @@ public sealed class SecretResolverTests : IDisposable
                 "secrets",
                 "source")
             : "/run/secrets/integrios/source";
-        Assert.Equal(expectedDestinationRoot, DestinationAuthenticationMountedFileSecretResolver.DefaultRoot);
-        Assert.Equal(expectedSourceRoot, SourceVerificationMountedFileSecretResolver.DefaultRoot);
+        DestinationAuthenticationMountedFileSecretResolver.DefaultRoot.ShouldBe(expectedDestinationRoot);
+        SourceVerificationMountedFileSecretResolver.DefaultRoot.ShouldBe(expectedSourceRoot);
 
         var defaultServices = new ServiceCollection();
         defaultServices.AddDestinationAuthenticationSecretResolutionServices(Configuration(
             new Dictionary<string, string?> { ["Integrios:DestinationSecrets:FileRoot"] = root }));
         using ServiceProvider defaultProvider = defaultServices.BuildServiceProvider();
-        Assert.IsType<DestinationAuthenticationMountedFileSecretResolver>(
-            defaultProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
+        defaultProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>()
+            .ShouldBeOfType<DestinationAuthenticationMountedFileSecretResolver>();
 
         var configurationServices = new ServiceCollection();
         configurationServices.AddDestinationAuthenticationSecretResolutionServices(Configuration(new Dictionary<string, string?>
@@ -209,23 +209,23 @@ public sealed class SecretResolverTests : IDisposable
             ["Integrios:DestinationSecrets:Provider"] = "configuration"
         }));
         using ServiceProvider configurationProvider = configurationServices.BuildServiceProvider();
-        Assert.IsType<DestinationAuthenticationConfigurationSecretResolver>(
-            configurationProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>());
+        configurationProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>()
+            .ShouldBeOfType<DestinationAuthenticationConfigurationSecretResolver>();
     }
 
     [Fact]
     public void DependencyInjection_RejectsUnsupportedProviderAndInvalidRoot()
     {
         var services = new ServiceCollection();
-        Assert.Throws<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
+        Should.Throw<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
             Configuration(new Dictionary<string, string?> { ["Integrios:DestinationSecrets:Provider"] = "vault" })));
-        Assert.Throws<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
+        Should.Throw<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
             Configuration(new Dictionary<string, string?>
             {
                 ["Integrios:DestinationSecrets:Provider"] = "file",
                 ["Integrios:DestinationSecrets:FileRoot"] = "relative"
             })));
-        Assert.Throws<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
+        Should.Throw<InvalidOperationException>(() => services.AddDestinationAuthenticationSecretResolutionServices(
             Configuration(new Dictionary<string, string?>
             {
                 ["Integrios:DestinationSecrets:Provider"] = "file",
@@ -249,11 +249,11 @@ public sealed class SecretResolverTests : IDisposable
         ISourceVerificationSecretResolver resolver =
             provider.GetRequiredService<ISourceVerificationSecretResolver>();
 
-        Assert.Equal("source-value", await resolver.ResolveAsync(
+        (await resolver.ResolveAsync(
             new TenantSecretScope(Guid.NewGuid(), "tenant-a"),
             "webhook_secret",
-            CancellationToken.None));
-        Assert.Null(provider.GetService<IDestinationAuthenticationSecretResolver>());
+            CancellationToken.None)).ShouldBe("source-value");
+        provider.GetService<IDestinationAuthenticationSecretResolver>().ShouldBeNull();
     }
 
     [Fact]
@@ -267,9 +267,9 @@ public sealed class SecretResolverTests : IDisposable
             "webhook_secret",
             CancellationToken.None);
 
-        Assert.Equal("source-file-value", value);
-        Assert.IsAssignableFrom<ISourceVerificationSecretResolver>(resolver);
-        Assert.IsNotAssignableFrom<IDestinationAuthenticationSecretResolver>(resolver);
+        value.ShouldBe("source-file-value");
+        resolver.ShouldBeAssignableTo<ISourceVerificationSecretResolver>();
+        resolver.ShouldNotBeAssignableTo<IDestinationAuthenticationSecretResolver>();
     }
 
     public void Dispose() => Directory.Delete(root, recursive: true);

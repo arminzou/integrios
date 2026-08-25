@@ -9,7 +9,7 @@ public sealed class DeliveryFailureClassifierTests
     [Fact]
     public void IsTerminal_SucceededResult_IsFalse()
     {
-        Assert.False(DeliveryFailureClassifier.IsTerminal(new DeliveryResult(true, 200)));
+        DeliveryFailureClassifier.IsTerminal(new DeliveryResult(true, 200)).ShouldBeFalse();
     }
 
     [Theory]
@@ -22,7 +22,7 @@ public sealed class DeliveryFailureClassifierTests
     {
         var result = new DeliveryResult(false, statusCode, FailurePhase: DeliveryFailurePhase.Http);
 
-        Assert.False(DeliveryFailureClassifier.IsTerminal(result));
+        DeliveryFailureClassifier.IsTerminal(result).ShouldBeFalse();
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed class DeliveryFailureClassifierTests
     {
         var result = new DeliveryResult(false, 0, IsTimeout: true, FailurePhase: DeliveryFailurePhase.Http);
 
-        Assert.False(DeliveryFailureClassifier.IsTerminal(result));
+        DeliveryFailureClassifier.IsTerminal(result).ShouldBeFalse();
     }
 
     [Theory]
@@ -42,7 +42,7 @@ public sealed class DeliveryFailureClassifierTests
     {
         var result = new DeliveryResult(false, statusCode, FailurePhase: DeliveryFailurePhase.Http);
 
-        Assert.True(DeliveryFailureClassifier.IsTerminal(result));
+        DeliveryFailureClassifier.IsTerminal(result).ShouldBeTrue();
     }
 
     [Theory]
@@ -55,6 +55,6 @@ public sealed class DeliveryFailureClassifierTests
         // retry-until-exhaustion behavior rather than being reclassified as terminal.
         var result = new DeliveryResult(false, 404, FailurePhase: phase);
 
-        Assert.False(DeliveryFailureClassifier.IsTerminal(result));
+        DeliveryFailureClassifier.IsTerminal(result).ShouldBeFalse();
     }
 }

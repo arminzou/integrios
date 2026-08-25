@@ -13,10 +13,10 @@ public sealed class WorkerLoopOptionsTests
         FanoutLoopOptions fanout = FanoutLoopOptions.FromConfiguration(configuration);
         DeliveryLoopOptions delivery = DeliveryLoopOptions.FromConfiguration(configuration);
 
-        Assert.Equal(10, fanout.BatchSize);
-        Assert.Equal(TimeSpan.FromSeconds(2), fanout.IdlePollInterval);
-        Assert.Equal(25, delivery.BatchSize);
-        Assert.Equal(TimeSpan.FromSeconds(2), delivery.IdlePollInterval);
+        fanout.BatchSize.ShouldBe(10);
+        fanout.IdlePollInterval.ShouldBe(TimeSpan.FromSeconds(2));
+        delivery.BatchSize.ShouldBe(25);
+        delivery.IdlePollInterval.ShouldBe(TimeSpan.FromSeconds(2));
     }
 
     [Fact]
@@ -39,10 +39,10 @@ public sealed class WorkerLoopOptionsTests
         services.AddWorkerHostServices(configuration, enableBackgroundLoops: true);
         using ServiceProvider provider = services.BuildServiceProvider();
 
-        Assert.Equal(new FanoutLoopOptions(4, TimeSpan.FromMilliseconds(125)),
-            provider.GetRequiredService<FanoutLoopOptions>());
-        Assert.Equal(new DeliveryLoopOptions(7, TimeSpan.FromMilliseconds(250)),
-            provider.GetRequiredService<DeliveryLoopOptions>());
+        provider.GetRequiredService<FanoutLoopOptions>().ShouldBe(
+            new FanoutLoopOptions(4, TimeSpan.FromMilliseconds(125)));
+        provider.GetRequiredService<DeliveryLoopOptions>().ShouldBe(
+            new DeliveryLoopOptions(7, TimeSpan.FromMilliseconds(250)));
     }
 
     [Theory]
@@ -57,11 +57,11 @@ public sealed class WorkerLoopOptionsTests
             [key] = value
         });
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
             new ServiceCollection().AddWorkerHostServices(configuration, enableBackgroundLoops: true));
 
-        Assert.Contains(key, exception.Message, StringComparison.Ordinal);
-        Assert.Contains("positive", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain(key, Case.Sensitive);
+        exception.Message.ShouldContain("positive", Case.Sensitive);
     }
 
     [Theory]
@@ -76,10 +76,10 @@ public sealed class WorkerLoopOptionsTests
             [key] = value
         });
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
             new ServiceCollection().AddWorkerHostServices(configuration, enableBackgroundLoops: true));
 
-        Assert.Contains(key, exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain(key, Case.Sensitive);
     }
 
     private static IConfiguration BuildConfiguration(Dictionary<string, string?> values) =>

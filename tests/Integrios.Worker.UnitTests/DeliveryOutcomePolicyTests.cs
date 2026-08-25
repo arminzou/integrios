@@ -12,8 +12,8 @@ public sealed class DeliveryOutcomePolicyTests
     {
         DeliveryOutcomeDecision decision = policy.Decide(DeliveryOutcomeKind.Succeeded, 1, DatabaseNow);
 
-        Assert.Equal(EventDeliveryDisposition.Succeeded, decision.Disposition);
-        Assert.Null(decision.DeliverAfter);
+        decision.Disposition.ShouldBe(EventDeliveryDisposition.Succeeded);
+        decision.DeliverAfter.ShouldBeNull();
     }
 
     [Theory]
@@ -26,8 +26,8 @@ public sealed class DeliveryOutcomePolicyTests
             retryCycleAttemptCount,
             DatabaseNow);
 
-        Assert.Equal(EventDeliveryDisposition.RetryScheduled, decision.Disposition);
-        Assert.Equal(DatabaseNow.AddSeconds(expectedSeconds), decision.DeliverAfter);
+        decision.Disposition.ShouldBe(EventDeliveryDisposition.RetryScheduled);
+        decision.DeliverAfter.ShouldBe(DatabaseNow.AddSeconds(expectedSeconds));
     }
 
     [Theory]
@@ -37,8 +37,8 @@ public sealed class DeliveryOutcomePolicyTests
     {
         DeliveryOutcomeDecision decision = policy.Decide(outcome, RetryPolicy.DefaultMaxAttempts, DatabaseNow);
 
-        Assert.Equal(EventDeliveryDisposition.DeadLettered, decision.Disposition);
-        Assert.Null(decision.DeliverAfter);
+        decision.Disposition.ShouldBe(EventDeliveryDisposition.DeadLettered);
+        decision.DeliverAfter.ShouldBeNull();
     }
 
     [Fact]
@@ -46,8 +46,8 @@ public sealed class DeliveryOutcomePolicyTests
     {
         DeliveryOutcomeDecision decision = policy.Decide(DeliveryOutcomeKind.Indeterminate, 2, DatabaseNow);
 
-        Assert.Equal(EventDeliveryDisposition.RetryScheduled, decision.Disposition);
-        Assert.Equal(DatabaseNow, decision.DeliverAfter);
+        decision.Disposition.ShouldBe(EventDeliveryDisposition.RetryScheduled);
+        decision.DeliverAfter.ShouldBe(DatabaseNow);
     }
 
     [Fact]
@@ -56,8 +56,8 @@ public sealed class DeliveryOutcomePolicyTests
         DeliveryOutcomeDecision decision = policy.Decide(
             DeliveryOutcomeKind.Failed, retryCycleAttemptCount: 1, DatabaseNow, isTerminal: true);
 
-        Assert.Equal(EventDeliveryDisposition.DeadLettered, decision.Disposition);
-        Assert.Null(decision.DeliverAfter);
+        decision.Disposition.ShouldBe(EventDeliveryDisposition.DeadLettered);
+        decision.DeliverAfter.ShouldBeNull();
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class DeliveryOutcomePolicyTests
         DeliveryOutcomeDecision decision = policy.Decide(
             DeliveryOutcomeKind.Failed, retryCycleAttemptCount: 1, DatabaseNow, retryAfter: TimeSpan.FromSeconds(7));
 
-        Assert.Equal(EventDeliveryDisposition.RetryScheduled, decision.Disposition);
-        Assert.Equal(DatabaseNow.AddSeconds(7), decision.DeliverAfter);
+        decision.Disposition.ShouldBe(EventDeliveryDisposition.RetryScheduled);
+        decision.DeliverAfter.ShouldBe(DatabaseNow.AddSeconds(7));
     }
 }

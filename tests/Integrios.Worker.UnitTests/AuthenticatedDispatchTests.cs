@@ -64,9 +64,9 @@ public sealed class AuthenticatedDispatchTests
             Arg.Is<TenantSecretScope>(scope => scope.Id == tenantId && scope.Slug == "test-tenant"),
             "erp_api_key",
             Arg.Any<CancellationToken>());
-        Assert.True(deliveryClient.Headers.TryGetValue("X-Api-Key", out string? headerValue));
-        Assert.Equal("secret-value", headerValue);
-        Assert.Equal(EventDeliveryDisposition.Succeeded, Assert.Single(queue.Finalizations).Disposition);
+        deliveryClient.Headers.TryGetValue("X-Api-Key", out string? headerValue).ShouldBeTrue();
+        headerValue.ShouldBe("secret-value");
+        queue.Finalizations.ShouldHaveSingleItem().Disposition.ShouldBe(EventDeliveryDisposition.Succeeded);
     }
 
     [Fact]
@@ -100,10 +100,10 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.DoesNotContain(resolvedSecret, completion.RequestPayloadJson!);
-        Assert.DoesNotContain(resolvedSecret, completion.ErrorMessage ?? string.Empty);
-        Assert.False(loggerProvider.AnyMessageContains(resolvedSecret));
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.RequestPayloadJson!.ShouldNotContain(resolvedSecret, Case.Sensitive);
+        (completion.ErrorMessage ?? string.Empty).ShouldNotContain(resolvedSecret, Case.Sensitive);
+        loggerProvider.AnyMessageContains(resolvedSecret).ShouldBeFalse();
     }
 
     [Fact]
@@ -141,18 +141,17 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.False(completion.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.RequestConstruction, completion.FailurePhase);
-        Assert.DoesNotContain("super-secret-value", completion.ErrorMessage ?? string.Empty);
-        Assert.Equal(
-            "Auth secret field 'api_key' contains a line break, which is not permitted in an HTTP header value.",
-            completion.ErrorMessage);
-        Assert.False(loggerProvider.AnyMessageContains("super-secret-value"));
-        Assert.True(loggerProvider.AnyMessageContains("failure_phase=request_construction"));
-        Assert.Single(
-            metrics.ForInstrument("integrios_delivery_request_construction_failures"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeFalse();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.RequestConstruction);
+        (completion.ErrorMessage ?? string.Empty).ShouldNotContain("super-secret-value", Case.Sensitive);
+        completion.ErrorMessage.ShouldBe(
+            "Auth secret field 'api_key' contains a line break, which is not permitted in an HTTP header value.");
+        loggerProvider.AnyMessageContains("super-secret-value").ShouldBeFalse();
+        loggerProvider.AnyMessageContains("failure_phase=request_construction").ShouldBeTrue();
+        metrics.ForInstrument("integrios_delivery_request_construction_failures")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), connectorKey))
+            .ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -187,10 +186,10 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.Equal(DeliveryFailurePhase.RequestConstruction, completion.FailurePhase);
-        Assert.Equal(DeliveryConfigurationException.GenericFailureMessage, completion.ErrorMessage);
-        Assert.False(loggerProvider.AnyMessageContains(resolvedSecret));
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.RequestConstruction);
+        completion.ErrorMessage.ShouldBe(DeliveryConfigurationException.GenericFailureMessage);
+        loggerProvider.AnyMessageContains(resolvedSecret).ShouldBeFalse();
     }
 
     [Fact]
@@ -229,14 +228,14 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.False(completion.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.SecretResolution, completion.FailurePhase);
-        Assert.Equal(EventDeliveryDisposition.RetryScheduled, Assert.Single(queue.Finalizations).Disposition);
-        Assert.True(loggerProvider.AnyMessageContains("failure_phase=secret_resolution"));
-        Assert.Single(
-            metrics.ForInstrument("integrios_delivery_secret_resolution_failures"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeFalse();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.SecretResolution);
+        queue.Finalizations.ShouldHaveSingleItem().Disposition.ShouldBe(EventDeliveryDisposition.RetryScheduled);
+        loggerProvider.AnyMessageContains("failure_phase=secret_resolution").ShouldBeTrue();
+        metrics.ForInstrument("integrios_delivery_secret_resolution_failures")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), connectorKey))
+            .ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -271,7 +270,7 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Equal(EventDeliveryDisposition.DeadLettered, Assert.Single(queue.Finalizations).Disposition);
+        queue.Finalizations.ShouldHaveSingleItem().Disposition.ShouldBe(EventDeliveryDisposition.DeadLettered);
     }
 
     [Fact]
@@ -311,10 +310,10 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Equal(eventId.ToString(), deliveryClient.Headers["Integrios-Event-Id"]);
-        Assert.Equal(deliveryId.ToString(), deliveryClient.Headers["Integrios-Delivery-Id"]);
-        Assert.Equal(attemptId.ToString(), deliveryClient.Headers["Integrios-Attempt-Id"]);
-        Assert.Equal("17", deliveryClient.Headers["Integrios-Attempt-Number"]);
+        deliveryClient.Headers["Integrios-Event-Id"].ShouldBe(eventId.ToString());
+        deliveryClient.Headers["Integrios-Delivery-Id"].ShouldBe(deliveryId.ToString());
+        deliveryClient.Headers["Integrios-Attempt-Id"].ShouldBe(attemptId.ToString());
+        deliveryClient.Headers["Integrios-Attempt-Number"].ShouldBe("17");
     }
 
     [Fact]
@@ -346,9 +345,9 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.False(completion.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.RequestConstruction, completion.FailurePhase);
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeFalse();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.RequestConstruction);
     }
 
     [Fact]
@@ -372,10 +371,10 @@ public sealed class AuthenticatedDispatchTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.False(completion.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.RequestConstruction, completion.FailurePhase);
-        Assert.Equal(0, deliveryClient.CallCount);
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeFalse();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.RequestConstruction);
+        deliveryClient.CallCount.ShouldBe(0);
     }
 
     private static IMediator BuildMediator(Action<IServiceCollection> registerDoubles)

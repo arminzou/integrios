@@ -9,9 +9,9 @@ public sealed class SubscriptionRoutingEvaluatorTests
     {
         var candidate = Candidate("""{"event_type":"Payment.Created"}""");
 
-        var target = Assert.Single(SubscriptionRoutingEvaluator.SelectTargets("payment.created", [candidate]));
+        var target = SubscriptionRoutingEvaluator.SelectTargets("payment.created", [candidate]).ShouldHaveSingleItem();
 
-        Assert.Equal(candidate.SubscriptionId, target.SubscriptionId);
+        target.SubscriptionId.ShouldBe(candidate.SubscriptionId);
     }
 
     [Fact]
@@ -19,9 +19,9 @@ public sealed class SubscriptionRoutingEvaluatorTests
     {
         var candidate = Candidate("""{"event_types":["payment.updated","payment.created"]}""");
 
-        var target = Assert.Single(SubscriptionRoutingEvaluator.SelectTargets("PAYMENT.CREATED", [candidate]));
+        var target = SubscriptionRoutingEvaluator.SelectTargets("PAYMENT.CREATED", [candidate]).ShouldHaveSingleItem();
 
-        Assert.Equal(candidate.SubscriptionId, target.SubscriptionId);
+        target.SubscriptionId.ShouldBe(candidate.SubscriptionId);
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public sealed class SubscriptionRoutingEvaluatorTests
 
         var targets = SubscriptionRoutingEvaluator.SelectTargets("payment.created", [candidate]);
 
-        Assert.Empty(targets);
+        targets.ShouldBeEmpty();
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class SubscriptionRoutingEvaluatorTests
                 Candidate("""{"event_types":[42,null]}""")
             ]);
 
-        Assert.Empty(targets);
+        targets.ShouldBeEmpty();
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class SubscriptionRoutingEvaluatorTests
 
         var targets = SubscriptionRoutingEvaluator.SelectTargets("payment.created", candidates);
 
-        Assert.Equal([firstId, secondId, candidates[1].SubscriptionId], targets.Select(target => target.SubscriptionId));
+        targets.Select(target => target.SubscriptionId).ShouldBe([firstId, secondId, candidates[1].SubscriptionId]);
     }
 
     private static SubscriptionRoutingCandidate Candidate(

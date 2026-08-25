@@ -50,10 +50,10 @@ public sealed class DeliveryPolicyRegistrationTests
 
         DeliveryExecutionOptions workerOptions = worker.GetRequiredService<DeliveryExecutionOptions>();
         RetryPolicy workerPolicy = worker.GetRequiredService<RetryPolicy>();
-        Assert.Equal(TimeSpan.FromSeconds(3), workerOptions.RetryBaseDelay);
-        Assert.Equal(7, workerOptions.RetryMaxAttempts);
-        Assert.Equal(workerOptions.RetryBaseDelay, workerPolicy.BaseDelay);
-        Assert.Equal(workerOptions.RetryMaxAttempts, workerPolicy.MaxAttempts);
+        workerOptions.RetryBaseDelay.ShouldBe(TimeSpan.FromSeconds(3));
+        workerOptions.RetryMaxAttempts.ShouldBe(7);
+        workerPolicy.BaseDelay.ShouldBe(workerOptions.RetryBaseDelay);
+        workerPolicy.MaxAttempts.ShouldBe(workerOptions.RetryMaxAttempts);
     }
 
     [Fact]
@@ -99,9 +99,9 @@ public sealed class DeliveryPolicyRegistrationTests
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
 
-    private static void AssertResolves<T>(IServiceProvider provider) where T : notnull =>
-        Assert.NotNull(provider.GetService<T>());
+    private static void AssertResolves<T>(IServiceProvider provider) where T : class =>
+        provider.GetService<T>().ShouldNotBeNull();
 
-    private static void AssertOmits<T>(IServiceProvider provider) where T : notnull =>
-        Assert.Null(provider.GetService<T>());
+    private static void AssertOmits<T>(IServiceProvider provider) where T : class =>
+        provider.GetService<T>().ShouldBeNull();
 }

@@ -15,8 +15,8 @@ public sealed class MetricCollectorTests
         counter.Add(1);
         using var measurements = collector.ForInstrument("test_counter").GetEnumerator();
 
-        Assert.True(measurements.MoveNext());
+        measurements.MoveNext().ShouldBeTrue();
         counter.Add(1);
-        Assert.False(measurements.MoveNext());
+        measurements.MoveNext().ShouldBeFalse();
     }
 }

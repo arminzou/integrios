@@ -32,8 +32,8 @@ public sealed class WorkerTransportAbstractionsTests
 
         var processedCount = await mediator.Send(new ProcessOutboxBatchCommand(10));
 
-        Assert.Equal(1, processedCount);
-        Assert.Equal(2, fanout.CallCount);
+        processedCount.ShouldBe(1);
+        fanout.CallCount.ShouldBe(2);
     }
 
     [Fact]
@@ -52,9 +52,9 @@ public sealed class WorkerTransportAbstractionsTests
 
         var processedCount = await mediator.Send(new ProcessOutboxBatchCommand(10));
 
-        Assert.Equal(1, processedCount);
-        var unrouted = Assert.Single(metrics.ForInstrument("integrios_events_unrouted"));
-        Assert.Equal(1, unrouted.Value);
+        processedCount.ShouldBe(1);
+        var unrouted = metrics.ForInstrument("integrios_events_unrouted").ShouldHaveSingleItem();
+        unrouted.Value.ShouldBe(1);
     }
 
     [Fact]
@@ -85,16 +85,16 @@ public sealed class WorkerTransportAbstractionsTests
 
         var processedCount = await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Equal(1, processedCount);
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.Equal(deliveryId, completion.DeliveryId);
-        Assert.Equal(queue.ClaimedItems[0].AttemptId, completion.AttemptId);
-        Assert.False(completion.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.Http, completion.FailurePhase);
-        Assert.Equal("{\"amount\":42}", completion.RequestPayloadJson);
-        Assert.Equal(500, completion.ResponseStatusCode);
-        Assert.Equal("downstream exploded", completion.ErrorMessage);
-        Assert.Equal(EventDeliveryDisposition.RetryScheduled, Assert.Single(queue.Finalizations).Disposition);
+        processedCount.ShouldBe(1);
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.DeliveryId.ShouldBe(deliveryId);
+        completion.AttemptId.ShouldBe(queue.ClaimedItems[0].AttemptId);
+        completion.Succeeded.ShouldBeFalse();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.Http);
+        completion.RequestPayloadJson.ShouldBe("{\"amount\":42}");
+        completion.ResponseStatusCode.ShouldBe(500);
+        completion.ErrorMessage.ShouldBe("downstream exploded");
+        queue.Finalizations.ShouldHaveSingleItem().Disposition.ShouldBe(EventDeliveryDisposition.RetryScheduled);
     }
 
     [Fact]
@@ -115,10 +115,10 @@ public sealed class WorkerTransportAbstractionsTests
 
         int processedCount = await mediator.Send(new DispatchEventDeliveriesCommand(2));
 
-        Assert.Equal(2, processedCount);
-        Assert.Equal(2, queue.ClaimCallCount);
-        Assert.Equal(2, queue.Completions.Count);
-        Assert.Equal(["claim", "deliver", "finalize", "claim", "deliver", "finalize"], operations);
+        processedCount.ShouldBe(2);
+        queue.ClaimCallCount.ShouldBe(2);
+        queue.Completions.Count.ShouldBe(2);
+        operations.ShouldBe(["claim", "deliver", "finalize", "claim", "deliver", "finalize"]);
     }
 
     [Fact]
@@ -146,11 +146,11 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Single(capturedPayloads);
-        Assert.Equal(payload, capturedPayloads[0]);
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.True(completion.Succeeded);
-        Assert.Null(completion.FailurePhase);
+        capturedPayloads.ShouldHaveSingleItem();
+        capturedPayloads[0].ShouldBe(payload);
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeTrue();
+        completion.FailurePhase.ShouldBeNull();
     }
 
     [Fact]
@@ -180,9 +180,9 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Single(capturedPayloads);
-        Assert.Equal(transformedOutput, capturedPayloads[0]);
-        Assert.True(Assert.Single(queue.Completions).Succeeded);
+        capturedPayloads.ShouldHaveSingleItem();
+        capturedPayloads[0].ShouldBe(transformedOutput);
+        queue.Completions.ShouldHaveSingleItem().Succeeded.ShouldBeTrue();
     }
 
     [Theory]
@@ -212,11 +212,11 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.False(completion.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.Transform, completion.FailurePhase);
-        Assert.Contains("Unsupported", completion.ErrorMessage);
-        Assert.Empty(deliveryClient.DeliveredUrls);
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeFalse();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.Transform);
+        completion.ErrorMessage!.ShouldContain("Unsupported", Case.Sensitive);
+        deliveryClient.DeliveredUrls.ShouldBeEmpty();
     }
 
     [Fact]
@@ -245,11 +245,11 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        DeliveryAttemptCompletion completion = Assert.Single(queue.Completions);
-        Assert.False(completion.Succeeded);
-        Assert.Equal(DeliveryFailurePhase.Transform, completion.FailurePhase);
-        Assert.Equal(EventDeliveryDisposition.DeadLettered, Assert.Single(queue.Finalizations).Disposition);
-        Assert.Empty(deliveryClient.DeliveredUrls);
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeFalse();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.Transform);
+        queue.Finalizations.ShouldHaveSingleItem().Disposition.ShouldBe(EventDeliveryDisposition.DeadLettered);
+        deliveryClient.DeliveredUrls.ShouldBeEmpty();
     }
 
     [Fact]
@@ -271,17 +271,17 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        var succeeded = Assert.Single(
-            metrics.ForInstrument("integrios_deliveries_succeeded"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
-        Assert.Equal(1, succeeded.Value);
-        Assert.Equal(connectorKey, succeeded.Tag("connector_key"));
+        var succeeded = metrics.ForInstrument("integrios_deliveries_succeeded")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), connectorKey))
+            .ShouldHaveSingleItem();
+        succeeded.Value.ShouldBe(1);
+        succeeded.Tag("connector_key").ShouldBe(connectorKey);
 
-        var duration = Assert.Single(
-            metrics.ForInstrument("integrios_delivery_attempt_duration_seconds"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
-        Assert.Equal("success", duration.Tag("result"));
-        Assert.Equal(connectorKey, duration.Tag("connector_key"));
+        var duration = metrics.ForInstrument("integrios_delivery_attempt_duration_seconds")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), connectorKey))
+            .ShouldHaveSingleItem();
+        duration.Tag("result").ShouldBe("success");
+        duration.Tag("connector_key").ShouldBe(connectorKey);
     }
 
     [Theory]
@@ -309,15 +309,14 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        var failed = Assert.Single(
-            metrics.ForInstrument("integrios_deliveries_failed"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
-        Assert.Equal(1, failed.Value);
-        Assert.Equal(connectorKey, failed.Tag("connector_key"));
-        Assert.Equal(expectedClass, failed.Tag("http_status_class"));
-        Assert.DoesNotContain(
-            metrics.ForInstrument("integrios_deliveries_dead_lettered"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
+        var failed = metrics.ForInstrument("integrios_deliveries_failed")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), connectorKey))
+            .ShouldHaveSingleItem();
+        failed.Value.ShouldBe(1);
+        failed.Tag("connector_key").ShouldBe(connectorKey);
+        failed.Tag("http_status_class").ShouldBe(expectedClass);
+        metrics.ForInstrument("integrios_deliveries_dead_lettered")
+            .ShouldNotContain(measurement => Equals(measurement.Tag("connector_key"), connectorKey));
     }
 
     [Fact]
@@ -340,14 +339,13 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        var deadLettered = Assert.Single(
-            metrics.ForInstrument("integrios_deliveries_dead_lettered"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
-        Assert.Equal(1, deadLettered.Value);
-        Assert.Equal(connectorKey, deadLettered.Tag("connector_key"));
-        Assert.DoesNotContain(
-            metrics.ForInstrument("integrios_deliveries_failed"),
-            measurement => Equals(measurement.Tag("connector_key"), connectorKey));
+        var deadLettered = metrics.ForInstrument("integrios_deliveries_dead_lettered")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), connectorKey))
+            .ShouldHaveSingleItem();
+        deadLettered.Value.ShouldBe(1);
+        deadLettered.Tag("connector_key").ShouldBe(connectorKey);
+        metrics.ForInstrument("integrios_deliveries_failed")
+            .ShouldNotContain(measurement => Equals(measurement.Tag("connector_key"), connectorKey));
     }
 
     [Fact]
@@ -378,7 +376,7 @@ public sealed class WorkerTransportAbstractionsTests
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
         string[] forbidden = ["tenant_id", "subscription_id", "connection_id"];
-        Assert.DoesNotContain(metrics.AllTagKeys, key => forbidden.Contains(key));
+        metrics.AllTagKeys.ShouldNotContain(key => forbidden.Contains(key));
     }
 
     [Fact]
@@ -412,8 +410,9 @@ public sealed class WorkerTransportAbstractionsTests
         var deliverSpans = collector.Activities
             .Where(a => a.OperationName == "subscription.deliver" && Equals(a.GetTagItem("delivery_id"), deliveryId))
             .ToList();
-        Assert.Equal(2, deliverSpans.Count);
-        Assert.All(deliverSpans, span => Assert.Equal(expectedTraceId, span.TraceId));
+        deliverSpans.Count.ShouldBe(2);
+        foreach (var span in deliverSpans)
+            span.TraceId.ShouldBe(expectedTraceId);
     }
 
     [Fact]
@@ -431,7 +430,7 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.True(capturing.AnyEntryHasScopeKeys("event_id", "delivery_id", "subscription_id"));
+        capturing.AnyEntryHasScopeKeys("event_id", "delivery_id", "subscription_id").ShouldBeTrue();
     }
 
     [Fact]
@@ -456,13 +455,13 @@ public sealed class WorkerTransportAbstractionsTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Equal(DeliveryFinalizationStatus.OwnershipLost, Assert.Single(queue.Finalizations).Status);
-        Assert.Single(metrics.ForInstrument("integrios_delivery_stale_finalizations"));
-        Assert.DoesNotContain(metrics.ForInstrument("integrios_deliveries_succeeded"), m => Equals(m.Tag("connector_key"), connectorKey));
-        Assert.DoesNotContain(metrics.ForInstrument("integrios_deliveries_failed"), m => Equals(m.Tag("connector_key"), connectorKey));
-        Assert.DoesNotContain(metrics.ForInstrument("integrios_deliveries_dead_lettered"), m => Equals(m.Tag("connector_key"), connectorKey));
-        Assert.DoesNotContain(metrics.ForInstrument("integrios_delivery_attempt_duration_seconds"), m => Equals(m.Tag("connector_key"), connectorKey));
-        Assert.True(capturing.AnyMessageContains(attemptId.ToString()));
+        queue.Finalizations.ShouldHaveSingleItem().Status.ShouldBe(DeliveryFinalizationStatus.OwnershipLost);
+        metrics.ForInstrument("integrios_delivery_stale_finalizations").ShouldHaveSingleItem();
+        metrics.ForInstrument("integrios_deliveries_succeeded").ShouldNotContain(m => Equals(m.Tag("connector_key"), connectorKey));
+        metrics.ForInstrument("integrios_deliveries_failed").ShouldNotContain(m => Equals(m.Tag("connector_key"), connectorKey));
+        metrics.ForInstrument("integrios_deliveries_dead_lettered").ShouldNotContain(m => Equals(m.Tag("connector_key"), connectorKey));
+        metrics.ForInstrument("integrios_delivery_attempt_duration_seconds").ShouldNotContain(m => Equals(m.Tag("connector_key"), connectorKey));
+        capturing.AnyMessageContains(attemptId.ToString()).ShouldBeTrue();
     }
 
     [Fact]
@@ -493,17 +492,17 @@ public sealed class WorkerTransportAbstractionsTests
 
         int processed = await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        Assert.Equal(1, processed);
-        Assert.Single(deliveryClient.DeliveredUrls);
-        Assert.Equal(3, queue.ClaimCallCount);
-        var deadLettered = Assert.Single(
-            metrics.ForInstrument("integrios_deliveries_dead_lettered"),
-            measurement => Equals(measurement.Tag("connector_key"), "webhook"));
-        Assert.Equal("webhook", deadLettered.Tag("connector_key"));
-        Assert.True(capturing.AnyMessageContains(recovered.DeliveryId.ToString()));
-        Assert.True(capturing.AnyMessageContains(recovered.AttemptId.ToString()));
-        Assert.True(capturing.AnyMessageContains(recovered.EventId.ToString()));
-        Assert.True(capturing.AnyMessageContains(recovered.SubscriptionId.ToString()));
+        processed.ShouldBe(1);
+        deliveryClient.DeliveredUrls.ShouldHaveSingleItem();
+        queue.ClaimCallCount.ShouldBe(3);
+        var deadLettered = metrics.ForInstrument("integrios_deliveries_dead_lettered")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), "webhook"))
+            .ShouldHaveSingleItem();
+        deadLettered.Tag("connector_key").ShouldBe("webhook");
+        capturing.AnyMessageContains(recovered.DeliveryId.ToString()).ShouldBeTrue();
+        capturing.AnyMessageContains(recovered.AttemptId.ToString()).ShouldBeTrue();
+        capturing.AnyMessageContains(recovered.EventId.ToString()).ShouldBeTrue();
+        capturing.AnyMessageContains(recovered.SubscriptionId.ToString()).ShouldBeTrue();
     }
 
     [Fact]
@@ -525,11 +524,11 @@ public sealed class WorkerTransportAbstractionsTests
 
         int processed = await mediator.Send(new DispatchEventDeliveriesCommand(2));
 
-        Assert.Equal(2, processed);
-        Assert.Equal(2, deliveryClient.DeliveredUrls.Count);
-        Assert.Equal(2, queue.Completions.Count);
-        Assert.Single(queue.Finalizations);
-        Assert.Equal(queue.ClaimedItems[1].Id, queue.Completions[1].DeliveryId);
+        processed.ShouldBe(2);
+        deliveryClient.DeliveredUrls.Count.ShouldBe(2);
+        queue.Completions.Count.ShouldBe(2);
+        queue.Finalizations.ShouldHaveSingleItem();
+        queue.Completions[1].DeliveryId.ShouldBe(queue.ClaimedItems[1].Id);
     }
 
     [Fact]
@@ -555,11 +554,11 @@ public sealed class WorkerTransportAbstractionsTests
 
         int processed = await mediator.Send(new DispatchEventDeliveriesCommand(2));
 
-        Assert.Equal(2, processed);
-        Assert.Equal(2, deliveryClient.CallCount);
-        Assert.Equal(2, queue.Completions.Count);
-        Assert.Single(queue.Finalizations);
-        Assert.Equal(queue.ClaimedItems[1].Id, queue.Completions[1].DeliveryId);
+        processed.ShouldBe(2);
+        deliveryClient.CallCount.ShouldBe(2);
+        queue.Completions.Count.ShouldBe(2);
+        queue.Finalizations.ShouldHaveSingleItem();
+        queue.Completions[1].DeliveryId.ShouldBe(queue.ClaimedItems[1].Id);
     }
 
     private static async Task SendDispatch(FakeEventDeliveryQueue queue, DeliveryResult result)

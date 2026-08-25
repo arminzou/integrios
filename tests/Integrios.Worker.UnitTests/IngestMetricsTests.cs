@@ -23,8 +23,8 @@ public sealed class IngestMetricsTests
         var mediator = BuildMediator(alreadyAccepted: false);
         await mediator.Send(MakeCommand());
 
-        var ingested = Assert.Single(metrics.ForInstrument("integrios_events_ingested"));
-        Assert.Equal(1, ingested.Value);
+        var ingested = metrics.ForInstrument("integrios_events_ingested").ShouldHaveSingleItem();
+        ingested.Value.ShouldBe(1);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class IngestMetricsTests
         var mediator = BuildMediator(alreadyAccepted: true);
         await mediator.Send(MakeCommand());
 
-        Assert.Empty(metrics.ForInstrument("integrios_events_ingested"));
+        metrics.ForInstrument("integrios_events_ingested").ShouldBeEmpty();
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class IngestMetricsTests
 
         await mediator.Send(MakeCommand());
 
-        Assert.True(capturing.AnyEntryHasScopeKeys("event_id", "tenant_id", "topic_id"));
+        capturing.AnyEntryHasScopeKeys("event_id", "tenant_id", "topic_id").ShouldBeTrue();
     }
 
     [Fact]
@@ -70,10 +70,10 @@ public sealed class IngestMetricsTests
 
         IngestEventResult result = await mediator.Send(MakeCommand());
 
-        Assert.Equal(acceptance.EventId, result.EventId);
-        Assert.Equal(acceptance.Status, result.Status);
-        Assert.Equal(acceptedAt, result.AcceptedAt);
-        Assert.True(result.AlreadyAccepted);
+        result.EventId.ShouldBe(acceptance.EventId);
+        result.Status.ShouldBe(acceptance.Status);
+        result.AcceptedAt.ShouldBe(acceptedAt);
+        result.AlreadyAccepted.ShouldBeTrue();
     }
 
     [Fact]
@@ -86,12 +86,12 @@ public sealed class IngestMetricsTests
 
         await mediator.Send(command);
 
-        EventSubmission submission = Assert.IsType<EventSubmission>(acceptance.LastSubmission);
-        Assert.Equal(command.TenantId, submission.TenantId);
-        Assert.Equal(topicId, submission.TopicId);
-        Assert.Equal(command.SourceId, submission.SourceId);
-        Assert.Equal("payment.created", submission.EventType);
-        Assert.Equal(command.RawInput.GetProperty("amount").GetInt32(), submission.Payload.GetProperty("amount").GetInt32());
+        EventSubmission submission = acceptance.LastSubmission.ShouldBeOfType<EventSubmission>();
+        submission.TenantId.ShouldBe(command.TenantId);
+        submission.TopicId.ShouldBe(topicId);
+        submission.SourceId.ShouldBe(command.SourceId);
+        submission.EventType.ShouldBe("payment.created");
+        submission.Payload.GetProperty("amount").GetInt32().ShouldBe(command.RawInput.GetProperty("amount").GetInt32());
     }
 
     private static IngestEventCommand MakeCommand() => new(

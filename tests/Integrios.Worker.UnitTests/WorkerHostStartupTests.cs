@@ -31,9 +31,9 @@ public sealed class WorkerHostStartupTests
         worker.AddTelemetryServices(configuration, "integrios-worker");
         worker.AddOutboxDepthMetricsServices(configuration);
 
-        Assert.DoesNotContain(admin, IsOutboxDepthMetricsRegistration);
-        Assert.DoesNotContain(ingestion, IsOutboxDepthMetricsRegistration);
-        Assert.Single(worker, IsOutboxDepthMetricsRegistration);
+        admin.ShouldNotContain(descriptor => IsOutboxDepthMetricsRegistration(descriptor));
+        ingestion.ShouldNotContain(descriptor => IsOutboxDepthMetricsRegistration(descriptor));
+        worker.Where(IsOutboxDepthMetricsRegistration).ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -54,12 +54,11 @@ public sealed class WorkerHostStartupTests
         Type[] hostedTypes = provider.GetServices<IHostedService>()
             .Select(service => service.GetType())
             .ToArray();
-        Assert.Contains(typeof(OutboxFanoutWorker), hostedTypes);
-        Assert.Contains(typeof(EventDeliveryWorker), hostedTypes);
-        Assert.Equal(2, hostedTypes.Length);
-        Assert.Equal(
-            provider.GetRequiredService<DeliveryExecutionOptions>().ShutdownGracePeriod,
-            provider.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout);
+        hostedTypes.ShouldContain(typeof(OutboxFanoutWorker));
+        hostedTypes.ShouldContain(typeof(EventDeliveryWorker));
+        hostedTypes.Length.ShouldBe(2);
+        provider.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout.ShouldBe(
+            provider.GetRequiredService<DeliveryExecutionOptions>().ShutdownGracePeriod);
     }
 
     [Fact]
@@ -77,12 +76,11 @@ public sealed class WorkerHostStartupTests
             ValidateScopes = true
         });
 
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(FanoutLoopOptions));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(DeliveryLoopOptions));
-        Assert.Equal(
-            provider.GetRequiredService<DeliveryExecutionOptions>().ShutdownGracePeriod,
-            provider.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout);
+        services.ShouldNotContain(descriptor => descriptor.ServiceType == typeof(IHostedService));
+        services.ShouldNotContain(descriptor => descriptor.ServiceType == typeof(FanoutLoopOptions));
+        services.ShouldNotContain(descriptor => descriptor.ServiceType == typeof(DeliveryLoopOptions));
+        provider.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout.ShouldBe(
+            provider.GetRequiredService<DeliveryExecutionOptions>().ShutdownGracePeriod);
     }
 
     private static IConfiguration BuildConfiguration(Dictionary<string, string?>? values = null)

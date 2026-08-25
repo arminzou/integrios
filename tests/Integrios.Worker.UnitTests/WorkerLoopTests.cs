@@ -55,8 +55,8 @@ public sealed class WorkerLoopTests
         await deliveryEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
         await fanoutCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.False(releaseDelivery.Task.IsCompleted);
-        Assert.True(fanoutCalls >= 1);
+        releaseDelivery.Task.IsCompleted.ShouldBeFalse();
+        (fanoutCalls >= 1).ShouldBeTrue();
 
         releaseDelivery.TrySetResult();
         await cancellation.CancelAsync();
@@ -102,10 +102,10 @@ public sealed class WorkerLoopTests
         Task deliveryTask = delivery.RunAsync(cancellation.Token);
         await deliveryFinalized.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.True(deliveryQueue.ClaimCallCount >= 1);
-        DeliveryAttemptCompletion completion = Assert.Single(deliveryQueue.Completions);
-        Assert.True(completion.Succeeded);
-        Assert.True(delay.Calls >= 1);
+        (deliveryQueue.ClaimCallCount >= 1).ShouldBeTrue();
+        DeliveryAttemptCompletion completion = deliveryQueue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeTrue();
+        (delay.Calls >= 1).ShouldBeTrue();
 
         await cancellation.CancelAsync();
         await Task.WhenAll(fanoutTask, deliveryTask).WaitAsync(TimeSpan.FromSeconds(2));
@@ -126,8 +126,8 @@ public sealed class WorkerLoopTests
 
         await worker.RunAsync(cancellation.Token);
 
-        Assert.Equal(2, calls);
-        Assert.Equal([TimeSpan.FromMilliseconds(123)], delay.Delays);
+        calls.ShouldBe(2);
+        delay.Delays.ShouldBe([TimeSpan.FromMilliseconds(123)]);
     }
 
     [Fact]
@@ -145,8 +145,8 @@ public sealed class WorkerLoopTests
 
         await worker.RunAsync(cancellation.Token);
 
-        Assert.Equal([TimeSpan.FromMilliseconds(456)], delay.Delays);
-        Assert.Single(loggerProvider.Messages, message => message.Contains("Unhandled error", StringComparison.Ordinal));
+        delay.Delays.ShouldBe([TimeSpan.FromMilliseconds(456)]);
+        loggerProvider.Messages.Where(message => message.Contains("Unhandled error", StringComparison.Ordinal)).ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -169,8 +169,8 @@ public sealed class WorkerLoopTests
 
         await worker.RunAsync(cancellation.Token);
 
-        Assert.Empty(delay.Delays);
-        Assert.DoesNotContain(loggerProvider.Messages, message => message.Contains("Unhandled error", StringComparison.Ordinal));
+        delay.Delays.ShouldBeEmpty();
+        loggerProvider.Messages.ShouldNotContain(message => message.Contains("Unhandled error", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -210,11 +210,11 @@ public sealed class WorkerLoopTests
         try
         {
             await Task.Yield();
-            Assert.False(stopping.IsCompleted);
+            stopping.IsCompleted.ShouldBeFalse();
 
             deliveryClient.Release.TrySetResult();
             await stopping.WaitAsync(TimeSpan.FromSeconds(2));
-            Assert.True(deliveryFinalized.Task.IsCompleted);
+            deliveryFinalized.Task.IsCompleted.ShouldBeTrue();
         }
         finally
         {
@@ -222,8 +222,8 @@ public sealed class WorkerLoopTests
             await stopping.WaitAsync(TimeSpan.FromSeconds(2));
         }
 
-        DeliveryAttemptCompletion completion = Assert.Single(deliveryQueue.Completions);
-        Assert.True(completion.Succeeded);
+        DeliveryAttemptCompletion completion = deliveryQueue.Completions.ShouldHaveSingleItem();
+        completion.Succeeded.ShouldBeTrue();
     }
 
     [Fact]
@@ -241,8 +241,8 @@ public sealed class WorkerLoopTests
 
         await worker.RunAsync(cancellation.Token);
 
-        var command = Assert.IsType<ProcessOutboxBatchCommand>(Assert.Single(sender.Requests));
-        Assert.Equal(7, command.BatchSize);
+        var command = sender.Requests.ShouldHaveSingleItem().ShouldBeOfType<ProcessOutboxBatchCommand>();
+        command.BatchSize.ShouldBe(7);
     }
 
     [Fact]
@@ -260,8 +260,8 @@ public sealed class WorkerLoopTests
 
         await worker.RunAsync(cancellation.Token);
 
-        var command = Assert.IsType<DispatchEventDeliveriesCommand>(Assert.Single(sender.Requests));
-        Assert.Equal(13, command.BatchSize);
+        var command = sender.Requests.ShouldHaveSingleItem().ShouldBeOfType<DispatchEventDeliveriesCommand>();
+        command.BatchSize.ShouldBe(13);
     }
 
     private static TaskCompletionSource NewSignal() =>

@@ -28,9 +28,9 @@ public sealed class SecretValidationCliTests
         int exitCode = await SecretValidationCli.RunAsync(
             ["secrets", "validate", "--tenant", "tenant-a"], services, output, error);
 
-        Assert.Equal(1, exitCode);
-        Assert.Contains($"connection {connection.Id} / api_key: unresolvable", output.ToString());
-        Assert.Empty(error.ToString());
+        exitCode.ShouldBe(1);
+        output.ToString().ShouldContain($"connection {connection.Id} / api_key: unresolvable", Case.Sensitive);
+        error.ToString().ShouldBeEmpty();
     }
 
     [Fact]
@@ -57,9 +57,9 @@ public sealed class SecretValidationCliTests
         int exitCode = await SecretValidationCli.RunAsync(
             ["secrets", "validate", "--all"], services, output, error);
 
-        Assert.Equal(0, exitCode);
-        Assert.Contains("Validated 2 secret reference(s): resolvable", output.ToString());
-        Assert.DoesNotContain("missing", output.ToString());
+        exitCode.ShouldBe(0);
+        output.ToString().ShouldContain("Validated 2 secret reference(s): resolvable", Case.Sensitive);
+        output.ToString().ShouldNotContain("missing", Case.Sensitive);
     }
 
     [Fact]
@@ -73,8 +73,8 @@ public sealed class SecretValidationCliTests
         int exitCode = await SecretValidationCli.RunAsync(
             ["secrets", "validate", "--tenant", "tenant-a"], services, output, error);
 
-        Assert.Equal(2, exitCode);
-        Assert.Contains("The selected Tenant is not active.", error.ToString());
+        exitCode.ShouldBe(2);
+        error.ToString().ShouldContain("The selected Tenant is not active.", Case.Sensitive);
     }
 
     [Fact]
@@ -96,9 +96,9 @@ public sealed class SecretValidationCliTests
             output,
             error);
 
-        Assert.Equal(0, exitCode);
-        Assert.Contains(selected.Id.ToString(), output.ToString());
-        Assert.DoesNotContain(other.Id.ToString(), output.ToString());
+        exitCode.ShouldBe(0);
+        output.ToString().ShouldContain(selected.Id.ToString(), Case.Sensitive);
+        output.ToString().ShouldNotContain(other.Id.ToString(), Case.Sensitive);
     }
 
     [Fact]
@@ -122,8 +122,8 @@ public sealed class SecretValidationCliTests
         string standardError = await process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
 
-        Assert.Equal(2, process.ExitCode);
-        Assert.Equal("Secret validation could not start with the current configuration.", standardError.Trim());
+        process.ExitCode.ShouldBe(2);
+        standardError.Trim().ShouldBe("Secret validation could not start with the current configuration.");
     }
 
     [Theory]
@@ -138,8 +138,8 @@ public sealed class SecretValidationCliTests
 
         int exitCode = await SecretValidationCli.RunAsync(args, services, output, error);
 
-        Assert.Equal(2, exitCode);
-        Assert.Contains("Usage: secrets validate", error.ToString());
+        exitCode.ShouldBe(2);
+        error.ToString().ShouldContain("Usage: secrets validate", Case.Sensitive);
     }
 
     private static ServiceProvider BuildServices(

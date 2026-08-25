@@ -10,8 +10,8 @@ public sealed class HttpSuccessEvaluatorTests
     {
         bool accepted = HttpSuccessEvaluator.Evaluate(null, Body("{}"), out string? diagnostic);
 
-        Assert.True(accepted);
-        Assert.Null(diagnostic);
+        accepted.ShouldBeTrue();
+        diagnostic.ShouldBeNull();
     }
 
     [Fact]
@@ -21,8 +21,8 @@ public sealed class HttpSuccessEvaluatorTests
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"ok\":false}"), out string? diagnostic);
 
-        Assert.True(accepted);
-        Assert.Null(diagnostic);
+        accepted.ShouldBeTrue();
+        diagnostic.ShouldBeNull();
     }
 
     [Fact]
@@ -32,8 +32,8 @@ public sealed class HttpSuccessEvaluatorTests
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"ok\":true}"), out string? diagnostic);
 
-        Assert.True(accepted);
-        Assert.Null(diagnostic);
+        accepted.ShouldBeTrue();
+        diagnostic.ShouldBeNull();
     }
 
     [Fact]
@@ -47,8 +47,8 @@ public sealed class HttpSuccessEvaluatorTests
         bool accepted = HttpSuccessEvaluator.Evaluate(
             contract, Body("""{"ok":false,"error":"channel_not_found"}"""), out string? diagnostic);
 
-        Assert.False(accepted);
-        Assert.Equal("channel_not_found", diagnostic);
+        accepted.ShouldBeFalse();
+        diagnostic.ShouldBe("channel_not_found");
     }
 
     [Fact]
@@ -61,8 +61,8 @@ public sealed class HttpSuccessEvaluatorTests
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("""{"ok":false}"""), out string? diagnostic);
 
-        Assert.False(accepted);
-        Assert.Contains("ok", diagnostic, StringComparison.Ordinal);
+        accepted.ShouldBeFalse();
+        diagnostic!.ShouldContain("ok", Case.Sensitive);
     }
 
     [Fact]
@@ -72,8 +72,8 @@ public sealed class HttpSuccessEvaluatorTests
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("not json"), out string? diagnostic);
 
-        Assert.False(accepted);
-        Assert.NotNull(diagnostic);
+        accepted.ShouldBeFalse();
+        diagnostic.ShouldNotBeNull();
     }
 
     [Fact]
@@ -83,8 +83,8 @@ public sealed class HttpSuccessEvaluatorTests
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"other\":1}"), out string? diagnostic);
 
-        Assert.False(accepted);
-        Assert.NotNull(diagnostic);
+        accepted.ShouldBeFalse();
+        diagnostic.ShouldNotBeNull();
     }
 
     [Fact]
@@ -94,8 +94,8 @@ public sealed class HttpSuccessEvaluatorTests
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("{\"ok\":\"true\"}"), out string? diagnostic);
 
-        Assert.False(accepted);
-        Assert.NotNull(diagnostic);
+        accepted.ShouldBeFalse();
+        diagnostic.ShouldNotBeNull();
     }
 
     [Fact]
@@ -105,8 +105,8 @@ public sealed class HttpSuccessEvaluatorTests
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("[1,2,3]"), out string? diagnostic);
 
-        Assert.False(accepted);
-        Assert.NotNull(diagnostic);
+        accepted.ShouldBeFalse();
+        diagnostic.ShouldNotBeNull();
     }
 
     private static byte[] Body(string json) => Encoding.UTF8.GetBytes(json);

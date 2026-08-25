@@ -18,12 +18,12 @@ public sealed class DeliveryExecutionOptionsTests
     {
         DeliveryExecutionOptions options = DeliveryExecutionOptions.Default;
 
-        Assert.Equal(TimeSpan.FromSeconds(30), options.HttpTimeout);
-        Assert.Equal(TimeSpan.FromSeconds(45), options.AttemptDeadline);
-        Assert.Equal(TimeSpan.FromMinutes(2), options.LeaseDuration);
-        Assert.Equal(TimeSpan.FromSeconds(60), options.ShutdownGracePeriod);
-        Assert.Equal(TimeSpan.FromSeconds(30), options.RetryBaseDelay);
-        Assert.Equal(3, options.RetryMaxAttempts);
+        options.HttpTimeout.ShouldBe(TimeSpan.FromSeconds(30));
+        options.AttemptDeadline.ShouldBe(TimeSpan.FromSeconds(45));
+        options.LeaseDuration.ShouldBe(TimeSpan.FromMinutes(2));
+        options.ShutdownGracePeriod.ShouldBe(TimeSpan.FromSeconds(60));
+        options.RetryBaseDelay.ShouldBe(TimeSpan.FromSeconds(30));
+        options.RetryMaxAttempts.ShouldBe(3);
         options.Validate();
     }
 
@@ -31,9 +31,9 @@ public sealed class DeliveryExecutionOptionsTests
     [MemberData(nameof(InvalidOptions))]
     public void Validate_RejectsUnsafeTimingRelationships(DeliveryExecutionOptions options, string expectedSetting)
     {
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(options.Validate);
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(options.Validate);
 
-        Assert.Contains(expectedSetting, exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain(expectedSetting, Case.Sensitive);
     }
 
     public static TheoryData<DeliveryExecutionOptions, string> InvalidOptions => new()
@@ -66,9 +66,9 @@ public sealed class DeliveryExecutionOptionsTests
         RetryPolicy policy = provider.GetRequiredService<RetryPolicy>();
 
         // Worker configuration is the only delivery-policy registration.
-        Assert.Equal(TimeSpan.FromSeconds(2), policy.BaseDelay);
-        Assert.Equal(5, policy.MaxAttempts);
-        Assert.Equal(TimeSpan.FromSeconds(4), policy.CalculateBackoff(2));
+        policy.BaseDelay.ShouldBe(TimeSpan.FromSeconds(2));
+        policy.MaxAttempts.ShouldBe(5);
+        policy.CalculateBackoff(2).ShouldBe(TimeSpan.FromSeconds(4));
     }
 
     [Fact]
@@ -79,10 +79,10 @@ public sealed class DeliveryExecutionOptionsTests
             ["Integrios:Delivery:Retry:MaxAttempts"] = "many"
         });
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
             new ServiceCollection().AddWorkerInfrastructureServices(configuration));
 
-        Assert.Contains("Retry:MaxAttempts", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("Retry:MaxAttempts", Case.Sensitive);
     }
 
     [Fact]
@@ -106,13 +106,13 @@ public sealed class DeliveryExecutionOptionsTests
         HttpClient deliveryHttpClient = provider.GetRequiredService<IHttpClientFactory>()
             .CreateClient(nameof(IDeliveryClient));
 
-        Assert.Equal(TimeSpan.FromSeconds(11), options.HttpTimeout);
-        Assert.Equal(TimeSpan.FromSeconds(22), options.AttemptDeadline);
-        Assert.Equal(TimeSpan.FromSeconds(44), options.LeaseDuration);
-        Assert.Equal(TimeSpan.FromSeconds(33), options.ShutdownGracePeriod);
-        Assert.Equal(options.HttpTimeout, deliveryHttpClient.Timeout);
+        options.HttpTimeout.ShouldBe(TimeSpan.FromSeconds(11));
+        options.AttemptDeadline.ShouldBe(TimeSpan.FromSeconds(22));
+        options.LeaseDuration.ShouldBe(TimeSpan.FromSeconds(44));
+        options.ShutdownGracePeriod.ShouldBe(TimeSpan.FromSeconds(33));
+        deliveryHttpClient.Timeout.ShouldBe(options.HttpTimeout);
         // The Worker composition root, not its Infrastructure module, owns shutdown behavior.
-        Assert.Equal(new HostOptions().ShutdownTimeout, hostOptions.ShutdownTimeout);
+        hostOptions.ShutdownTimeout.ShouldBe(new HostOptions().ShutdownTimeout);
     }
 
     [Fact]
@@ -124,10 +124,10 @@ public sealed class DeliveryExecutionOptionsTests
             ["Integrios:Delivery:AttemptDeadline"] = "00:00:20"
         });
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
             new ServiceCollection().AddWorkerInfrastructureServices(configuration));
 
-        Assert.Contains("AttemptDeadline", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("AttemptDeadline", Case.Sensitive);
     }
 
     [Fact]
@@ -159,10 +159,10 @@ public sealed class DeliveryExecutionOptionsTests
         await stopServer.CancelAsync();
         RedirectObservation observation = await serverTask;
 
-        Assert.False(result.Succeeded);
-        Assert.Equal((int)HttpStatusCode.Found, result.StatusCode);
-        Assert.Equal(1, observation.RequestCount);
-        Assert.Contains("X-Api-Key: must-not-follow", observation.FirstRequest, StringComparison.OrdinalIgnoreCase);
+        result.Succeeded.ShouldBeFalse();
+        result.StatusCode.ShouldBe((int)HttpStatusCode.Found);
+        observation.RequestCount.ShouldBe(1);
+        observation.FirstRequest.ShouldContain("X-Api-Key: must-not-follow", Case.Insensitive);
     }
 
     private static IConfiguration BuildConfiguration(Dictionary<string, string?> values)
