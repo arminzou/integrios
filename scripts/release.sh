@@ -12,20 +12,24 @@ fi
 CURRENT_VERSION=$(cat "$VERSION_FILE")
 BUMP_TYPE="${1:-patch}"
 PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+CURRENT_TAG="v$CURRENT_VERSION"
 
-# Parse and bump version
-IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-case $BUMP_TYPE in
-  major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-  minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-  patch) PATCH=$((PATCH+1)) ;;
-  *)
-    echo "Usage: $0 {major|minor|patch}" >&2
-    exit 1
-    ;;
-esac
-
-NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+if git rev-parse -q --verify "refs/tags/$CURRENT_TAG" >/dev/null; then
+  # Parse and bump an already-released version.
+  IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+  case $BUMP_TYPE in
+    major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+    minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+    patch) PATCH=$((PATCH+1)) ;;
+    *)
+      echo "Usage: $0 {major|minor|patch}" >&2
+      exit 1
+      ;;
+  esac
+  NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+else
+  NEW_VERSION="$CURRENT_VERSION"
+fi
 
 # Generate changelog from commits since last tag
 if [[ -n "$PREV_TAG" ]]; then
@@ -34,13 +38,14 @@ else
   CHANGELOG=$(git log --pretty=format:"- %s" 2>/dev/null | grep -E "^- (feat|fix|refactor|perf|docs)" || echo "Initial release")
 fi
 
-# Update version file
-echo "$NEW_VERSION" > "$VERSION_FILE"
-echo "Updated $VERSION_FILE: $CURRENT_VERSION → $NEW_VERSION"
+# Commit a bump only when the current version was already released.
+if [[ "$NEW_VERSION" != "$CURRENT_VERSION" ]]; then
+  echo "$NEW_VERSION" > "$VERSION_FILE"
+  echo "Updated $VERSION_FILE: $CURRENT_VERSION → $NEW_VERSION"
+  git add VERSION
+  git commit -m "chore: release $NEW_VERSION"
+fi
 
-# Commit and tag
-git add VERSION
-git commit -m "chore: release $NEW_VERSION"
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION
 
 $CHANGELOG"
