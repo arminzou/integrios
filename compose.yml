@@ -19,7 +19,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Admin
     image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
@@ -37,7 +37,7 @@ services:
     # see deploy/ for the production reference.
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Admin
     image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
@@ -53,7 +53,7 @@ services:
   ingestion:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Ingestion
         MOUNT_ROOT: /run/secrets/integrios/source
@@ -72,7 +72,7 @@ services:
   admin:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Admin
     image: ${INTEGRIOS_ADMIN_IMAGE:-integrios-admin:dev}
@@ -89,7 +89,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Worker
         MOUNT_ROOT: /run/secrets/integrios/destination
@@ -107,7 +107,7 @@ services:
   mocksink:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
       args:
         PROJECT: Integrios.MockSink
     image: ${INTEGRIOS_MOCKSINK_IMAGE:-integrios-mocksink:dev}
