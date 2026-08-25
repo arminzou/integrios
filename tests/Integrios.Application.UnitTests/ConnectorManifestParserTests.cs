@@ -462,7 +462,7 @@ public sealed class ConnectorManifestParserTests
 
     private static JsonElement Json(string value) => JsonSerializer.Deserialize<JsonElement>(value);
 
-    private static readonly ITransformEvaluator MappingEvaluator = new Integrios.Infrastructure.Transforms.JsonataTransformEvaluator();
+    private static readonly ITransformEvaluator MappingEvaluator = new FakeMappingEvaluator();
 
     private static ConnectorManifest ParseAsBootstrap(JsonElement document) =>
         ConnectorManifestParser.Parse(
@@ -507,6 +507,31 @@ public sealed class ConnectorManifestParserTests
             IDictionary<string, string> headers,
             JsonElement config,
             IReadOnlyDictionary<string, string> secrets) => throw new NotSupportedException();
+    }
+
+    // Validates manifest-declared mapping expressions well enough to tell the two fixtures apart:
+    // the accepted source-contract mapping is a balanced object, the rejected one is an unclosed brace.
+    // Real JSONata syntax rejection is proven by Infrastructure TransformEvaluatorTests.
+    private sealed class FakeMappingEvaluator : ITransformEvaluator
+    {
+        public string? ValidateExpression(TransformSpec transform)
+        {
+            string expression = transform.Expression.Trim();
+            int depth = 0;
+            foreach (char c in expression)
+            {
+                if (c == '{') depth++;
+                else if (c == '}') depth--;
+                if (depth < 0)
+                    return "Invalid JSONata expression: unexpected '}'.";
+            }
+
+            return depth == 0 && expression.Length > 0 ? null : "Invalid JSONata expression: unclosed object.";
+        }
+
+        public string Evaluate(TransformSpec transform, string payloadJson, TransformContext context) => payloadJson;
+
+        public string Evaluate(TransformSpec transform, string payloadJson, JsonElement? context) => payloadJson;
     }
 
 }

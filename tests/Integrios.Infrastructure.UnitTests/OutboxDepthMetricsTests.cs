@@ -5,8 +5,9 @@ using Integrios.Infrastructure.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Integrios.Tests.Shared;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 public sealed class OutboxDepthMetricsTests
 {

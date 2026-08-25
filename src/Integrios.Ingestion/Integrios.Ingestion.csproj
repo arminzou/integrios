@@ -17,4 +17,7 @@
     <ProjectReference Include="..\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Integrios.Ingestion.UnitTests" />
+  </ItemGroup>
 </Project>

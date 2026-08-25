@@ -1,7 +1,7 @@
 using System.Text;
 using Integrios.Application.Delivery;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Application.UnitTests;
 
 public sealed class HttpSuccessEvaluatorTests
 {

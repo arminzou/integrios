@@ -3,7 +3,6 @@ using Integrios.Application.Ingestion;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
-using Integrios.Infrastructure.Transforms;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +19,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddApplicationServices();
-        services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
+        services.AddSingleton<ITransformEvaluator>(new FakeTransformEvaluator());
         services.AddSingleton<IEventAcceptance>(eventAcceptance);
         provider = services.BuildServiceProvider();
         mediator = provider.GetRequiredService<IMediator>();
@@ -113,6 +112,26 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
                 AcceptedAt = DateTimeOffset.UtcNow,
                 AlreadyAccepted = AlreadyAccepted,
             });
+        }
+    }
+
+    // Passes the input through unchanged for identity mappings and fails when the expression is an
+    // explicit $error — enough for the handler's mapping-failure path without the real JSONata engine.
+    private sealed class FakeTransformEvaluator : ITransformEvaluator
+    {
+        public string? ValidateExpression(TransformSpec transform) => null;
+
+        public string Evaluate(TransformSpec transform, string payloadJson, TransformContext context)
+            => Evaluate(transform, payloadJson);
+
+        public string Evaluate(TransformSpec transform, string payloadJson, JsonElement? context)
+            => Evaluate(transform, payloadJson);
+
+        private static string Evaluate(TransformSpec transform, string payloadJson)
+        {
+            if (transform.Expression.Contains("$error", StringComparison.Ordinal))
+                throw new TransformEvaluationException("evaluation failed");
+            return payloadJson;
         }
     }
 }

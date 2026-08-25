@@ -8,10 +8,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Integrios.FunctionalTests" />
-    <InternalsVisibleTo Include="Integrios.Worker.UnitTests" />
     <InternalsVisibleTo Include="Integrios.Application.UnitTests" />
-    <InternalsVisibleTo Include="Integrios.Admin.UnitTests" />
-    <InternalsVisibleTo Include="Integrios.Ingestion.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>

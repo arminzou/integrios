@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Application.UnitTests;
 
 // Captures activities produced by a single ActivitySource. Create it before the spans are
 // started; the AllData sample makes the source actually emit activities under test.

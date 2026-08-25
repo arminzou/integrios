@@ -5,7 +5,7 @@ using Integrios.Infrastructure.Secrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 public sealed class SecretResolverTests : IDisposable
 {

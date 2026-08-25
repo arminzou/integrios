@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using Integrios.Application.Telemetry;
 using MediatR;
+using Integrios.Tests.Shared;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Application.UnitTests;
 
 public sealed class TelemetryBehaviorTests
 {

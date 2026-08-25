@@ -1,53 +1,18 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Integrios.Application.Delivery;
 using Integrios.Application;
+using Integrios.Application.Delivery;
 using Integrios.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
-public sealed class DeliveryExecutionOptionsTests
+public sealed class WorkerInfrastructureRegistrationTests
 {
-    [Fact]
-    public void Defaults_MatchFencedLeaseTimingContract()
-    {
-        DeliveryExecutionOptions options = DeliveryExecutionOptions.Default;
-
-        options.HttpTimeout.ShouldBe(TimeSpan.FromSeconds(30));
-        options.AttemptDeadline.ShouldBe(TimeSpan.FromSeconds(45));
-        options.LeaseDuration.ShouldBe(TimeSpan.FromMinutes(2));
-        options.ShutdownGracePeriod.ShouldBe(TimeSpan.FromSeconds(60));
-        options.RetryBaseDelay.ShouldBe(TimeSpan.FromSeconds(30));
-        options.RetryMaxAttempts.ShouldBe(3);
-        options.Validate();
-    }
-
-    [Theory]
-    [MemberData(nameof(InvalidOptions))]
-    public void Validate_RejectsUnsafeTimingRelationships(DeliveryExecutionOptions options, string expectedSetting)
-    {
-        InvalidOperationException exception = Should.Throw<InvalidOperationException>(options.Validate);
-
-        exception.Message.ShouldContain(expectedSetting, Case.Sensitive);
-    }
-
-    public static TheoryData<DeliveryExecutionOptions, string> InvalidOptions => new()
-    {
-        { new(TimeSpan.Zero, TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(60)), "HttpTimeout" },
-        { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(60)), "AttemptDeadline" },
-        { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(60)), "LeaseDuration" },
-        { new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(45)), "ShutdownGracePeriod" },
-        { Valid with { RetryBaseDelay = TimeSpan.Zero }, "Retry:BaseDelay" },
-        { Valid with { RetryMaxAttempts = 0 }, "Retry:MaxAttempts" }
-    };
-
-    private static DeliveryExecutionOptions Valid => DeliveryExecutionOptions.Default;
-
     [Fact]
     public void WorkerInfrastructureRegistration_AppliesConfiguredRetryPolicy()
     {
@@ -58,7 +23,7 @@ public sealed class DeliveryExecutionOptionsTests
         });
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddApplicationServices();
+        services.AddWorkerApplicationServices();
         services.AddWorkerInfrastructureServices(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
@@ -97,7 +62,7 @@ public sealed class DeliveryExecutionOptionsTests
         });
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddApplicationServices();
+        services.AddWorkerApplicationServices();
         services.AddWorkerInfrastructureServices(configuration);
         using ServiceProvider provider = services.BuildServiceProvider();
 
@@ -144,7 +109,7 @@ public sealed class DeliveryExecutionOptionsTests
         IConfiguration configuration = BuildConfiguration([]);
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddApplicationServices();
+        services.AddWorkerApplicationServices();
         services.AddWorkerInfrastructureServices(configuration);
         await using ServiceProvider provider = services.BuildServiceProvider();
         IDeliveryClient deliveryClient = provider.GetRequiredService<IDeliveryClient>();

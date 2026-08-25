@@ -1,33 +1,13 @@
 using System.Text.Json;
-using Integrios.Application.Delivery;
 using Integrios.Application.Authoring.Subscriptions;
-using Integrios.Application.Transforms;
-using Integrios.Domain.Entities;
+using Integrios.Application.Delivery;
 using Integrios.Domain.ValueObjects;
-using Integrios.Infrastructure.Delivery;
+using Integrios.Tests.Shared;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Application.UnitTests;
 
-public sealed class HttpDeliveryContractTests
+public sealed class HttpDeliveryConfigurationRulesTests
 {
-    [Fact]
-    public void Configuration_SerializesTheExactVersionOneShape()
-    {
-        var configuration = new HttpDeliveryConfiguration
-        {
-            Version = 1,
-            Method = "PATCH",
-            Path = "contacts",
-            Headers = new Dictionary<string, string> { ["X-Operation"] = "upsert" },
-            Body = "json"
-        };
-
-        string json = JsonSerializer.Serialize(configuration, StoredJson.Options);
-
-        json.ShouldBe(
-            """{"version":1,"method":"PATCH","path":"contacts","headers":{"X-Operation":"upsert"},"body":"json"}""");
-    }
-
     [Fact]
     public void Authoring_RejectsUnknownConfigurationVersion()
     {
@@ -37,15 +17,6 @@ public sealed class HttpDeliveryContractTests
             () => HttpDeliveryConfigurationRules.Validate(configuration));
 
         error.Message.ShouldBe("http_delivery.version must be 1.");
-    }
-
-    [Theory]
-    [InlineData("""{"version":1,"method":"POST","headers":{},"body":"json","unknown":true}""")]
-    [InlineData("""{"version":1,"method":"POST","path_expression":{"engine":"jsonata","version":"1","expression":"id"},"headers":{},"body":"json"}""")]
-    public void Configuration_RejectsUnknownMembers(string json)
-    {
-        Should.Throw<JsonException>(
-            () => JsonSerializer.Deserialize<HttpDeliveryConfiguration>(json, StoredJson.Options));
     }
 
     [Theory]
@@ -143,7 +114,7 @@ public sealed class HttpDeliveryContractTests
             "api_key_header",
             """{"header_name":"X-API-KEY"}""",
             """{"api_key":"destination_key"}""");
-        IDestinationAuthenticatorRegistry registry = new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator()]);
+        IDestinationAuthenticatorRegistry registry = new FakeDestinationAuthenticatorRegistry(new FakeApiKeyHeaderAuthenticator());
 
         var error = Should.Throw<SubscriptionValidationException>(
             () => HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
@@ -152,47 +123,6 @@ public sealed class HttpDeliveryContractTests
                 registry));
 
         error.Message.ShouldBe("http_delivery header 'X-API-KEY' is owned by destination authentication.");
-    }
-
-    [Theory]
-    [InlineData("https://slack.com/api", "chat.postMessage", "https://slack.com/api/chat.postMessage")]
-    [InlineData("https://slack.com/api/", "/chat.postMessage", "https://slack.com/api/chat.postMessage")]
-    [InlineData("https://slack.com/api///", "/chat.postMessage", "https://slack.com/api/chat.postMessage")]
-    [InlineData("https://dsg.crm.test/api/data/v9.2", "/contacts?$select=fullname,emailaddress1", "https://dsg.crm.test/api/data/v9.2/contacts?$select=fullname,emailaddress1")]
-    [InlineData("https://dsg.crm.test/api/data/v9.2", "?$select=fullname", "https://dsg.crm.test/api/data/v9.2?$select=fullname")]
-    public void Composition_AppendsToThePreservedBasePath(
-        string baseUri,
-        string relativeTarget,
-        string expected)
-    {
-        HttpTargetComposer.Compose(baseUri, relativeTarget).ShouldBe(expected);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void Composition_AbsentOrEmptyPathReturnsTheBaseUriUnchanged(string? relativeTarget)
-    {
-        const string baseUri = "https://legacy.example.test/exact-target";
-
-        string result = HttpTargetComposer.Compose(baseUri, relativeTarget);
-
-        result.ShouldBe(baseUri);
-    }
-
-    [Theory]
-    [InlineData("https://attacker.test/path")]
-    [InlineData("//attacker.test/path")]
-    [InlineData("path#fragment")]
-    [InlineData("../outside")]
-    [InlineData("inside/../../outside")]
-    [InlineData("%2e%2e/outside")]
-    [InlineData("%252e%252e/outside")]
-    [InlineData("inside%2f..%2foutside")]
-    public void Composition_RejectsTargetsThatEscapeOrAreNotRequestTargets(string relativeTarget)
-    {
-        Should.Throw<DeliveryConfigurationException>(
-            () => HttpTargetComposer.Compose("https://destination.test/base", relativeTarget));
     }
 
     private static HttpDeliveryConfiguration Configuration(

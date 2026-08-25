@@ -1,10 +1,8 @@
-using Integrios.Application.Delivery;
-using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Domain.UnitTests;
 
-public sealed class DeliveryExecutionVocabularyTests
+public sealed class DeliveryStatusVocabularyTests
 {
     [Fact]
     public void DeliveryAttemptStatus_ContainsEveryDocumentedState()
@@ -28,12 +26,5 @@ public sealed class DeliveryExecutionVocabularyTests
                 DeliveryFailurePhase.RequestConstruction,
                 DeliveryFailurePhase.Http
             ]);
-    }
-
-    [Fact]
-    public void DeliveryFinalizationStatus_DistinguishesOwnershipLossFromApplied()
-    {
-        DeliveryFinalizationStatus.Applied.ShouldNotBe(
-            DeliveryFinalizationStatus.OwnershipLost);
     }
 }

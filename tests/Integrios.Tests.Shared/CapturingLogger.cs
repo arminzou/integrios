@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Logging;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Tests.Shared;
 
 // Keeps a per-log-call snapshot of the active scope stack so tests can assert which scope keys entries carry.
 // Register via AddSingleton<ILoggerProvider>(provider).
-internal sealed class CapturingLoggerProvider : ILoggerProvider
+public sealed class CapturingLoggerProvider : ILoggerProvider
 {
     private readonly CapturingLogger logger = new();
 
@@ -35,7 +35,7 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider
     }
 }
 
-internal sealed class CapturingLogger : ILogger
+public sealed class CapturingLogger : ILogger
 {
     private readonly List<object?> scopes = [];
 

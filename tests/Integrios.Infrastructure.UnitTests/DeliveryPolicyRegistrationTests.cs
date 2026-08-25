@@ -5,7 +5,7 @@ using Integrios.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 public sealed class DeliveryPolicyRegistrationTests
 {
@@ -13,7 +13,7 @@ public sealed class DeliveryPolicyRegistrationTests
     public void ApplicationRegistration_DoesNotProvideDeliveryPolicies()
     {
         using ServiceProvider provider = new ServiceCollection()
-            .AddApplicationServices()
+            .AddWorkerApplicationServices()
             .BuildServiceProvider();
 
         AssertOmits<DeliveryExecutionOptions>(provider);

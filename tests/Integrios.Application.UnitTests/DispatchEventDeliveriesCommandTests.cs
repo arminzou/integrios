@@ -7,56 +7,17 @@ using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
-using Integrios.Infrastructure.Delivery;
-using Integrios.Infrastructure.Transforms;
+using Integrios.Tests.Shared;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using MediatR;
 using NSubstitute;
+using static Integrios.Tests.Shared.DeliveryTestDoubles;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Application.UnitTests;
 
-public sealed class WorkerTransportAbstractionsTests
+public sealed class DispatchEventDeliveriesCommandTests
 {
-    [Fact]
-    public async Task ProcessOutboxBatchCommand_ProcessesCommittedFanoutResults()
-    {
-        var eventId = Guid.NewGuid();
-        var topicId = Guid.NewGuid();
-        var fanout = new FakeOutboxFanout(
-            [new OutboxFanoutResult(eventId, topicId, EventStatus.Routed, 2, 2)]);
-        var mediator = BuildMediator(services =>
-        {
-            services.AddSingleton<IOutboxFanout>(fanout);
-        });
-
-        var processedCount = await mediator.Send(new ProcessOutboxBatchCommand(10));
-
-        processedCount.ShouldBe(1);
-        fanout.CallCount.ShouldBe(2);
-    }
-
-    [Fact]
-    public async Task ProcessOutboxBatchCommand_NoMatchingSubscriptions_MarksUnroutedAndEmitsCounter()
-    {
-        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
-
-        var eventId = Guid.NewGuid();
-        var topicId = Guid.NewGuid();
-        var fanout = new FakeOutboxFanout(
-            [new OutboxFanoutResult(eventId, topicId, EventStatus.Unrouted, 0, 0)]);
-        var mediator = BuildMediator(services =>
-        {
-            services.AddSingleton<IOutboxFanout>(fanout);
-        });
-
-        var processedCount = await mediator.Send(new ProcessOutboxBatchCommand(10));
-
-        processedCount.ShouldBe(1);
-        var unrouted = metrics.ForInstrument("integrios_events_unrouted").ShouldHaveSingleItem();
-        unrouted.Value.ShouldBe(1);
-    }
-
     [Fact]
     public async Task DispatchEventDeliveriesCommand_SchedulesRetry_ThroughEventDeliveryQueue()
     {
@@ -192,6 +153,8 @@ public sealed class WorkerTransportAbstractionsTests
         string engine,
         string version)
     {
+        // Real engine rejection is proven by Infrastructure TransformEvaluatorTests; here the fake
+        // reports an unsupported engine so the handler's failure path is exercised without the engine.
         string transformJson = JsonSerializer.Serialize(new
         {
             engine,
@@ -207,7 +170,7 @@ public sealed class WorkerTransportAbstractionsTests
         {
             services.AddSingleton<IEventDeliveryQueue>(queue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator(error: "Unsupported engine"));
         });
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
@@ -573,130 +536,19 @@ public sealed class WorkerTransportAbstractionsTests
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
     }
 
-    internal static EventDeliveryWorkItem MakeWorkItem(
-        Guid? id = null,
-        Guid? eventId = null,
-        Guid? subscriptionId = null,
-        Guid? destinationConnectionId = null,
-        Guid? tenantId = null,
-        Guid? attemptId = null,
-        int attemptNumber = 1,
-        string url = "https://erp.example/webhook",
-        string payload = "{\"amount\":42}",
-        string? transform = null,
-        string connectorKey = "erp_system",
-        string? traceparent = null) =>
-        new(
-            id ?? Guid.NewGuid(),
-            attemptId ?? Guid.NewGuid(),
-            attemptNumber,
-            eventId ?? Guid.NewGuid(),
-            subscriptionId ?? Guid.NewGuid(),
-            destinationConnectionId ?? Guid.NewGuid(),
-            tenantId ?? Guid.NewGuid(),
-            "test-tenant",
-            payload,
-            "payment.created",
-            "payments",
-            DateTimeOffset.UtcNow,
-            transform,
-            connectorKey,
-            "{\"version\":1,\"base_uri\":\"" + url + "\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}",
-            traceparent);
-
-    internal static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
+    private static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddApplicationServices();
         services.AddSingleton(DeliveryExecutionOptions.Default);
-        services.AddSingleton<IDestinationAuthenticatorRegistry>(new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
+        services.AddSingleton<IDestinationAuthenticatorRegistry>(
+            new FakeDestinationAuthenticatorRegistry(
+                new FakeApiKeyHeaderAuthenticator(),
+                new FakeBearerTokenAuthenticator()));
         services.AddSingleton<IDestinationAuthenticationSecretResolver>(new NullSecretResolver());
         registerTestDoubles(services);
         return services.BuildServiceProvider().GetRequiredService<IMediator>();
-    }
-
-    private sealed class FakeOutboxFanout(IReadOnlyList<OutboxFanoutResult> results) : IOutboxFanout
-    {
-        private int index;
-
-        public int CallCount { get; private set; }
-
-        public Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken = default)
-        {
-            CallCount++;
-            return Task.FromResult<OutboxFanoutResult?>(index < results.Count ? results[index++] : null);
-        }
-    }
-
-    internal sealed class FakeEventDeliveryQueue : IEventDeliveryQueue
-    {
-        public IReadOnlyList<EventDeliveryWorkItem> ClaimedItems { get; init; } = [];
-        public IReadOnlyList<EventDeliveryClaimResult>? ClaimResults { get; init; }
-        public EventDeliveryDisposition FailureDisposition { get; set; } = EventDeliveryDisposition.RetryScheduled;
-        public DeliveryFinalizationStatus FinalizationStatus { get; set; } = DeliveryFinalizationStatus.Applied;
-        public List<DeliveryAttemptCompletion> Completions { get; } = [];
-        public List<DeliveryFinalizationResult> Finalizations { get; } = [];
-        public Queue<Exception> FinalizationExceptions { get; init; } = [];
-        public bool HonorFinalizationCancellation { get; init; }
-        public List<string>? Operations { get; init; }
-        public TaskCompletionSource? FinalizationSignal { get; init; }
-        public int ClaimCallCount { get; private set; }
-        private int claimIndex;
-
-        public Task<EventDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default)
-        {
-            ClaimCallCount++;
-            Operations?.Add("claim");
-            if (ClaimResults is not null)
-            {
-                return Task.FromResult<EventDeliveryClaimResult?>(
-                    claimIndex < ClaimResults.Count ? ClaimResults[claimIndex++] : null);
-            }
-
-            return Task.FromResult<EventDeliveryClaimResult?>(
-                claimIndex < ClaimedItems.Count
-                    ? new ClaimedEventDelivery(ClaimedItems[claimIndex++])
-                    : null);
-        }
-
-        public Task<DeliveryFinalizationResult> FinalizeAsync(DeliveryAttemptCompletion completion, CancellationToken cancellationToken = default)
-        {
-            Completions.Add(completion);
-            Operations?.Add("finalize");
-            FinalizationSignal?.TrySetResult();
-            if (HonorFinalizationCancellation)
-                cancellationToken.ThrowIfCancellationRequested();
-            if (FinalizationExceptions.TryDequeue(out Exception? exception))
-                throw exception;
-
-            var disposition = completion.Succeeded ? EventDeliveryDisposition.Succeeded : FailureDisposition;
-            var result = FinalizationStatus == DeliveryFinalizationStatus.Applied
-                ? new DeliveryFinalizationResult(FinalizationStatus, disposition)
-                : new DeliveryFinalizationResult(FinalizationStatus);
-            Finalizations.Add(result);
-            return Task.FromResult(result);
-        }
-
-    }
-
-    internal sealed class FakeDeliveryClient(
-        DeliveryResult result,
-        List<string>? capturedPayloads = null,
-        List<string>? operations = null) : IDeliveryClient
-    {
-        public List<string> DeliveredUrls { get; } = [];
-
-        public Task<DeliveryResult> DeliverAsync(
-            OutboundHttpMessage request, HttpSuccessRule? successRule, CancellationToken cancellationToken = default)
-        {
-            _ = successRule;
-            _ = cancellationToken;
-            operations?.Add("deliver");
-            DeliveredUrls.Add(request.Uri);
-            capturedPayloads?.Add(request.JsonBody ?? string.Empty);
-            return Task.FromResult(result);
-        }
     }
 
     private sealed class SequenceDeliveryClient(params DeliveryResult[] results) : IDeliveryClient
@@ -729,14 +581,6 @@ public sealed class WorkerTransportAbstractionsTests
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return new DeliveryResult(true, 200);
         }
-    }
-
-    private sealed class NullSecretResolver : IDestinationAuthenticationSecretResolver
-    {
-        public string ProviderName => "test";
-
-        public Task<string> ResolveAsync(TenantSecretScope tenant, string secretName, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException($"Unexpected secret lookup for '{secretName}'.");
     }
 
     internal static ITransformEvaluator CreateTransformEvaluator(string? output = null, string? error = null)

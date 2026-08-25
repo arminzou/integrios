@@ -10,8 +10,6 @@
     <InternalsVisibleTo Include="Integrios.FunctionalTests" />
     <InternalsVisibleTo Include="Integrios.Migrations.Postgres" />
     <InternalsVisibleTo Include="Integrios.Migrations.SqlServer" />
-    <InternalsVisibleTo Include="Integrios.Worker.UnitTests" />
-    <InternalsVisibleTo Include="Integrios.Application.UnitTests" />
     <InternalsVisibleTo Include="Integrios.Infrastructure.UnitTests" />
   </ItemGroup>
 

@@ -8,8 +8,9 @@ using Integrios.Domain.Enums;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Integrios.Tests.Shared;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Application.UnitTests;
 
 public sealed class IngestMetricsTests
 {

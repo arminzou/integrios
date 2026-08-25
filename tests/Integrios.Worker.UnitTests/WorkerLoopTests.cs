@@ -1,10 +1,15 @@
+using Integrios.Application;
 using Integrios.Application.Delivery;
+using Integrios.Application.Secrets;
 using Integrios.Application.Transforms;
+using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
+using static Integrios.Tests.Shared.DeliveryTestDoubles;
 
 namespace Integrios.Worker.UnitTests;
 
@@ -68,18 +73,17 @@ public sealed class WorkerLoopTests
     {
         using var cancellation = new CancellationTokenSource();
         var deliveryFinalized = NewSignal();
-        var deliveryQueue = new WorkerTransportAbstractionsTests.FakeEventDeliveryQueue
+        var deliveryQueue = new FakeEventDeliveryQueue
         {
-            ClaimedItems = [WorkerTransportAbstractionsTests.MakeWorkItem()],
+            ClaimedItems = [MakeWorkItem()],
             FinalizationSignal = deliveryFinalized
         };
-        var mediator = WorkerTransportAbstractionsTests.BuildMediator(services =>
+        var mediator = BuildMediator(services =>
         {
             services.AddSingleton<IEventDeliveryQueue>(deliveryQueue);
             services.AddSingleton<IDeliveryClient>(
-                new WorkerTransportAbstractionsTests.FakeDeliveryClient(new DeliveryResult(true, 200)));
-            services.AddSingleton<Integrios.Application.Transforms.ITransformEvaluator>(
-                WorkerTransportAbstractionsTests.CreateTransformEvaluator());
+                new FakeDeliveryClient(new DeliveryResult(true, 200)));
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
 
         Task<int> RunFanout(CancellationToken _) =>
@@ -179,18 +183,17 @@ public sealed class WorkerLoopTests
         var fanout = new SignalingOutboxFanout();
         var deliveryClient = new BlockingDeliveryClient();
         var deliveryFinalized = NewSignal();
-        var deliveryQueue = new WorkerTransportAbstractionsTests.FakeEventDeliveryQueue
+        var deliveryQueue = new FakeEventDeliveryQueue
         {
-            ClaimedItems = [WorkerTransportAbstractionsTests.MakeWorkItem()],
+            ClaimedItems = [MakeWorkItem()],
             FinalizationSignal = deliveryFinalized
         };
-        IMediator mediator = WorkerTransportAbstractionsTests.BuildMediator(services =>
+        IMediator mediator = BuildMediator(services =>
         {
             services.AddSingleton<IOutboxFanout>(fanout);
             services.AddSingleton<IEventDeliveryQueue>(deliveryQueue);
             services.AddSingleton<IDeliveryClient>(deliveryClient);
-            services.AddSingleton<ITransformEvaluator>(
-                WorkerTransportAbstractionsTests.CreateTransformEvaluator());
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
         });
         IConfiguration configuration = new ConfigurationBuilder().Build();
         using IHost host = Host.CreateDefaultBuilder()
@@ -367,5 +370,29 @@ public sealed class WorkerLoopTests
             object request,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+    }
+
+    private static IMediator BuildMediator(Action<IServiceCollection> registerTestDoubles)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddWorkerApplicationServices();
+        services.AddSingleton(DeliveryExecutionOptions.Default);
+        services.AddSingleton<IDestinationAuthenticatorRegistry>(
+            new FakeDestinationAuthenticatorRegistry(
+                new FakeApiKeyHeaderAuthenticator(),
+                new FakeBearerTokenAuthenticator()));
+        services.AddSingleton<IDestinationAuthenticationSecretResolver>(new NullSecretResolver());
+        registerTestDoubles(services);
+        return services.BuildServiceProvider().GetRequiredService<IMediator>();
+    }
+
+    private static ITransformEvaluator CreateTransformEvaluator()
+    {
+        var evaluator = Substitute.For<ITransformEvaluator>();
+        evaluator.ValidateExpression(Arg.Any<TransformSpec>()).Returns((string?)null);
+        evaluator.Evaluate(Arg.Any<TransformSpec>(), Arg.Any<string>(), Arg.Any<TransformContext>())
+            .Returns(callInfo => callInfo.ArgAt<string>(1));
+        return evaluator;
     }
 }

@@ -2,7 +2,7 @@ using System.Text.Json;
 using Integrios.Application.Delivery;
 using Integrios.Infrastructure.Delivery;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 public sealed class DestinationAuthenticatorRegistryTests
 {

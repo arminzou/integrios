@@ -6,7 +6,7 @@ using Integrios.Infrastructure.Transforms;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Integrios.Application.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 public sealed class PreviewSourceContractQueryTests : IDisposable
 {
@@ -16,7 +16,7 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
     public PreviewSourceContractQueryTests()
     {
         var services = new ServiceCollection();
-        services.AddApplicationServices();
+        services.AddAdminApplicationServices();
         services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
         provider = services.BuildServiceProvider();
         mediator = provider.GetRequiredService<IMediator>();

@@ -6,7 +6,7 @@ using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Delivery;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 public sealed class HttpDeliveryClientTests
 {

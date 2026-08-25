@@ -1,10 +1,10 @@
 using System.Diagnostics.Metrics;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Tests.Shared;
 
 // Captures synchronous instrument measurements for a single meter via MeterListener.
 // Start it before the meter's instruments are created (i.e. before the first handler runs).
-internal sealed class MetricCollector : IDisposable
+public sealed class MetricCollector : IDisposable
 {
     private readonly MeterListener _listener = new();
     private readonly object _measurementsLock = new();
@@ -61,7 +61,7 @@ internal sealed class MetricCollector : IDisposable
 
     public void Dispose() => _listener.Dispose();
 
-    internal sealed record Measurement(string Instrument, double Value, IReadOnlyDictionary<string, object?> Tags)
+    public sealed record Measurement(string Instrument, double Value, IReadOnlyDictionary<string, object?> Tags)
     {
         public object? Tag(string key) => Tags.TryGetValue(key, out var value) ? value : null;
     }

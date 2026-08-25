@@ -12,8 +12,9 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using Integrios.Tests.Shared;
 
-namespace Integrios.Worker.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 public sealed class AuthenticatedDispatchTests
 {
@@ -382,7 +383,7 @@ public sealed class AuthenticatedDispatchTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMetrics();
-        services.AddApplicationServices();
+        services.AddWorkerApplicationServices();
         services.AddSingleton(DeliveryExecutionOptions.Default);
         registerDoubles(services);
         return services.BuildServiceProvider().GetRequiredService<IMediator>();

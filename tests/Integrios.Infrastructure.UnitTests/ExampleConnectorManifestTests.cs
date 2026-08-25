@@ -7,7 +7,7 @@ using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Transforms;
 
-namespace Integrios.Application.UnitTests;
+namespace Integrios.Infrastructure.UnitTests;
 
 // Proves the public examples under examples/connectors/ are valid against the exact same
 // manifest parser, real destination-authentication handler registry, and real source-contract

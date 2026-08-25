@@ -1,16 +1,17 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Delivery;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
-using Integrios.Infrastructure.Delivery;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Application.UnitTests;
 
 public sealed class ConnectionUseValidatorTests
 {
-    private static readonly DestinationAuthenticatorRegistry AuthenticationSchemes = new(
-        [new BearerTokenAuthenticator(), new ApiKeyHeaderAuthenticator()]);
+    private static readonly IDestinationAuthenticatorRegistry AuthenticationSchemes =
+        new FakeDestinationAuthenticatorRegistry(new FakeBearerTokenAuthenticator(), new FakeApiKeyHeaderAuthenticator());
 
     [Fact]
     public void BothCapableConnection_CanBeReadyForBothUsesWithoutPersistedDirection()
