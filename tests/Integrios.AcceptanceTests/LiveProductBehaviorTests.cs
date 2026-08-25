@@ -9,7 +9,7 @@ namespace Integrios.AcceptanceTests;
 [Collection(PackagedDeploymentCollection.Name)]
 public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 {
-    private const string HttpConnectorId = "00000000-0000-0000-0000-000000000001";
+    private string HttpConnectorId => fixture.HttpConnectorId.ToString();
     private const string ApiKeyConnectorId = "11111111-1111-1111-1111-111111111111";
     private const string BearerConnectorId = "22222222-2222-2222-2222-222222222222";
     private const string SourceOnlyConnectorId = "33333333-3333-3333-3333-333333333333";

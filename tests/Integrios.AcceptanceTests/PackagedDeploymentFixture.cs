@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Npgsql;
 
@@ -70,6 +72,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public HttpClient MockSinkClient { get; private set; } = null!;
     public HttpClient WorkerMetricsClient { get; private set; } = null!;
     public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:acceptance-admin-secret";
+    public Guid HttpConnectorId { get; private set; }
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
     {
@@ -97,6 +100,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                 Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "compose.acceptance.yml"),
             ];
             await StartDeploymentAsync(buildImages: false);
+            await AssertBootstrapStateAsync();
+            HttpConnectorId = await ApplyExampleManifestAsync("http");
         }
         catch (Exception exception)
         {
@@ -136,6 +141,24 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         return value is T typed
             ? typed
             : (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
+    }
+
+    public async Task<Guid> ApplyExampleManifestAsync(string key)
+    {
+        string path = Path.Combine(repoRoot, "examples", "connectors", $"{key}.json");
+        using var content = new StringContent(await File.ReadAllTextAsync(path), Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/admin/connectors/{key}/versions/1")
+        {
+            Content = content,
+        };
+        request.Headers.TryAddWithoutValidation("Authorization", AdminAuthorization);
+        using HttpResponseMessage response = await AdminClient.SendAsync(request);
+        string responseBody = await response.Content.ReadAsStringAsync();
+        if (response.StatusCode is not HttpStatusCode.Created and not HttpStatusCode.OK)
+            throw new InvalidOperationException($"Applying {key}.json failed with {(int)response.StatusCode}: {responseBody}");
+
+        using JsonDocument document = JsonDocument.Parse(responseBody);
+        return document.RootElement.GetProperty("id").GetGuid();
     }
 
     public async Task<int> ExecuteAsync(string sql)
@@ -446,14 +469,13 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     private async Task AssertBootstrapStateAsync()
     {
-        long builtins = await ScalarAsync<long>(
-            "SELECT COUNT(*) FROM connectors WHERE key = 'http' AND status = 'active'");
+        long connectors = await ScalarAsync<long>("SELECT COUNT(*) FROM connectors");
         long liveOperatorKeys = await ScalarAsync<long>(
             "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL");
-        if (builtins != 1 || liveOperatorKeys != 1)
+        if (connectors != 0 || liveOperatorKeys != 1)
         {
             throw new InvalidOperationException(
-                $"Packaged Bootstrap state was unexpected: built-ins={builtins}, live OperatorKeys={liveOperatorKeys}.");
+                $"Packaged Bootstrap state was unexpected: Connectors={connectors}, live OperatorKeys={liveOperatorKeys}.");
         }
     }
 

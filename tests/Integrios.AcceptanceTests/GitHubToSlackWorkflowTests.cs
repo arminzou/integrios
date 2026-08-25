@@ -23,8 +23,8 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
     [Fact]
     public async Task PackagedSystem_ProvesGitHubToSlackGoldenPath()
     {
-        const string githubConnectorId = "00000000-0000-0000-0000-000000000002";
-        string slackConnectorId = await ApplyExampleManifestAsync("slack");
+        string githubConnectorId = (await fixture.ApplyExampleManifestAsync("github")).ToString();
+        string slackConnectorId = (await fixture.ApplyExampleManifestAsync("slack")).ToString();
 
         string tenantSlug = $"golden-{Suffix()}";
         Guid tenant = await CreateTenantAsync(tenantSlug);
@@ -69,17 +69,6 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
 
         await SetSlackModeAsync(new { ok = true });
         await WaitForDeliveryStatusAsync(throttled, subscription, "succeeded");
-    }
-
-    private async Task<string> ApplyExampleManifestAsync(string key)
-    {
-        string path = Path.Combine(RepositoryRoot(), "examples", "connectors", $"{key}-v1.json");
-        using var content = new StringContent(await File.ReadAllTextAsync(path), Encoding.UTF8, "application/json");
-        using HttpRequestMessage request = new(HttpMethod.Put, $"/admin/connectors/{key}/versions/1") { Content = content };
-        request.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
-        using HttpResponseMessage response = await fixture.AdminClient.SendAsync(request);
-        JsonElement body = await AssertJsonAsync(response, HttpStatusCode.Created, HttpStatusCode.OK);
-        return body.GetProperty("id").GetGuid().ToString();
     }
 
     private async Task<Guid> CreateTenantAsync(string slug)
@@ -140,7 +129,7 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant}/sources",
-            new { connection_id = connection, topic_id = topic, type = "webhook", configuration = new { source_contract = "github_webhook" } });
+            new { connection_id = connection, topic_id = topic, type = "webhook", configuration = new { source_contract = "verified_webhook" } });
         JsonElement source = await AssertJsonAsync(response, HttpStatusCode.Created);
         return $"/webhooks/{source.GetProperty("configuration").GetProperty("callback_id").GetString()}";
     }
@@ -277,14 +266,4 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
 
     private static string Suffix() => Guid.NewGuid().ToString("N")[..10];
 
-    private static string RepositoryRoot()
-    {
-        for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Integrios.slnx")))
-                return directory.FullName;
-        }
-
-        throw new InvalidOperationException("Could not locate the Integrios repository root.");
-    }
 }

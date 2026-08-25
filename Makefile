@@ -30,14 +30,6 @@ db-info:
 # DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET are exported above
 # so appsettings.Development.json and the dev OperatorKey secret are picked up.
 
-# Upsert the built-in webhook connector.
-bootstrap-builtins:
-	dotnet run --project src/Integrios.Admin -- bootstrap --builtins
-
-# Create the global operator key (no-op if a live one already exists).
-bootstrap-operator-key:
-	dotnet run --project src/Integrios.Admin -- bootstrap --operator-key
-
-# Run builtins + operator-key together.
+# Create the first global OperatorKey (no-op if a live one already exists).
 bootstrap:
 	dotnet run --project src/Integrios.Admin -- bootstrap

@@ -19,7 +19,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         await AssertHealthyAsync(fixture.MockSinkClient);
 
         (await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM connectors WHERE key = 'http' AND status = 'active'")).ShouldBe(1L);
+            $"SELECT COUNT(*) FROM connectors WHERE id = '{fixture.HttpConnectorId}' AND key = 'http' AND status = 'active'")).ShouldBe(1L);
         (await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL")).ShouldBe(1L);
 
@@ -83,7 +83,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                connector_id = "00000000-0000-0000-0000-000000000001",
+                connector_id = fixture.HttpConnectorId,
                 name = "acceptance-source",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
                 environment = "production"
@@ -92,7 +92,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                connector_id = "00000000-0000-0000-0000-000000000001",
+                connector_id = fixture.HttpConnectorId,
                 name = "acceptance-destination",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"
@@ -213,7 +213,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                connector_id = "00000000-0000-0000-0000-000000000001",
+                connector_id = fixture.HttpConnectorId,
                 name = "loop-isolation-source",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
                 environment = "production"
@@ -222,7 +222,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/connections",
             new
             {
-                connector_id = "00000000-0000-0000-0000-000000000001",
+                connector_id = fixture.HttpConnectorId,
                 name = "loop-isolation-destination",
                 config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"

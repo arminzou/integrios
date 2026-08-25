@@ -13,7 +13,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan LeaseRecoveryTimeout = TimeSpan.FromSeconds(150);
     private static readonly TimeSpan CleanupLockTimeout = TimeSpan.FromSeconds(10);
-    private static readonly Guid HttpConnectorId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    private Guid HttpConnectorId => fixture.HttpConnectorId;
     private static readonly Guid ApiKeyConnectorId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     // Barrier key for the post-send window. Any constant works; it only has to be unique within

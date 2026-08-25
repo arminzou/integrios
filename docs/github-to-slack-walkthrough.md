@@ -52,9 +52,8 @@ SLACK_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/slack/versions/1" -H "
   -H 'Content-Type: application/json' --data-binary @examples/connectors/slack.json | jq -r .id)
 ```
 
-Bootstrap installs neither: only the deployment-wide generic `http` Connector is built in. These
-two are ordinary Operator-authored Connectors, validated by the same manifest parser and
-authoring rules any Operator-authored manifest goes through.
+Bootstrap installs no Connectors. These are ordinary Operator-authored Connectors, validated by
+the same manifest parser and authoring rules any Operator-authored manifest goes through.
 
 ## 2. Create a Tenant
 

@@ -22,9 +22,10 @@ provider. Secret files placed there are ignored by Git; the quickstart uses unau
 connections, so no secret values need to be added to its tracked documentation files.
 
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
-after migrations and before the services start. It creates the built-in `http` connector and
-the OperatorKey credential used below (bootstrap output, not migration-seeded data), and is
-idempotent, so re-running `make up` against an existing EF-managed database is safe. The dev credential
+after migrations and before the services start. It creates only the first OperatorKey credential
+used below (bootstrap output, not migration-seeded data) and is idempotent, so re-running `make up`
+against an existing EF-managed database is safe. A fresh deployment contains zero Connectors until
+the Operator applies a manifest. The dev credential
 `global_operator_key:operator_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` in `.env`.
 
 The EF Core cutover does not upgrade databases created by the former Flyway migration path. Delete
@@ -52,45 +53,48 @@ watches the Worker deliver it to the bundled MockSink.
 ADMIN=http://localhost:5150
 INGESTION=http://localhost:5231
 AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
-HTTP_CONNECTOR=00000000-0000-0000-0000-000000000001   # deployment-wide built-in http Connector
 
-# 1. Create a tenant
+# 1. Apply the generic HTTP example and capture this deployment's generated Connector ID.
+HTTP_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/http/versions/1" -H "$AUTH" \
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/http.json | jq -r .id)
+
+# 2. Create a tenant
 TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"slug":"acme","name":"Acme","environment":"production"}' | jq -r .id)
 
-# 2. Create an Integrios API key for this generic source (the token is shown once, capture it)
+# 3. Create an Integrios API key for this generic source (the token is shown once, capture it)
 TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/tenant-api-keys -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name":"acme-ingestion"}' | jq -r .token)
 
-# 3. Create Tenant-owned source and destination Connections from the same reusable Connector.
+# 4. Create Tenant-owned source and destination Connections from the same reusable Connector.
 # The destination selects open (unauthenticated) delivery by omitting destination_authentication,
-# which the built-in http Connector's manifest explicitly allows.
+# which the applied HTTP example explicitly allows.
 SRC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-source\",\"config\":{},\"environment\":\"production\"}" | jq -r .id)
 DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-erp\",\"config\":{\"base_uri\":\"http://mocksink:8080/sink/acme-erp\"},\"environment\":\"production\"}" | jq -r .id)
 
-# 4. Create a topic fed by the source connection
+# 5. Create a topic fed by the source connection
 TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"name\":\"payments\",\"source_connection_ids\":[\"$SRC\"]}" | jq -r .id)
 
-# 5. Subscribe the destination to payment.created events
+# 6. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"name\":\"acme-erp-sub\",\"match_rules\":{\"event_type\":\"payment.created\"},\"destination_connection_id\":\"$DST\",\"order_index\":0}" > /dev/null
 
-# 6. Send an event to the data plane
+# 7. Send an event to the data plane
 EVENT=$(curl -s -X POST $INGESTION/events -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"source_connection_id\":\"$SRC\",\"topic_name\":\"payments\",\"event_type\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_001\",\"amount\":1200},\"idempotency_key\":\"demo-001\"}" | jq -r .event_id)
 
-# 7. Check it was accepted and fanned out to the subscription
+# 8. Check it was accepted and fanned out to the subscription
 curl -s $INGESTION/events/$EVENT -H "Authorization: TenantApiKey $TOKEN" | jq
 
-# 8. See it delivered in the sink
+# 9. See it delivered in the sink
 docker compose logs mocksink | grep MockSink
 ```
 
 Connection updates replace the complete `config` object rather than merging fields. A Connection's
-destination configuration schema is declared by its Connector's manifest; the built-in `http`
+destination configuration schema is declared by its Connector's manifest; the example `http`
 Connector requires an absolute HTTP(S) `base_uri` with no query or fragment for any Connection an
 active Subscription references. This quickstart's source Connection carries no configuration
 because the `http` Connector's source side is empty by contract (see

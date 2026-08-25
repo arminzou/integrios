@@ -1,11 +1,6 @@
 @baseUrl = {{ADMIN_BASE_URL}}
 @operatorKey = Authorization: OperatorKey global_operator_key:operator_bootstrap_secret
-@webhookIntId = 00000000-0000-0000-0000-000000000001
-
-# Local-only connector IDs seeded for manual verification.
-# These are useful because the stock seed data only includes the open webhook connector.
-@authDestinationIntId = 11111111-1111-1111-1111-111111111111
-@sourceOnlyIntId = 22222222-2222-2222-2222-222222222222
+@webhookIntId = {{applyHttpConnector.response.body.$.id}}
 
 # Sink base URL:
 # - use http://mocksink:8080 when calling from one container to another
@@ -35,31 +30,19 @@ GET {{baseUrl}}/health
 GET {{baseUrl}}/admin/tenants
 
 ###
-# Step 1 - Inspect the connector catalog
-# This shows the platform-level connection types the control plane knows about.
-# The webhook connector and deployment-wide OperatorKey below come from the `bootstrap` one-shot
-# (`Integrios.Admin bootstrap`, run automatically by `make up`), not from migrations.
-GET {{baseUrl}}/admin/connectors
+# Step 1 - Apply the generic HTTP Connector example
+# Bootstrap creates only the deployment-wide OperatorKey. Connector identity is generated when
+# the Operator applies a manifest through Admin.
+# @name applyHttpConnector
+PUT {{baseUrl}}/admin/connectors/http/versions/1
 {{operatorKey}}
+Content-Type: application/json
+
+< ../../examples/connectors/http.json
 
 ###
-# Step 1a - Inspect the stock open webhook connector
-# This is the generic HTTP connector used by the normal local walkthrough.
+# Step 1a - Inspect the applied HTTP Connector
 GET {{baseUrl}}/admin/connectors/{{webhookIntId}}
-{{operatorKey}}
-
-###
-# Step 1b - Inspect the local-only auth-capable connector
-# Use this for manual v2.6 verification. Expect:
-# - direction = destination
-# - supportedAuthSchemes = ["api_key_header"]
-GET {{baseUrl}}/admin/connectors/{{authDestinationIntId}}
-{{operatorKey}}
-
-###
-# Step 1c - Inspect the local-only source-only connector
-# Use this for the destination direction rejection check later.
-GET {{baseUrl}}/admin/connectors/{{sourceOnlyIntId}}
 {{operatorKey}}
 
 ###
@@ -321,143 +304,42 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{c
 {{operatorKey}}
 
 ###
-# Step 8 - v2.6 authenticated delivery smoke check
-# This proves the live stack accepts an auth-enabled destination connection.
-# The exact auth validation edge cases are already covered by automated tests.
-#
-# Before starting the default file-backed Worker, create:
-# secrets/acme-corp/erp_api_key (exact secret value; no automatic trimming)
-#
-# @name createAuthDestinationConnection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connectorId": "{{authDestinationIntId}}",
-  "name": "acme-erp-auth",
-  "config": {
-    "url": "{{sinkBase}}/sink/acme-erp-auth"
-  },
-  "destination_authentication": {
-    "scheme": "api_key_header",
-    "config": {
-      "header_name": "X-Api-Key"
-    },
-    "secret_refs": {
-      "api_key": "erp_api_key"
-    }
-  },
-  "environment": "production",
-  "description": "Auth-enabled destination connection for v2.6 verification"
-}
-
-###
-# Step 8a - Update the auth-enabled connection
-PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createAuthDestinationConnection.response.body.$.id}}
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "acme-erp-auth",
-  "config": {
-    "url": "{{sinkBase}}/sink/acme-erp-auth"
-  },
-  "destination_authentication": {
-    "scheme": "api_key_header",
-    "config": {
-      "header_name": "X-Partner-Key"
-    },
-    "secret_refs": {
-      "api_key": "erp_api_key_v2"
-    }
-  },
-  "environment": "production",
-  "description": "Updated auth-enabled destination connection for v2.6 verification"
-}
-
-###
-# Step 8b - Direction enforcement smoke check
-# First create a source-only connection.
-# @name createSourceOnlyDestinationConnection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connectorId": "{{sourceOnlyIntId}}",
-  "name": "acme-source-only-destination",
-  "config": {
-    "url": "{{sinkBase}}/sink/acme-source-only-destination"
-  },
-  "environment": "production",
-  "description": "Used to verify destination-direction enforcement"
-}
-
-###
-# Step 8c - The subscription create should reject that source-only destination.
-# Expect 422.
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "reject-source-only-destination",
-  "matchRules": {
-    "event_type": "payment.created"
-  },
-  "destinationConnectionId": "{{createSourceOnlyDestinationConnection.response.body.$.id}}",
-  "orderIndex": 15,
-  "description": "Should fail because the destination connection is source-only"
-}
-
-###
-# Step 9 - Cleanup
+# Step 8 - Cleanup
 # Walk backward through the control-plane objects so the next manual run starts
 # from a known state. Skip requests for resources you did not create.
 
 ###
-# Step 9a - Optional: deactivate the raw subscription if it is still active
+# Step 8a - Optional: deactivate the raw subscription if it is still active
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{createRawSubscription.response.body.$.id}}/deactivate
 {{operatorKey}}
 
 ###
-# Step 9b - Deactivate the main subscription
+# Step 8b - Deactivate the main subscription
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}/deactivate
 {{operatorKey}}
 
 ###
-# Step 9c - Optional: deactivate the auth-enabled destination connection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createAuthDestinationConnection.response.body.$.id}}/deactivate
-{{operatorKey}}
-
-###
-# Step 9d - Optional: deactivate the source-only verification connection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{createSourceOnlyDestinationConnection.response.body.$.id}}/deactivate
-{{operatorKey}}
-
-###
-# Step 9e - Deactivate the topic
+# Step 8c - Deactivate the topic
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/deactivate
 {{operatorKey}}
 
 ###
-# Step 9f - Deactivate the standard destination connection
+# Step 8d - Deactivate the standard destination connection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}/deactivate
 {{operatorKey}}
 
 ###
-# Step 9g - Deactivate the source connection
+# Step 8e - Deactivate the source connection
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}/deactivate
 {{operatorKey}}
 
 ###
-# Step 9h - Revoke the data-plane API key
+# Step 8f - Revoke the data-plane API key
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys/{{tenantApiKeyId}}/revoke
 {{operatorKey}}
 
 ###
-# Step 9i - Optional: deactivate the tenant if you want the entire runbook state
+# Step 8g - Optional: deactivate the tenant if you want the entire runbook state
 # retired instead of reused on the next pass.
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/deactivate
 {{operatorKey}}
