@@ -22,69 +22,41 @@ team points it at their own stack. Licensed under MIT.
 
 - `Integrios.slnx` is the solution entrypoint.
 - `src/` contains the main application projects.
-- `src/Integrios.Ingestion` owns HTTP intake, tenant auth, and the durable acceptance boundary. Data plane.
+- `src/Integrios.Ingestion` owns intake, tenant auth, and the durable acceptance boundary. Data plane.
 - `src/Integrios.Admin` owns tenant management, connection configuration, topic and subscription management. Control plane.
 - `src/Integrios.Worker` owns outbox polling, fanout to subscriptions, delivery, and retry/DLQ behavior.
 - `src/Integrios.MockSink` provides a controllable local sink for testing and demos. Not part of the deployable product.
 - `src/Integrios.Domain` holds core domain types and shared contracts.
-- `tests/` contains unit and integration test projects.
+- `tests/` contains the test projects; a project's name states what it needs to run.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` contain the
   provider-specific EF Core migrations.
 - `docs/` is for public documentation only.
 
 ## Architecture
 
+The code is authoritative for the domain model, its vocabulary, and the current source and
+destination capabilities. Do not restate them here: a copy in this file drifts silently and is then
+read as instruction. Narrative descriptions belong in `docs/`, which may lag the code and is not a
+substitute for reading it.
+
 ### Service split
 
 The platform is divided into two planes across three deployable processes.
 
-- **Control plane** (`Integrios.Admin`, port 5150): Operator-owned Tenant lifecycle, connection configuration, topic and subscription management, and policy. Auth may evolve for Operator identities, but never into Tenant-scoped control-plane authority.
-- **Data plane** (`Integrios.Ingestion`, port 5231): generic TenantApiKey-authenticated Event intake plus any curated built-in provider HTTP endpoints, Tenant resolution, source-Connection validation, durable acceptance boundary, and outbox writes. External Event producers remain the universal source path.
-- **Worker** (`Integrios.Worker`): outbox polling, fanout to subscriptions, per-subscription delivery, retry/DLQ/replay.
+- **Control plane** (`Integrios.Admin`, port 5150): Operator-owned configuration and policy. Auth may
+  evolve for Operator identities, but never into Tenant-scoped control-plane authority.
+- **Data plane** (`Integrios.Ingestion`, port 5231): authenticated intake, resolution of the
+  configured origin, the durable acceptance boundary, and outbox writes.
+- **Worker** (`Integrios.Worker`): outbox polling, fanout, per-subscription delivery, and
+  retry/DLQ/replay.
 
-`Integrios.Worker` reads topic and subscription config directly from Postgres. The control plane owns the write path for those tables; the worker holds a read-only contract against them. There are currently no service-to-service config calls.
-
-### Core domain model
-
-- `Tenant` is the top-level ownership and isolation boundary, not a control-plane actor.
-- `TenantApiKey` represents the Integrios-issued machine credential for generic Event intake.
-- An `Event producer` is an external Operator-controlled application or automation that converts source-system changes into the generic Event contract and calls Integrios with an TenantApiKey; it is not an Integrios runtime plugin.
-- A `Built-in source adapter` is a platform-supplied HTTP intake module for a popular, stable provider contract; it verifies and normalizes into the same generic Event contract.
-- `Connector` is a deployment-wide, reusable declarative HTTP contract for an external-system class. It may be built in or Operator-authored, is shared across tenants, and carries no tenant data.
-- `Connection` is a Tenant-owned configured instance of one Connector and carries Tenant-specific endpoint configuration plus separate source-verification and destination-authentication selections and secret references. Its current uses are relationship-derived, never persisted on the Connection.
-- `Topic` represents a tenant-owned named stream of events; source connections publish to it.
-- `Subscription` represents an independent consumer of a topic with its own filter, transform, versioned HTTP delivery configuration, destination connection, and DLQ scope. Retry policy is currently fixed platform behavior.
-- `Event` represents an accepted, normalized inbound unit of work, tagged with the topic it was published to.
-- `SubscriptionDelivery` tracks the per-(event, subscription) delivery state produced by fanout.
-- `DeliveryAttempt` records each concrete outbound execution against a subscription delivery.
-
-### Connector and HTTP transport model
-
-This is the authoritative source and destination model:
-
-The bullets below describe the finalized product model. The current code has only the built-in
-`webhook` Connector, fixed JSON `POST` delivery to `Connection.config.url`, and open,
-API-key-header, or bearer-token destination authentication. Connections already persist separate
-`source_verification` and `destination_authentication` envelopes. Do not document target
-capabilities as shipped until their implementation lands.
-
-- Generic HTTP Event intake through external Event producers is universal. An Event producer authenticates with an TenantApiKey, identifies a configured source Connection, and publishes to an allowed Topic.
-- Integrios may ship a small curated set of built-in provider HTTP source adapters when a stable, popular contract materially reduces repeated security or operational work. Every adapter must normalize into the same Event acceptance seam.
-- Operator-authored Connectors cannot contain executable source code. Do not add runtime plugins, polling adapters, or a broad connector catalog without a new architecture decision.
-- HTTP(S) is the only destination protocol in current scope. Do not introduce non-HTTP destination protocols, a runtime plugin system, or provider-specific execution adapters without a new architecture decision.
-- Connectors are narrow declarative definitions: stable identity, presentation metadata, direction, required Connection fields, supported auth schemes, and optional base-URI constraints. They do not own executable request templates, transforms, routing, retries, or workflow steps.
-- The same Connector is reusable across Tenants. Each Tenant supplies its own Connection configuration and secret references.
-- A Connection's use is derived from active relationships: a source association with an active Topic is a source use, and an active Subscription reference is a destination use. Disabled relationships do not contribute a use. Do not call this a Connection role, capability, or direction.
-- A destination Connection owns the absolute base URI and authentication. A Subscription owns HTTP method, relative path or path expression, restricted static headers, and JSON-or-no-body behavior.
-- Initial methods are `POST`, `PUT`, `PATCH`, and `DELETE`. Dynamic headers, arbitrary methods, form/multipart/binary bodies, response-driven workflows, and successful-response persistence are out of scope.
-- OAuth 2.0 client credentials belongs to the reusable Connection auth-scheme set; interactive OAuth flows do not.
-- Fanout snapshots versioned HTTP and non-secret Connection configuration plus secret references. The Worker resolves current secret values per attempt. Never persist resolved values in execution snapshots.
-- Destination actions are not part of the current domain model. Multiple external updates are modeled as multiple independent Subscriptions, preserving separate retry, DLQ, and replay behavior.
-- Once referenced by a Connection, a Connector's functional contract is immutable. Breaking contract changes require a new version or definition; presentation metadata may still change.
+The Worker reads configuration directly from the configured database. The control plane owns the
+write path for those tables; the Worker holds a read-only contract against them. There are no
+service-to-service configuration calls.
 
 ### Module boundaries
 
-- `Integrios.Ingestion` owns the HTTP surface, tenant resolution, and acceptance-boundary writes. It does not own fanout, delivery, or retry behavior.
+- `Integrios.Ingestion` owns the intake surface, tenant resolution, and acceptance-boundary writes. It does not own fanout, delivery, or retry behavior.
 - `Integrios.Admin` owns control plane configuration. It does not own event processing.
 - `Integrios.Worker` owns outbox polling, fanout to subscriptions, per-subscription delivery, and retry/DLQ/replay. It does not own HTTP intake or config writes.
 - `Integrios.MockSink` owns controllable success, failure, and slow-path responses for local testing. It is never a dependency of production services.
@@ -111,7 +83,7 @@ dotnet build Integrios.slnx
 dotnet test Integrios.slnx
 
 # Run one test project
-dotnet test tests/Integrios.Ingestion.Tests/Integrios.Ingestion.Tests.csproj
+dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj
 
 # Run one service
 dotnet run --project src/Integrios.Ingestion
@@ -145,10 +117,6 @@ Naming:
 - database columns use `snake_case`
 - `Connector.key` values use `snake_case`
 
-Domain naming:
-
-- keep domain entity names aligned with the model: `Tenant`, `TenantApiKey`, `Connector`, `Connection`, `Topic`, `Subscription`, `Event`, `SubscriptionDelivery`, `DeliveryAttempt`
-
 Style:
 
 - prefer early returns over deep nesting
@@ -160,8 +128,32 @@ Style:
 
 - use xUnit for tests
 - when changing behavior, add or update tests where practical
-- prefer targeted tests for narrow changes and full-suite runs for broader changes
 - if you skip verification, say so explicitly
+
+A test project's name states what it needs to run. `Integrios.<Layer>.UnitTests` needs nothing;
+`Integrios.Application.FunctionalTests` starts databases and a message-broker emulator through
+Testcontainers; `Integrios.AcceptanceTests` builds every service image and composes the packaged
+deployment. Cost follows that ordering, and acceptance dominates a run of everything.
+
+Choose tiers by what the change can actually break, not by default:
+
+| Change | Run |
+|---|---|
+| anything at all | `UnitTests` projects + `ArchitectureTests` |
+| behavior in `src/` | add `FunctionalTests` on the default provider |
+| raw SQL, JSON operators, migrations, or the `DbContext` | add the second provider leg, `INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver` |
+| host composition, dependency registration, Dockerfile, Compose, bootstrap, or an HTTP contract the acceptance tests exercise | add `AcceptanceTests` |
+
+The second provider leg is for plausible provider divergence, not reassurance: one provider catches
+nearly everything that is not provider-specific.
+
+CI runs `AcceptanceTests` on every push to `main` (the `qualify` job, skipped only for pull
+requests). Running it locally before each commit in a batch duplicates a gate that is about to run
+anyway; run it once before pushing, or when the change is in the list above.
+
+While iterating, filter to the narrowest relevant test rather than running a whole project:
+`dotnet test <project> --filter "FullyQualifiedName~SourcesAdminTests"`. Do not partition a project
+with traits or category filters.
 
 Default verification:
 
