@@ -18,7 +18,7 @@
     <Project Path="tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj" />
     <Project Path="tests/Integrios.Tests.Shared/Integrios.Tests.Shared.csproj" />
     <Project Path="tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj" />
-    <Project Path="tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj" />
+    <Project Path="tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj" />
     <Project Path="tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj" />
   </Folder>
 </Solution>

@@ -36,7 +36,7 @@ jobs:
       - name: Build
         run: dotnet build Integrios.slnx --configuration Release --no-restore
 
-      - name: Test architecture and unit tiers
+      - name: Run architecture and unit tests
         run: |
           dotnet test tests/Integrios.ArchitectureTests/Integrios.ArchitectureTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Domain.UnitTests/Integrios.Domain.UnitTests.csproj --configuration Release --no-build
@@ -50,7 +50,7 @@ jobs:
     name: functional (${{ matrix.database-provider }})
     needs: verify
     runs-on: ubuntu-latest
-    # The tier now starts a real Service Bus emulator alongside the database container; a broker
+    # The functional project now starts a real Service Bus emulator alongside the database container; a broker
     # that never becomes ready would otherwise burn the six-hour default before failing.
     timeout-minutes: 15
     strategy:
@@ -68,19 +68,19 @@ jobs:
           cache-dependency-path: '**/packages.lock.json'
 
       - name: Restore
-        run: dotnet restore tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --locked-mode
+        run: dotnet restore tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --locked-mode
 
       - name: Build
-        run: dotnet build tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-restore
+        run: dotnet build tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --configuration Release --no-restore
 
-      - name: Test ${{ matrix.database-provider }} functional tier
+      - name: Test ${{ matrix.database-provider }} functional
         env:
           INTEGRIOS_TEST_DATABASE_PROVIDER: ${{ matrix.database-provider }}
         run: >
-          dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj
+          dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj
           --configuration Release --no-build
 
-  qualify:
+  acceptance:
     needs: [verify, functional]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -101,21 +101,19 @@ jobs:
         run: dotnet restore Integrios.slnx --locked-mode
 
       - name: Select acceptance run
-        id: tier
+        id: select_run
         shell: bash
         run: |
-          # The qualify job itself does not run on pull_request (see the job-level `if`); PRs
-          # stop at the functional tier. What remains distinguishes only release, which runs the
-          # whole solution, from main and nightly, which run the acceptance project whole.
+          # The acceptance job itself does not run on pull_request (see the job-level `if`); PRs
+          # stop after the functional job. run_kind distinguishes the three retained gates. Release
+          # does not rerun the whole solution: verify and both functional provider jobs already
+          # supplied those gates, so every run_kind targets the packaged Acceptance project.
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
-            echo 'name=nightly' >> "$GITHUB_OUTPUT"
-            echo 'target=tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj' >> "$GITHUB_OUTPUT"
+            echo 'run_kind=nightly' >> "$GITHUB_OUTPUT"
           elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' || "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo 'name=release' >> "$GITHUB_OUTPUT"
-            echo 'target=Integrios.slnx' >> "$GITHUB_OUTPUT"
+            echo 'run_kind=release' >> "$GITHUB_OUTPUT"
           else
-            echo 'name=main' >> "$GITHUB_OUTPUT"
-            echo 'target=tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj' >> "$GITHUB_OUTPUT"
+            echo 'run_kind=main' >> "$GITHUB_OUTPUT"
           fi
 
       # The deployment reference defaults to a version so a fresh clone deploys without editing
@@ -135,7 +133,7 @@ jobs:
           echo "deployment default ${defaults} matches release ${tag}"
 
       - name: Record release inputs
-        if: steps.tier.outputs.name == 'release'
+        if: steps.select_run.outputs.run_kind == 'release'
         shell: bash
         run: |
           mkdir -p evidence/test-results
@@ -147,8 +145,10 @@ jobs:
           cp global.json evidence/global.json
           cp .github/workflows/ci.yml evidence/ci-workflow.yml
           cat > evidence/commands.txt <<'EOF'
-          # Architecture/unit/provider tests below ran in this workflow run's verify matrix; see its logs.
-          # The full-suite command below ran in this qualify job; see acceptance.log.
+          # Each command below ran in the job that supplied its gate during this workflow run:
+          #   verify      -> restore, audit, build, architecture, unit
+          #   functional  -> both database-provider runs
+          #   acceptance  -> the packaged Acceptance run (see acceptance.log)
           dotnet restore Integrios.slnx --locked-mode
           dotnet list Integrios.slnx package --vulnerable --include-transitive --no-restore
           dotnet build Integrios.slnx --configuration Release --no-restore
@@ -159,26 +159,25 @@ jobs:
           dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
-          INTEGRIOS_TEST_DATABASE_PROVIDER=postgres dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
-          INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver dotnet test tests/Integrios.Application.FunctionalTests/Integrios.Application.FunctionalTests.csproj --configuration Release --no-build
-          dotnet test Integrios.slnx --configuration Release --no-restore
+          INTEGRIOS_TEST_DATABASE_PROVIDER=postgres dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --configuration Release --no-build
+          INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj --configuration Release --no-restore
           EOF
 
       - name: Run acceptance tests
         shell: bash
         env:
-          TIER: ${{ steps.tier.outputs.name }}
-          TARGET: ${{ steps.tier.outputs.target }}
+          RUN_KIND: ${{ steps.select_run.outputs.run_kind }}
         run: |
           set -o pipefail
           mkdir -p evidence/test-results
-          command=(dotnet test "$TARGET" --configuration Release --no-restore --logger trx --results-directory evidence/test-results)
+          command=(dotnet test tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj --configuration Release --no-restore --logger trx --results-directory evidence/test-results)
 
           printf '%q ' "${command[@]}" > evidence/selected-command.txt
           printf '\n' >> evidence/selected-command.txt
           "${command[@]}" 2>&1 | tee evidence/acceptance.log
 
-          python3 - "$TIER" <<'PY'
+          python3 - "$RUN_KIND" <<'PY'
           import glob
           import sys
           import xml.etree.ElementTree as ET
@@ -186,7 +185,7 @@ jobs:
           # Expected test counts are deliberately not asserted here. A hand-maintained floor
           # decays every time a test is added. What remains is a presence check that catches the
           # target resolving to no tests.
-          tier = sys.argv[1]
+          run_kind = sys.argv[1]
           total = 0
           not_executed = 0
           acceptance_results = 0
@@ -211,7 +210,7 @@ jobs:
 
           with open('evidence/test-counts.txt', 'w', encoding='utf-8') as output:
               output.write(
-                  f'tier={tier}\n'
+                  f'run_kind={run_kind}\n'
                   f'trx_files={len(files)}\n'
                   f'total_tests={total}\n'
                   f'acceptance_tests={acceptance_results}\n'
@@ -219,18 +218,18 @@ jobs:
               )
 
           if not files or total < 1:
-              raise SystemExit(f'{tier} run selected no tests; the target resolved to nothing')
+              raise SystemExit(f'{run_kind} run selected no tests; the target resolved to nothing')
           if acceptance_results < 1:
               raise SystemExit(
-                  f'{tier} run executed no tests from the acceptance project; '
+                  f'{run_kind} run executed no tests from the acceptance project; '
                   'the target resolved to nothing'
               )
           if not_executed:
-              raise SystemExit(f'{tier} run reported {not_executed} skipped or unexecuted tests')
+              raise SystemExit(f'{run_kind} run reported {not_executed} skipped or unexecuted tests')
           PY
 
       - name: Record resolved external image digests
-        if: always() && steps.tier.outputs.name == 'release'
+        if: always() && steps.select_run.outputs.run_kind == 'release'
         shell: bash
         run: |
           mapfile -t images < <(
@@ -250,7 +249,7 @@ jobs:
           done
 
       - name: Upload acceptance evidence
-        if: always() && steps.tier.outputs.name == 'release'
+        if: always() && steps.select_run.outputs.run_kind == 'release'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-acceptance-${{ github.run_id }}
@@ -260,7 +259,7 @@ jobs:
           retention-days: 90
 
   package:
-    needs: [verify, qualify]
+    needs: [verify, acceptance]
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
@@ -355,7 +354,7 @@ jobs:
           retention-days: 90
 
   retain-release-evidence:
-    needs: [qualify, package]
+    needs: [acceptance, package]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:

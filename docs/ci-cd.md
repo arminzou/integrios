@@ -1,23 +1,23 @@
 # CI/CD
 
-Integrios ships one tiered GitHub Actions workflow (`.github/workflows/ci.yml`) you can run
-as-is or fork and adapt. The tiers keep routine feedback prompt while still making complete
-qualification mandatory before publishing a release:
+Integrios ships one event-driven GitHub Actions workflow (`.github/workflows/ci.yml`) you can run
+as-is or fork and adapt. The flows keep routine feedback prompt while still making complete
+verification mandatory before publishing a release:
 
-1. **Pull request**: locked restore, dependency audit, Release build, architecture and component
-   tests, plus the same Functional suite against PostgreSQL and SQL Server 2022. No configuration or
+1. **Pull request**: locked restore, dependency audit, Release build, architecture and unit tests,
+   plus the same Functional suite against PostgreSQL and SQL Server 2022. No configuration or
    secrets are required, so this runs for fork pull requests too.
 2. **Main**: repeats the pull-request gate, then runs the complete Acceptance project before
    publishing commit, `main`, and `latest` images.
 3. **Nightly**: repeats the pull-request gate and complete Acceptance project on schedule.
-4. **Release**: runs the provider matrix and complete solution before publishing images.
-   A `v*` tag, or an explicit manual run from `main`, triggers it.
+4. **Release**: repeats the pull-request gate and runs the complete Acceptance project before
+   publishing images. A `v*` tag, or an explicit manual run from `main`, triggers it.
 5. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
    Kubernetes, etc.) lives in your own infrastructure, not in this repo.
 
 ## What the default pipeline does
 
-The main and release tiers publish images to GitHub Container Registry (GHCR) under:
+The main and release flows publish images to GitHub Container Registry (GHCR) under:
 
 ```
 ghcr.io/<owner>/<repo>/ingestion
@@ -45,7 +45,7 @@ digest set, and run migrations before starting them. The deployment reference in
 `INTEGRIOS_VERSION`; keep that property if you adapt it.
 
 Successful release runs retain a downloadable evidence artifact for 90 days. It contains
-the workflow and commit identity, .NET and dependency versions, exact qualification
+the workflow and commit identity, .NET and dependency versions, exact verification
 commands, test logs and TRX results, resolved external image digests, and the published
 Ingestion, Admin, and Worker image digests.
 
@@ -53,7 +53,7 @@ The repository pins its .NET SDK, NuGet dependency graph, container versions, an
 third-party GitHub Actions. Action references use immutable commit SHAs with a readable
 release-version comment; keep that form when adapting the workflow.
 
-Publishing exists only in the main and release tiers. Pull requests, including those from
+Publishing exists only in the main and release flows. Pull requests, including those from
 forks, run only the read-only verification job and never need or receive registry
 credentials.
 

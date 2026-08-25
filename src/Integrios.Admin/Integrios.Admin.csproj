@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Integrios.Application.FunctionalTests" />
+    <InternalsVisibleTo Include="Integrios.FunctionalTests" />
     <InternalsVisibleTo Include="Integrios.Admin.UnitTests" />
   </ItemGroup>
 

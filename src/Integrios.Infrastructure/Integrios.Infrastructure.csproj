@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Integrios.Application.FunctionalTests" />
+    <InternalsVisibleTo Include="Integrios.FunctionalTests" />
     <InternalsVisibleTo Include="Integrios.Migrations.Postgres" />
     <InternalsVisibleTo Include="Integrios.Migrations.SqlServer" />
     <InternalsVisibleTo Include="Integrios.Worker.UnitTests" />
