@@ -73,7 +73,7 @@ Content-Type: application/json
 
 {
   "headers": {
-    "X-Qualification": "expected-value"
+    "X-Example-Header": "expected-value"
   }
 }
 

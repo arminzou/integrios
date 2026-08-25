@@ -21,7 +21,7 @@ public sealed class GitHubToSlackAcceptanceTests(PackagedDeploymentFixture fixtu
     private const string SlackSecretReference = "slack_bot_token";
 
     [Fact]
-    public async Task PackagedSystem_QualifiesGitHubToSlackGoldenPath()
+    public async Task PackagedSystem_ProvesGitHubToSlackGoldenPath()
     {
         const string githubConnectorId = "00000000-0000-0000-0000-000000000002";
         string slackConnectorId = await ApplyExampleManifestAsync("slack");
