@@ -16,7 +16,7 @@ namespace Integrios.FunctionalTests.Ingestion;
 
 // Real-broker integration: proves PeekLock completion, deterministic dead-lettering, transient
 // redelivery, and idempotent duplicate handling against the official Azure Service Bus emulator.
-public sealed class AzureServiceBusQueueSourceIntegrationTests(AzureServiceBusQueueSourceFixture fixture)
+public sealed class AzureServiceBusQueueSourceTests(AzureServiceBusQueueSourceFixture fixture)
     : IClassFixture<AzureServiceBusQueueSourceFixture>
 {
     internal const string TenantSlug = "sb-integration";
@@ -293,7 +293,7 @@ public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
     {
         await Database.StartAsync();
         await ServiceBus.StartAsync();
-        TenantId = (await AzureServiceBusQueueSourceIntegrationTests.SeedAsync(Database)).TenantId;
+        TenantId = (await AzureServiceBusQueueSourceTests.SeedAsync(Database)).TenantId;
 
         factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
@@ -304,7 +304,7 @@ public sealed class AzureServiceBusQueueSourceFixture : IAsyncLifetime
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    [$"SourceSecrets:{AzureServiceBusQueueSourceIntegrationTests.TenantSlug}:{AzureServiceBusQueueSourceIntegrationTests.SecretReference}"] =
+                    [$"SourceSecrets:{AzureServiceBusQueueSourceTests.TenantSlug}:{AzureServiceBusQueueSourceTests.SecretReference}"] =
                         ServiceBus.GetConnectionString(),
                 }));
             builder.ConfigureServices(services =>

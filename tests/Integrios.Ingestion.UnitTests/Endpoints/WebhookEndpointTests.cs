@@ -14,8 +14,8 @@ namespace Integrios.Ingestion.UnitTests;
 // configuration-backed ISourceVerificationSecretResolver end to end through the HTTP endpoint;
 // only the Postgres-backed ISourceEndpointResolver and IEventAcceptance ports are stubbed. This is
 // the "production path" i7a.5 requires host isolation to be proven against.
-public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
-    : IClassFixture<ApiTestAppFixture>, IAsyncLifetime
+public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
+    : IClassFixture<IngestionApiFixture>, IAsyncLifetime
 {
     private const string SignatureHeaderName = "X-Signature";
     private const string EventTypeHeaderName = "X-Event-Type";
@@ -72,7 +72,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
                 Scheme = "hmac_sha256",
                 Config = JsonSerializer.Deserialize<JsonElement>("{}"),
                 SecretRefs = JsonSerializer.Deserialize<JsonElement>(
-                    $$"""{"secret":"{{ApiTestAppFixture.WebhookSecretReference}}"}"""),
+                    $$"""{"secret":"{{IngestionApiFixture.WebhookSecretReference}}"}"""),
             },
         };
         fixture.SourceEndpointResolver.Result = endpoint;
@@ -183,7 +183,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
 
     private static string SignBody(string body)
     {
-        byte[] key = Encoding.UTF8.GetBytes(ApiTestAppFixture.WebhookSecretValue);
+        byte[] key = Encoding.UTF8.GetBytes(IngestionApiFixture.WebhookSecretValue);
         byte[] hash = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(body));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
@@ -191,7 +191,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
     private static ResolvedSourceEndpoint BuildResolvedEndpoint() => new()
     {
         TenantId = Guid.NewGuid(),
-        TenantSlug = ApiTestAppFixture.WebhookTenantSlug,
+        TenantSlug = IngestionApiFixture.WebhookTenantSlug,
         TopicId = Guid.NewGuid(),
         SourceId = Guid.NewGuid(),
         ConnectionId = Guid.NewGuid(),
@@ -203,7 +203,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
             // optional Config keys, proving the shape stays per-Connector-overridable.
             Config = JsonSerializer.Deserialize<JsonElement>($$"""{"header_name":"{{SignatureHeaderName}}","encoding":"hex","prefix":""}"""),
             SecretRefs = JsonSerializer.Deserialize<JsonElement>(
-                $$"""{"secret":"{{ApiTestAppFixture.WebhookSecretReference}}"}"""),
+                $$"""{"secret":"{{IngestionApiFixture.WebhookSecretReference}}"}"""),
         },
         SourceContractSchema = null,
         // $context.headers keys are lower-cased by BuildContext regardless of how the request sent

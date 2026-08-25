@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Ingestion.UnitTests;
 
-public sealed class ApiTestAppFixture : IDisposable
+public sealed class IngestionApiFixture : IDisposable
 {
     // Fixed identity used by WebhookEndpointTests to exercise the real
     // ISourceVerificationSecretResolver production path (configuration-backed provider) rather
@@ -28,7 +28,7 @@ public sealed class ApiTestAppFixture : IDisposable
     public StubQueueSourceCatalog QueueSourceCatalog { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
-    public ApiTestAppFixture()
+    public IngestionApiFixture()
     {
         Factory = new CustomApiFactory(
             TenantApiKeyRepository, EventAcceptance, EventLookup, EventApiSourceResolver, SourceEndpointResolver,
@@ -71,8 +71,8 @@ internal sealed class CustomApiFactory(
             {
                 ["ConnectionStrings:Postgres"] =
                     "Host=localhost;Database=test;Username=test;Password=test",
-                [$"SourceSecrets:{ApiTestAppFixture.WebhookTenantSlug}:{ApiTestAppFixture.WebhookSecretReference}"] =
-                    ApiTestAppFixture.WebhookSecretValue
+                [$"SourceSecrets:{IngestionApiFixture.WebhookTenantSlug}:{IngestionApiFixture.WebhookSecretReference}"] =
+                    IngestionApiFixture.WebhookSecretValue
             }));
 
         builder.ConfigureServices(services =>

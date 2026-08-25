@@ -8,8 +8,8 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Ingestion.UnitTests;
 
-public sealed class EventEndpointTests(ApiTestAppFixture fixture)
-    : IClassFixture<ApiTestAppFixture>, IAsyncLifetime
+public sealed class EventEndpointTests(IngestionApiFixture fixture)
+    : IClassFixture<IngestionApiFixture>, IAsyncLifetime
 {
     private HttpClient client = null!;
 

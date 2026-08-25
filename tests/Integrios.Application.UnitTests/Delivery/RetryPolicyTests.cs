@@ -2,7 +2,7 @@ using Integrios.Application.Delivery;
 
 namespace Integrios.Application.UnitTests;
 
-public sealed class OutboxWorkerBackoffTests
+public sealed class RetryPolicyTests
 {
     [Theory]
     [InlineData(1, 30)]

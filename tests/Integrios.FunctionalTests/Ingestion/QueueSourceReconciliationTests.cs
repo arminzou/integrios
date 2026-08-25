@@ -94,7 +94,7 @@ public sealed class QueueSourceReconciliationTests(QueueSourceReconciliationFixt
         await fixture.PublishAsync(new { event_type = "order.created", source_event_id = whileRebound, payload = new { } });
         (await fixture.WaitForEventAsync(whileRebound, TimeSpan.FromSeconds(10))).ShouldBeNull();
 
-        await fixture.SetQueueNameAsync(sourceId, AzureServiceBusQueueSourceIntegrationTests.QueueName);
+        await fixture.SetQueueNameAsync(sourceId, AzureServiceBusQueueSourceTests.QueueName);
         (await fixture.WaitForEventAsync(whileRebound, Settle)).ShouldNotBeNull();
     }
 }
@@ -117,7 +117,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     {
         await Database.StartAsync();
         await ServiceBus.StartAsync();
-        Seeded = await AzureServiceBusQueueSourceIntegrationTests.SeedAsync(Database, includeSource: false);
+        Seeded = await AzureServiceBusQueueSourceTests.SeedAsync(Database, includeSource: false);
 
         factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
@@ -129,7 +129,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    [$"SourceSecrets:{AzureServiceBusQueueSourceIntegrationTests.TenantSlug}:{AzureServiceBusQueueSourceIntegrationTests.SecretReference}"] =
+                    [$"SourceSecrets:{AzureServiceBusQueueSourceTests.TenantSlug}:{AzureServiceBusQueueSourceTests.SecretReference}"] =
                         ServiceBus.GetConnectionString(),
                 }));
         });
@@ -147,7 +147,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     }
 
     internal Task CreateSourceAsync(Guid sourceId) =>
-        AzureServiceBusQueueSourceIntegrationTests.InsertQueueSourceAsync(Database, Seeded, sourceId);
+        AzureServiceBusQueueSourceTests.InsertQueueSourceAsync(Database, Seeded, sourceId);
 
     internal Task RevokeSourceAsync(Guid sourceId) => ExecuteAsync(
         $"UPDATE sources SET status = 'revoked', revoked_at = {Database.Now} WHERE id = @Id",
@@ -164,7 +164,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
             authentication = new
             {
                 scheme = "connection_string",
-                secret_ref = AzureServiceBusQueueSourceIntegrationTests.SecretReference,
+                secret_ref = AzureServiceBusQueueSourceTests.SecretReference,
             },
         });
         return ExecuteAsync(
@@ -175,7 +175,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     internal async Task PublishAsync(object body)
     {
         await using ServiceBusClient client = new(ServiceBus.GetConnectionString());
-        ServiceBusSender sender = client.CreateSender(AzureServiceBusQueueSourceIntegrationTests.QueueName);
+        ServiceBusSender sender = client.CreateSender(AzureServiceBusQueueSourceTests.QueueName);
         await sender.SendMessageAsync(new ServiceBusMessage(JsonSerializer.Serialize(body, HostJson.Options)));
     }
 
@@ -183,7 +183,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     {
         await using ServiceBusClient client = new(ServiceBus.GetConnectionString());
         await using ServiceBusReceiver receiver = client.CreateReceiver(
-            AzureServiceBusQueueSourceIntegrationTests.QueueName);
+            AzureServiceBusQueueSourceTests.QueueName);
         while (await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(1)) is { } message)
             await receiver.CompleteMessageAsync(message);
     }
@@ -192,7 +192,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     {
         await using ServiceBusClient client = new(ServiceBus.GetConnectionString());
         await using ServiceBusReceiver receiver = client.CreateReceiver(
-            AzureServiceBusQueueSourceIntegrationTests.QueueName);
+            AzureServiceBusQueueSourceTests.QueueName);
         return await receiver.PeekMessageAsync();
     }
 

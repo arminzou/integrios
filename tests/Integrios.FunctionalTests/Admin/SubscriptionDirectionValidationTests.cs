@@ -55,7 +55,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     [Theory]
     [InlineData("destination")]
     [InlineData("both")]
-    public async Task CreateSubscription_DestinationCapableConnection_IsAllowed(string direction)
+    public async Task CreateSubscription_DestinationCapableConnection_ReturnsCreated(string direction)
     {
         var topic = await CreateTopicAsync("payments");
         Guid destinationConnectionId = await InsertConnectionWithDirectionAsync($"allowed_{direction}_sink", direction);

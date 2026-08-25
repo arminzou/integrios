@@ -127,7 +127,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
     }
 
     [Fact]
-    public async Task ListTenantApiKeys_Pagination_WorksCorrectly()
+    public async Task ListTenantApiKeys_Pagination_ReturnsNonOverlappingPages()
     {
         await CreateTenantApiKeyAsync("page-key-1");
         await CreateTenantApiKeyAsync("page-key-2");

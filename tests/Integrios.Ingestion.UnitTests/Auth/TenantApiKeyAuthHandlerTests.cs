@@ -12,8 +12,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.Ingestion.UnitTests;
 
-public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
-    : IClassFixture<ApiTestAppFixture>, IAsyncLifetime
+public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
+    : IClassFixture<IngestionApiFixture>, IAsyncLifetime
 {
     private HttpClient client = null!;
 
@@ -74,7 +74,7 @@ public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     // Happy path: valid credential passes the filter
 
     [Fact]
-    public async Task ValidCredential_PassesFilter()
+    public async Task ValidCredential_AllowsRequestThrough()
     {
         (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
