@@ -33,13 +33,13 @@ public sealed class AdminExceptionHandlerTests
 
         var handled = await handler.TryHandleAsync(context, exception, CancellationToken.None);
 
-        Assert.True(handled);
-        Assert.Equal(expectedStatusCode, context.Response.StatusCode);
+        handled.ShouldBeTrue();
+        context.Response.StatusCode.ShouldBe(expectedStatusCode);
         var body = await ResponseBodyAsync(context);
         var expectedMessage = exception is BadHttpRequestException
             ? "The request body is invalid."
             : exception.Message;
-        Assert.Equal(expectedMessage, body.GetProperty("error").GetString());
+        body.GetProperty("error").GetString().ShouldBe(expectedMessage);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class AdminExceptionHandlerTests
             new InvalidOperationException("unexpected"),
             CancellationToken.None);
 
-        Assert.False(handled);
+        handled.ShouldBeFalse();
     }
 
     private static DefaultHttpContext NewContext() => new()

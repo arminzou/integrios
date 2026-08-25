@@ -5,10 +5,10 @@ public sealed class PublicIngestionBaseUriTests
     [Fact]
     public void Parse_ProductionRejectsHttp()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        var exception = Should.Throw<InvalidOperationException>(() =>
             PublicIngestionBaseUri.Parse("http://ingestion.example.test/root", allowHttp: false));
 
-        Assert.Contains("must use HTTPS", exception.Message, StringComparison.Ordinal);
+        exception.Message.ShouldContain("must use HTTPS", Case.Sensitive);
     }
 
     [Fact]
@@ -18,9 +18,8 @@ public sealed class PublicIngestionBaseUriTests
             "http://localhost:5231/proxy/root/",
             allowHttp: true);
 
-        Assert.Equal(
-            "http://localhost:5231/proxy/root/webhooks/github/00000000-0000-0000-0000-000000000001",
-            uri.AppendCallbackPath("/webhooks/github/00000000-0000-0000-0000-000000000001"));
+        uri.AppendCallbackPath("/webhooks/github/00000000-0000-0000-0000-000000000001").ShouldBe(
+            "http://localhost:5231/proxy/root/webhooks/github/00000000-0000-0000-0000-000000000001");
     }
 
     [Theory]
@@ -33,6 +32,6 @@ public sealed class PublicIngestionBaseUriTests
     [InlineData("https://ingestion.example.test/#fragment")]
     public void Parse_RejectsMissingOrNonOriginValues(string? value)
     {
-        Assert.Throws<InvalidOperationException>(() => PublicIngestionBaseUri.Parse(value, allowHttp: false));
+        Should.Throw<InvalidOperationException>(() => PublicIngestionBaseUri.Parse(value, allowHttp: false));
     }
 }

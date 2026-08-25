@@ -37,7 +37,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
         fixture.EventLookup.GetEventResult = null;
 
         HttpResponseMessage response = await GetEventAsync(Guid.NewGuid(), $"TenantApiKey {TenantApiKeyAuthHandlerTests.TestToken}");
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -74,23 +74,23 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
         fixture.EventLookup.GetEventResult = expected;
 
         HttpResponseMessage response = await GetEventAsync(eventId, $"TenantApiKey {TenantApiKeyAuthHandlerTests.TestToken}");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         EventDto? body = await response.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
-        Assert.NotNull(body);
-        Assert.Equal(expected.EventId, body.EventId);
-        Assert.Equal(expected.Status, body.Status);
-        Assert.Equal(expected.AcceptedAt, body.AcceptedAt);
-        Assert.Equal(expected.ProcessedAt, body.ProcessedAt);
-        Assert.Equal(expected.FailedAt, body.FailedAt);
-        DeliveryAttemptDto attempt = Assert.Single(body.DeliveryAttempts);
-        Assert.Equal(attemptId, attempt.AttemptId);
-        Assert.Equal(expected.DeliveryAttempts[0].EventDeliveryId, attempt.EventDeliveryId);
-        Assert.Equal(expected.DeliveryAttempts[0].SubscriptionId, attempt.SubscriptionId);
-        Assert.Equal(expected.DeliveryAttempts[0].DestinationConnectionId, attempt.DestinationConnectionId);
-        Assert.Equal(1, attempt.AttemptNumber);
-        Assert.Equal("succeeded", attempt.Status);
-        Assert.Equal(200, attempt.ResponseStatusCode);
+        body.ShouldNotBeNull();
+        body.EventId.ShouldBe(expected.EventId);
+        body.Status.ShouldBe(expected.Status);
+        body.AcceptedAt.ShouldBe(expected.AcceptedAt);
+        body.ProcessedAt.ShouldBe(expected.ProcessedAt);
+        body.FailedAt.ShouldBe(expected.FailedAt);
+        DeliveryAttemptDto attempt = body.DeliveryAttempts.ShouldHaveSingleItem();
+        attempt.AttemptId.ShouldBe(attemptId);
+        attempt.EventDeliveryId.ShouldBe(expected.DeliveryAttempts[0].EventDeliveryId);
+        attempt.SubscriptionId.ShouldBe(expected.DeliveryAttempts[0].SubscriptionId);
+        attempt.DestinationConnectionId.ShouldBe(expected.DeliveryAttempts[0].DestinationConnectionId);
+        attempt.AttemptNumber.ShouldBe(1);
+        attempt.Status.ShouldBe("succeeded");
+        attempt.ResponseStatusCode.ShouldBe(200);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
             payload = new { amount = 42 }
         }, sourceId: null));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
             payload = new { amount = 42 }
         }, sourceId: Guid.NewGuid()));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
             payload = new { amount = 42 }
         }, sourceId: Guid.NewGuid()));
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class EventEndpointTests(ApiTestAppFixture fixture)
             Headers = { { "Authorization", $"TenantApiKey {TenantApiKeyAuthHandlerTests.TestToken}" } }
         });
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     private static HttpRequestMessage AuthorizedRequest(object body, Guid? sourceId)

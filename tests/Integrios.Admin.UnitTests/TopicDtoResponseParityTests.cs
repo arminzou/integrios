@@ -26,16 +26,14 @@ public sealed class TopicDtoResponseParityTests
 
         foreach (PropertyInfo dtoProperty in dtoType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            Assert.True(
-                responseProperties.TryGetValue(dtoProperty.Name, out PropertyInfo? responseProperty),
+            responseProperties.TryGetValue(dtoProperty.Name, out PropertyInfo? responseProperty).ShouldBeTrue(
                 $"{responseType.Name} has no counterpart for {dtoType.Name}.{dtoProperty.Name}.");
 
             (Type dtoElementType, bool dtoIsList) = UnwrapList(dtoProperty.PropertyType);
             if (dtoIsList)
             {
                 (Type responseElementType, bool responseIsList) = UnwrapList(responseProperty!.PropertyType);
-                Assert.True(
-                    responseIsList,
+                responseIsList.ShouldBeTrue(
                     $"{responseType.Name}.{responseProperty.Name} must be a list to match {dtoType.Name}.{dtoProperty.Name}.");
                 if (IsApplicationModelType(dtoElementType))
                     AssertParity(dtoElementType, responseElementType);

@@ -23,15 +23,14 @@ public sealed class StoredJsonContractTests
 
         string json = JsonSerializer.Serialize(selection, StoredJson.Options);
 
-        Assert.Equal(
-            """{"scheme":"hmac_sha256","config":{"signature_header":"X-Hub-Signature-256"},"secret_refs":{"secret":"env:GH_SECRET"}}""",
-            json);
+        json.ShouldBe(
+            """{"scheme":"hmac_sha256","config":{"signature_header":"X-Hub-Signature-256"},"secret_refs":{"secret":"env:GH_SECRET"}}""");
 
         SourceVerification? restored = JsonSerializer.Deserialize<SourceVerification>(
             json, StoredJson.Options);
 
-        Assert.NotNull(restored);
-        Assert.Equal("hmac_sha256", restored.Scheme);
-        Assert.Equal("env:GH_SECRET", restored.SecretRefs.GetProperty("secret").GetString());
+        restored.ShouldNotBeNull();
+        restored.Scheme.ShouldBe("hmac_sha256");
+        restored.SecretRefs.GetProperty("secret").GetString().ShouldBe("env:GH_SECRET");
     }
 }

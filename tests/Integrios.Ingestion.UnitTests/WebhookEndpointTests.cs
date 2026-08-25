@@ -48,14 +48,14 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         HttpResponseMessage response = await SendAsync(
             callbackId, """{"action":"opened","number":1}""", "issue.opened", "delivery-1");
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.NotNull(fixture.EventAcceptance.LastSubmission);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        fixture.EventAcceptance.LastSubmission.ShouldNotBeNull();
         EventSubmission submission = fixture.EventAcceptance.LastSubmission;
-        Assert.Equal("test.issue.opened", submission.EventType);
-        Assert.Equal("delivery-1", submission.SourceEventId);
-        Assert.Equal($"{fixture.SourceEndpointResolver.Result!.SourceId}:delivery-1", submission.IdempotencyKey);
-        Assert.Equal(JsonValueKind.Object, submission.Payload.ValueKind);
-        Assert.Equal(1, submission.Payload.GetProperty("number").GetInt32());
+        submission.EventType.ShouldBe("test.issue.opened");
+        submission.SourceEventId.ShouldBe("delivery-1");
+        submission.IdempotencyKey.ShouldBe($"{fixture.SourceEndpointResolver.Result!.SourceId}:delivery-1");
+        submission.Payload.ValueKind.ShouldBe(JsonValueKind.Object);
+        submission.Payload.GetProperty("number").GetInt32().ShouldBe(1);
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         request.Headers.TryAddWithoutValidation(DeliveryIdHeaderName, "delivery-default");
 
         HttpResponseMessage response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         request.Headers.TryAddWithoutValidation(DeliveryIdHeaderName, "delivery-open");
 
         HttpResponseMessage response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -118,8 +118,8 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
             callbackId, """{"action":"opened"}""", new string('0', 64), "issue.opened", "delivery-2");
 
         HttpResponseMessage response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Null(fixture.EventAcceptance.LastSubmission);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        fixture.EventAcceptance.LastSubmission.ShouldBeNull();
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
 
         HttpResponseMessage response = await SendAsync(Guid.NewGuid(), """{"a":1}""", "push", "delivery-3");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
 
         HttpResponseMessage response = await SendAsync(callbackId, "[1,2,3]", "push", "delivery-4");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public sealed class WebhookEndpointTests(ApiTestAppFixture fixture)
         HttpRequestMessage request = BuildRequest(callbackId, oversizedBody, "deadbeef", "push", "delivery-5");
 
         HttpResponseMessage response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
     }
 
     private async Task<HttpResponseMessage> SendAsync(

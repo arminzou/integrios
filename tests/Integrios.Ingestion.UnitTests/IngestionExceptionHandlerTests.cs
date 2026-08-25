@@ -16,10 +16,10 @@ public sealed class IngestionExceptionHandlerTests
 
         var handled = await handler.TryHandleAsync(context, exception, CancellationToken.None);
 
-        Assert.True(handled);
-        Assert.Equal(StatusCodes.Status422UnprocessableEntity, context.Response.StatusCode);
+        handled.ShouldBeTrue();
+        context.Response.StatusCode.ShouldBe(StatusCodes.Status422UnprocessableEntity);
         var body = await ResponseBodyAsync(context);
-        Assert.Equal(exception.Message, body.GetProperty("error").GetString());
+        body.GetProperty("error").GetString().ShouldBe(exception.Message);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class IngestionExceptionHandlerTests
             new InvalidOperationException("unexpected"),
             CancellationToken.None);
 
-        Assert.False(handled);
+        handled.ShouldBeFalse();
     }
 
     [Fact]
@@ -47,10 +47,10 @@ public sealed class IngestionExceptionHandlerTests
             new BadHttpRequestException("binding details"),
             CancellationToken.None);
 
-        Assert.True(handled);
-        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        handled.ShouldBeTrue();
+        context.Response.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
         var body = await ResponseBodyAsync(context);
-        Assert.Equal("The request body is invalid.", body.GetProperty("error").GetString());
+        body.GetProperty("error").GetString().ShouldBe("The request body is invalid.");
     }
 
     private static DefaultHttpContext NewContext() => new()

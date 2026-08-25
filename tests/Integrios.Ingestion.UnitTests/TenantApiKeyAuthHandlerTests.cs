@@ -47,7 +47,7 @@ public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     public async Task BadHeader_Returns401(string? authHeader)
     {
         HttpResponseMessage response = await PostEventsAsync(authHeader);
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // Repository filtering: unknown key -> 401
@@ -56,7 +56,7 @@ public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     public async Task UnknownKeyId_Returns401()
     {
         HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {TestToken}");
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // Hash verification: valid keyId but wrong token -> 401
@@ -68,7 +68,7 @@ public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
         HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {WrongToken}");
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // Happy path: valid credential passes the filter
@@ -80,7 +80,7 @@ public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
         HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {TestToken}");
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
     // 401 response carries WWW-Authenticate header
@@ -89,15 +89,15 @@ public sealed class TenantApiKeyAuthHandlerTests(ApiTestAppFixture fixture)
     public async Task Rejected_Response_HasWwwAuthenticateHeader()
     {
         HttpResponseMessage response = await PostEventsAsync(authHeader: null);
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.True(response.Headers.Contains("WWW-Authenticate"));
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        response.Headers.Contains("WWW-Authenticate").ShouldBeTrue();
     }
 
     [Fact]
     public async Task GetEvent_MissingAuth_Returns401()
     {
         HttpResponseMessage response = await GetEventAsync(Guid.NewGuid(), authHeader: null);
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // Helpers

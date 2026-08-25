@@ -25,7 +25,7 @@ public sealed class ApplicationArchitectureTests
             .Where(type => type.IsInterface)
             .ToArray();
 
-        Assert.NotEmpty(publicPorts);
+        publicPorts.ShouldNotBeEmpty();
 
         string[] offenders = publicPorts
             .Where(port => !ApprovedPortGroups.Any(group => IsInGroup(port.Namespace, group)))
@@ -33,8 +33,7 @@ public sealed class ApplicationArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             "Every public Application port lives in an approved responsibility group. "
             + $"Found: {string.Join(", ", offenders)}");
     }
@@ -52,8 +51,7 @@ public sealed class ApplicationArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            responseTypes.Length == 0,
+        (responseTypes.Length == 0).ShouldBeTrue(
             "A response is a transport contract owned by a host. Application projects persisted "
             + $"state as *Dto and describes outcomes as *Result or *Report. Found: {string.Join(", ", responseTypes)}");
     }
@@ -68,8 +66,7 @@ public sealed class ApplicationArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            requestTypes.Length == 0,
+        (requestTypes.Length == 0).ShouldBeTrue(
             "A request is a transport contract owned by a host: route values are authoritative and "
             + "wire deserialization ignores C# nullability, so untrusted input becomes trusted in "
             + $"exactly one place. Application does not know requests exist. Found: {string.Join(", ", requestTypes)}");
@@ -85,8 +82,7 @@ public sealed class ApplicationArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             "Rule 2: never introduce a generic success-or-failure Result<T> wrapper; every operation "
             + $"gets a specific *Result type. Found: {string.Join(", ", offenders)}");
     }
@@ -103,8 +99,7 @@ public sealed class ApplicationArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             "Rule 8: port interfaces declare no default parameter values; every call site passes "
             + $"CancellationToken explicitly. Found: {string.Join(", ", offenders)}");
     }
@@ -125,8 +120,7 @@ public sealed class ApplicationArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             "No exported Application port signature may reference a type outside Domain, Application, "
             + $"or the BCL; a fake implementation must compile with zero packages installed. Found: {string.Join(", ", offenders)}");
     }
@@ -166,10 +160,10 @@ public sealed class ApplicationArchitectureTests
     {
         HandlerRegistration[] handlers = HandlerRegistrations().ToArray();
 
-        Assert.NotEmpty(handlers);
-        Assert.All(handlers, handler => Assert.True(
-            handler.ImplementationType.IsNotPublic,
-            $"{handler.ImplementationType.FullName} must remain internal."));
+        handlers.ShouldNotBeEmpty();
+        foreach (var handler in handlers)
+            handler.ImplementationType.IsNotPublic.ShouldBeTrue(
+                $"{handler.ImplementationType.FullName} must remain internal.");
     }
 
     // Async state machines and closures inherit the name of the method they were generated for,

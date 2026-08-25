@@ -10,7 +10,7 @@ public class EventStatusTests
     public void EveryStatus_RoundTrips_ThroughDbValue()
     {
         foreach (var status in Enum.GetValues<EventStatus>())
-            Assert.Equal(status, EventStatusMap.FromDbValue(EventStatusMap.ToDbValue(status)));
+            EventStatusMap.FromDbValue(EventStatusMap.ToDbValue(status)).ShouldBe(status);
     }
 
     [Theory]
@@ -19,16 +19,16 @@ public class EventStatusTests
     [InlineData(EventStatus.Unrouted, "unrouted")]
     [InlineData(EventStatus.DeadLettered, "dead_lettered")]
     public void DbValue_IsSnakeCase(EventStatus status, string expected)
-        => Assert.Equal(expected, EventStatusMap.ToDbValue(status));
+        => EventStatusMap.ToDbValue(status).ShouldBe(expected);
 
     [Fact]
     public void JsonConverter_SerializesAsSnakeCaseString()
     {
-        Assert.Equal("\"routed\"", JsonSerializer.Serialize(EventStatus.Routed));
-        Assert.Equal(EventStatus.Routed, JsonSerializer.Deserialize<EventStatus>("\"routed\""));
+        JsonSerializer.Serialize(EventStatus.Routed).ShouldBe("\"routed\"");
+        JsonSerializer.Deserialize<EventStatus>("\"routed\"").ShouldBe(EventStatus.Routed);
     }
 
     [Fact]
     public void FromDbValue_Throws_OnUnknownStatus()
-        => Assert.Throws<ArgumentOutOfRangeException>(() => EventStatusMap.FromDbValue("completed"));
+        => Should.Throw<ArgumentOutOfRangeException>(() => EventStatusMap.FromDbValue("completed"));
 }

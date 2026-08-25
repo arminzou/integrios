@@ -93,7 +93,7 @@ public sealed class ProjectArchitectureTests
                 .Order(StringComparer.Ordinal)
                 .ToArray();
 
-            Assert.Equal(expectedReferences.Order(StringComparer.Ordinal), actualReferences);
+            actualReferences.ShouldBe(expectedReferences.Order(StringComparer.Ordinal));
         }
 
         XDocument applicationProject = XDocument.Load(Path.Combine(
@@ -109,7 +109,7 @@ public sealed class ProjectArchitectureTests
             .Cast<string>()
             .ToArray();
 
-        Assert.DoesNotContain(declaredDependencies, dependency =>
+        declaredDependencies.ShouldNotContain(dependency =>
             dependency.Equals("Dapper", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase)
@@ -134,8 +134,7 @@ public sealed class ProjectArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             ".brain/AGENTS.md:28 bans generic Contracts/, Interfaces/, or Abstractions/ buckets "
             + $"anywhere in src/; namespaces stay feature-based, not directory-mirrored. Found: {string.Join(", ", offenders)}");
     }
@@ -151,8 +150,7 @@ public sealed class ProjectArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             "Rule 6: a port names the capability, an implementation names its vendor; *Service is "
             + $"banned as the suffix that means nothing. Found: {string.Join(", ", offenders)}");
     }
@@ -172,8 +170,7 @@ public sealed class ProjectArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             "JSON casing is a policy set once per host, never a per-field decision. Types stored as "
             + "JSON carry their own serializer options instead. Found: " + string.Join(", ", offenders));
     }
@@ -197,8 +194,7 @@ public sealed class ProjectArchitectureTests
         string[] unapproved = exportedTypes.Except(approvedTypes, StringComparer.Ordinal).ToArray();
         string[] missing = approvedTypes.Except(exportedTypes, StringComparer.Ordinal).ToArray();
 
-        Assert.True(
-            unapproved.Length == 0 && missing.Length == 0,
+        (unapproved.Length == 0 && missing.Length == 0).ShouldBeTrue(
             "Integrios.Infrastructure may export only host-composition DI extensions; any other "
             + $"public type leaks an implementation detail across the layer boundary. {DescribeSetDiff(unapproved, missing)}");
     }
@@ -225,8 +221,7 @@ public sealed class ProjectArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            offenders.Length == 0,
+        (offenders.Length == 0).ShouldBeTrue(
             "Rule 5: capability values carry semantic ubiquitous-language names, never *Details, "
             + $"*Info, or *Data. Found: {string.Join(", ", offenders)}");
     }
@@ -244,7 +239,7 @@ public sealed class ProjectArchitectureTests
             .ToHashSet(StringComparer.Ordinal);
 
         foreach (string forbiddenName in forbiddenNames)
-            Assert.DoesNotContain(forbiddenName, references);
+            references.ShouldNotContain(forbiddenName);
     }
 
     private static void AssertOmitsReferencePrefixes(Assembly assembly, params string[] forbiddenPrefixes)
@@ -255,8 +250,7 @@ public sealed class ProjectArchitectureTests
 
         foreach (string forbiddenPrefix in forbiddenPrefixes)
         {
-            Assert.DoesNotContain(
-                references,
+            references.ShouldNotContain(
                 reference => reference.StartsWith(forbiddenPrefix, StringComparison.Ordinal));
         }
     }
@@ -309,14 +303,14 @@ public sealed class ProjectArchitectureTests
             "Microsoft.Extensions.Diagnostics",
             "Microsoft.Extensions.Logging.Abstractions"
         ];
-        Assert.Equal(approvedDirectDependencies.Order(StringComparer.Ordinal), directDependencies);
+        directDependencies.ShouldBe(approvedDirectDependencies.Order(StringComparer.Ordinal));
 
         string[] frameworkReferences = framework.GetProperty("frameworkReferences")
             .EnumerateObject()
             .Select(property => property.Name)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(["Microsoft.NETCore.App"], frameworkReferences);
+        frameworkReferences.ShouldBe(new[] { "Microsoft.NETCore.App" });
 
         // The transitive graph is checked for what may not appear rather than pinned exactly: the
         // rule is that Application never acquires a web, database, or transform dependency, even
@@ -336,8 +330,7 @@ public sealed class ProjectArchitectureTests
                 prefix => package.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
             .ToArray();
 
-        Assert.True(
-            violations.Length == 0,
+        (violations.Length == 0).ShouldBeTrue(
             "Integrios.Application must not resolve a web, database, or transform package, directly "
             + $"or transitively. Found: {string.Join(", ", violations)}");
     }

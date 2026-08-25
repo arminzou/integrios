@@ -77,7 +77,7 @@ public sealed class HostCompositionArchitectureTests
 
         ApplicationArchitectureTests.HandlerRegistration[] handlers =
             ApplicationArchitectureTests.HandlerRegistrations().ToArray();
-        Assert.NotEmpty(handlers);
+        handlers.ShouldNotBeEmpty();
 
         foreach (ApplicationArchitectureTests.HandlerRegistration handler in handlers)
         {
@@ -88,8 +88,7 @@ public sealed class HostCompositionArchitectureTests
                 .Select(host => host.Name)
                 .ToArray();
 
-            Assert.True(
-                owners.Length == 1,
+            (owners.Length == 1).ShouldBeTrue(
                 $"{handler.ImplementationType.FullName} as {handler.ServiceType} must be registered by exactly one host; found: {string.Join(", ", owners)}.");
         }
     }
@@ -141,7 +140,7 @@ public sealed class HostCompositionArchitectureTests
 
         ApplicationArchitectureTests.HandlerRegistration[] handlers =
             ApplicationArchitectureTests.HandlerRegistrations().ToArray();
-        Assert.NotEmpty(handlers);
+        handlers.ShouldNotBeEmpty();
 
         foreach (ApplicationArchitectureTests.HandlerRegistration handler in handlers)
         {
@@ -154,8 +153,7 @@ public sealed class HostCompositionArchitectureTests
 
             Host expected = ExpectedOwner(handler.ImplementationType);
 
-            Assert.True(
-                actual.Length == 1 && actual[0] == expected,
+            (actual.Length == 1 && actual[0] == expected).ShouldBeTrue(
                 $"{handler.ImplementationType.FullName} belongs to a group owned by {expected} but "
                 + $"was registered by [{string.Join(", ", actual)}]. Group boundary is host "
                 + "boundary; a handler owned by another host must be declared in CrossGroupOwners "
@@ -172,8 +170,7 @@ public sealed class HostCompositionArchitectureTests
             .Where(group => ApplicationArchitectureTests.IsInGroup(handlerType.Namespace, group.Key))
             .ToArray();
 
-        Assert.True(
-            matches.Length == 1,
+        (matches.Length == 1).ShouldBeTrue(
             $"{handlerType.FullName} must live in exactly one owning responsibility group; "
             + $"matched {matches.Length}. Shared groups hold no handlers.");
 
@@ -194,8 +191,7 @@ public sealed class HostCompositionArchitectureTests
         string[] unclassified = publicPorts.Except(classifiedPorts).Select(type => type.FullName!).ToArray();
         string[] retired = classifiedPorts.Except(publicPorts).Select(type => type.FullName!).ToArray();
 
-        Assert.True(
-            unclassified.Length == 0 && retired.Length == 0,
+        (unclassified.Length == 0 && retired.Length == 0).ShouldBeTrue(
             "Every public Application port must appear in PortOwners with its exact host set, so a "
             + $"new port cannot silently escape ownership review. {ProjectArchitectureTests.DescribeSetDiff(unclassified, retired)}");
 
@@ -224,8 +220,7 @@ public sealed class HostCompositionArchitectureTests
             foreach ((Host host, IServiceProvider provider) in providers)
             {
                 bool resolves = provider.GetServices(port).Any();
-                Assert.True(
-                    resolves == expectedOwners.Contains(host),
+                (resolves == expectedOwners.Contains(host)).ShouldBeTrue(
                     $"{port.FullName} ownership for {host} was expected={expectedOwners.Contains(host)} but resolved={resolves}.");
             }
         }
@@ -366,11 +361,11 @@ public sealed class HostCompositionArchitectureTests
             })
             .Build();
 
-    private static void AssertResolves<T>(IServiceProvider provider) where T : notnull =>
-        Assert.NotNull(provider.GetService<T>());
+    private static void AssertResolves<T>(IServiceProvider provider) where T : class =>
+        provider.GetService<T>().ShouldNotBeNull();
 
-    private static void AssertOmits<T>(IServiceProvider provider) where T : notnull =>
-        Assert.Null(provider.GetService<T>());
+    private static void AssertOmits<T>(IServiceProvider provider) where T : class =>
+        provider.GetService<T>().ShouldBeNull();
 
     private enum Host
     {
