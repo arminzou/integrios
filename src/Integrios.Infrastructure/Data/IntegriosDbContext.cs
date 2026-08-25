@@ -18,20 +18,16 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
     public DbSet<Connector> Connectors => Set<Connector>();
     public DbSet<OutboxEntry> Outboxes => Set<OutboxEntry>();
     public DbSet<Source> Sources => Set<Source>();
-    public DbSet<SourceEndpoint> SourceEndpoints => Set<SourceEndpoint>();
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<EventDelivery> EventDeliveries => Set<EventDelivery>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Topic> Topics => Set<Topic>();
-    public DbSet<TopicSource> TopicSources => Set<TopicSource>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Conventions.Remove<ForeignKeyIndexConvention>();
         configurationBuilder.Properties<OperationalStatus>()
             .HaveConversion<SnakeCaseEnumConverter<OperationalStatus>>();
-        configurationBuilder.Properties<TopicSourceStatus>()
-            .HaveConversion<SnakeCaseEnumConverter<TopicSourceStatus>>();
         configurationBuilder.Properties<SourceStatus>()
             .HaveConversion<SnakeCaseEnumConverter<SourceStatus>>();
         configurationBuilder.Properties<SourceType>()
@@ -159,16 +155,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.Payload).HasColumnType(jsonType);
         });
 
-        modelBuilder.Entity<SourceEndpoint>(entity =>
-        {
-            entity.Property<string>("Status").HasDefaultValueSql(TextDefault("active"));
-            entity.HasIndex("TenantId", "TopicId", "ConnectionId")
-                .HasDatabaseName("uq_source_endpoints_active_association")
-                .HasFilter("(status = N'active')");
-            entity.Property(e => e.Id).HasDefaultValueSql(generatedGuid);
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
-        });
-
         modelBuilder.Entity<Source>(entity =>
         {
             entity.ToTable("sources", table =>
@@ -240,12 +226,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
-        });
-
-        modelBuilder.Entity<TopicSource>(entity =>
-        {
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
-            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
         });
 
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))

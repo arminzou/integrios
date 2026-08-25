@@ -47,8 +47,6 @@ public sealed class DatabaseProviderRegistrationTests
 
         var operatorKey = context.Model.FindEntityType(typeof(OperatorKey))!;
         Assert.Null(operatorKey.FindProperty("TenantId"));
-        Assert.False(context.Model.FindEntityType(typeof(TopicSource))!.FindProperty("Status")!.IsNullable);
-        Assert.False(context.Model.FindEntityType(typeof(SourceEndpoint))!.FindProperty("Status")!.IsNullable);
 
         var status = context.Model.FindEntityType(typeof(EventDelivery))!
             .FindProperty(nameof(EventDelivery.Status))!;
