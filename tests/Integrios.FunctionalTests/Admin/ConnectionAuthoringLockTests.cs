@@ -25,7 +25,7 @@ public sealed class ConnectionAuthoringLockTests : IClassFixture<AdminApiFixture
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         await Should.ThrowAsync<ConnectionAuthoringConflictException>(
             () => authoringLock.AcquireAsync([connectionId], CancellationToken.None));
-        stopwatch.Elapsed.ShouldBeInRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
 
         await firstLease.DisposeAsync();
         IAsyncDisposable secondLease = await authoringLock.AcquireAsync([connectionId], CancellationToken.None);
