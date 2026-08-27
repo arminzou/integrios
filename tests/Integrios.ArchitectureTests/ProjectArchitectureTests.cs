@@ -14,8 +14,7 @@ public sealed class ProjectArchitectureTests
         "Integrios.Infrastructure",
         "Integrios.Admin",
         "Integrios.Ingestion",
-        "Integrios.Worker",
-        "Integrios.MockSink"
+        "Integrios.Worker"
     ];
 
     [Fact]
@@ -29,8 +28,7 @@ public sealed class ProjectArchitectureTests
             "Integrios.Infrastructure",
             "Integrios.Admin",
             "Integrios.Ingestion",
-            "Integrios.Worker",
-            "Integrios.MockSink");
+            "Integrios.Worker");
         AssertOmitsReferencePrefixes(
             assemblies["Integrios.Domain"],
             "Microsoft.EntityFrameworkCore",
@@ -41,8 +39,7 @@ public sealed class ProjectArchitectureTests
             "Integrios.Infrastructure",
             "Integrios.Admin",
             "Integrios.Ingestion",
-            "Integrios.Worker",
-            "Integrios.MockSink");
+            "Integrios.Worker");
         AssertOmitsReferencePrefixes(
             assemblies["Integrios.Application"],
             "Microsoft.AspNetCore",
@@ -55,12 +52,11 @@ public sealed class ProjectArchitectureTests
             assemblies["Integrios.Infrastructure"],
             "Integrios.Admin",
             "Integrios.Ingestion",
-            "Integrios.Worker",
-            "Integrios.MockSink");
+            "Integrios.Worker");
 
-        AssertOmitsReferences(assemblies["Integrios.Admin"], "Integrios.Ingestion", "Integrios.Worker", "Integrios.MockSink");
-        AssertOmitsReferences(assemblies["Integrios.Ingestion"], "Integrios.Admin", "Integrios.Worker", "Integrios.MockSink");
-        AssertOmitsReferences(assemblies["Integrios.Worker"], "Integrios.Admin", "Integrios.Ingestion", "Integrios.MockSink");
+        AssertOmitsReferences(assemblies["Integrios.Admin"], "Integrios.Ingestion", "Integrios.Worker");
+        AssertOmitsReferences(assemblies["Integrios.Ingestion"], "Integrios.Admin", "Integrios.Worker");
+        AssertOmitsReferences(assemblies["Integrios.Worker"], "Integrios.Admin", "Integrios.Ingestion");
     }
 
     [Fact]
@@ -76,8 +72,7 @@ public sealed class ProjectArchitectureTests
             ["Integrios.Migrations.SqlServer"] = ["Integrios.Infrastructure"],
             ["Integrios.Admin"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure", "Integrios.Migrations.Postgres", "Integrios.Migrations.SqlServer"],
             ["Integrios.Ingestion"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
-            ["Integrios.Worker"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
-            ["Integrios.MockSink"] = []
+            ["Integrios.Worker"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"]
         };
 
         foreach ((string projectName, string[] expectedReferences) in allowedProjectReferences)

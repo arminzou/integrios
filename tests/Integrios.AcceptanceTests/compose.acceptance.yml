@@ -52,6 +52,9 @@ services:
       - "${INTEGRIOS_WORKER_METRICS_PORT}:5299"
 
   mocksink:
-    image: ${INTEGRIOS_MOCKSINK_IMAGE}
+    image: wiremock/wiremock:3.13.1
+    command: ["--global-response-templating"]
+    volumes:
+      - "${INTEGRIOS_WIREMOCK_MAPPINGS_DIR}:/home/wiremock/mappings:ro"
     ports:
       - "${INTEGRIOS_MOCKSINK_PORT}:8080"

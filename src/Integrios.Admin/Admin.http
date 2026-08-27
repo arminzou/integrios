@@ -3,7 +3,7 @@
 @webhookIntId = {{applyHttpConnector.response.body.$.id}}
 
 # Sink base URL:
-# - use http://mocksink:8080 when calling from one container to another
+# - use http://mocksink:8080 when calling from one container to another (WireMock)
 # - use http://localhost:5054 when driving the stack from your host machine
 @sinkBase = {{SINK_BASE}}
 
@@ -18,7 +18,7 @@
 # 3. Topic decides which source connections may publish to that stream.
 # 4. Worker reads accepted events, matches subscriptions, applies any transform,
 #    and delivers to each destination connection.
-# 5. MockSink is the local downstream system so you can watch deliveries happen.
+# 5. WireMock is the local downstream system so you can inspect deliveries.
 
 ###
 # Step 0 - Confirm the control plane is up

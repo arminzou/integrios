@@ -36,8 +36,7 @@ public sealed class TestSuiteArchitectureTests
             ],
             ["Integrios.Admin"] = ["Integrios.FunctionalTests", "Integrios.Admin.UnitTests"],
             ["Integrios.Ingestion"] = ["Integrios.Ingestion.UnitTests"],
-            ["Integrios.Worker"] = ["Integrios.Worker.UnitTests"],
-            ["Integrios.MockSink"] = []
+            ["Integrios.Worker"] = ["Integrios.Worker.UnitTests"]
         };
 
         foreach ((string projectName, string[] expectedFriends) in approved)

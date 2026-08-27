@@ -17,7 +17,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
     // Every Fact below arranges its own uniquely named Tenant data and restores the
-    // deployment-global state it touches (MockSink control modes in a finally path, the Worker's
+    // deployment-global state it touches (WireMock control modes in a finally path, the Worker's
     // secret provider normalized back to the file default). No Fact depends on another Fact's
     // execution order or on credentials captured before a rotation.
 
@@ -233,9 +233,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         Guid failureSubscription = await CreateSubscriptionAsync(
             tenant, topic, "independent-failure", failureDestination, "independent.test");
 
-        using HttpResponseMessage failMode = await fixture.MockSinkClient.PutAsJsonAsync(
-            "/control/independent-failure", new { mode = "fail" });
-        failMode.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ConfigureAsync("independent-failure", "fail");
         try
         {
             EventAcceptance accepted = await IngestAsync(
@@ -245,8 +243,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             (await fixture.ScalarAsync<int>(
                 $"SELECT lifetime_attempt_count FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'")).ShouldBe(3);
 
-            using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
-            recover.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync("independent-failure");
             Guid failureDelivery = await fixture.ScalarAsync<Guid>(
                 $"SELECT id FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{failureSubscription}'");
             using HttpResponseMessage replay = await SendAdminAsync(
@@ -261,17 +258,14 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         }
         finally
         {
-            using HttpResponseMessage restoreFailure = await fixture.MockSinkClient.DeleteAsync("/control/independent-failure");
-            restoreFailure.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync("independent-failure");
         }
 
         Guid snapshotDestination = await CreateConnectionAsync(
             tenant, HttpConnectorId, "snapshot-destination", "http://mocksink:8080/sink/snapshot");
         Guid snapshotSubscription = await CreateSubscriptionAsync(
             tenant, topic, "snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"first\" }"));
-        using HttpResponseMessage snapshotFail = await fixture.MockSinkClient.PutAsJsonAsync(
-            "/control/snapshot", new { mode = "fail" });
-        snapshotFail.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ConfigureAsync("snapshot", "fail");
         try
         {
             EventAcceptance snapshotEvent = await IngestAsync(
@@ -285,19 +279,16 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
             // The failed attempt already left a receipt carrying the original expression. Clearing it
             // first is what makes the post-update assertion falsifiable: only the retry's body remains.
-            using HttpResponseMessage clearSnapshotReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/snapshot");
-            clearSnapshotReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetReceiptsAsync("snapshot");
 
-            using HttpResponseMessage snapshotRecover = await fixture.MockSinkClient.DeleteAsync("/control/snapshot");
-            snapshotRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync("snapshot");
             await WaitForDeliveryStatusAsync(snapshotEvent.Id, snapshotSubscription, "succeeded");
             await AssertReceiptBodyAsync("snapshot", "{\"version\":\"first\"}");
             await AssertNoReceiptBodyContainsAsync("snapshot", "second");
         }
         finally
         {
-            using HttpResponseMessage restoreSnapshot = await fixture.MockSinkClient.DeleteAsync("/control/snapshot");
-            restoreSnapshot.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync("snapshot");
         }
 
         Guid runtimeDestination = await CreateConnectionAsync(
@@ -373,9 +364,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenant, HttpConnectorId, "slow-destination", "http://mocksink:8080/sink/slow-timeout");
         Guid slowSubscription = await CreateSubscriptionAsync(
             tenant, topic, "slow-timeout", slowDestination, "slow.test");
-        using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
-            "/control/slow-timeout", new { mode = "slow", delayMs = 8000 });
-        slowMode.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ConfigureAsync("slow-timeout", "slow", delayMs: 8000);
         try
         {
             // Must outlast the deployment's compressed HttpTimeout so the client, not the sink, ends
@@ -392,8 +381,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         {
             // Leaving the sink slow would make every later retry of this subscription hold a delivery
             // slot for the full outbound timeout, eating into the evidence budget of later outcomes.
-            using HttpResponseMessage slowRecover = await fixture.MockSinkClient.DeleteAsync("/control/slow-timeout");
-            slowRecover.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync("slow-timeout");
         }
     }
 
@@ -449,25 +437,21 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             rotation, ApiKeyConnectorId, "rotation-destination", "http://mocksink:8080/sink/rotation", ApiKeyAuth("shared_secret"));
         Guid rotationSubscription = await CreateSubscriptionAsync(
             rotation, rotationTopic, "rotation", rotationDestination, "rotation.test");
-        using HttpResponseMessage fail = await fixture.MockSinkClient.PutAsJsonAsync("/control/rotation", new { mode = "fail" });
-        fail.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ConfigureAsync("rotation", "fail");
         try
         {
             EventAcceptance rotationEvent = await IngestAsync(rotation, rotationSource, "rotation", "rotation.test", new { value = 1 });
             await WaitForAttemptCountAsync(rotationEvent.Id, rotationSubscription, 1);
             await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v1");
-            using HttpResponseMessage resetReceipts = await fixture.MockSinkClient.DeleteAsync("/receipts/rotation");
-            resetReceipts.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetReceiptsAsync("rotation");
             fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v2", "rotation-v2");
-            using HttpResponseMessage recover = await fixture.MockSinkClient.DeleteAsync("/control/rotation");
-            recover.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync("rotation");
             await WaitForDeliveryStatusAsync(rotationEvent.Id, rotationSubscription, "succeeded");
             await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v2");
         }
         finally
         {
-            using HttpResponseMessage restore = await fixture.MockSinkClient.DeleteAsync("/control/rotation");
-            restore.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync("rotation");
         }
 
         // The configuration-provider scenario is wired to this exact slug by the acceptance Compose
@@ -782,44 +766,16 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     }
 
     private async Task AssertReceiptHeaderAsync(string sink, string name, string value)
-    {
-        using HttpResponseMessage assertion = await fixture.MockSinkClient.PostAsJsonAsync(
-            $"/receipts/{sink}/assert-headers",
-            new { headers = new Dictionary<string, string> { [name] = value } });
-        string body = await assertion.Content.ReadAsStringAsync();
-        assertion.StatusCode.ShouldBe(HttpStatusCode.OK);
-        body.ShouldNotContain(value, Case.Sensitive);
-    }
+        => await fixture.WireMockSink.AssertReceiptHeaderAsync(sink, name, value);
 
     private async Task AssertReceiptBodyAsync(string sink, string expected)
-    {
-        using JsonDocument receipts = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>($"/receipts/{sink}")
-            ?? throw new InvalidOperationException("MockSink returned no receipt evidence.");
-        receipts.RootElement.GetProperty("receipts").EnumerateArray().ShouldContain(
-            receipt => JsonEquivalent(receipt.GetProperty("body").GetString()!, expected));
-    }
+        => await fixture.WireMockSink.AssertReceiptBodyAsync(sink, expected);
 
     private async Task AssertNoReceiptBodyContainsAsync(string sink, string fragment)
-    {
-        using JsonDocument receipts = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>($"/receipts/{sink}")
-            ?? throw new InvalidOperationException("MockSink returned no receipt evidence.");
-        receipts.RootElement.GetProperty("receipts").EnumerateArray().ShouldNotContain(
-            receipt => receipt.GetProperty("body").GetString()!.Contains(fragment, StringComparison.Ordinal));
-    }
+        => await fixture.WireMockSink.AssertNoReceiptBodyContainsAsync(sink, fragment);
 
     private async Task<int> ReceiptCountAsync(string sink)
-    {
-        using JsonDocument receipts = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>($"/receipts/{sink}")
-            ?? throw new InvalidOperationException("MockSink returned no receipt evidence.");
-        return receipts.RootElement.GetProperty("count").GetInt32();
-    }
-
-    private static bool JsonEquivalent(string actual, string expected)
-    {
-        using JsonDocument actualDocument = JsonDocument.Parse(actual);
-        using JsonDocument expectedDocument = JsonDocument.Parse(expected);
-        return JsonElement.DeepEquals(actualDocument.RootElement, expectedDocument.RootElement);
-    }
+        => await fixture.WireMockSink.ReceiptCountAsync(sink);
 
     private static object ConnectionBody(string connectorId, string name, string url, object? auth = null) => new
     {

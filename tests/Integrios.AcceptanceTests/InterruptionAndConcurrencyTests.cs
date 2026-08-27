@@ -99,18 +99,14 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     {
         string suffix = Suffix();
         Pipeline pipeline = await CreatePipelineAsync($"restart-{suffix}", authReference: null);
-        using HttpResponseMessage fail = await fixture.MockSinkClient.PutAsJsonAsync(
-            $"/control/{pipeline.SinkName}",
-            new { mode = "fail" });
-        fail.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ConfigureAsync(pipeline.SinkName, "fail");
 
         Guid eventId = await IngestAsync(pipeline, new { restart = true });
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<long>(
                 $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
 
-        using HttpResponseMessage reset = await fixture.MockSinkClient.DeleteAsync($"/control/{pipeline.SinkName}");
-        reset.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ResetControlAsync(pipeline.SinkName);
         await fixture.RestartPostgresAsync();
 
         // Restarting the product services is part of the interruption window, not a workaround:
@@ -455,19 +451,12 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     }
 
     private async Task<int> ReceiptCountAsync(string sinkName)
-    {
-        using JsonDocument document = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>(
-            $"/receipts/{sinkName}") ?? throw new InvalidOperationException("MockSink returned no receipt document.");
-        return document.RootElement.GetProperty("count").GetInt32();
-    }
+        => await fixture.WireMockSink.ReceiptCountAsync(sinkName);
 
     private async Task AssertReceiptHeadersAsync(string sinkName, IReadOnlyDictionary<string, string> headers)
     {
-        using HttpResponseMessage response = await fixture.MockSinkClient.PostAsJsonAsync(
-            $"/receipts/{sinkName}/assert-headers",
-            new { headers });
-        string body = await response.Content.ReadAsStringAsync();
-        response.IsSuccessStatusCode.ShouldBeTrue($"Header assertion failed: {body}");
+        foreach ((string name, string value) in headers)
+            await fixture.WireMockSink.AssertReceiptHeaderAsync(sinkName, name, value);
     }
 
     private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan? timeout = null)

@@ -21,7 +21,6 @@
     <ProjectReference Include="..\..\src\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Ingestion\Integrios.Ingestion.csproj" />
-    <ProjectReference Include="..\..\src\Integrios.MockSink\Integrios.MockSink.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Worker\Integrios.Worker.csproj" />
   </ItemGroup>
 

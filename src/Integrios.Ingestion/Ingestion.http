@@ -6,7 +6,7 @@
 # 1. Ingestion accepts an authenticated event write.
 # 2. The event is stored durably and can be fetched back by ID.
 # 3. Worker will later fan out the event to matching subscriptions and deliver it
-#    to MockSink.
+#    to WireMock.
 #
 # Setup:
 # - copy the token from Admin.http createTenantApiKey into src/Integrios.Ingestion/.env

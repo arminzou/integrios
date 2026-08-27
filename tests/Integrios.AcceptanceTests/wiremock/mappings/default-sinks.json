@@ -1,0 +1,13 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/sink/.*"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": {
+      "received": true
+    }
+  }
+}

@@ -8,9 +8,9 @@ using System.Text.Json;
 namespace Integrios.AcceptanceTests;
 
 // i7a.10: proves the packaged golden path end to end against real images, migrations, and
-// deployment configuration, extending the existing acceptance harness and MockSink rather than
+// deployment configuration, extending the existing acceptance harness and WireMock rather than
 // standing up a second end-to-end framework. GitHub and Slack are simulated by a realistically
-// signed request and a provider-capable MockSink response respectively; no live provider is
+// signed request and a provider-capable WireMock response respectively; no live provider is
 // contacted.
 [Collection(PackagedDeploymentCollection.Name)]
 public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture)
@@ -179,26 +179,13 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
     }
 
     private async Task SetSlackModeAsync(object? body, int? statusCode = null, int? retryAfterSeconds = null)
-    {
-        using HttpResponseMessage response = await fixture.MockSinkClient.PutAsJsonAsync(
-            "/control/slack",
-            new { mode = "succeed", statusCode, body, retryAfterSeconds });
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
+        => await fixture.WireMockSink.ConfigureAsync("slack", "succeed", statusCode: statusCode, body: body, retryAfterSeconds: retryAfterSeconds);
 
     private async Task ResetSlackReceiptsAsync()
-    {
-        using HttpResponseMessage response = await fixture.MockSinkClient.DeleteAsync("/receipts/slack");
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
+        => await fixture.WireMockSink.ResetReceiptsAsync("slack");
 
     private async Task AssertSlackReceivedTransformedMessageAsync()
-    {
-        using JsonDocument receipts = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>("/receipts/slack")
-            ?? throw new InvalidOperationException("MockSink returned no receipt evidence for slack.");
-        receipts.RootElement.GetProperty("receipts").EnumerateArray().ShouldContain(
-            receipt => receipt.GetProperty("body").GetString()!.Contains("octocat pushed to acme/widgets", StringComparison.Ordinal));
-    }
+        => await fixture.WireMockSink.AssertReceiptBodyContainsAsync("slack", "octocat pushed to acme/widgets");
 
     private async Task<long> AttemptCountAsync(Guid eventId, Guid subscriptionId) =>
         await fixture.ScalarAsync<long>(

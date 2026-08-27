@@ -16,7 +16,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     {
         await AssertHealthyAsync(fixture.AdminClient);
         await AssertHealthyAsync(fixture.IngestionClient);
-        await AssertHealthyAsync(fixture.MockSinkClient);
+        await fixture.WireMockSink.AssertHealthyAsync();
 
         (await fixture.ScalarAsync<long>(
             $"SELECT COUNT(*) FROM connectors WHERE id = '{fixture.HttpConnectorId}' AND key = 'http' AND status = 'active'")).ShouldBe(1L);
@@ -27,41 +27,16 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         const string headerValue = "expected-value";
         const string body = "{\"event\":\"packaged-deployment\"}";
 
-        using HttpResponseMessage resetBefore = await fixture.MockSinkClient.DeleteAsync($"/receipts/{sinkName}");
-        resetBefore.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        using var delivery = new HttpRequestMessage(HttpMethod.Post, $"/sink/{sinkName}")
-        {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
-        };
-        delivery.Headers.Add("X-Acceptance", headerValue);
-        using HttpResponseMessage delivered = await fixture.MockSinkClient.SendAsync(delivery);
-        delivered.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        using JsonDocument receiptQuery = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>(
-            $"/receipts/{sinkName}") ?? throw new InvalidOperationException("MockSink returned no receipt document.");
-        JsonElement root = receiptQuery.RootElement;
-        root.GetProperty("count").GetInt32().ShouldBe(1);
-        JsonElement receipt = root.GetProperty("receipts")[0];
-        receipt.GetProperty("method").GetString().ShouldBe("POST");
-        receipt.GetProperty("path").GetString().ShouldBe($"/sink/{sinkName}");
-        receipt.GetProperty("body").GetString().ShouldBe(body);
-        receipt.GetProperty("headerNames").EnumerateArray().Select(value => value.GetString()).ShouldContain(
-            "X-Acceptance");
-
-        using HttpResponseMessage headerAssertion = await fixture.MockSinkClient.PostAsJsonAsync(
-            $"/receipts/{sinkName}/assert-headers",
-            new { headers = new Dictionary<string, string> { ["X-Acceptance"] = headerValue } });
-        string assertionEvidence = await headerAssertion.Content.ReadAsStringAsync();
-        headerAssertion.StatusCode.ShouldBe(HttpStatusCode.OK);
-        assertionEvidence.ShouldContain("\"matched\":true", Case.Sensitive);
-        assertionEvidence.ShouldNotContain(headerValue, Case.Sensitive);
-
-        using HttpResponseMessage resetAfter = await fixture.MockSinkClient.DeleteAsync($"/receipts/{sinkName}");
-        resetAfter.StatusCode.ShouldBe(HttpStatusCode.OK);
-        using JsonDocument emptyQuery = await fixture.MockSinkClient.GetFromJsonAsync<JsonDocument>(
-            $"/receipts/{sinkName}") ?? throw new InvalidOperationException("MockSink returned no reset receipt document.");
-        emptyQuery.RootElement.GetProperty("count").GetInt32().ShouldBe(0);
+        await fixture.WireMockSink.ResetReceiptsAsync(sinkName);
+        await fixture.WireMockSink.PostAsync(
+            sinkName,
+            body,
+            new Dictionary<string, string> { ["X-Acceptance"] = headerValue });
+        (await fixture.WireMockSink.ReceiptCountAsync(sinkName)).ShouldBe(1);
+        await fixture.WireMockSink.AssertReceiptAsync(sinkName, body, "X-Acceptance");
+        await fixture.WireMockSink.AssertReceiptHeaderAsync(sinkName, "X-Acceptance", headerValue);
+        await fixture.WireMockSink.ResetReceiptsAsync(sinkName);
+        (await fixture.WireMockSink.ReceiptCountAsync(sinkName)).ShouldBe(0);
     }
 
     [Fact]
@@ -112,10 +87,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 destination_connection_id = destinationConnectionId
             });
 
-        using HttpResponseMessage failMode = await fixture.MockSinkClient.PutAsJsonAsync(
-            $"/control/{sinkName}",
-            new { mode = "fail" });
-        failMode.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ConfigureAsync(sinkName, "fail");
 
         using var ingest = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={sourceId}")
         {
@@ -137,8 +109,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             await fixture.ScalarAsync<long>(
                 $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
 
-        using HttpResponseMessage successMode = await fixture.MockSinkClient.DeleteAsync($"/control/{sinkName}");
-        successMode.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ResetControlAsync(sinkName);
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<string>(
@@ -242,10 +213,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 destination_connection_id = destinationConnectionId
             });
 
-        using HttpResponseMessage slowMode = await fixture.MockSinkClient.PutAsJsonAsync(
-            $"/control/{sinkName}",
-            new { mode = "slow", delayMs = 8000 });
-        slowMode.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixture.WireMockSink.ConfigureAsync(sinkName, "slow", delayMs: 8000);
         Guid? blockedEventId = null;
 
         try
@@ -273,8 +241,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         }
         finally
         {
-            using HttpResponseMessage reset = await fixture.MockSinkClient.DeleteAsync($"/control/{sinkName}");
-            reset.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await fixture.WireMockSink.ResetControlAsync(sinkName);
             if (blockedEventId is { } eventId)
             {
                 await WaitForAsync(async () =>

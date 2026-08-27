@@ -40,14 +40,14 @@ make up
 |----------|-------------------------|-------------------------------|
 | Ingestion  | `http://localhost:5231` | Webhook/event intake (data plane) |
 | Admin    | `http://localhost:5150` | Tenant and config management (control plane) |
-| MockSink | `http://localhost:5054` | Controllable delivery target for testing |
+| WireMock | `http://localhost:5054` | Controllable delivery target for testing |
 
 The Worker runs in the background with no HTTP port.
 
 ## Quickstart: your first delivered event
 
 This drives the Admin API to onboard a Tenant and a Subscription, sends an Event to Ingestion, and
-watches the Worker deliver it to the bundled MockSink.
+watches the Worker deliver it to bundled WireMock.
 
 ```bash
 ADMIN=http://localhost:5150
@@ -89,8 +89,10 @@ EVENT=$(curl -s -X POST $INGESTION/events -H "Authorization: TenantApiKey $TOKEN
 # 8. Check it was accepted and fanned out to the subscription
 curl -s $INGESTION/events/$EVENT -H "Authorization: TenantApiKey $TOKEN" | jq
 
-# 9. See it delivered in the sink
-docker compose logs mocksink | grep MockSink
+# 9. See it delivered in WireMock's request journal
+curl -s -X POST http://localhost:5054/__admin/requests/find \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"POST","urlPath":"/sink/acme-erp"}' | jq
 ```
 
 Connection updates replace the complete `config` object rather than merging fields. A Connection's
@@ -106,13 +108,9 @@ Topic update requests must include the Topic's current `name`. The name is its i
 Tenant-scoped stream identifier; changing it requires creating a new Topic. Updates may change the
 description and, when supplied, replace `source_connection_ids`.
 
-The last command should show a line like:
+The last command should show the delivery request, including its body and headers.
 
-```
-[MockSink] acme-erp received event (mode=succeed): {"amount": 1200, "paymentId": "pay_001"}
-```
-
-> Inside Compose, services reach MockSink at `http://mocksink:8080` (used in the connection
+> Inside Compose, services reach WireMock at `http://mocksink:8080` (used in the connection
 > config above); from your host it's `http://localhost:5054`.
 
 ### Exploring failure handling
@@ -123,8 +121,10 @@ backoff from 30 seconds, so this walkthrough takes about 90 seconds to reach `de
 First, clear earlier receipts, configure the destination to fail, and send a new Event:
 
 ```bash
-curl -s -X DELETE http://localhost:5054/receipts/acme-erp > /dev/null
-curl -s -X PUT http://localhost:5054/control/acme-erp -H 'Content-Type: application/json' -d '{"mode":"fail"}'
+CONTROL_ID=11111111-1111-1111-1111-111111111111
+curl -s -X DELETE http://localhost:5054/__admin/requests > /dev/null
+curl -s -X POST http://localhost:5054/__admin/mappings -H 'Content-Type: application/json' \
+  -d "{\"id\":\"$CONTROL_ID\",\"priority\":1,\"request\":{\"method\":\"POST\",\"urlPath\":\"/sink/acme-erp\"},\"response\":{\"status\":500}}"
 
 FAIL_EVENT=$(curl -s -X POST $INGESTION/events \
   -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
@@ -149,8 +149,8 @@ Reset the sink, discard the failed-request receipts, and replay the dead-lettere
 Recovery is an Operator action through Admin, so it requires the OperatorKey and targets one delivery:
 
 ```bash
-curl -s -X DELETE http://localhost:5054/control/acme-erp
-curl -s -X DELETE http://localhost:5054/receipts/acme-erp > /dev/null
+curl -s -X DELETE http://localhost:5054/__admin/mappings/$CONTROL_ID
+curl -s -X DELETE http://localhost:5054/__admin/requests > /dev/null
 FAIL_DELIVERY=$(curl -s $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries -H "$AUTH" \
   | jq -r '.subscription_deliveries[] | select(.status == "dead_lettered") | .subscription_delivery_id')
 curl -i -s -X POST $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries/$FAIL_DELIVERY/replay -H "$AUTH"
@@ -160,7 +160,9 @@ until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $T
   sleep 2
 done
 
-curl -s http://localhost:5054/receipts/acme-erp | jq
+curl -s -X POST http://localhost:5054/__admin/requests/find \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"POST","urlPath":"/sink/acme-erp"}' | jq
 ```
 
 The final receipt proves that replay created a new successful attempt without discarding the three

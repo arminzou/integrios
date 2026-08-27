@@ -2,7 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/Integrios.Ingestion/Integrios.Ingestion.csproj" />
     <Project Path="src/Integrios.Admin/Integrios.Admin.csproj" />
-    <Project Path="src/Integrios.MockSink/Integrios.MockSink.csproj" />
     <Project Path="src/Integrios.Domain/Integrios.Domain.csproj" />
     <Project Path="src/Integrios.Application/Integrios.Application.csproj" />
     <Project Path="src/Integrios.Worker/Integrios.Worker.csproj" />

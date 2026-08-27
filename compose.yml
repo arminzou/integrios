@@ -33,7 +33,7 @@ services:
   bootstrap:
     # Same command as production. What makes this stack dev-only is the well-known dev secret
     # defaulted below (override via .env / INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET), plus the bundled
-    # MockSink/Grafana. Never deploy this compose file unchanged to a public/prod environment;
+    # WireMock/Grafana. Never deploy this compose file unchanged to a public/prod environment;
     # see deploy/ for the production reference.
     build:
       context: .
@@ -105,12 +105,10 @@ services:
       - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destination}:/run/secrets/integrios/destination:ro
 
   mocksink:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: Integrios.MockSink
-    image: ${INTEGRIOS_MOCKSINK_IMAGE:-integrios-mocksink:dev}
+    image: wiremock/wiremock:3.13.1
+    command: ["--global-response-templating"]
+    volumes:
+      - ./tests/Integrios.AcceptanceTests/wiremock/mappings:/home/wiremock/mappings:ro
     ports:
       - "${INTEGRIOS_MOCKSINK_PORT:-5054}:8080"
 

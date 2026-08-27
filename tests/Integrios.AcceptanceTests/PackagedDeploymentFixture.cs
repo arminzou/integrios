@@ -51,6 +51,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_INGESTION_PORT"] = ingestionPort.ToString(),
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
             ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
+            ["INTEGRIOS_WIREMOCK_MAPPINGS_DIR"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "wiremock", "mappings"),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "otel-collector.acceptance.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
@@ -64,13 +65,13 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
             ["INTEGRIOS_INGESTION_IMAGE"] = $"{projectName}-ingestion",
             ["INTEGRIOS_WORKER_IMAGE"] = $"{projectName}-worker",
-            ["INTEGRIOS_MOCKSINK_IMAGE"] = $"{projectName}-mocksink",
         };
     }
 
     public HttpClient AdminClient { get; private set; } = null!;
     public HttpClient IngestionClient { get; private set; } = null!;
-    public HttpClient MockSinkClient { get; private set; } = null!;
+    private HttpClient wireMockClient = null!;
+    public WireMockSink WireMockSink { get; private set; } = null!;
     public HttpClient WorkerMetricsClient { get; private set; } = null!;
     public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:acceptance-admin-secret";
     public Guid HttpConnectorId { get; private set; }
@@ -435,7 +436,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
         AdminClient = CreateClient(adminPort);
         IngestionClient = CreateClient(ingestionPort);
-        MockSinkClient = CreateClient(mockSinkPort);
+        wireMockClient = CreateClient(mockSinkPort);
+        WireMockSink = new WireMockSink(wireMockClient);
         WorkerMetricsClient = CreateClient(workerMetricsPort);
         await WaitUntilReadyAsync(expectCollector: !buildImages);
     }
@@ -508,7 +510,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             {
                 await AssertHealthyAsync(AdminClient, "Admin");
                 await AssertHealthyAsync(IngestionClient, "Ingestion");
-                await AssertHealthyAsync(MockSinkClient, "MockSink");
+                await AssertHealthyAsync(wireMockClient, "WireMock", "/__admin/health");
 
                 // The OTLP receiver must accept spans before a test emits any, or early spans are
                 // dropped and the trace-continuity assertions fail with no usable diagnostic.
@@ -561,11 +563,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             throw new InvalidOperationException("OTLP collector has not reported readiness yet.");
     }
 
-    private static async Task AssertHealthyAsync(HttpClient client, string serviceName)
+    private static async Task AssertHealthyAsync(HttpClient client, string serviceName, string path = "/health")
     {
-        using HttpResponseMessage response = await client.GetAsync("/health");
+        using HttpResponseMessage response = await client.GetAsync(path);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"{serviceName} /health returned {(int)response.StatusCode}.");
+            throw new InvalidOperationException($"{serviceName} {path} returned {(int)response.StatusCode}.");
     }
 
     private async Task<string> CaptureDiagnosticsAsync()
@@ -620,7 +622,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             environment["INTEGRIOS_ADMIN_IMAGE"],
             environment["INTEGRIOS_INGESTION_IMAGE"],
             environment["INTEGRIOS_WORKER_IMAGE"],
-            environment["INTEGRIOS_MOCKSINK_IMAGE"],
         ];
 
         try
@@ -639,7 +640,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     {
         AdminClient?.Dispose();
         IngestionClient?.Dispose();
-        MockSinkClient?.Dispose();
+        wireMockClient?.Dispose();
+        WireMockSink = null!;
         WorkerMetricsClient?.Dispose();
     }
 

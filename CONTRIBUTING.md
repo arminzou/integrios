@@ -29,7 +29,7 @@ See [docs/setup.md](docs/setup.md) for the end-to-end run and a first-event walk
 
 - `src/` contains the services: `Integrios.Ingestion` (data plane), `Integrios.Admin` (control
   plane), `Integrios.Worker` (delivery), plus `Integrios.Domain`, `Integrios.Application`,
-  `Integrios.Infrastructure`, and `Integrios.MockSink` (a local test sink).
+  `Integrios.Infrastructure`, plus WireMock as the bundled local test sink.
 - `tests/`: xUnit test projects.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/`: provider-specific
   EF Core migrations.
@@ -51,7 +51,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 ```
 
 Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`. Suggested
-scopes: `api`, `admin`, `worker`, `mocksink`, `core`, `db`, `docs`, `infra`.
+scopes: `api`, `admin`, `worker`, `core`, `db`, `docs`, `infra`.
 
 ## CI
 

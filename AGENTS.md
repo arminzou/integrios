@@ -25,7 +25,7 @@ team points it at their own stack. Licensed under MIT.
 - `src/Integrios.Ingestion` owns intake, tenant auth, and the durable acceptance boundary. Data plane.
 - `src/Integrios.Admin` owns tenant management, connection configuration, topic and subscription management. Control plane.
 - `src/Integrios.Worker` owns outbox polling, fanout to subscriptions, delivery, and retry/DLQ behavior.
-- `src/Integrios.MockSink` provides a controllable local sink for testing and demos. Not part of the deployable product.
+- The development Compose stack includes WireMock as a controllable local sink for testing and demos. It is not part of the deployable product.
 - `src/Integrios.Domain` holds core domain types and shared contracts.
 - `tests/` contains the test projects; a project's name states what it needs to run.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` contain the
@@ -59,7 +59,6 @@ service-to-service configuration calls.
 - `Integrios.Ingestion` owns the intake surface, tenant resolution, and acceptance-boundary writes. It does not own fanout, delivery, or retry behavior.
 - `Integrios.Admin` owns control plane configuration. It does not own event processing.
 - `Integrios.Worker` owns outbox polling, fanout to subscriptions, per-subscription delivery, and retry/DLQ/replay. It does not own HTTP intake or config writes.
-- `Integrios.MockSink` owns controllable success, failure, and slow-path responses for local testing. It is never a dependency of production services.
 - `Integrios.Domain` owns domain entities, enums, and API contracts. It does not own implementation logic.
 
 ### Scope constraints
@@ -89,7 +88,6 @@ dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.cs
 dotnet run --project src/Integrios.Ingestion
 dotnet run --project src/Integrios.Admin
 dotnet run --project src/Integrios.Worker
-dotnet run --project src/Integrios.MockSink
 ```
 
 ## Database Commands

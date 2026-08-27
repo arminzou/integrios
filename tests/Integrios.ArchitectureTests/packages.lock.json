@@ -767,13 +767,6 @@
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.4, )"
         }
       },
-      "integrios.mocksink": {
-        "type": "Project",
-        "dependencies": {
-          "Microsoft.AspNetCore.OpenApi": "[10.0.5, )",
-          "Microsoft.OpenApi": "[2.7.5, )"
-        }
-      },
       "integrios.worker": {
         "type": "Project",
         "dependencies": {

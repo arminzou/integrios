@@ -1,0 +1,13 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/redirect/.*"
+  },
+  "response": {
+    "status": 307,
+    "headers": {
+      "Location": "/sink/{{request.pathSegments.[1]}}"
+    }
+  }
+}
