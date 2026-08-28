@@ -72,7 +72,6 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
             "SELECT COUNT(*) FROM events WHERE tenant_id=@TenantId AND source_event_id=@SourceEventId",
             new { fixture.TenantId, SourceEventId = sourceEventId });
         eventCount.ShouldBe(0);
-        await receiver.CompleteMessageAsync(deadLettered);
     }
 
     [Fact]
