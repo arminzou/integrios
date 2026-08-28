@@ -34,4 +34,13 @@ public sealed class TelemetryBehaviorTests
         var span = collector.Single("PingRequest");
         span.Status.ShouldBe(ActivityStatusCode.Error);
     }
+
+    [Fact]
+    public void TryParseTraceparent_ReturnsOnlyValidW3CContext()
+    {
+        ActivitySources.TryParseTraceparent(
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", out var context).ShouldBeTrue();
+        context.TraceId.ToString().ShouldBe("4bf92f3577b34da6a3ce929d0e0e4736");
+        ActivitySources.TryParseTraceparent("not-a-traceparent", out _).ShouldBeFalse();
+    }
 }

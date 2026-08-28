@@ -10,6 +10,7 @@ public sealed record EventDto
     public required DateTimeOffset AcceptedAt { get; init; }
     public DateTimeOffset? ProcessedAt { get; init; }
     public DateTimeOffset? FailedAt { get; init; }
+    public string? TraceId { get; init; }
     public IReadOnlyList<EventDeliveryDto> EventDeliveries { get; init; } = [];
     public IReadOnlyList<DeliveryAttemptDto> DeliveryAttempts { get; init; } = [];
 }

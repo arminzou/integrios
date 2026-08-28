@@ -1,5 +1,6 @@
 using Dapper;
 using Integrios.Application.Ingestion;
+using Integrios.Application.Telemetry;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;
@@ -27,7 +28,8 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                     status       AS Status,
                     accepted_at  AS AcceptedAt,
                     processed_at AS ProcessedAt,
-                    failed_at    AS FailedAt
+                    failed_at    AS FailedAt,
+                    (SELECT traceparent FROM outbox WHERE event_id = events.id) AS Traceparent
                 FROM events
                 WHERE tenant_id = @TenantId
                   AND id = @EventId
@@ -102,6 +104,9 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
             FailedAt = row.FailedAt,
+            TraceId = ActivitySources.TryParseTraceparent(row.Traceparent, out var context)
+                ? context.TraceId.ToString()
+                : null,
             EventDeliveries = deliveries.Select(delivery => new EventDeliveryDto
             {
                 EventDeliveryId = delivery.EventDeliveryId,
@@ -124,6 +129,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
         public DateTimeOffset AcceptedAt { get; init; }
         public DateTimeOffset? ProcessedAt { get; init; }
         public DateTimeOffset? FailedAt { get; init; }
+        public string? Traceparent { get; init; }
     }
 
     private sealed record DeliveryAttemptRow

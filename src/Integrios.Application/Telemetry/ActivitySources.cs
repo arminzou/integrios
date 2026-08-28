@@ -13,9 +13,15 @@ public static class ActivitySources
     // fresh root trace rather than inheriting the current batch-tick span.
     public static Activity? StartLinkedSpan(string name, string? traceparent)
     {
-        if (!string.IsNullOrEmpty(traceparent) && ActivityContext.TryParse(traceparent, null, out var parentContext))
+        if (TryParseTraceparent(traceparent, out var parentContext))
             return Application.StartActivity(name, ActivityKind.Internal, parentContext);
 
         return Application.StartActivity(name, ActivityKind.Internal, default(ActivityContext));
+    }
+
+    public static bool TryParseTraceparent(string? traceparent, out ActivityContext context)
+    {
+        context = default;
+        return !string.IsNullOrEmpty(traceparent) && ActivityContext.TryParse(traceparent, null, out context);
     }
 }

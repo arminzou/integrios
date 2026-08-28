@@ -142,6 +142,16 @@ public sealed class AdminApiFixture : IAsyncLifetime
             new { DeliveryId = deliveryId });
     }
 
+    public async Task AddOutboxTraceparentAsync(Guid eventId, string traceparent)
+    {
+        await using DbConnection connection = database.CreateConnection();
+        await connection.OpenAsync();
+        await connection.ExecuteAsync($$$"""
+            INSERT INTO outbox (event_id, payload, traceparent)
+            VALUES (@EventId, {{{database.Json("@Payload")}}}, @Traceparent)
+            """, new { EventId = eventId, Payload = "{}", Traceparent = traceparent });
+    }
+
     private async Task SeedAsync(DbConnection connection)
     {
         TenantId = Guid.NewGuid();

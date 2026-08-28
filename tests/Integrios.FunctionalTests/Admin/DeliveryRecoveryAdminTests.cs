@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Integrios.Application.Ingestion;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -54,6 +55,33 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
             HttpMethod.Post,
             $"{route}/{deliveryId}/replay"));
         repeatedReplay.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task EventDetail_ProjectsOnlyAValidOutboxRootTraceId()
+    {
+        var (eventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        string route = $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries";
+        const string traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+        await fixture.AddOutboxTraceparentAsync(eventId, traceparent);
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Get, route));
+        string content = await response.Content.ReadAsStringAsync();
+        EventDto detail = JsonSerializer.Deserialize<EventDto>(content, HostJson.Options).ShouldBeOfType<EventDto>();
+
+        detail.TraceId.ShouldBe("4bf92f3577b34da6a3ce929d0e0e4736");
+        content.ShouldNotContain("traceparent");
+
+        await fixture.ResetAsync();
+        var (missingEventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        HttpResponseMessage missingResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/events/{missingEventId}/deliveries"));
+        (await missingResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options)).ShouldNotBeNull().TraceId.ShouldBeNull();
+
+        await fixture.AddOutboxTraceparentAsync(missingEventId, "not-a-traceparent");
+        HttpResponseMessage malformedResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/events/{missingEventId}/deliveries"));
+        (await malformedResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options)).ShouldNotBeNull().TraceId.ShouldBeNull();
     }
 
     [Fact]
