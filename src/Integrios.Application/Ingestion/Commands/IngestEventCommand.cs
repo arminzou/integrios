@@ -37,10 +37,9 @@ internal sealed class IngestEventCommandHandler(
         // The ambient request span is the acceptance span; its id becomes the trace anchor
         // carried across the outbox hop.
         var activity = Activity.Current;
-        activity?.SetTag("tenant_id", command.TenantId);
-        activity?.SetTag("topic_id", source.TopicId);
-        activity?.SetTag("source_id", command.SourceId);
-        activity?.SetTag("idempotency_key", idempotencyKey);
+        activity?.SetTag("integrios.tenant.id", command.TenantId);
+        activity?.SetTag("integrios.topic.id", source.TopicId);
+        activity?.SetTag("integrios.source.id", command.SourceId);
 
         var accepted = await eventAcceptance.AcceptAsync(
             new EventSubmission
@@ -57,7 +56,7 @@ internal sealed class IngestEventCommandHandler(
             activity?.Id,
             cancellationToken);
 
-        activity?.SetTag("event_id", accepted.EventId);
+        activity?.SetTag("integrios.event.id", accepted.EventId);
 
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {

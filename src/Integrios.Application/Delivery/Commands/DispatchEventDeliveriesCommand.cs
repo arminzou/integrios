@@ -79,19 +79,19 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         CancellationToken cancellationToken = attemptDeadline.Token;
         long startedTimestamp = Stopwatch.GetTimestamp();
 
-        using Activity? activity = ActivitySources.StartLinkedSpan("subscription.deliver", row.Traceparent);
+        using Activity? attemptActivity = ActivitySources.StartLinkedSpan("delivery.attempt", row.Traceparent);
         using IDisposable? scope = logger.BeginScope(new Dictionary<string, object?>
         {
             ["event_id"] = row.EventId,
             ["subscription_id"] = row.SubscriptionId,
             ["delivery_id"] = row.Id
         });
-        activity?.SetTag("event_id", row.EventId);
-        activity?.SetTag("subscription_id", row.SubscriptionId);
-        activity?.SetTag("delivery_id", row.Id);
-        activity?.SetTag("attempt_id", row.AttemptId);
-        activity?.SetTag("attempt_number", row.AttemptNumber);
-        activity?.SetTag("connector_key", row.ConnectorKey);
+        attemptActivity?.SetTag("integrios.event.id", row.EventId);
+        attemptActivity?.SetTag("integrios.subscription.id", row.SubscriptionId);
+        attemptActivity?.SetTag("integrios.delivery.id", row.Id);
+        attemptActivity?.SetTag("integrios.attempt.id", row.AttemptId);
+        attemptActivity?.SetTag("integrios.attempt.number", row.AttemptNumber);
+        attemptActivity?.SetTag("integrios.connector.key", row.ConnectorKey);
 
         HttpExecutionSnapshot snapshot;
         try
@@ -101,22 +101,24 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         catch (DeliveryPreparationException ex)
         {
             var snapshotFailure = new DeliveryResult(false, 0, ex.Message, FailurePhase: ex.FailurePhase);
-            await FinalizeAsync(row, null, snapshotFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
+            await FinalizeAsync(row, null, snapshotFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken, attemptActivity);
             return;
         }
 
         string? payload = null;
         if (snapshot.Request.Body == "json")
         {
+            using Activity? transformActivity = ActivitySources.Application.StartActivity("delivery.transform");
             (payload, string? error) = ApplyTransform(row);
             if (error is not null)
             {
+                transformActivity?.SetStatus(ActivityStatusCode.Error, error);
                 var transformFailure = new DeliveryResult(
                     false,
                     0,
                     error,
                     FailurePhase: DeliveryFailurePhase.Transform);
-                await FinalizeAsync(row, row.PayloadJson, transformFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
+                await FinalizeAsync(row, row.PayloadJson, transformFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken, attemptActivity);
                 return;
             }
         }
@@ -127,7 +129,10 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         try
         {
             outboundRequest = await BuildOutboundRequestAsync(row, snapshot, payload, cancellationToken);
+            using Activity? httpActivity = ActivitySources.Application.StartActivity("delivery.http");
             result = await deliveryClient.DeliverAsync(outboundRequest, snapshot.HttpSuccess, cancellationToken);
+            if (!result.Succeeded)
+                httpActivity?.SetStatus(ActivityStatusCode.Error, result.Error);
         }
         catch (DeliveryPreparationException ex)
         {
@@ -142,7 +147,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
                 FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
-        await FinalizeAsync(row, outboundRequest?.JsonBody, result, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken);
+        await FinalizeAsync(row, outboundRequest?.JsonBody, result, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken, attemptActivity);
     }
 
     private async Task FinalizeAsync(
@@ -150,7 +155,8 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         string? requestPayload,
         DeliveryResult result,
         TimeSpan duration,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Activity? attemptActivity)
     {
         DeliveryFailurePhase? failurePhase = result.Succeeded
             ? null
@@ -168,6 +174,10 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
             IsTerminalFailure: DeliveryFailureClassifier.IsTerminal(result),
             RetryAfter: result.RetryAfter);
 
+        if (failurePhase is not null)
+            attemptActivity?.SetTag("integrios.failure_phase", MapFailurePhase(failurePhase));
+
+        using Activity? finalizeActivity = ActivitySources.Application.StartActivity("delivery.finalize");
         DeliveryFinalizationResult finalization = await deliveryQueue.FinalizeAsync(completion, cancellationToken);
         if (finalization.Status == DeliveryFinalizationStatus.OwnershipLost)
         {

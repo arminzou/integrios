@@ -132,17 +132,21 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             traceSpans = ParseSpans(await fixture.ReadTraceArtifactsAsync())
                 .Where(span => span.TraceId == traceId)
                 .ToArray();
-            return traceSpans.Any(span => span.Name == "IngestEventCommand")
+            return traceSpans.Any(span => span.Name == "event.accept")
                 && traceSpans.Any(span => span.Name == "outbox.fanout")
-                && traceSpans.Count(span => span.Name == "subscription.deliver") >= 2;
+                && traceSpans.Count(span => span.Name == "delivery.attempt") >= 2
+                && traceSpans.Count(span => span.Name == "delivery.transform") >= 2
+                && traceSpans.Count(span => span.Name == "delivery.http") >= 2
+                && traceSpans.Count(span => span.Name == "delivery.finalize") >= 2;
         });
 
-        ExportedSpan acceptanceSpan = traceSpans.Where(span => span.Name == "IngestEventCommand").ShouldHaveSingleItem();
+        ExportedSpan acceptanceSpan = traceSpans.Where(span => span.Name == "event.accept").ShouldHaveSingleItem();
         ExportedSpan fanoutSpan = traceSpans.Where(span => span.Name == "outbox.fanout").ShouldHaveSingleItem();
-        ExportedSpan[] deliverySpans = traceSpans.Where(span => span.Name == "subscription.deliver").ToArray();
+        ExportedSpan[] deliverySpans = traceSpans.Where(span => span.Name == "delivery.attempt").ToArray();
         fanoutSpan.ParentSpanId.ShouldBe(acceptanceSpan.SpanId);
         foreach (var span in deliverySpans)
             span.ParentSpanId.ShouldBe(fanoutSpan.SpanId);
+        traceSpans.ShouldNotContain(span => span.Name == "IngestEventCommand" || span.Name == "subscription.deliver");
 
         string ingestionMetrics = await fixture.IngestionClient.GetStringAsync("/metrics");
         string adminMetrics = await fixture.AdminClient.GetStringAsync("/metrics");

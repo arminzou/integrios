@@ -50,8 +50,8 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         }
 
         using var activity = ActivitySources.StartLinkedSpan("outbox.fanout", row.Traceparent);
-        activity?.SetTag("event_id", row.EventId);
-        activity?.SetTag("topic_id", row.TopicId);
+        activity?.SetTag("integrios.event.id", row.EventId);
+        activity?.SetTag("integrios.topic.id", row.TopicId);
 
         // An accepted Event without a Topic has no routing path and reaches the same terminal
         // unrouted state as an Event whose Topic has no matching Subscription.

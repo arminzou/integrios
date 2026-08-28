@@ -55,9 +55,9 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
             : null;
 
         var activity = Activity.Current;
-        activity?.SetTag("tenant_id", endpoint.TenantId);
-        activity?.SetTag("topic_id", endpoint.TopicId);
-        activity?.SetTag("source_id", endpoint.SourceId);
+        activity?.SetTag("integrios.tenant.id", endpoint.TenantId);
+        activity?.SetTag("integrios.topic.id", endpoint.TopicId);
+        activity?.SetTag("integrios.source.id", endpoint.SourceId);
         var accepted = await eventAcceptance.AcceptAsync(
             new EventSubmission
             {
@@ -72,7 +72,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
             },
             activity?.Id,
             cancellationToken);
-        activity?.SetTag("event_id", accepted.EventId);
+        activity?.SetTag("integrios.event.id", accepted.EventId);
 
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {

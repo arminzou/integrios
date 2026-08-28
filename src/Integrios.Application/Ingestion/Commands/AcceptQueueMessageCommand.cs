@@ -35,9 +35,9 @@ internal sealed class AcceptQueueMessageCommandHandler(
             : null;
 
         var activity = Activity.Current;
-        activity?.SetTag("tenant_id", command.TenantId);
-        activity?.SetTag("topic_id", command.TopicId);
-        activity?.SetTag("source_id", command.SourceId);
+        activity?.SetTag("integrios.tenant.id", command.TenantId);
+        activity?.SetTag("integrios.topic.id", command.TopicId);
+        activity?.SetTag("integrios.source.id", command.SourceId);
         var accepted = await eventAcceptance.AcceptAsync(
             new EventSubmission
             {
@@ -52,7 +52,7 @@ internal sealed class AcceptQueueMessageCommandHandler(
             },
             activity?.Id,
             cancellationToken);
-        activity?.SetTag("event_id", accepted.EventId);
+        activity?.SetTag("integrios.event.id", accepted.EventId);
 
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {

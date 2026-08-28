@@ -47,7 +47,7 @@ internal sealed class ProcessOutboxBatchCommandHandler(
                 result.InsertedCount);
         }
 
-        System.Diagnostics.Activity.Current?.SetTag("claimed_rows", processedCount);
+        System.Diagnostics.Activity.Current?.SetTag("integrios.claimed_rows", processedCount);
         return processedCount;
     }
 }

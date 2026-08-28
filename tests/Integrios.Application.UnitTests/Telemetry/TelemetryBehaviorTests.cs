@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using Integrios.Application.Ingestion;
 using Integrios.Application.Telemetry;
 using MediatR;
 using Integrios.Tests.Shared;
@@ -36,6 +38,27 @@ public sealed class TelemetryBehaviorTests
     }
 
     [Fact]
+    public async Task Handle_StartsRootAcceptanceSpanForEveryIngressCommand()
+    {
+        using var collector = new ActivityCollector(ActivitySources.ApplicationName);
+        var accepted = new IngestEventResult
+        {
+            EventId = Guid.NewGuid(),
+            Status = Domain.Enums.EventStatus.Accepted,
+            AcceptedAt = DateTimeOffset.UtcNow,
+            AlreadyAccepted = false
+        };
+
+        await HandleAcceptanceAsync(new IngestEventCommand(Guid.NewGuid(), Guid.NewGuid(), JsonDocument.Parse("{}").RootElement), accepted);
+        await HandleAcceptanceAsync(new AcceptVerifiedWebhookCommand(Guid.NewGuid(), null, new Dictionary<string, string>(), ReadOnlyMemory<byte>.Empty), accepted);
+        await HandleAcceptanceAsync(new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, JsonDocument.Parse("{}").RootElement), accepted);
+
+        Activity[] spans = collector.Activities.Where(activity => activity.OperationName == "event.accept").ToArray();
+        spans.Length.ShouldBe(3);
+        spans.ShouldAllBe(span => span.ParentId == null);
+    }
+
+    [Fact]
     public void TryParseTraceparent_ReturnsOnlyValidW3CContext()
     {
         ActivitySources.TryParseTraceparent(
@@ -43,4 +66,11 @@ public sealed class TelemetryBehaviorTests
         context.TraceId.ToString().ShouldBe("4bf92f3577b34da6a3ce929d0e0e4736");
         ActivitySources.TryParseTraceparent("not-a-traceparent", out _).ShouldBeFalse();
     }
+
+    private static Task HandleAcceptanceAsync<TRequest>(TRequest request, IngestEventResult accepted)
+        where TRequest : IRequest<IngestEventResult> =>
+        new TelemetryBehavior<TRequest, IngestEventResult>().Handle(
+            request,
+            _ => Task.FromResult(accepted),
+            CancellationToken.None);
 }

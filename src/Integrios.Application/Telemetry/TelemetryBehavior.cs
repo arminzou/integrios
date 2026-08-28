@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Integrios.Application.Ingestion;
 using MediatR;
 
 namespace Integrios.Application.Telemetry;
@@ -11,7 +12,11 @@ public sealed class TelemetryBehavior<TRequest, TResponse> : IPipelineBehavior<T
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        using var activity = ActivitySources.Application.StartActivity(typeof(TRequest).Name);
+        using Activity? activity = request is IngestEventCommand
+            or AcceptVerifiedWebhookCommand
+            or AcceptQueueMessageCommand
+            ? ActivitySources.StartRootSpan("event.accept")
+            : ActivitySources.Application.StartActivity(typeof(TRequest).Name);
 
         try
         {

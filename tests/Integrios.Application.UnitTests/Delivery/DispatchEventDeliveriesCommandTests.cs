@@ -371,11 +371,41 @@ public sealed class DispatchEventDeliveriesCommandTests
         }, new DeliveryResult(true, 200, null));
 
         var deliverSpans = collector.Activities
-            .Where(a => a.OperationName == "subscription.deliver" && Equals(a.GetTagItem("delivery_id"), deliveryId))
+            .Where(a => a.OperationName == "delivery.attempt" && Equals(a.GetTagItem("integrios.delivery.id"), deliveryId))
             .ToList();
         deliverSpans.Count.ShouldBe(2);
+        deliverSpans.ShouldContain(span => Equals(span.GetTagItem("integrios.failure_phase"), "http"));
+        string[] retiredKeys = ["event_id", "subscription_id", "delivery_id", "attempt_id", "attempt_number", "connector_key"];
+        deliverSpans.SelectMany(span => span.TagObjects).Select(tag => tag.Key)
+            .ShouldNotContain(key => retiredKeys.Contains(key));
         foreach (var span in deliverSpans)
             span.TraceId.ShouldBe(expectedTraceId);
+
+        var attemptIds = deliverSpans.Select(span => span.SpanId).ToHashSet();
+        foreach (string name in new[] { "delivery.transform", "delivery.http", "delivery.finalize" })
+        {
+            Activity[] spans = collector.Activities.Where(span => span.OperationName == name).ToArray();
+            spans.Length.ShouldBe(2);
+            spans.ShouldAllBe(span => attemptIds.Contains(span.ParentSpanId));
+        }
+    }
+
+    [Theory]
+    [InlineData(DeliveryFailurePhase.Transform, "transform")]
+    [InlineData(DeliveryFailurePhase.SecretResolution, "secret_resolution")]
+    [InlineData(DeliveryFailurePhase.RequestConstruction, "request_construction")]
+    [InlineData(DeliveryFailurePhase.Http, "http")]
+    public async Task DispatchEventDeliveries_RecordsEveryPersistedFailurePhaseOnAttemptSpan(
+        DeliveryFailurePhase failurePhase,
+        string expectedTag)
+    {
+        using var collector = new ActivityCollector(ActivitySources.ApplicationName);
+        var queue = new FakeEventDeliveryQueue { ClaimedItems = [MakeWorkItem()] };
+
+        await SendDispatch(queue, new DeliveryResult(false, 0, "failed", FailurePhase: failurePhase));
+
+        collector.Single("delivery.attempt").GetTagItem("integrios.failure_phase").ShouldBe(expectedTag);
+        queue.Completions.ShouldHaveSingleItem().FailurePhase.ShouldBe(failurePhase);
     }
 
     [Fact]

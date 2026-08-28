@@ -40,8 +40,8 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
         }
 
         using var activity = ActivitySources.StartLinkedSpan("outbox.fanout", row.Traceparent);
-        activity?.SetTag("event_id", row.EventId);
-        activity?.SetTag("topic_id", row.TopicId);
+        activity?.SetTag("integrios.event.id", row.EventId);
+        activity?.SetTag("integrios.topic.id", row.TopicId);
 
         IReadOnlyList<SubscriptionRoutingCandidate> candidates = row.TopicId is null
             ? []

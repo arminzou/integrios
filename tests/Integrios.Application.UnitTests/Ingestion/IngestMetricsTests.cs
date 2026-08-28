@@ -95,6 +95,23 @@ public sealed class IngestMetricsTests
         submission.Payload.GetProperty("amount").GetInt32().ShouldBe(command.RawInput.GetProperty("amount").GetInt32());
     }
 
+    [Fact]
+    public async Task IngestEventCommand_StartsRootAcceptanceSpanAndPersistsItsTraceparent()
+    {
+        using var collector = new ActivityCollector(ActivitySources.ApplicationName);
+        var acceptance = new FakeEventAcceptance(alreadyAccepted: false);
+        IngestEventCommand command = MakeCommand();
+
+        await BuildMediator(acceptance, new FakeEventApiSourceResolver()).Send(command);
+
+        var span = collector.Single("event.accept");
+        span.ParentId.ShouldBeNull();
+        acceptance.LastTraceparent.ShouldNotBeNull();
+        acceptance.LastTraceparent.Split('-')[2].ShouldBe(span.SpanId.ToString());
+        span.TagObjects.Select(tag => tag.Key).ShouldNotContain("idempotency_key");
+        span.GetTagItem("integrios.tenant.id").ShouldBe(command.TenantId);
+    }
+
     private static IngestEventCommand MakeCommand() => new(
         Guid.NewGuid(),
         SourceId,
@@ -156,6 +173,7 @@ public sealed class IngestMetricsTests
     {
         private readonly EventAcceptance acceptance;
         public EventSubmission? LastSubmission { get; private set; }
+        public string? LastTraceparent { get; private set; }
 
         public FakeEventAcceptance(bool alreadyAccepted)
             : this(new EventAcceptance
@@ -179,6 +197,7 @@ public sealed class IngestMetricsTests
             CancellationToken cancellationToken)
         {
             LastSubmission = submission;
+            LastTraceparent = traceparent;
             return Task.FromResult(acceptance);
         }
 

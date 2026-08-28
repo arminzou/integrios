@@ -8,6 +8,9 @@ public static class ActivitySources
 
     public static readonly ActivitySource Application = new(ApplicationName);
 
+    public static Activity? StartRootSpan(string name) =>
+        Application.StartActivity(name, ActivityKind.Internal, default(ActivityContext));
+
     // Starts a span attached to the trace carried by a stored W3C traceparent, so async hops
     // continue the originating event's trace. An absent or unparseable traceparent starts a
     // fresh root trace rather than inheriting the current batch-tick span.
