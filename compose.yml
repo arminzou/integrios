@@ -115,6 +115,7 @@ services:
   # Prometheus and Grafana below are a local development convenience only.
   # The platform bundles no observability backend; operators point it at their own stack.
   prometheus:
+    profiles: ["observability"]
     image: prom/prometheus:v3.13.1
     restart: unless-stopped
     volumes:
@@ -123,6 +124,7 @@ services:
       - "9090:9090"
 
   grafana:
+    profiles: ["observability"]
     image: grafana/grafana:12.4.6
     restart: unless-stopped
     depends_on:

@@ -12,6 +12,9 @@ export INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET
 up:
 	docker compose up --build -d
 
+up-observability:
+	docker compose --profile observability up --build -d
+
 down:
 	docker compose down
 
