@@ -20,6 +20,7 @@ if (args is ["database", ..])
     return await DatabaseMigrationCli.RunAsync(args);
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 
 builder.Services.AddSingleton(PublicIngestionBaseUri.Parse(
     builder.Configuration[PublicIngestionBaseUri.ConfigurationKey],

@@ -23,6 +23,7 @@ services:
         condition: service_healthy
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      DOTNET_ENVIRONMENT: Production
     command: ["database", "migrate"]
 
   # Idempotent one-shot: creates the first deployment-wide OperatorKey only when none is live.
@@ -46,6 +47,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      DOTNET_ENVIRONMENT: Production
       Integrios__SourceSecrets__Provider: ${INTEGRIOS_SOURCE_SECRETS_PROVIDER:-file}
       # Queue Sources using azure_identity draw an ambient credential through
       # DefaultAzureCredential. Nothing below is set by default, so the working scheme out of the
@@ -70,6 +72,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      DOTNET_ENVIRONMENT: Production
       Integrios__PublicIngestionBaseUri: ${INTEGRIOS_PUBLIC_INGESTION_BASE_URI}
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
@@ -82,6 +85,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      DOTNET_ENVIRONMENT: Production
       Integrios__DestinationSecrets__Provider: ${INTEGRIOS_DESTINATION_SECRETS_PROVIDER:-file}
     volumes:
       - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destination}:/run/secrets/integrios/destination:ro

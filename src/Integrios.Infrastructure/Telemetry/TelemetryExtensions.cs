@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Npgsql;
-using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -11,6 +11,20 @@ namespace Integrios.Infrastructure.Telemetry;
 public static class TelemetryExtensions
 {
     private static readonly TimeSpan DefaultOutboxDepthSampleInterval = TimeSpan.FromSeconds(15);
+
+    public static ILoggingBuilder AddOperationalConsoleLogging(
+        this ILoggingBuilder logging,
+        bool isDevelopment)
+    {
+        logging.ClearProviders();
+
+        if (isDevelopment)
+            logging.AddSimpleConsole();
+        else
+            logging.AddJsonConsole();
+
+        return logging;
+    }
 
     public static IServiceCollection AddTelemetryServices(
         this IServiceCollection services,
@@ -45,15 +59,7 @@ public static class TelemetryExtensions
                 {
                     tracing.AddOtlpExporter();
                 }
-            })
-            .WithLogging();
-
-        // IncludeFormattedMessage/IncludeScopes must be set on OpenTelemetryLoggerOptions, not on LoggerProviderBuilder, configure separately after WithLogging registers the provider.
-        services.Configure<OpenTelemetryLoggerOptions>(options =>
-        {
-            options.IncludeFormattedMessage = true;
-            options.IncludeScopes = true;
-        });
+            });
 
         return services;
     }

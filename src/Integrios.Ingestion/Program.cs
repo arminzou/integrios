@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);

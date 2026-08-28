@@ -6,6 +6,7 @@ using Integrios.Worker;
 // The Worker is a WebApplication only to serve an operational HTTP surface
 // (Prometheus /metrics now, /healthz later). The outbox loop is a hosted service.
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 bool secretCommand = SecretValidationCli.IsCommand(args);
 
 try
