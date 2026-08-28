@@ -119,6 +119,12 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
 
         HttpResponseMessage response = await client.SendAsync(request);
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        response.Content.Headers.ContentType.ShouldNotBeNull();
+        response.Content.Headers.ContentType.MediaType.ShouldBe("application/problem+json");
+        using JsonDocument problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        problem.RootElement.GetProperty("status").GetInt32().ShouldBe((int)HttpStatusCode.Unauthorized);
+        problem.RootElement.GetProperty("detail").GetString().ShouldBe("Signature verification failed.");
+        string.IsNullOrWhiteSpace(problem.RootElement.GetProperty("trace_id").GetString()).ShouldBeFalse();
         fixture.EventAcceptance.LastSubmission.ShouldBeNull();
     }
 

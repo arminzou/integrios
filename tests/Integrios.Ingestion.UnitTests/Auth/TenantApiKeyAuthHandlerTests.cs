@@ -98,6 +98,16 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
     {
         HttpResponseMessage response = await GetEventAsync(Guid.NewGuid(), authHeader: null);
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        await AssertProblemDetailsAsync(response, HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task WrongMethod_Returns405ProblemDetails()
+    {
+        using HttpResponseMessage response = await client.DeleteAsync("/events");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
+        await AssertProblemDetailsAsync(response, HttpStatusCode.MethodNotAllowed);
     }
 
     // Helpers
@@ -129,6 +139,16 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
             message.Headers.TryAddWithoutValidation("Authorization", authHeader);
 
         return client.SendAsync(message);
+    }
+
+    private static async Task AssertProblemDetailsAsync(HttpResponseMessage response, HttpStatusCode expectedStatus)
+    {
+        response.Content.Headers.ContentType.ShouldNotBeNull();
+        response.Content.Headers.ContentType.MediaType.ShouldBe("application/problem+json");
+
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("status").GetInt32().ShouldBe((int)expectedStatus);
+        string.IsNullOrWhiteSpace(body.RootElement.GetProperty("trace_id").GetString()).ShouldBeFalse();
     }
 
     public static (TenantApiKey TenantApiKey, Tenant Tenant) BuildValidTenantApiKeyPublic(string token) => BuildValidTenantApiKey(token);

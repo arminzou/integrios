@@ -1,34 +1,44 @@
 using Integrios.Application.Ingestion;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Integrios.Ingestion.ErrorHandling;
 
-public sealed class IngestionExceptionHandler : IExceptionHandler
+public sealed class IngestionExceptionHandler(IProblemDetailsService problemDetailsService) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
         CancellationToken cancellationToken)
     {
-        (int StatusCode, string Message)? error = exception switch
+        ProblemDetails? problem = exception switch
         {
-            EventAcceptanceException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            SourceEndpointNotFoundException => (StatusCodes.Status404NotFound, exception.Message),
-            SourceVerificationException => (StatusCodes.Status401Unauthorized, exception.Message),
-            WebhookPayloadException => (StatusCodes.Status400BadRequest, exception.Message),
-            BadHttpRequestException badRequest => (badRequest.StatusCode, "The request body is invalid."),
+            EventAcceptanceException => Problem(StatusCodes.Status422UnprocessableEntity, exception.Message),
+            SourceEndpointNotFoundException => Problem(StatusCodes.Status404NotFound, exception.Message),
+            SourceVerificationException => Problem(StatusCodes.Status401Unauthorized, exception.Message),
+            WebhookPayloadException => Problem(StatusCodes.Status400BadRequest, exception.Message),
+            BadHttpRequestException badRequest => Problem(badRequest.StatusCode, "The request is invalid."),
             _ => null
         };
 
-        if (error is null)
+        if (problem is null)
             return false;
 
-        httpContext.Response.StatusCode = error.Value.StatusCode;
-        await httpContext.Response.WriteAsJsonAsync(
-            new ErrorResponse(error.Value.Message),
-            cancellationToken);
+        httpContext.Response.StatusCode = problem.Status!.Value;
+        await problemDetailsService.WriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = httpContext,
+            ProblemDetails = problem,
+            Exception = exception
+        });
         return true;
     }
 
-    private sealed record ErrorResponse(string Error);
+    private static ProblemDetails Problem(int statusCode, string detail) => new()
+    {
+        Status = statusCode,
+        Title = ReasonPhrases.GetReasonPhrase(statusCode),
+        Detail = detail
+    };
 }

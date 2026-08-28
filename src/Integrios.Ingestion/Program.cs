@@ -27,6 +27,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
