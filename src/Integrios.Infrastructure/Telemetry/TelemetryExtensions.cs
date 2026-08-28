@@ -11,6 +11,7 @@ namespace Integrios.Infrastructure.Telemetry;
 public static class TelemetryExtensions
 {
     private static readonly TimeSpan DefaultOutboxDepthSampleInterval = TimeSpan.FromSeconds(15);
+    private const string OtlpEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
 
     public static ILoggingBuilder AddOperationalConsoleLogging(
         this ILoggingBuilder logging,
@@ -31,12 +32,13 @@ public static class TelemetryExtensions
         IConfiguration configuration,
         string serviceName)
     {
-        // OTLP is off unless an endpoint is configured; spans are still produced in-process.
-        var otlpEndpoint = configuration["Integrios:Telemetry:OtlpEndpoint"]
-            ?? configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+        bool exportTraces = HasValidOtlpEndpoint(configuration);
 
         services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService(serviceName))
+            .ConfigureResource(r => r.AddService(
+                serviceName,
+                serviceVersion: typeof(TelemetryExtensions).Assembly.GetName().Version!.ToString(3),
+                serviceInstanceId: Guid.NewGuid().ToString("N")))
             .WithMetrics(metrics =>
             {
                 metrics
@@ -55,13 +57,29 @@ public static class TelemetryExtensions
                     .AddNpgsql()
                     .AddSqlClientInstrumentation();
 
-                if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+                if (exportTraces)
                 {
                     tracing.AddOtlpExporter();
                 }
             });
 
         return services;
+    }
+
+    private static bool HasValidOtlpEndpoint(IConfiguration configuration)
+    {
+        string? endpoint = configuration[OtlpEndpointConfigurationKey];
+        if (string.IsNullOrWhiteSpace(endpoint))
+            return false;
+
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out Uri? uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException(
+                $"{OtlpEndpointConfigurationKey} must be an absolute HTTP(S) URI.");
+        }
+
+        return true;
     }
 
     public static IServiceCollection AddOutboxDepthMetricsServices(
