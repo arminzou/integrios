@@ -88,6 +88,18 @@ public sealed class DatabaseTelemetryTests(DatabaseTelemetryFixture fixture)
             .ShouldHaveSingleItem().Value;
         connectionFactory.OpenCount.ShouldBe(1);
 
+        foreach (string name in new[]
+                 {
+                     "integrios_outbox_pending_depth",
+                     "integrios_outbox_oldest_pending_age_seconds",
+                     "integrios_delivery_ready_depth",
+                     "integrios_delivery_oldest_ready_age_seconds",
+                     "integrios_backlog_snapshot_age_seconds"
+                 })
+        {
+            metrics.ForInstrument(name).ShouldAllBe(measurement => measurement.Tags.Count == 0);
+        }
+
         connectionFactory.Fail = true;
         await Task.Delay(20);
         await sampler.SampleAsync(CancellationToken.None);
