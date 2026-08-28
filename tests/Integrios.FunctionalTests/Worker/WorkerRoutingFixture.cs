@@ -17,6 +17,7 @@ using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Events;
 using Integrios.Infrastructure.Subscriptions;
+using Integrios.Infrastructure.Telemetry;
 using Integrios.Infrastructure.Transforms;
 using Integrios.Tests.Shared;
 using MediatR;
@@ -60,6 +61,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public MutableSecretResolver SecretResolver { get; } = new();
     private string ConnectionString => database.ConnectionString;
     internal EventDeliveryQueue DeliveryQueue { get; private set; } = null!;
+    internal BacklogSnapshotReader BacklogSnapshotReader { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
@@ -70,6 +72,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             .AddWorkerInfrastructureServices(database.Configuration)
             .BuildServiceProvider();
         var connectionFactory = infrastructureProvider.GetRequiredService<IDbConnectionFactory>();
+        BacklogSnapshotReader = new BacklogSnapshotReader(connectionFactory);
         var outboxFanout = infrastructureProvider.GetRequiredService<IOutboxFanout>();
         DeliveryQueue = (EventDeliveryQueue)infrastructureProvider.GetRequiredService<IEventDeliveryQueue>();
         dbContext = new IntegriosDbContext(database.CreateOptions());
@@ -177,6 +180,18 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         $"UPDATE event_deliveries SET deliver_after={database.OneSecondAgo} WHERE event_id=@EventId AND status='pending'",
         new { EventId = eventId });
 
+    public Task DeferDeliveryAsync(Guid eventId) => ExecuteAsync(
+        database.Provider == "postgres"
+            ? "UPDATE event_deliveries SET deliver_after=now() + interval '1 hour' WHERE event_id=@EventId AND status='pending'"
+            : "UPDATE event_deliveries SET deliver_after=DATEADD(hour, 1, SYSUTCDATETIME()) WHERE event_id=@EventId AND status='pending'",
+        new { EventId = eventId });
+
+    public Task AgeDeliveryAsync(Guid eventId) => ExecuteAsync(
+        database.Provider == "postgres"
+            ? "UPDATE event_deliveries SET created_at=now() - interval '1 second' WHERE event_id=@EventId AND status='pending'"
+            : "UPDATE event_deliveries SET created_at=DATEADD(second, -1, SYSUTCDATETIME()) WHERE event_id=@EventId AND status='pending'",
+        new { EventId = eventId });
+
     public async Task<Guid> InsertEventAndOutboxAsync(string eventType)
     {
         Guid eventId = Guid.NewGuid();
@@ -210,6 +225,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
     public Task ForceRetryNowAsync(Guid eventId) => ExecuteAsync(
         $"UPDATE outbox SET deliver_after={database.OneSecondAgo} WHERE event_id=@EventId", new { EventId = eventId });
+
+    public Task AgeOutboxAsync(Guid eventId) => ExecuteAsync(
+        database.Provider == "postgres"
+            ? "UPDATE outbox SET created_at=now() - interval '1 second' WHERE event_id=@EventId"
+            : "UPDATE outbox SET created_at=DATEADD(second, -1, SYSUTCDATETIME()) WHERE event_id=@EventId",
+        new { EventId = eventId });
 
     public Task SetSubscriptionTransformByNameAsync(string subscriptionName, string? transformConfigJson) => ExecuteAsync(
         $"UPDATE subscriptions SET mapping_config={database.Json("@Config")} WHERE name=@Name",
