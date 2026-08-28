@@ -44,8 +44,10 @@ internal sealed class EventDeliveryQueue(
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
+        string databaseNow = sqlServer ? "SYSUTCDATETIME()" : "now()";
+        string claimable = EventDeliveryClaimability.Predicate(connectionFactory.Provider, "sd", databaseNow);
         string claimSql = sqlServer
-            ? """
+            ? $"""
                 SELECT TOP (1)
                     sd.id AS Id, sd.event_id AS EventId, sd.subscription_id AS SubscriptionId,
                     sd.destination_connection_id AS DestinationConnectionId, sd.status AS Status,
@@ -61,14 +63,13 @@ internal sealed class EventDeliveryQueue(
                 JOIN events e ON e.id=sd.event_id
                 JOIN tenants tenant ON tenant.id=e.tenant_id
                 LEFT JOIN topics t ON t.id=e.topic_id
-                WHERE (sd.status=N'in_flight' AND sd.lease_expires_at <= SYSUTCDATETIME())
-                   OR (sd.status=N'pending' AND (sd.deliver_after IS NULL OR sd.deliver_after <= SYSUTCDATETIME()))
+                WHERE {claimable}
                 ORDER BY CASE WHEN sd.status=N'in_flight' THEN 0 ELSE 1 END,
                     CASE WHEN sd.lease_expires_at IS NULL THEN 1 ELSE 0 END, sd.lease_expires_at,
                     CASE WHEN sd.deliver_after IS NULL THEN 0 ELSE 1 END, sd.deliver_after,
                     sd.created_at, sd.id
                 """
-            : """
+            : $"""
                 SELECT
                     sd.id AS Id,
                     sd.event_id AS EventId,
@@ -93,8 +94,7 @@ internal sealed class EventDeliveryQueue(
                 JOIN events e ON e.id = sd.event_id
                 JOIN tenants tenant ON tenant.id = e.tenant_id
                 LEFT JOIN topics t ON t.id = e.topic_id
-                WHERE (sd.status = 'in_flight' AND sd.lease_expires_at <= now())
-                   OR (sd.status = 'pending' AND (sd.deliver_after IS NULL OR sd.deliver_after <= now()))
+                WHERE {claimable}
                 ORDER BY CASE WHEN sd.status = 'in_flight' THEN 0 ELSE 1 END,
                     sd.lease_expires_at NULLS LAST, sd.deliver_after NULLS FIRST, sd.created_at, sd.id
                 LIMIT 1 FOR UPDATE OF sd SKIP LOCKED;
