@@ -1,11 +1,16 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using Integrios.Application.Telemetry;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Telemetry;
+using Integrios.Tests.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
 
@@ -52,6 +57,64 @@ public sealed class DatabaseTelemetryTests(DatabaseTelemetryFixture fixture)
         recorder.Clear();
         await context.Database.ExecuteSqlRawAsync("SELECT 1");
         recorder.Completed.ShouldContain(activity => activity.Kind == ActivityKind.Client);
+    }
+
+    [Fact]
+    public async Task BacklogSampler_CachesSnapshotAcrossScrapesAndFailures()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMetrics();
+        services.AddWorkerInfrastructureServices(fixture.Database.Configuration);
+        await using ServiceProvider provider = services.BuildServiceProvider();
+        var connectionFactory = new CountingConnectionFactory(
+            provider.GetRequiredService<IDbConnectionFactory>());
+        var sampler = new OutboxDepthMetrics(
+            provider.GetRequiredService<IMeterFactory>(),
+            new BacklogSnapshotReader(connectionFactory),
+            new OutboxDepthMetricsOptions(TimeSpan.FromSeconds(1)),
+            NullLogger<OutboxDepthMetrics>.Instance);
+
+        await sampler.SampleAsync(CancellationToken.None);
+        connectionFactory.OpenCount.ShouldBe(1);
+        metrics.CollectObservableInstruments();
+
+        metrics.ForInstrument("integrios_outbox_pending_depth").ShouldHaveSingleItem().Value.ShouldBe(0);
+        metrics.ForInstrument("integrios_outbox_oldest_pending_age_seconds").ShouldHaveSingleItem().Value.ShouldBe(0);
+        metrics.ForInstrument("integrios_delivery_ready_depth").ShouldHaveSingleItem().Value.ShouldBe(0);
+        metrics.ForInstrument("integrios_delivery_oldest_ready_age_seconds").ShouldHaveSingleItem().Value.ShouldBe(0);
+        double firstSnapshotAge = metrics.ForInstrument("integrios_backlog_snapshot_age_seconds")
+            .ShouldHaveSingleItem().Value;
+        connectionFactory.OpenCount.ShouldBe(1);
+
+        connectionFactory.Fail = true;
+        await Task.Delay(20);
+        await sampler.SampleAsync(CancellationToken.None);
+        metrics.CollectObservableInstruments();
+
+        connectionFactory.OpenCount.ShouldBe(2);
+        metrics.ForInstrument("integrios_outbox_pending_depth").Last().Value.ShouldBe(0);
+        metrics.ForInstrument("integrios_outbox_oldest_pending_age_seconds").Last().Value.ShouldBe(0);
+        metrics.ForInstrument("integrios_delivery_ready_depth").Last().Value.ShouldBe(0);
+        metrics.ForInstrument("integrios_delivery_oldest_ready_age_seconds").Last().Value.ShouldBe(0);
+        metrics.ForInstrument("integrios_backlog_snapshot_age_seconds").Last().Value
+            .ShouldBeGreaterThan(firstSnapshotAge);
+    }
+
+    private sealed class CountingConnectionFactory(IDbConnectionFactory inner) : IDbConnectionFactory
+    {
+        public DatabaseProvider Provider => inner.Provider;
+        public int OpenCount { get; private set; }
+        public bool Fail { get; set; }
+
+        public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            OpenCount++;
+            return Fail
+                ? ValueTask.FromException<DbConnection>(new InvalidOperationException("Injected sample failure."))
+                : inner.OpenConnectionAsync(cancellationToken);
+        }
     }
 
     private sealed class RecordingActivityProcessor : BaseProcessor<Activity>

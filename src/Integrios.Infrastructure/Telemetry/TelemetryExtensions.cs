@@ -101,6 +101,7 @@ public static class TelemetryExtensions
         }
 
         services.AddSingleton(new OutboxDepthMetricsOptions(sampleInterval));
+        services.AddSingleton<BacklogSnapshotReader>();
         services.AddHostedService<OutboxDepthMetrics>();
         return services;
     }

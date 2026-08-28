@@ -30,6 +30,10 @@ public sealed class OutboxDepthMetricsTests
 
         connectionFactory.OpenCount.ShouldBe(0);
         metrics.ForInstrument("integrios_outbox_pending_depth").ShouldBeEmpty();
+        metrics.ForInstrument("integrios_outbox_oldest_pending_age_seconds").ShouldBeEmpty();
+        metrics.ForInstrument("integrios_delivery_ready_depth").ShouldBeEmpty();
+        metrics.ForInstrument("integrios_delivery_oldest_ready_age_seconds").ShouldBeEmpty();
+        metrics.ForInstrument("integrios_backlog_snapshot_age_seconds").ShouldBeEmpty();
     }
 
     [Theory]
