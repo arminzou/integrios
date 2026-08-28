@@ -9,7 +9,7 @@ namespace Integrios.Application.Authoring.TenantApiKeys;
 
 public sealed record CreateTenantApiKeyCommand(
     Guid TenantId,
-    string Name,
+    string? Name,
     string? Description,
     DateTimeOffset? ExpiresAt
 ) : IRequest<CreateTenantApiKeyResult>;
@@ -19,6 +19,9 @@ internal sealed class CreateTenantApiKeyCommandHandler(ITenantApiKeyRepository r
 {
     public async Task<CreateTenantApiKeyResult> Handle(CreateTenantApiKeyCommand command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new TenantApiKeyValidationException("Name is required.", "name");
+
         var rawKey = "intg_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var keyPrefix = rawKey[..12]; // display hint: "intg_3f8a2c1d" (non-secret, first 12 chars)
         var keyHash = "sha256:" + Convert.ToHexString(

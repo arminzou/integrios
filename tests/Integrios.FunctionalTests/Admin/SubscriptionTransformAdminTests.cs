@@ -246,7 +246,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
-        body.GetProperty("error").GetString()!.ShouldContain("expression", Case.Sensitive);
+        body.GetProperty("errors").GetProperty("")[0].GetString()!.ShouldContain("expression", Case.Sensitive);
     }
 
     [Fact]
@@ -268,6 +268,6 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
-        string.IsNullOrWhiteSpace(body.GetProperty("error").GetString()).ShouldBeFalse();
+        string.IsNullOrWhiteSpace(body.GetProperty("errors").GetProperty("")[0].GetString()).ShouldBeFalse();
     }
 }

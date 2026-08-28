@@ -11,7 +11,7 @@ namespace Integrios.Application.Authoring.Connections;
 public sealed record CreateConnectionCommand(
     Guid TenantId,
     Guid ConnectorId,
-    string Name,
+    string? Name,
     JsonElement Config,
     SourceVerificationInput? SourceVerification,
     DestinationAuthenticationInput? DestinationAuthentication,
@@ -28,6 +28,9 @@ internal sealed class CreateConnectionCommandHandler(
 
     public async Task<ConnectionDto> Handle(CreateConnectionCommand command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new ConnectionValidationException("Name is required.", "name");
+
         Connector connector = await connectorReader.GetByIdAsync(command.ConnectorId, cancellationToken)
             ?? throw new ConnectionValidationException("The specified connector does not exist.");
 

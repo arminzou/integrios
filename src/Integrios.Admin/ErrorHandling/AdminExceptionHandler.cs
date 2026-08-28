@@ -1,45 +1,54 @@
+using Integrios.Application.Authoring;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Authoring.Connections;
 using Integrios.Application.Authoring.Connectors;
-using Integrios.Application.Authoring.Subscriptions;
-using Integrios.Application.Authoring.Sources;
-using Integrios.Application.Authoring.Tenants;
-using Integrios.Application.Authoring.Topics;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Integrios.Admin.ErrorHandling;
 
-public sealed class AdminExceptionHandler : IExceptionHandler
+public sealed class AdminExceptionHandler(IProblemDetailsService problemDetailsService) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
         CancellationToken cancellationToken)
     {
-        (int StatusCode, string Message)? error = exception switch
+        ProblemDetails? problem = exception switch
         {
-            DuplicateResourceException => (StatusCodes.Status409Conflict, exception.Message),
-            ConnectionAuthoringConflictException => (StatusCodes.Status409Conflict, exception.Message),
-            TenantValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            ConnectionValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            ConnectorManifestValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            ConnectorVersionConflictException => (StatusCodes.Status409Conflict, exception.Message),
-            TopicValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            SourceValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            SubscriptionValidationException => (StatusCodes.Status422UnprocessableEntity, exception.Message),
-            BadHttpRequestException badRequest => (badRequest.StatusCode, "The request body is invalid."),
+            AuthoringValidationException validation => ValidationProblem(validation),
+            DuplicateResourceException => Problem(StatusCodes.Status409Conflict, exception.Message),
+            ConnectionAuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
+            ConnectorVersionConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
+            BadHttpRequestException badRequest => Problem(badRequest.StatusCode, "The request is invalid."),
             _ => null
         };
 
-        if (error is null)
+        if (problem is null)
             return false;
 
-        httpContext.Response.StatusCode = error.Value.StatusCode;
-        await httpContext.Response.WriteAsJsonAsync(
-            new ErrorResponse(error.Value.Message),
-            cancellationToken);
+        httpContext.Response.StatusCode = problem.Status!.Value;
+        await problemDetailsService.WriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = httpContext,
+            ProblemDetails = problem,
+            Exception = exception
+        });
         return true;
     }
 
-    private sealed record ErrorResponse(string Error);
+    private static ProblemDetails Problem(int statusCode, string detail) => new()
+    {
+        Status = statusCode,
+        Title = ReasonPhrases.GetReasonPhrase(statusCode),
+        Detail = detail
+    };
+
+    private static HttpValidationProblemDetails ValidationProblem(AuthoringValidationException exception) => new(
+        new Dictionary<string, string[]> { [exception.Field] = [exception.Message] })
+    {
+        Status = StatusCodes.Status422UnprocessableEntity,
+        Title = "One or more validation errors occurred."
+    };
 }

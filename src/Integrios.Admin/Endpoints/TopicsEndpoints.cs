@@ -76,7 +76,7 @@ public sealed class TopicsEndpoints : IEndpointGroup
 }
 
 internal sealed record CreateTopicRequest(
-    string Name,
+    string? Name,
     string? Description);
 
 internal sealed record UpdateTopicRequest(

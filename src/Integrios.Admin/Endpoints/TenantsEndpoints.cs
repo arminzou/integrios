@@ -69,5 +69,5 @@ public sealed class TenantsEndpoints : IEndpointGroup
     }
 }
 
-internal sealed record CreateTenantRequest(string Slug, string Name, string? Environment, string? Description);
-internal sealed record UpdateTenantRequest(string Name, string? Description, string? Environment);
+internal sealed record CreateTenantRequest(string? Slug, string? Name, string? Environment, string? Description);
+internal sealed record UpdateTenantRequest(string? Name, string? Description, string? Environment);

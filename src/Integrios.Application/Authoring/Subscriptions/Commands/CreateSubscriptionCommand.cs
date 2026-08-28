@@ -14,7 +14,7 @@ namespace Integrios.Application.Authoring.Subscriptions;
 public sealed record CreateSubscriptionCommand(
     Guid TenantId,
     Guid TopicId,
-    string Name,
+    string? Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? MappingConfig,
@@ -33,6 +33,9 @@ internal sealed class CreateSubscriptionCommandHandler(
 {
     public async Task<SubscriptionDto?> Handle(CreateSubscriptionCommand command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new SubscriptionValidationException("Name is required.", "name");
+
         SubscriptionAuthoringRules.Validate(command.MatchRules, command.MappingConfig, command.HttpDelivery, transformEvaluator);
 
         var topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken);

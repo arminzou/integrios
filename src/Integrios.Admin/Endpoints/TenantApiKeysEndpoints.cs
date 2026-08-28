@@ -61,4 +61,4 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
     }
 }
 
-internal sealed record CreateTenantApiKeyRequest(string Name, string? Description, DateTimeOffset? ExpiresAt);
+internal sealed record CreateTenantApiKeyRequest(string? Name, string? Description, DateTimeOffset? ExpiresAt);

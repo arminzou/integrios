@@ -24,7 +24,9 @@ public sealed class TransformEndpoints : IEndpointGroup
             new PreviewMappingQuery(request.Transform, request.SampleInput, request.SampleContext),
             cancellationToken);
         if (result.Error is not null)
-            return Results.BadRequest(new { error = result.Error });
+            return Results.ValidationProblem(
+                new Dictionary<string, string[]> { [""] = [result.Error] },
+                statusCode: StatusCodes.Status400BadRequest);
 
         using var doc = JsonDocument.Parse(result.OutputJson!);
         return Results.Ok(new { output = doc.RootElement.Clone() });

@@ -6,8 +6,8 @@ using MediatR;
 namespace Integrios.Application.Authoring.Tenants;
 
 public sealed record CreateTenantCommand(
-    string Slug,
-    string Name,
+    string? Slug,
+    string? Name,
     string? Environment,
     string? Description
 ) : IRequest<TenantDto>;
@@ -17,17 +17,20 @@ internal sealed class CreateTenantCommandHandler(ITenantRepository repository)
 {
     public async Task<TenantDto> Handle(CreateTenantCommand command, CancellationToken cancellationToken)
     {
-        if (!TenantSlug.IsValid(command.Slug))
+        if (command.Slug is not { } slug || !TenantSlug.IsValid(slug))
         {
             throw new TenantValidationException(
-                "Tenant slug must be a lowercase DNS label of 1 to 63 characters.");
+                "Tenant slug must be a lowercase DNS label of 1 to 63 characters.",
+                "slug");
         }
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new TenantValidationException("Name is required.", "name");
 
         var now = DateTimeOffset.UtcNow;
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
-            Slug = command.Slug,
+            Slug = slug,
             Name = command.Name,
             Status = OperationalStatus.Active,
             Environment = command.Environment,

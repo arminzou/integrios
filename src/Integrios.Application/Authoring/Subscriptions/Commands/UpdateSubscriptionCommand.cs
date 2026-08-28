@@ -14,7 +14,7 @@ public sealed record UpdateSubscriptionCommand(
     Guid TenantId,
     Guid TopicId,
     Guid Id,
-    string Name,
+    string? Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? MappingConfig,
@@ -32,6 +32,9 @@ internal sealed class UpdateSubscriptionCommandHandler(
 {
     public async Task<SubscriptionDto?> Handle(UpdateSubscriptionCommand command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new SubscriptionValidationException("Name is required.", "name");
+
         SubscriptionAuthoringRules.Validate(command.MatchRules, command.MappingConfig, command.HttpDelivery, transformEvaluator);
 
         var existing = await subscriptionRepository.GetByIdAsync(

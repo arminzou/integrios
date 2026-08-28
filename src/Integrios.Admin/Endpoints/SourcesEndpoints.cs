@@ -25,7 +25,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
             "event_api" => SourceType.EventApi,
             "webhook" => SourceType.Webhook,
             "queue" => SourceType.Queue,
-            _ => throw new SourceValidationException("Source type must be event_api, webhook, or queue.")
+            _ => throw new SourceValidationException("Source type must be event_api, webhook, or queue.", "type")
         };
         SourceDto source = await mediator.Send(new CreateSourceCommand(tenantId, request.ConnectionId, request.TopicId, type, request.Configuration), cancellationToken);
         return Results.Created($"/admin/tenants/{tenantId}/sources/{source.Id}", source);
@@ -53,5 +53,5 @@ public sealed class SourcesEndpoints : IEndpointGroup
         await mediator.Send(new RevokeSourceCommand(tenantId, id), cancellationToken) ? Results.Ok() : Results.NotFound();
 }
 
-internal sealed record CreateSourceRequest(Guid ConnectionId, Guid TopicId, string Type, JsonElement Configuration);
+internal sealed record CreateSourceRequest(Guid ConnectionId, Guid TopicId, string? Type, JsonElement Configuration);
 internal sealed record UpdateSourceRequest(JsonElement Configuration);

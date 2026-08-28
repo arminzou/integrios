@@ -12,7 +12,7 @@ namespace Integrios.Application.Authoring.Connections;
 public sealed record UpdateConnectionCommand(
     Guid TenantId,
     Guid Id,
-    string Name,
+    string? Name,
     JsonElement Config,
     SourceVerificationInput? SourceVerification,
     DestinationAuthenticationInput? DestinationAuthentication,
@@ -31,6 +31,9 @@ internal sealed class UpdateConnectionCommandHandler(
 
     public async Task<ConnectionDto?> Handle(UpdateConnectionCommand command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new ConnectionValidationException("Name is required.", "name");
+
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync([command.Id], cancellationToken);
         Connection? existing = await repository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
         if (existing is null)

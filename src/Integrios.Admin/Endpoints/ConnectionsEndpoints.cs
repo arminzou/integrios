@@ -97,7 +97,7 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
 
 internal sealed record CreateConnectionRequest(
     Guid ConnectorId,
-    string Name,
+    string? Name,
     JsonElement Config,
     ConnectionSchemeSelectionRequest? SourceVerification,
     ConnectionSchemeSelectionRequest? DestinationAuthentication,
@@ -105,7 +105,7 @@ internal sealed record CreateConnectionRequest(
     string? Description);
 
 internal sealed record UpdateConnectionRequest(
-    string Name,
+    string? Name,
     JsonElement Config,
     ConnectionSchemeSelectionRequest? SourceVerification,
     ConnectionSchemeSelectionRequest? DestinationAuthentication,

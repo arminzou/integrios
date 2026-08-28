@@ -22,6 +22,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string GlobalOperatorSecret = "operator_bootstrap_secret";
     public const string GlobalOperatorAuthHeader = $"OperatorKey {GlobalOperatorPublicKey}:{GlobalOperatorSecret}";
     public const string InvalidOperatorAuthHeader = "OperatorKey unknown_operator_key:unsupported-secret";
+    public const string InvalidOperatorSecretAuthHeader = $"OperatorKey {GlobalOperatorPublicKey}:unsupported-secret";
 
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;

@@ -107,7 +107,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
 }
 
 internal sealed record CreateSubscriptionRequest(
-    string Name,
+    string? Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? Mapping,
@@ -116,7 +116,7 @@ internal sealed record CreateSubscriptionRequest(
     string? Description);
 
 internal sealed record UpdateSubscriptionRequest(
-    string Name,
+    string? Name,
     JsonElement MatchRules,
     Guid DestinationConnectionId,
     JsonElement? Mapping,

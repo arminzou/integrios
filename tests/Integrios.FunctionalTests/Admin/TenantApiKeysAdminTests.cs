@@ -106,6 +106,22 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task GetTenantApiKey_WrongSecret_Returns401()
+    {
+        var created = await CreateTenantApiKeyAsync("wrong-secret-key");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}");
+        request.Headers.TryAddWithoutValidation(
+            "Authorization",
+            AdminApiFixture.InvalidOperatorSecretAuthHeader);
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     // List
 
     [Fact]
