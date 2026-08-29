@@ -1,10 +1,12 @@
 using System.Data.Common;
+using System.Diagnostics.Metrics;
 using Integrios.Application.Telemetry;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Integrios.Tests.Shared;
 
 namespace Integrios.Infrastructure.UnitTests;
@@ -52,6 +54,26 @@ public sealed class OutboxDepthMetricsTests
             new ServiceCollection().AddOutboxDepthMetricsServices(configuration));
     }
 
+    [Fact]
+    public async Task SamplerWarning_DoesNotCarryTheProviderException()
+    {
+        var logs = new CapturingLoggerProvider();
+        using ILoggerFactory loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(logs));
+        using ServiceProvider services = new ServiceCollection().AddMetrics().BuildServiceProvider();
+        var sampler = new OutboxDepthMetrics(
+            services.GetRequiredService<IMeterFactory>(),
+            new BacklogSnapshotReader(new FailingConnectionFactory()),
+            new OutboxDepthMetricsOptions(TimeSpan.FromSeconds(1)),
+            loggerFactory.CreateLogger<OutboxDepthMetrics>());
+
+        await sampler.SampleAsync(CancellationToken.None);
+
+        CapturedLogRecord record = logs.Records.ShouldHaveSingleItem();
+        record.Level.ShouldBe(LogLevel.Warning);
+        record.Exception.ShouldBeNull();
+        record.Message.ShouldNotContain(FailingConnectionFactory.ProviderMessage);
+    }
+
     private sealed class CountingConnectionFactory : IDbConnectionFactory
     {
         public DatabaseProvider Provider => DatabaseProvider.Postgres;
@@ -63,5 +85,15 @@ public sealed class OutboxDepthMetricsTests
             OpenCount++;
             return ValueTask.FromException<DbConnection>(new InvalidOperationException("Database access was not expected."));
         }
+    }
+
+    private sealed class FailingConnectionFactory : IDbConnectionFactory
+    {
+        public const string ProviderMessage = "provider secret";
+
+        public DatabaseProvider Provider => DatabaseProvider.Postgres;
+
+        public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<DbConnection>(new InvalidOperationException(ProviderMessage));
     }
 }

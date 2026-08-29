@@ -101,9 +101,9 @@ internal sealed class OutboxDepthMetrics : BackgroundService
         {
             throw;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            _logger.LogWarning(exception, "Could not sample the backlog snapshot; retaining the last successful values.");
+            _logger.LogWarning("Could not sample the backlog snapshot; retaining the last successful values.");
         }
     }
 }

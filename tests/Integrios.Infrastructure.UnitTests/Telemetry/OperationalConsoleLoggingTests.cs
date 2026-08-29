@@ -24,6 +24,20 @@ public sealed class OperationalConsoleLoggingTests
 
         provider.GetRequiredService<IOptions<ConsoleLoggerOptions>>().Value.FormatterName
             .ShouldBe(formatterName);
+
+        provider.GetRequiredService<IOptions<LoggerFactoryOptions>>().Value.ActivityTrackingOptions
+            .ShouldBe(ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId);
+
+        if (isDevelopment)
+        {
+            provider.GetRequiredService<IOptions<SimpleConsoleFormatterOptions>>().Value.IncludeScopes
+                .ShouldBeTrue();
+        }
+        else
+        {
+            provider.GetRequiredService<IOptions<JsonConsoleFormatterOptions>>().Value.IncludeScopes
+                .ShouldBeTrue();
+        }
     }
 
     [Fact]

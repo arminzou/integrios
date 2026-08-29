@@ -1,3 +1,7 @@
+using System.Diagnostics;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,14 +22,19 @@ public static class TelemetryExtensions
         bool isDevelopment)
     {
         logging.ClearProviders();
+        logging.Configure(options =>
+            options.ActivityTrackingOptions = ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId);
 
         if (isDevelopment)
-            logging.AddSimpleConsole();
+            logging.AddSimpleConsole(options => options.IncludeScopes = true);
         else
-            logging.AddJsonConsole();
+            logging.AddJsonConsole(options => options.IncludeScopes = true);
 
         return logging;
     }
+
+    public static IApplicationBuilder UseRequestCompletionLogging(this IApplicationBuilder app) =>
+        app.UseMiddleware<RequestCompletionLoggingMiddleware>();
 
     public static IServiceCollection AddTelemetryServices(
         this IServiceCollection services,
@@ -105,4 +114,41 @@ public static class TelemetryExtensions
         services.AddHostedService<OutboxDepthMetrics>();
         return services;
     }
+}
+
+internal sealed class RequestCompletionLoggingMiddleware(
+    RequestDelegate next,
+    ILogger<RequestCompletionLoggingMiddleware> logger)
+{
+    private static readonly EventId RequestCompleted = new(1000, "HttpRequestCompleted");
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        if (IsOperationalRequest(context.Request.Path))
+        {
+            await next(context);
+            return;
+        }
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        await next(context);
+
+        string routeTemplate = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText ?? "unmatched";
+        logger.LogInformation(
+            RequestCompleted,
+            "Completed HTTP request {method} {route_template} with {status} in {duration_ms} ms (request_id={request_id}).",
+            context.Request.Method,
+            routeTemplate,
+            context.Response.StatusCode,
+            stopwatch.Elapsed.TotalMilliseconds,
+            context.TraceIdentifier);
+    }
+
+    private static bool IsOperationalRequest(PathString path) =>
+        path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/metrics", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/assets", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/favicon.ico", StringComparison.OrdinalIgnoreCase);
 }
