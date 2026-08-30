@@ -16,6 +16,7 @@ using static Integrios.Tests.Shared.DeliveryTestDoubles;
 
 namespace Integrios.Application.UnitTests;
 
+[Collection(ActivityTestCollection.Name)]
 public sealed class DispatchEventDeliveriesCommandTests
 {
     [Fact]

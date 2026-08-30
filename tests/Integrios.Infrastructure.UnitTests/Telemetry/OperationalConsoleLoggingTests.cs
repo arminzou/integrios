@@ -1,4 +1,8 @@
+using System.Diagnostics;
 using Integrios.Infrastructure.Telemetry;
+using Microsoft.AspNetCore.Http;
+using OpenTelemetry.Instrumentation.AspNetCore;
+using OpenTelemetry.Instrumentation.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,9 +39,58 @@ public sealed class OperationalConsoleLoggingTests
         }
         else
         {
-            provider.GetRequiredService<IOptions<JsonConsoleFormatterOptions>>().Value.IncludeScopes
-                .ShouldBeTrue();
+            JsonConsoleFormatterOptions json =
+                provider.GetRequiredService<IOptions<JsonConsoleFormatterOptions>>().Value;
+            json.IncludeScopes.ShouldBeTrue();
+            json.UseUtcTimestamp.ShouldBeTrue();
+            json.TimestampFormat.ShouldNotBeNullOrWhiteSpace();
+            DateTimeOffset.UtcNow.ToString(json.TimestampFormat).ShouldEndWith("Z");
         }
+    }
+
+    [Theory]
+    [InlineData("/health", false)]
+    [InlineData("/metrics", false)]
+    [InlineData("/favicon.ico", false)]
+    [InlineData("/api/events", true)]
+    public void TelemetryRegistration_ExcludesOperationalEndpointsFromExportedTraces(string path, bool exported)
+    {
+        var services = new ServiceCollection();
+        services.AddTelemetryServices(new ConfigurationBuilder().Build(), "integrios-admin");
+
+        using ServiceProvider provider = services.BuildServiceProvider();
+        // Resolving TracerProvider applies the registered instrumentation options.
+        provider.GetRequiredService<TracerProvider>();
+
+        Func<HttpContext, bool>? filter = provider
+            .GetRequiredService<IOptionsMonitor<AspNetCoreTraceInstrumentationOptions>>()
+            .Get(Options.DefaultName)
+            .Filter;
+
+        filter.ShouldNotBeNull();
+        filter(new DefaultHttpContext { Request = { Path = path } }).ShouldBe(exported);
+    }
+
+    [Fact]
+    public void TelemetryRegistration_RemovesCompleteOutboundUrls()
+    {
+        var services = new ServiceCollection();
+        services.AddTelemetryServices(new ConfigurationBuilder().Build(), "integrios-worker");
+
+        using ServiceProvider provider = services.BuildServiceProvider();
+        provider.GetRequiredService<TracerProvider>();
+        HttpClientTraceInstrumentationOptions options = provider
+            .GetRequiredService<IOptionsMonitor<HttpClientTraceInstrumentationOptions>>()
+            .Get(Options.DefaultName);
+        options.EnrichWithHttpRequestMessage.ShouldNotBeNull();
+
+        using var activity = new Activity("outbound");
+        activity.SetTag("url.full", "https://secret.example.test/private");
+        activity.SetTag("http.url", "https://secret.example.test/private");
+        options.EnrichWithHttpRequestMessage(activity, new HttpRequestMessage());
+
+        activity.GetTagItem("url.full").ShouldBeNull();
+        activity.GetTagItem("http.url").ShouldBeNull();
     }
 
     [Fact]

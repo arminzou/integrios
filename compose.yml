@@ -63,6 +63,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      DOTNET_ENVIRONMENT: Development
       Integrios__SourceSecrets__Provider: ${INTEGRIOS_SOURCE_SECRETS_PROVIDER:-file}
     volumes:
       - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/source}:/run/secrets/integrios/source:ro
@@ -100,6 +101,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      DOTNET_ENVIRONMENT: Development
       Integrios__DestinationSecrets__Provider: ${INTEGRIOS_DESTINATION_SECRETS_PROVIDER:-file}
     volumes:
       - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destination}:/run/secrets/integrios/destination:ro

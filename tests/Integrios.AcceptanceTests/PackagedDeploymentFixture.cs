@@ -95,6 +95,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         try
         {
             await StartDeploymentAsync(buildImages: true);
+            await AssertServerEnvironmentsAsync("Development");
             await AssertBootstrapStateAsync();
             DisposeClients();
             await StopDeploymentAsync();
@@ -105,6 +106,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                 Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "compose.acceptance.yml"),
             ];
             await StartDeploymentAsync(buildImages: false);
+            await AssertServerEnvironmentsAsync("Production");
             await AssertBootstrapStateAsync();
             HttpConnectorId = await ApplyExampleManifestAsync("http");
             ApiKeyConnectorId = await ApplyConnectorManifestAsync(
@@ -379,6 +381,22 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         return result.Output;
     }
 
+    // The packaged observability fact removes the collector to prove Delivery is indifferent to it.
+    public async Task StopCollectorAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromSeconds(60), "stop", "otel-collector");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not stop the OTLP collector: {result.Output}");
+    }
+
+    public async Task StartCollectorAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "start", "otel-collector");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not start the OTLP collector: {result.Output}");
+        await WaitForServiceAsync("otel-collector");
+    }
+
     public async Task RestartPostgresAsync()
     {
         ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "restart", "postgres");
@@ -496,6 +514,25 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             throw new InvalidOperationException(
                 $"Packaged Bootstrap state was unexpected: Connectors={connectors}, live OperatorKeys={liveOperatorKeys}.");
+        }
+    }
+
+    private async Task AssertServerEnvironmentsAsync(string expected)
+    {
+        foreach (string serviceName in (string[])["admin", "ingestion", "worker"])
+        {
+            ComposeResult result = await RunComposeAsync(
+                TimeSpan.FromSeconds(30),
+                "exec",
+                "--no-TTY",
+                serviceName,
+                "printenv",
+                "DOTNET_ENVIRONMENT");
+            if (result.ExitCode != 0 || result.StandardOutput.Trim() != expected)
+            {
+                throw new InvalidOperationException(
+                    $"{serviceName} did not declare DOTNET_ENVIRONMENT={expected}: {result.Output}");
+            }
         }
     }
 

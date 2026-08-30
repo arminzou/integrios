@@ -24,7 +24,7 @@ public sealed class TelemetryBehavior<TRequest, TResponse> : IPipelineBehavior<T
         }
         catch (Exception ex)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetStatus(ActivityStatusCode.Error);
             activity?.AddException(ex);
             throw;
         }

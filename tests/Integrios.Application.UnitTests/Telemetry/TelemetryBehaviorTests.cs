@@ -7,6 +7,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.UnitTests;
 
+[Collection(ActivityTestCollection.Name)]
 public sealed class TelemetryBehaviorTests
 {
     private sealed record PingRequest : IRequest<string>;
@@ -35,6 +36,7 @@ public sealed class TelemetryBehaviorTests
 
         var span = collector.Single("PingRequest");
         span.Status.ShouldBe(ActivityStatusCode.Error);
+        span.StatusDescription.ShouldBeNull();
     }
 
     [Fact]

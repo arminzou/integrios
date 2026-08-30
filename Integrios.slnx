@@ -4,6 +4,7 @@
     <Project Path="src/Integrios.Admin/Integrios.Admin.csproj" />
     <Project Path="src/Integrios.Domain/Integrios.Domain.csproj" />
     <Project Path="src/Integrios.Application/Integrios.Application.csproj" />
+    <Project Path="src/Integrios.Infrastructure/Integrios.Infrastructure.csproj" />
     <Project Path="src/Integrios.Worker/Integrios.Worker.csproj" />
     <Project Path="src/Integrios.Migrations.Postgres/Integrios.Migrations.Postgres.csproj" />
     <Project Path="src/Integrios.Migrations.SqlServer/Integrios.Migrations.SqlServer.csproj" />

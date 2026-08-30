@@ -28,7 +28,12 @@ public static class TelemetryExtensions
         if (isDevelopment)
             logging.AddSimpleConsole(options => options.IncludeScopes = true);
         else
-            logging.AddJsonConsole(options => options.IncludeScopes = true);
+            logging.AddJsonConsole(options =>
+            {
+                options.IncludeScopes = true;
+                options.UseUtcTimestamp = true;
+                options.TimestampFormat = "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'";
+            });
 
         return logging;
     }
@@ -61,8 +66,14 @@ public static class TelemetryExtensions
             {
                 tracing
                     .AddSource("integrios.application")
-                    .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
+                    .AddAspNetCoreInstrumentation(options => options.Filter =
+                        context => !RequestCompletionLoggingMiddleware.IsOperationalRequest(context.Request.Path))
+                    .AddHttpClientInstrumentation(options =>
+                        options.EnrichWithHttpRequestMessage = static (activity, _) =>
+                        {
+                            activity.SetTag("url.full", null);
+                            activity.SetTag("http.url", null);
+                        })
                     .AddNpgsql()
                     .AddSqlClientInstrumentation();
 
@@ -144,7 +155,7 @@ internal sealed class RequestCompletionLoggingMiddleware(
             context.TraceIdentifier);
     }
 
-    private static bool IsOperationalRequest(PathString path) =>
+    internal static bool IsOperationalRequest(PathString path) =>
         path.Equals("/health", StringComparison.OrdinalIgnoreCase)
         || path.Equals("/metrics", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase)

@@ -27,16 +27,22 @@ services:
     image: ${INTEGRIOS_INGESTION_IMAGE}
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=acceptance
+      OTEL_TRACES_SAMPLER: always_on
 
   admin:
     image: ${INTEGRIOS_ADMIN_IMAGE}
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=acceptance
+      OTEL_TRACES_SAMPLER: always_on
 
   worker:
     image: ${INTEGRIOS_WORKER_IMAGE}
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=acceptance
+      OTEL_TRACES_SAMPLER: always_on
       DestinationSecrets__acceptance-config__shared_secret: ${INTEGRIOS_ACCEPTANCE_CONFIG_SHARED_SECRET:-}
       DestinationSecrets__acceptance-config__config_only: ${INTEGRIOS_ACCEPTANCE_CONFIG_ONLY_SECRET:-}
       # Compressed cadence. The retry, dead-letter, replay, and timeout state machines are

@@ -112,7 +112,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
             (payload, string? error) = ApplyTransform(row);
             if (error is not null)
             {
-                transformActivity?.SetStatus(ActivityStatusCode.Error, error);
+                transformActivity?.SetStatus(ActivityStatusCode.Error);
                 var transformFailure = new DeliveryResult(
                     false,
                     0,
@@ -132,7 +132,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
             using Activity? httpActivity = ActivitySources.Application.StartActivity("delivery.http");
             result = await deliveryClient.DeliverAsync(outboundRequest, snapshot.HttpSuccess, cancellationToken);
             if (!result.Succeeded)
-                httpActivity?.SetStatus(ActivityStatusCode.Error, result.Error);
+                httpActivity?.SetStatus(ActivityStatusCode.Error);
         }
         catch (DeliveryPreparationException ex)
         {
