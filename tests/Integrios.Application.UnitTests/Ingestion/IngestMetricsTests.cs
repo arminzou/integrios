@@ -12,7 +12,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.UnitTests;
 
-[Collection(ActivityTestCollection.Name)]
+[Collection(ActivityListenerCollection.Name)]
 public sealed class IngestMetricsTests
 {
     private static readonly Guid SourceId = Guid.NewGuid();

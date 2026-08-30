@@ -7,7 +7,7 @@ using Integrios.Tests.Shared;
 
 namespace Integrios.Application.UnitTests;
 
-[Collection(ActivityTestCollection.Name)]
+[Collection(ActivityListenerCollection.Name)]
 public sealed class TelemetryBehaviorTests
 {
     private sealed record PingRequest : IRequest<string>;
