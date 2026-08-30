@@ -27,7 +27,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     private readonly int postgresPort = GetAvailablePort();
     private readonly int ingestionPort = GetAvailablePort();
+    private readonly int ingestionOperationalPort = GetAvailablePort();
     private readonly int adminPort = GetAvailablePort();
+    private readonly int adminOperationalPort = GetAvailablePort();
     private readonly int mockSinkPort = GetAvailablePort();
     private readonly int workerMetricsPort = GetAvailablePort();
 
@@ -49,7 +51,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             ["INTEGRIOS_POSTGRES_PORT"] = postgresPort.ToString(),
             ["INTEGRIOS_INGESTION_PORT"] = ingestionPort.ToString(),
+            ["INTEGRIOS_INGESTION_OPERATIONAL_PORT"] = ingestionOperationalPort.ToString(),
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
+            ["INTEGRIOS_ADMIN_OPERATIONAL_PORT"] = adminOperationalPort.ToString(),
             ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
             ["INTEGRIOS_WIREMOCK_MAPPINGS_DIR"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "wiremock", "mappings"),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
@@ -69,10 +73,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     }
 
     public HttpClient AdminClient { get; private set; } = null!;
+    public HttpClient AdminOperationalClient { get; private set; } = null!;
     public HttpClient IngestionClient { get; private set; } = null!;
+    public HttpClient IngestionOperationalClient { get; private set; } = null!;
     private HttpClient wireMockClient = null!;
     public WireMockSink WireMockSink { get; private set; } = null!;
-    public HttpClient WorkerMetricsClient { get; private set; } = null!;
+    public HttpClient WorkerOperationalClient { get; private set; } = null!;
     public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:acceptance-admin-secret";
     public Guid HttpConnectorId { get; private set; }
     public Guid ApiKeyConnectorId { get; private set; }
@@ -403,6 +409,28 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"Could not restart Postgres: {result.Output}");
 
+        await WaitForPostgresAsync();
+    }
+
+    public async Task StopPostgresAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "stop", "postgres");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not stop Postgres: {result.Output}");
+    }
+
+    public async Task StartPostgresAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "start", "postgres");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not start Postgres: {result.Output}");
+
+        await WaitForPostgresAsync();
+        await WaitUntilReadyAsync(expectCollector: true);
+    }
+
+    private async Task WaitForPostgresAsync()
+    {
         var deadline = Stopwatch.StartNew();
         Exception? lastException = null;
         while (deadline.Elapsed < ReadinessTimeout)
@@ -420,7 +448,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             }
         }
 
-        throw new TimeoutException($"Postgres did not recover after restart: {lastException?.Message}");
+        throw new TimeoutException($"Postgres did not become available: {lastException?.Message}");
     }
 
     private async Task StartDeploymentAsync(bool buildImages)
@@ -453,10 +481,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         }
 
         AdminClient = CreateClient(adminPort);
+        AdminOperationalClient = CreateClient(adminOperationalPort);
         IngestionClient = CreateClient(ingestionPort);
+        IngestionOperationalClient = CreateClient(ingestionOperationalPort);
         wireMockClient = CreateClient(mockSinkPort);
         WireMockSink = new WireMockSink(wireMockClient);
-        WorkerMetricsClient = CreateClient(workerMetricsPort);
+        WorkerOperationalClient = CreateClient(workerMetricsPort);
         await WaitUntilReadyAsync(expectCollector: !buildImages);
     }
 
@@ -545,8 +575,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             try
             {
-                await AssertHealthyAsync(AdminClient, "Admin");
-                await AssertHealthyAsync(IngestionClient, "Ingestion");
+                await AssertHealthyAsync(AdminOperationalClient, "Admin");
+                await AssertHealthyAsync(AdminOperationalClient, "Admin", "/ready");
+                await AssertHealthyAsync(IngestionOperationalClient, "Ingestion");
+                await AssertHealthyAsync(IngestionOperationalClient, "Ingestion", "/ready");
+                await AssertHealthyAsync(WorkerOperationalClient, "Worker");
+                await AssertHealthyAsync(WorkerOperationalClient, "Worker", "/ready");
                 await AssertHealthyAsync(wireMockClient, "WireMock", "/__admin/health");
 
                 // The OTLP receiver must accept spans before a test emits any, or early spans are
@@ -676,10 +710,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private void DisposeClients()
     {
         AdminClient?.Dispose();
+        AdminOperationalClient?.Dispose();
         IngestionClient?.Dispose();
+        IngestionOperationalClient?.Dispose();
         wireMockClient?.Dispose();
         WireMockSink = null!;
-        WorkerMetricsClient?.Dispose();
+        WorkerOperationalClient?.Dispose();
     }
 
     public async Task<string> ReadTraceArtifactsAsync()

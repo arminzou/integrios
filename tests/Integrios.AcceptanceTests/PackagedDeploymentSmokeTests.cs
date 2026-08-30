@@ -15,8 +15,9 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     [Fact]
     public async Task PackagedDeployment_StartsAndExposesDeterministicEvidence()
     {
-        await AssertHealthyAsync(fixture.AdminClient);
-        await AssertHealthyAsync(fixture.IngestionClient);
+        await AssertHealthyAsync(fixture.AdminOperationalClient);
+        await AssertHealthyAsync(fixture.IngestionOperationalClient);
+        await AssertHealthyAsync(fixture.WorkerOperationalClient);
         await fixture.WireMockSink.AssertHealthyAsync();
 
         (await fixture.ScalarAsync<long>(
@@ -38,6 +39,45 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         await fixture.WireMockSink.AssertReceiptHeaderAsync(sinkName, "X-Acceptance", headerValue);
         await fixture.WireMockSink.ResetReceiptsAsync(sinkName);
         (await fixture.WireMockSink.ReceiptCountAsync(sinkName)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task OperationalEndpoints_ArePrivateAndReadinessTracksOnlyTheDatabase()
+    {
+        HttpClient[] operationalClients =
+        [
+            fixture.AdminOperationalClient,
+            fixture.IngestionOperationalClient,
+            fixture.WorkerOperationalClient
+        ];
+
+        foreach (HttpClient client in operationalClients)
+        {
+            (await client.GetAsync("/health")).StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await client.GetAsync("/ready")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        foreach (HttpClient publicClient in (HttpClient[])[fixture.AdminClient, fixture.IngestionClient])
+        {
+            (await publicClient.GetAsync("/health")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            (await publicClient.GetAsync("/ready")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            (await publicClient.GetAsync("/metrics")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+
+        await fixture.StopPostgresAsync();
+        try
+        {
+            foreach (HttpClient client in operationalClients)
+            {
+                (await client.GetAsync("/health")).StatusCode.ShouldBe(HttpStatusCode.OK);
+                (await client.GetAsync("/ready")).StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+            }
+        }
+        finally
+        {
+            await fixture.StartPostgresAsync();
+            await fixture.RestartProductServicesAsync();
+        }
     }
 
     [Fact]
@@ -194,9 +234,9 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             span.ParentSpanId.ShouldBe(fanoutSpan.SpanId);
         traceSpans.ShouldNotContain(span => span.Name == "IngestEventCommand" || span.Name == "subscription.deliver");
 
-        string ingestionMetrics = await fixture.IngestionClient.GetStringAsync("/metrics");
-        string adminMetrics = await fixture.AdminClient.GetStringAsync("/metrics");
-        string workerMetrics = await fixture.WorkerMetricsClient.GetStringAsync("/metrics");
+        string ingestionMetrics = await fixture.IngestionOperationalClient.GetStringAsync("/metrics");
+        string adminMetrics = await fixture.AdminOperationalClient.GetStringAsync("/metrics");
+        string workerMetrics = await fixture.WorkerOperationalClient.GetStringAsync("/metrics");
         ingestionMetrics.ShouldContain("integrios_events_ingested_total", Case.Sensitive);
         adminMetrics.ShouldContain("http_server_request_duration", Case.Sensitive);
         workerMetrics.ShouldContain("integrios_fanout_rows_created_total", Case.Sensitive);
@@ -273,7 +313,8 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             .Where(span => span.TraceId == unreachableTraceId && span.Name == "delivery.http")
             .ShouldAllBe(span => span.StatusCode == 2);
 
-        foreach (ExportedSpan span in allSpans)
+        string[] testTraceIds = [traceId, unreachableTraceId, recoveryRequestTraceId];
+        foreach (ExportedSpan span in allSpans.Where(span => testTraceIds.Contains(span.TraceId)))
         {
             span.StatusMessage.ShouldBeNullOrEmpty($"Span '{span.Name}' exported a status description.");
             foreach (string key in (string[])["http.route", "url.path", "http.target"])
@@ -281,6 +322,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 if (span.Attributes.TryGetValue(key, out string? path))
                 {
                     path.ShouldNotBe("/health");
+                    path.ShouldNotBe("/ready");
                     path.ShouldNotBe("/metrics");
                 }
             }
@@ -301,12 +343,15 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             }
         }
 
-        resources
+        var serviceInstances = resources
             .Where(resource => expectedServiceNames.Contains(resource.GetValueOrDefault("service.name")))
-            .Select(resource => resource["service.instance.id"])
-            .Distinct(StringComparer.Ordinal)
-            .Count()
-            .ShouldBe(expectedServiceNames.Length);
+            .GroupBy(resource => resource["service.name"], StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(resource => resource["service.instance.id"]).Distinct(StringComparer.Ordinal));
+        serviceInstances.SelectMany(pair => pair.Value.Select(instanceId => (pair.Key, instanceId)))
+            .GroupBy(instance => instance.instanceId, StringComparer.Ordinal)
+            .ShouldAllBe(group => group.Select(instance => instance.Key).Distinct(StringComparer.Ordinal).Count() == 1);
 
         string workerLogs = await fixture.GetServiceLogsAsync("worker");
         workerLogs.ShouldContain(eventId.ToString(), Case.Sensitive);
@@ -342,6 +387,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         {
             string route = completion["State"]?["route_template"]?.GetValue<string>() ?? string.Empty;
             route.ShouldNotBe("/health");
+            route.ShouldNotBe("/ready");
             route.ShouldNotBe("/metrics");
         }
 

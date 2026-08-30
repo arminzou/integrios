@@ -1,17 +1,17 @@
 # Dev-convenience Prometheus config. Operators bring their own in production.
 # Targets use Compose service names and in-container ports (not host-published ports):
-# ingestion/admin listen on 8080 (ASPNETCORE_HTTP_PORTS); the worker binds 5299 via UseUrls.
+# Every host serves its operational endpoints on the internal 5299 listener.
 global:
   scrape_interval: 15s
 
 scrape_configs:
   - job_name: integrios-ingestion
     static_configs:
-      - targets: ["ingestion:8080"]
+      - targets: ["ingestion:5299"]
 
   - job_name: integrios-admin
     static_configs:
-      - targets: ["admin:8080"]
+      - targets: ["admin:5299"]
 
   - job_name: integrios-worker
     static_configs:

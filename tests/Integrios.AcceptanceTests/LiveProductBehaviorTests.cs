@@ -511,8 +511,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM connectors WHERE key = 'http'")).ShouldBe(1L);
 
         await fixture.RestartProductServicesAsync();
-        using HttpResponseMessage healthyAdmin = await fixture.AdminClient.GetAsync("/health");
-        using HttpResponseMessage healthyIngestion = await fixture.IngestionClient.GetAsync("/health");
+        using HttpResponseMessage healthyAdmin = await fixture.AdminOperationalClient.GetAsync("/health");
+        using HttpResponseMessage healthyIngestion = await fixture.IngestionOperationalClient.GetAsync("/health");
         healthyAdmin.StatusCode.ShouldBe(HttpStatusCode.OK);
         healthyIngestion.StatusCode.ShouldBe(HttpStatusCode.OK);
 

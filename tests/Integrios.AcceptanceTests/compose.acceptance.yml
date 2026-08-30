@@ -54,9 +54,6 @@ services:
       Integrios__Worker__FanoutLoop__IdlePollInterval: "00:00:00.250"
       Integrios__Worker__DeliveryLoop__IdlePollInterval: "00:00:00.250"
       Integrios__Delivery__Retry__BaseDelay: "00:00:02"
-    ports:
-      - "${INTEGRIOS_WORKER_METRICS_PORT}:5299"
-
   mocksink:
     image: wiremock/wiremock:3.13.1
     command: ["--global-response-templating"]

@@ -182,6 +182,7 @@ public sealed class ProjectArchitectureTests
         string[] approvedTypes =
         [
             "Integrios.Infrastructure.DependencyInjection",
+            "Integrios.Infrastructure.Hosting.OperationalEndpointExtensions",
             "Integrios.Infrastructure.SecretResolutionDependencyInjection",
             "Integrios.Infrastructure.Telemetry.TelemetryExtensions"
         ];

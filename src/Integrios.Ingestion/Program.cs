@@ -1,5 +1,6 @@
 using Integrios.Application;
 using Integrios.Infrastructure;
+using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
 using Integrios.Ingestion.Auth;
 using Integrios.Ingestion.Endpoints;
@@ -9,6 +10,7 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
+int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
 
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
@@ -28,6 +30,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UseRouting();
+app.UseOperationalEndpointIsolation(operationalPort);
 app.UseRequestCompletionLogging();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -39,8 +42,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapEndpoints(typeof(Program).Assembly);
-app.MapPrometheusScrapingEndpoint();
+app.MapOperationalEndpoints();
 
 app.Run();

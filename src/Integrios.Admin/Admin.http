@@ -1,4 +1,5 @@
 @baseUrl = {{ADMIN_BASE_URL}}
+@operationalBaseUrl = {{ADMIN_OPERATIONAL_BASE_URL}}
 @operatorKey = Authorization: OperatorKey global_operator_key:operator_bootstrap_secret
 @webhookIntId = {{applyHttpConnector.response.body.$.id}}
 
@@ -22,7 +23,7 @@
 
 ###
 # Step 0 - Confirm the control plane is up
-GET {{baseUrl}}/health
+GET {{operationalBaseUrl}}/health
 
 ###
 # Step 0a - Auth probe

@@ -8,6 +8,7 @@ using Integrios.Admin.ErrorHandling;
 using Integrios.Admin.OpenApi;
 using Integrios.Application;
 using Integrios.Infrastructure;
+using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
 using Microsoft.AspNetCore.Authentication;
 using System.Text.Json;
@@ -21,6 +22,7 @@ if (args is ["database", ..])
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
+int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
 
 builder.Services.AddSingleton(PublicIngestionBaseUri.Parse(
     builder.Configuration[PublicIngestionBaseUri.ConfigurationKey],
@@ -46,6 +48,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UseRouting();
+app.UseOperationalEndpointIsolation(operationalPort);
 app.UseRequestCompletionLogging();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -57,12 +60,10 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
-
 var admin = app.MapGroup("/admin").RequireAuthorization();
 admin.MapEndpoints(typeof(Program).Assembly);
 
-app.MapPrometheusScrapingEndpoint();
+app.MapOperationalEndpoints();
 
 app.Run();
 return 0;

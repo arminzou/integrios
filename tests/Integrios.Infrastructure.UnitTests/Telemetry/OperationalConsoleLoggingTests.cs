@@ -50,6 +50,7 @@ public sealed class OperationalConsoleLoggingTests
 
     [Theory]
     [InlineData("/health", false)]
+    [InlineData("/ready", false)]
     [InlineData("/metrics", false)]
     [InlineData("/favicon.ico", false)]
     [InlineData("/api/events", true)]

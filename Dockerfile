@@ -39,13 +39,13 @@ RUN apt-get update \
 # separate, so each image creates only the mount root its own host reads. Named without the word
 # "secret" so the BuildKit SecretsUsedInArgOrEnv check does not flag this path as a credential.
 ARG MOUNT_ROOT=
-# Every host is an ASP.NET application; the Worker serves only Prometheus scraping and binds this
-# port through UseUrls, so EXPOSE documents the port each image actually listens on.
+# Every host is an ASP.NET application. Admin and Ingestion use HTTP_PORT for product traffic;
+# all three hosts use 5299 for probes and Prometheus scraping.
 ARG HTTP_PORT=8080
 
 WORKDIR /app
 COPY --from=build /app .
 RUN if [ -n "${MOUNT_ROOT}" ]; then mkdir -p "${MOUNT_ROOT}"; fi
 ENV ASPNETCORE_HTTP_PORTS=${HTTP_PORT}
-EXPOSE ${HTTP_PORT}
+EXPOSE ${HTTP_PORT} 5299
 ENTRYPOINT ["/app/service"]

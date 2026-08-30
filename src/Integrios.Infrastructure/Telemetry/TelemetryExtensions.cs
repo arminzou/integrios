@@ -157,6 +157,7 @@ internal sealed class RequestCompletionLoggingMiddleware(
 
     internal static bool IsOperationalRequest(PathString path) =>
         path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/ready", StringComparison.OrdinalIgnoreCase)
         || path.Equals("/metrics", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase)
