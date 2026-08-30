@@ -398,15 +398,34 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         }
         finally
         {
-            try
-            {
-                await fixture.WireMockSink.ResetControlAsync(sinkName);
-            }
-            finally
-            {
-                await fixture.StartCollectorAsync();
-            }
+            await fixture.WireMockSink.ResetControlAsync(sinkName);
         }
+
+        // Export failures during the outage must not wedge the pipeline: once the collector is
+        // back, an Event ingested after it exports its whole chain without any intervention.
+        await fixture.StartCollectorAsync();
+        Guid recoveredEventId = await IngestEventAsync(
+            apiToken,
+            sourceId,
+            "payment.created",
+            $"recovered-{suffix}");
+        await WaitForAsync(async () =>
+            await fixture.ScalarAsync<string>(
+                $"SELECT status FROM event_deliveries WHERE event_id = '{recoveredEventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
+        string recoveredTraceparent = await fixture.ScalarAsync<string>(
+            $"SELECT traceparent FROM event_deliveries WHERE event_id = '{recoveredEventId}' AND subscription_id = '{subscriptionId}'");
+        string recoveredTraceId = recoveredTraceparent.Split('-')[1];
+
+        await WaitForAsync(async () =>
+        {
+            ExportedSpan[] recoveredSpans = ParseTraceArtifacts(await fixture.ReadTraceArtifactsAsync()).Spans
+                .Where(span => span.TraceId == recoveredTraceId)
+                .ToArray();
+            return recoveredSpans.Any(span => span.Name == "event.accept")
+                && recoveredSpans.Any(span => span.Name == "outbox.fanout")
+                && recoveredSpans.Any(span => span.Name == "delivery.attempt")
+                && recoveredSpans.Any(span => span.Name == "delivery.finalize");
+        });
     }
 
     [Fact]
