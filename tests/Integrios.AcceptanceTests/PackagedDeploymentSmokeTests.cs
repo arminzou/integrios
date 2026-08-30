@@ -94,6 +94,27 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 destination_connection_id = destinationConnectionId
             });
 
+        // A refused connection is the only exercised path that leaves DeliveryResult.Error non-null
+        // on the HTTP phase. Without it the exported-status assertion below is vacuous for
+        // delivery.http, and a span that copied the transport message would still pass.
+        Guid unreachableConnectionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/connections",
+            new
+            {
+                connector_id = fixture.HttpConnectorId,
+                name = "acceptance-unreachable",
+                config = new { base_uri = "http://mocksink:9/sink/unreachable" },
+                environment = "production"
+            });
+        await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
+            new
+            {
+                name = "acceptance-unreachable",
+                match_rules = new { event_type = "payment.unreachable" },
+                destination_connection_id = unreachableConnectionId
+            });
+
         await fixture.WireMockSink.ConfigureAsync(sinkName, "fail");
 
         using var ingest = new HttpRequestMessage(
@@ -123,6 +144,12 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             using JsonDocument acceptedDocument = JsonDocument.Parse(acceptedBody);
             eventId = acceptedDocument.RootElement.GetProperty("event_id").GetGuid();
         }
+
+        Guid unreachableEventId = await IngestEventAsync(
+            apiToken,
+            sourceId,
+            "payment.unreachable",
+            $"unreachable-{suffix}");
 
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<long>(
@@ -220,6 +247,13 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             recoveryDocument.RootElement.GetProperty("trace_id").GetString().ShouldBe(traceId);
         }
 
+        await WaitForAsync(async () =>
+            await fixture.ScalarAsync<long>(
+                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{unreachableEventId}' AND da.status = 'failed' AND da.error_message IS NOT NULL") >= 1);
+        string unreachableTraceparent = await fixture.ScalarAsync<string>(
+            $"SELECT traceparent FROM event_deliveries WHERE event_id = '{unreachableEventId}'");
+        string unreachableTraceId = unreachableTraceparent.Split('-')[1];
+
         string traceArtifacts = string.Empty;
         IReadOnlyList<ExportedSpan> allSpans = [];
         IReadOnlyList<IReadOnlyDictionary<string, string>> resources = [];
@@ -230,8 +264,14 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             (allSpans, resources) = ParseTraceArtifacts(traceArtifacts);
             return expectedServiceNames.All(serviceName =>
                 resources.Any(resource =>
-                    resource.TryGetValue("service.name", out string? actual) && actual == serviceName));
+                    resource.TryGetValue("service.name", out string? actual) && actual == serviceName))
+                && allSpans.Any(span =>
+                    span.TraceId == unreachableTraceId && span.Name == "delivery.http");
         });
+
+        allSpans
+            .Where(span => span.TraceId == unreachableTraceId && span.Name == "delivery.http")
+            .ShouldAllBe(span => span.StatusCode == 2);
 
         foreach (ExportedSpan span in allSpans)
         {
