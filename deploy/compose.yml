@@ -17,7 +17,7 @@ services:
       retries: 10
 
   migrate:
-    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.3.0}
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.4.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,7 +29,7 @@ services:
   # Idempotent one-shot: creates the first deployment-wide OperatorKey only when none is live.
   # Production fails closed unless the Operator supplies a secret.
   bootstrap:
-    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.3.0}
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.4.0}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -40,7 +40,7 @@ services:
     command: ["bootstrap"]
 
   ingestion:
-    image: ghcr.io/arminzou/integrios/ingestion:${INTEGRIOS_VERSION:-0.3.0}
+    image: ghcr.io/arminzou/integrios/ingestion:${INTEGRIOS_VERSION:-0.4.0}
     restart: unless-stopped
     depends_on:
       bootstrap:
@@ -66,7 +66,7 @@ services:
       - "127.0.0.1:${INTEGRIOS_INGESTION_OPERATIONAL_PORT:-5232}:5299"
 
   admin:
-    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.3.0}
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.4.0}
     restart: unless-stopped
     depends_on:
       bootstrap:
@@ -80,7 +80,7 @@ services:
       - "127.0.0.1:${INTEGRIOS_ADMIN_OPERATIONAL_PORT:-5151}:5299"
 
   worker:
-    image: ghcr.io/arminzou/integrios/worker:${INTEGRIOS_VERSION:-0.3.0}
+    image: ghcr.io/arminzou/integrios/worker:${INTEGRIOS_VERSION:-0.4.0}
     restart: unless-stopped
     depends_on:
       bootstrap:
