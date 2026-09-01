@@ -44,7 +44,7 @@ release into your ACR with Azure CLI:
 
 ```powershell
 $registry = '<registry-name>'
-$release = '<v-release-tag>'
+$release = '<release-version-without-v>'
 
 foreach ($service in @('admin', 'ingestion', 'worker')) {
   az acr import `
@@ -53,6 +53,9 @@ foreach ($service in @('admin', 'ingestion', 'worker')) {
     --image "integrios/$service`:$release"
 }
 ```
+
+The Git release tag carries a `v` prefix, while its container tags do not. For example, Git release
+`v0.4.1` publishes container tag `0.4.1`.
 
 Resolve the imported manifests to destination ACR digests:
 
