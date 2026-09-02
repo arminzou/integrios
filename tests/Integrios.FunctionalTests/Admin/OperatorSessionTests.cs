@@ -181,15 +181,28 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
             && !value.Contains(OperatorSessionOptions.CookieName + "=;", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("/tenants?view=all", "/tenants?view=all")]
+    [InlineData("//evil.example", "/")]
+    [InlineData(@"/\evil.example", "/")]
+    public async Task SignIn_ReturnsOnlyToSameOriginPaths(string returnTo, string expected)
+    {
+        OperatorSession session = await SignInAsync(fixture.AliceHost, returnTo);
+
+        session.RedirectLocation.ShouldBe(expected);
+    }
+
     /// Drives the real authorization-code flow: Admin redirects to the provider, the provider
     /// redirects back with a code, and Admin exchanges it over the back channel before issuing its
     /// own cookie.
-    private async Task<OperatorSession> SignInAsync(WebApplicationFactory<Program> host)
+    private async Task<OperatorSession> SignInAsync(WebApplicationFactory<Program> host, string? returnTo = null)
     {
         using HttpClient client = Client(host);
         using var provider = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
 
-        using HttpResponseMessage challenge = await client.GetAsync(OperatorSessionEndpoints.LoginPath);
+        string loginPath = OperatorSessionEndpoints.LoginPath
+            + (returnTo is null ? string.Empty : $"?return_to={Uri.EscapeDataString(returnTo)}");
+        using HttpResponseMessage challenge = await client.GetAsync(loginPath);
         challenge.StatusCode.ShouldBe(HttpStatusCode.Found);
         Dictionary<string, string> cookies = Merge(
             new Dictionary<string, string>(StringComparer.Ordinal), challenge.Headers.GetValues("Set-Cookie"));
@@ -218,7 +231,8 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
             body,
             root.GetProperty("antiforgery_token").GetString()!,
             root.GetProperty("antiforgery_header_name").GetString()!,
-            root.GetProperty("antiforgery_form_field_name").GetString()!);
+            root.GetProperty("antiforgery_form_field_name").GetString()!,
+            callbackResponse.Headers.Location?.OriginalString);
     }
 
     /// The dashboard is HTTPS-only in production: the session and antiforgery cookies are both
@@ -275,5 +289,6 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
         string RawBody,
         string AntiforgeryToken,
         string AntiforgeryHeaderName,
-        string AntiforgeryFormFieldName);
+        string AntiforgeryFormFieldName,
+        string? RedirectLocation);
 }

@@ -1,5 +1,8 @@
 using System.Net;
+using Integrios.Admin.Auth;
+using Integrios.Admin.Dashboard;
 using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.FunctionalTests.Admin;
@@ -54,20 +57,37 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
     }
 
     [Fact]
-    public async Task BrowserRoutes_ServeTheShellWhenTheDashboardIsBuilt()
+    public async Task BrowserRoutes_ServeTheBuiltShellOnlyWhenOidcIsConfigured()
     {
-        using HttpResponseMessage root = await client.GetAsync("/");
-        if (root.StatusCode == HttpStatusCode.NotFound)
-            // The frontend build has not run in this working tree; the packaged Acceptance leg is
-            // what proves the shipped image contains the assets.
-            return;
+        string webRoot = Path.Combine(Path.GetTempPath(), "integrios-dashboard-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(webRoot);
+        await File.WriteAllTextAsync(Path.Combine(webRoot, DashboardHosting.ShellFile), "<html>dashboard</html>");
 
-        root.StatusCode.ShouldBe(HttpStatusCode.OK);
-        root.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
+        try
+        {
+            using WebApplicationFactory<Program> withoutOidc = fixture.WebFactory.WithWebHostBuilder(
+                builder => builder.UseWebRoot(webRoot));
+            using HttpClient unavailable = withoutOidc.CreateClient();
+            using HttpResponseMessage unavailableRoot = await unavailable.GetAsync("/");
+            unavailableRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        // A deep browser route is the dashboard's own routing surface, not a missing page.
-        using HttpResponseMessage deep = await client.GetAsync("/tenants/overview");
-        deep.StatusCode.ShouldBe(HttpStatusCode.OK);
-        deep.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
+            using WebApplicationFactory<Program> withOidc = fixture.WebFactory.WithWebHostBuilder(builder =>
+            {
+                builder.UseWebRoot(webRoot);
+                builder.UseSetting(OperatorOidcOptions.AuthorityKey, "https://oidc.example.test");
+                builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientId", "dashboard-test");
+            });
+            using HttpClient available = withOidc.CreateClient();
+            foreach (string path in new[] { "/", "/tenants/overview" })
+            {
+                using HttpResponseMessage response = await available.GetAsync(path);
+                response.StatusCode.ShouldBe(HttpStatusCode.OK);
+                response.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
+            }
+        }
+        finally
+        {
+            Directory.Delete(webRoot, recursive: true);
+        }
     }
 }

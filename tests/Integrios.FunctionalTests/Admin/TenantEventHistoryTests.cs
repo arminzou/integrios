@@ -152,9 +152,10 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
     /// so a Source Event id that is itself "all" collided with the unfiltered scope, and one
     /// containing a delimiter or a newline could corrupt the cursor's own framing. Neither may
     /// happen: every distinct filter combination gets its own scope, and free-text values round-trip
-    /// no matter what they contain.
+    /// no matter what they contain. Equivalent timestamps also retain the same scope when written
+    /// with a different UTC offset.
     [Fact]
-    public async Task History_CursorScope_DisambiguatesSourceEventIdFromTheUnfilteredSentinelAndDelimiters()
+    public async Task History_CursorScope_IsUnambiguousAndStableAcrossEquivalentTimestampOffsets()
     {
         var (firstAllId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
         var (secondAllId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
@@ -198,6 +199,19 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
             $"/admin/tenants/{fixture.TenantId}/events?source_event_id={Uri.EscapeDataString(delimited)}&limit=1&after={Uri.EscapeDataString(delimitedCursor)}");
         delimitedSecondPage.GetProperty("items").GetArrayLength().ShouldBe(1);
         delimitedSecondPage.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // Equivalent DateTimeOffset values describe the same database filter even when the client
+        // writes them with another offset, so changing only that representation keeps the cursor.
+        const string acceptedFromUtc = "2026-01-01T00:00:00Z";
+        const string acceptedToUtc = "2027-01-01T00:00:00Z";
+        const string acceptedFromOffset = "2025-12-31T19:00:00-05:00";
+        const string acceptedToOffset = "2026-12-31T19:00:00-05:00";
+        JsonElement utcFirstPage = await GetAsync(
+            $"/admin/tenants/{fixture.TenantId}/events?accepted_from={acceptedFromUtc}&accepted_to={acceptedToUtc}&limit=1");
+        string utcCursor = utcFirstPage.GetProperty("next_cursor").GetString()!;
+        JsonElement offsetSecondPage = await GetAsync(
+            $"/admin/tenants/{fixture.TenantId}/events?accepted_from={Uri.EscapeDataString(acceptedFromOffset)}&accepted_to={Uri.EscapeDataString(acceptedToOffset)}&limit=1&after={Uri.EscapeDataString(utcCursor)}");
+        offsetSecondPage.GetProperty("items").GetArrayLength().ShouldBeGreaterThan(0);
     }
 
     private async Task AssertBadRequestAsync(string url) =>

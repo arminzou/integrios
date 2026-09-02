@@ -20,6 +20,8 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
         int limit,
         CancellationToken cancellationToken)
     {
+        DateTimeOffset? acceptedFrom = filter.AcceptedFrom?.ToUniversalTime();
+        DateTimeOffset? acceptedTo = filter.AcceptedTo?.ToUniversalTime();
         // SourceEventId is Operator-supplied free text, unlike the enum and Guid filters every other
         // capability scopes by: it could itself read "all" or carry a delimiter or a newline. JSON
         // (present vs. the literal null, and every string escaped) keeps the scope unambiguous
@@ -32,8 +34,8 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
             filter.SourceId,
             filter.TopicId,
             filter.SourceEventId,
-            filter.AcceptedFrom,
-            filter.AcceptedTo));
+            acceptedFrom,
+            acceptedTo));
         DateTimeOffset cursorAcceptedAt = default;
         Guid cursorId = default;
         bool hasCursor = afterCursor is not null;
@@ -84,8 +86,8 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
             filter.SourceId,
             filter.TopicId,
             filter.SourceEventId,
-            filter.AcceptedFrom,
-            filter.AcceptedTo,
+            AcceptedFrom = acceptedFrom,
+            AcceptedTo = acceptedTo,
             CursorAcceptedAt = cursorAcceptedAt,
             CursorId = cursorId,
             Take = limit + 1,
