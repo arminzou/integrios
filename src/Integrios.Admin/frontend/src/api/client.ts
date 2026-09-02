@@ -1,15 +1,11 @@
 import createClient, { type Middleware } from "openapi-fetch";
-import type { paths } from "./schema";
+import type { components, paths } from "./schema";
 
 /// The signed-in Operator and the antiforgery token the session bootstrap issues. The browser holds
 /// no credential of its own: the session cookie travels automatically and is never readable here.
-export interface OperatorSession {
-  user_id: string;
-  display_name: string;
-  email: string | null;
-  antiforgery_token: string;
-  antiforgery_header_name: string;
-}
+/// Generated from the Admin OpenAPI document rather than hand-maintained, so this type can never
+/// drift from the contract `/auth/session` actually serves.
+export type OperatorSession = components["schemas"]["OperatorSessionResponse"];
 
 let session: OperatorSession | null = null;
 

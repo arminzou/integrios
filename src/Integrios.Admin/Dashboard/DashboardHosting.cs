@@ -1,3 +1,5 @@
+using Integrios.Admin.Auth;
+
 namespace Integrios.Admin.Dashboard;
 
 /// Serves the Operator dashboard from the Admin host itself.
@@ -30,9 +32,12 @@ public static class DashboardHosting
         !NonBrowserPrefixes.Any(prefix =>
             context.Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase));
 
+    /// The dashboard needs a browser sign-in path to ever reach a signed-in state, so it stays
+    /// unmapped without one: serving the shell while `/auth/session` has no route would hand the
+    /// browser a page that can never bootstrap.
     public static void MapDashboard(this WebApplication app)
     {
-        if (!IsDashboardAvailable(app.Environment))
+        if (!IsDashboardAvailable(app.Environment) || !OperatorAuthentication.IsOidcConfigured(app.Configuration))
             return;
 
         app.UseDefaultFiles();

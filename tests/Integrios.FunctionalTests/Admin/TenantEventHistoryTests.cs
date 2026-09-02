@@ -148,6 +148,58 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         await AssertBadRequestAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&accepted_to=2027-01-01T00:00:00Z&after={carried}");
     }
 
+    /// The cursor scope used to colon-join raw filter text with "all" as the missing-value sentinel,
+    /// so a Source Event id that is itself "all" collided with the unfiltered scope, and one
+    /// containing a delimiter or a newline could corrupt the cursor's own framing. Neither may
+    /// happen: every distinct filter combination gets its own scope, and free-text values round-trip
+    /// no matter what they contain.
+    [Fact]
+    public async Task History_CursorScope_DisambiguatesSourceEventIdFromTheUnfilteredSentinelAndDelimiters()
+    {
+        var (firstAllId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        var (secondAllId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        foreach (Guid id in new[] { firstAllId, secondAllId })
+            await ExecuteAsync(
+                "UPDATE events SET source_event_id = @SourceEventId WHERE id = @Id",
+                new { Id = id, SourceEventId = "all" });
+
+        // A cursor issued for the unfiltered list and one issued for source_event_id=all must not
+        // validate against each other, even though both filter sets once colon-joined to the same
+        // "all" scope token.
+        string unfilteredCursor = (await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1"))
+            .GetProperty("next_cursor").GetString()!;
+        string literalAllCursor = (await GetAsync($"/admin/tenants/{fixture.TenantId}/events?source_event_id=all&limit=1"))
+            .GetProperty("next_cursor").GetString()!;
+
+        await AssertBadRequestAsync(
+            $"/admin/tenants/{fixture.TenantId}/events?source_event_id=all&limit=1&after={Uri.EscapeDataString(unfilteredCursor)}");
+        await AssertBadRequestAsync(
+            $"/admin/tenants/{fixture.TenantId}/events?limit=1&after={Uri.EscapeDataString(literalAllCursor)}");
+
+        // Its own cursor still walks the source_event_id=all list correctly.
+        JsonElement literalAllSecondPage = await GetAsync(
+            $"/admin/tenants/{fixture.TenantId}/events?source_event_id=all&limit=1&after={Uri.EscapeDataString(literalAllCursor)}");
+        literalAllSecondPage.GetProperty("items").GetArrayLength().ShouldBe(1);
+
+        // A colon and an embedded newline in the filter text must not corrupt the scope's own
+        // newline-delimited framing: the filtered list still issues a cursor and that cursor decodes.
+        var (firstDelimitedId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        var (secondDelimitedId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        const string delimited = "a:b\nc";
+        foreach (Guid id in new[] { firstDelimitedId, secondDelimitedId })
+            await ExecuteAsync(
+                "UPDATE events SET source_event_id = @SourceEventId WHERE id = @Id",
+                new { Id = id, SourceEventId = delimited });
+
+        JsonElement delimitedFirstPage = await GetAsync(
+            $"/admin/tenants/{fixture.TenantId}/events?source_event_id={Uri.EscapeDataString(delimited)}&limit=1");
+        string delimitedCursor = delimitedFirstPage.GetProperty("next_cursor").GetString()!;
+        JsonElement delimitedSecondPage = await GetAsync(
+            $"/admin/tenants/{fixture.TenantId}/events?source_event_id={Uri.EscapeDataString(delimited)}&limit=1&after={Uri.EscapeDataString(delimitedCursor)}");
+        delimitedSecondPage.GetProperty("items").GetArrayLength().ShouldBe(1);
+        delimitedSecondPage.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
     private async Task AssertBadRequestAsync(string url) =>
         (await client.SendAsync(AdminRequest(HttpMethod.Get, url))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 

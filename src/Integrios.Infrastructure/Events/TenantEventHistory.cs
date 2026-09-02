@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dapper;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Ingestion;
@@ -19,15 +20,20 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
         int limit,
         CancellationToken cancellationToken)
     {
-        string cursorScope = string.Join(':',
-            "events", tenantId.ToString("N"),
-            filter.Status is { } s ? EventStatusMap.ToDbValue(s) : "all",
-            filter.DeliveryStatus ?? "all",
-            filter.SourceId?.ToString("N") ?? "all",
-            filter.TopicId?.ToString("N") ?? "all",
-            filter.SourceEventId ?? "all",
-            filter.AcceptedFrom?.UtcTicks.ToString() ?? "all",
-            filter.AcceptedTo?.UtcTicks.ToString() ?? "all");
+        // SourceEventId is Operator-supplied free text, unlike the enum and Guid filters every other
+        // capability scopes by: it could itself read "all" or carry a delimiter or a newline. JSON
+        // (present vs. the literal null, and every string escaped) keeps the scope unambiguous
+        // instead of colon-joining raw values, which could collide two different filter sets onto
+        // the same scope or break PageCursor's own newline-delimited framing.
+        string cursorScope = JsonSerializer.Serialize(new CursorScopeKey(
+            tenantId,
+            filter.Status is { } s ? EventStatusMap.ToDbValue(s) : null,
+            filter.DeliveryStatus,
+            filter.SourceId,
+            filter.TopicId,
+            filter.SourceEventId,
+            filter.AcceptedFrom,
+            filter.AcceptedTo));
         DateTimeOffset cursorAcceptedAt = default;
         Guid cursorId = default;
         bool hasCursor = afterCursor is not null;
@@ -105,6 +111,16 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
             Deliveries = new EventDeliveryCounts(row.Pending, row.InFlight, row.Succeeded, row.DeadLettered),
         }).ToList(), nextCursor);
     }
+
+    private sealed record CursorScopeKey(
+        Guid TenantId,
+        string? Status,
+        string? DeliveryStatus,
+        Guid? SourceId,
+        Guid? TopicId,
+        string? SourceEventId,
+        DateTimeOffset? AcceptedFrom,
+        DateTimeOffset? AcceptedTo);
 
     private sealed record EventListRow
     {

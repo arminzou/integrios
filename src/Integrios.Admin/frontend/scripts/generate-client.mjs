@@ -28,6 +28,11 @@ run("dotnet", ["build", adminProject, "-p:OpenApiGenerateDocumentsOnBuild=true"]
     // deployment configuration and are never written anywhere.
     Integrios__PublicIngestionBaseUri: "https://ingestion.invalid",
     ConnectionStrings__Postgres: "Host=openapi.invalid;Database=integrios;Username=none;Password=none",
+    // An Authority is what turns on the OIDC-gated /auth endpoints (see IsOidcConfigured), so the
+    // generated document and client describe them too instead of the frontend hand-maintaining a
+    // mirror of a contract the API already serves.
+    "Integrios__Admin__Oidc__Authority": "https://oidc.invalid",
+    "Integrios__Admin__Oidc__ClientId": "openapi-placeholder",
   },
 });
 

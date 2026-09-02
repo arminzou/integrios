@@ -132,6 +132,35 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
         denied.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    /// The dashboard's own sign-out is a native HTML form submission, not an XHR: the browser sets no
+    /// custom header, so the token must travel through the antiforgery form field the session
+    /// response names, using the exact `application/x-www-form-urlencoded` shape a browser sends.
+    [Fact]
+    public async Task NativeLogoutFormSubmission_UsesTheConfiguredFormField_AndSucceeds()
+    {
+        OperatorSession session = await SignInAsync(fixture.AliceHost);
+        using HttpClient client = Client(fixture.AliceHost);
+
+        using var form = new FormUrlEncodedContent(
+            [new KeyValuePair<string, string>(session.AntiforgeryFormFieldName, session.AntiforgeryToken)]);
+        using var request = new HttpRequestMessage(HttpMethod.Post, OperatorSessionEndpoints.LogoutPath)
+        {
+            Content = form,
+        };
+        request.Headers.Add(
+            "Cookie", string.Join("; ", session.Cookies.Select(pair => $"{pair.Key}={pair.Value}")));
+
+        using HttpResponseMessage logout = await client.SendAsync(request);
+        logout.StatusCode.ShouldBe(HttpStatusCode.Found);
+        logout.Headers.TryGetValues("Set-Cookie", out var cleared).ShouldBeTrue();
+        Dictionary<string, string> afterLogout = Merge(session.Cookies, cleared!);
+        afterLogout[OperatorSessionOptions.CookieName].ShouldBeEmpty();
+
+        using HttpResponseMessage denied = await SendAsync(
+            client, HttpMethod.Get, OperatorSessionEndpoints.BootstrapPath, afterLogout);
+        denied.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     [Fact]
     public async Task UnauthenticatedBrowserRequests_AreRejectedRatherThanRedirected()
     {
@@ -188,7 +217,8 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
             setCookie,
             body,
             root.GetProperty("antiforgery_token").GetString()!,
-            root.GetProperty("antiforgery_header_name").GetString()!);
+            root.GetProperty("antiforgery_header_name").GetString()!,
+            root.GetProperty("antiforgery_form_field_name").GetString()!);
     }
 
     /// The dashboard is HTTPS-only in production: the session and antiforgery cookies are both
@@ -244,5 +274,6 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
         string SetCookieHeader,
         string RawBody,
         string AntiforgeryToken,
-        string AntiforgeryHeaderName);
+        string AntiforgeryHeaderName,
+        string AntiforgeryFormFieldName);
 }

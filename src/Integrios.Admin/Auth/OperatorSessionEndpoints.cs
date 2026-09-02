@@ -19,7 +19,7 @@ public static class OperatorSessionEndpoints
     {
         app.MapGet(LoginPath, StartSignIn).WithName(nameof(StartSignIn));
         app.MapPost(LogoutPath, SignOutOperator).WithName(nameof(SignOutOperator));
-        app.MapGet(BootstrapPath, GetSession).WithName(nameof(GetSession));
+        app.MapGet(BootstrapPath, GetSession).WithName(nameof(GetSession)).Produces<OperatorSessionResponse>();
     }
 
     private static IResult StartSignIn([FromQuery(Name = "return_to")] string? returnTo) =>
@@ -56,16 +56,26 @@ public static class OperatorSessionEndpoints
             user.DisplayName,
             user.Email,
             tokens.RequestToken!,
-            tokens.HeaderName!));
+            tokens.HeaderName!,
+            tokens.FormFieldName));
     }
 
     /// Keeps the browser off a guessable absolute redirect: only a same-origin path is honoured.
+    /// A leading "//" or "/\" is rejected because browsers resolve either as network-path (protocol-
+    /// relative) references, which would send the redirect off-origin.
     private static string LocalReturnPath(string? returnTo) =>
-        !string.IsNullOrWhiteSpace(returnTo)
-        && returnTo.StartsWith('/')
-        && !returnTo.StartsWith("//", StringComparison.Ordinal)
-            ? returnTo
-            : "/";
+        IsLocalPath(returnTo) ? returnTo! : "/";
+
+    private static bool IsLocalPath(string? returnTo)
+    {
+        if (string.IsNullOrEmpty(returnTo) || returnTo[0] != '/')
+            return false;
+
+        if (returnTo.Length == 1)
+            return true;
+
+        return returnTo[1] != '/' && returnTo[1] != '\\';
+    }
 }
 
 public sealed record OperatorSessionResponse(
@@ -73,4 +83,5 @@ public sealed record OperatorSessionResponse(
     string DisplayName,
     string? Email,
     string AntiforgeryToken,
-    string AntiforgeryHeaderName);
+    string AntiforgeryHeaderName,
+    string AntiforgeryFormFieldName);

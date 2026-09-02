@@ -71,10 +71,13 @@ export function App() {
               ))}
             </ul>
           )}
+          {/* A native form submission carries no custom header, so the antiforgery token must
+              travel through the server-configured form field rather than the header name used by
+              the typed client's own requests. */}
           <form method="post" action="/auth/logout">
             <input
               type="hidden"
-              name={state.session.antiforgery_header_name}
+              name={state.session.antiforgery_form_field_name}
               value={state.session.antiforgery_token}
             />
             <button type="submit">Sign out</button>
