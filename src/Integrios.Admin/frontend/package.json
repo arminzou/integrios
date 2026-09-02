@@ -1,0 +1,26 @@
+{
+  "name": "integrios-admin-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:api": "node scripts/generate-client.mjs",
+    "dev": "vite",
+    "build": "npm run generate:api && tsc --noEmit && vite build",
+    "check": "npm run generate:api && tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.13.5",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "@types/react": "19.1.9",
+    "@types/react-dom": "19.1.7",
+    "@vitejs/plugin-react": "4.7.0",
+    "openapi-typescript": "7.9.1",
+    "typescript": "5.9.2",
+    "vite": "7.1.3"
+  }
+}

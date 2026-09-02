@@ -2,6 +2,7 @@ using Integrios.Admin;
 using Integrios.Admin.Auth;
 using Integrios.Admin.OperatorKeys;
 using Integrios.Admin.Bootstrap;
+using Integrios.Admin.Dashboard;
 using Integrios.Admin.Database;
 using Integrios.Admin.Endpoints;
 using Integrios.Admin.ErrorHandling;
@@ -73,6 +74,7 @@ var admin = app.MapGroup("/admin").RequireAuthorization(OperatorAuthentication.P
 admin.MapEndpoints(typeof(Program).Assembly);
 
 app.MapOperationalEndpoints();
+app.MapDashboard();
 
 app.Run();
 return 0;

@@ -11,7 +11,9 @@ public sealed class TenantsEndpoints : IEndpointGroup
     public void Map(RouteGroupBuilder group)
     {
         group.MapPost(CreateTenant);
-        group.MapGet(ListTenants);
+        // Declares the response schema so the generated browser client is typed against the real
+        // contract and the frontend check fails when this list changes shape.
+        group.MapGet(ListTenants).Produces<TenantListDto>();
         group.MapGet(GetTenantById, "/{id:guid}");
         group.MapPatch(UpdateTenant, "/{id:guid}");
         group.MapPost(DeactivateTenant, "/{id:guid}/deactivate");

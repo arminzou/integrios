@@ -33,3 +33,9 @@ archive
 .worktrees/
 deploy/azure/main.bicepparam
 deploy/azure/main.json
+
+# Frontend build inputs and outputs that are generated, never authored
+node_modules/
+src/Integrios.Admin/wwwroot/
+src/Integrios.Admin/frontend/src/api/schema.d.ts
+artifacts/openapi/
