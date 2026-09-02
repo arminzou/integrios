@@ -81,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<ISourceRepository, SourceRepository>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
+        services.AddSingleton<ITenantEventHistory, TenantEventHistory>();
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.AddDestinationAuthenticationServices();
         services.AddTransformEvaluationServices();

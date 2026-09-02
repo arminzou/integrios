@@ -318,7 +318,8 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .IsUnique()
                         .HasFilter("(idempotency_key IS NOT NULL)");
 
-                    b.HasIndex(new[] { "TenantId" }, "idx_events_tenant_id");
+                    b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
+                        .IsDescending(false, true, true);
 
                     b.ToTable("events", (string)null);
                 });
@@ -843,6 +844,8 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                     b.HasKey("Id")
                         .HasName("outbox_pkey");
+
+                    b.HasIndex(new[] { "EventId" }, "idx_outbox_event_id");
 
                     b.HasIndex(new[] { "DeliverAfter", "CreatedAt" }, "idx_outbox_pending")
                         .HasFilter("(processed_at IS NULL)");

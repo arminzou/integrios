@@ -33,6 +33,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingestion],
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingestion],
+        [typeof(ITenantEventHistory)] = [Host.Admin],
         [typeof(IConnectorReader)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
@@ -112,7 +113,8 @@ public sealed class HostCompositionArchitectureTests
         new Dictionary<string, Host>
         {
             ["ReplayEventDeliveryCommandHandler"] = Host.Admin,
-            ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin
+            ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin,
+            ["ListTenantEventsQueryHandler"] = Host.Admin
         };
 
     [Fact]

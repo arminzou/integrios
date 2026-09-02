@@ -18,7 +18,8 @@ public static class DependencyInjection
     private static readonly Dictionary<Type, string> CrossGroupOwners = new()
     {
         [typeof(ReplayEventDeliveryCommandHandler)] = Admin,
-        [typeof(GetEventDeliveryRecoveryQueryHandler)] = Admin
+        [typeof(GetEventDeliveryRecoveryQueryHandler)] = Admin,
+        [typeof(ListTenantEventsQueryHandler)] = Admin
     };
 
     internal static IServiceCollection AddApplicationServices(this IServiceCollection services)
