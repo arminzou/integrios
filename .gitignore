@@ -31,3 +31,5 @@ archive
 
 # Local git worktrees (see .worktrees/<slice>/)
 .worktrees/
+deploy/azure/main.bicepparam
+deploy/azure/main.json
