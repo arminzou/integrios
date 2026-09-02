@@ -32,7 +32,7 @@ an SBOM and build provenance attestation.
 The three services are separate images because each contains only its own host. Ingestion, Admin,
 and Worker compose different capabilities — Worker resolves delivery secrets and Admin never
 does — so keeping them in one image would reduce that separation to configuration. All three are
-built from a single `docker/Dockerfile`, which selects the host through a `PROJECT` build
+built from a single repo-root `Dockerfile`, which selects the host through a `PROJECT` build
 argument; the base image pins and the Npgsql GSSAPI workaround therefore exist in exactly one
 place.
 

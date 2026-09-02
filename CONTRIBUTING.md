@@ -3,10 +3,11 @@
 Thanks for your interest. Integrios is an early-stage, open-source integration platform;
 contributions, issues, and feedback are welcome.
 
-> **Maturity:** this is a preview release. The backend foundation works end to end, but
-> some capabilities (Operator-authored Connector definitions, richer generic HTTP request
-> configuration, and an Operator admin UI) are planned and not yet implemented. See the README
-> preview note for the current release boundary.
+> **Maturity:** this is a preview release. The backend foundation works end to end, including
+> Operator-authored Connector definitions (see the [GitHub-to-Slack
+> walkthrough](docs/github-to-slack-walkthrough.md) for a shipped, worked example); an Operator
+> admin UI is planned and not yet implemented — every capability is driven through the Admin and
+> Ingestion HTTP APIs today.
 
 ## Getting set up
 

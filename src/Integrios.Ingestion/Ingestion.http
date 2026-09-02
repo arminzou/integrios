@@ -3,44 +3,45 @@
 # Run Admin.http first.
 #
 # What this file verifies:
-# 1. Ingestion accepts an authenticated event write.
+# 1. Ingestion accepts an authenticated event write, addressed by Source id.
 # 2. The event is stored durably and can be fetched back by ID.
 # 3. Worker will later fan out the event to matching subscriptions and deliver it
 #    to WireMock.
 #
 # Setup:
 # - copy the token from Admin.http createTenantApiKey into src/Integrios.Ingestion/.env
+# - copy the id from Admin.http createSource into src/Integrios.Ingestion/.env
 # - for the auth-enabled destination path, provision the default file-backed Worker secret at:
 #   secrets/acme-corp/erp_api_key (exact secret value; no automatic trimming)
 @tenantApiKeyToken = {{$dotenv INGESTION_TENANT_API_KEY}}
-@sourceConnectionId = {{$dotenv INGESTION_SOURCE_CONNECTION_ID}}
+@sourceId = {{$dotenv INGESTION_SOURCE_ID}}
 
 ###
 # Step 1 - Ingest an event
-# This event targets topic `payments`. The worker will later match subscriptions
-# with `event_type = payment.created`.
+# source_id (query parameter) names the Source created in Admin.http; it resolves to one Topic
+# (payments) and one source_contract (event_json). With no mapping configured on the Source, the
+# request body below is the Source's output directly: event_type and payload are required,
+# source_event_id and metadata are optional. source_event_id becomes part of the idempotency key
+# ("{source_id}:{source_event_id}") -- there is no separate idempotency_key field.
 # @name ingest
-POST {{baseUrl}}/events
+POST {{baseUrl}}/events?source_id={{sourceId}}
 Authorization: TenantApiKey {{tenantApiKeyToken}}
 Content-Type: application/json
 
 {
-  "sourceEventId": "event_src_001",
-  "sourceConnectionId": "{{sourceConnectionId}}",
-  "topicName": "payments",
-  "eventType": "payment.created",
+  "event_type": "payment.created",
+  "source_event_id": "event_src_001",
   "payload": {
     "paymentId": "pay_001",
     "amount": 1200
   },
   "metadata": {
     "source": "manual-test"
-  },
-  "idempotencyKey": "manual-001"
+  }
 }
 
 ###
-@eventId = {{ingest.response.body.$.eventId}}
+@eventId = {{ingest.response.body.$.event_id}}
 
 ###
 # Step 2 - Fetch the accepted event
@@ -49,7 +50,7 @@ Content-Type: application/json
 GET {{baseUrl}}/events/{{eventId}}
 Authorization: TenantApiKey {{tenantApiKeyToken}}
 
-###
-# Step 3 - Replay the event if it later reaches dead-letter
-POST {{baseUrl}}/events/{{eventId}}/replay
-Authorization: TenantApiKey {{tenantApiKeyToken}}
+# Replay is an Admin operation scoped to one dead-lettered EventDelivery, not an Ingestion
+# endpoint -- there is no POST /events/{id}/replay here. It requires the OperatorKey and the
+# specific delivery id from GET /admin/tenants/{tenantId}/events/{eventId}/deliveries. See the
+# full retry/dead-letter/replay walkthrough in docs/setup.md.

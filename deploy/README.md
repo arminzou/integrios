@@ -1,7 +1,8 @@
 # Production reference deployment
 
 This is the PostgreSQL reference production Compose deployment for Integrios. It is copy-and-own:
-copy this directory into your own infrastructure repo and adapt it to your environment.
+copy this directory into your own infrastructure repo and adapt it to your environment. For an
+Azure Container Apps reference instead, see [deploy/azure](azure/README.md).
 
 The root `compose.yml` at the repository root is the local development stack. It builds images
 from source and bundles a test sink and dashboards; it is not for deployment.
@@ -143,6 +144,13 @@ see [Database backends](../docs/database-backends.md) for the queue-locking poli
 | Service | Port | Purpose |
 |---------|------|---------|
 | ingestion | 5231 | Webhook/event intake (data plane) |
+| ingestion | 5232 (loopback only) | Operational: `/health`, `/ready`, metrics |
 | admin   | 5150 | Tenant and config management (control plane) |
+| admin   | 5151 (loopback only) | Operational: `/health`, `/ready`, metrics |
+| worker  | 5299 (loopback only) | Operational: `/health`, `/ready`, metrics |
 
-The worker exposes no HTTP port.
+The worker exposes no product HTTP port — only its operational listener. Every operational port is
+bound to `127.0.0.1`, not the container's external interface; override the host-side port with
+`INTEGRIOS_INGESTION_OPERATIONAL_PORT`, `INTEGRIOS_ADMIN_OPERATIONAL_PORT`, or
+`INTEGRIOS_WORKER_METRICS_PORT` in `.env`. See [Observability](../docs/observability.md) for what
+each operational endpoint returns.

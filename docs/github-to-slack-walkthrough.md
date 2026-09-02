@@ -43,6 +43,9 @@ against it references below.
 
 ```bash
 ADMIN=http://localhost:5150
+# GitHub must be able to reach this origin -- see Prerequisites (a tunnel such as ngrok, or a
+# real production deployment). It is not the same as ADMIN above.
+INGESTION=http://localhost:5231
 AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
 
 GITHUB_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/github/versions/1" -H "$AUTH" \
@@ -91,24 +94,34 @@ printf '%s' "$GITHUB_SECRET" > ./secrets/source/acme/github_webhook_secret
 convention and the `configuration` provider alternative; source-verification secrets follow the
 exact same shape under `secrets/source/` instead of `secrets/destination/`.)
 
-## 4. Create a Topic and get the callback URL
+## 4. Create a Topic, a webhook Source, and the callback URL
 
-Creating the Topic with this Connection as a source mints a stable source endpoint, because the
-GitHub Connector's manifest declares a `source_contracts` entry. Removing and re-adding the association
-later would mint a new endpoint identity; this one is stable for as long as the association exists.
+A Topic on its own accepts nothing; a **Source** is the resource that binds one Connection to one
+Topic and authorizes it to publish there. Creating a `webhook` Source against the GitHub Connection
+mints a stable `callback_id` — the sole routing coordinate GitHub's requests carry, per
+[architecture.md](architecture.md#source-model) — because the GitHub Connector's manifest declares
+the `verified_webhook` source contract. Revoking and re-creating the Source later mints a new
+`callback_id`; this one is stable for as long as the Source exists.
 
 ```bash
 TOPIC=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics" -H "$AUTH" \
   -H 'Content-Type: application/json' \
-  -d "{\"name\":\"github-events\",\"source_connection_ids\":[\"$GITHUB_CONN\"]}" | jq -r .id)
+  -d '{"name":"github-events"}' | jq -r .id)
 
-CALLBACK_URL=$(curl -s "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC" -H "$AUTH" \
-  | jq -r '.sources[0].endpoint.callback_url')
+CALLBACK_ID=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources" -H "$AUTH" \
+  -H 'Content-Type: application/json' \
+  -d "{\"connection_id\":\"$GITHUB_CONN\",\"topic_id\":\"$TOPIC\",\"type\":\"webhook\",
+       \"configuration\":{\"source_contract\":\"verified_webhook\"}}" \
+  | jq -r '.configuration.callback_id')
+
+CALLBACK_URL="$INGESTION/webhooks/$CALLBACK_ID"
 echo "$CALLBACK_URL"
 ```
 
-`callback_url` is derived from the deployment's configured `Integrios__PublicIngestionBaseUri`; see
-[Prerequisites](#prerequisites) if this doesn't already point at a GitHub-reachable HTTPS origin.
+There is no endpoint that renders the full callback URL for you — build it yourself from `$INGESTION`
+(the same GitHub-reachable HTTPS origin from [Prerequisites](#prerequisites)) and the returned
+`callback_id`. Set `INGESTION=<your public HTTPS origin>` alongside `$ADMIN` at the top of this
+walkthrough if you haven't already.
 
 ## 5. Configure the GitHub webhook (manual, external)
 
@@ -190,11 +203,11 @@ acceptance log line:
 
 ```bash
 EVENT=$(docker compose logs ingestion --no-color | grep -oE 'Accepted webhook event [0-9a-f-]+' | tail -1 | awk '{print $NF}')
-curl -s "http://localhost:5231/events/$EVENT" -H "Authorization: TenantApiKey $TOKEN" | jq
+curl -s "$INGESTION/events/$EVENT" -H "Authorization: TenantApiKey $TOKEN" | jq
 ```
 
 A `delivery_attempts[].status` of `succeeded` with `response_status_code: 200` means Slack accepted
-and confirmed the message logically (`ok: true`); a `dead_lettered` SubscriptionDelivery despite an
+and confirmed the message logically (`ok: true`); a `dead_lettered` EventDelivery despite an
 HTTP 200 attempt means Slack returned `ok: false`, which the `json_boolean` success rule in
 `slack.json` classifies as a terminal delivery failure rather than a false success.
 

@@ -20,7 +20,7 @@ and reliable HTTP delivery with retries, dead-lettering, replay, and auditable d
 
 ## Architecture
 
-Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, connections, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingestion` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
+Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, connections, topics, sources, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingestion` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
 
 A **Connector** is a reusable, deployment-wide declarative HTTP contract. A **Connection** is a
 Tenant-owned configured instance of one Connector, so the same Connector can serve many Tenants
@@ -38,7 +38,7 @@ Prerequisite: Docker.
 make up
 ```
 
-This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingestion on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md).
+This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingestion on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md) (Docker Compose) or [deploy/azure](deploy/azure/README.md) (Azure Container Apps).
 
 ## Documentation
 

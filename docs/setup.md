@@ -74,22 +74,30 @@ SRC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Co
 DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-erp\",\"config\":{\"base_uri\":\"http://mocksink:8080/sink/acme-erp\"},\"environment\":\"production\"}" | jq -r .id)
 
-# 5. Create a topic fed by the source connection
+# 5. Create a topic
 TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"payments\",\"source_connection_ids\":[\"$SRC\"]}" | jq -r .id)
+  -d '{"name":"payments"}' | jq -r .id)
 
-# 6. Subscribe the destination to payment.created events
+# 6. Create an event_api Source binding the source Connection to the Topic. source_contract
+# selects one of the Connector's declared source_contracts; the http Connector declares event_json,
+# which (with no mapping configured) treats the caller's raw request body as the Source output.
+SOURCE=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources -H "$AUTH" -H 'Content-Type: application/json' \
+  -d "{\"connection_id\":\"$SRC\",\"topic_id\":\"$TOPIC\",\"type\":\"event_api\",\"configuration\":{\"source_contract\":\"event_json\"}}" | jq -r .id)
+
+# 7. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"name\":\"acme-erp-sub\",\"match_rules\":{\"event_type\":\"payment.created\"},\"destination_connection_id\":\"$DST\",\"order_index\":0}" > /dev/null
 
-# 7. Send an event to the data plane
-EVENT=$(curl -s -X POST $INGESTION/events -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"source_connection_id\":\"$SRC\",\"topic_name\":\"payments\",\"event_type\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_001\",\"amount\":1200},\"idempotency_key\":\"demo-001\"}" | jq -r .event_id)
+# 8. Send an event to the data plane. source_id (query parameter) names the Source; the body is the
+# Source's event_json contract output directly -- event_type and payload are required,
+# source_event_id is optional and becomes part of the idempotency key ("$SOURCE:$source_event_id").
+EVENT=$(curl -s -X POST "$INGESTION/events?source_id=$SOURCE" -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"event_type":"payment.created","source_event_id":"demo-001","payload":{"paymentId":"pay_001","amount":1200}}' | jq -r .event_id)
 
-# 8. Check it was accepted and fanned out to the subscription
+# 9. Check it was accepted and fanned out to the subscription
 curl -s $INGESTION/events/$EVENT -H "Authorization: TenantApiKey $TOKEN" | jq
 
-# 9. See it delivered in WireMock's request journal
+# 10. See it delivered in WireMock's request journal
 curl -s -X POST http://localhost:5054/__admin/requests/find \
   -H 'Content-Type: application/json' \
   -d '{"method":"POST","urlPath":"/sink/acme-erp"}' | jq
@@ -104,9 +112,10 @@ because the `http` Connector's source side is empty by contract (see
 Operator-authored Connectors such as the ones in the [GitHub-to-Slack
 walkthrough](github-to-slack-walkthrough.md)).
 
-Topic update requests must include the Topic's current `name`. The name is its immutable,
-Tenant-scoped stream identifier; changing it requires creating a new Topic. Updates may change the
-description and, when supplied, replace `source_connection_ids`.
+A Topic's `name` is its immutable, Tenant-scoped stream identifier; changing it requires creating a
+new Topic. Topic updates may change only the `description`. A Source binds one Connection to one
+Topic and carries its own `configuration` (the selected `source_contract` and, for a Webhook Source,
+its generated `callback_id`); update a Source to change its `configuration`, not the Topic.
 
 The last command should show the delivery request, including its body and headers.
 
@@ -126,14 +135,14 @@ curl -s -X DELETE http://localhost:5054/__admin/requests > /dev/null
 curl -s -X POST http://localhost:5054/__admin/mappings -H 'Content-Type: application/json' \
   -d "{\"id\":\"$CONTROL_ID\",\"priority\":1,\"request\":{\"method\":\"POST\",\"urlPath\":\"/sink/acme-erp\"},\"response\":{\"status\":500}}"
 
-FAIL_EVENT=$(curl -s -X POST $INGESTION/events \
+FAIL_EVENT=$(curl -s -X POST "$INGESTION/events?source_id=$SOURCE" \
   -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"source_connection_id\":\"$SRC\",\"topic_name\":\"payments\",\"event_type\":\"payment.created\",\"payload\":{\"paymentId\":\"pay_failure\",\"amount\":1200},\"idempotency_key\":\"demo-failure-$(date +%s)\"}" \
+  -d "{\"event_type\":\"payment.created\",\"source_event_id\":\"demo-failure-$(date +%s)\",\"payload\":{\"paymentId\":\"pay_failure\",\"amount\":1200}}" \
   | jq -r .event_id)
 ```
 
 Wait until all three attempts have failed. The third failed attempt exhausts the retry budget and
-dead-letters this SubscriptionDelivery:
+dead-letters this EventDelivery:
 
 ```bash
 until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
@@ -145,14 +154,14 @@ curl -s $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
   | jq '.delivery_attempts'
 ```
 
-Reset the sink, discard the failed-request receipts, and replay the dead-lettered SubscriptionDelivery.
+Reset the sink, discard the failed-request receipts, and replay the dead-lettered EventDelivery.
 Recovery is an Operator action through Admin, so it requires the OperatorKey and targets one delivery:
 
 ```bash
 curl -s -X DELETE http://localhost:5054/__admin/mappings/$CONTROL_ID
 curl -s -X DELETE http://localhost:5054/__admin/requests > /dev/null
 FAIL_DELIVERY=$(curl -s $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries -H "$AUTH" \
-  | jq -r '.subscription_deliveries[] | select(.status == "dead_lettered") | .subscription_delivery_id')
+  | jq -r '.event_deliveries[] | select(.status == "dead_lettered") | .event_delivery_id')
 curl -i -s -X POST $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries/$FAIL_DELIVERY/replay -H "$AUTH"
 
 until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
