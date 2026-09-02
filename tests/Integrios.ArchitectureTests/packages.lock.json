@@ -124,6 +124,14 @@
         "resolved": "2.0.1",
         "contentHash": "FYv95bNT4UwcNA+G/J1oX5OpRiSUxteXaUt2BJbRSdRNiIUNbggJF69wy6mnk2wYToaanpdXZdCwVylt96MpwQ=="
       },
+      "Microsoft.AspNetCore.Authentication.OpenIdConnect": {
+        "type": "Transitive",
+        "resolved": "10.0.5",
+        "contentHash": "MPODD1XR3wu+QbVBpId+uO7yGfhSr1ZIdiPrqzbApHlVUdi2Va29elIKYaROaZd5ksvYWtPnurvHPzTrzg1UnQ==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "8.0.1"
+        }
+      },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "Transitive",
         "resolved": "10.0.5",
@@ -266,10 +274,10 @@
       },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "Transitive",
-        "resolved": "10.0.5",
-        "contentHash": "v1SVsowG6YE1YnHVGmLWz57YTRCQRx9pH5ebIESXfm5isI9gA3QaMyg/oMTzPpXYZwSAVDzYItGJKfmV+pqXkQ==",
+        "resolved": "10.0.4",
+        "contentHash": "NkvJ8aSr3AG30yabjv7ZWwTG/wq5OElNTlNq39Ok2HSEF3TIwAc1f1xnTJlR/GuoJmEgkfT7WBO9YbSXRk41+g==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.5"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.4"
         }
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
@@ -316,27 +324,14 @@
           "Microsoft.Extensions.Logging.Abstractions": "10.0.9"
         }
       },
-      "Microsoft.Extensions.Http": {
-        "type": "Transitive",
-        "resolved": "10.0.5",
-        "contentHash": "AiFvHYM8nP0wPC7bGPI3NHQlSYSLqjjT7DMJUuuxhd+7pz3O89iu2gdQfgACy5DxsXENiok5i1bMacJL7KR8jA==",
-        "dependencies": {
-          "Microsoft.Extensions.Configuration.Abstractions": "10.0.5",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.5",
-          "Microsoft.Extensions.Diagnostics": "10.0.5",
-          "Microsoft.Extensions.Logging": "10.0.5",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.5",
-          "Microsoft.Extensions.Options": "10.0.5"
-        }
-      },
       "Microsoft.Extensions.Logging": {
         "type": "Transitive",
-        "resolved": "10.0.5",
-        "contentHash": "+XTMKQyDWg4ODoNHU/BN3BaI1jhGO7VCS+BnzT/4IauiG6y2iPAte7MyD7rHKS+hNP0TkFkjrae8DFjDUxtcxg==",
+        "resolved": "10.0.4",
+        "contentHash": "S8+6fCuMOhJZGk8sGFtOy3VsF9mk9x4UOL59GM91REiA/fmCDjunKKIw4RmStG87qyXPfxelDJf2pXIbTuaBdw==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection": "10.0.5",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.5",
-          "Microsoft.Extensions.Options": "10.0.5"
+          "Microsoft.Extensions.DependencyInjection": "10.0.4",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.4",
+          "Microsoft.Extensions.Options": "10.0.4"
         }
       },
       "Microsoft.Extensions.Logging.Abstractions": {
@@ -412,43 +407,43 @@
       },
       "Microsoft.IdentityModel.JsonWebTokens": {
         "type": "Transitive",
-        "resolved": "7.7.1",
-        "contentHash": "3Izi75UCUssvo8LPx3OVnEeZay58qaFicrtSnbtUt7q8qQi0gy46gh4V8VUTkMVMKXV6VMyjBVmeNNgeCUJuIw==",
+        "resolved": "8.0.1",
+        "contentHash": "s6++gF9x0rQApQzOBbSyp4jUaAlwm+DroKfL8gdOHxs83k8SJfUXhuc46rDB3rNXBQ1MVRxqKUrqFhO/M0E97g==",
         "dependencies": {
-          "Microsoft.IdentityModel.Tokens": "7.7.1"
+          "Microsoft.IdentityModel.Tokens": "8.0.1"
         }
       },
       "Microsoft.IdentityModel.Logging": {
         "type": "Transitive",
-        "resolved": "7.7.1",
-        "contentHash": "BZNgSq/o8gsKExdYoBKPR65fdsxW0cTF8PsdqB8y011AGUJJW300S/ZIsEUD0+sOmGc003Gwv3FYbjrVjvsLNQ==",
+        "resolved": "8.0.1",
+        "contentHash": "UCPF2exZqBXe7v/6sGNiM6zCQOUXXQ9+v5VTb9gPB8ZSUPnX53BxlN78v2jsbIvK9Dq4GovQxo23x8JgWvm/Qg==",
         "dependencies": {
-          "Microsoft.IdentityModel.Abstractions": "7.7.1"
+          "Microsoft.IdentityModel.Abstractions": "8.0.1"
         }
       },
       "Microsoft.IdentityModel.Protocols": {
         "type": "Transitive",
-        "resolved": "7.7.1",
-        "contentHash": "h+fHHBGokepmCX+QZXJk4Ij8OApCb2n2ktoDkNX5CXteXsOxTHMNgjPGpAwdJMFvAL7TtGarUnk3o97NmBq2QQ==",
+        "resolved": "8.0.1",
+        "contentHash": "uA2vpKqU3I2mBBEaeJAWPTjT9v1TZrGWKdgK6G5qJd03CLx83kdiqO9cmiK8/n1erkHzFBwU/RphP83aAe3i3g==",
         "dependencies": {
-          "Microsoft.IdentityModel.Tokens": "7.7.1"
+          "Microsoft.IdentityModel.Tokens": "8.0.1"
         }
       },
       "Microsoft.IdentityModel.Protocols.OpenIdConnect": {
         "type": "Transitive",
-        "resolved": "7.7.1",
-        "contentHash": "yT2Hdj8LpPbcT9C9KlLVxXl09C8zjFaVSaApdOwuecMuoV4s6Sof/mnTDz/+F/lILPIBvrWugR9CC7iRVZgbfQ==",
+        "resolved": "8.0.1",
+        "contentHash": "AQDbfpL+yzuuGhO/mQhKNsp44pm5Jv8/BI4KiFXR7beVGZoSH35zMV3PrmcfvSTsyI6qrcR898NzUauD6SRigg==",
         "dependencies": {
-          "Microsoft.IdentityModel.Protocols": "7.7.1",
-          "System.IdentityModel.Tokens.Jwt": "7.7.1"
+          "Microsoft.IdentityModel.Protocols": "8.0.1",
+          "System.IdentityModel.Tokens.Jwt": "8.0.1"
         }
       },
       "Microsoft.IdentityModel.Tokens": {
         "type": "Transitive",
-        "resolved": "7.7.1",
-        "contentHash": "fQ0VVCba75lknUHGldi3iTKAYUQqbzp1Un8+d9cm9nON0Gs8NAkXddNg8iaUB0qi/ybtAmNWizTR4avdkCJ9pQ==",
+        "resolved": "8.0.1",
+        "contentHash": "kDimB6Dkd3nkW2oZPDkMkVHfQt3IDqO5gL0oa8WVy3OP4uE8Ij+8TXnqg9TOd9ufjsY3IDiGz7pCUbnfL18tjg==",
         "dependencies": {
-          "Microsoft.IdentityModel.Logging": "7.7.1"
+          "Microsoft.IdentityModel.Logging": "8.0.1"
         }
       },
       "Microsoft.OpenApi": {
@@ -624,11 +619,11 @@
       },
       "System.IdentityModel.Tokens.Jwt": {
         "type": "Transitive",
-        "resolved": "7.7.1",
-        "contentHash": "rQkO1YbAjLwnDJSMpRhRtrc6XwIcEOcUvoEcge+evurpzSZM3UNK+MZfD3sKyTlYsvknZ6eJjSBfnmXqwOsT9Q==",
+        "resolved": "8.0.1",
+        "contentHash": "GJw3bYkWpOgvN3tJo5X4lYUeIFA2HD293FPUhKmp7qxS+g5ywAb34Dnd3cDAFLkcMohy5XTpoaZ4uAHuw0uSPQ==",
         "dependencies": {
-          "Microsoft.IdentityModel.JsonWebTokens": "7.7.1",
-          "Microsoft.IdentityModel.Tokens": "7.7.1"
+          "Microsoft.IdentityModel.JsonWebTokens": "8.0.1",
+          "Microsoft.IdentityModel.Tokens": "8.0.1"
         }
       },
       "System.Management": {
@@ -697,11 +692,12 @@
       "integrios.admin": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[1.0.0, )",
-          "Integrios.Domain": "[1.0.0, )",
-          "Integrios.Infrastructure": "[1.0.0, )",
-          "Integrios.Migrations.Postgres": "[1.0.0, )",
-          "Integrios.Migrations.SqlServer": "[1.0.0, )",
+          "Integrios.Application": "[0.4.1, )",
+          "Integrios.Domain": "[0.4.1, )",
+          "Integrios.Infrastructure": "[0.4.1, )",
+          "Integrios.Migrations.Postgres": "[0.4.1, )",
+          "Integrios.Migrations.SqlServer": "[0.4.1, )",
+          "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.5, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.5, )",
           "Microsoft.OpenApi": "[2.7.5, )"
         }
@@ -709,7 +705,7 @@
       "integrios.application": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Domain": "[1.0.0, )",
+          "Integrios.Domain": "[0.4.1, )",
           "MediatR": "[12.5.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.5, )",
           "Microsoft.Extensions.Diagnostics": "[10.0.5, )",
@@ -725,12 +721,10 @@
           "Azure.Identity": "[1.21.0, )",
           "Azure.Messaging.ServiceBus": "[7.20.2, )",
           "Dapper": "[2.1.72, )",
-          "Integrios.Application": "[1.0.0, )",
-          "Integrios.Domain": "[1.0.0, )",
+          "Integrios.Application": "[0.4.1, )",
+          "Integrios.Domain": "[0.4.1, )",
           "Jsonata.Net.Native": "[3.0.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.4, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.9, )",
-          "Microsoft.Extensions.Http": "[10.0.5, )",
           "Npgsql": "[10.0.2, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.1, )",
           "Npgsql.OpenTelemetry": "[10.0.2, )",
@@ -746,9 +740,9 @@
       "integrios.ingestion": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[1.0.0, )",
-          "Integrios.Domain": "[1.0.0, )",
-          "Integrios.Infrastructure": "[1.0.0, )",
+          "Integrios.Application": "[0.4.1, )",
+          "Integrios.Domain": "[0.4.1, )",
+          "Integrios.Infrastructure": "[0.4.1, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.5, )",
           "Microsoft.OpenApi": "[2.7.5, )"
         }
@@ -756,23 +750,23 @@
       "integrios.migrations.postgres": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[1.0.0, )",
+          "Integrios.Infrastructure": "[0.4.1, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.1, )"
         }
       },
       "integrios.migrations.sqlserver": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[1.0.0, )",
+          "Integrios.Infrastructure": "[0.4.1, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.4, )"
         }
       },
       "integrios.worker": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[1.0.0, )",
-          "Integrios.Domain": "[1.0.0, )",
-          "Integrios.Infrastructure": "[1.0.0, )"
+          "Integrios.Application": "[0.4.1, )",
+          "Integrios.Domain": "[0.4.1, )",
+          "Integrios.Infrastructure": "[0.4.1, )"
         }
       }
     }
