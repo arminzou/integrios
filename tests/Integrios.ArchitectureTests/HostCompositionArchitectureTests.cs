@@ -3,6 +3,7 @@ using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Delivery;
 using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Secrets;
@@ -34,6 +35,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IEventAcceptance)] = [Host.Ingestion],
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingestion],
         [typeof(ITenantEventHistory)] = [Host.Admin],
+        [typeof(IOperatorIdentityStore)] = [Host.Admin],
         [typeof(IConnectorReader)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
@@ -103,6 +105,7 @@ public sealed class HostCompositionArchitectureTests
     {
         ["Integrios.Application.Authoring"] = Host.Admin,
         ["Integrios.Application.Bootstrap"] = Host.Admin,
+        ["Integrios.Application.Identity"] = Host.Admin,
         ["Integrios.Application.Ingestion"] = Host.Ingestion,
         ["Integrios.Application.Delivery"] = Host.Worker
     };

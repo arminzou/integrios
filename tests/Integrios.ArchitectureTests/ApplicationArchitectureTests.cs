@@ -12,6 +12,7 @@ public sealed class ApplicationArchitectureTests
     private static readonly string[] ApprovedPortGroups =
     [
         "Integrios.Application.Authoring",
+        "Integrios.Application.Identity",
         "Integrios.Application.Ingestion",
         "Integrios.Application.Delivery",
         "Integrios.Application.Secrets",

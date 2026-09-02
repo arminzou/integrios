@@ -10,7 +10,6 @@ using Integrios.Application;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
-using Microsoft.AspNetCore.Authentication;
 using System.Text.Json;
 
 if (args is ["bootstrap", ..])
@@ -41,9 +40,15 @@ builder.Services.AddAdminApplicationServices();
 builder.Services.AddAdminInfrastructureServices(builder.Configuration);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-admin");
 
-builder.Services.AddAuthentication(OperatorKeyAuthHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, OperatorKeyAuthHandler>(OperatorKeyAuthHandler.SchemeName, _ => { });
-builder.Services.AddAuthorization();
+builder.Services.AddOperatorAuthentication(builder.Configuration);
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-Integrios-Antiforgery";
+    options.Cookie.Name = "integrios_antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+});
 
 var app = builder.Build();
 
@@ -58,9 +63,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseMiddleware<OperatorAntiforgeryMiddleware>();
 app.UseAuthorization();
 
-var admin = app.MapGroup("/admin").RequireAuthorization();
+if (OperatorAuthentication.IsOidcConfigured(builder.Configuration))
+    app.MapOperatorSessionEndpoints();
+
+var admin = app.MapGroup("/admin").RequireAuthorization(OperatorAuthentication.PolicyName);
 admin.MapEndpoints(typeof(Program).Assembly);
 
 app.MapOperationalEndpoints();

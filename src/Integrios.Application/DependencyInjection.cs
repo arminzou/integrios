@@ -26,7 +26,7 @@ public static class DependencyInjection
         => AddApplicationServices(services, static _ => true);
 
     public static IServiceCollection AddAdminApplicationServices(this IServiceCollection services)
-        => AddApplicationServices(services, OwnedBy(Admin, "Authoring", "Bootstrap"));
+        => AddApplicationServices(services, OwnedBy(Admin, "Authoring", "Bootstrap", "Identity"));
 
     public static IServiceCollection AddIngestionApplicationServices(this IServiceCollection services)
         => AddApplicationServices(services, OwnedBy(Ingestion, "Ingestion"));

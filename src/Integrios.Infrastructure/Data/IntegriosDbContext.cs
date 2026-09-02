@@ -22,6 +22,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
     public DbSet<EventDelivery> EventDeliveries => Set<EventDelivery>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Topic> Topics => Set<Topic>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<OperatorIdentity> OperatorIdentities => Set<OperatorIdentity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -226,6 +228,21 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+        });
+
+        modelBuilder.Entity<OperatorIdentity>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+            // An OpenID Connect issuer and subject are case-sensitive, and this pair is the identity.
+            // Under the server's default collation two subjects differing only in case would collide
+            // on the unique index and resolve to one another's User.
+            entity.Property(e => e.Issuer).UseCollation("Latin1_General_BIN2");
+            entity.Property(e => e.Subject).UseCollation("Latin1_General_BIN2");
         });
 
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))

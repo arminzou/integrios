@@ -433,6 +433,41 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.OperatorIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("issuer");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("subject");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("operator_identities_pkey");
+
+                    b.HasIndex(new[] { "Issuer", "Subject" }, "uq_operator_identities_issuer_subject")
+                        .IsUnique();
+
+                    b.ToTable("operator_identities", (string)null);
+                });
+
             modelBuilder.Entity("Integrios.Domain.Entities.OperatorKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -802,6 +837,37 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.ToTable("topics", (string)null);
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text")
+                        .HasColumnName("email");
+
+                    b.Property<DateTimeOffset?>("LastSignedInAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_signed_in_at");
+
+                    b.HasKey("Id")
+                        .HasName("users_pkey");
+
+                    b.ToTable("users", (string)null);
+                });
+
             modelBuilder.Entity("Integrios.Infrastructure.Outbox.OutboxEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -925,6 +991,16 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasForeignKey("Id", "ActiveAttemptId")
                         .HasPrincipalKey("EventDeliveryId", "Id")
                         .HasConstraintName("fk_event_deliveries_active_attempt");
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.OperatorIdentity", b =>
+                {
+                    b.HasOne("Integrios.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("operator_identities_user_id_fkey");
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Source", b =>
