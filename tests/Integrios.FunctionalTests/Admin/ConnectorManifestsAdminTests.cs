@@ -95,11 +95,11 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         list.Items.ShouldContain(item =>
             item.Id == created.Id &&
             item.ContractVersion == 1 &&
-            item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Disabled API");
+            item.Name == "Disabled API");
         list.Items.ShouldContain(item =>
             item.Id == createdV2.Id &&
             item.ContractVersion == 2 &&
-            item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Example API v2");
+            item.Name == "Example API v2");
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Authoring.Subscriptions;
@@ -23,6 +24,7 @@ public interface ISubscriptionRepository
     Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(
         Guid tenantId,
         Guid topicId,
+        OperationalStatus? status,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken);

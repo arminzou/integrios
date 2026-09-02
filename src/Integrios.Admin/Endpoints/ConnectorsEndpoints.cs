@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Domain.Enums;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -22,12 +23,13 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
 
     private static async Task<IResult> ListConnectors(
         IMediator mediator,
+        string? direction,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        ConnectorListDto response = await mediator.Send(new ListConnectorsQuery(after, limit), cancellationToken);
+        ConnectorListDto response = await mediator.Send(new ListConnectorsQuery(ListFilter.ParseEnum<ConnectorDirection>(direction, "Connector direction must be source, destination, or both."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 

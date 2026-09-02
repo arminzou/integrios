@@ -1,15 +1,17 @@
 using System.Text.Json;
-using Integrios.Application.Common.Pagination;
+using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Authoring.Subscriptions;
+using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.Infrastructure.Subscriptions;
 
-internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubscriptionRepository
+internal sealed class SubscriptionRepository(IntegriosDbContext context, IDataProtectionProvider dataProtectionProvider) : ISubscriptionRepository
 {
     public async Task<Subscription?> CreateAsync(
         Guid tenantId,
@@ -74,27 +76,32 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
     public async Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(
         Guid tenantId,
         Guid topicId,
+        OperationalStatus? status,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
-        bool hasCursor = afterCursor is not null
-            && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
+        string cursorScope = $"subscriptions:{tenantId:N}:{topicId:N}:{status?.ToString() ?? "all"}";
+        bool hasCursor = afterCursor is not null;
+        if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
+            throw new InvalidCursorException();
 
         IQueryable<Subscription> query = context.Subscriptions.AsNoTracking().Where(subscription =>
             subscription.TenantId == tenantId && subscription.TopicId == topicId);
+        if (status is not null)
+            query = query.Where(subscription => subscription.Status == status);
         if (hasCursor)
         {
             query = query.Where(subscription =>
-                subscription.CreatedAt > cursorCreatedAt
-                || (subscription.CreatedAt == cursorCreatedAt && subscription.Id.CompareTo(cursorId) > 0));
+                subscription.CreatedAt < cursorCreatedAt
+                || (subscription.CreatedAt == cursorCreatedAt && subscription.Id.CompareTo(cursorId) < 0));
         }
 
         List<Subscription> items = await query
-            .OrderBy(subscription => subscription.CreatedAt)
-            .ThenBy(subscription => subscription.Id)
+            .OrderByDescending(subscription => subscription.CreatedAt)
+            .ThenByDescending(subscription => subscription.Id)
             .Take(limit + 1)
             .ToListAsync(cancellationToken);
 
@@ -102,7 +109,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         if (items.Count > limit)
         {
             items.RemoveAt(items.Count - 1);
-            nextCursor = PageCursor.Encode(items[^1].CreatedAt, items[^1].Id);
+            nextCursor = PageCursor.Encode(dataProtectionProvider, cursorScope, items[^1].CreatedAt, items[^1].Id, DateTimeOffset.UtcNow);
         }
 
         return (items, nextCursor);

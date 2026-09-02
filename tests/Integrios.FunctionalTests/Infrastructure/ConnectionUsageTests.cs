@@ -8,6 +8,7 @@ using Integrios.Infrastructure.OperatorKeys;
 using Integrios.Infrastructure.Connections;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.FunctionalTests.Infrastructure;
 
@@ -62,7 +63,7 @@ public sealed class ConnectionUsageTests(PostgresApiFixture fixture)
             UpdatedAt = DateTimeOffset.UtcNow,
         });
         await context.SaveChangesAsync();
-        var repository = new ConnectionRepository(context);
+        var repository = new ConnectionRepository(context, new EphemeralDataProtectionProvider());
 
         ConnectionUsage whileAssociated = await repository.GetUsageAsync(
             fixture.TenantAId, connectionId, CancellationToken.None);

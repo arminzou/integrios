@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Common.Pagination;
 using Integrios.Application.Authoring.Connections;
+using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
@@ -9,10 +9,11 @@ using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Npgsql;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.Infrastructure.Connections;
 
-internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnectionRepository
+internal sealed class ConnectionRepository(IntegriosDbContext context, IDataProtectionProvider dataProtectionProvider) : IConnectionRepository
 {
     public async Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken)
     {
@@ -70,27 +71,32 @@ internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnec
 
     public async Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(
         Guid tenantId,
+        OperationalStatus? status,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
-        bool hasCursor = afterCursor is not null
-            && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
+        string cursorScope = $"connections:{tenantId:N}:{status?.ToString() ?? "all"}";
+        bool hasCursor = afterCursor is not null;
+        if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
+            throw new InvalidCursorException();
 
         IQueryable<Connection> query = context.Connections.AsNoTracking()
             .Where(connection => connection.TenantId == tenantId);
+        if (status is not null)
+            query = query.Where(connection => connection.Status == status);
         if (hasCursor)
         {
             query = query.Where(connection =>
-                connection.CreatedAt > cursorCreatedAt
-                || (connection.CreatedAt == cursorCreatedAt && connection.Id.CompareTo(cursorId) > 0));
+                connection.CreatedAt < cursorCreatedAt
+                || (connection.CreatedAt == cursorCreatedAt && connection.Id.CompareTo(cursorId) < 0));
         }
 
         List<Connection> items = await query
-            .OrderBy(connection => connection.CreatedAt)
-            .ThenBy(connection => connection.Id)
+            .OrderByDescending(connection => connection.CreatedAt)
+            .ThenByDescending(connection => connection.Id)
             .Take(limit + 1)
             .ToListAsync(cancellationToken);
 
@@ -98,7 +104,7 @@ internal sealed class ConnectionRepository(IntegriosDbContext context) : IConnec
         if (items.Count > limit)
         {
             items.RemoveAt(items.Count - 1);
-            nextCursor = PageCursor.Encode(items[^1].CreatedAt, items[^1].Id);
+            nextCursor = PageCursor.Encode(dataProtectionProvider, cursorScope, items[^1].CreatedAt, items[^1].Id, DateTimeOffset.UtcNow);
         }
 
         return (items, nextCursor);

@@ -1,3 +1,4 @@
+using Integrios.Application.Common.Exceptions;
 using System.Text.Json;
 using Integrios.Application.Authoring.Sources;
 using Integrios.Domain.Enums;
@@ -31,9 +32,17 @@ public sealed class SourcesEndpoints : IEndpointGroup
         return Results.Created($"/admin/tenants/{tenantId}/sources/{source.Id}", source);
     }
 
-    private static async Task<IResult> ListSources(Guid tenantId, IMediator mediator, string? after, int limit = 0, CancellationToken cancellationToken = default)
+    private static async Task<IResult> ListSources(Guid tenantId, IMediator mediator, string? status, string? type, string? after, int limit = 0, CancellationToken cancellationToken = default)
     {
-        SourceListDto sources = await mediator.Send(new ListSourcesQuery(tenantId, after, Math.Clamp(limit == 0 ? 20 : limit, 1, 100)), cancellationToken);
+        SourceType? sourceType = type switch
+        {
+            null or "" => null,
+            "event_api" => SourceType.EventApi,
+            "webhook" => SourceType.Webhook,
+            "queue" => SourceType.Queue,
+            _ => throw new InvalidListFilterException("Source type must be event_api, webhook, or queue."),
+        };
+        SourceListDto sources = await mediator.Send(new ListSourcesQuery(tenantId, ListFilter.ParseEnum<SourceStatus>(status, "Source status must be active or revoked."), sourceType, after, Math.Clamp(limit == 0 ? 20 : limit, 1, 100)), cancellationToken);
         return Results.Ok(sources);
     }
 

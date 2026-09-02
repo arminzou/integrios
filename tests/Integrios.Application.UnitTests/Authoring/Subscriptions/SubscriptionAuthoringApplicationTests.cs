@@ -198,7 +198,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Topic> CreateAsync(Guid tenantId, string name, string? description, CancellationToken ct = default) =>
             Task.FromResult(topic);
 
-        public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct = default) =>
+        public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, OperationalStatus? status, string? afterCursor, int limit, CancellationToken ct = default) =>
             Task.FromResult<(IReadOnlyList<Topic>, string?)>(([topic], null));
 
         public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? name, string? description, CancellationToken ct = default) =>
@@ -217,7 +217,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Connection> CreateAsync(Connection value, CancellationToken cancellationToken = default) =>
             Task.FromResult(value);
 
-        public Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
+        public Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, OperationalStatus? status, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
             Task.FromResult<(IReadOnlyList<Connection>, string?)>(([connection], null));
 
         public Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
@@ -235,7 +235,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Connector?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Connector?>(connector);
 
-        public Task<(IReadOnlyList<Connector> Items, string? NextCursor)> ListAsync(string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
+        public Task<(IReadOnlyList<Connector> Items, string? NextCursor)> ListAsync(ConnectorDirection? direction, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
             Task.FromResult<(IReadOnlyList<Connector>, string?)>(([connector], null));
     }
 
@@ -262,7 +262,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Subscription?> GetByIdAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
-        public Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(Guid tenantId, Guid topicId, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
+        public Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(Guid tenantId, Guid topicId, OperationalStatus? status, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
             Task.FromResult<(IReadOnlyList<Subscription>, string?)>(([], null));
 
         public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, int orderIndex, string? description, CancellationToken cancellationToken = default) =>

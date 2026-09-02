@@ -1,4 +1,5 @@
 using Integrios.Application.Authoring.Topics;
+using Integrios.Domain.Enums;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -33,11 +34,12 @@ public sealed class TopicsEndpoints : IEndpointGroup
         Guid tenantId,
         IMediator mediator,
         CancellationToken cancellationToken,
+        string? status,
         string? after = null,
         int limit = 20)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var dto = await mediator.Send(new ListTopicsByTenantQuery(tenantId, after, limit), cancellationToken);
+        var dto = await mediator.Send(new ListTopicsByTenantQuery(tenantId, ListFilter.ParseEnum<OperationalStatus>(status, "Topic status must be active or disabled."), after, limit), cancellationToken);
         return Results.Ok(AdminTopicListResponse.From(dto));
     }
 

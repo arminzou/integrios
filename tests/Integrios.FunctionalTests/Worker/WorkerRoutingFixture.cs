@@ -22,6 +22,7 @@ using Integrios.Infrastructure.Transforms;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
@@ -77,7 +78,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         DeliveryQueue = (EventDeliveryQueue)infrastructureProvider.GetRequiredService<IEventDeliveryQueue>();
         dbContext = new IntegriosDbContext(database.CreateOptions());
         deadLetterReplay = new DeadLetterReplay(connectionFactory);
-        subscriptionRepository = new SubscriptionRepository(dbContext);
+        subscriptionRepository = new SubscriptionRepository(dbContext, new EphemeralDataProtectionProvider());
         eventLookup = new TenantEventLookup(connectionFactory);
 
         var services = new ServiceCollection();

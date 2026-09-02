@@ -242,7 +242,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
 
         await using (IntegriosDbContext context = CreateContext())
         {
-            var repository = new Integrios.Infrastructure.Topics.TopicRepository(context);
+            var repository = new Integrios.Infrastructure.Topics.TopicRepository(context, new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
             var topic = await repository.CreateAsync(
                 seed.TenantId, "payments", null, CancellationToken.None);
             seed = seed with { TopicId = topic.Id };

@@ -1,4 +1,5 @@
 using Integrios.Application.Authoring.Tenants;
+using Integrios.Domain.Enums;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -29,12 +30,13 @@ public sealed class TenantsEndpoints : IEndpointGroup
 
     private static async Task<IResult> ListTenants(
         IMediator mediator,
+        string? status,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var response = await mediator.Send(new ListTenantsQuery(after, limit), cancellationToken);
+        var response = await mediator.Send(new ListTenantsQuery(ListFilter.ParseEnum<OperationalStatus>(status, "Tenant status must be active or disabled."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connections;
+using Integrios.Domain.Enums;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -41,13 +42,14 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
     private static async Task<IResult> ListConnections(
         Guid tenantId,
         IMediator mediator,
+        string? status,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         ConnectionListDto response = await mediator.Send(
-            new ListConnectionsByTenantQuery(tenantId, after, limit),
+            new ListConnectionsByTenantQuery(tenantId, ListFilter.ParseEnum<OperationalStatus>(status, "Connection status must be active or disabled."), after, limit),
             cancellationToken);
         return Results.Ok(response);
     }

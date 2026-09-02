@@ -21,6 +21,7 @@ public sealed class AdminExceptionHandler(IProblemDetailsService problemDetailsS
             DuplicateResourceException => Problem(StatusCodes.Status409Conflict, exception.Message),
             ConnectionAuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             ConnectorVersionConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
+            InvalidCursorException or InvalidListFilterException => Problem(StatusCodes.Status400BadRequest, exception.Message),
             BadHttpRequestException badRequest => Problem(badRequest.StatusCode, "The request is invalid."),
             _ => null
         };

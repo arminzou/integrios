@@ -2,6 +2,7 @@ using System.Text.Json;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
+using Integrios.Domain.Enums;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -49,11 +50,12 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid topicId,
         IMediator mediator,
         CancellationToken cancellationToken,
+        string? status,
         string? after,
         int limit = 0)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var response = await mediator.Send(new ListSubscriptionsByTopicQuery(tenantId, topicId, after, limit), cancellationToken);
+        var response = await mediator.Send(new ListSubscriptionsByTopicQuery(tenantId, topicId, ListFilter.ParseEnum<OperationalStatus>(status, "Subscription status must be active or disabled."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 

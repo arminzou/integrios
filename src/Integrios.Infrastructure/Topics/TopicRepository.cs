@@ -1,16 +1,17 @@
 using Integrios.Application.Authoring.Topics;
 using Integrios.Infrastructure.Data;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Common.Pagination;
+using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Npgsql;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.Infrastructure.Topics;
 
-internal sealed class TopicRepository(IntegriosDbContext context) : ITopicRepository
+internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectionProvider dataProtectionProvider) : ITopicRepository
 {
     public async Task<Topic> CreateAsync(
         Guid tenantId,
@@ -58,26 +59,31 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
 
     public async Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(
         Guid tenantId,
+        OperationalStatus? status,
         string? afterCursor,
         int limit,
         CancellationToken ct)
     {
         DateTimeOffset cursorTime = default;
         Guid cursorId = default;
-        bool hasCursor = afterCursor is not null
-            && PageCursor.TryDecode(afterCursor, out cursorTime, out cursorId);
+        string cursorScope = $"topics:{tenantId:N}:{status?.ToString() ?? "all"}";
+        bool hasCursor = afterCursor is not null;
+        if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorTime, out cursorId))
+            throw new InvalidCursorException();
 
         IQueryable<Topic> query = context.Topics.AsNoTracking().Where(topic => topic.TenantId == tenantId);
+        if (status is not null)
+            query = query.Where(topic => topic.Status == status);
         if (hasCursor)
         {
             query = query.Where(topic =>
-                topic.CreatedAt > cursorTime
-                || (topic.CreatedAt == cursorTime && topic.Id.CompareTo(cursorId) > 0));
+                topic.CreatedAt < cursorTime
+                || (topic.CreatedAt == cursorTime && topic.Id.CompareTo(cursorId) < 0));
         }
 
         List<Topic> topics = await query
-            .OrderBy(topic => topic.CreatedAt)
-            .ThenBy(topic => topic.Id)
+            .OrderByDescending(topic => topic.CreatedAt)
+            .ThenByDescending(topic => topic.Id)
             .Take(limit + 1)
             .ToListAsync(ct);
 
@@ -88,7 +94,7 @@ internal sealed class TopicRepository(IntegriosDbContext context) : ITopicReposi
         List<Topic> items = topics;
 
         var nextCursor = hasMore
-            ? PageCursor.Encode(topics[^1].CreatedAt, topics[^1].Id)
+            ? PageCursor.Encode(dataProtectionProvider, cursorScope, topics[^1].CreatedAt, topics[^1].Id, DateTimeOffset.UtcNow)
             : null;
 
         return (items, nextCursor);

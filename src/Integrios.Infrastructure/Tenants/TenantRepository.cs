@@ -1,6 +1,6 @@
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Common.Pagination;
 using Integrios.Application.Authoring.Tenants;
+using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
@@ -8,10 +8,11 @@ using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Npgsql;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.Infrastructure.Tenants;
 
-internal sealed class TenantRepository(IntegriosDbContext context) : ITenantRepository
+internal sealed class TenantRepository(IntegriosDbContext context, IDataProtectionProvider dataProtectionProvider) : ITenantRepository
 {
     public async Task<Tenant> CreateAsync(Tenant tenant, CancellationToken cancellationToken)
     {
@@ -33,26 +34,31 @@ internal sealed class TenantRepository(IntegriosDbContext context) : ITenantRepo
         context.Tenants.AsNoTracking().SingleOrDefaultAsync(tenant => tenant.Id == id, cancellationToken);
 
     public async Task<(IReadOnlyList<Tenant> Items, string? NextCursor)> ListAsync(
+        OperationalStatus? status,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
-        bool hasCursor = afterCursor is not null
-            && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
+        string cursorScope = $"tenants:{status?.ToString() ?? "all"}";
+        bool hasCursor = afterCursor is not null;
+        if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
+            throw new InvalidCursorException();
 
         IQueryable<Tenant> query = context.Tenants.AsNoTracking();
+        if (status is not null)
+            query = query.Where(tenant => tenant.Status == status);
         if (hasCursor)
         {
             query = query.Where(tenant =>
-                tenant.CreatedAt > cursorCreatedAt
-                || (tenant.CreatedAt == cursorCreatedAt && tenant.Id.CompareTo(cursorId) > 0));
+                tenant.CreatedAt < cursorCreatedAt
+                || (tenant.CreatedAt == cursorCreatedAt && tenant.Id.CompareTo(cursorId) < 0));
         }
 
         List<Tenant> items = await query
-            .OrderBy(tenant => tenant.CreatedAt)
-            .ThenBy(tenant => tenant.Id)
+            .OrderByDescending(tenant => tenant.CreatedAt)
+            .ThenByDescending(tenant => tenant.Id)
             .Take(limit + 1)
             .ToListAsync(cancellationToken);
 
@@ -60,7 +66,7 @@ internal sealed class TenantRepository(IntegriosDbContext context) : ITenantRepo
         if (items.Count > limit)
         {
             items.RemoveAt(items.Count - 1);
-            nextCursor = PageCursor.Encode(items[^1].CreatedAt, items[^1].Id);
+            nextCursor = PageCursor.Encode(dataProtectionProvider, cursorScope, items[^1].CreatedAt, items[^1].Id, DateTimeOffset.UtcNow);
         }
 
         return (items, nextCursor);
