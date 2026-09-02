@@ -56,11 +56,18 @@ public static class OperatorAuthentication
         {
             OperatorOidcOptions oidc = OperatorOidcOptions.FromConfiguration(configuration);
             services.AddSingleton(oidc);
+            // Matches RequireHttpsMetadata: secure-only except for a local plaintext-HTTP deployment
+            // that explicitly opted out. A hardcoded Always here would make the browser session
+            // uncheckable behind plain HTTP -- antiforgery fails closed with a 500 rather than
+            // silently accepting a forgeable request, so this must track the same knob.
+            CookieSecurePolicy cookieSecurePolicy = oidc.RequireHttpsMetadata
+                ? CookieSecurePolicy.Always
+                : CookieSecurePolicy.SameAsRequest;
             authentication.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
                 options.Cookie.Name = OperatorSessionOptions.CookieName;
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SecurePolicy = cookieSecurePolicy;
                 options.Cookie.SameSite = SameSiteMode.Strict;
                 options.ExpireTimeSpan = session.Lifetime;
                 // Fixed, not sliding: the lifetime is the deprovisioning bound, so activity must not
@@ -96,9 +103,9 @@ public static class OperatorAuthentication
                 // would not accompany; a redirect keeps the whole browser path same-site.
                 options.ResponseMode = OpenIdConnectResponseMode.Query;
                 options.CorrelationCookie.SameSite = SameSiteMode.Lax;
-                options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.CorrelationCookie.SecurePolicy = cookieSecurePolicy;
                 options.NonceCookie.SameSite = SameSiteMode.Lax;
-                options.NonceCookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.NonceCookie.SecurePolicy = cookieSecurePolicy;
                 options.CallbackPath = oidc.CallbackPath;
                 options.SignedOutCallbackPath = oidc.SignedOutCallbackPath;
                 options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;

@@ -42,12 +42,16 @@ builder.Services.AddAdminInfrastructureServices(builder.Configuration);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-admin");
 
 builder.Services.AddOperatorAuthentication(builder.Configuration);
+// Matches Integrios:Admin:Oidc:RequireHttpsMetadata's own default: secure-only except for a local
+// plaintext-HTTP deployment that explicitly opted out.
+bool requireHttpsCookies = builder.Configuration.GetValue<bool?>(
+    OperatorOidcOptions.SectionKey + ":RequireHttpsMetadata") ?? true;
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-Integrios-Antiforgery";
     options.Cookie.Name = "integrios_antiforgery";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = requireHttpsCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 
