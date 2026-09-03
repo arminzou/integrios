@@ -19,7 +19,7 @@ import { createServer, type ViteDevServer } from "vite";
 /// Opt-in, because it needs a deployment:
 ///   INTEGRIOS_JOURNEY_ORIGIN=http://localhost:5150 \
 ///   INTEGRIOS_JOURNEY_OPERATOR_KEY='OperatorKey global_operator_key:...' \
-///   npx vitest run src/journey.browser.test.ts
+///   npx vitest run tests/e2e/journey.browser.test.ts
 const adminOrigin = process.env.INTEGRIOS_JOURNEY_ORIGIN;
 const operatorKey = process.env.INTEGRIOS_JOURNEY_OPERATOR_KEY;
 const configured = Boolean(adminOrigin && operatorKey);
