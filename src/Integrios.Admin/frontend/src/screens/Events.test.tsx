@@ -28,7 +28,10 @@ const eventsCall = (calls: Call[]) => calls.filter((call) => call.url.pathname.e
 
 describe("Event history", () => {
   it("reports Event status separately from Delivery state instead of rolling one into the other", async () => {
-    stubHttp(() => ({ status: 200, body: page([routedEventWithDeadLetters]) }));
+    stubHttp(({ url }) => ({
+      status: 200,
+      body: url.pathname.endsWith("/events") ? page([routedEventWithDeadLetters]) : page([]),
+    }));
 
     render(<EventsScreen tenantId={tenantId} />);
 
@@ -57,6 +60,19 @@ describe("Event history", () => {
     expect(applied.url.searchParams.has("status")).toBe(false);
     // A changed filter restarts from the first cursor rather than reusing one issued for the old scope.
     expect(applied.url.searchParams.has("after")).toBe(false);
+  });
+
+  it("reports unavailable filter options instead of presenting an empty picker", async () => {
+    stubHttp(({ url }) =>
+      url.pathname.endsWith("/sources")
+        ? { status: 500, body: { title: "Sources are unavailable." } }
+        : { status: 200, body: page([]) },
+    );
+
+    render(<EventsScreen tenantId={tenantId} />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Sources are unavailable.");
+    expect((screen.getByLabelText("Source") as HTMLSelectElement).disabled).toBe(true);
   });
 });
 

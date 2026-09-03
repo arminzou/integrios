@@ -95,9 +95,10 @@ export function EventsScreen({ tenantId }: { tenantId: string }) {
         }}
       >
         <h2>Find an Event</h2>
+        <FormError message={formError(sources.problem ?? topics.problem)} />
         <Field id="event-status" label="Event status" hint="How far the Event itself got.">
           <select
-            {...fieldProps("event-status")}
+            {...fieldProps("event-status", undefined, true)}
             value={draft.status}
             onChange={(event) => set({ status: event.target.value })}
           >
@@ -117,7 +118,7 @@ export function EventsScreen({ tenantId }: { tenantId: string }) {
           hint="Matches Events with at least one EventDelivery in this state."
         >
           <select
-            {...fieldProps("event-delivery-status")}
+            {...fieldProps("event-delivery-status", undefined, true)}
             value={draft.deliveryStatus}
             onChange={(event) => set({ deliveryStatus: event.target.value })}
           >
@@ -135,9 +136,10 @@ export function EventsScreen({ tenantId }: { tenantId: string }) {
           hint={sources.truncated ? "Showing the first 100 Sources." : undefined}
         >
           <select
-            {...fieldProps("event-source")}
+            {...fieldProps("event-source", undefined, sources.truncated)}
             value={draft.sourceId}
             onChange={(event) => set({ sourceId: event.target.value })}
+            disabled={sources.busy || sources.problem !== null}
           >
             <option value="">Any Source</option>
             {sources.items.map((source) => (
@@ -149,9 +151,10 @@ export function EventsScreen({ tenantId }: { tenantId: string }) {
         </Field>
         <Field id="event-topic" label="Topic" hint={topics.truncated ? "Showing the first 100 Topics." : undefined}>
           <select
-            {...fieldProps("event-topic")}
+            {...fieldProps("event-topic", undefined, topics.truncated)}
             value={draft.topicId}
             onChange={(event) => set({ topicId: event.target.value })}
+            disabled={topics.busy || topics.problem !== null}
           >
             <option value="">Any Topic</option>
             {topics.items.map((topic) => (
@@ -167,7 +170,7 @@ export function EventsScreen({ tenantId }: { tenantId: string }) {
           hint="The identity the sending system gave the Event. Matched exactly."
         >
           <input
-            {...fieldProps("event-source-event-id")}
+            {...fieldProps("event-source-event-id", undefined, true)}
             value={draft.sourceEventId}
             onChange={(event) => set({ sourceEventId: event.target.value })}
           />

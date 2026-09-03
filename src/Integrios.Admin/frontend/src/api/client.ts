@@ -10,11 +10,17 @@ export type OperatorSession = components["schemas"]["OperatorSessionResponse"];
 let session: OperatorSession | null = null;
 
 /// Every unsafe request carries the antiforgery token; safe ones never need it.
-const antiforgery: Middleware = {
+const browserBoundary: Middleware = {
   async onRequest({ request }) {
     if (session && !["GET", "HEAD", "OPTIONS", "TRACE"].includes(request.method))
       request.headers.set(session.antiforgery_header_name, session.antiforgery_token);
     return request;
+  },
+  onError() {
+    return Response.json(
+      { title: "The Admin API could not be reached." },
+      { status: 503, headers: { "content-type": "application/problem+json" } },
+    );
   },
 };
 
@@ -28,7 +34,7 @@ export const api = createClient<paths>({
   // page currently has.
   fetch: (request) => globalThis.fetch(request),
 });
-api.use(antiforgery);
+api.use(browserBoundary);
 
 export async function loadSession(): Promise<OperatorSession | null> {
   const response = await fetch("/auth/session", { credentials: "same-origin" });

@@ -97,6 +97,7 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
   const [environment, setEnvironment] = useState("");
   const [description, setDescription] = useState("");
   const { busy, problem, run } = useAction();
+  const connectorOptionsUnavailable = connectors.busy || connectors.problem !== null;
 
   return (
     <form
@@ -130,6 +131,7 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
       }}
     >
       <h2>Create a Connection</h2>
+      <FormError message={formError(connectors.problem)} />
       <FormError message={formError(problem, writeFields)} />
       <Field
         id="create-connection-connector"
@@ -138,9 +140,10 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
         hint={connectors.truncated ? "Showing the first 100 Connectors." : undefined}
       >
         <select
-          {...fieldProps("create-connection-connector", fieldError(problem, "connector_id"))}
+          {...fieldProps("create-connection-connector", fieldError(problem, "connector_id"), connectors.truncated)}
           value={connectorId}
           onChange={(event) => setConnectorId(event.target.value)}
+          disabled={connectorOptionsUnavailable}
           required
         >
           <option value="">Choose a Connector</option>
@@ -166,7 +169,7 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
         hint="The Connector's manifest defines what this document must contain."
       >
         <textarea
-          {...fieldProps("create-connection-config", configError ?? fieldError(problem, "config"))}
+          {...fieldProps("create-connection-config", configError ?? fieldError(problem, "config"), true)}
           rows={8}
           value={config}
           onChange={(event) => setConfig(event.target.value)}
@@ -187,7 +190,7 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
           onChange={(event) => setDescription(event.target.value)}
         />
       </Field>
-      <button type="submit" disabled={busy}>
+      <button type="submit" disabled={busy || connectorOptionsUnavailable}>
         Create Connection
       </button>
     </form>

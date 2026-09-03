@@ -124,6 +124,8 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
   const [configuration, setConfiguration] = useState("{}");
   const [configurationError, setConfigurationError] = useState<string | undefined>(undefined);
   const { busy, problem, run } = useAction();
+  const optionsUnavailable =
+    connections.busy || topics.busy || connections.problem !== null || topics.problem !== null;
 
   return (
     <form
@@ -147,6 +149,7 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
       }}
     >
       <h2>Create a Source</h2>
+      <FormError message={formError(connections.problem ?? topics.problem)} />
       <FormError message={formError(problem, ["connection_id", "topic_id", "type", "configuration"])} />
       <Field
         id="create-source-connection"
@@ -155,9 +158,10 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
         hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
       >
         <select
-          {...fieldProps("create-source-connection", fieldError(problem, "connection_id"))}
+          {...fieldProps("create-source-connection", fieldError(problem, "connection_id"), connections.truncated)}
           value={connectionId}
           onChange={(event) => setConnectionId(event.target.value)}
+          disabled={connections.busy || connections.problem !== null}
           required
         >
           <option value="">Choose a Connection</option>
@@ -175,9 +179,10 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
         hint={topics.truncated ? "Showing the first 100 active Topics." : undefined}
       >
         <select
-          {...fieldProps("create-source-topic", fieldError(problem, "topic_id"))}
+          {...fieldProps("create-source-topic", fieldError(problem, "topic_id"), topics.truncated)}
           value={topicId}
           onChange={(event) => setTopicId(event.target.value)}
+          disabled={topics.busy || topics.problem !== null}
           required
         >
           <option value="">Choose a Topic</option>
@@ -215,7 +220,7 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
           required
         />
       </Field>
-      <button type="submit" disabled={busy}>
+      <button type="submit" disabled={busy || optionsUnavailable}>
         Create Source
       </button>
     </form>

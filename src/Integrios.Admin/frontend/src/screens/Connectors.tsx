@@ -180,7 +180,7 @@ function ApplyManifest({
           <output id={`${prefix}-key`}>{connector.key}</output>
         ) : (
           <input
-            {...fieldProps(`${prefix}-key`, fieldError(problem, "key"))}
+            {...fieldProps(`${prefix}-key`, fieldError(problem, "key"), !connector)}
             value={key}
             onChange={(event) => setKey(event.target.value)}
             required
@@ -193,7 +193,7 @@ function ApplyManifest({
         hint="Applying to a new version installs it; applying to an existing one updates that version."
       >
         <input
-          {...fieldProps(`${prefix}-contract-version`)}
+          {...fieldProps(`${prefix}-contract-version`, undefined, true)}
           type="number"
           min={1}
           step={1}

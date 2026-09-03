@@ -4,11 +4,12 @@ import { navigate } from "../routes";
 
 /// Attributes that tie a control to its own label and error message. Screens spread these onto the
 /// control itself so a failed field announces its message rather than only turning a colour.
-export function fieldProps(id: string, error?: string) {
+export function fieldProps(id: string, error?: string, hasHint = false) {
+  const describedBy = [hasHint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(" ");
   return {
     id,
     "aria-invalid": error ? (true as const) : undefined,
-    "aria-describedby": error ? `${id}-error` : undefined,
+    "aria-describedby": describedBy || undefined,
   };
 }
 
@@ -59,15 +60,21 @@ export function ConfirmAction({
   onConfirm: () => void;
 }) {
   const [armed, setArmed] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
 
   useEffect(() => {
     if (armed) confirmRef.current?.focus();
+    else if (restoreFocus.current) {
+      restoreFocus.current = false;
+      triggerRef.current?.focus();
+    }
   }, [armed]);
 
   if (!armed)
     return (
-      <button type="button" onClick={() => setArmed(true)}>
+      <button ref={triggerRef} type="button" disabled={busy} onClick={() => setArmed(true)}>
         {label}
       </button>
     );
@@ -86,7 +93,13 @@ export function ConfirmAction({
       >
         {confirmLabel ?? label}
       </button>
-      <button type="button" onClick={() => setArmed(false)}>
+      <button
+        type="button"
+        onClick={() => {
+          restoreFocus.current = true;
+          setArmed(false);
+        }}
+      >
         Cancel
       </button>
     </span>

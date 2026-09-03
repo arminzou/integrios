@@ -141,6 +141,7 @@ describe("Create forms, filled through a real browser", () => {
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/connections`);
+    expect(writes[0].headers()[session.antiforgery_header_name.toLowerCase()]).toBe(session.antiforgery_token);
     expect(sent.body.connector_id).toBe(connectorId);
     // The textarea holds text; the API takes a document.
     expect(sent.body.config).toEqual({ base_uri: "http://sink.invalid" });
@@ -252,7 +253,12 @@ describe("Update and deactivate, driven through a real browser", () => {
     // Arming the confirmation must not be the action itself.
     expect(writes, "Deactivation ran before it was confirmed.").toHaveLength(0);
 
-    await view.click("text=Deactivate orders");
+    await view.getByRole("button", { name: "Cancel" }).click();
+    const trigger = view.getByRole("button", { name: "Deactivate Topic" });
+    expect(await trigger.evaluate((button) => document.activeElement === button)).toBe(true);
+
+    await trigger.click();
+    await view.getByRole("button", { name: "Deactivate orders" }).click();
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");

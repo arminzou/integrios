@@ -234,6 +234,7 @@ function SubscriptionForm({
   const [headers, setHeaders] = useState(() => formatJson(subscription?.http_delivery.headers) || "{}");
   const [headersError, setHeadersError] = useState<string | undefined>(undefined);
   const { busy, problem, run } = useAction();
+  const connectionOptionsUnavailable = connections.busy || connections.problem !== null;
 
   return (
     <form
@@ -283,6 +284,7 @@ function SubscriptionForm({
       }}
     >
       <h3>{subscription ? `Edit ${subscription.name}` : "Create a Subscription"}</h3>
+      <FormError message={formError(connections.problem)} />
       <FormError message={formError(problem, writeFields)} />
 
       <Field id={`${prefix}-name`} label="Name" error={fieldError(problem, "name")}>
@@ -300,9 +302,14 @@ function SubscriptionForm({
         hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
       >
         <select
-          {...fieldProps(`${prefix}-destination`, fieldError(problem, "destination_connection_id"))}
+          {...fieldProps(
+            `${prefix}-destination`,
+            fieldError(problem, "destination_connection_id"),
+            connections.truncated,
+          )}
           value={destination}
           onChange={(event) => setDestination(event.target.value)}
+          disabled={connectionOptionsUnavailable}
           required
         >
           <option value="">Choose a Connection</option>
@@ -320,7 +327,7 @@ function SubscriptionForm({
         hint="Lower numbers are delivered first."
       >
         <input
-          {...fieldProps(`${prefix}-order`, fieldError(problem, "order_index"))}
+          {...fieldProps(`${prefix}-order`, fieldError(problem, "order_index"), true)}
           type="number"
           step={1}
           value={orderIndex}
@@ -348,7 +355,7 @@ function SubscriptionForm({
         hint="Leave empty to deliver the Event unmapped."
       >
         <textarea
-          {...fieldProps(`${prefix}-mapping`, mappingError ?? fieldError(problem, "mapping"))}
+          {...fieldProps(`${prefix}-mapping`, mappingError ?? fieldError(problem, "mapping"), true)}
           rows={6}
           value={mapping}
           onChange={(event) => setMapping(event.target.value)}
@@ -400,7 +407,7 @@ function SubscriptionForm({
           onChange={(event) => setDescription(event.target.value)}
         />
       </Field>
-      <button type="submit" disabled={busy}>
+      <button type="submit" disabled={busy || connectionOptionsUnavailable}>
         {subscription ? "Save changes" : "Create Subscription"}
       </button>
     </form>

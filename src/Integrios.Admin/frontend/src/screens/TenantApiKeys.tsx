@@ -179,7 +179,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
           hint="Leave empty for a key that does not expire."
         >
           <input
-            {...fieldProps("create-key-expires", fieldError(problem, "expires_at"))}
+            {...fieldProps("create-key-expires", fieldError(problem, "expires_at"), true)}
             type="datetime-local"
             value={expiresAt}
             onChange={(event) => setExpiresAt(event.target.value)}

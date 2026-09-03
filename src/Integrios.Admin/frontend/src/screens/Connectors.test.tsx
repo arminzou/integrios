@@ -58,7 +58,7 @@ describe("Installing the first Connector", () => {
     fireEvent.click(screen.getByRole("button", { name: "Install Connector" }));
 
     const message = await screen.findByText("A Connector key must be lowercase.");
-    expect(key.getAttribute("aria-describedby")).toBe(message.id);
+    expect(key.getAttribute("aria-describedby")?.split(" ")).toEqual(["install-connector-key-hint", message.id]);
     expect((key as HTMLInputElement).value).toBe("HTTP");
   });
 

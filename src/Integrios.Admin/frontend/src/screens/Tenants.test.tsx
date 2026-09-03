@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TenantScreen, TenantsScreen } from "./Tenants";
 import { stubHttp, page, type Call } from "../test/http";
@@ -24,6 +24,15 @@ function tenant(overrides: Record<string, unknown> = {}) {
 const listCalls = (calls: Call[]) => calls.filter((call) => call.method === "GET");
 
 describe("Tenants list", () => {
+  it("reports a request that could not reach Admin instead of loading forever", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+
+    render(<TenantsScreen />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("The Admin API could not be reached.");
+    expect(screen.queryByText("Loading…")).toBeNull();
+  });
+
   it("appends the next page only when Load more is used, and sends the cursor it was given", async () => {
     const calls = stubHttp(({ url }) =>
       url.searchParams.get("after") === "cursor-1"
