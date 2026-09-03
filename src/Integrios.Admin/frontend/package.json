@@ -6,6 +6,7 @@
     "generate:api": "node scripts/generate-client.mjs",
     "dev": "vite",
     "build": "npm run generate:api && tsc --noEmit && vitest run && vite build",
+    "build:assets": "npm run generate:api && tsc --noEmit && vite build",
     "check": "npm run generate:api && tsc --noEmit && vitest run",
     "test": "vitest run",
     "preview": "vite preview"

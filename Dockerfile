@@ -46,8 +46,10 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 WORKDIR /src/src/Integrios.Admin/frontend
 RUN npm ci
-# Writes the production build to src/Integrios.Admin/wwwroot (see the frontend Vite configuration).
-RUN npm run build && mv /src/src/Integrios.Admin/wwwroot /dashboard
+# Assets only: generate the typed client, type-check against it, and bundle. The frontend checks
+# run in CI, which is also where the browser they need is installed -- an image build has no reason
+# to carry test infrastructure, and would fail for want of it.
+RUN npm run build:assets && mv /src/src/Integrios.Admin/wwwroot /dashboard
 
 # Only the Admin image builds or carries dashboard assets. BuildKit builds a stage only when the
 # selected target depends on it, so the aliases below mean the Node stage above is never built for
