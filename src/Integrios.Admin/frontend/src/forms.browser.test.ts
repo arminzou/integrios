@@ -34,17 +34,51 @@ const connector = { id: connectorId, key: "http", contract_version: 1, name: "HT
 
 const page = (items: unknown[]) => ({ items, next_cursor: null });
 
+const subscriptionId = "77777777-7777-7777-7777-777777777777";
+const sourceId = "88888888-8888-8888-8888-888888888888";
+
+const connectionDetail = { ...connection, config: { base_uri: "http://sink.invalid" }, source_verification: null, destination_authentication: null };
+const subscriptionDetail = {
+  id: subscriptionId,
+  topic_id: topicId,
+  tenant_id: tenantId,
+  name: "to-sink",
+  match_rules: { event_type: "order.created" },
+  destination_connection_id: connectionId,
+  mapping_config: null,
+  http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
+  status: "active",
+  order_index: 1,
+  description: null,
+  ...stamps,
+};
+const sourceDetail = {
+  id: sourceId,
+  tenant_id: tenantId,
+  connection_id: connectionId,
+  topic_id: topicId,
+  type: "event_api",
+  configuration: { source_contract: "event_json" },
+  status: "active",
+  revoked_at: null,
+  ...stamps,
+};
+
 /// One handler for every screen: reads answer from the path, writes are captured and accepted.
-/// Per-endpoint stubs would be a fixture per screen for no extra coverage.
+/// Per-endpoint stubs would be a fixture per screen for no extra coverage. Detail routes are
+/// matched before their lists, because a list path is a prefix of the detail path under it.
 function readFor(pathname: string): unknown {
   if (pathname === "/admin/connectors") return page([connector]);
   if (pathname === "/admin/tenants") return page([tenant]);
   if (/^\/admin\/tenants\/[^/]+$/.test(pathname)) return tenant;
+  if (/\/connections\/[^/]+$/.test(pathname)) return connectionDetail;
+  if (/\/subscriptions\/[^/]+$/.test(pathname)) return subscriptionDetail;
+  if (/\/sources\/[^/]+$/.test(pathname)) return sourceDetail;
+  if (/\/topics\/[^/]+$/.test(pathname)) return topic;
   if (/\/connections$/.test(pathname)) return page([connection]);
   if (/\/topics$/.test(pathname)) return page([topic]);
-  if (/\/topics\/[^/]+$/.test(pathname)) return topic;
-  if (/\/subscriptions$/.test(pathname)) return page([]);
-  if (/\/sources$/.test(pathname)) return page([]);
+  if (/\/subscriptions$/.test(pathname)) return page([subscriptionDetail]);
+  if (/\/sources$/.test(pathname)) return page([sourceDetail]);
   return page([]);
 }
 
@@ -167,6 +201,75 @@ describe("Create forms, filled through a real browser", () => {
     expect(sent.body.topic_id).toBe(topicId);
     expect(sent.body.type).toBe("webhook");
     expect(sent.body.configuration).toEqual({ path: "/hook" });
+    await view.close();
+  }, 60_000);
+});
+
+describe("Update and deactivate, driven through a real browser", () => {
+  // Tenant, Topic and Source updates send only plain strings and are covered by the jsdom suite.
+  // What is exercised here is what a string-only form has to convert: a parsed configuration
+  // document and a numeric order index, plus the two shapes with no other coverage at all — a
+  // confirmed deactivate, and the one DELETE the dashboard issues.
+
+  it("sends an updated Connection with its config reparsed and its schemes untouched", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/connections/${connectionId}`);
+
+    await view.fill("#connection-config", '{"base_uri":"http://moved.invalid"}');
+    await view.click("text=Save changes");
+
+    const sent = await submitted(writes);
+    expect(sent.method).toBe("PATCH");
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/connections/${connectionId}`);
+    expect(sent.body.config).toEqual({ base_uri: "http://moved.invalid" });
+    // The form never round-trips a scheme's secret references, so it must not claim to replace them.
+    expect(sent.body.source_verification).toBeNull();
+    expect(sent.body.destination_authentication).toBeNull();
+    await view.close();
+  }, 60_000);
+
+  it("sends an updated Subscription with a numeric order and a mapping that stays null", async () => {
+    const { page: view, writes } = await open(
+      `/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`,
+    );
+
+    await view.fill("#subscription-order", "7");
+    await view.click("text=Save changes");
+
+    const sent = await submitted(writes);
+    expect(sent.method).toBe("PATCH");
+    expect(sent.body.order_index).toBe(7);
+    // The stored Subscription has no mapping; editing another field must not invent one.
+    expect(sent.body.mapping).toBeNull();
+    expect(sent.body.match_rules).toEqual({ event_type: "order.created" });
+    await view.close();
+  }, 60_000);
+
+  it("deactivates a Topic only after the confirmation naming it", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}`);
+
+    await view.click("text=Deactivate Topic");
+    await view.getByText(/Deactivate the Topic "orders"\?/).waitFor();
+    // Arming the confirmation must not be the action itself.
+    expect(writes, "Deactivation ran before it was confirmed.").toHaveLength(0);
+
+    await view.click("text=Deactivate orders");
+
+    const sent = await submitted(writes);
+    expect(sent.method).toBe("POST");
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/topics/${topicId}/deactivate`);
+    await view.close();
+  }, 60_000);
+
+  it("revokes a Source with the one DELETE the dashboard issues", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
+
+    await view.click("text=Revoke Source");
+    expect(writes, "Revocation ran before it was confirmed.").toHaveLength(0);
+    await view.click(`text=Revoke ${sourceId}`);
+
+    const sent = await submitted(writes);
+    expect(sent.method).toBe("DELETE");
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}`);
     await view.close();
   }, 60_000);
 });
