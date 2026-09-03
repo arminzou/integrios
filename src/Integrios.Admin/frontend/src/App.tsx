@@ -1,5 +1,14 @@
-import { useEffect, useState } from "react";
-import { api, loadSession, signInHref, type OperatorSession } from "./api/client";
+import { useEffect, useState, type ReactNode } from "react";
+import { loadSession, signInHref, type OperatorSession } from "./api/client";
+import { useRoute, type Route } from "./routes";
+import { Link } from "./ui/controls";
+import { ConnectorScreen, ConnectorsScreen } from "./screens/Connectors";
+import { ConnectionScreen, ConnectionsScreen } from "./screens/Connections";
+import { SourceScreen, SourcesScreen } from "./screens/Sources";
+import { SubscriptionScreen } from "./screens/Subscriptions";
+import { TenantApiKeysScreen } from "./screens/TenantApiKeys";
+import { TenantScreen, TenantsScreen } from "./screens/Tenants";
+import { TopicScreen, TopicsScreen } from "./screens/Topics";
 
 type State =
   | { status: "loading" }
@@ -7,12 +16,8 @@ type State =
   | { status: "signedIn"; session: OperatorSession }
   | { status: "failed"; message: string };
 
-/// The shell proves the browser contract end to end: one origin, a cookie session resolved through
-/// the bootstrap, and a typed client generated from the Admin document. Capability screens arrive
-/// as their own slices rather than being stubbed here.
 export function App() {
   const [state, setState] = useState<State>({ status: "loading" });
-  const [tenants, setTenants] = useState<string[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,61 +35,112 @@ export function App() {
     };
   }, []);
 
-  // One real typed call against the generated contract. It is what makes the frontend check fail
-  // when the Admin API changes shape, rather than drifting until a screen breaks in a browser.
-  useEffect(() => {
-    if (state.status !== "signedIn") return;
-    let cancelled = false;
-    api.GET("/admin/tenants", { params: { query: { limit: 20 } } }).then(({ data }) => {
-      if (cancelled) return;
-      setTenants((data?.items ?? []).map((tenant) => tenant.name));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [state.status]);
-
-  return (
-    <main>
-      <h1>Integrios Operator</h1>
-      {state.status === "loading" && <p>Checking your session…</p>}
-      {state.status === "anonymous" && (
+  if (state.status === "loading") return <Shell>Checking your session…</Shell>;
+  if (state.status === "failed")
+    return (
+      <Shell>
+        <p role="alert">{state.message}</p>
+      </Shell>
+    );
+  if (state.status === "anonymous")
+    return (
+      <Shell>
         <p>
           <a href={signInHref()}>Sign in</a> to administer this deployment.
         </p>
-      )}
-      {state.status === "signedIn" && (
-        <>
-          <p>
-            Signed in as <strong>{state.session.display_name}</strong>
-            {state.session.email ? ` (${state.session.email})` : ""}.
-          </p>
-          <h2>Tenants</h2>
-          {tenants === null ? (
-            <p>Loading tenants…</p>
-          ) : tenants.length === 0 ? (
-            <p>No Tenants are configured yet.</p>
-          ) : (
-            <ul>
-              {tenants.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-          )}
-          {/* A native form submission carries no custom header, so the antiforgery token must
-              travel through the server-configured form field rather than the header name used by
-              the typed client's own requests. */}
-          <form method="post" action="/auth/logout">
-            <input
-              type="hidden"
-              name={state.session.antiforgery_form_field_name}
-              value={state.session.antiforgery_token}
-            />
-            <button type="submit">Sign out</button>
-          </form>
-        </>
-      )}
-      {state.status === "failed" && <p role="alert">{state.message}</p>}
+      </Shell>
+    );
+
+  return <SignedIn session={state.session} />;
+}
+
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <main>
+      <h1>Integrios Operator</h1>
+      {children}
     </main>
   );
+}
+
+function SignedIn({ session }: { session: OperatorSession }) {
+  const route = useRoute();
+
+  return (
+    <>
+      <header>
+        <nav aria-label="Capabilities">
+          <ul>
+            <li>
+              <Link to="/tenants">Tenants</Link>
+            </li>
+            <li>
+              <Link to="/connectors">Connectors</Link>
+            </li>
+          </ul>
+        </nav>
+        <p>
+          Signed in as <strong>{session.display_name}</strong>
+          {session.email ? ` (${session.email})` : ""}.
+        </p>
+        {/* A native form submission carries no custom header, so the antiforgery token must
+            travel through the server-configured form field rather than the header name used by
+            the typed client's own requests. */}
+        <form method="post" action="/auth/logout">
+          <input type="hidden" name={session.antiforgery_form_field_name} value={session.antiforgery_token} />
+          <button type="submit">Sign out</button>
+        </form>
+      </header>
+      <main>
+        <Screen route={route} />
+      </main>
+    </>
+  );
+}
+
+function Screen({ route }: { route: Route }) {
+  switch (route.name) {
+    case "tenants":
+      return <TenantsScreen />;
+    case "tenant":
+      return <TenantScreen tenantId={route.tenantId} />;
+    case "connections":
+      return <ConnectionsScreen tenantId={route.tenantId} />;
+    case "connection":
+      return <ConnectionScreen tenantId={route.tenantId} connectionId={route.connectionId} />;
+    case "tenantApiKeys":
+      return <TenantApiKeysScreen tenantId={route.tenantId} />;
+    case "sources":
+      return <SourcesScreen tenantId={route.tenantId} />;
+    case "source":
+      return <SourceScreen tenantId={route.tenantId} sourceId={route.sourceId} />;
+    case "topics":
+      return <TopicsScreen tenantId={route.tenantId} />;
+    case "topic":
+      return <TopicScreen tenantId={route.tenantId} topicId={route.topicId} />;
+    case "subscription":
+      return (
+        <SubscriptionScreen
+          tenantId={route.tenantId}
+          topicId={route.topicId}
+          subscriptionId={route.subscriptionId}
+        />
+      );
+    case "connectors":
+      return <ConnectorsScreen />;
+    case "connector":
+      return <ConnectorScreen connectorId={route.connectorId} />;
+    case "unknown":
+      return (
+        <>
+          <h1>Not found</h1>
+          <p role="alert">
+            No Operator screen owns <code>{route.path}</code>.
+          </p>
+          <p>
+            <Link to="/tenants">Go to Tenants</Link>
+          </p>
+        </>
+      );
+  }
 }

@@ -10,10 +10,10 @@ public sealed class TopicsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateTopic);
-        group.MapGet(ListTopics);
-        group.MapGet(GetTopicById, "/{id:guid}");
-        group.MapPatch(UpdateTopic, "/{id:guid}");
+        group.MapPost(CreateTopic).Produces<AdminTopicResponse>(StatusCodes.Status201Created);
+        group.MapGet(ListTopics).Produces<AdminTopicListResponse>();
+        group.MapGet(GetTopicById, "/{id:guid}").Produces<AdminTopicResponse>();
+        group.MapPatch(UpdateTopic, "/{id:guid}").Produces<AdminTopicResponse>();
         group.MapPost(DeactivateTopic, "/{id:guid}/deactivate");
     }
 

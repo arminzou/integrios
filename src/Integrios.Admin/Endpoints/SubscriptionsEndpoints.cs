@@ -13,10 +13,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateSubscription);
-        group.MapGet(ListSubscriptions);
-        group.MapGet(GetSubscriptionById, "/{id:guid}");
-        group.MapPatch(UpdateSubscription, "/{id:guid}");
+        group.MapPost(CreateSubscription).Produces<SubscriptionDto>(StatusCodes.Status201Created);
+        group.MapGet(ListSubscriptions).Produces<SubscriptionListDto>();
+        group.MapGet(GetSubscriptionById, "/{id:guid}").Produces<SubscriptionDto>();
+        group.MapPatch(UpdateSubscription, "/{id:guid}").Produces<SubscriptionDto>();
         group.MapPost(DeactivateSubscription, "/{id:guid}/deactivate");
     }
 

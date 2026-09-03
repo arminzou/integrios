@@ -1,0 +1,150 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { Problem } from "../api/problem";
+import { navigate } from "../routes";
+
+/// Attributes that tie a control to its own label and error message. Screens spread these onto the
+/// control itself so a failed field announces its message rather than only turning a colour.
+export function fieldProps(id: string, error?: string) {
+  return {
+    id,
+    "aria-invalid": error ? (true as const) : undefined,
+    "aria-describedby": error ? `${id}-error` : undefined,
+  };
+}
+
+export function Field({
+  id,
+  label,
+  error,
+  hint,
+  children,
+}: {
+  id: string;
+  label: string;
+  error?: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <p>
+      <label htmlFor={id}>{label}</label>
+      {children}
+      {hint ? <span id={`${id}-hint`}>{hint}</span> : null}
+      {error ? (
+        <strong id={`${id}-error`} role="alert">
+          {error}
+        </strong>
+      ) : null}
+    </p>
+  );
+}
+
+export function FormError({ message }: { message?: string }) {
+  return message ? <p role="alert">{message}</p> : null;
+}
+
+/// An irreversible action states what it is about to change, by name, before it can be confirmed.
+/// The confirmation takes focus so it is reachable and announced without a pointer.
+export function ConfirmAction({
+  label,
+  question,
+  confirmLabel,
+  busy,
+  onConfirm,
+}: {
+  label: string;
+  question: string;
+  confirmLabel?: string;
+  busy?: boolean;
+  onConfirm: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (armed) confirmRef.current?.focus();
+  }, [armed]);
+
+  if (!armed)
+    return (
+      <button type="button" onClick={() => setArmed(true)}>
+        {label}
+      </button>
+    );
+
+  return (
+    <span role="group" aria-label={label}>
+      <span>{question}</span>
+      <button
+        type="button"
+        ref={confirmRef}
+        disabled={busy}
+        onClick={() => {
+          setArmed(false);
+          onConfirm();
+        }}
+      >
+        {confirmLabel ?? label}
+      </button>
+      <button type="button" onClick={() => setArmed(false)}>
+        Cancel
+      </button>
+    </span>
+  );
+}
+
+export function LoadMore({
+  cursor,
+  busy,
+  onLoadMore,
+}: {
+  cursor: string | null;
+  busy: boolean;
+  onLoadMore: () => void;
+}) {
+  if (!cursor) return null;
+  return (
+    <button type="button" onClick={onLoadMore} disabled={busy}>
+      Load more
+    </button>
+  );
+}
+
+/// What a list shows when it has no rows to show: still loading, failed, or genuinely empty. The
+/// empty text names the scope that was searched so an empty Tenant is not mistaken for a failure.
+export function ListStatus({
+  busy,
+  loaded,
+  problem,
+  empty,
+  emptyText,
+}: {
+  busy: boolean;
+  loaded: boolean;
+  problem: Problem | null;
+  empty: boolean;
+  emptyText: string;
+}) {
+  if (problem) return <p role="alert">{problem.detail ?? `The list could not be read (${problem.status}).`}</p>;
+  if (busy && !loaded) return <p>Loading…</p>;
+  if (loaded && empty) return <p>{emptyText}</p>;
+  return null;
+}
+
+/// A real anchor, so copying, opening in a new tab, and middle-clicking behave as the Operator
+/// expects; only a plain left click is taken over to avoid a full document reload.
+export function Link({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <a
+      href={to}
+      onClick={(event) => {
+        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        navigate(to);
+      }}
+    >
+      {children}
+    </a>
+  );
+}

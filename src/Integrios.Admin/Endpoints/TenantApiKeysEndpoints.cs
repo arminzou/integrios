@@ -9,9 +9,9 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateTenantApiKey);
-        group.MapGet(ListTenantApiKeys);
-        group.MapGet(GetTenantApiKeyById, "/{id:guid}");
+        group.MapPost(CreateTenantApiKey).Produces<CreateTenantApiKeyResult>(StatusCodes.Status201Created);
+        group.MapGet(ListTenantApiKeys).Produces<TenantApiKeyListDto>();
+        group.MapGet(GetTenantApiKeyById, "/{id:guid}").Produces<TenantApiKeyDto>();
         group.MapPost(RevokeTenantApiKey, "/{id:guid}/revoke");
     }
 

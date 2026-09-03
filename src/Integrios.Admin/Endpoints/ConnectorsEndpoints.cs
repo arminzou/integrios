@@ -13,12 +13,15 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapGet(ListConnectors);
-        group.MapGet(GetConnectorById, "/{id:guid}");
+        group.MapGet(ListConnectors).Produces<ConnectorListDto>();
+        group.MapGet(GetConnectorById, "/{id:guid}").Produces<ConnectorDto>();
         group.MapGet(GetConnectorByVersion, "/{key}/versions/{contractVersion:int}")
-            .WithName(GetByVersionRouteName);
-        group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}");
-        group.MapPost(PreviewSourceContract, "/source-contracts/preview");
+            .WithName(GetByVersionRouteName)
+            .Produces<ConnectorDto>();
+        group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}")
+            .Produces<ConnectorDto>()
+            .Produces<ConnectorDto>(StatusCodes.Status201Created);
+        group.MapPost(PreviewSourceContract, "/source-contracts/preview").Produces<PreviewResponse>();
     }
 
     private static async Task<IResult> ListConnectors(
@@ -95,7 +98,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
                 statusCode: StatusCodes.Status400BadRequest);
 
         using var doc = JsonDocument.Parse(result.OutputJson!);
-        return Results.Ok(new { output = doc.RootElement.Clone() });
+        return Results.Ok(new PreviewResponse(doc.RootElement.Clone()));
     }
 }
 

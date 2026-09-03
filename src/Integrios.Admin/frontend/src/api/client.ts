@@ -18,7 +18,16 @@ const antiforgery: Middleware = {
   },
 };
 
-export const api = createClient<paths>({ credentials: "same-origin" });
+/// The dashboard and the Admin API share one origin, so the base URL is the page's own origin
+/// rather than anything configured. Stating it explicitly keeps every request absolute — which
+/// `Request` requires outside a browser — without ever addressing a second origin.
+export const api = createClient<paths>({
+  baseUrl: location.origin,
+  credentials: "same-origin",
+  // Resolved per request rather than captured once, so the client always uses whatever `fetch` the
+  // page currently has.
+  fetch: (request) => globalThis.fetch(request),
+});
 api.use(antiforgery);
 
 export async function loadSession(): Promise<OperatorSession | null> {

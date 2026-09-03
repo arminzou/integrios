@@ -11,10 +11,10 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateConnection);
-        group.MapGet(ListConnections);
-        group.MapGet(GetConnectionById, "/{id:guid}");
-        group.MapPatch(UpdateConnection, "/{id:guid}");
+        group.MapPost(CreateConnection).Produces<ConnectionDto>(StatusCodes.Status201Created);
+        group.MapGet(ListConnections).Produces<ConnectionListDto>();
+        group.MapGet(GetConnectionById, "/{id:guid}").Produces<ConnectionDto>();
+        group.MapPatch(UpdateConnection, "/{id:guid}").Produces<ConnectionDto>();
         group.MapPost(DeactivateConnection, "/{id:guid}/deactivate");
     }
 

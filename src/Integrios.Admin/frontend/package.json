@@ -5,8 +5,9 @@
   "scripts": {
     "generate:api": "node scripts/generate-client.mjs",
     "dev": "vite",
-    "build": "npm run generate:api && tsc --noEmit && vite build",
-    "check": "npm run generate:api && tsc --noEmit",
+    "build": "npm run generate:api && tsc --noEmit && vitest run && vite build",
+    "check": "npm run generate:api && tsc --noEmit && vitest run",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -15,12 +16,16 @@
     "react-dom": "19.1.1"
   },
   "devDependencies": {
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.0",
     "@types/node": "24.3.0",
     "@types/react": "19.1.9",
     "@types/react-dom": "19.1.7",
     "@vitejs/plugin-react": "4.7.0",
+    "jsdom": "26.1.0",
     "openapi-typescript": "7.9.1",
     "typescript": "5.9.2",
-    "vite": "7.3.6"
+    "vite": "7.3.6",
+    "vitest": "3.2.7"
   }
 }

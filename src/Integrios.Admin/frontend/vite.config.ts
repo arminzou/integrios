@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // Development runs the dashboard behind Vite's proxy so the browser sees one origin, exactly as
@@ -8,6 +8,12 @@ const adminOrigin = process.env.INTEGRIOS_ADMIN_ORIGIN ?? "https://localhost:515
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    restoreMocks: true,
+    unstubGlobals: true,
+  },
   build: {
     // Published into the Admin host's static root.
     outDir: "../wwwroot",

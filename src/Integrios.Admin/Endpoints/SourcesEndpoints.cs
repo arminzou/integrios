@@ -12,10 +12,10 @@ public sealed class SourcesEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateSource);
-        group.MapGet(ListSources);
-        group.MapGet(GetSourceById, "/{id:guid}");
-        group.MapPatch(UpdateSource, "/{id:guid}");
+        group.MapPost(CreateSource).Produces<SourceDto>(StatusCodes.Status201Created);
+        group.MapGet(ListSources).Produces<SourceListDto>();
+        group.MapGet(GetSourceById, "/{id:guid}").Produces<SourceDto>();
+        group.MapPatch(UpdateSource, "/{id:guid}").Produces<SourceDto>();
         group.MapDelete(RevokeSource, "/{id:guid}");
     }
 

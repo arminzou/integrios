@@ -10,7 +10,7 @@ public sealed class TransformEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(PreviewMapping, "/preview");
+        group.MapPost(PreviewMapping, "/preview").Produces<PreviewResponse>();
     }
 
     // Stateless dry-run: evaluate a transform against a sample payload so an author can see the
@@ -29,7 +29,7 @@ public sealed class TransformEndpoints : IEndpointGroup
                 statusCode: StatusCodes.Status400BadRequest);
 
         using var doc = JsonDocument.Parse(result.OutputJson!);
-        return Results.Ok(new { output = doc.RootElement.Clone() });
+        return Results.Ok(new PreviewResponse(doc.RootElement.Clone()));
     }
 }
 
