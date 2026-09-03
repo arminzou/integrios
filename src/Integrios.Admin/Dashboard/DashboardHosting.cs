@@ -1,4 +1,5 @@
 using Integrios.Admin.Auth;
+using Microsoft.AspNetCore.StaticFiles;
 
 namespace Integrios.Admin.Dashboard;
 
@@ -28,6 +29,27 @@ public static class DashboardHosting
     public static bool IsDashboardAvailable(IWebHostEnvironment environment) =>
         File.Exists(Path.Combine(environment.WebRootPath ?? string.Empty, ShellFile));
 
+    /// Where the frontend build emits its bundles. Every file below it carries a content hash in
+    /// its own name, so the URL identifies exactly one version of one file, forever.
+    private const string HashedAssetPrefix = "/assets";
+
+    /// Without an explicit policy a browser is free to guess how long a response stays fresh, and
+    /// it guesses from the file's age rather than asking. That is tolerable for a bundle and wrong
+    /// for the shell: the shell's URL never changes while its content must, because it names the
+    /// bundle hash to load. A stale shell therefore does not render an old dashboard, it renders
+    /// nothing — it keeps requesting a hash the deployment no longer has.
+    ///
+    /// So the two are pinned in opposite directions. A hashed bundle can never change under its
+    /// own URL and is cached for a year without revalidating; the shell is always revalidated,
+    /// which costs one conditional request that answers 304 whenever it is unchanged.
+    private static void SetCacheControl(StaticFileResponseContext context)
+    {
+        context.Context.Response.Headers.CacheControl =
+            context.Context.Request.Path.StartsWithSegments(HashedAssetPrefix, StringComparison.OrdinalIgnoreCase)
+                ? "public, max-age=31536000, immutable"
+                : "no-cache";
+    }
+
     public static bool IsBrowserRoute(HttpContext context) =>
         !NonBrowserPrefixes.Any(prefix =>
             context.Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase));
@@ -40,9 +62,13 @@ public static class DashboardHosting
         if (!IsDashboardAvailable(app.Environment) || !OperatorAuthentication.IsOidcConfigured(app.Configuration))
             return;
 
+        // The same options serve both paths so the shell is governed by one rule whether it is
+        // reached directly or through the browser-route fallback.
+        var files = new StaticFileOptions { OnPrepareResponse = SetCacheControl };
+
         app.UseDefaultFiles();
-        app.UseStaticFiles();
-        app.MapFallbackToFile(ShellFile).Add(builder =>
+        app.UseStaticFiles(files);
+        app.MapFallbackToFile(ShellFile, files).Add(builder =>
         {
             RequestDelegate shell = builder.RequestDelegate!;
             builder.RequestDelegate = async context =>

@@ -29,6 +29,30 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
         (await bundle.Content.ReadAsStringAsync()).ShouldNotBeEmpty();
     }
 
+    [Fact]
+    public async Task TheShellIsAlwaysRevalidatedAndItsHashedBundleNeverIs()
+    {
+        using HttpResponseMessage shell = await fixture.AdminClient.GetAsync("/");
+        // Without this the browser is free to guess a freshness window from the file's age and skip
+        // asking. An upgraded deployment would then keep serving a shell that names a bundle hash
+        // it no longer has, and the dashboard would not render at all.
+        CacheControlOf(shell).ShouldBe("no-cache", "The shell must be revalidated on every load.");
+
+        // A browser route reaches the same shell through the fallback and must carry the same rule.
+        using HttpResponseMessage deepLink = await fixture.AdminClient.GetAsync("/tenants");
+        CacheControlOf(deepLink).ShouldBe("no-cache", "A browser route must be revalidated too.");
+
+        string html = await shell.Content.ReadAsStringAsync();
+        string bundle = Regex.Match(html, @"src=""(?<path>/assets/[^""]+\.js)""").Groups["path"].Value;
+        bundle.ShouldNotBeEmpty();
+
+        using HttpResponseMessage asset = await fixture.AdminClient.GetAsync(bundle);
+        // The bundle's own name carries its content hash, so this URL can never mean anything else.
+        CacheControlOf(asset).ShouldBe(
+            "public, max-age=31536000, immutable",
+            "A content-hashed bundle should never need revalidating.");
+    }
+
     [Theory]
     [InlineData("/tenants")]
     [InlineData("/connectors")]
@@ -118,6 +142,12 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
             (await fixture.ImageHasExecutableAsync(image, "npm")).ShouldBeFalse($"{image} contains npm.");
         }
     }
+
+    /// The header as sent, or a stand-in when it is absent. Read as text on purpose: reaching into
+    /// the parsed CacheControl object through a null-conditional silently skips the assertion in the
+    /// one case that matters, when no policy was sent at all.
+    private static string CacheControlOf(HttpResponseMessage response) =>
+        response.Headers.CacheControl?.ToString() ?? "(no Cache-Control header)";
 
     /// The bootstrap and migrate services run Admin command-line verbs from an image built without
     /// the dashboard. That they completed is asserted by the fixture's own startup gate; this
