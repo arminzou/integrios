@@ -12,6 +12,14 @@
 # Base image tags stay literal rather than build arguments: the release evidence step resolves
 # external image digests by reading FROM lines out of this file and skips anything containing a
 # variable reference, so parameterizing them would silently drop both bases from that record.
+# Selects whether this image builds and carries the Operator dashboard. It is a separate argument
+# from PROJECT because a stage name interpolated into FROM must be lowercase, and it is global
+# because only a global argument is visible there. It defaults to none, so a build that forgets to
+# ask for the dashboard produces an image without one rather than one that half has it; the
+# packaged Acceptance run is what proves Admin actually got it.
+ARG DASHBOARD=none
+
+FROM node:22.21.1-bookworm-slim AS node
 FROM mcr.microsoft.com/dotnet/sdk:10.0.102 AS build
 ARG PROJECT
 WORKDIR /src
@@ -27,6 +35,27 @@ RUN dotnet publish "src/${PROJECT}/${PROJECT}.csproj" \
 # so the service is PID 1 and still receives any command arguments (`bootstrap`, secret
 # validation) appended by Compose.
 RUN ln -s "/app/${PROJECT}" /app/service
+
+# The dashboard is built where both toolchains are present, so the one npm script the repository
+# already uses runs unchanged: it generates the typed client from the Admin OpenAPI document, which
+# only the .NET build can emit. Copying Node in rather than shelling out to a package manager keeps
+# its version pinned by the image tag above, and CI reads that same tag so the two cannot drift.
+FROM build AS dashboard-build
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+WORKDIR /src/src/Integrios.Admin/frontend
+RUN npm ci
+# Writes the production build to src/Integrios.Admin/wwwroot (see the frontend Vite configuration).
+RUN npm run build && mv /src/src/Integrios.Admin/wwwroot /dashboard
+
+# Only the Admin image builds or carries dashboard assets. BuildKit builds a stage only when the
+# selected target depends on it, so the aliases below mean the Node stage above is never built for
+# Ingestion or Worker -- those hosts stay independent of Node, and their `/dashboard` is empty.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.10 AS dashboard-none
+RUN mkdir -p /dashboard
+FROM dashboard-build AS dashboard-admin
+FROM dashboard-${DASHBOARD} AS dashboard
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.10
 # Npgsql probes for Kerberos/GSSAPI on connect; the slim base image omits it.
@@ -45,6 +74,10 @@ ARG HTTP_PORT=8080
 
 WORKDIR /app
 COPY --from=build /app .
+# Admin serves the dashboard from its own static root; the other hosts receive an empty directory
+# and so have no shell to serve. Admin's own command-line verbs never read it either -- they branch
+# before the web host is constructed.
+COPY --from=dashboard /dashboard ./wwwroot
 RUN if [ -n "${MOUNT_ROOT}" ]; then mkdir -p "${MOUNT_ROOT}"; fi
 ENV ASPNETCORE_HTTP_PORTS=${HTTP_PORT}
 EXPOSE ${HTTP_PORT} 5299

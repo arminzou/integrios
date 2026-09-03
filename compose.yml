@@ -77,6 +77,8 @@ services:
       dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Admin
+        # Only this image builds and carries the Operator dashboard.
+        DASHBOARD: admin
     image: ${INTEGRIOS_ADMIN_IMAGE:-integrios-admin:dev}
     depends_on:
       bootstrap:

@@ -46,6 +46,56 @@ jobs:
           dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
 
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      # The image build pins Node by its base image tag. Reading that same tag here is what keeps
+      # the version CI checks against and the version the published image is built with identical.
+      - name: Resolve the pinned Node version
+        id: node_version
+        shell: bash
+        run: |
+          version=$(grep -oP '^FROM node:\K[0-9]+\.[0-9]+\.[0-9]+' Dockerfile | sort -u)
+          if [[ "$(wc -l <<<"$version")" -ne 1 ]]; then
+            echo "Dockerfile pins these Node versions; expected exactly one:" >&2
+            echo "$version" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Node pinned by the image build: ${version}"
+
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ steps.node_version.outputs.version }}
+          cache: npm
+          cache-dependency-path: src/Integrios.Admin/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/Integrios.Admin/frontend
+        run: npm ci
+
+      - name: Audit frontend dependencies
+        working-directory: src/Integrios.Admin/frontend
+        run: npm audit --audit-level=high
+
+      # Generates the typed client from the Admin OpenAPI document the .NET build emits, type-checks
+      # the dashboard against it, runs the frontend checks, and produces the production build. A
+      # frontend that no longer matches the API contract fails here.
+      - name: Build the dashboard
+        working-directory: src/Integrios.Admin/frontend
+        run: npm run build
+
   functional:
     name: functional (${{ matrix.database-provider }})
     needs: verify
@@ -81,7 +131,7 @@ jobs:
           --configuration Release --no-build
 
   acceptance:
-    needs: [verify, functional]
+    needs: [verify, frontend, functional]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -278,7 +328,9 @@ jobs:
               MOUNT_ROOT=/run/secrets/integrios/source
           - name: admin
             project: Integrios.Admin
-            build-args: ''
+            # Only this image builds and carries the Operator dashboard.
+            build-args: |
+              DASHBOARD=admin
           - name: worker
             project: Integrios.Worker
             build-args: |
