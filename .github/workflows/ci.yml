@@ -89,6 +89,12 @@ jobs:
         working-directory: src/Integrios.Admin/frontend
         run: npm audit --audit-level=high
 
+      # The frontend checks include browser tests, for the tab order, focus ring, and layout-
+      # dependent accessibility rules that jsdom cannot decide. Only the one browser they use.
+      - name: Install the test browser
+        working-directory: src/Integrios.Admin/frontend
+        run: npx playwright install --with-deps chromium
+
       # Generates the typed client from the Admin OpenAPI document the .NET build emits, type-checks
       # the dashboard against it, runs the frontend checks, and produces the production build. A
       # frontend that no longer matches the API contract fails here.
