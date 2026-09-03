@@ -65,12 +65,25 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["POSTGRES_PASSWORD"] = "acceptance_postgres",
             ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "acceptance-admin-secret",
             ["INTEGRIOS_PUBLIC_INGESTION_BASE_URI"] = "https://acceptance.example.test",
+            // Admin maps the dashboard only when an identity provider is configured, so the
+            // packaged run configures one to prove the browser surface is actually served. No
+            // sign-in happens here and this authority is never reached: the real provider round
+            // trip is a Functional gate against a containerized provider.
+            ["INTEGRIOS_ADMIN_OIDC_AUTHORITY"] = "https://oidc.invalid/",
+            ["INTEGRIOS_ADMIN_OIDC_CLIENT_ID"] = "integrios-acceptance",
             ["INTEGRIOS_BOOTSTRAP_IMAGE"] = $"{projectName}-bootstrap",
             ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
             ["INTEGRIOS_INGESTION_IMAGE"] = $"{projectName}-ingestion",
             ["INTEGRIOS_WORKER_IMAGE"] = $"{projectName}-worker",
         };
     }
+
+    /// The images this deployment built, so a test can assert what an artifact carries rather than
+    /// only what a running deployment happens to serve.
+    public string AdminImage => environment["INTEGRIOS_ADMIN_IMAGE"];
+    public string BootstrapImage => environment["INTEGRIOS_BOOTSTRAP_IMAGE"];
+    public string IngestionImage => environment["INTEGRIOS_INGESTION_IMAGE"];
+    public string WorkerImage => environment["INTEGRIOS_WORKER_IMAGE"];
 
     public HttpClient AdminClient { get; private set; } = null!;
     public HttpClient AdminOperationalClient { get; private set; } = null!;
@@ -705,6 +718,34 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             // Image cleanup is best effort so it cannot hide the primary test failure.
         }
+    }
+
+    /// Names of the entries an image carries directly under `path`, empty when the directory is
+    /// absent or empty. Runs the image with a shell rather than its own entrypoint, so nothing about
+    /// the service starts.
+    public async Task<IReadOnlyList<string>> ListImageEntriesAsync(string image, string path)
+    {
+        ComposeResult result = await RunDockerAsync(
+            TimeSpan.FromMinutes(1),
+            ["run", "--rm", "--entrypoint", "sh", image, "-c", $"ls -A '{path}' 2>/dev/null || true"]);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not list '{path}' in {image}: {result.Output}");
+
+        return result.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// True when the image can run the named executable at all. Used to prove a host carries no
+    /// build toolchain rather than merely not invoking one.
+    public async Task<bool> ImageHasExecutableAsync(string image, string executable)
+    {
+        ComposeResult result = await RunDockerAsync(
+            TimeSpan.FromMinutes(1),
+            ["run", "--rm", "--entrypoint", "sh", image, "-c", $"command -v '{executable}' >/dev/null && echo present || echo absent"]);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not probe {executable} in {image}: {result.Output}");
+
+        return result.StandardOutput.Contains("present", StringComparison.Ordinal);
     }
 
     private void DisposeClients()
