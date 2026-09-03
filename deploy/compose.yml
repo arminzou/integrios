@@ -75,6 +75,13 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       DOTNET_ENVIRONMENT: Production
       Integrios__PublicIngestionBaseUri: ${INTEGRIOS_PUBLIC_INGESTION_BASE_URI}
+      # The Operator dashboard is served only when an identity provider is configured. Left unset,
+      # this deployment stays machine-only on OperatorKey exactly as before, with no browser surface
+      # and no sign-in path. Setting an Authority turns on the browser session, the dashboard, and
+      # the antiforgery boundary that protects it.
+      Integrios__Admin__Oidc__Authority: ${INTEGRIOS_ADMIN_OIDC_AUTHORITY:-}
+      Integrios__Admin__Oidc__ClientId: ${INTEGRIOS_ADMIN_OIDC_CLIENT_ID:-}
+      Integrios__Admin__Oidc__ClientSecret: ${INTEGRIOS_ADMIN_OIDC_CLIENT_SECRET:-}
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
       - "127.0.0.1:${INTEGRIOS_ADMIN_OPERATIONAL_PORT:-5151}:5299"
