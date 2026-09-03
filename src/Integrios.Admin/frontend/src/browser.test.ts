@@ -59,13 +59,26 @@ afterAll(async () => {
   await server?.close();
 });
 
-async function openDashboard(): Promise<Page> {
+async function openDashboard(path = "/tenants"): Promise<Page> {
   const page = await browser.newPage();
   await page.route("**/auth/session", (route) => route.fulfill({ json: session }));
+  await page.route("**/admin/tenants/*", (route) => route.fulfill({ json: tenants.items[0] }));
   await page.route("**/admin/tenants*", (route) => route.fulfill({ json: tenants }));
-  await page.goto(`${origin}/tenants`);
-  await page.getByRole("link", { name: "Acme" }).waitFor();
+  await page.goto(`${origin}${path}`);
+  await page.getByRole("heading", { level: 1 }).waitFor();
   return page;
+}
+
+async function accessibilityViolations(page: Page): Promise<string[]> {
+  await page.addScriptTag({ path: axePath });
+  return page.evaluate(async () => {
+    const results = await (window as unknown as { axe: { run: Function } }).axe.run(document, {
+      runOnly: { type: "rule", values: ["color-contrast", "target-size"] },
+    });
+    return (results as { violations: { id: string; nodes: { html: string }[] }[] }).violations.map(
+      (violation) => `${violation.id}: ${violation.nodes.map((node) => node.html).join(" | ")}`,
+    );
+  });
 }
 
 describe("The dashboard in a real browser", () => {
@@ -110,23 +123,14 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   }, 60_000);
 
-  it("passes the accessibility rules that need real layout", async () => {
-    const page = await openDashboard();
-    await page.addScriptTag({ path: axePath });
-
-    const violations = await page.evaluate(async () => {
-      // ponytail: only the rules that pass today. target-size is left out because links currently
-      // render below the 24x24 minimum, which is tracked as its own work; add it here when those
-      // targets grow rather than widening the rule set speculatively.
-      const results = await (window as unknown as { axe: { run: Function } }).axe.run(document, {
-        runOnly: { type: "rule", values: ["color-contrast"] },
-      });
-      return (results as { violations: { id: string; nodes: { html: string }[] }[] }).violations.map(
-        (violation) => `${violation.id}: ${violation.nodes.map((node) => node.html).join(" | ")}`,
-      );
-    });
-
-    expect(violations).toEqual([]);
+  // Two screens, because they carry different link shapes: the list has navigation and table
+  // links, the detail has the capability list. Each is a separate target-size rule.
+  it.each([
+    ["the list", "/tenants"],
+    ["a detail screen", `/tenants/${tenants.items[0].id}`],
+  ])("passes the accessibility rules that need real layout on %s", async (_name, path) => {
+    const page = await openDashboard(path);
+    expect(await accessibilityViolations(page)).toEqual([]);
     await page.close();
   }, 60_000);
 });

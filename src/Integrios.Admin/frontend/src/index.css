@@ -1,0 +1,22 @@
+/* Not visual design — an accessibility floor the dashboard has to clear whatever it later looks
+   like. WCAG 2.2 asks a pointer target to be at least 24x24, and a link is otherwise only as tall
+   as its text, which leaves navigation and table links around 17px.
+
+   Only links that stand alone as targets are given a box: navigation, list entries, and table
+   cells. A link inside a sentence is explicitly exempt from the rule and is left as flowing text,
+   because padding it would break the line it sits in for no accessibility gain. */
+nav a,
+li a,
+th a,
+td a {
+  display: inline-block;
+  padding: 4px 6px;
+}
+
+/* Controls are only as tall as their default font, which also lands under the minimum. */
+button,
+input,
+select,
+textarea {
+  min-height: 24px;
+}
