@@ -11,6 +11,8 @@ export type Route =
   | { name: "tenantApiKeys"; tenantId: string }
   | { name: "sources"; tenantId: string }
   | { name: "source"; tenantId: string; sourceId: string }
+  | { name: "events"; tenantId: string }
+  | { name: "event"; tenantId: string; eventId: string }
   | { name: "topics"; tenantId: string }
   | { name: "topic"; tenantId: string; topicId: string }
   | { name: "subscription"; tenantId: string; topicId: string; subscriptionId: string }
@@ -44,6 +46,10 @@ export function parseRoute(path: string): Route {
     case "connections":
       if (segments.length === 3) return { name: "connections", tenantId };
       if (segments.length === 4 && uuid.test(id)) return { name: "connection", tenantId, connectionId: id };
+      return unknown;
+    case "events":
+      if (segments.length === 3) return { name: "events", tenantId };
+      if (segments.length === 4 && uuid.test(id)) return { name: "event", tenantId, eventId: id };
       return unknown;
     case "tenant-api-keys":
       return segments.length === 3 ? { name: "tenantApiKeys", tenantId } : unknown;

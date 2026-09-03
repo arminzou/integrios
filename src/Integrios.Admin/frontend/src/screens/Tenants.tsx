@@ -184,6 +184,9 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         <li>
           <Link to={`/tenants/${tenantId}/tenant-api-keys`}>Tenant API keys</Link>
         </li>
+        <li>
+          <Link to={`/tenants/${tenantId}/events`}>Events and Deliveries</Link>
+        </li>
       </ul>
 
       <EditTenant key={current.updated_at} tenant={current} onSaved={tenant.reload} />

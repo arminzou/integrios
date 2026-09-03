@@ -29,8 +29,18 @@ describe("parseRoute", () => {
     expect(parseRoute(`/tenants/${tenant}/topics/not-a-topic`).name).toBe("unknown");
   });
 
+  it("resolves the Event investigation routes under their Tenant", () => {
+    expect(parseRoute(`/tenants/${tenant}/events`)).toEqual({ name: "events", tenantId: tenant });
+    expect(parseRoute(`/tenants/${tenant}/events/${topic}`)).toEqual({
+      name: "event",
+      tenantId: tenant,
+      eventId: topic,
+    });
+  });
+
   it("does not resolve a capability the dashboard does not own", () => {
-    expect(parseRoute(`/tenants/${tenant}/events`).name).toBe("unknown");
+    expect(parseRoute(`/tenants/${tenant}/deliveries`).name).toBe("unknown");
+    expect(parseRoute(`/tenants/${tenant}/events/${topic}/attempts`).name).toBe("unknown");
     expect(parseRoute(`/tenants/${tenant}/connections/${topic}/extra`).name).toBe("unknown");
     expect(parseRoute("/connectors/all").name).toBe("unknown");
   });

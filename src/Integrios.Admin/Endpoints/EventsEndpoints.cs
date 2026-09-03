@@ -15,7 +15,8 @@ public sealed class EventsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapGet(ListTenantEvents);
+        // The dashboard reads this list, so it declares its schema; see DashboardResponseSchemaTests.
+        group.MapGet(ListTenantEvents).Produces<EventListDto>();
     }
 
     private static async Task<IResult> ListTenantEvents(

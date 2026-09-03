@@ -34,6 +34,10 @@ public static class EventStatusMap
     private static readonly IReadOnlyDictionary<string, EventStatus> FromDb =
         ToDb.ToDictionary(kv => kv.Value, kv => kv.Key, StringComparer.OrdinalIgnoreCase);
 
+    // The canonical spellings, in declaration order. The API document describes the wire vocabulary
+    // from this same map rather than restating it.
+    public static IReadOnlyList<string> DbValues { get; } = [.. ToDb.Values];
+
     public static string ToDbValue(EventStatus status) =>
         ToDb.TryGetValue(status, out var value)
             ? value

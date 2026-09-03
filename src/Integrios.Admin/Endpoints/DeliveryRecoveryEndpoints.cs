@@ -10,7 +10,7 @@ public sealed class DeliveryRecoveryEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapGet(GetDeliveries);
+        group.MapGet(GetDeliveries).Produces<EventDto>();
         group.MapPost(ReplayDelivery, "/{deliveryId:guid}/replay");
     }
 

@@ -34,6 +34,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<OperatorKeySchemeTransformer>();
+    options.AddSchemaTransformer<EventStatusSchemaTransformer>();
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AdminExceptionHandler>();
