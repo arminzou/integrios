@@ -35,6 +35,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IEventAcceptance)] = [Host.Ingestion],
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingestion],
         [typeof(ITenantEventHistory)] = [Host.Admin],
+        [typeof(ITenantEventActivitySummary)] = [Host.Admin],
         [typeof(IOperatorIdentityStore)] = [Host.Admin],
         [typeof(IConnectorReader)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
@@ -117,7 +118,8 @@ public sealed class HostCompositionArchitectureTests
         {
             ["ReplayEventDeliveryCommandHandler"] = Host.Admin,
             ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin,
-            ["ListTenantEventsQueryHandler"] = Host.Admin
+            ["ListTenantEventsQueryHandler"] = Host.Admin,
+            ["GetTenantEventActivitySummaryQueryHandler"] = Host.Admin
         };
 
     [Fact]
@@ -253,6 +255,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
         AssertResolves<ITenantEventLookup>(scope.ServiceProvider);
         AssertResolves<IDeadLetterReplay>(scope.ServiceProvider);
+        AssertResolves<ITenantEventActivitySummary>(scope.ServiceProvider);
 
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
@@ -304,6 +307,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<DeliveryExecutionOptions>(provider);
         AssertOmits<RetryPolicy>(provider);
         AssertOmits<DeliveryOutcomePolicy>(provider);
+        AssertOmits<ITenantEventActivitySummary>(provider);
     }
 
     [Fact]
@@ -340,6 +344,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IConnectorReader>(scope.ServiceProvider);
         AssertOmits<IConnectorManifestStore>(scope.ServiceProvider);
         AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
+        AssertOmits<ITenantEventActivitySummary>(scope.ServiceProvider);
     }
 
     private static ServiceProvider BuildProvider(
