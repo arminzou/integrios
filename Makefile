@@ -36,3 +36,8 @@ db-info:
 # Create the first global OperatorKey (no-op if a live one already exists).
 bootstrap:
 	dotnet run --project src/Integrios.Admin -- bootstrap
+
+# --- Operator dashboard dev server ---
+# Vite on :5173, proxying /admin and /auth to the Admin host from `make up`.
+dashboard:
+	cd src/Integrios.Admin/frontend && npm install && npm run dev
