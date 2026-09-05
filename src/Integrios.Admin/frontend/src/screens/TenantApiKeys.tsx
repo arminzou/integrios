@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 
@@ -28,7 +28,9 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
         In <Link to={`/tenants/${tenantId}`}>this Tenant</Link>.
       </p>
 
-      <CreateTenantApiKey tenantId={tenantId} onCreated={list.reload} />
+      <Disclosure label="New Tenant API key">
+        <CreateTenantApiKey tenantId={tenantId} onCreated={list.reload} />
+      </Disclosure>
 
       <h2>All Tenant API keys</h2>
       <Field id="tenant-api-key-state" label="State">
@@ -52,34 +54,36 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
         emptyText="This Tenant has no API keys matching this filter."
       />
       {list.items.length > 0 ? (
-        <table>
-          <caption>Tenant API keys, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Prefix</th>
-              <th scope="col">State</th>
-              <th scope="col">Expires</th>
-              <th scope="col">Last used</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((key) => (
-              <tr key={key.id}>
-                <th scope="row">{key.name}</th>
-                {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
-                <td>{key.key_prefix}</td>
-                <td>{key.state}</td>
-                <td>{key.expires_at ?? "Never"}</td>
-                <td>{key.last_used_at ?? "Never used"}</td>
-                <td>
-                  <RevokeTenantApiKey tenantId={tenantId} apiKey={key} onRevoked={list.reload} />
-                </td>
+        <div className="table-card">
+          <table>
+            <caption>Tenant API keys, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Prefix</th>
+                <th scope="col">State</th>
+                <th scope="col">Expires</th>
+                <th scope="col">Last used</th>
+                <th scope="col">Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((key) => (
+                <tr key={key.id}>
+                  <th scope="row">{key.name}</th>
+                  {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
+                  <td>{key.key_prefix}</td>
+                  <td>{key.state}</td>
+                  <td>{key.expires_at ?? "Never"}</td>
+                  <td>{key.last_used_at ?? "Never used"}</td>
+                  <td>
+                    <RevokeTenantApiKey tenantId={tenantId} apiKey={key} onRevoked={list.reload} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
     </>

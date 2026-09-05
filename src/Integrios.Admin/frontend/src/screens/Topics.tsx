@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
 import { navigate } from "../routes";
-import { ConfirmAction, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useResource } from "../ui/useResource";
@@ -30,7 +30,9 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
         In <Link to={`/tenants/${tenantId}`}>this Tenant</Link>.
       </p>
 
-      <CreateTopic tenantId={tenantId} onCreated={list.reload} />
+      <Disclosure label="New Topic">
+        <CreateTopic tenantId={tenantId} onCreated={list.reload} />
+      </Disclosure>
 
       <h2>All Topics</h2>
       <Field id="topic-status" label="Status">
@@ -49,27 +51,29 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
         emptyText="This Tenant has no Topics matching this filter."
       />
       {list.items.length > 0 ? (
-        <table>
-          <caption>Topics, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Status</th>
-              <th scope="col">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((topic) => (
-              <tr key={topic.id}>
-                <th scope="row">
-                  <Link to={`/tenants/${tenantId}/topics/${topic.id}`}>{topic.name}</Link>
-                </th>
-                <td>{topic.status}</td>
-                <td>{topic.description ?? "—"}</td>
+        <div className="table-card">
+          <table>
+            <caption>Topics, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Status</th>
+                <th scope="col">Description</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((topic) => (
+                <tr key={topic.id}>
+                  <th scope="row">
+                    <Link to={`/tenants/${tenantId}/topics/${topic.id}`}>{topic.name}</Link>
+                  </th>
+                  <td>{topic.status}</td>
+                  <td>{topic.description ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
     </>

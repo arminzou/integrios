@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
 import { navigate } from "../routes";
-import { ConfirmAction, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
 import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
@@ -42,7 +42,9 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
         In <Link to={`/tenants/${tenantId}`}>this Tenant</Link>.
       </p>
 
-      <CreateSource tenantId={tenantId} onCreated={list.reload} />
+      <Disclosure label="New Source">
+        <CreateSource tenantId={tenantId} onCreated={list.reload} />
+      </Disclosure>
 
       <h2>All Sources</h2>
       <Field id="source-status" label="Status">
@@ -71,31 +73,33 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
         emptyText="This Tenant has no Sources matching these filters."
       />
       {list.items.length > 0 ? (
-        <table>
-          <caption>Sources, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">Source</th>
-              <th scope="col">Type</th>
-              <th scope="col">Status</th>
-              <th scope="col">Topic</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((source) => (
-              <tr key={source.id}>
-                <th scope="row">
-                  <Link to={`/tenants/${tenantId}/sources/${source.id}`}>{source.id}</Link>
-                </th>
-                <td>{source.type}</td>
-                <td>{source.status}</td>
-                <td>
-                  <Link to={`/tenants/${tenantId}/topics/${source.topic_id}`}>{source.topic_id}</Link>
-                </td>
+        <div className="table-card">
+          <table>
+            <caption>Sources, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Type</th>
+                <th scope="col">Status</th>
+                <th scope="col">Topic</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((source) => (
+                <tr key={source.id}>
+                  <th scope="row">
+                    <Link to={`/tenants/${tenantId}/sources/${source.id}`}>{source.id}</Link>
+                  </th>
+                  <td>{source.type}</td>
+                  <td>{source.status}</td>
+                  <td>
+                    <Link to={`/tenants/${tenantId}/topics/${source.topic_id}`}>{source.topic_id}</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
     </>

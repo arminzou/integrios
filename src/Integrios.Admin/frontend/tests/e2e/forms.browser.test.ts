@@ -157,6 +157,7 @@ describe("Create forms, filled through a real browser", () => {
   it("sends a Topic, leaving an untouched optional field null rather than empty", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics`);
 
+    await view.click("text=New Topic");
     await view.fill("#create-topic-name", "orders");
     await view.click("text=Create Topic");
 
@@ -171,6 +172,7 @@ describe("Create forms, filled through a real browser", () => {
   it("sends a Subscription with a numeric order, an object delivery, and a null mapping", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}`);
 
+    await view.click("text=New Subscription");
     await view.fill("#create-subscription-name", "to-sink");
     await view.selectOption("#create-subscription-destination", connectionId);
     await view.fill("#create-subscription-order", "3");
@@ -192,6 +194,7 @@ describe("Create forms, filled through a real browser", () => {
   it("sends a Source with its type and configuration", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
 
+    await view.click("text=New Source");
     await view.selectOption("#create-source-connection", connectionId);
     await view.selectOption("#create-source-topic", topicId);
     await view.selectOption("#create-source-type", "webhook");

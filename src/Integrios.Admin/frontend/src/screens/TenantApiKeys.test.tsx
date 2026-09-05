@@ -30,6 +30,7 @@ describe("Tenant API keys", () => {
     );
 
     render(<TenantApiKeysScreen tenantId={tenantId} />);
+    fireEvent.click(screen.getByText("New Tenant API key"));
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Tenant API key" }));
 

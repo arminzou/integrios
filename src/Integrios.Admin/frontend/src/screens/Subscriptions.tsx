@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
 import { navigate } from "../routes";
-import { ConfirmAction, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
 import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
@@ -54,14 +54,16 @@ export function SubscriptionsSection({
   return (
     <>
       <h2>Subscriptions on {topicName}</h2>
-      <SubscriptionForm
-        tenantId={tenantId}
-        topicId={topicId}
-        onSaved={(created) => {
-          list.reload();
-          if (created) navigate(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${created.id}`);
-        }}
-      />
+      <Disclosure label="New Subscription">
+        <SubscriptionForm
+          tenantId={tenantId}
+          topicId={topicId}
+          onSaved={(created) => {
+            list.reload();
+            if (created) navigate(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${created.id}`);
+          }}
+        />
+      </Disclosure>
 
       <h3>All Subscriptions</h3>
       <Field id="subscription-status" label="Status">
@@ -84,31 +86,33 @@ export function SubscriptionsSection({
         emptyText={`${topicName} has no Subscriptions matching this filter.`}
       />
       {list.items.length > 0 ? (
-        <table>
-          <caption>Subscriptions on {topicName}, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Status</th>
-              <th scope="col">Order</th>
-              <th scope="col">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((subscription) => (
-              <tr key={subscription.id}>
-                <th scope="row">
-                  <Link to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}>
-                    {subscription.name}
-                  </Link>
-                </th>
-                <td>{subscription.status}</td>
-                <td>{subscription.order_index}</td>
-                <td>{subscription.description ?? "—"}</td>
+        <div className="table-card">
+          <table>
+            <caption>Subscriptions on {topicName}, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Status</th>
+                <th scope="col">Order</th>
+                <th scope="col">Description</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((subscription) => (
+                <tr key={subscription.id}>
+                  <th scope="row">
+                    <Link to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}>
+                      {subscription.name}
+                    </Link>
+                  </th>
+                  <td>{subscription.status}</td>
+                  <td>{subscription.order_index}</td>
+                  <td>{subscription.description ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
 

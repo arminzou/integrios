@@ -132,11 +132,13 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
 
     // Topic.
     view = await openDashboard(`/tenants/${tenantId}/topics`);
+    await view.click("text=New Topic");
     await view.fill("#create-topic-name", `${run}-orders`);
     await view.click("text=Create Topic");
     const topicId = await created(view, /\/topics\/[0-9a-f-]{36}$/, "Topic");
 
     // Subscription, authored on the Topic it belongs to.
+    await view.click("text=New Subscription");
     await view.fill("#create-subscription-name", `${run}-to-sink`);
     await view.selectOption("#create-subscription-destination", connectionId);
     await view.fill("#create-subscription-match-rules", `{"event_type":"${run}.created"}`);
@@ -146,6 +148,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
 
     // Source.
     view = await openDashboard(`/tenants/${tenantId}/sources`);
+    await view.click("text=New Source");
     await view.selectOption("#create-source-connection", connectionId);
     await view.selectOption("#create-source-topic", topicId);
     await view.selectOption("#create-source-type", "event_api");
