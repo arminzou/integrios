@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link, NavLink } from "react-router";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { Form, SelectField, TextField } from "../ui/fields";
+import { Panel, RowHeader, TableCard } from "../ui/layout";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
@@ -21,8 +28,8 @@ const deliveryStatuses = ["pending", "in_flight", "succeeded", "dead_lettered"];
 
 /// Above this width the ledger and the selected Event's inspector sit side by side, so moving focus
 /// to the inspector on selection would only be disorienting; below it the inspector follows the
-/// ledger in document order, and focus is what makes the newly-visible result findable. Kept as one
-/// constant because the CSS breakpoint in index.css must agree with it.
+/// ledger in document order, and focus is what makes the newly-visible result findable. The layout
+/// utilities below carry the same 900px, so the two cannot drift apart unnoticed.
 const desktopBreakpoint = "(min-width: 900px)";
 
 type Filters = {
@@ -67,12 +74,13 @@ type SummaryKey = "accepted" | "awaiting" | "unrouted" | "deadLettered";
 
 export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; selectedEventId?: string }) {
   // The applied filters are separate from what is being typed: a source Event identity is a free
-  // text field, and re-reading the list on every keystroke would restart the cursor each time.
-  const [draft, setDraft] = useState<Filters>(noFilters);
+  // text field, and re-reading the list on every keystroke would restart the cursor each time. The
+  // form holds what is being typed; this holds what the ledger is actually reading under.
   const [applied, setApplied] = useState<Filters>(noFilters);
   // Which activity-summary item, if any, produced the current filters. Cleared whenever the
   // Operator edits filters by hand, so the pressed state never lies about what is actually applied.
   const [activeSummary, setActiveSummary] = useState<SummaryKey | null>(null);
+  const form = useForm<Filters>({ defaultValues: noFilters });
 
   const sources = useOptions<SourceListItem>(
     () => api.GET("/admin/tenants/{tenantId}/sources", { params: { path: { tenantId }, query: { limit: 100 } } }),
@@ -117,8 +125,6 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
     `events|${tenantId}|${JSON.stringify(applied)}`,
   );
 
-  const set = (patch: Partial<Filters>) => setDraft((previous) => ({ ...previous, ...patch }));
-
   function selectSummaryItem(key: SummaryKey) {
     if (!summary.data) return;
     const statePatch: Partial<Filters> =
@@ -135,184 +141,182 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
       acceptedFrom: localInputValue(summary.data.window_start),
       acceptedTo: localInputValue(summary.data.window_end),
     };
-    setDraft(next);
+    // The filter panel shows what the summary item applied, so an Operator who opens it sees the
+    // filters that are actually in force rather than what they last typed.
+    form.reset(next);
     setApplied(next);
     setActiveSummary(key);
   }
 
   return (
-    <div className="events-layout">
-      <div className="ledger-column">
-        <h1>Events</h1>
-        <p>
-          In <Link to={`/tenants/${tenantId}`}>this Tenant</Link>.
-        </p>
+    <div
+      data-layout="events"
+      className="flex flex-col gap-6 min-[900px]:flex-row min-[900px]:items-start min-[900px]:gap-8"
+    >
+      <div className="flex min-w-0 flex-col gap-6 min-[900px]:flex-[1_1_55%]">
+        <header>
+          <h1>Events</h1>
+          <p className="text-ink-secondary">
+            In{" "}
+            <Link className="underline" to={`/tenants/${tenantId}`}>
+              this Tenant
+            </Link>
+            .
+          </p>
+        </header>
 
         <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
 
         <Disclosure label="Find an Event">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              setApplied(draft);
-              setActiveSummary(null);
-            }}
-          >
-            <FormError message={formError(sources.problem ?? topics.problem)} />
-            <Field id="event-status" label="Event status" hint="How far the Event itself got.">
-              <select
-                {...fieldProps("event-status", undefined, true)}
-                value={draft.status}
-                onChange={(event) => set({ status: event.target.value })}
+          <Form {...form}>
+            <Panel asChild className="max-w-none">
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={form.handleSubmit((values) => {
+                  setApplied(values);
+                  setActiveSummary(null);
+                })}
               >
-                <option value="">Any Event status</option>
-                {eventStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {/* Delivery status is a separate filter over Delivery state. An Event matches when one of
-                its EventDeliveries is in that state; the Event's own status is untouched by it. */}
-            <Field
-              id="event-delivery-status"
-              label="Delivery status"
-              hint="Matches Events with at least one EventDelivery in this state."
-            >
-              <select
-                {...fieldProps("event-delivery-status", undefined, true)}
-                value={draft.deliveryStatus}
-                onChange={(event) => set({ deliveryStatus: event.target.value })}
-              >
-                <option value="">Any Delivery status</option>
-                {deliveryStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              id="event-source"
-              label="Source"
-              hint={sources.truncated ? "Showing the first 100 Sources." : undefined}
-            >
-              <select
-                {...fieldProps("event-source", undefined, sources.truncated)}
-                value={draft.sourceId}
-                onChange={(event) => set({ sourceId: event.target.value })}
-                disabled={sources.busy || sources.problem !== null}
-              >
-                <option value="">Any Source</option>
-                {sources.items.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.type} · {source.id}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field id="event-topic" label="Topic" hint={topics.truncated ? "Showing the first 100 Topics." : undefined}>
-              <select
-                {...fieldProps("event-topic", undefined, topics.truncated)}
-                value={draft.topicId}
-                onChange={(event) => set({ topicId: event.target.value })}
-                disabled={topics.busy || topics.problem !== null}
-              >
-                <option value="">Any Topic</option>
-                {topics.items.map((topic) => (
-                  <option key={topic.id} value={topic.id}>
-                    {topic.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              id="event-source-event-id"
-              label="Source Event id"
-              hint="The identity the sending system gave the Event. Matched exactly."
-            >
-              <input
-                {...fieldProps("event-source-event-id", undefined, true)}
-                value={draft.sourceEventId}
-                onChange={(event) => set({ sourceEventId: event.target.value })}
-              />
-            </Field>
-            <Field id="event-accepted-from" label="Accepted from">
-              <input
-                {...fieldProps("event-accepted-from")}
-                type="datetime-local"
-                step="1"
-                value={draft.acceptedFrom}
-                onChange={(event) => set({ acceptedFrom: event.target.value })}
-              />
-            </Field>
-            <Field id="event-accepted-to" label="Accepted to">
-              <input
-                {...fieldProps("event-accepted-to")}
-                type="datetime-local"
-                step="1"
-                value={draft.acceptedTo}
-                onChange={(event) => set({ acceptedTo: event.target.value })}
-              />
-            </Field>
-            <button type="submit">Apply filters</button>
-            <button
-              type="button"
-              onClick={() => {
-                setDraft(noFilters);
-                setApplied(noFilters);
-                setActiveSummary(null);
-              }}
-            >
-              Clear filters
-            </button>
-          </form>
+                <FormError message={formError(sources.problem ?? topics.problem)} />
+
+                <SelectField
+                  control={form.control}
+                  name="status"
+                  label="Event status"
+                  hint="How far the Event itself got."
+                >
+                  <option value="">Any Event status</option>
+                  {eventStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </SelectField>
+                {/* Delivery status is a separate filter over Delivery state. An Event matches when one
+                    of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
+                <SelectField
+                  control={form.control}
+                  name="deliveryStatus"
+                  label="Delivery status"
+                  hint="Matches Events with at least one EventDelivery in this state."
+                >
+                  <option value="">Any Delivery status</option>
+                  {deliveryStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  control={form.control}
+                  name="sourceId"
+                  label="Source"
+                  hint={sources.truncated ? "Showing the first 100 Sources." : undefined}
+                  disabled={sources.busy || sources.problem !== null}
+                >
+                  <option value="">Any Source</option>
+                  {sources.items.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.type} · {source.id}
+                    </option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  control={form.control}
+                  name="topicId"
+                  label="Topic"
+                  hint={topics.truncated ? "Showing the first 100 Topics." : undefined}
+                  disabled={topics.busy || topics.problem !== null}
+                >
+                  <option value="">Any Topic</option>
+                  {topics.items.map((topic) => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.name}
+                    </option>
+                  ))}
+                </SelectField>
+                <TextField
+                  control={form.control}
+                  name="sourceEventId"
+                  label="Source Event id"
+                  hint="The identity the sending system gave the Event. Matched exactly."
+                />
+                <TextField
+                  control={form.control}
+                  name="acceptedFrom"
+                  label="Accepted from"
+                  type="datetime-local"
+                  step="1"
+                />
+                <TextField
+                  control={form.control}
+                  name="acceptedTo"
+                  label="Accepted to"
+                  type="datetime-local"
+                  step="1"
+                />
+
+                <div className="flex flex-wrap gap-3">
+                  <Button type="submit">Apply filters</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      form.reset(noFilters);
+                      setApplied(noFilters);
+                      setActiveSummary(null);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              </form>
+            </Panel>
+          </Form>
         </Disclosure>
 
-        <ListStatus
-          busy={list.busy}
-          loaded={list.loaded}
-          problem={list.problem}
-          empty={list.items.length === 0}
-          emptyText="No Events in this Tenant match these filters."
-        />
-        {list.items.length > 0 ? (
-          <div className="table-card">
-            <table>
-              <caption>Events, newest first</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Accepted</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Source Event id</th>
-                  <th scope="col">Event status</th>
-                  <th scope="col">Deliveries</th>
-                </tr>
-              </thead>
-              <tbody>
+        <div className="flex flex-col gap-4">
+          <ListStatus
+            busy={list.busy}
+            loaded={list.loaded}
+            problem={list.problem}
+            empty={list.items.length === 0}
+            emptyText="No Events in this Tenant match these filters."
+          />
+          {list.items.length > 0 ? (
+            <TableCard caption="Events, newest first">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Accepted</TableHead>
+                  <TableHead scope="col">Type</TableHead>
+                  <TableHead scope="col">Source Event id</TableHead>
+                  <TableHead scope="col">Event status</TableHead>
+                  <TableHead scope="col">Deliveries</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {list.items.map((item) => (
-                  <tr key={item.event_id}>
-                    <th scope="row">
+                  <TableRow key={item.event_id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                    <RowHeader>
                       {/* NavLink marks the selected row itself: the route is the selection, so
                           `aria-current` follows the URL rather than a separately tracked flag. */}
-                      <NavLink to={`/tenants/${tenantId}/events/${item.event_id}`} end>
+                      <NavLink className="underline" to={`/tenants/${tenantId}/events/${item.event_id}`} end>
                         {item.accepted_at}
                       </NavLink>
-                    </th>
-                    <td>{item.event_type}</td>
-                    <td>{item.source_event_id ?? "—"}</td>
-                    <td>{item.status}</td>
-                    <td>
+                    </RowHeader>
+                    <TableCell>{item.event_type}</TableCell>
+                    <TableCell className="font-mono text-sm">{item.source_event_id ?? "—"}</TableCell>
+                    <TableCell>{item.status}</TableCell>
+                    <TableCell>
                       <DeliveryCounts counts={item.deliveries} />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+              </TableBody>
+            </TableCard>
+          ) : null}
+          <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+        </div>
       </div>
 
       {/* Keyed by Event id: switching the selection is a distinct inspector, not the same one fed a
@@ -352,16 +356,21 @@ function ActivitySummary({
   ];
 
   return (
-    <section aria-label="Event activity summary" className="activity-summary">
-      <p className="activity-summary-window">
+    <section aria-label="Event activity summary" className="flex flex-col gap-3">
+      <p className="m-0 text-ink-secondary">
         Last 60 minutes, {data.window_start} to {data.window_end}.
       </p>
-      <ul className="activity-summary-list">
+      <ul className="m-0 flex list-none flex-wrap gap-3 p-0">
         {items.map((item) => (
           <li key={item.key}>
-            <button type="button" aria-pressed={activeKey === item.key} onClick={() => onSelect(item.key)}>
-              <span className="activity-summary-value">{item.value}</span>
-              <span>{item.label}</span>
+            <button
+              type="button"
+              aria-pressed={activeKey === item.key}
+              onClick={() => onSelect(item.key)}
+              className="flex min-w-38 cursor-pointer flex-col items-start gap-1 rounded-lg border bg-surface px-4 py-3 text-left hover:bg-surface-quiet aria-pressed:border-accent-border aria-pressed:bg-selected-surface aria-pressed:text-selected-ink focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <span className="font-serif text-3xl">{item.value}</span>
+              <span className="text-sm">{item.label}</span>
             </button>
           </li>
         ))}
@@ -386,10 +395,10 @@ function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDelive
 }
 
 /// The selected Event's detail: a persistent inspector beside the ledger on wide screens, and the
-/// same content following the ledger in document order on narrow ones (see `.events-layout` in
-/// index.css). It reads independently of the ledger list by the route's own Event id, so a direct
-/// link resolves the same detail whether or not that row is in the ledger's currently loaded page,
-/// and a replay only re-reads this Event rather than the whole ledger.
+/// same content following the ledger in document order on narrow ones. It reads independently of
+/// the ledger list by the route's own Event id, so a direct link resolves the same detail whether
+/// or not that row is in the ledger's currently loaded page, and a replay only re-reads this Event
+/// rather than the whole ledger.
 function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: string }) {
   const event = useResource<EventDetail>(
     () =>
@@ -413,10 +422,13 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
     if (isNarrow) heading.current?.focus();
   }, [eventId, event.data, event.problem]);
 
+  const panel =
+    "flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-6 min-[900px]:sticky min-[900px]:flex-[1_1_45%] min-[900px]:top-[calc(var(--topbar-height)+1rem)]";
+
   if (event.problem)
     return (
-      <aside className="event-inspector" aria-label="Event detail">
-        <h2 ref={heading} tabIndex={-1}>
+      <aside className={panel} aria-label="Event detail">
+        <h2 ref={heading} tabIndex={-1} className="m-0">
           Event
         </h2>
         <p role="alert">{event.problem.detail ?? `This Event could not be read (${event.problem.status}).`}</p>
@@ -424,18 +436,18 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
     );
   if (!event.data)
     return (
-      <aside className="event-inspector" aria-label="Event detail">
+      <aside className={panel} aria-label="Event detail">
         <p>Loading…</p>
       </aside>
     );
 
   const current = event.data;
   return (
-    <aside className="event-inspector" aria-label="Event detail">
-      <h2 ref={heading} tabIndex={-1}>
+    <aside className={panel} aria-label="Event detail">
+      <h2 ref={heading} tabIndex={-1} className="m-0 text-2xl break-all">
         Event {current.event_id}
       </h2>
-      <dl>
+      <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-1 [&>dd]:m-0 [&>dd]:text-right [&>dt]:m-0 [&>dt]:font-medium [&>dt]:text-ink-secondary">
         <dt>Event status</dt>
         <dd>{current.status}</dd>
         <dt>Accepted</dt>
@@ -448,75 +460,86 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
 
       <TraceId traceId={current.trace_id ?? null} />
 
-      <h3>EventDeliveries</h3>
-      {current.event_deliveries?.length ? (
-        <div className="table-scroll">
-          <table>
-            <caption>One EventDelivery per matched Subscription</caption>
-            <thead>
-              <tr>
-                <th scope="col">Subscription</th>
-                <th scope="col">Delivery status</th>
-                <th scope="col">Attempts (lifetime / retry cycle)</th>
-                <th scope="col">Deliver after</th>
-                <th scope="col">Failed</th>
-                <th scope="col">Recovery</th>
-              </tr>
-            </thead>
-            <tbody>
-              {current.event_deliveries.map((delivery) => (
-                <tr key={delivery.event_delivery_id}>
-                  <th scope="row">{delivery.subscription_id}</th>
-                  <td>{delivery.status}</td>
-                  <td>
-                    {delivery.lifetime_attempt_count} / {delivery.retry_cycle_attempt_count}
-                  </td>
-                  <td>{delivery.deliver_after ?? "—"}</td>
-                  <td>{delivery.failed_at ?? "—"}</td>
-                  <td>
-                    <ReplayDelivery
-                      tenantId={tenantId}
-                      eventId={eventId}
-                      delivery={delivery}
-                      onReplayed={event.reload}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p>This Event has no EventDeliveries.</p>
-      )}
+      <section className="flex flex-col gap-2">
+        <h3 className="m-0 text-lg">EventDeliveries</h3>
+        {current.event_deliveries?.length ? (
+          <div className="overflow-x-auto">
+            <TableCard caption="One EventDelivery per matched Subscription">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Subscription</TableHead>
+                  <TableHead scope="col">Delivery status</TableHead>
+                  <TableHead scope="col">Attempts (lifetime / retry cycle)</TableHead>
+                  <TableHead scope="col">Deliver after</TableHead>
+                  <TableHead scope="col">Failed</TableHead>
+                  <TableHead scope="col">Recovery</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {current.event_deliveries.map((delivery) => (
+                  <TableRow key={delivery.event_delivery_id}>
+                    <RowHeader className="font-mono text-sm">{delivery.subscription_id}</RowHeader>
+                    <TableCell>{delivery.status}</TableCell>
+                    <TableCell>
+                      {delivery.lifetime_attempt_count} / {delivery.retry_cycle_attempt_count}
+                    </TableCell>
+                    <TableCell>{delivery.deliver_after ?? "—"}</TableCell>
+                    <TableCell>{delivery.failed_at ?? "—"}</TableCell>
+                    <TableCell>
+                      <ReplayDelivery
+                        tenantId={tenantId}
+                        eventId={eventId}
+                        delivery={delivery}
+                        onReplayed={event.reload}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </TableCard>
+          </div>
+        ) : (
+          <p>This Event has no EventDeliveries.</p>
+        )}
+      </section>
 
-      <h3>Delivery timeline</h3>
-      {current.delivery_attempts?.length ? (
-        <ol className="timeline" aria-label="Every attempt made against this Event's EventDeliveries">
-          {current.delivery_attempts.map((attempt) => {
-            // Only a terminal "failed" attempt gets the failure marker and its detail line.
-            // "in_progress" (leased but not yet finished) and any other in-flight status are
-            // neither success nor failure yet, and must not be painted red on a guess.
-            const failed = attempt.status === "failed";
-            return (
-              <li key={attempt.attempt_id} className={failed ? "failed" : undefined}>
-                <p>
-                  <time>{attempt.started_at}</time> — attempt {attempt.attempt_number} to Subscription{" "}
-                  {attempt.subscription_id}: {attempt.status}
-                </p>
-                {failed ? (
-                  <p>
-                    {attempt.failure_phase ?? "—"} · HTTP {attempt.response_status_code ?? "—"} ·{" "}
-                    {attempt.error_message ?? "—"}
+      <section className="flex flex-col gap-2">
+        <h3 className="m-0 text-lg">Delivery timeline</h3>
+        {current.delivery_attempts?.length ? (
+          <ol
+            className="m-0 list-none border-l pl-5"
+            aria-label="Every attempt made against this Event's EventDeliveries"
+          >
+            {current.delivery_attempts.map((attempt) => {
+              // Only a terminal "failed" attempt gets the failure marker and its detail line.
+              // "in_progress" (leased but not yet finished) and any other in-flight status are
+              // neither success nor failure yet, and must not be painted red on a guess.
+              const failed = attempt.status === "failed";
+              return (
+                <li
+                  key={attempt.attempt_id}
+                  className={`relative pb-4 last:pb-0 before:absolute before:top-1.5 before:-left-[25px] before:size-2.5 before:rounded-full before:content-[''] ${
+                    failed ? "before:bg-danger-ink" : "before:bg-selected-ink"
+                  }`}
+                >
+                  <p className="m-0">
+                    <time className="font-semibold">{attempt.started_at}</time> — attempt {attempt.attempt_number} to
+                    Subscription <span className="font-mono text-sm">{attempt.subscription_id}</span>: {attempt.status}
                   </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-      ) : (
-        <p>No delivery attempts have been made for this Event.</p>
-      )}
+                  {failed ? (
+                    <p className="m-0 text-ink-secondary">
+                      {attempt.failure_phase ?? "—"} · HTTP {attempt.response_status_code ?? "—"} ·{" "}
+                      {attempt.error_message ?? "—"}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <p>No delivery attempts have been made for this Event.</p>
+        )}
+      </section>
     </aside>
   );
 }
@@ -530,25 +553,30 @@ function TraceId({ traceId }: { traceId: string | null }) {
   if (!traceId) return <p>This Event carries no trace identity.</p>;
 
   return (
-    <p>
-      <label htmlFor="event-trace-id">Trace id</label>
-      <input id="event-trace-id" className="trace-value" ref={field} readOnly value={traceId} size={40} />
-      <button
-        type="button"
-        onClick={() => {
-          // Clipboard access can be unavailable or refused; selecting the value still lets the
-          // Operator copy it, so the control is never a dead end.
-          field.current?.select();
-          void navigator.clipboard
-            ?.writeText(traceId)
-            .then(() => setCopied(true))
-            .catch(() => setCopied(false));
-        }}
-      >
-        Copy trace id
-      </button>
-      <span role="status">{copied ? "Trace id copied." : ""}</span>
-    </p>
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="event-trace-id">Trace id</Label>
+      <Input id="event-trace-id" className="font-mono text-sm" ref={field} readOnly value={traceId} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            // Clipboard access can be unavailable or refused; selecting the value still lets the
+            // Operator copy it, so the control is never a dead end.
+            field.current?.select();
+            void navigator.clipboard
+              ?.writeText(traceId)
+              .then(() => setCopied(true))
+              .catch(() => setCopied(false));
+          }}
+        >
+          Copy trace id
+        </Button>
+        <span role="status" className="text-sm text-ink-secondary">
+          {copied ? "Trace id copied." : ""}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -570,7 +598,7 @@ function ReplayDelivery({
   if (delivery.status !== "dead_lettered") return <span>—</span>;
 
   return (
-    <>
+    <div className="flex flex-col items-start gap-2">
       <ConfirmAction
         label="Replay"
         question={`Replay the dead-lettered delivery to Subscription ${delivery.subscription_id}? It is queued for delivery again.`}
@@ -587,6 +615,6 @@ function ReplayDelivery({
         }
       />
       <FormError message={formError(problem)} />
-    </>
+    </div>
   );
 }

@@ -215,7 +215,7 @@ describe("The Event ledger and inspector in a real browser", () => {
     const wide = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 1280, height: 900 });
     await wide.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
     const wideLayout = await wide.evaluate(
-      () => getComputedStyle(document.querySelector(".events-layout")!).flexDirection,
+      () => getComputedStyle(document.querySelector("[data-layout=events]")!).flexDirection,
     );
     expect(wideLayout).toBe("row");
     await wide.close();
@@ -223,7 +223,7 @@ describe("The Event ledger and inspector in a real browser", () => {
     const narrow = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 500, height: 900 });
     await narrow.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
     const narrowLayout = await narrow.evaluate(
-      () => getComputedStyle(document.querySelector(".events-layout")!).flexDirection,
+      () => getComputedStyle(document.querySelector("[data-layout=events]")!).flexDirection,
     );
     expect(narrowLayout).toBe("column");
     await narrow.close();

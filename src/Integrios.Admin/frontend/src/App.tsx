@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
+import { Button } from "@/components/ui/button";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
 import type { components } from "./api/schema";
 import { isIdentifier } from "./identifiers";
@@ -168,7 +169,9 @@ function TopNav({
               the typed client's own requests. */}
           <form method="post" action="/auth/logout">
             <input type="hidden" name={session.antiforgery_form_field_name} value={session.antiforgery_token} />
-            <button type="submit">Sign out</button>
+            <Button type="submit" variant="outline" size="sm">
+              Sign out
+            </Button>
           </form>
         </div>
       </nav>

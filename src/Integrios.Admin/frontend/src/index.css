@@ -151,4 +151,18 @@
     letter-spacing: -0.02em;
     margin: 0 0 12px;
   }
+
+  /* Monospace is limited to identifiers, trace values, and JSON documents. */
+  code {
+    font-family: var(--font-mono);
+  }
+
+  pre {
+    font-family: var(--font-mono);
+    background: var(--surface-quiet);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    overflow-x: auto;
+  }
 }
