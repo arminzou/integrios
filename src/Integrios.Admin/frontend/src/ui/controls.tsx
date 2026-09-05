@@ -7,9 +7,25 @@ import type { Problem } from "../api/problem";
 /// list it belongs to.
 export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <details className="disclosure">
-      <summary>{label}</summary>
-      {children}
+    <details className="group">
+      <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-2 rounded-md border bg-surface px-3 py-2 text-sm font-medium outline-none select-none hover:bg-hover-surface focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 12 12"
+          className="size-3 shrink-0 transition-transform group-open:rotate-90"
+        >
+          <path
+            d="M4.5 2.5 8 6l-3.5 3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        {label}
+      </summary>
+      <div className="pt-4">{children}</div>
     </details>
   );
 }
