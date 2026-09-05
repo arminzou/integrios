@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, loadSession, signInHref, type OperatorSession } from "./api/client";
 import { useRoute, type Route } from "./routes";
 import type { components } from "./api/schema";
@@ -66,7 +66,7 @@ function Shell({ children }: { children: ReactNode }) {
     <div className="shell">
       <header className="topbar">
         <div className="topbar-row">
-          <span className="brand">Integrios Operator</span>
+          <BrandMark />
         </div>
       </header>
       <main id="main">{children}</main>
@@ -74,14 +74,28 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
+function BrandMark() {
+  return (
+    <span className="brand">
+      <span className="brand-mark" aria-hidden="true">
+        I
+      </span>
+      Integrios Operator
+    </span>
+  );
+}
+
 function SignedIn({ session }: { session: OperatorSession }) {
   const route = useRoute();
   const tenantId = "tenantId" in route ? route.tenantId : null;
+  const tenant = useTenant(tenantId);
+  const section = tenantSectionOf(route);
 
   return (
     <div className="shell">
-      <TopNav session={session} route={route} tenantId={tenantId} />
+      <TopNav session={session} route={route} tenantId={tenantId} tenant={tenant} />
       <main id="main">
+        {section ? <p className="breadcrumb">{tenantDisplayName(tenant)} / {sectionLabels[section]}</p> : null}
         <Screen route={route} />
       </main>
     </div>
@@ -96,17 +110,36 @@ function TopNav({
   session,
   route,
   tenantId,
+  tenant,
 }: {
   session: OperatorSession;
   route: Route;
   tenantId: string | null;
+  tenant: ReturnType<typeof useTenant>;
 }) {
   const connectorsActive = isConnectorsSection(route);
+  const headerRef = useRef<HTMLElement>(null);
+
+  // The sticky inspector on the Events screen sits below whatever this topbar's real height turns
+  // out to be — one row when no Tenant is selected, two when one is — rather than a guessed pixel
+  // offset that drifts out of sync the moment this header's own content changes.
+  useEffect(() => {
+    const element = headerRef.current;
+    if (!element) return;
+    const updateHeight = () => {
+      document.documentElement.style.setProperty("--topbar-height", `${element.offsetHeight}px`);
+    };
+    updateHeight();
+    if (typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [tenantId]);
 
   return (
-    <header className="topbar">
+    <header className="topbar" ref={headerRef}>
       <nav className="topbar-row" aria-label="Deployment">
-        <span className="brand">Integrios Operator</span>
+        <BrandMark />
         <ul className="nav-list">
           <li>
             <Link to="/tenants" current={!connectorsActive && route.name !== "unknown"}>
@@ -133,12 +166,21 @@ function TopNav({
           </form>
         </div>
       </nav>
-      {tenantId ? <TenantNav tenantId={tenantId} route={route} /> : null}
+      {tenantId ? <TenantNav tenantId={tenantId} route={route} tenant={tenant} /> : null}
     </header>
   );
 }
 
 type TenantSection = "overview" | "events" | "connections" | "sources" | "topics" | "apiKeys";
+
+const sectionLabels: Record<TenantSection, string> = {
+  overview: "Overview",
+  events: "Events",
+  connections: "Connections",
+  sources: "Sources",
+  topics: "Topics",
+  apiKeys: "API keys",
+};
 
 function tenantSectionOf(route: Route): TenantSection | null {
   switch (route.name) {
@@ -164,36 +206,53 @@ function tenantSectionOf(route: Route): TenantSection | null {
   }
 }
 
-/// Names the current Tenant explicitly in navigation rather than leaving it implied by the route's
-/// opaque id. Reads the Tenant independently of whatever a screen underneath also reads: the shell
-/// has no channel to a screen's own resource state, and duplicating one small GET is cheaper than
-/// wiring a shared cache across every screen for this.
-function TenantNav({ tenantId, route }: { tenantId: string; route: Route }) {
-  const tenant = useResource<Tenant>(
-    () => api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } }),
-    tenantId,
+/// Reads the current Tenant once for the whole shell, so navigation and the breadcrumb name it
+/// from the same read instead of each issuing their own GET. `tenantId` is null on deployment-wide
+/// routes; the load stays a no-op instant resolution rather than a conditional hook call.
+function useTenant(tenantId: string | null) {
+  return useResource<Tenant>(
+    () =>
+      tenantId
+        ? api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } })
+        : Promise.resolve({ data: undefined, error: undefined, response: { status: 200 } }),
+    tenantId ?? "",
   );
+}
+
+function tenantDisplayName(tenant: ReturnType<typeof useTenant>): string {
+  return tenant.data ? tenant.data.name : tenant.problem ? "This Tenant" : "Loading Tenant…";
+}
+
+/// Names the current Tenant explicitly in navigation rather than leaving it implied by the route's
+/// opaque id.
+function TenantNav({
+  tenantId,
+  route,
+  tenant,
+}: {
+  tenantId: string;
+  route: Route;
+  tenant: ReturnType<typeof useTenant>;
+}) {
   const section = tenantSectionOf(route);
 
-  const items: { label: string; href: string; section: TenantSection }[] = [
-    { label: "Overview", href: `/tenants/${tenantId}`, section: "overview" },
-    { label: "Events", href: `/tenants/${tenantId}/events`, section: "events" },
-    { label: "Connections", href: `/tenants/${tenantId}/connections`, section: "connections" },
-    { label: "Sources", href: `/tenants/${tenantId}/sources`, section: "sources" },
-    { label: "Topics", href: `/tenants/${tenantId}/topics`, section: "topics" },
-    { label: "API keys", href: `/tenants/${tenantId}/tenant-api-keys`, section: "apiKeys" },
+  const items: { section: TenantSection; href: string }[] = [
+    { section: "overview", href: `/tenants/${tenantId}` },
+    { section: "events", href: `/tenants/${tenantId}/events` },
+    { section: "connections", href: `/tenants/${tenantId}/connections` },
+    { section: "sources", href: `/tenants/${tenantId}/sources` },
+    { section: "topics", href: `/tenants/${tenantId}/topics` },
+    { section: "apiKeys", href: `/tenants/${tenantId}/tenant-api-keys` },
   ];
 
   return (
     <nav className="topbar-row tenant-row" aria-label="Tenant">
-      <span className="tenant-name">
-        {tenant.data ? tenant.data.name : tenant.problem ? "This Tenant" : "Loading Tenant…"}
-      </span>
+      <span className="tenant-name">{tenantDisplayName(tenant)}</span>
       <ul className="nav-list">
         {items.map((item) => (
           <li key={item.section}>
             <Link to={item.href} current={item.section === section}>
-              {item.label}
+              {sectionLabels[item.section]}
             </Link>
           </li>
         ))}

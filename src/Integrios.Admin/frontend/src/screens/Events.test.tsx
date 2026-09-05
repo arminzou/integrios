@@ -207,6 +207,32 @@ describe("Event inspector", () => {
     expect(screen.queryByRole("button", { name: "Replay" })).toBeNull();
   });
 
+  it("renders an in-progress Delivery attempt neutrally, not as a failure", async () => {
+    // A worker leases an attempt as "in_progress" before it finishes, and a dead lease can leave one
+    // stuck there indefinitely. Neither is a failure, and the timeline must not guess otherwise.
+    const inProgress = {
+      attempt_id: "88888888-0000-0000-0000-000000000001",
+      event_delivery_id: deliveryId,
+      subscription_id: subscriptionId,
+      destination_connection_id: "88888888-8888-8888-8888-888888888888",
+      attempt_number: 1,
+      status: "in_progress",
+      failure_phase: null,
+      response_status_code: null,
+      error_message: null,
+      started_at: "2026-09-01T10:00:00Z",
+      completed_at: null,
+    };
+    stubHttp(respondFor(page([]), { ...detail("succeeded"), delivery_attempts: [inProgress] }));
+
+    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    const item = (await screen.findByText(/in_progress/)).closest("li")!;
+
+    expect(item.className).not.toContain("failed");
+    // No fabricated failure detail line for an attempt that has not finished yet.
+    expect(within(item).queryByText(/HTTP/)).toBeNull();
+  });
+
   it("hands over the trace identity as an opaque value without linking to any backend", async () => {
     stubHttp(respondFor(page([]), detail("succeeded")));
 

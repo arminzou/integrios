@@ -275,35 +275,37 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
           emptyText="No Events in this Tenant match these filters."
         />
         {list.items.length > 0 ? (
-          <table>
-            <caption>Events, newest first</caption>
-            <thead>
-              <tr>
-                <th scope="col">Accepted</th>
-                <th scope="col">Type</th>
-                <th scope="col">Source Event id</th>
-                <th scope="col">Event status</th>
-                <th scope="col">Deliveries</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.items.map((item) => (
-                <tr key={item.event_id}>
-                  <th scope="row">
-                    <Link to={`/tenants/${tenantId}/events/${item.event_id}`} current={item.event_id === selectedEventId}>
-                      {item.accepted_at}
-                    </Link>
-                  </th>
-                  <td>{item.event_type}</td>
-                  <td>{item.source_event_id ?? "—"}</td>
-                  <td>{item.status}</td>
-                  <td>
-                    <DeliveryCounts counts={item.deliveries} />
-                  </td>
+          <div className="ledger">
+            <table>
+              <caption>Events, newest first</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Accepted</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Source Event id</th>
+                  <th scope="col">Event status</th>
+                  <th scope="col">Deliveries</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {list.items.map((item) => (
+                  <tr key={item.event_id}>
+                    <th scope="row">
+                      <Link to={`/tenants/${tenantId}/events/${item.event_id}`} current={item.event_id === selectedEventId}>
+                        {item.accepted_at}
+                      </Link>
+                    </th>
+                    <td>{item.event_type}</td>
+                    <td>{item.source_event_id ?? "—"}</td>
+                    <td>{item.status}</td>
+                    <td>
+                      <DeliveryCounts counts={item.deliveries} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : null}
         <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
       </div>
@@ -439,73 +441,70 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
 
       <h3>EventDeliveries</h3>
       {current.event_deliveries?.length ? (
-        <table>
-          <caption>One EventDelivery per matched Subscription</caption>
-          <thead>
-            <tr>
-              <th scope="col">Subscription</th>
-              <th scope="col">Delivery status</th>
-              <th scope="col">Attempts (lifetime / retry cycle)</th>
-              <th scope="col">Deliver after</th>
-              <th scope="col">Failed</th>
-              <th scope="col">Recovery</th>
-            </tr>
-          </thead>
-          <tbody>
-            {current.event_deliveries.map((delivery) => (
-              <tr key={delivery.event_delivery_id}>
-                <th scope="row">{delivery.subscription_id}</th>
-                <td>{delivery.status}</td>
-                <td>
-                  {delivery.lifetime_attempt_count} / {delivery.retry_cycle_attempt_count}
-                </td>
-                <td>{delivery.deliver_after ?? "—"}</td>
-                <td>{delivery.failed_at ?? "—"}</td>
-                <td>
-                  <ReplayDelivery
-                    tenantId={tenantId}
-                    eventId={eventId}
-                    delivery={delivery}
-                    onReplayed={event.reload}
-                  />
-                </td>
+        <div className="table-scroll">
+          <table>
+            <caption>One EventDelivery per matched Subscription</caption>
+            <thead>
+              <tr>
+                <th scope="col">Subscription</th>
+                <th scope="col">Delivery status</th>
+                <th scope="col">Attempts (lifetime / retry cycle)</th>
+                <th scope="col">Deliver after</th>
+                <th scope="col">Failed</th>
+                <th scope="col">Recovery</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {current.event_deliveries.map((delivery) => (
+                <tr key={delivery.event_delivery_id}>
+                  <th scope="row">{delivery.subscription_id}</th>
+                  <td>{delivery.status}</td>
+                  <td>
+                    {delivery.lifetime_attempt_count} / {delivery.retry_cycle_attempt_count}
+                  </td>
+                  <td>{delivery.deliver_after ?? "—"}</td>
+                  <td>{delivery.failed_at ?? "—"}</td>
+                  <td>
+                    <ReplayDelivery
+                      tenantId={tenantId}
+                      eventId={eventId}
+                      delivery={delivery}
+                      onReplayed={event.reload}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <p>This Event has no EventDeliveries.</p>
       )}
 
-      <h3>Delivery attempts</h3>
+      <h3>Delivery timeline</h3>
       {current.delivery_attempts?.length ? (
-        <table>
-          <caption>Every attempt made against this Event's EventDeliveries</caption>
-          <thead>
-            <tr>
-              <th scope="col">Started</th>
-              <th scope="col">Attempt</th>
-              <th scope="col">Subscription</th>
-              <th scope="col">Outcome</th>
-              <th scope="col">Failure phase</th>
-              <th scope="col">Response</th>
-              <th scope="col">Error</th>
-            </tr>
-          </thead>
-          <tbody>
-            {current.delivery_attempts.map((attempt) => (
-              <tr key={attempt.attempt_id}>
-                <th scope="row">{attempt.started_at}</th>
-                <td>{attempt.attempt_number}</td>
-                <td>{attempt.subscription_id}</td>
-                <td>{attempt.status}</td>
-                <td>{attempt.failure_phase ?? "—"}</td>
-                <td>{attempt.response_status_code ?? "—"}</td>
-                <td>{attempt.error_message ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ol className="timeline" aria-label="Every attempt made against this Event's EventDeliveries">
+          {current.delivery_attempts.map((attempt) => {
+            // Only a terminal "failed" attempt gets the failure marker and its detail line.
+            // "in_progress" (leased but not yet finished) and any other in-flight status are
+            // neither success nor failure yet, and must not be painted red on a guess.
+            const failed = attempt.status === "failed";
+            return (
+              <li key={attempt.attempt_id} className={failed ? "failed" : undefined}>
+                <p>
+                  <time>{attempt.started_at}</time> — attempt {attempt.attempt_number} to Subscription{" "}
+                  {attempt.subscription_id}: {attempt.status}
+                </p>
+                {failed ? (
+                  <p>
+                    {attempt.failure_phase ?? "—"} · HTTP {attempt.response_status_code ?? "—"} ·{" "}
+                    {attempt.error_message ?? "—"}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
       ) : (
         <p>No delivery attempts have been made for this Event.</p>
       )}
@@ -524,7 +523,7 @@ function TraceId({ traceId }: { traceId: string | null }) {
   return (
     <p>
       <label htmlFor="event-trace-id">Trace id</label>
-      <input id="event-trace-id" ref={field} readOnly value={traceId} size={40} />
+      <input id="event-trace-id" className="trace-value" ref={field} readOnly value={traceId} size={40} />
       <button
         type="button"
         onClick={() => {
