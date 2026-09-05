@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
 import { navigate } from "../routes";
-import { ConfirmAction, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
 import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
@@ -33,7 +33,9 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
         In <Link to={`/tenants/${tenantId}`}>this Tenant</Link>.
       </p>
 
-      <CreateConnection tenantId={tenantId} onCreated={list.reload} />
+      <Disclosure label="New Connection">
+        <CreateConnection tenantId={tenantId} onCreated={list.reload} />
+      </Disclosure>
 
       <h2>All Connections</h2>
       <Field id="connection-status" label="Status">
@@ -56,29 +58,31 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
         emptyText="This Tenant has no Connections matching this filter."
       />
       {list.items.length > 0 ? (
-        <table>
-          <caption>Connections, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Status</th>
-              <th scope="col">Environment</th>
-              <th scope="col">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((connection) => (
-              <tr key={connection.id}>
-                <th scope="row">
-                  <Link to={`/tenants/${tenantId}/connections/${connection.id}`}>{connection.name}</Link>
-                </th>
-                <td>{connection.status}</td>
-                <td>{connection.environment ?? "—"}</td>
-                <td>{connection.description ?? "—"}</td>
+        <div className="table-card">
+          <table>
+            <caption>Connections, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Status</th>
+                <th scope="col">Environment</th>
+                <th scope="col">Description</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((connection) => (
+                <tr key={connection.id}>
+                  <th scope="row">
+                    <Link to={`/tenants/${tenantId}/connections/${connection.id}`}>{connection.name}</Link>
+                  </th>
+                  <td>{connection.status}</td>
+                  <td>{connection.environment ?? "—"}</td>
+                  <td>{connection.description ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
     </>

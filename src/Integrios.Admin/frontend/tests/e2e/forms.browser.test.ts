@@ -132,6 +132,9 @@ describe("Create forms, filled through a real browser", () => {
   it("sends a Connection with its config parsed out of the textarea", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/connections`);
 
+    // The create form sits behind a "New Connection" disclosure so it does not permanently
+    // dominate the list above it.
+    await view.click("text=New Connection");
     await view.selectOption("#create-connection-connector", connectorId);
     await view.fill("#create-connection-name", "sink");
     await view.fill("#create-connection-config", '{"base_uri":"http://sink.invalid"}');

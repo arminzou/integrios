@@ -121,6 +121,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
 
     // Connection.
     view = await openDashboard(`/tenants/${tenantId}/connections`);
+    await view.click("text=New Connection");
     await view.selectOption("#create-connection-connector", connectors[0].id);
     await view.fill("#create-connection-name", `${run}-sink`);
     await view.fill("#create-connection-config", '{"base_uri":"http://mocksink:8080"}');

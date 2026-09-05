@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
@@ -146,8 +146,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
         <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
 
-        <details className="filters-disclosure">
-          <summary>Find an Event</summary>
+        <Disclosure label="Find an Event">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -265,7 +264,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               Clear filters
             </button>
           </form>
-        </details>
+        </Disclosure>
 
         <ListStatus
           busy={list.busy}
@@ -275,7 +274,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
           emptyText="No Events in this Tenant match these filters."
         />
         {list.items.length > 0 ? (
-          <div className="ledger">
+          <div className="table-card">
             <table>
               <caption>Events, newest first</caption>
               <thead>

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { expectNoAccessibilityViolations } from "../test/axe";
 import { page, stubHttp } from "../test/http";
+import { ConnectionsScreen } from "./Connections";
 import { ConnectorsScreen } from "./Connectors";
 import { EventsScreen } from "./Events";
 import { SourcesScreen } from "./Sources";
@@ -90,6 +91,7 @@ describe("Accessibility of the Operator workflows", () => {
     for (const [name, element] of [
       ["Tenants", <TenantsScreen />],
       ["Connectors", <ConnectorsScreen />],
+      ["Connections", <ConnectionsScreen tenantId={tenantId} />],
       ["Sources", <SourcesScreen tenantId={tenantId} />],
       ["Tenant API keys", <TenantApiKeysScreen tenantId={tenantId} />],
     ] as const) {
@@ -99,6 +101,17 @@ describe("Accessibility of the Operator workflows", () => {
       expect(name).toBeTruthy();
       cleanup();
     }
+  });
+
+  it("passes the automated rules on the Connections authoring pattern with its create panel open", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    const container = renderScreen(<ConnectionsScreen tenantId={tenantId} />);
+    await screen.findByRole("heading", { level: 1, name: "Connections" });
+    // The create form is only exercised for accessibility once its disclosure is open — closed, it
+    // carries no violations to find.
+    fireEvent.click(screen.getByText("New Connection"));
+    await expectNoAccessibilityViolations(container);
   });
 
   it("passes the automated rules on a populated table and its confirmation", async () => {

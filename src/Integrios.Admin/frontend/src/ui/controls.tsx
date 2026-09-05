@@ -2,6 +2,18 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Problem } from "../api/problem";
 import { navigate } from "../routes";
 
+/// A collapsed "Find an X" filter panel or "New X" create panel, shared across every capability's
+/// list screen so neither a filter form nor a create form permanently dominates the page above the
+/// list it belongs to.
+export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <details className="disclosure">
+      <summary>{label}</summary>
+      {children}
+    </details>
+  );
+}
+
 /// Attributes that tie a control to its own label and error message. Screens spread these onto the
 /// control itself so a failed field announces its message rather than only turning a colour.
 export function fieldProps(id: string, error?: string, hasHint = false) {
