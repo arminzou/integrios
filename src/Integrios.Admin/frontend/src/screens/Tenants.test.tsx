@@ -90,6 +90,7 @@ describe("Tenant authoring", () => {
     );
 
     render(<TenantsScreen />);
+    fireEvent.click(screen.getByText("New Tenant"));
     const slug = await screen.findByLabelText("Slug");
     fireEvent.change(slug, { target: { value: "acme" } });
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme" } });

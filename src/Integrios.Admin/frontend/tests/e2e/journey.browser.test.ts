@@ -113,6 +113,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
 
     // Tenant.
     let view = await openDashboard("/tenants");
+    await view.click("text=New Tenant");
     await view.fill("#create-tenant-slug", run);
     await view.fill("#create-tenant-name", `Journey ${run}`);
     await view.click("text=Create Tenant");

@@ -29,6 +29,10 @@ export function ConnectorsScreen() {
       <h1>Connectors</h1>
       <p>Connectors are installed for the whole deployment, not for one Tenant.</p>
 
+      {/* Unlike Connections' create form, this one is never collapsed behind a disclosure: a fresh
+          deployment installs no Connectors, and this list is the only screen it can reach, so the
+          form that gets it out of that state must stay immediately visible rather than
+          discoverable-only. */}
       <ApplyManifest
         onApplied={(installed) => {
           list.reload();
@@ -57,31 +61,33 @@ export function ConnectorsScreen() {
         emptyText="No Connectors match this filter."
       />
       {list.items.length > 0 ? (
-        <table>
-          <caption>Connectors, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Key</th>
-              <th scope="col">Contract version</th>
-              <th scope="col">Direction</th>
-              <th scope="col">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((connector) => (
-              <tr key={connector.id}>
-                <th scope="row">
-                  <Link to={`/connectors/${connector.id}`}>{connector.name}</Link>
-                </th>
-                <td>{connector.key}</td>
-                <td>{connector.contract_version}</td>
-                <td>{connector.direction}</td>
-                <td>{connector.status}</td>
+        <div className="table-card">
+          <table>
+            <caption>Connectors, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Key</th>
+                <th scope="col">Contract version</th>
+                <th scope="col">Direction</th>
+                <th scope="col">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((connector) => (
+                <tr key={connector.id}>
+                  <th scope="row">
+                    <Link to={`/connectors/${connector.id}`}>{connector.name}</Link>
+                  </th>
+                  <td>{connector.key}</td>
+                  <td>{connector.contract_version}</td>
+                  <td>{connector.direction}</td>
+                  <td>{connector.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
 

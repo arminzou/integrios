@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
 import { navigate } from "../routes";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
@@ -26,7 +26,9 @@ export function TenantsScreen() {
   return (
     <>
       <h1>Tenants</h1>
-      <CreateTenant onCreated={list.reload} />
+      <Disclosure label="New Tenant">
+        <CreateTenant onCreated={list.reload} />
+      </Disclosure>
 
       <h2>All Tenants</h2>
       <Field id="tenant-status" label="Status">
@@ -45,29 +47,31 @@ export function TenantsScreen() {
         emptyText="No Tenants match this filter."
       />
       {list.items.length > 0 ? (
-        <table>
-          <caption>Tenants, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Slug</th>
-              <th scope="col">Status</th>
-              <th scope="col">Environment</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((tenant) => (
-              <tr key={tenant.id}>
-                <th scope="row">
-                  <Link to={`/tenants/${tenant.id}`}>{tenant.name}</Link>
-                </th>
-                <td>{tenant.slug}</td>
-                <td>{tenant.status}</td>
-                <td>{tenant.environment ?? "—"}</td>
+        <div className="table-card">
+          <table>
+            <caption>Tenants, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Slug</th>
+                <th scope="col">Status</th>
+                <th scope="col">Environment</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.items.map((tenant) => (
+                <tr key={tenant.id}>
+                  <th scope="row">
+                    <Link to={`/tenants/${tenant.id}`}>{tenant.name}</Link>
+                  </th>
+                  <td>{tenant.slug}</td>
+                  <td>{tenant.status}</td>
+                  <td>{tenant.environment ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
     </>

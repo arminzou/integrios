@@ -87,12 +87,21 @@ describe("The dashboard in a real browser", () => {
 
     // Document order, focusable elements only. A hidden input — the antiforgery field the sign-out
     // form carries — is in the DOM and is not a tab stop, so counting it here would fail the test
-    // for the browser doing the right thing.
+    // for the browser doing the right thing. A closed disclosure's own content is the same case:
+    // still in the DOM, but not reachable until its <summary> is activated, so only the summary
+    // itself is a stop.
     const expected = await page.$$eval(
-      "a[href], button, input:not([type=hidden]), select, textarea",
+      "a[href], button, input:not([type=hidden]), select, textarea, summary",
       (elements) =>
         elements
           .filter((element) => !element.hasAttribute("disabled"))
+          .filter((element) => {
+            const closedAncestor = element.closest("details:not([open])");
+            if (!closedAncestor) return true;
+            // The summary belonging to a closed disclosure is still how a keyboard Operator opens
+            // it, so it stays a real tab stop; everything else inside is not, until it is open.
+            return element.tagName === "SUMMARY" && element.parentElement === closedAncestor;
+          })
           .map((element) => element.tagName.toLowerCase()),
     );
 
