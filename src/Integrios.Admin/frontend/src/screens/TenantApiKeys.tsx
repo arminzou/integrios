@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router";
@@ -7,13 +8,12 @@ import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
+import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
-import { useAction } from "../ui/useAction";
-import { useCursorList } from "../ui/useCursorList";
 
 type TenantApiKeyListItem = components["schemas"]["TenantApiKeyListItemDto"];
 type CreatedKey = components["schemas"]["CreateTenantApiKeyResult"];
@@ -30,13 +30,21 @@ type CreateValues = z.infer<typeof createSchema>;
 
 export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
   const [state, setState] = useState("");
-  const list = useCursorList<TenantApiKeyListItem>(
-    (after) =>
-      api.GET("/admin/tenants/{tenantId}/tenant-api-keys", {
-        params: { path: { tenantId }, query: { state: state || undefined, after: after ?? undefined, limit: 20 } },
-      }),
-    `tenant-api-keys|${tenantId}|${state}`,
-  );
+  const list = useInfiniteQuery({
+    queryKey: ["tenant-api-keys", tenantId, { state }],
+    queryFn: ({ pageParam }) =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/tenant-api-keys", {
+          params: {
+            path: { tenantId },
+            query: { state: state || undefined, after: pageParam ?? undefined, limit: 20 },
+          },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextCursor<TenantApiKeyListItem>,
+  });
+  const keys = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <Page>
@@ -49,7 +57,7 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
       </PageHeader>
 
       <Disclosure label="New Tenant API key">
-        <CreateTenantApiKey tenantId={tenantId} onCreated={list.reload} />
+        <CreateTenantApiKey tenantId={tenantId} />
       </Disclosure>
 
       <section className="flex flex-col gap-4">
@@ -62,13 +70,13 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
         </Filter>
 
         <ListStatus
-          busy={list.busy}
-          loaded={list.loaded}
-          problem={list.problem}
-          empty={list.items.length === 0}
+          busy={list.isFetching}
+          loaded={list.isSuccess}
+          problem={asProblem(list.error)}
+          empty={keys.length === 0}
           emptyText="This Tenant has no API keys matching this filter."
         />
-        {list.items.length > 0 ? (
+        {keys.length > 0 ? (
           <TableCard caption="Tenant API keys, newest first">
             <TableHeader>
               <TableRow>
@@ -81,7 +89,7 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {list.items.map((key) => (
+              {keys.map((key) => (
                 <TableRow key={key.id}>
                   <RowHeader>{key.name}</RowHeader>
                   {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
@@ -90,29 +98,30 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
                   <TableCell>{key.expires_at ?? "Never"}</TableCell>
                   <TableCell>{key.last_used_at ?? "Never used"}</TableCell>
                   <TableCell>
-                    <RevokeTenantApiKey tenantId={tenantId} apiKey={key} onRevoked={list.reload} />
+                    <RevokeTenantApiKey tenantId={tenantId} apiKey={key} />
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );
 }
 
-function RevokeTenantApiKey({
-  tenantId,
-  apiKey,
-  onRevoked,
-}: {
-  tenantId: string;
-  apiKey: TenantApiKeyListItem;
-  onRevoked: () => void;
-}) {
-  const { busy, problem, run } = useAction();
+function RevokeTenantApiKey({ tenantId, apiKey }: { tenantId: string; apiKey: TenantApiKeyListItem }) {
+  const queryClient = useQueryClient();
+  const revoke = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.POST("/admin/tenants/{tenantId}/tenant-api-keys/{id}/revoke", {
+          params: { path: { tenantId, id: apiKey.id } },
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] }),
+  });
 
   if (apiKey.state === "revoked") return <span>Revoked</span>;
 
@@ -122,33 +131,25 @@ function RevokeTenantApiKey({
         label="Revoke"
         question={`Revoke the Tenant API key "${apiKey.name}" (${apiKey.key_prefix})? Callers using it stop being authenticated immediately.`}
         confirmLabel={`Revoke ${apiKey.name}`}
-        busy={busy}
-        onConfirm={() =>
-          void run(
-            () =>
-              api.POST("/admin/tenants/{tenantId}/tenant-api-keys/{id}/revoke", {
-                params: { path: { tenantId, id: apiKey.id } },
-              }),
-            onRevoked,
-          )
-        }
+        busy={revoke.isPending}
+        onConfirm={() => revoke.mutate()}
       />
-      <FormError message={formError(problem)} />
+      <FormError message={formError(asProblem(revoke.error))} />
     </div>
   );
 }
 
-function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
+function CreateTenantApiKey({ tenantId }: { tenantId: string }) {
   const [created, setCreated] = useState<CreatedKey | null>(null);
-  const { busy, problem, run } = useAction();
+  const queryClient = useQueryClient();
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     defaultValues: { name: "", description: "", expires_at: "" },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    const failure = await run(
-      () =>
+  const create = useMutation({
+    mutationFn: (values: CreateValues) =>
+      call(() =>
         api.POST("/admin/tenants/{tenantId}/tenant-api-keys", {
           params: { path: { tenantId } },
           body: {
@@ -159,14 +160,19 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
             expires_at: values.expires_at ? new Date(values.expires_at).toISOString() : null,
           },
         }),
-      (result) => {
-        form.reset();
-        setCreated(result ?? null);
-        onCreated();
-      },
-    );
-    if (failure) applyProblem(form, failure, createFields);
+      ),
+    onSuccess: (result) => {
+      form.reset();
+      // The token is in this response and nowhere else; the list below re-reads and will only ever
+      // carry the key's prefix.
+      setCreated(result ?? null);
+      void queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
+    },
   });
+
+  const submit = form.handleSubmit((values) =>
+    create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -174,7 +180,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
         <Panel asChild>
           <form className="flex flex-col gap-4" onSubmit={submit}>
             <h2>Create a Tenant API key</h2>
-            <FormError message={formError(problem, createFields)} />
+            <FormError message={formError(asProblem(create.error), createFields)} />
 
             <TextField control={form.control} name="name" label="Name" required />
             <TextField control={form.control} name="description" label="Description (optional)" />
@@ -186,7 +192,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
               type="datetime-local"
             />
 
-            <Button type="submit" className="self-start" disabled={busy}>
+            <Button type="submit" className="self-start" disabled={create.isPending}>
               Create Tenant API key
             </Button>
           </form>

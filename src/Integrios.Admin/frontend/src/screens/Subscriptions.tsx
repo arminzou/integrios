@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
@@ -7,22 +8,18 @@ import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
+import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
-import { useAction } from "../ui/useAction";
-import { useCursorList } from "../ui/useCursorList";
-import { useOptions } from "../ui/useOptions";
-import { useResource } from "../ui/useResource";
 import { TransformPreview } from "./Previews";
 
 type SubscriptionListItem = components["schemas"]["SubscriptionListItemDto"];
 type Subscription = components["schemas"]["SubscriptionDto"];
 type HttpDelivery = components["schemas"]["HttpDeliveryConfiguration"];
-type ConnectionListItem = components["schemas"]["ConnectionListItemDto"];
 
 const writeFields = [
   "name",
@@ -88,16 +85,21 @@ export function SubscriptionsSection({
 }) {
   const [status, setStatus] = useState("");
   const navigate = useNavigate();
-  const list = useCursorList<SubscriptionListItem>(
-    (after) =>
-      api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
-        params: {
-          path: { tenantId, topicId },
-          query: { status: status || undefined, after: after ?? undefined, limit: 20 },
-        },
-      }),
-    `subscriptions|${tenantId}|${topicId}|${status}`,
-  );
+  const list = useInfiniteQuery({
+    queryKey: ["subscriptions", tenantId, topicId, { status }],
+    queryFn: ({ pageParam }) =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
+          params: {
+            path: { tenantId, topicId },
+            query: { status: status || undefined, after: pageParam ?? undefined, limit: 20 },
+          },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextCursor<SubscriptionListItem>,
+  });
+  const subscriptions = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <section className="flex flex-col gap-6">
@@ -107,7 +109,6 @@ export function SubscriptionsSection({
           tenantId={tenantId}
           topicId={topicId}
           onSaved={(created) => {
-            list.reload();
             if (created) navigate(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${created.id}`);
           }}
         />
@@ -122,13 +123,13 @@ export function SubscriptionsSection({
         </Filter>
 
         <ListStatus
-          busy={list.busy}
-          loaded={list.loaded}
-          problem={list.problem}
-          empty={list.items.length === 0}
+          busy={list.isFetching}
+          loaded={list.isSuccess}
+          problem={asProblem(list.error)}
+          empty={subscriptions.length === 0}
           emptyText={`${topicName} has no Subscriptions matching this filter.`}
         />
-        {list.items.length > 0 ? (
+        {subscriptions.length > 0 ? (
           <TableCard caption={`Subscriptions on ${topicName}, newest first`}>
             <TableHeader>
               <TableRow>
@@ -139,7 +140,7 @@ export function SubscriptionsSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {list.items.map((subscription) => (
+              {subscriptions.map((subscription) => (
                 <TableRow key={subscription.id}>
                   <RowHeader>
                     <Link
@@ -157,7 +158,7 @@ export function SubscriptionsSection({
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </div>
 
       <TransformPreview />
@@ -174,22 +175,35 @@ export function SubscriptionScreen({
   topicId: string;
   subscriptionId: string;
 }) {
-  const subscription = useResource<Subscription>(
-    () =>
-      api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
-        params: { path: { tenantId, topicId, id: subscriptionId } },
-      }),
-    `${tenantId}|${topicId}|${subscriptionId}`,
-  );
-  const { busy, problem, run } = useAction();
+  const queryClient = useQueryClient();
+  const subscription = useQuery({
+    queryKey: ["subscription", tenantId, topicId, subscriptionId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
+          params: { path: { tenantId, topicId, id: subscriptionId } },
+        }),
+      ),
+  });
+  const deactivate = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/deactivate", {
+          params: { path: { tenantId, topicId, id: subscriptionId } },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["subscription", tenantId, topicId, subscriptionId] });
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions", tenantId, topicId] });
+    },
+  });
 
-  if (subscription.problem)
+  const problem = asProblem(subscription.error);
+  if (problem)
     return (
       <>
         <h1>Subscription</h1>
-        <p role="alert">
-          {subscription.problem.detail ?? `This Subscription could not be read (${subscription.problem.status}).`}
-        </p>
+        <p role="alert">{problem.detail ?? `This Subscription could not be read (${problem.status}).`}</p>
       </>
     );
   if (!subscription.data) return <p>Loading…</p>;
@@ -223,33 +237,19 @@ export function SubscriptionScreen({
         </Details>
       </Panel>
 
-      <SubscriptionForm
-        key={current.updated_at}
-        tenantId={tenantId}
-        topicId={topicId}
-        subscription={current}
-        onSaved={subscription.reload}
-      />
+      <SubscriptionForm key={current.updated_at} tenantId={tenantId} topicId={topicId} subscription={current} />
 
       <TransformPreview />
 
       <div className="flex flex-col gap-3">
-        <FormError message={formError(problem)} />
+        <FormError message={formError(asProblem(deactivate.error))} />
         {current.status === "active" ? (
           <ConfirmAction
             label="Deactivate Subscription"
             question={`Deactivate the Subscription "${current.name}"? It stops receiving Events from this Topic.`}
             confirmLabel={`Deactivate ${current.name}`}
-            busy={busy}
-            onConfirm={() =>
-              void run(
-                () =>
-                  api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/deactivate", {
-                    params: { path: { tenantId, topicId, id: current.id } },
-                  }),
-                subscription.reload,
-              )
-            }
+            busy={deactivate.isPending}
+            onConfirm={() => deactivate.mutate()}
           />
         ) : null}
       </div>
@@ -268,17 +268,19 @@ function SubscriptionForm({
   tenantId: string;
   topicId: string;
   subscription?: Subscription;
-  onSaved: (saved: Subscription | undefined) => void;
+  onSaved?: (saved: Subscription | undefined) => void;
 }) {
-  const connections = useOptions<ConnectionListItem>(
-    () =>
-      api.GET("/admin/tenants/{tenantId}/connections", {
-        params: { path: { tenantId }, query: { status: "active", limit: 100 } },
-      }),
-    `connection-options|${tenantId}`,
-  );
-  const { busy, problem, run } = useAction();
-  const connectionOptionsUnavailable = connections.busy || connections.problem !== null;
+  const queryClient = useQueryClient();
+  const connections = useQuery({
+    queryKey: ["connection-options", tenantId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/connections", {
+          params: { path: { tenantId }, query: { status: "active", limit: 100 } },
+        }),
+      ),
+  });
+  const connectionOptionsUnavailable = connections.isPending || connections.isError;
 
   const form = useForm<SubscriptionValues>({
     resolver: zodResolver(subscriptionSchema),
@@ -296,26 +298,26 @@ function SubscriptionForm({
     },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    const httpDelivery: HttpDelivery = {
-      version: subscription?.http_delivery.version ?? currentHttpDeliveryVersion,
-      method: values.method,
-      path: values.path || null,
-      headers: parseJson(values.headers).value as Record<string, string>,
-      body: values.body,
-    };
-    const requestBody = {
-      name: values.name,
-      match_rules: parseJson(values.match_rules).value,
-      destination_connection_id: values.destination_connection_id,
-      mapping: values.mapping.trim() === "" ? null : parseJson(values.mapping).value,
-      http_delivery: httpDelivery,
-      order_index: Number(values.order_index),
-      description: values.description.trim() || null,
-    };
+  const save = useMutation({
+    mutationFn: (values: SubscriptionValues) => {
+      const httpDelivery: HttpDelivery = {
+        version: subscription?.http_delivery.version ?? currentHttpDeliveryVersion,
+        method: values.method,
+        path: values.path || null,
+        headers: parseJson(values.headers).value as Record<string, string>,
+        body: values.body,
+      };
+      const requestBody = {
+        name: values.name,
+        match_rules: parseJson(values.match_rules).value,
+        destination_connection_id: values.destination_connection_id,
+        mapping: values.mapping.trim() === "" ? null : parseJson(values.mapping).value,
+        http_delivery: httpDelivery,
+        order_index: Number(values.order_index),
+        description: values.description.trim() || null,
+      };
 
-    const failure = await run(
-      () =>
+      return call(() =>
         subscription
           ? api.PATCH("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
               params: { path: { tenantId, topicId, id: subscription.id } },
@@ -325,30 +327,39 @@ function SubscriptionForm({
               params: { path: { tenantId, topicId } },
               body: requestBody,
             }),
-      onSaved,
-    );
-    if (failure) applyProblem(form, failure, formFields);
+      );
+    },
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions", tenantId, topicId] });
+      if (subscription)
+        void queryClient.invalidateQueries({ queryKey: ["subscription", tenantId, topicId, subscription.id] });
+      onSaved?.(saved);
+    },
   });
+
+  const submit = form.handleSubmit((values) =>
+    save.mutate(values, { onError: (failure) => applyProblem(form, failure, formFields) }),
+  );
 
   return (
     <Form {...form}>
       <Panel asChild>
         <form className="flex flex-col gap-4" onSubmit={submit}>
           <h3>{subscription ? `Edit ${subscription.name}` : "Create a Subscription"}</h3>
-          <FormError message={formError(connections.problem)} />
-          <FormError message={formError(problem, writeFields)} />
+          <FormError message={formError(asProblem(connections.error))} />
+          <FormError message={formError(asProblem(save.error), writeFields)} />
 
           <TextField control={form.control} name="name" label="Name" required />
           <SelectField
             control={form.control}
             name="destination_connection_id"
             label="Destination Connection"
-            hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
+            hint={connections.data?.next_cursor ? "Showing the first 100 active Connections." : undefined}
             disabled={connectionOptionsUnavailable}
             required
           >
             <option value="">Choose a Connection</option>
-            {connections.items.map((connection) => (
+            {(connections.data?.items ?? []).map((connection) => (
               <option key={connection.id} value={connection.id}>
                 {connection.name}
               </option>
@@ -400,7 +411,7 @@ function SubscriptionForm({
 
           <TextField control={form.control} name="description" label="Description (optional)" />
 
-          <Button type="submit" className="self-start" disabled={busy || connectionOptionsUnavailable}>
+          <Button type="submit" className="self-start" disabled={save.isPending || connectionOptionsUnavailable}>
             {subscription ? "Save changes" : "Create Subscription"}
           </Button>
         </form>

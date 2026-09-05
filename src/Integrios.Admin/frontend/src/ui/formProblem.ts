@@ -10,9 +10,14 @@ import { fieldError, type Problem } from "../api/problem";
 /// rule the form can check on its own.
 export function applyProblem<TValues extends FieldValues>(
   form: UseFormReturn<TValues, unknown, unknown>,
-  problem: Problem,
+  failure: unknown,
   fields: readonly Path<TValues>[],
 ) {
+  // Whatever a mutation rejected with: everything the Admin API refuses arrives here as a Problem,
+  // and anything else — a bug thrown inside the client — has no field messages to place.
+  const problem = failure as Problem | null;
+  if (!problem?.errors) return;
+
   for (const field of fields) {
     const message = fieldError(problem, field);
     if (message) form.setError(field, { type: "server", message });

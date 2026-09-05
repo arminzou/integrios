@@ -1,13 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
-import type { components } from "./api/schema";
+import { call } from "./api/query";
 import { isIdentifier } from "./identifiers";
 import { sectionHrefs, sectionLabels, sectionOrder, type TenantSection } from "./sections";
-import { useResource } from "./ui/useResource";
-
-type Tenant = components["schemas"]["TenantDto"];
 
 type State =
   | { status: "loading" }
@@ -182,19 +180,18 @@ function TopNav({
 
 /// Reads the current Tenant once for the whole shell, so navigation and the breadcrumb name it
 /// from the same read instead of each issuing their own GET. `tenantId` is null on deployment-wide
-/// routes; the load stays a no-op instant resolution rather than a conditional hook call.
+/// routes, and the query is simply disabled there rather than the hook being called conditionally.
 function useTenant(tenantId: string | null) {
-  return useResource<Tenant>(
-    () =>
-      tenantId
-        ? api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } })
-        : Promise.resolve({ data: undefined, error: undefined, response: { status: 200 } }),
-    tenantId ?? "",
-  );
+  return useQuery({
+    queryKey: ["tenant", tenantId],
+    queryFn: () => call(() => api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId as string } } })),
+    // A deployment-wide route names no Tenant, so there is nothing to read.
+    enabled: tenantId !== null,
+  });
 }
 
 function tenantDisplayName(tenant: ReturnType<typeof useTenant>): string {
-  return tenant.data ? tenant.data.name : tenant.problem ? "This Tenant" : "Loading Tenant…";
+  return tenant.data ? tenant.data.name : tenant.isError ? "This Tenant" : "Loading Tenant…";
 }
 
 /// Names the current Tenant explicitly in navigation rather than leaving it implied by the route's

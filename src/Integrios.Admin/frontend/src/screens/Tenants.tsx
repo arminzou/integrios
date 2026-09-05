@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
@@ -7,14 +8,12 @@ import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
+import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
-import { useAction } from "../ui/useAction";
-import { useCursorList } from "../ui/useCursorList";
-import { useResource } from "../ui/useResource";
 
 type Tenant = components["schemas"]["TenantDto"];
 
@@ -40,20 +39,25 @@ const optional = (text: string) => text.trim() || null;
 
 export function TenantsScreen() {
   const [status, setStatus] = useState("");
-  const list = useCursorList<Tenant>(
-    (after) =>
-      api.GET("/admin/tenants", {
-        params: { query: { status: status || undefined, after: after ?? undefined, limit: 20 } },
-      }),
-    `tenants|${status}`,
-  );
+  const list = useInfiniteQuery({
+    queryKey: ["tenants", { status }],
+    queryFn: ({ pageParam }) =>
+      call(() =>
+        api.GET("/admin/tenants", {
+          params: { query: { status: status || undefined, after: pageParam ?? undefined, limit: 20 } },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextCursor<Tenant>,
+  });
+  const tenants = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <Page>
       <PageHeader title="Tenants" />
 
       <Disclosure label="New Tenant">
-        <CreateTenant onCreated={list.reload} />
+        <CreateTenant />
       </Disclosure>
 
       <section className="flex flex-col gap-4">
@@ -65,13 +69,13 @@ export function TenantsScreen() {
         </Filter>
 
         <ListStatus
-          busy={list.busy}
-          loaded={list.loaded}
-          problem={list.problem}
-          empty={list.items.length === 0}
+          busy={list.isFetching}
+          loaded={list.isSuccess}
+          problem={asProblem(list.error)}
+          empty={tenants.length === 0}
           emptyText="No Tenants match this filter."
         />
-        {list.items.length > 0 ? (
+        {tenants.length > 0 ? (
           <TableCard caption="Tenants, newest first">
             <TableHeader>
               <TableRow>
@@ -82,7 +86,7 @@ export function TenantsScreen() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {list.items.map((tenant) => (
+              {tenants.map((tenant) => (
                 <TableRow key={tenant.id}>
                   <RowHeader>
                     <Link className="underline" to={`/tenants/${tenant.id}`}>
@@ -97,23 +101,23 @@ export function TenantsScreen() {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );
 }
 
-function CreateTenant({ onCreated }: { onCreated: () => void }) {
+function CreateTenant() {
   const navigate = useNavigate();
-  const { busy, problem, run } = useAction();
+  const queryClient = useQueryClient();
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     defaultValues: { slug: "", name: "", environment: "", description: "" },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    const failure = await run(
-      () =>
+  const create = useMutation({
+    mutationFn: (values: CreateValues) =>
+      call(() =>
         api.POST("/admin/tenants", {
           body: {
             slug: values.slug,
@@ -122,28 +126,31 @@ function CreateTenant({ onCreated }: { onCreated: () => void }) {
             description: optional(values.description),
           },
         }),
-      (created) => {
-        form.reset();
-        onCreated();
-        if (created) navigate(`/tenants/${created.id}`);
-      },
-    );
-    if (failure) applyProblem(form, failure, createFields);
+      ),
+    onSuccess: (created) => {
+      form.reset();
+      void queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      if (created) navigate(`/tenants/${created.id}`);
+    },
   });
+
+  const submit = form.handleSubmit((values) =>
+    create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
+  );
 
   return (
     <Form {...form}>
       <Panel asChild>
         <form className="flex flex-col gap-4" onSubmit={submit}>
           <h2>Create a Tenant</h2>
-          <FormError message={formError(problem, createFields)} />
+          <FormError message={formError(asProblem(create.error), createFields)} />
 
           <TextField control={form.control} name="slug" label="Slug" required />
           <TextField control={form.control} name="name" label="Name" required />
           <TextField control={form.control} name="environment" label="Environment (optional)" />
           <TextField control={form.control} name="description" label="Description (optional)" />
 
-          <Button type="submit" className="self-start" disabled={busy}>
+          <Button type="submit" className="self-start" disabled={create.isPending}>
             Create Tenant
           </Button>
         </form>
@@ -153,16 +160,17 @@ function CreateTenant({ onCreated }: { onCreated: () => void }) {
 }
 
 export function TenantScreen({ tenantId }: { tenantId: string }) {
-  const tenant = useResource<Tenant>(
-    () => api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } }),
-    tenantId,
-  );
+  const tenant = useQuery({
+    queryKey: ["tenant", tenantId],
+    queryFn: () => call(() => api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } })),
+  });
 
-  if (tenant.problem)
+  const problem = asProblem(tenant.error);
+  if (problem)
     return (
       <>
         <h1>Tenant</h1>
-        <p role="alert">{tenant.problem.detail ?? `This Tenant could not be read (${tenant.problem.status}).`}</p>
+        <p role="alert">{problem.detail ?? `This Tenant could not be read (${problem.status}).`}</p>
       </>
     );
   if (!tenant.data) return <p>Loading…</p>;
@@ -207,13 +215,17 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         </ul>
       </section>
 
-      <EditTenant key={current.updated_at} tenant={current} onSaved={tenant.reload} />
+      <EditTenant key={current.updated_at} tenant={current} />
     </Page>
   );
 }
 
-function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }) {
-  const { busy, problem, run } = useAction();
+function EditTenant({ tenant }: { tenant: Tenant }) {
+  const queryClient = useQueryClient();
+  const reread = () => {
+    void queryClient.invalidateQueries({ queryKey: ["tenant", tenant.id] });
+    void queryClient.invalidateQueries({ queryKey: ["tenants"] });
+  };
   const form = useForm<UpdateValues>({
     resolver: zodResolver(updateSchema),
     defaultValues: {
@@ -223,9 +235,9 @@ function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
     },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    const failure = await run(
-      () =>
+  const save = useMutation({
+    mutationFn: (values: UpdateValues) =>
+      call(() =>
         api.PATCH("/admin/tenants/{id}", {
           params: { path: { id: tenant.id } },
           body: {
@@ -234,10 +246,18 @@ function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
             description: optional(values.description),
           },
         }),
-      onSaved,
-    );
-    if (failure) applyProblem(form, failure, updateFields);
+      ),
+    onSuccess: reread,
   });
+
+  const deactivate = useMutation({
+    mutationFn: () => call(() => api.POST("/admin/tenants/{id}/deactivate", { params: { path: { id: tenant.id } } })),
+    onSuccess: reread,
+  });
+
+  const submit = form.handleSubmit((values) =>
+    save.mutate(values, { onError: (failure) => applyProblem(form, failure, updateFields) }),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -245,13 +265,13 @@ function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
         <Panel asChild>
           <form className="flex flex-col gap-4" onSubmit={submit}>
             <h2>Edit {tenant.name}</h2>
-            <FormError message={formError(problem, updateFields)} />
+            <FormError message={formError(asProblem(save.error), updateFields)} />
 
             <TextField control={form.control} name="name" label="Name" required />
             <TextField control={form.control} name="environment" label="Environment (optional)" />
             <TextField control={form.control} name="description" label="Description (optional)" />
 
-            <Button type="submit" className="self-start" disabled={busy}>
+            <Button type="submit" className="self-start" disabled={save.isPending}>
               Save changes
             </Button>
           </form>
@@ -261,15 +281,16 @@ function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
       {/* Deactivation is offered only where the API actually owns it; there is no invented
           reactivation to make the pair look symmetrical. */}
       {tenant.status === "active" ? (
-        <ConfirmAction
-          label="Deactivate Tenant"
-          question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
-          confirmLabel={`Deactivate ${tenant.name}`}
-          busy={busy}
-          onConfirm={() =>
-            void run(() => api.POST("/admin/tenants/{id}/deactivate", { params: { path: { id: tenant.id } } }), onSaved)
-          }
-        />
+        <div className="flex flex-col items-start gap-2">
+          <ConfirmAction
+            label="Deactivate Tenant"
+            question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
+            confirmLabel={`Deactivate ${tenant.name}`}
+            busy={deactivate.isPending}
+            onConfirm={() => deactivate.mutate()}
+          />
+          <FormError message={formError(asProblem(deactivate.error))} />
+        </div>
       ) : null}
     </div>
   );

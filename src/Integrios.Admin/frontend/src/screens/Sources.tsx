@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
@@ -7,21 +8,16 @@ import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
+import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
-import { useAction } from "../ui/useAction";
-import { useCursorList } from "../ui/useCursorList";
-import { useOptions } from "../ui/useOptions";
-import { useResource } from "../ui/useResource";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
 type Source = components["schemas"]["SourceDto"];
-type ConnectionListItem = components["schemas"]["ConnectionListItemDto"];
-type Topic = components["schemas"]["AdminTopicResponse"];
 
 const sourceTypes = [
   { value: "event_api", label: "Event API" },
@@ -54,16 +50,21 @@ type EditValues = z.infer<typeof editSchema>;
 export function SourcesScreen({ tenantId }: { tenantId: string }) {
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
-  const list = useCursorList<SourceListItem>(
-    (after) =>
-      api.GET("/admin/tenants/{tenantId}/sources", {
-        params: {
-          path: { tenantId },
-          query: { status: status || undefined, type: type || undefined, after: after ?? undefined, limit: 20 },
-        },
-      }),
-    `sources|${tenantId}|${status}|${type}`,
-  );
+  const list = useInfiniteQuery({
+    queryKey: ["sources", tenantId, { status, type }],
+    queryFn: ({ pageParam }) =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/sources", {
+          params: {
+            path: { tenantId },
+            query: { status: status || undefined, type: type || undefined, after: pageParam ?? undefined, limit: 20 },
+          },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextCursor<SourceListItem>,
+  });
+  const sources = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <Page>
@@ -76,7 +77,7 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
       </PageHeader>
 
       <Disclosure label="New Source">
-        <CreateSource tenantId={tenantId} onCreated={list.reload} />
+        <CreateSource tenantId={tenantId} />
       </Disclosure>
 
       <section className="flex flex-col gap-4">
@@ -98,13 +99,13 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
         </div>
 
         <ListStatus
-          busy={list.busy}
-          loaded={list.loaded}
-          problem={list.problem}
-          empty={list.items.length === 0}
+          busy={list.isFetching}
+          loaded={list.isSuccess}
+          problem={asProblem(list.error)}
+          empty={sources.length === 0}
           emptyText="This Tenant has no Sources matching these filters."
         />
-        {list.items.length > 0 ? (
+        {sources.length > 0 ? (
           <TableCard caption="Sources, newest first">
             <TableHeader>
               <TableRow>
@@ -115,7 +116,7 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {list.items.map((source) => (
+              {sources.map((source) => (
                 <TableRow key={source.id}>
                   <RowHeader>
                     <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/sources/${source.id}`}>
@@ -134,39 +135,43 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );
 }
 
-function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
+function CreateSource({ tenantId }: { tenantId: string }) {
   const navigate = useNavigate();
-  const connections = useOptions<ConnectionListItem>(
-    () =>
-      api.GET("/admin/tenants/{tenantId}/connections", {
-        params: { path: { tenantId }, query: { status: "active", limit: 100 } },
-      }),
-    `connection-options|${tenantId}`,
-  );
-  const topics = useOptions<Topic>(
-    () =>
-      api.GET("/admin/tenants/{tenantId}/topics", {
-        params: { path: { tenantId }, query: { status: "active", limit: 100 } },
-      }),
-    `topic-options|${tenantId}`,
-  );
-  const { busy, problem, run } = useAction();
-  const optionsUnavailable = connections.busy || topics.busy || connections.problem !== null || topics.problem !== null;
+  const queryClient = useQueryClient();
+  const connections = useQuery({
+    queryKey: ["connection-options", tenantId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/connections", {
+          params: { path: { tenantId }, query: { status: "active", limit: 100 } },
+        }),
+      ),
+  });
+  const topics = useQuery({
+    queryKey: ["topic-options", tenantId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/topics", {
+          params: { path: { tenantId }, query: { status: "active", limit: 100 } },
+        }),
+      ),
+  });
+  const optionsUnavailable = connections.isPending || topics.isPending || connections.isError || topics.isError;
 
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     defaultValues: { connection_id: "", topic_id: "", type: "webhook", configuration: "{}" },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    const failure = await run(
-      () =>
+  const create = useMutation({
+    mutationFn: (values: CreateValues) =>
+      call(() =>
         api.POST("/admin/tenants/{tenantId}/sources", {
           params: { path: { tenantId } },
           body: {
@@ -176,32 +181,35 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
             configuration: parseJson(values.configuration).value,
           },
         }),
-      (created) => {
-        onCreated();
-        if (created) navigate(`/tenants/${tenantId}/sources/${created.id}`);
-      },
-    );
-    if (failure) applyProblem(form, failure, createFields);
+      ),
+    onSuccess: (created) => {
+      void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
+      if (created) navigate(`/tenants/${tenantId}/sources/${created.id}`);
+    },
   });
+
+  const submit = form.handleSubmit((values) =>
+    create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
+  );
 
   return (
     <Form {...form}>
       <Panel asChild>
         <form className="flex flex-col gap-4" onSubmit={submit}>
           <h2>Create a Source</h2>
-          <FormError message={formError(connections.problem ?? topics.problem)} />
-          <FormError message={formError(problem, createFields)} />
+          <FormError message={formError(asProblem(connections.error ?? topics.error))} />
+          <FormError message={formError(asProblem(create.error), createFields)} />
 
           <SelectField
             control={form.control}
             name="connection_id"
             label="Connection"
-            hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
-            disabled={connections.busy || connections.problem !== null}
+            hint={connections.data?.next_cursor ? "Showing the first 100 active Connections." : undefined}
+            disabled={connections.isPending || connections.isError}
             required
           >
             <option value="">Choose a Connection</option>
-            {connections.items.map((connection) => (
+            {(connections.data?.items ?? []).map((connection) => (
               <option key={connection.id} value={connection.id}>
                 {connection.name}
               </option>
@@ -211,12 +219,12 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
             control={form.control}
             name="topic_id"
             label="Topic"
-            hint={topics.truncated ? "Showing the first 100 active Topics." : undefined}
-            disabled={topics.busy || topics.problem !== null}
+            hint={topics.data?.next_cursor ? "Showing the first 100 active Topics." : undefined}
+            disabled={topics.isPending || topics.isError}
             required
           >
             <option value="">Choose a Topic</option>
-            {topics.items.map((topic) => (
+            {(topics.data?.items ?? []).map((topic) => (
               <option key={topic.id} value={topic.id}>
                 {topic.name}
               </option>
@@ -237,7 +245,7 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
             required
           />
 
-          <Button type="submit" className="self-start" disabled={busy || optionsUnavailable}>
+          <Button type="submit" className="self-start" disabled={create.isPending || optionsUnavailable}>
             Create Source
           </Button>
         </form>
@@ -247,16 +255,18 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
 }
 
 export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceId: string }) {
-  const source = useResource<Source>(
-    () => api.GET("/admin/tenants/{tenantId}/sources/{id}", { params: { path: { tenantId, id: sourceId } } }),
-    `${tenantId}|${sourceId}`,
-  );
+  const source = useQuery({
+    queryKey: ["source", tenantId, sourceId],
+    queryFn: () =>
+      call(() => api.GET("/admin/tenants/{tenantId}/sources/{id}", { params: { path: { tenantId, id: sourceId } } })),
+  });
 
-  if (source.problem)
+  const problem = asProblem(source.error);
+  if (problem)
     return (
       <>
         <h1>Source</h1>
-        <p role="alert">{source.problem.detail ?? `This Source could not be read (${source.problem.status}).`}</p>
+        <p role="alert">{problem.detail ?? `This Source could not be read (${problem.status}).`}</p>
       </>
     );
   if (!source.data) return <p>Loading…</p>;
@@ -298,31 +308,48 @@ export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceI
         </Details>
       </Panel>
 
-      <EditSource key={current.updated_at} tenantId={tenantId} source={current} onSaved={source.reload} />
+      <EditSource key={current.updated_at} tenantId={tenantId} source={current} />
     </Page>
   );
 }
 
 /// The Admin API owns exactly one Source update — its configuration. Type, Connection, and Topic are
 /// fixed at creation, so they are shown rather than offered as editable fields.
-function EditSource({ tenantId, source, onSaved }: { tenantId: string; source: Source; onSaved: () => void }) {
-  const { busy, problem, run } = useAction();
+function EditSource({ tenantId, source }: { tenantId: string; source: Source }) {
+  const queryClient = useQueryClient();
+  const reread = () => {
+    void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
+    void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
+  };
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
     defaultValues: { configuration: formatJson(source.configuration) },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    const failure = await run(
-      () =>
+  const save = useMutation({
+    mutationFn: (values: EditValues) =>
+      call(() =>
         api.PATCH("/admin/tenants/{tenantId}/sources/{id}", {
           params: { path: { tenantId, id: source.id } },
           body: { configuration: parseJson(values.configuration).value },
         }),
-      onSaved,
-    );
-    if (failure) applyProblem(form, failure, editFields);
+      ),
+    onSuccess: reread,
   });
+
+  const revoke = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.DELETE("/admin/tenants/{tenantId}/sources/{id}", {
+          params: { path: { tenantId, id: source.id } },
+        }),
+      ),
+    onSuccess: reread,
+  });
+
+  const submit = form.handleSubmit((values) =>
+    save.mutate(values, { onError: (failure) => applyProblem(form, failure, editFields) }),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -330,7 +357,7 @@ function EditSource({ tenantId, source, onSaved }: { tenantId: string; source: S
         <Panel asChild>
           <form className="flex flex-col gap-4" onSubmit={submit}>
             <h2>Edit configuration</h2>
-            <FormError message={formError(problem, editFields)} />
+            <FormError message={formError(asProblem(save.error), editFields)} />
 
             <TextAreaField
               control={form.control}
@@ -340,7 +367,7 @@ function EditSource({ tenantId, source, onSaved }: { tenantId: string; source: S
               required
             />
 
-            <Button type="submit" className="self-start" disabled={busy}>
+            <Button type="submit" className="self-start" disabled={save.isPending}>
               Save configuration
             </Button>
           </form>
@@ -348,21 +375,16 @@ function EditSource({ tenantId, source, onSaved }: { tenantId: string; source: S
       </Form>
 
       {source.status === "active" ? (
-        <ConfirmAction
-          label="Revoke Source"
-          question={`Revoke the ${source.type} Source ${source.id}? It stops accepting Events and cannot be restored.`}
-          confirmLabel={`Revoke ${source.id}`}
-          busy={busy}
-          onConfirm={() =>
-            void run(
-              () =>
-                api.DELETE("/admin/tenants/{tenantId}/sources/{id}", {
-                  params: { path: { tenantId, id: source.id } },
-                }),
-              onSaved,
-            )
-          }
-        />
+        <div className="flex flex-col items-start gap-2">
+          <ConfirmAction
+            label="Revoke Source"
+            question={`Revoke the ${source.type} Source ${source.id}? It stops accepting Events and cannot be restored.`}
+            confirmLabel={`Revoke ${source.id}`}
+            busy={revoke.isPending}
+            onConfirm={() => revoke.mutate()}
+          />
+          <FormError message={formError(asProblem(revoke.error))} />
+        </div>
       ) : null}
     </div>
   );

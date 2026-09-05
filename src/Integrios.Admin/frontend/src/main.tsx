@@ -1,7 +1,9 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import "./index.css";
+import { createQueryClient } from "./api/query";
 import { routeConfig } from "./routes";
 
 // Named rather than asserted non-null: if the shell ever ships without its mount point, this says
@@ -15,6 +17,8 @@ const router = createBrowserRouter(routeConfig);
 
 createRoot(root).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <QueryClientProvider client={createQueryClient()}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   </StrictMode>,
 );

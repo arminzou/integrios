@@ -1,3 +1,4 @@
+import { type UseQueryResult, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, NavLink } from "react-router";
@@ -7,21 +8,15 @@ import { Label } from "@/components/ui/label";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
+import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Form, SelectField, TextField } from "../ui/fields";
 import { Panel, RowHeader, TableCard } from "../ui/layout";
-import { useAction } from "../ui/useAction";
-import { useCursorList } from "../ui/useCursorList";
-import { useOptions } from "../ui/useOptions";
-import { useResource } from "../ui/useResource";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
-type EventDetail = components["schemas"]["EventDto"];
 type EventDelivery = components["schemas"]["EventDeliveryDto"];
 type EventActivitySummary = components["schemas"]["EventActivitySummaryDto"];
-type SourceListItem = components["schemas"]["SourceListItemDto"];
-type Topic = components["schemas"]["AdminTopicResponse"];
 
 const eventStatuses = ["accepted", "processing", "routed", "unrouted", "failed", "dead_lettered"];
 const deliveryStatuses = ["pending", "in_flight", "succeeded", "dead_lettered"];
@@ -82,48 +77,61 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   const [activeSummary, setActiveSummary] = useState<SummaryKey | null>(null);
   const form = useForm<Filters>({ defaultValues: noFilters });
 
-  const sources = useOptions<SourceListItem>(
-    () => api.GET("/admin/tenants/{tenantId}/sources", { params: { path: { tenantId }, query: { limit: 100 } } }),
-    `source-options|${tenantId}`,
-  );
-  const topics = useOptions<Topic>(
-    () => api.GET("/admin/tenants/{tenantId}/topics", { params: { path: { tenantId }, query: { limit: 100 } } }),
-    `topic-options|${tenantId}`,
-  );
+  const sources = useQuery({
+    queryKey: ["source-options", tenantId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/sources", { params: { path: { tenantId }, query: { limit: 100 } } }),
+      ),
+  });
+  const topics = useQuery({
+    queryKey: ["topic-options", tenantId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/topics", { params: { path: { tenantId }, query: { limit: 100 } } }),
+      ),
+  });
 
   // Source and Topic scope the summary, matching the ledger's own ownership checks; Event-status
   // and Delivery-status filters do not, so the four summary values stay comparable to each other.
-  const summary = useResource<EventActivitySummary>(
-    () =>
-      api.GET("/admin/tenants/{tenantId}/events/activity-summary", {
-        params: {
-          path: { tenantId },
-          query: { source_id: applied.sourceId || undefined, topic_id: applied.topicId || undefined },
-        },
-      }),
-    `activity-summary|${tenantId}|${applied.sourceId}|${applied.topicId}`,
-  );
-
-  const list = useCursorList<EventListItem>(
-    (after) =>
-      api.GET("/admin/tenants/{tenantId}/events", {
-        params: {
-          path: { tenantId },
-          query: {
-            status: applied.status || undefined,
-            delivery_status: applied.deliveryStatus || undefined,
-            source_id: applied.sourceId || undefined,
-            topic_id: applied.topicId || undefined,
-            source_event_id: applied.sourceEventId || undefined,
-            accepted_from: instant(applied.acceptedFrom),
-            accepted_to: instant(applied.acceptedTo),
-            after: after ?? undefined,
-            limit: 20,
+  const summary = useQuery({
+    queryKey: ["activity-summary", tenantId, { sourceId: applied.sourceId, topicId: applied.topicId }],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/events/activity-summary", {
+          params: {
+            path: { tenantId },
+            query: { source_id: applied.sourceId || undefined, topic_id: applied.topicId || undefined },
           },
-        },
-      }),
-    `events|${tenantId}|${JSON.stringify(applied)}`,
-  );
+        }),
+      ),
+  });
+
+  const list = useInfiniteQuery({
+    queryKey: ["events", tenantId, applied],
+    queryFn: ({ pageParam }) =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/events", {
+          params: {
+            path: { tenantId },
+            query: {
+              status: applied.status || undefined,
+              delivery_status: applied.deliveryStatus || undefined,
+              source_id: applied.sourceId || undefined,
+              topic_id: applied.topicId || undefined,
+              source_event_id: applied.sourceEventId || undefined,
+              accepted_from: instant(applied.acceptedFrom),
+              accepted_to: instant(applied.acceptedTo),
+              after: pageParam ?? undefined,
+              limit: 20,
+            },
+          },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextCursor<EventListItem>,
+  });
+  const events = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   function selectSummaryItem(key: SummaryKey) {
     if (!summary.data) return;
@@ -177,7 +185,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                   setActiveSummary(null);
                 })}
               >
-                <FormError message={formError(sources.problem ?? topics.problem)} />
+                <FormError message={formError(asProblem(sources.error ?? topics.error))} />
 
                 <SelectField
                   control={form.control}
@@ -211,11 +219,11 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                   control={form.control}
                   name="sourceId"
                   label="Source"
-                  hint={sources.truncated ? "Showing the first 100 Sources." : undefined}
-                  disabled={sources.busy || sources.problem !== null}
+                  hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
+                  disabled={sources.isPending || sources.isError}
                 >
                   <option value="">Any Source</option>
-                  {sources.items.map((source) => (
+                  {(sources.data?.items ?? []).map((source) => (
                     <option key={source.id} value={source.id}>
                       {source.type} · {source.id}
                     </option>
@@ -225,11 +233,11 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                   control={form.control}
                   name="topicId"
                   label="Topic"
-                  hint={topics.truncated ? "Showing the first 100 Topics." : undefined}
-                  disabled={topics.busy || topics.problem !== null}
+                  hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+                  disabled={topics.isPending || topics.isError}
                 >
                   <option value="">Any Topic</option>
-                  {topics.items.map((topic) => (
+                  {(topics.data?.items ?? []).map((topic) => (
                     <option key={topic.id} value={topic.id}>
                       {topic.name}
                     </option>
@@ -277,13 +285,13 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
         <div className="flex flex-col gap-4">
           <ListStatus
-            busy={list.busy}
-            loaded={list.loaded}
-            problem={list.problem}
-            empty={list.items.length === 0}
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={events.length === 0}
             emptyText="No Events in this Tenant match these filters."
           />
-          {list.items.length > 0 ? (
+          {events.length > 0 ? (
             <TableCard caption="Events, newest first">
               <TableHeader>
                 <TableRow>
@@ -295,7 +303,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.items.map((item) => (
+                {events.map((item) => (
                   <TableRow key={item.event_id} className="has-[a[aria-current=page]]:bg-selected-surface">
                     <RowHeader>
                       {/* NavLink marks the selected row itself: the route is the selection, so
@@ -315,7 +323,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               </TableBody>
             </TableCard>
           ) : null}
-          <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+          <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
         </div>
       </div>
 
@@ -335,16 +343,13 @@ function ActivitySummary({
   activeKey,
   onSelect,
 }: {
-  summary: ReturnType<typeof useResource<EventActivitySummary>>;
+  summary: UseQueryResult<EventActivitySummary>;
   activeKey: SummaryKey | null;
   onSelect: (key: SummaryKey) => void;
 }) {
-  if (summary.problem)
-    return (
-      <p role="alert">
-        {summary.problem.detail ?? `The activity summary could not be read (${summary.problem.status}).`}
-      </p>
-    );
+  const problem = asProblem(summary.error);
+  if (problem)
+    return <p role="alert">{problem.detail ?? `The activity summary could not be read (${problem.status}).`}</p>;
   if (!summary.data) return <p>Loading activity summary…</p>;
 
   const data = summary.data;
@@ -400,18 +405,22 @@ function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDelive
 /// or not that row is in the ledger's currently loaded page, and a replay only re-reads this Event
 /// rather than the whole ledger.
 function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: string }) {
-  const event = useResource<EventDetail>(
-    () =>
-      api.GET("/admin/tenants/{tenantId}/events/{eventId}/deliveries", {
-        params: { path: { tenantId, eventId } },
-      }),
-    `${tenantId}|${eventId}`,
-  );
+  const queryClient = useQueryClient();
+  const eventKey = ["event", tenantId, eventId];
+  const event = useQuery({
+    queryKey: eventKey,
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/events/{eventId}/deliveries", {
+          params: { path: { tenantId, eventId } },
+        }),
+      ),
+  });
 
   const heading = useRef<HTMLHeadingElement>(null);
   const focusedFor = useRef<string | null>(null);
   useEffect(() => {
-    if ((!event.data && !event.problem) || focusedFor.current === eventId) return;
+    if ((!event.data && !event.isError) || focusedFor.current === eventId) return;
     focusedFor.current = eventId;
     // Only when the inspector is not already sitting beside the ledger: moving focus there too is
     // disorienting when the result was already visible, and this effect does not re-run on a
@@ -420,18 +429,19 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
     // narrow-width focus move against actual layout.
     const isNarrow = typeof window.matchMedia === "function" && !window.matchMedia(desktopBreakpoint).matches;
     if (isNarrow) heading.current?.focus();
-  }, [eventId, event.data, event.problem]);
+  }, [eventId, event.data, event.isError]);
 
   const panel =
     "flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-6 min-[900px]:sticky min-[900px]:flex-[1_1_45%] min-[900px]:top-[calc(var(--topbar-height)+1rem)]";
 
-  if (event.problem)
+  const problem = asProblem(event.error);
+  if (problem)
     return (
       <aside className={panel} aria-label="Event detail">
         <h2 ref={heading} tabIndex={-1} className="m-0">
           Event
         </h2>
-        <p role="alert">{event.problem.detail ?? `This Event could not be read (${event.problem.status}).`}</p>
+        <p role="alert">{problem.detail ?? `This Event could not be read (${problem.status}).`}</p>
       </aside>
     );
   if (!event.data)
@@ -490,7 +500,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                         tenantId={tenantId}
                         eventId={eventId}
                         delivery={delivery}
-                        onReplayed={event.reload}
+                        onReplayed={() => queryClient.invalidateQueries({ queryKey: eventKey })}
                       />
                     </TableCell>
                   </TableRow>
@@ -593,7 +603,17 @@ function ReplayDelivery({
   delivery: EventDelivery;
   onReplayed: () => void;
 }) {
-  const { busy, problem, run } = useAction();
+  // A replay re-reads only this Event: the ledger beside it is a separate query and is not
+  // refetched as a side effect of recovering one Delivery.
+  const replay = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.POST("/admin/tenants/{tenantId}/events/{eventId}/deliveries/{deliveryId}/replay", {
+          params: { path: { tenantId, eventId, deliveryId: delivery.event_delivery_id } },
+        }),
+      ),
+    onSuccess: onReplayed,
+  });
 
   if (delivery.status !== "dead_lettered") return <span>—</span>;
 
@@ -603,18 +623,10 @@ function ReplayDelivery({
         label="Replay"
         question={`Replay the dead-lettered delivery to Subscription ${delivery.subscription_id}? It is queued for delivery again.`}
         confirmLabel="Replay this delivery"
-        busy={busy}
-        onConfirm={() =>
-          void run(
-            () =>
-              api.POST("/admin/tenants/{tenantId}/events/{eventId}/deliveries/{deliveryId}/replay", {
-                params: { path: { tenantId, eventId, deliveryId: delivery.event_delivery_id } },
-              }),
-            onReplayed,
-          )
-        }
+        busy={replay.isPending}
+        onConfirm={() => replay.mutate()}
       />
-      <FormError message={formError(problem)} />
+      <FormError message={formError(asProblem(replay.error))} />
     </div>
   );
 }

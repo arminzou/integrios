@@ -132,16 +132,10 @@ export function ConfirmAction({
   );
 }
 
-export function LoadMore({
-  cursor,
-  busy,
-  onLoadMore,
-}: {
-  cursor: string | null;
-  busy: boolean;
-  onLoadMore: () => void;
-}) {
-  if (!cursor) return null;
+/// The one way further rows are read: an explicit request for the next cursor, never infinite
+/// scroll and never a page number.
+export function LoadMore({ hasMore, busy, onLoadMore }: { hasMore: boolean; busy: boolean; onLoadMore: () => void }) {
+  if (!hasMore) return null;
   return (
     <Button type="button" variant="outline" className="self-start" onClick={onLoadMore} disabled={busy}>
       Load more

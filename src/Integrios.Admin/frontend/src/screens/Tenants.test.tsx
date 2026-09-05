@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
@@ -54,6 +54,44 @@ describe("Tenants list", () => {
     // The first page is still on screen: Load more appends, it does not replace.
     expect(screen.getByRole("link", { name: "Acme" })).toBeTruthy();
     expect(listCalls(calls)[1].url.searchParams.get("after")).toBe("cursor-1");
+  });
+
+  it("never lets a slow read under the previous filter land in the list it was replaced by", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = new URL(typeof input === "string" ? input : input.url, "http://localhost");
+        const filtered = url.searchParams.get("status") === "disabled";
+        // The read the Operator has moved on from answers last, which is the ordering that used to
+        // be able to overwrite the newer one.
+        if (!filtered) await held;
+        return new Response(
+          JSON.stringify(
+            page([
+              filtered
+                ? tenant({ id: `${"2".repeat(8)}-2222-2222-2222-222222222222`, name: "Beta", slug: "beta" })
+                : tenant(),
+            ]),
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    renderScreen(<TenantsScreen />);
+    fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "disabled" } });
+    await screen.findByRole("link", { name: "Beta" });
+
+    await act(async () => {
+      release();
+    });
+
+    expect(screen.queryByRole("link", { name: "Acme" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Beta" })).toBeTruthy();
   });
 
   it("restarts from the first cursor when a filter changes instead of reusing the old one", async () => {
