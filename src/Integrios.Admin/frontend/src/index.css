@@ -1,3 +1,189 @@
+/* The dashboard's one semantic token set. Tokens are named for the role they play, never for
+   their current color or the product that inspired the palette, so a future value change never
+   touches markup. There is no dark variant and no theme switcher: the production dashboard is
+   light-only by design. */
+:root {
+  color-scheme: light;
+
+  --canvas: #fafafa;
+  --surface: #ffffff;
+  --surface-quiet: #fafafa;
+  --ink: #171717;
+  --ink-secondary: #707070;
+  --border: #e5e5e5;
+  --selected-surface: #ededed;
+  --selected-ink: #333333;
+  --warning-ink: #92400e;
+  --danger-ink: #b91c1c;
+
+  --radius: 6px;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", ui-serif, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+a {
+  color: var(--ink);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  border: 1px solid var(--border);
+}
+
+caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+thead th {
+  background: var(--surface-quiet);
+}
+
+dt {
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin-top: 8px;
+}
+
+dd {
+  margin: 0 0 4px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+}
+
+button {
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--surface-quiet);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The signed-in shell: a top-navigation bar instead of a persistent side rail. Its first row is
+   always present; the Tenant-scoped second row appears only once a Tenant is selected, so a
+   deployment-wide screen never claims a Tenant it does not have. */
+.shell {
+  min-height: 100vh;
+  background: var(--canvas);
+}
+
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 16px;
+}
+
+/* The contextual Tenant row wraps or scrolls within its own region at narrow widths rather than
+   forcing the document to overflow; it never collapses behind a pointer-only control. */
+.tenant-row {
+  border-top: 1px solid var(--border);
+  background: var(--surface-quiet);
+}
+
+.brand {
+  font-family: var(--font-serif);
+  font-weight: 600;
+}
+
+.tenant-name {
+  font-weight: 600;
+}
+
+.nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.topbar a {
+  text-decoration: none;
+}
+
+.topbar a:hover,
+.topbar a:focus-visible {
+  text-decoration: underline;
+}
+
+.nav-list a[aria-current="page"] {
+  background: var(--selected-surface);
+  color: var(--selected-ink);
+  border-radius: var(--radius);
+}
+
+.operator-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+#main {
+  padding: 16px;
+}
+
 /* Not visual design — an accessibility floor the dashboard has to clear whatever it later looks
    like. WCAG 2.2 asks a pointer target to be at least 24x24, and a link is otherwise only as tall
    as its text, which leaves navigation and table links around 17px.
