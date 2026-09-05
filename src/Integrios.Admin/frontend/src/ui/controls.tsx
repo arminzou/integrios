@@ -92,6 +92,7 @@ export function ConfirmAction({
     );
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a <fieldset> needs a <legend> and is a form-control grouping; this is an inline confirmation named by aria-label
     <span role="group" aria-label={label}>
       <span>{question}</span>
       <button

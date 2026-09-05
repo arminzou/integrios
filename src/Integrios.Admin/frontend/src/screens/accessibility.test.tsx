@@ -89,6 +89,9 @@ describe("Accessibility of the Operator workflows", () => {
           : page([]),
     }));
 
+    // Each element is rendered on its own by `renderScreen` in the loop body, never as a sibling in
+    // a rendered list, so React has nothing to reconcile and a key would say otherwise.
+    // biome-ignore-start lint/correctness/useJsxKeyInIterable: fixtures rendered one at a time, not as a list
     for (const [name, element] of [
       ["Tenants", <TenantsScreen />],
       ["Connectors", <ConnectorsScreen />],
@@ -102,6 +105,7 @@ describe("Accessibility of the Operator workflows", () => {
       expect(name).toBeTruthy();
       cleanup();
     }
+    // biome-ignore-end lint/correctness/useJsxKeyInIterable: end of the fixture array
   });
 
   it("passes the automated rules on the Connections authoring pattern with its create panel open", async () => {

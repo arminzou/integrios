@@ -38,7 +38,7 @@ describe("Tenants list", () => {
       url.searchParams.get("after") === "cursor-1"
         ? {
             status: 200,
-            body: page([tenant({ id: "2".repeat(8) + "-2222-2222-2222-222222222222", name: "Beta", slug: "beta" })]),
+            body: page([tenant({ id: `${"2".repeat(8)}-2222-2222-2222-222222222222`, name: "Beta", slug: "beta" })]),
           }
         : { status: 200, body: page([tenant()], "cursor-1") },
     );

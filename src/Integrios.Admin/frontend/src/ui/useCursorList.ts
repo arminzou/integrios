@@ -62,6 +62,10 @@ export function useCursorList<Item>(load: (after: string | null) => Promise<Fetc
     }));
   }, []);
 
+  // `scope` is a re-run trigger rather than a value this effect reads, which is why the rule cannot
+  // see that it is load-bearing. Dropping it stops a filter change from restarting paging and lets a
+  // stale scope's response land; three tests fail when it goes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scope is an intentional re-run trigger
   useEffect(() => {
     generation.current++;
     setState(initialState<Item>());

@@ -28,6 +28,9 @@ export function useResource<T>(load: () => Promise<FetchResult<T>>, scope: strin
     setData(body ?? null);
   }, []);
 
+  // `scope` is a re-run trigger rather than a value this effect reads. Dropping it leaves the
+  // previous resource on screen when the route selects a sibling.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scope is an intentional re-run trigger
   useEffect(() => {
     generation.current++;
     setData(null);

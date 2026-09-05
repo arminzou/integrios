@@ -127,6 +127,9 @@ function TopNav({
   // The sticky inspector on the Events screen sits below whatever this topbar's real height turns
   // out to be — one row when no Tenant is selected, two when one is — rather than a guessed pixel
   // offset that drifts out of sync the moment this header's own content changes.
+  // `tenantId` is a re-run trigger rather than a value this effect reads: it is what re-measures the
+  // header when the Tenant row appears or disappears and the bar's height changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tenantId is an intentional re-run trigger
   useEffect(() => {
     const element = headerRef.current;
     if (!element) return;

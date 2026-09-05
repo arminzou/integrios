@@ -72,7 +72,9 @@ async function openDashboard(path = "/tenants"): Promise<Page> {
 async function accessibilityViolations(page: Page): Promise<string[]> {
   await page.addScriptTag({ path: axePath });
   return page.evaluate(async () => {
-    const results = await (window as unknown as { axe: { run: Function } }).axe.run(document, {
+    const results = await (
+      window as unknown as { axe: { run: (root: Document, options: unknown) => Promise<unknown> } }
+    ).axe.run(document, {
       runOnly: { type: "rule", values: ["color-contrast", "target-size"] },
     });
     return (results as { violations: { id: string; nodes: { html: string }[] }[] }).violations.map(
