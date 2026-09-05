@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import type { Problem } from "../api/problem";
 
 /// A collapsed "Find an X" filter panel or "New X" create panel, shared across every capability's
@@ -52,7 +53,11 @@ export function Field({
 }
 
 export function FormError({ message }: { message?: string }) {
-  return message ? <p role="alert">{message}</p> : null;
+  return message ? (
+    <p role="alert" className="text-sm text-destructive">
+      {message}
+    </p>
+  ) : null;
 }
 
 /// An irreversible action states what it is about to change, by name, before it can be confirmed.
@@ -85,17 +90,25 @@ export function ConfirmAction({
 
   if (!armed)
     return (
-      <button ref={triggerRef} type="button" disabled={busy} onClick={() => setArmed(true)}>
+      <Button
+        ref={triggerRef}
+        type="button"
+        variant="outline"
+        className="self-start"
+        disabled={busy}
+        onClick={() => setArmed(true)}
+      >
         {label}
-      </button>
+      </Button>
     );
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: a <fieldset> needs a <legend> and is a form-control grouping; this is an inline confirmation named by aria-label
-    <span role="group" aria-label={label}>
+    <span role="group" aria-label={label} className="flex flex-wrap items-center gap-3">
       <span>{question}</span>
-      <button
+      <Button
         type="button"
+        variant="destructive"
         ref={confirmRef}
         disabled={busy}
         onClick={() => {
@@ -104,16 +117,17 @@ export function ConfirmAction({
         }}
       >
         {confirmLabel ?? label}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="outline"
         onClick={() => {
           restoreFocus.current = true;
           setArmed(false);
         }}
       >
         Cancel
-      </button>
+      </Button>
     </span>
   );
 }
@@ -129,9 +143,9 @@ export function LoadMore({
 }) {
   if (!cursor) return null;
   return (
-    <button type="button" onClick={onLoadMore} disabled={busy}>
+    <Button type="button" variant="outline" className="self-start" onClick={onLoadMore} disabled={busy}>
       Load more
-    </button>
+    </Button>
   );
 }
 

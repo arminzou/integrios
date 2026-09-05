@@ -168,9 +168,11 @@ describe("Create forms, filled through a real browser", () => {
     // The create form sits behind a "New Connection" disclosure so it does not permanently
     // dominate the list above it.
     await view.click("text=New Connection");
-    await view.selectOption("#create-connection-connector", connectorId);
-    await view.fill("#create-connection-name", "sink");
-    await view.fill("#create-connection-config", '{"base_uri":"http://sink.invalid"}');
+    // Addressed by label rather than by id: the form's controls take the id their label points at
+    // from the form primitive, so the label association is the stable handle and is worth asserting.
+    await view.getByLabel("Connector").selectOption(connectorId);
+    await view.getByLabel("Name").fill("sink");
+    await view.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://sink.invalid"}');
     await view.click("text=Create Connection");
     await view.waitForFunction(() => true);
 
@@ -254,7 +256,7 @@ describe("Update and deactivate, driven through a real browser", () => {
   it("sends an updated Connection with its config reparsed and its schemes untouched", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/connections/${connectionId}`);
 
-    await view.fill("#connection-config", '{"base_uri":"http://moved.invalid"}');
+    await view.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://moved.invalid"}');
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);

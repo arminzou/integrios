@@ -1,20 +1,76 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
-import { fieldError, formError } from "../api/problem";
+import { formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
 import { useResource } from "../ui/useResource";
 
+/// Connections is the authoring pattern every other capability copies. Its parts, in the order they
+/// appear below:
+///
+/// - A list screen is a heading, a create panel behind a disclosure so it never dominates the list,
+///   a filter, and the rows in a bordered card. Paging stays on the cursor the list returns.
+/// - A form is a Zod schema plus `useForm`. The schema is the only place the form's rules live; the
+///   submit handler does the conversion a form of strings always needs — text to a JSON document, an
+///   untouched optional field to `null` — and names the request body the typed client sends.
+/// - A rejected write comes back as Problem Details. `applyProblem` puts each field-keyed message on
+///   its own control and `formError` renders whatever was attributed to no rendered field, so the
+///   Admin API stays the authority on what is wrong with a document.
+/// - A picker over another capability is a real `<select>`, and an irreversible action is
+///   `ConfirmAction`, which names what it is about to change before it can be confirmed.
+///
+/// What is capability-specific — which fields exist, what they mean, which mutations the Admin API
+/// offers — stays here rather than moving into a shared form abstraction.
+
 type ConnectionListItem = components["schemas"]["ConnectionListItemDto"];
 type Connection = components["schemas"]["ConnectionDto"];
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
 
-const writeFields = ["connector_id", "name", "config", "environment", "description"];
+/// The fields each form renders, so a message the server attributes to one of them lands on that
+/// control and everything else lands at form level.
+const editFields = ["name", "config", "environment", "description"] as const;
+const createFields = ["connector_id", ...editFields] as const;
+
+/// A domain JSON document, authored as text. Well-formedness is all the dashboard checks; the
+/// Connector contract, and the server, remain the authority on whether the document is valid.
+const jsonDocument = z.string().superRefine((text, ctx) => {
+  const parsed = parseJson(text);
+  if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+});
+
+const editSchema = z.object({
+  name: z.string().trim().min(1, "Enter a name."),
+  config: jsonDocument,
+  environment: z.string(),
+  description: z.string(),
+});
+
+const createSchema = editSchema.extend({
+  connector_id: z.string().min(1, "Choose a Connector."),
+});
+
+type EditValues = z.infer<typeof editSchema>;
+type CreateValues = z.infer<typeof createSchema>;
+
+/// An optional field left untouched is absent, not empty.
+const optional = (text: string) => text.trim() || null;
 
 export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
   const [status, setStatus] = useState("");
@@ -27,61 +83,77 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
   );
 
   return (
-    <>
-      <h1>Connections</h1>
-      <p>
-        In <Link to={`/tenants/${tenantId}`}>this Tenant</Link>.
-      </p>
+    <div className="flex flex-col gap-8">
+      <header>
+        <h1>Connections</h1>
+        <p className="text-ink-secondary">
+          In{" "}
+          <Link className="underline" to={`/tenants/${tenantId}`}>
+            this Tenant
+          </Link>
+          .
+        </p>
+      </header>
 
       <Disclosure label="New Connection">
         <CreateConnection tenantId={tenantId} onCreated={list.reload} />
       </Disclosure>
 
-      <h2>All Connections</h2>
-      <Field id="connection-status" label="Status">
-        <select {...fieldProps("connection-status")} value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">Any status</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
-        </select>
-      </Field>
-
-      <ListStatus
-        busy={list.busy}
-        loaded={list.loaded}
-        problem={list.problem}
-        empty={list.items.length === 0}
-        emptyText="This Tenant has no Connections matching this filter."
-      />
-      {list.items.length > 0 ? (
-        <div className="table-card">
-          <table>
-            <caption>Connections, newest first</caption>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Status</th>
-                <th scope="col">Environment</th>
-                <th scope="col">Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.items.map((connection) => (
-                <tr key={connection.id}>
-                  <th scope="row">
-                    <Link to={`/tenants/${tenantId}/connections/${connection.id}`}>{connection.name}</Link>
-                  </th>
-                  <td>{connection.status}</td>
-                  <td>{connection.environment ?? "—"}</td>
-                  <td>{connection.description ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="flex flex-col gap-4">
+        <h2>All Connections</h2>
+        <div className="flex max-w-56 flex-col gap-2">
+          <Label htmlFor="connection-status">Status</Label>
+          <NativeSelect
+            id="connection-status"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="w-auto"
+          >
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </NativeSelect>
         </div>
-      ) : null}
-      <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
-    </>
+
+        <ListStatus
+          busy={list.busy}
+          loaded={list.loaded}
+          problem={list.problem}
+          empty={list.items.length === 0}
+          emptyText="This Tenant has no Connections matching this filter."
+        />
+        {list.items.length > 0 ? (
+          <Card className="gap-0 overflow-hidden py-0">
+            <Table className="caption-top">
+              <TableCaption className="mt-0 px-4 pt-4 pb-2 text-left">Connections, newest first</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  <TableHead scope="col">Environment</TableHead>
+                  <TableHead scope="col">Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.items.map((connection) => (
+                  <TableRow key={connection.id}>
+                    <TableHead scope="row" className="font-normal whitespace-normal">
+                      <Link className="underline" to={`/tenants/${tenantId}/connections/${connection.id}`}>
+                        {connection.name}
+                      </Link>
+                    </TableHead>
+                    <TableCell>{connection.status}</TableCell>
+                    <TableCell>{connection.environment ?? "—"}</TableCell>
+                    <TableCell>{connection.description ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        ) : null}
+        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+      </section>
+    </div>
   );
 }
 
@@ -91,118 +163,130 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
     () => api.GET("/admin/connectors", { params: { query: { limit: 100 } } }),
     "connector-options",
   );
-  const [connectorId, setConnectorId] = useState("");
-  const [name, setName] = useState("");
-  const [config, setConfig] = useState("{}");
-  const [configError, setConfigError] = useState<string | undefined>(undefined);
-  const [environment, setEnvironment] = useState("");
-  const [description, setDescription] = useState("");
   const { busy, problem, run } = useAction();
   const connectorOptionsUnavailable = connectors.busy || connectors.problem !== null;
 
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        const parsed = parseJson(config);
-        setConfigError(parsed.error);
-        if (parsed.error !== undefined) return;
+  const form = useForm<CreateValues>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { connector_id: "", name: "", config: "{}", environment: "", description: "" },
+  });
 
-        void run(
-          () =>
-            api.POST("/admin/tenants/{tenantId}/connections", {
-              params: { path: { tenantId } },
-              body: {
-                connector_id: connectorId,
-                name,
-                config: parsed.value,
-                // Verification and authentication schemes carry secret references, never secret
-                // values, so they are configured on the Connection itself rather than typed here.
-                source_verification: null,
-                destination_authentication: null,
-                environment: environment || null,
-                description: description || null,
-              },
-            }),
-          (created) => {
-            onCreated();
-            if (created) navigate(`/tenants/${tenantId}/connections/${created.id}`);
+  const submit = form.handleSubmit(async (values) => {
+    const failure = await run(
+      () =>
+        api.POST("/admin/tenants/{tenantId}/connections", {
+          params: { path: { tenantId } },
+          body: {
+            connector_id: values.connector_id,
+            name: values.name,
+            config: parseJson(values.config).value,
+            // Verification and authentication schemes carry secret references, never secret
+            // values, so they are configured on the Connection itself rather than typed here.
+            source_verification: null,
+            destination_authentication: null,
+            environment: optional(values.environment),
+            description: optional(values.description),
           },
-        );
-      }}
-    >
-      <h2>Create a Connection</h2>
-      <FormError message={formError(connectors.problem)} />
-      <FormError message={formError(problem, writeFields)} />
-      <Field
-        id="create-connection-connector"
-        label="Connector"
-        error={fieldError(problem, "connector_id")}
-        hint={connectors.truncated ? "Showing the first 100 Connectors." : undefined}
-      >
-        <select
-          {...fieldProps("create-connection-connector", fieldError(problem, "connector_id"), connectors.truncated)}
-          value={connectorId}
-          onChange={(event) => setConnectorId(event.target.value)}
-          disabled={connectorOptionsUnavailable}
-          required
-        >
-          <option value="">Choose a Connector</option>
-          {connectors.items.map((connector) => (
-            <option key={connector.id} value={connector.id}>
-              {connector.name} (v{connector.contract_version}, {connector.direction})
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field id="create-connection-name" label="Name" error={fieldError(problem, "name")}>
-        <input
-          {...fieldProps("create-connection-name", fieldError(problem, "name"))}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          required
+        }),
+      (created) => {
+        onCreated();
+        if (created) navigate(`/tenants/${tenantId}/connections/${created.id}`);
+      },
+    );
+    if (failure) applyProblem(form, failure, createFields);
+  });
+
+  return (
+    <Form {...form}>
+      <form className="flex max-w-2xl flex-col gap-4 rounded-lg border bg-surface p-6" onSubmit={submit}>
+        <h2>Create a Connection</h2>
+        <FormError message={formError(connectors.problem)} />
+        <FormError message={formError(problem, createFields)} />
+
+        <FormField
+          control={form.control}
+          name="connector_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Connector</FormLabel>
+              <FormControl>
+                <NativeSelect {...field} disabled={connectorOptionsUnavailable} required>
+                  <option value="">Choose a Connector</option>
+                  {connectors.items.map((connector) => (
+                    <option key={connector.id} value={connector.id}>
+                      {connector.name} (v{connector.contract_version}, {connector.direction})
+                    </option>
+                  ))}
+                </NativeSelect>
+              </FormControl>
+              {connectors.truncated ? <FormDescription>Showing the first 100 Connectors.</FormDescription> : null}
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </Field>
-      <Field
-        id="create-connection-config"
-        label="Configuration (JSON)"
-        error={configError ?? fieldError(problem, "config")}
-        hint="The Connector's manifest defines what this document must contain."
-      >
-        <textarea
-          {...fieldProps("create-connection-config", configError ?? fieldError(problem, "config"), true)}
-          rows={8}
-          value={config}
-          onChange={(event) => setConfig(event.target.value)}
-          required
+
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Name</FormLabel>
+              <FormControl>
+                <Input {...field} required />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </Field>
-      <Field
-        id="create-connection-environment"
-        label="Environment (optional)"
-        error={fieldError(problem, "environment")}
-      >
-        <input
-          {...fieldProps("create-connection-environment", fieldError(problem, "environment"))}
-          value={environment}
-          onChange={(event) => setEnvironment(event.target.value)}
+
+        <FormField
+          control={form.control}
+          name="config"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Configuration (JSON)</FormLabel>
+              <FormControl>
+                <Textarea {...field} className="min-h-40 font-mono text-sm" required />
+              </FormControl>
+              <FormDescription>The Connector's manifest defines what this document must contain.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </Field>
-      <Field
-        id="create-connection-description"
-        label="Description (optional)"
-        error={fieldError(problem, "description")}
-      >
-        <input
-          {...fieldProps("create-connection-description", fieldError(problem, "description"))}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
+
+        <FormField
+          control={form.control}
+          name="environment"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Environment (optional)</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </Field>
-      <button type="submit" disabled={busy || connectorOptionsUnavailable}>
-        Create Connection
-      </button>
-    </form>
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description (optional)</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit" className="self-start" disabled={busy || connectorOptionsUnavailable}>
+          Create Connection
+        </Button>
+      </form>
+    </Form>
   );
 }
 
@@ -228,31 +312,44 @@ export function ConnectionScreen({ tenantId, connectionId }: { tenantId: string;
 
   const current = connection.data;
   return (
-    <>
-      <h1>{current.name}</h1>
-      <p>
-        In <Link to={`/tenants/${tenantId}/connections`}>this Tenant's Connections</Link>.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd>{current.status}</dd>
-        <dt>Connector</dt>
-        <dd>
-          <Link to={`/connectors/${current.connector_id}`}>{current.connector_id}</Link>
-        </dd>
-        <dt>Environment</dt>
-        <dd>{current.environment ?? "—"}</dd>
-        <dt>Source verification</dt>
-        <dd>{current.source_verification ? current.source_verification.scheme : "Not configured"}</dd>
-        <dt>Destination authentication</dt>
-        <dd>{current.destination_authentication ? current.destination_authentication.scheme : "Not configured"}</dd>
-      </dl>
+    <div className="flex flex-col gap-8">
+      <header>
+        <h1>{current.name}</h1>
+        <p className="text-ink-secondary">
+          In{" "}
+          <Link className="underline" to={`/tenants/${tenantId}/connections`}>
+            this Tenant's Connections
+          </Link>
+          .
+        </p>
+      </header>
 
-      <h2>Configuration</h2>
-      <pre>{formatJson(current.config)}</pre>
+      <Card className="max-w-2xl gap-0 px-6 py-5">
+        <dl className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-6 gap-y-3 [&>dd]:m-0 [&>dt]:m-0 [&>dt]:font-medium">
+          <dt>Status</dt>
+          <dd>{current.status}</dd>
+          <dt>Connector</dt>
+          <dd>
+            <Link className="underline" to={`/connectors/${current.connector_id}`}>
+              {current.connector_id}
+            </Link>
+          </dd>
+          <dt>Environment</dt>
+          <dd>{current.environment ?? "—"}</dd>
+          <dt>Source verification</dt>
+          <dd>{current.source_verification ? current.source_verification.scheme : "Not configured"}</dd>
+          <dt>Destination authentication</dt>
+          <dd>{current.destination_authentication ? current.destination_authentication.scheme : "Not configured"}</dd>
+        </dl>
+      </Card>
+
+      <section className="flex max-w-2xl flex-col gap-2">
+        <h2>Configuration</h2>
+        <pre className="max-w-2xl text-sm">{formatJson(current.config)}</pre>
+      </section>
 
       <EditConnection key={current.updated_at} tenantId={tenantId} connection={current} onSaved={connection.reload} />
-    </>
+    </div>
   );
 }
 
@@ -265,78 +362,106 @@ function EditConnection({
   connection: Connection;
   onSaved: () => void;
 }) {
-  const [name, setName] = useState(connection.name);
-  const [config, setConfig] = useState(() => formatJson(connection.config));
-  const [configError, setConfigError] = useState<string | undefined>(undefined);
-  const [environment, setEnvironment] = useState(connection.environment ?? "");
-  const [description, setDescription] = useState(connection.description ?? "");
   const { busy, problem, run } = useAction();
+  const form = useForm<EditValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues: {
+      name: connection.name,
+      config: formatJson(connection.config),
+      environment: connection.environment ?? "",
+      description: connection.description ?? "",
+    },
+  });
+
+  const submit = form.handleSubmit(async (values) => {
+    const failure = await run(
+      () =>
+        api.PATCH("/admin/tenants/{tenantId}/connections/{id}", {
+          params: { path: { tenantId, id: connection.id } },
+          body: {
+            name: values.name,
+            config: parseJson(values.config).value,
+            // Sending null leaves the stored scheme untouched: this form never round-trips a
+            // scheme's secret references, so it must not claim to replace them either.
+            source_verification: null,
+            destination_authentication: null,
+            environment: optional(values.environment),
+            description: optional(values.description),
+          },
+        }),
+      onSaved,
+    );
+    if (failure) applyProblem(form, failure, editFields);
+  });
 
   return (
-    <>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          const parsed = parseJson(config);
-          setConfigError(parsed.error);
-          if (parsed.error !== undefined) return;
+    <div className="flex flex-col gap-6">
+      <Form {...form}>
+        <form className="flex max-w-2xl flex-col gap-4 rounded-lg border bg-surface p-6" onSubmit={submit}>
+          <h2>Edit {connection.name}</h2>
+          <FormError message={formError(problem, editFields)} />
 
-          void run(
-            () =>
-              api.PATCH("/admin/tenants/{tenantId}/connections/{id}", {
-                params: { path: { tenantId, id: connection.id } },
-                body: {
-                  name,
-                  config: parsed.value,
-                  // Sending null leaves the stored scheme untouched: this form never round-trips a
-                  // scheme's secret references, so it must not claim to replace them either.
-                  source_verification: null,
-                  destination_authentication: null,
-                  environment: environment || null,
-                  description: description || null,
-                },
-              }),
-            onSaved,
-          );
-        }}
-      >
-        <h2>Edit {connection.name}</h2>
-        <FormError message={formError(problem, writeFields)} />
-        <Field id="connection-name" label="Name" error={fieldError(problem, "name")}>
-          <input
-            {...fieldProps("connection-name", fieldError(problem, "name"))}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Name</FormLabel>
+                <FormControl>
+                  <Input {...field} required />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </Field>
-        <Field id="connection-config" label="Configuration (JSON)" error={configError ?? fieldError(problem, "config")}>
-          <textarea
-            {...fieldProps("connection-config", configError ?? fieldError(problem, "config"))}
-            rows={10}
-            value={config}
-            onChange={(event) => setConfig(event.target.value)}
-            required
+
+          <FormField
+            control={form.control}
+            name="config"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Configuration (JSON)</FormLabel>
+                <FormControl>
+                  <Textarea {...field} className="min-h-56 font-mono text-sm" required />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </Field>
-        <Field id="connection-environment" label="Environment (optional)" error={fieldError(problem, "environment")}>
-          <input
-            {...fieldProps("connection-environment", fieldError(problem, "environment"))}
-            value={environment}
-            onChange={(event) => setEnvironment(event.target.value)}
+
+          <FormField
+            control={form.control}
+            name="environment"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Environment (optional)</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </Field>
-        <Field id="connection-description" label="Description (optional)" error={fieldError(problem, "description")}>
-          <input
-            {...fieldProps("connection-description", fieldError(problem, "description"))}
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description (optional)</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </Field>
-        <button type="submit" disabled={busy}>
-          Save changes
-        </button>
-      </form>
+
+          <Button type="submit" className="self-start" disabled={busy}>
+            Save changes
+          </Button>
+        </form>
+      </Form>
 
       {connection.status === "active" ? (
         <ConfirmAction
@@ -355,6 +480,6 @@ function EditConnection({
           }
         />
       ) : null}
-    </>
+    </div>
   );
 }
