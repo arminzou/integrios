@@ -12,6 +12,7 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
+import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
@@ -72,7 +73,7 @@ type CreateValues = z.infer<typeof createSchema>;
 const optional = (text: string) => text.trim() || null;
 
 export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useFilterParam("status");
   const list = useInfiniteQuery({
     queryKey: ["connections", tenantId, { status }],
     queryFn: ({ pageParam }) =>
@@ -239,6 +240,7 @@ function CreateConnection({ tenantId }: { tenantId: string }) {
 }
 
 export function ConnectionScreen({ tenantId, connectionId }: { tenantId: string; connectionId: string }) {
+  const [notice, setNotice] = useState("");
   const connection = useQuery({
     queryKey: ["connection", tenantId, connectionId],
     queryFn: () =>
@@ -296,12 +298,26 @@ export function ConnectionScreen({ tenantId, connectionId }: { tenantId: string;
         <pre className="max-w-2xl text-sm">{formatJson(current.config)}</pre>
       </section>
 
-      <EditConnection key={current.updated_at} tenantId={tenantId} connection={current} />
+      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
+      <EditConnection
+        key={current.updated_at}
+        tenantId={tenantId}
+        connection={current}
+        onDone={() => setNotice("Connection deactivated.")}
+      />
     </Page>
   );
 }
 
-function EditConnection({ tenantId, connection }: { tenantId: string; connection: Connection }) {
+function EditConnection({
+  tenantId,
+  connection,
+  onDone,
+}: {
+  tenantId: string;
+  connection: Connection;
+  onDone: () => void;
+}) {
   const queryClient = useQueryClient();
   /// Both reads that can now be wrong: this Connection, and any list it appears in.
   const reread = () => {
@@ -346,7 +362,10 @@ function EditConnection({ tenantId, connection }: { tenantId: string; connection
           params: { path: { tenantId, id: connection.id } },
         }),
       ),
-    onSuccess: reread,
+    onSuccess: () => {
+      reread();
+      onDone();
+    },
   });
 
   const submit = form.handleSubmit((values) =>

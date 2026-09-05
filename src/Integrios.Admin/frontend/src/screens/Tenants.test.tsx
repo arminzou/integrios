@@ -165,3 +165,41 @@ describe("Tenant authoring", () => {
     expect(calls.find((call) => call.method === "POST")!.url.pathname).toBe(`/admin/tenants/${tenantId}/deactivate`);
   });
 });
+
+describe("Deactivating a Tenant", () => {
+  it("keeps the confirmation after the control that offered it has gone", async () => {
+    // Deactivation removes the very control that performed it, and changes `updated_at`, which
+    // remounts the edit panel and discards its mutation state. A notice living on either would be
+    // gone at the moment it finally had something to report.
+    let status = "active";
+    stubHttp(({ url, method }) => {
+      if (method === "POST" && url.pathname.endsWith("/deactivate")) {
+        status = "disabled";
+        return { status: 202 };
+      }
+      return { status: 200, body: tenant({ status, updated_at: `2026-09-01T00:00:0${status.length}Z` }) };
+    });
+
+    renderScreen(<TenantScreen tenantId={tenantId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate Tenant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate Acme" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Deactivate Tenant" })).toBeNull());
+    expect(screen.getByText("Tenant deactivated.")).toBeTruthy();
+  });
+});
+
+describe("Filtering the Tenants list", () => {
+  it("reads its filter from the URL and offers a way out of an empty filtered list", async () => {
+    const calls = stubHttp(() => ({ status: 200, body: { items: [], next_cursor: null } }));
+
+    const { router } = renderScreen(<TenantsScreen />, "/tenants?status=disabled");
+
+    await waitFor(() => expect(calls.some((call) => call.url.searchParams.get("status") === "disabled")).toBe(true));
+    expect((await screen.findByLabelText("Status")) as HTMLSelectElement).toHaveProperty("value", "disabled");
+
+    // An empty list that is empty because of the filter says how to stop filtering.
+    fireEvent.click(await screen.findByRole("link", { name: "Clear filters" }));
+    await waitFor(() => expect(router.state.location.search).toBe(""));
+  });
+});

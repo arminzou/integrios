@@ -12,6 +12,7 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
+import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
@@ -49,8 +50,8 @@ type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
 
 export function SourcesScreen({ tenantId }: { tenantId: string }) {
-  const [status, setStatus] = useState("");
-  const [type, setType] = useState("");
+  const [status, setStatus] = useFilterParam("status");
+  const [type, setType] = useFilterParam("type");
   const list = useInfiniteQuery({
     queryKey: ["sources", tenantId, { status, type }],
     queryFn: ({ pageParam }) =>
@@ -258,6 +259,7 @@ function CreateSource({ tenantId }: { tenantId: string }) {
 }
 
 export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceId: string }) {
+  const [notice, setNotice] = useState("");
   const source = useQuery({
     queryKey: ["source", tenantId, sourceId],
     queryFn: () =>
@@ -313,14 +315,20 @@ export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceI
         </Details>
       </Panel>
 
-      <EditSource key={current.updated_at} tenantId={tenantId} source={current} />
+      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
+      <EditSource
+        key={current.updated_at}
+        tenantId={tenantId}
+        source={current}
+        onDone={() => setNotice("Source revoked.")}
+      />
     </Page>
   );
 }
 
 /// The Admin API owns exactly one Source update — its configuration. Type, Connection, and Topic are
 /// fixed at creation, so they are shown rather than offered as editable fields.
-function EditSource({ tenantId, source }: { tenantId: string; source: Source }) {
+function EditSource({ tenantId, source, onDone }: { tenantId: string; source: Source; onDone: () => void }) {
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
@@ -349,7 +357,10 @@ function EditSource({ tenantId, source }: { tenantId: string; source: Source }) 
           params: { path: { tenantId, id: source.id } },
         }),
       ),
-    onSuccess: reread,
+    onSuccess: () => {
+      reread();
+      onDone();
+    },
   });
 
   const submit = form.handleSubmit((values) =>

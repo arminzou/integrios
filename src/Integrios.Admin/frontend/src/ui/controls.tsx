@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import type { Problem } from "../api/problem";
 
@@ -196,6 +197,26 @@ export function WriteStatus({ done, children }: { done: boolean; children: React
   );
 }
 
+/// The next action for a list that is empty because of what was asked of it, rather than because
+/// the Tenant holds nothing. It reads the URL rather than any screen's own state, which is what
+/// lets every capability offer it without wiring one per screen — and is only possible because the
+/// filters live in the URL at all.
+function ClearFilters() {
+  const [params] = useSearchParams();
+  const { pathname } = useLocation();
+
+  if (params.toString() === "") return null;
+  return (
+    <Button asChild variant="outline">
+      {/* The base layer hands links their underline back, which a control shaped like a button
+          should not carry. */}
+      <Link to={pathname} className="no-underline">
+        Clear filters
+      </Link>
+    </Button>
+  );
+}
+
 /// What a list shows when it has no rows to show: still loading, failed, or genuinely empty. The
 /// empty text names the scope that was searched so an empty Tenant is not mistaken for a failure.
 export function ListStatus({
@@ -213,6 +234,12 @@ export function ListStatus({
 }) {
   if (problem) return <p role="alert">{problem.detail ?? `The list could not be read (${problem.status}).`}</p>;
   if (busy && !loaded) return <ListSkeleton />;
-  if (loaded && empty) return <p>{emptyText}</p>;
+  if (loaded && empty)
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="m-0">{emptyText}</p>
+        <ClearFilters />
+      </div>
+    );
   return null;
 }

@@ -12,6 +12,7 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
+import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
@@ -39,7 +40,7 @@ type CreateValues = z.infer<typeof createSchema>;
 const optional = (text: string) => text.trim() || null;
 
 export function TenantsScreen() {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useFilterParam("status");
   const list = useInfiniteQuery({
     queryKey: ["tenants", { status }],
     queryFn: ({ pageParam }) =>
@@ -163,6 +164,7 @@ function CreateTenant() {
 }
 
 export function TenantScreen({ tenantId }: { tenantId: string }) {
+  const [notice, setNotice] = useState("");
   const tenant = useQuery({
     queryKey: ["tenant", tenantId],
     queryFn: () => call(() => api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } })),
@@ -226,12 +228,13 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         </ul>
       </section>
 
-      <EditTenant key={current.updated_at} tenant={current} />
+      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
+      <EditTenant key={current.updated_at} tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
     </Page>
   );
 }
 
-function EditTenant({ tenant }: { tenant: Tenant }) {
+function EditTenant({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["tenant", tenant.id] });
@@ -263,7 +266,10 @@ function EditTenant({ tenant }: { tenant: Tenant }) {
 
   const deactivate = useMutation({
     mutationFn: () => call(() => api.POST("/admin/tenants/{id}/deactivate", { params: { path: { id: tenant.id } } })),
-    onSuccess: reread,
+    onSuccess: () => {
+      reread();
+      onDone();
+    },
   });
 
   const submit = form.handleSubmit((values) =>

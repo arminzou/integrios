@@ -105,6 +105,41 @@ describe("Event history", () => {
     expect(applied.url.searchParams.has("after")).toBe(false);
   });
 
+  it("restores the ledger's scope from the URL, so a filtered view is a link", async () => {
+    const calls = stubHttp(respondFor(page([])));
+
+    renderScreen(
+      <EventsScreen tenantId={tenantId} />,
+      `/tenants/${tenantId}/events?status=unrouted&source_event_id=order-42&accepted_from=2026-09-01T09%3A00%3A17Z`,
+    );
+
+    await waitFor(() => expect(eventsCall(calls).length).toBeGreaterThan(0));
+    const read = eventsCall(calls)[0].url.searchParams;
+    expect(read.get("status")).toBe("unrouted");
+    expect(read.get("source_event_id")).toBe("order-42");
+    // The window survives the round trip through the local-time control the form holds it in.
+    expect(read.get("accepted_from")).toBe("2026-09-01T09:00:17.000Z");
+
+    // The form opens showing the scope in force, not the empty defaults.
+    openFilters();
+    expect((screen.getByLabelText("Source Event id") as HTMLInputElement).value).toBe("order-42");
+  });
+
+  it("writes applied filters to the URL under the Admin API's own parameter names", async () => {
+    stubHttp(respondFor(page([])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
+    await screen.findByText("No Events in this Tenant match these filters.");
+
+    openFilters();
+    fireEvent.change(screen.getByLabelText("Delivery status"), { target: { value: "dead_lettered" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => expect(router.state.location.search).toBe("?delivery_status=dead_lettered"));
+    // Applying is a navigation, so the previous scope is what Back returns to.
+    expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/events`);
+  });
+
   it("reports unavailable filter options instead of presenting an empty picker", async () => {
     stubHttp((call) =>
       call.url.pathname.endsWith("/sources")

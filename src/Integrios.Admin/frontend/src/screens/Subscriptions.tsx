@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
@@ -10,8 +9,9 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
+import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
@@ -84,7 +84,7 @@ export function SubscriptionsSection({
   topicId: string;
   topicName: string;
 }) {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useFilterParam("status");
   const navigate = useNavigate();
   const list = useInfiniteQuery({
     queryKey: ["subscriptions", tenantId, topicId, { status }],
@@ -247,6 +247,7 @@ export function SubscriptionScreen({
       <TransformPreview />
 
       <div className="flex flex-col gap-3">
+        <WriteStatus done={deactivate.isSuccess}>Subscription deactivated.</WriteStatus>
         <FormError message={formError(asProblem(deactivate.error))} />
         {current.status === "active" ? (
           <ConfirmAction

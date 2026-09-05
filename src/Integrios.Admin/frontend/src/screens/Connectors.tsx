@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
@@ -12,6 +11,7 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
+import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
@@ -37,7 +37,7 @@ type ApplyValues = z.infer<typeof applySchema>;
 /// Connectors are deployment-wide rather than Tenant-scoped, so this screen carries no Tenant.
 export function ConnectorsScreen() {
   const navigate = useNavigate();
-  const [direction, setDirection] = useState("");
+  const [direction, setDirection] = useFilterParam("direction");
   const list = useInfiniteQuery({
     queryKey: ["connectors", { direction }],
     queryFn: ({ pageParam }) =>

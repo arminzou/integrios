@@ -1,7 +1,7 @@
 import { type UseQueryResult, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, NavLink } from "react-router";
+import { Link, NavLink, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
@@ -48,6 +48,44 @@ const noFilters: Filters = {
   acceptedTo: "",
 };
 
+/// How the URL spells each filter. Snake case matches the Admin API's own query parameters, so a
+/// link an Operator copies out of the dashboard reads like the request it produces.
+///
+/// The two accepted-window fields are marked as instants because they are the one place the form's
+/// value and the URL's value must differ. A `datetime-local` control holds a local wall clock with
+/// no offset, and a link carrying that raw would resolve to a different moment for a colleague in
+/// another zone. The URL therefore carries the unambiguous instant and the form converts at the
+/// boundary, exactly as the request already does.
+const filterParams: { field: keyof Filters; name: string; isInstant?: true }[] = [
+  { field: "status", name: "status" },
+  { field: "deliveryStatus", name: "delivery_status" },
+  { field: "sourceId", name: "source_id" },
+  { field: "topicId", name: "topic_id" },
+  { field: "sourceEventId", name: "source_event_id" },
+  { field: "acceptedFrom", name: "accepted_from", isInstant: true },
+  { field: "acceptedTo", name: "accepted_to", isInstant: true },
+];
+
+function readFilters(params: URLSearchParams): Filters {
+  const filters = { ...noFilters };
+  for (const { field, name, isInstant } of filterParams) {
+    const value = params.get(name);
+    if (value) filters[field] = isInstant ? localInputValue(value) : value;
+  }
+  return filters;
+}
+
+function writeFilters(values: Filters): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const { field, name, isInstant } of filterParams) {
+    const value = values[field];
+    if (!value) continue;
+    const written = isInstant ? instant(value) : value;
+    if (written) params.set(name, written);
+  }
+  return params;
+}
+
 /// A local datetime-local value carries no offset, so it is sent as an instant the server can read
 /// unambiguously rather than as the browser's own wall clock.
 function instant(value: string): string | undefined {
@@ -71,12 +109,22 @@ type SummaryKey = "accepted" | "awaiting" | "unrouted" | "deadLettered";
 export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; selectedEventId?: string }) {
   // The applied filters are separate from what is being typed: a source Event identity is a free
   // text field, and re-reading the list on every keystroke would restart the cursor each time. The
-  // form holds what is being typed; this holds what the ledger is actually reading under.
-  const [applied, setApplied] = useState<Filters>(noFilters);
+  // form holds what is being typed; the URL holds what the ledger is actually reading under, so a
+  // filtered ledger is a link and the back button restores the previous scope.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.toString();
+  const applied = useMemo(() => readFilters(new URLSearchParams(query)), [query]);
   // Which activity-summary item, if any, produced the current filters. Cleared whenever the
   // Operator edits filters by hand, so the pressed state never lies about what is actually applied.
   const [activeSummary, setActiveSummary] = useState<SummaryKey | null>(null);
-  const form = useForm<Filters>({ defaultValues: noFilters });
+  const form = useForm<Filters>({ defaultValues: applied });
+
+  // The URL can change without the form having produced it — the empty state's Clear filters, the
+  // back button, a pasted link. The form follows it rather than keeping values the ledger is no
+  // longer reading under.
+  useEffect(() => {
+    form.reset(applied);
+  }, [applied, form]);
 
   const sources = useQuery({
     queryKey: ["source-options", tenantId],
@@ -150,10 +198,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
       acceptedFrom: localInputValue(summary.data.window_start),
       acceptedTo: localInputValue(summary.data.window_end),
     };
-    // The filter panel shows what the summary item applied, so an Operator who opens it sees the
-    // filters that are actually in force rather than what they last typed.
-    form.reset(next);
-    setApplied(next);
+    setSearchParams(writeFilters(next));
     setActiveSummary(key);
   }
 
@@ -182,7 +227,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               <form
                 className="flex flex-col gap-4"
                 onSubmit={form.handleSubmit((values) => {
-                  setApplied(values);
+                  setSearchParams(writeFilters(values));
                   setActiveSummary(null);
                 })}
               >
@@ -271,8 +316,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                     type="button"
                     variant="outline"
                     onClick={() => {
-                      form.reset(noFilters);
-                      setApplied(noFilters);
+                      setSearchParams(new URLSearchParams());
                       setActiveSummary(null);
                     }}
                   >

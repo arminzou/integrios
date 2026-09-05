@@ -10,8 +10,9 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
+import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 
@@ -29,7 +30,8 @@ const createSchema = z.object({
 type CreateValues = z.infer<typeof createSchema>;
 
 export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
-  const [state, setState] = useState("");
+  const [notice, setNotice] = useState("");
+  const [state, setState] = useFilterParam("state");
   const list = useInfiniteQuery({
     queryKey: ["tenant-api-keys", tenantId, { state }],
     queryFn: ({ pageParam }) =>
@@ -69,6 +71,7 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
           <option value="revoked">Revoked</option>
         </Filter>
 
+        <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
         <ListStatus
           busy={list.isFetching}
           loaded={list.isSuccess}
@@ -98,7 +101,11 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
                   <TableCell>{key.expires_at ?? "Never"}</TableCell>
                   <TableCell>{key.last_used_at ?? "Never used"}</TableCell>
                   <TableCell>
-                    <RevokeTenantApiKey tenantId={tenantId} apiKey={key} />
+                    <RevokeTenantApiKey
+                      tenantId={tenantId}
+                      apiKey={key}
+                      onDone={() => setNotice(`${key.name} revoked.`)}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -111,7 +118,15 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
   );
 }
 
-function RevokeTenantApiKey({ tenantId, apiKey }: { tenantId: string; apiKey: TenantApiKeyListItem }) {
+function RevokeTenantApiKey({
+  tenantId,
+  apiKey,
+  onDone,
+}: {
+  tenantId: string;
+  apiKey: TenantApiKeyListItem;
+  onDone: () => void;
+}) {
   const queryClient = useQueryClient();
   const revoke = useMutation({
     mutationFn: () =>
@@ -120,7 +135,10 @@ function RevokeTenantApiKey({ tenantId, apiKey }: { tenantId: string; apiKey: Te
           params: { path: { tenantId, id: apiKey.id } },
         }),
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] }),
+    onSuccess: () => {
+      onDone();
+      return queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
+    },
   });
 
   if (apiKey.state === "revoked") return <span>Revoked</span>;

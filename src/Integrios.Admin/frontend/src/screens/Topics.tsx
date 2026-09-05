@@ -12,6 +12,7 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
+import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { SubscriptionsSection } from "./Subscriptions";
@@ -30,7 +31,7 @@ type TopicValues = z.infer<typeof topicSchema>;
 const optional = (text: string) => text.trim() || null;
 
 export function TopicsScreen({ tenantId }: { tenantId: string }) {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useFilterParam("status");
   const list = useInfiniteQuery({
     queryKey: ["topics", tenantId, { status }],
     queryFn: ({ pageParam }) =>
@@ -152,6 +153,7 @@ function CreateTopic({ tenantId }: { tenantId: string }) {
 }
 
 export function TopicScreen({ tenantId, topicId }: { tenantId: string; topicId: string }) {
+  const [notice, setNotice] = useState("");
   const topic = useQuery({
     queryKey: ["topic", tenantId, topicId],
     queryFn: () =>
@@ -188,7 +190,13 @@ export function TopicScreen({ tenantId, topicId }: { tenantId: string; topicId: 
         </Details>
       </Panel>
 
-      <EditTopic key={current.updated_at} tenantId={tenantId} topic={current} />
+      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
+      <EditTopic
+        key={current.updated_at}
+        tenantId={tenantId}
+        topic={current}
+        onDone={() => setNotice("Topic deactivated.")}
+      />
 
       {/* Subscriptions are owned by the Topic in the API, so they are authored where they live
           rather than from a separate Tenant-level list that would have to reintroduce the Topic. */}
@@ -197,7 +205,7 @@ export function TopicScreen({ tenantId, topicId }: { tenantId: string; topicId: 
   );
 }
 
-function EditTopic({ tenantId, topic }: { tenantId: string; topic: Topic }) {
+function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic; onDone: () => void }) {
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["topic", tenantId, topic.id] });
@@ -226,7 +234,10 @@ function EditTopic({ tenantId, topic }: { tenantId: string; topic: Topic }) {
           params: { path: { tenantId, id: topic.id } },
         }),
       ),
-    onSuccess: reread,
+    onSuccess: () => {
+      reread();
+      onDone();
+    },
   });
 
   const submit = form.handleSubmit((values) =>
