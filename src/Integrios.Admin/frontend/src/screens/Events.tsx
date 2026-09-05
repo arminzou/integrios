@@ -469,8 +469,8 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
   const current = event.data;
   return (
     <aside className={panel} aria-label="Event detail">
-      <h2 ref={heading} tabIndex={-1} className="m-0 text-2xl break-all">
-        Event {current.event_id}
+      <h2 ref={heading} tabIndex={-1} className="m-0 text-2xl">
+        Event <span className="font-mono text-base break-all">{current.event_id}</span>
       </h2>
       <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-1 [&>dd]:m-0 [&>dd]:text-right [&>dt]:m-0 [&>dt]:font-medium [&>dt]:text-ink-secondary">
         <dt>Event status</dt>
@@ -502,8 +502,13 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Subscription</TableHead>
-                  <TableHead scope="col">Delivery status</TableHead>
-                  <TableHead scope="col">Attempts (lifetime / retry cycle)</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  {/* Abbreviated because this table sits in the inspector panel rather than the
+                      page, and the long form pushed the last column past the card edge. The caption
+                      above names what the table is; the title names what the pair of numbers is. */}
+                  <TableHead scope="col" title="Lifetime attempts / attempts in the current retry cycle">
+                    Attempts
+                  </TableHead>
                   <TableHead scope="col">Deliver after</TableHead>
                   <TableHead scope="col">Failed</TableHead>
                   <TableHead scope="col">Recovery</TableHead>
@@ -570,8 +575,13 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                   </p>
                   {failed ? (
                     <p className="m-0 text-ink-secondary">
-                      {attempt.failure_phase ?? "—"} · HTTP {attempt.response_status_code ?? "—"} ·{" "}
-                      {attempt.error_message ?? "—"}
+                      {[
+                        attempt.response_status_code ? `HTTP ${attempt.response_status_code}` : null,
+                        attempt.failure_phase ? `during ${attempt.failure_phase}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" ") || "No response was recorded"}
+                      {attempt.error_message ? `. ${attempt.error_message}` : "."}
                     </p>
                   ) : null}
                 </li>

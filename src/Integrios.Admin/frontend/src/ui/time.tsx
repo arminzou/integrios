@@ -10,7 +10,16 @@
 ///
 /// `undefined` as the locale is the Operator's own, resolved by the platform. No locale data is
 /// bundled and no remote asset is loaded.
-const absolute = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" });
+/// The year is dropped, not the seconds. Everything an Operator reads here is recent, so the year
+/// is the one part that is never the answer to a question, while seconds are what separates two
+/// delivery attempts in the same retry cycle. The full instant, year included, stays on the title.
+const absolute = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+});
 
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
@@ -38,7 +47,7 @@ export function Timestamp({ value }: { value: string }) {
   if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
 
   return (
-    <time dateTime={value} title={`${value}\n${since(value)}`} className="tabular-nums">
+    <time dateTime={value} title={`${value}\n${since(value)}`} className="whitespace-nowrap tabular-nums">
       {absolute.format(date)}
     </time>
   );
