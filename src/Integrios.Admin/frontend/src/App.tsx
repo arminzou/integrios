@@ -56,13 +56,30 @@ export function App() {
 function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
+      <SkipLink />
       <header className="topbar">
         <div className="topbar-row">
           <BrandMark />
         </div>
       </header>
-      <main id="main">{children}</main>
+      <main id="main" tabIndex={-1}>
+        {children}
+      </main>
     </div>
+  );
+}
+
+/// The first thing a keyboard reaches. The topbar carries up to two rows of navigation, so without
+/// this every screen costs that many tab stops before its own content. `#main` takes `tabIndex={-1}`
+/// so following the link moves focus rather than only scrolling.
+function SkipLink() {
+  return (
+    <a
+      href="#main"
+      className="sr-only rounded-md border bg-surface px-3 py-2 text-sm font-medium focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-10"
+    >
+      Skip to content
+    </a>
   );
 }
 
@@ -83,12 +100,22 @@ function SignedIn({ session }: { session: OperatorSession }) {
   const params = useParams();
   const tenantId = Object.values(params).every(isIdentifier) ? (params.tenantId ?? null) : null;
   const tenant = useTenant(tenantId);
-  const section = useTenantSection();
+  const { section, title } = useRouteHandle();
+
+  // Names where the Operator is, so history and a restored window say more than the product name.
+  // The Tenant joins the title only once its name has actually been read: a loading placeholder
+  // here would be what a bookmark captured.
+  const tenantName = tenant.data?.name;
+  useEffect(() => {
+    const parts = [section ? sectionLabels[section] : title, tenantName, "Integrios Operator"];
+    document.title = parts.filter(Boolean).join(" · ");
+  }, [section, title, tenantName]);
 
   return (
     <div className="shell">
+      <SkipLink />
       <TopNav session={session} tenantId={tenantId} tenant={tenant} />
-      <main id="main">
+      <main id="main" tabIndex={-1}>
         {section && tenantId ? (
           <p className="breadcrumb">
             {tenantDisplayName(tenant)} / {sectionLabels[section]}
@@ -100,12 +127,13 @@ function SignedIn({ session }: { session: OperatorSession }) {
   );
 }
 
-/// The matched route tags itself with the Tenant section it belongs to, so the shell reads that
-/// rather than re-deriving it from the path it already matched.
-function useTenantSection(): TenantSection | null {
+/// The matched route tags itself with the Tenant section it belongs to and the name its tab should
+/// carry, so the shell reads both rather than re-deriving either from the path it already matched.
+type RouteHandle = { section?: TenantSection; title?: string };
+
+function useRouteHandle(): RouteHandle {
   const matches = useMatches();
-  const handle = matches.at(-1)?.handle as { section?: TenantSection } | undefined;
-  return handle?.section ?? null;
+  return (matches.at(-1)?.handle as RouteHandle | undefined) ?? {};
 }
 
 function TopNav({

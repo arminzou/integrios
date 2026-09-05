@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link, type RouteObject, useLocation, useParams } from "react-router";
+import { isRouteErrorResponse, Link, type RouteObject, useLocation, useParams, useRouteError } from "react-router";
 import { App } from "./App";
 import { isIdentifier } from "./identifiers";
 import { ConnectionScreen, ConnectionsScreen } from "./screens/Connections";
@@ -43,14 +43,38 @@ function NotFound() {
   );
 }
 
+/// The last line of defence. A screen that throws while rendering would otherwise leave a blank
+/// document with nothing to act on; this replaces the layout route, so it carries no shell and
+/// recovers through a full document load rather than a router navigation the failure may have
+/// already broken.
+function RouteError() {
+  const error = useRouteError();
+  const detail = isRouteErrorResponse(error)
+    ? `${error.status} ${error.statusText}`
+    : error instanceof Error
+      ? error.message
+      : null;
+
+  return (
+    <main id="main" tabIndex={-1}>
+      <h1>This screen stopped rendering</h1>
+      <p role="alert">The dashboard could not finish drawing this page.{detail ? ` ${detail}` : ""}</p>
+      <p>
+        <a href="/tenants">Reload the Tenants list</a>
+      </p>
+    </main>
+  );
+}
+
 export const routeConfig: RouteObject[] = [
   {
     // A pathless layout route: `App` owns the session bootstrap and the signed-in shell, and every
     // screen below renders into its outlet.
     element: <App />,
+    errorElement: <RouteError />,
     children: [
-      { index: true, element: <TenantsScreen /> },
-      { path: "tenants", element: <TenantsScreen /> },
+      { index: true, handle: { title: "Tenants" }, element: <TenantsScreen /> },
+      { path: "tenants", handle: { title: "Tenants" }, element: <TenantsScreen /> },
       {
         path: "tenants/:tenantId",
         handle: { section: "overview" satisfies TenantSection },
@@ -116,12 +140,13 @@ export const routeConfig: RouteObject[] = [
           </Ids>
         ),
       },
-      { path: "connectors", element: <ConnectorsScreen /> },
+      { path: "connectors", handle: { title: "Connectors" }, element: <ConnectorsScreen /> },
       {
         path: "connectors/:connectorId",
+        handle: { title: "Connector" },
         element: <Ids>{({ connectorId }) => <ConnectorScreen connectorId={connectorId} />}</Ids>,
       },
-      { path: "*", element: <NotFound /> },
+      { path: "*", handle: { title: "Not found" }, element: <NotFound /> },
     ],
   },
 ];
