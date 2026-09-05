@@ -1,7 +1,14 @@
 /* The dashboard's one semantic token set. Tokens are named for the role they play, never for
    their current color or the product that inspired the palette, so a future value change never
    touches markup. There is no dark variant and no theme switcher: the production dashboard is
-   light-only by design. */
+   light-only by design.
+
+   Tailwind carries presentation from here on: the palette is declared once below and exposed to
+   utilities through `@theme inline`, so `bg-surface` and `var(--surface)` are the same value. The
+   second half of that block is the vocabulary the vendored shadcn/ui primitives are written
+   against, mapped onto these roles rather than given colors of their own. */
+@import "tailwindcss";
+
 :root {
   color-scheme: light;
 
@@ -22,15 +29,107 @@
   --danger-surface: #f4eeee;
 
   --radius: 6px;
-  --radius-lg: 10px;
+  /* A bounded content group — an activity-summary metric, the ledger, the inspector panel. */
+  --radius-card: 10px;
 
   /* Measured from the real topbar in App.tsx and kept in sync via ResizeObserver; this fallback
      only covers the instant before that first measurement lands. */
   --topbar-height: 56px;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-quiet: var(--surface-quiet);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-accent-border: var(--accent-border);
+  --color-selected-surface: var(--selected-surface);
+  --color-selected-ink: var(--selected-ink);
+  --color-hover-surface: var(--hover-surface);
+  --color-row-hover-surface: var(--row-hover-surface);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-surface: var(--danger-surface);
+
+  /* The names shadcn/ui primitives use, pointed at the roles above so a vendored component carries
+     this palette without being rewritten, and the palette still has exactly one definition. */
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--surface);
+  --color-secondary: var(--selected-surface);
+  --color-secondary-foreground: var(--selected-ink);
+  --color-muted: var(--surface-quiet);
+  --color-muted-foreground: var(--ink-secondary);
+  --color-accent: var(--hover-surface);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--danger-ink);
+  --color-destructive-foreground: var(--danger-surface);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent-border);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-card);
 
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: Georgia, "Times New Roman", ui-serif, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Tailwind's preflight strips the browser's own element defaults, which the screens that have not
+   yet been migrated to utilities still rely on for their headings, paragraphs, lists, and links.
+   `revert` hands those elements back to the browser stylesheet until each screen states its own
+   spacing; this block shrinks with every capability that migrates and goes away with the last one. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-size: revert;
+    font-weight: revert;
+    margin: revert;
+  }
+
+  p,
+  dl,
+  blockquote,
+  figure {
+    margin: revert;
+  }
+
+  ul,
+  ol {
+    list-style: revert;
+    margin: revert;
+    padding: revert;
+  }
+
+  fieldset,
+  legend {
+    border: revert;
+    padding: revert;
+  }
+
+  a {
+    text-decoration: revert;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-size: revert;
+  }
 }
 
 html,
@@ -301,7 +400,7 @@ tr:has(a[aria-current="page"]) {
   background: var(--surface);
   border: none;
   box-shadow: inset 0 0 0 1px var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   padding: 14px 16px;
 }
 
@@ -365,7 +464,7 @@ tr:has(a[aria-current="page"]) {
    forcing the document itself to overflow. */
 .table-card {
   background: var(--surface);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   box-shadow: inset 0 0 0 1px var(--border);
   overflow-x: auto;
 }
@@ -401,7 +500,7 @@ tr:has(a[aria-current="page"]) {
   background: var(--surface);
   border: none;
   box-shadow: inset 0 0 0 1px var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   padding: 20px 24px;
 }
 

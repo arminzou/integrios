@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
@@ -7,7 +9,9 @@ import { defineConfig } from "vitest/config";
 const adminOrigin = process.env.INTEGRIOS_ADMIN_ORIGIN ?? "http://localhost:5150";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  // The `@/` alias shadcn/ui components import themselves and the class-merge helper through.
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "tests/e2e/**/*.test.ts"],
