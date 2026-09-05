@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { createRequire } from "node:module";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { chromium, type Browser, type Page } from "playwright";
+import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /// What jsdom cannot decide. It implements no sequential focus navigation, so tab order and the
 /// focus ring are unprovable there, and it has no layout, so the accessibility rules that measure
@@ -137,9 +137,13 @@ describe("The dashboard in a real browser", () => {
   it.each([
     ["the list", "/tenants"],
     ["a detail screen", `/tenants/${tenants.items[0].id}`],
-  ])("passes the accessibility rules that need real layout on %s", async (_name, path) => {
-    const page = await openDashboard(path);
-    expect(await accessibilityViolations(page)).toEqual([]);
-    await page.close();
-  }, 60_000);
+  ])(
+    "passes the accessibility rules that need real layout on %s",
+    async (_name, path) => {
+      const page = await openDashboard(path);
+      expect(await accessibilityViolations(page)).toEqual([]);
+      await page.close();
+    },
+    60_000,
+  );
 });

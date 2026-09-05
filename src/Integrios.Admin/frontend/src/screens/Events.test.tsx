@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { type Call, page, stubHttp } from "../test/http";
 import { EventsScreen } from "./Events";
-import { page, stubHttp, type Call } from "../test/http";
 
 afterEach(cleanup);
 
@@ -188,7 +188,9 @@ describe("Event inspector", () => {
     render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Replay" }));
 
-    expect(screen.getByText(new RegExp(`Replay the dead-lettered delivery to Subscription ${subscriptionId}`))).toBeTruthy();
+    expect(
+      screen.getByText(new RegExp(`Replay the dead-lettered delivery to Subscription ${subscriptionId}`)),
+    ).toBeTruthy();
     expect(calls.some((call) => call.method === "POST")).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Replay this delivery" }));

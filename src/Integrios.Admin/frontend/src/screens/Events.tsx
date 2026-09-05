@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, fieldProps, Link, ListStatus, LoadMore } from "../ui/controls";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
@@ -87,7 +87,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   const summary = useResource<EventActivitySummary>(
     () =>
       api.GET("/admin/tenants/{tenantId}/events/activity-summary", {
-        params: { path: { tenantId }, query: { source_id: applied.sourceId || undefined, topic_id: applied.topicId || undefined } },
+        params: {
+          path: { tenantId },
+          query: { source_id: applied.sourceId || undefined, topic_id: applied.topicId || undefined },
+        },
       }),
     `activity-summary|${tenantId}|${applied.sourceId}|${applied.topicId}`,
   );
@@ -290,7 +293,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 {list.items.map((item) => (
                   <tr key={item.event_id}>
                     <th scope="row">
-                      <Link to={`/tenants/${tenantId}/events/${item.event_id}`} current={item.event_id === selectedEventId}>
+                      <Link
+                        to={`/tenants/${tenantId}/events/${item.event_id}`}
+                        current={item.event_id === selectedEventId}
+                      >
                         {item.accepted_at}
                       </Link>
                     </th>
@@ -330,7 +336,11 @@ function ActivitySummary({
   onSelect: (key: SummaryKey) => void;
 }) {
   if (summary.problem)
-    return <p role="alert">{summary.problem.detail ?? `The activity summary could not be read (${summary.problem.status}).`}</p>;
+    return (
+      <p role="alert">
+        {summary.problem.detail ?? `The activity summary could not be read (${summary.problem.status}).`}
+      </p>
+    );
   if (!summary.data) return <p>Loading activity summary…</p>;
 
   const data = summary.data;

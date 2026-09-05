@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type Call, page, stubHttp } from "../test/http";
 import { TenantScreen, TenantsScreen } from "./Tenants";
-import { stubHttp, page, type Call } from "../test/http";
 
 afterEach(cleanup);
 
@@ -36,7 +36,10 @@ describe("Tenants list", () => {
   it("appends the next page only when Load more is used, and sends the cursor it was given", async () => {
     const calls = stubHttp(({ url }) =>
       url.searchParams.get("after") === "cursor-1"
-        ? { status: 200, body: page([tenant({ id: "2".repeat(8) + "-2222-2222-2222-222222222222", name: "Beta", slug: "beta" })]) }
+        ? {
+            status: 200,
+            body: page([tenant({ id: "2".repeat(8) + "-2222-2222-2222-222222222222", name: "Beta", slug: "beta" })]),
+          }
         : { status: 200, body: page([tenant()], "cursor-1") },
     );
 
@@ -84,7 +87,10 @@ describe("Tenant authoring", () => {
       method === "POST"
         ? {
             status: 422,
-            body: { title: "One or more validation errors occurred.", errors: { slug: ["A Tenant already uses this slug."] } },
+            body: {
+              title: "One or more validation errors occurred.",
+              errors: { slug: ["A Tenant already uses this slug."] },
+            },
           }
         : { status: 200, body: page([]) },
     );
@@ -104,9 +110,7 @@ describe("Tenant authoring", () => {
   });
 
   it("names the Tenant before deactivating it and calls nothing until it is confirmed", async () => {
-    const calls = stubHttp(({ method }) =>
-      method === "POST" ? { status: 200 } : { status: 200, body: tenant() },
-    );
+    const calls = stubHttp(({ method }) => (method === "POST" ? { status: 200 } : { status: 200, body: tenant() }));
 
     render(<TenantScreen tenantId={tenantId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Deactivate Tenant" }));

@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { page, stubHttp } from "../test/http";
 import { TenantApiKeysScreen } from "./TenantApiKeys";
-import { stubHttp, page } from "../test/http";
 
 afterEach(cleanup);
 

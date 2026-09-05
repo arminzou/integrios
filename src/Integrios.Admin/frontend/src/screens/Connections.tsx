@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
 import { navigate } from "../routes";
-import { ConfirmAction, Disclosure, Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, fieldProps, Link, ListStatus, LoadMore } from "../ui/controls";
 import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
@@ -39,11 +39,7 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
 
       <h2>All Connections</h2>
       <Field id="connection-status" label="Status">
-        <select
-          {...fieldProps("connection-status")}
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-        >
+        <select {...fieldProps("connection-status")} value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="">Any status</option>
           <option value="active">Active</option>
           <option value="disabled">Disabled</option>
@@ -180,14 +176,22 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
           required
         />
       </Field>
-      <Field id="create-connection-environment" label="Environment (optional)" error={fieldError(problem, "environment")}>
+      <Field
+        id="create-connection-environment"
+        label="Environment (optional)"
+        error={fieldError(problem, "environment")}
+      >
         <input
           {...fieldProps("create-connection-environment", fieldError(problem, "environment"))}
           value={environment}
           onChange={(event) => setEnvironment(event.target.value)}
         />
       </Field>
-      <Field id="create-connection-description" label="Description (optional)" error={fieldError(problem, "description")}>
+      <Field
+        id="create-connection-description"
+        label="Description (optional)"
+        error={fieldError(problem, "description")}
+      >
         <input
           {...fieldProps("create-connection-description", fieldError(problem, "description"))}
           value={description}

@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { useCursorList, type FetchResult } from "./useCursorList";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type FetchResult, useCursorList } from "./useCursorList";
 
 afterEach(cleanup);
 

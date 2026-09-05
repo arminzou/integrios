@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { ConnectorsScreen } from "./Connectors";
+import { afterEach, describe, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
+import { ConnectorsScreen } from "./Connectors";
 
 afterEach(cleanup);
 

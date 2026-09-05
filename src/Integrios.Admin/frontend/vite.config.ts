@@ -1,5 +1,5 @@
-import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
 
 // Development runs the dashboard behind Vite's proxy so the browser sees one origin, exactly as
 // production does when Admin serves these assets itself. That is what keeps the product free of a
@@ -21,10 +21,7 @@ export default defineConfig({
   },
   server: {
     proxy: Object.fromEntries(
-      ["/admin", "/auth"].map((path) => [
-        path,
-        { target: adminOrigin, changeOrigin: false, secure: false },
-      ]),
+      ["/admin", "/auth"].map((path) => [path, { target: adminOrigin, changeOrigin: false, secure: false }]),
     ),
   },
 });

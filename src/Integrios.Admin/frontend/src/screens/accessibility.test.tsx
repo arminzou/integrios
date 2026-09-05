@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAccessibilityViolations } from "../test/axe";
 import { page, stubHttp } from "../test/http";
 import { ConnectionsScreen } from "./Connections";
@@ -83,9 +83,10 @@ describe("Accessibility of the Operator workflows", () => {
   it("passes the automated rules on the authoring screens", async () => {
     stubHttp(({ url }) => ({
       status: 200,
-      body: url.pathname.endsWith("/tenants") || url.pathname.includes("/topics") || url.pathname.includes("/sources")
-        ? page([])
-        : page([]),
+      body:
+        url.pathname.endsWith("/tenants") || url.pathname.includes("/topics") || url.pathname.includes("/sources")
+          ? page([])
+          : page([]),
     }));
 
     for (const [name, element] of [
@@ -146,9 +147,7 @@ describe("Accessibility of the Operator workflows", () => {
   it("passes the automated rules on a Topic and its Subscriptions", async () => {
     stubHttp(({ url }) => ({
       status: 200,
-      body: url.pathname.endsWith("/subscriptions") || url.pathname.endsWith("/connections")
-        ? page([])
-        : topic,
+      body: url.pathname.endsWith("/subscriptions") || url.pathname.endsWith("/connections") ? page([]) : topic,
     }));
 
     const container = renderScreen(<TopicScreen tenantId={tenantId} topicId={topicId} />);

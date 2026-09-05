@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { chromium, type Browser, type Page, type Request } from "playwright";
+
+import { type Browser, chromium, type Page, type Request } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /// Every create form, filled and submitted through a real browser.
 ///
@@ -27,17 +28,48 @@ const session = {
 };
 
 const stamps = { created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z" };
-const tenant = { id: tenantId, slug: "acme", name: "Acme", status: "active", environment: null, description: null, ...stamps };
+const tenant = {
+  id: tenantId,
+  slug: "acme",
+  name: "Acme",
+  status: "active",
+  environment: null,
+  description: null,
+  ...stamps,
+};
 const topic = { id: topicId, tenant_id: tenantId, name: "orders", status: "active", description: null, ...stamps };
-const connection = { id: connectionId, tenant_id: tenantId, connector_id: connectorId, name: "sink", status: "active", environment: null, description: null, ...stamps };
-const connector = { id: connectorId, key: "http", contract_version: 1, name: "HTTP", direction: "both", status: "active", description: null, ...stamps };
+const connection = {
+  id: connectionId,
+  tenant_id: tenantId,
+  connector_id: connectorId,
+  name: "sink",
+  status: "active",
+  environment: null,
+  description: null,
+  ...stamps,
+};
+const connector = {
+  id: connectorId,
+  key: "http",
+  contract_version: 1,
+  name: "HTTP",
+  direction: "both",
+  status: "active",
+  description: null,
+  ...stamps,
+};
 
 const page = (items: unknown[]) => ({ items, next_cursor: null });
 
 const subscriptionId = "77777777-7777-7777-7777-777777777777";
 const sourceId = "88888888-8888-8888-8888-888888888888";
 
-const connectionDetail = { ...connection, config: { base_uri: "http://sink.invalid" }, source_verification: null, destination_authentication: null };
+const connectionDetail = {
+  ...connection,
+  config: { base_uri: "http://sink.invalid" },
+  source_verification: null,
+  destination_authentication: null,
+};
 const subscriptionDetail = {
   id: subscriptionId,
   topic_id: topicId,
@@ -107,8 +139,7 @@ async function open(path: string): Promise<{ page: Page; writes: Request[] }> {
   await browserPage.route("**/auth/session", (route) => route.fulfill({ json: session }));
   await browserPage.route("**/admin/**", (route) => {
     const request = route.request();
-    if (request.method() === "GET")
-      return route.fulfill({ json: readFor(new URL(request.url()).pathname) });
+    if (request.method() === "GET") return route.fulfill({ json: readFor(new URL(request.url()).pathname) });
     writes.push(request);
     return route.fulfill({ status: 201, json: { id: "66666666-6666-6666-6666-666666666666", ...stamps } });
   });
@@ -118,7 +149,9 @@ async function open(path: string): Promise<{ page: Page; writes: Request[] }> {
   return { page: browserPage, writes };
 }
 
-async function submitted(writes: Request[]): Promise<{ method: string; pathname: string; body: Record<string, unknown> }> {
+async function submitted(
+  writes: Request[],
+): Promise<{ method: string; pathname: string; body: Record<string, unknown> }> {
   const request = writes[0];
   expect(request, "The form submitted no request at all.").toBeDefined();
   return {
@@ -235,9 +268,7 @@ describe("Update and deactivate, driven through a real browser", () => {
   }, 60_000);
 
   it("sends an updated Subscription with a numeric order and a mapping that stays null", async () => {
-    const { page: view, writes } = await open(
-      `/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`,
-    );
+    const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`);
 
     await view.fill("#subscription-order", "7");
     await view.click("text=Save changes");

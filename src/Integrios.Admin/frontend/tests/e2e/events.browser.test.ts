@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { chromium, type Browser, type Page } from "playwright";
+
+import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /// What jsdom cannot decide for the Event ledger and its inspector: real layout (whether the
 /// inspector sits beside the ledger or below it) and `matchMedia`, which the narrow-width focus
@@ -117,9 +118,7 @@ describe("The Event ledger and inspector in a real browser", () => {
   it("moves focus to the inspector heading on selection only when it is not already beside the ledger", async () => {
     const narrow = await openEvents(`/tenants/${tenantId}/events`, { width: 500, height: 900 });
     await narrow.getByRole("link", { name: /2026-09-01T09:30:00Z/ }).click();
-    await expect
-      .poll(() => narrow.evaluate(() => document.activeElement?.tagName))
-      .toBe("H2");
+    await expect.poll(() => narrow.evaluate(() => document.activeElement?.tagName)).toBe("H2");
     await narrow.close();
 
     const wide = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
@@ -137,9 +136,7 @@ describe("The Event ledger and inspector in a real browser", () => {
 
     await narrow.getByRole("link", { name: /2026-09-01T09:35:00Z/ }).click();
     await narrow.getByRole("heading", { level: 2, name: `Event ${secondEventId}` }).waitFor();
-    await expect
-      .poll(() => narrow.evaluate(() => document.activeElement?.textContent))
-      .toBe(`Event ${secondEventId}`);
+    await expect.poll(() => narrow.evaluate(() => document.activeElement?.textContent)).toBe(`Event ${secondEventId}`);
     await narrow.close();
   }, 60_000);
 
@@ -156,13 +153,17 @@ describe("The Event ledger and inspector in a real browser", () => {
   it("lays the inspector out beside the ledger above the desktop breakpoint and below it under 900px", async () => {
     const wide = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 1280, height: 900 });
     await wide.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
-    const wideLayout = await wide.evaluate(() => getComputedStyle(document.querySelector(".events-layout")!).flexDirection);
+    const wideLayout = await wide.evaluate(
+      () => getComputedStyle(document.querySelector(".events-layout")!).flexDirection,
+    );
     expect(wideLayout).toBe("row");
     await wide.close();
 
     const narrow = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 500, height: 900 });
     await narrow.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
-    const narrowLayout = await narrow.evaluate(() => getComputedStyle(document.querySelector(".events-layout")!).flexDirection);
+    const narrowLayout = await narrow.evaluate(
+      () => getComputedStyle(document.querySelector(".events-layout")!).flexDirection,
+    );
     expect(narrowLayout).toBe("column");
     await narrow.close();
   }, 60_000);

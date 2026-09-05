@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { problemFrom, type Problem } from "../api/problem";
+import { type Problem, problemFrom } from "../api/problem";
 
 /// The shape openapi-fetch returns for one call. Declaring it here keeps the hook framework-neutral
 /// instead of importing the client's own generics into every screen.
@@ -28,10 +28,7 @@ function initialState<Item>(): State<Item> {
 /// read — its route and its active filters. When it changes the accumulated results are discarded
 /// and reading restarts from the first cursor, because a cursor is only valid for the filters it
 /// was issued under and the server rejects it otherwise instead of silently resetting.
-export function useCursorList<Item>(
-  load: (after: string | null) => Promise<FetchResult<Page<Item>>>,
-  scope: string,
-) {
+export function useCursorList<Item>(load: (after: string | null) => Promise<FetchResult<Page<Item>>>, scope: string) {
   const loadRef = useRef(load);
   loadRef.current = load;
   const [state, setState] = useState<State<Item>>(initialState<Item>);

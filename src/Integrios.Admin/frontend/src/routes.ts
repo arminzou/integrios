@@ -30,8 +30,7 @@ export function parseRoute(path: string): Route {
 
   if (segments[0] === "connectors") {
     if (segments.length === 1) return { name: "connectors" };
-    if (segments.length === 2 && uuid.test(segments[1]))
-      return { name: "connector", connectorId: segments[1] };
+    if (segments.length === 2 && uuid.test(segments[1])) return { name: "connector", connectorId: segments[1] };
     return unknown;
   }
 
@@ -92,5 +91,11 @@ export function navigate(path: string) {
 }
 
 export function useRoute(): Route {
-  return parseRoute(useSyncExternalStore(subscribe, () => location.pathname, () => "/"));
+  return parseRoute(
+    useSyncExternalStore(
+      subscribe,
+      () => location.pathname,
+      () => "/",
+    ),
+  );
 }

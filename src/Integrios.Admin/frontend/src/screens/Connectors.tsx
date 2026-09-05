@@ -2,13 +2,13 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { Field, FormError, Link, ListStatus, LoadMore, fieldProps } from "../ui/controls";
-import { formatJson, parseJson } from "../ui/json";
 import { navigate } from "../routes";
-import { SourceContractPreview } from "./Previews";
+import { Field, FormError, fieldProps, Link, ListStatus, LoadMore } from "../ui/controls";
+import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useResource } from "../ui/useResource";
+import { SourceContractPreview } from "./Previews";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
 type Connector = components["schemas"]["ConnectorDto"];
@@ -181,7 +181,12 @@ function ApplyManifest({
       <FormError message={formError(problem, ["key"])} />
       {/* An existing Connector's key is its identity, so it is shown rather than offered for
           editing: changing it here would install a different Connector, not rename this one. */}
-      <Field id={`${prefix}-key`} label="Key" error={fieldError(problem, "key")} hint={connector ? undefined : "The Connector's stable identifier, such as http."}>
+      <Field
+        id={`${prefix}-key`}
+        label="Key"
+        error={fieldError(problem, "key")}
+        hint={connector ? undefined : "The Connector's stable identifier, such as http."}
+      >
         {connector ? (
           <output id={`${prefix}-key`}>{connector.key}</output>
         ) : (

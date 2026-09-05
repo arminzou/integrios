@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { api, loadSession, signInHref, type OperatorSession } from "./api/client";
-import { useRoute, type Route } from "./routes";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
 import type { components } from "./api/schema";
-import { Link } from "./ui/controls";
-import { useResource } from "./ui/useResource";
-import { ConnectorScreen, ConnectorsScreen } from "./screens/Connectors";
+import { type Route, useRoute } from "./routes";
 import { ConnectionScreen, ConnectionsScreen } from "./screens/Connections";
+import { ConnectorScreen, ConnectorsScreen } from "./screens/Connectors";
 import { EventsScreen } from "./screens/Events";
 import { SourceScreen, SourcesScreen } from "./screens/Sources";
 import { SubscriptionScreen } from "./screens/Subscriptions";
 import { TenantApiKeysScreen } from "./screens/TenantApiKeys";
 import { TenantScreen, TenantsScreen } from "./screens/Tenants";
 import { TopicScreen, TopicsScreen } from "./screens/Topics";
+import { Link } from "./ui/controls";
+import { useResource } from "./ui/useResource";
 
 type Tenant = components["schemas"]["TenantDto"];
 
@@ -95,7 +95,11 @@ function SignedIn({ session }: { session: OperatorSession }) {
     <div className="shell">
       <TopNav session={session} route={route} tenantId={tenantId} tenant={tenant} />
       <main id="main">
-        {section ? <p className="breadcrumb">{tenantDisplayName(tenant)} / {sectionLabels[section]}</p> : null}
+        {section ? (
+          <p className="breadcrumb">
+            {tenantDisplayName(tenant)} / {sectionLabels[section]}
+          </p>
+        ) : null}
         <Screen route={route} />
       </main>
     </div>
@@ -287,11 +291,7 @@ function Screen({ route }: { route: Route }) {
       return <TopicScreen tenantId={route.tenantId} topicId={route.topicId} />;
     case "subscription":
       return (
-        <SubscriptionScreen
-          tenantId={route.tenantId}
-          topicId={route.topicId}
-          subscriptionId={route.subscriptionId}
-        />
+        <SubscriptionScreen tenantId={route.tenantId} topicId={route.topicId} subscriptionId={route.subscriptionId} />
       );
     case "connectors":
       return <ConnectorsScreen />;

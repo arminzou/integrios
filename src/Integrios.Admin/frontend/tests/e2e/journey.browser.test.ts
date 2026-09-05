@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { chromium, type Browser, type Page } from "playwright";
+
+import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /// One golden journey against a real deployment: author a Tenant, a Connection, a Topic, a
 /// Subscription and a Source, each through its own screen, and let the real Admin API judge every
@@ -73,7 +74,9 @@ async function openDashboard(path: string): Promise<Page> {
       headers: { ...request.headers(), authorization: operatorKey! },
     });
     if (request.method() !== "GET")
-      writes.push(`${request.method()} ${source.pathname} -> ${response.status()} ${(await response.text()).slice(0, 200)}`);
+      writes.push(
+        `${request.method()} ${source.pathname} -> ${response.status()} ${(await response.text()).slice(0, 200)}`,
+      );
     await route.fulfill({ response });
   });
 

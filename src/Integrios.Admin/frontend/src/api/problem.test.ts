@@ -3,7 +3,10 @@ import { fieldError, formError, problemFrom } from "./problem";
 
 describe("Problem Details", () => {
   it("attributes a validation message to its field whatever casing the server used", () => {
-    const problem = problemFrom({ title: "One or more validation errors occurred.", errors: { Slug: ["Taken."] } }, 422);
+    const problem = problemFrom(
+      { title: "One or more validation errors occurred.", errors: { Slug: ["Taken."] } },
+      422,
+    );
     expect(fieldError(problem, "slug")).toBe("Taken.");
   });
 

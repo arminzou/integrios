@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { problemFrom, type Problem } from "../api/problem";
+import { type Problem, problemFrom } from "../api/problem";
 import type { FetchResult } from "./useCursorList";
 
 /// One authoritative read of a single resource. `scope` identifies what is being read — the route

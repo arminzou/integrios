@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 afterEach(() => {
@@ -19,7 +19,10 @@ const session = {
 describe("Application session", () => {
   it("offers anonymous Operators a sign-in that returns to the current local route", async () => {
     history.replaceState(null, "", "/tenants?status=active");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 401 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 401 })),
+    );
 
     render(<App />);
 
@@ -29,7 +32,10 @@ describe("Application session", () => {
   });
 
   it("reports a failed session bootstrap", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 503 })),
+    );
 
     render(<App />);
 
@@ -40,9 +46,7 @@ describe("Application session", () => {
     history.replaceState(null, "", "/not-owned");
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        Response.json(session, { headers: { "content-type": "application/json" } }),
-      ),
+      vi.fn(async () => Response.json(session, { headers: { "content-type": "application/json" } })),
     );
 
     render(<App />);
