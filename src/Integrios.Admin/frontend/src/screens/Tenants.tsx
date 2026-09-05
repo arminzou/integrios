@@ -14,6 +14,7 @@ import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../u
 import { Filter, Form, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge } from "../ui/status";
 
 type Tenant = components["schemas"]["TenantDto"];
 
@@ -94,7 +95,9 @@ export function TenantsScreen() {
                     </Link>
                   </RowHeader>
                   <TableCell>{tenant.slug}</TableCell>
-                  <TableCell>{tenant.status}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={tenant.status} />
+                  </TableCell>
                   <TableCell>{tenant.environment ?? "—"}</TableCell>
                 </TableRow>
               ))}
@@ -178,14 +181,22 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
   const current = tenant.data;
   return (
     <Page>
-      <PageHeader title={current.name} />
+      <PageHeader title={current.name}>
+        In{" "}
+        <Link className="underline" to="/tenants">
+          this deployment's Tenants
+        </Link>
+        .
+      </PageHeader>
 
       <Panel>
         <Details>
           <dt>Slug</dt>
           <dd>{current.slug}</dd>
           <dt>Status</dt>
-          <dd>{current.status}</dd>
+          <dd>
+            <StatusBadge status={current.status} />
+          </dd>
           <dt>Environment</dt>
           <dd>{current.environment ?? "—"}</dd>
           <dt>Description</dt>

@@ -15,6 +15,7 @@ import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge } from "../ui/status";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
 type Source = components["schemas"]["SourceDto"];
@@ -124,7 +125,9 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
                     </Link>
                   </RowHeader>
                   <TableCell>{source.type}</TableCell>
-                  <TableCell>{source.status}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={source.status} />
+                  </TableCell>
                   <TableCell>
                     <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
                       {source.topic_id}
@@ -287,7 +290,9 @@ export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceI
           <dt>Type</dt>
           <dd>{current.type}</dd>
           <dt>Status</dt>
-          <dd>{current.status}</dd>
+          <dd>
+            <StatusBadge status={current.status} />
+          </dd>
           <dt>Connection</dt>
           <dd>
             <Link

@@ -75,6 +75,11 @@ function eventDetail(eventId: string) {
   };
 }
 
+/// A ledger row's primary link, located by the route it points at. The acceptance time it renders
+/// is formatted for the browser's own locale and is therefore not a stable handle; the route is,
+/// and the route is what the row's selection contract is actually about.
+const ledgerLink = (scope: Page, id: string) => scope.locator(`a[href="/tenants/${tenantId}/events/${id}"]`);
+
 let server: ViteDevServer;
 let browser: Browser;
 let origin: string;
@@ -118,7 +123,7 @@ describe("The Event ledger and inspector in a real browser", () => {
   it("preserves the filtered ledger while selection follows links, back, forward, and refresh", async () => {
     const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
     await page.getByRole("button", { name: /Events accepted/ }).click();
-    const row = page.getByRole("link", { name: /2026-09-01T09:30:00Z/ });
+    const row = ledgerLink(page, loadedEventId);
     const href = await row.getAttribute("href");
     expect(href).toBe(`/tenants/${tenantId}/events/${loadedEventId}`);
     await row.click();
@@ -167,7 +172,7 @@ describe("The Event ledger and inspector in a real browser", () => {
       return route.fulfill({ json: body });
     });
     const opened = page.context().waitForEvent("page");
-    await page.getByRole("link", { name: /2026-09-01T09:30:00Z/ }).click({ button: "middle" });
+    await ledgerLink(page, loadedEventId).click({ button: "middle" });
     const tab = await opened;
     await tab.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
     expect(new URL(page.url()).pathname).toBe(`/tenants/${tenantId}/events`);
@@ -178,12 +183,12 @@ describe("The Event ledger and inspector in a real browser", () => {
 
   it("moves focus to the inspector heading on selection only when it is not already beside the ledger", async () => {
     const narrow = await openEvents(`/tenants/${tenantId}/events`, { width: 500, height: 900 });
-    await narrow.getByRole("link", { name: /2026-09-01T09:30:00Z/ }).click();
+    await ledgerLink(narrow, loadedEventId).click();
     await expect.poll(() => narrow.evaluate(() => document.activeElement?.tagName)).toBe("H2");
     await narrow.close();
 
     const wide = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
-    await wide.getByRole("link", { name: /2026-09-01T09:30:00Z/ }).click();
+    await ledgerLink(wide, loadedEventId).click();
     await wide.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
     // The inspector is already visible beside the ledger, so selecting a row leaves focus on the
     // link the Operator just activated rather than moving it.
@@ -195,7 +200,7 @@ describe("The Event ledger and inspector in a real browser", () => {
     const narrow = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 500, height: 900 });
     await narrow.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
 
-    await narrow.getByRole("link", { name: /2026-09-01T09:35:00Z/ }).click();
+    await ledgerLink(narrow, secondEventId).click();
     await narrow.getByRole("heading", { level: 2, name: `Event ${secondEventId}` }).waitFor();
     await expect.poll(() => narrow.evaluate(() => document.activeElement?.textContent)).toBe(`Event ${secondEventId}`);
     await narrow.close();

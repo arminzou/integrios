@@ -51,6 +51,17 @@ function respondFor(eventsBody: unknown, detailBody: unknown = page([])) {
   };
 }
 
+/// A ledger row, located by the route its primary link points at rather than by the acceptance time
+/// it renders. The visible instant is formatted for the reader's locale, so it is not a stable
+/// handle; the route is, and it is what the row's selection contract is actually about.
+async function ledgerRow(id: string): Promise<HTMLTableRowElement> {
+  return await waitFor(() => {
+    const row = document.querySelector(`a[href="/tenants/${tenantId}/events/${id}"]`)?.closest("tr");
+    if (!row) throw new Error(`No ledger row for Event ${id}.`);
+    return row as HTMLTableRowElement;
+  });
+}
+
 function openFilters() {
   fireEvent.click(screen.getByText("Find an Event"));
 }
@@ -61,11 +72,16 @@ describe("Event history", () => {
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
 
-    const row = (await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" })).closest("tr")!;
+    const row = await ledgerRow(eventId);
+    // The exact instant the API sent survives formatting, on the attribute a machine reads.
+    expect(within(row).getByRole("rowheader").querySelector("time")?.getAttribute("datetime")).toBe(
+      "2026-09-01T10:00:00Z",
+    );
+
     const cells = within(row).getAllByRole("cell");
     // The Event status cell reports the Event's own status. A dead-lettered Delivery does not
     // change it, and the Delivery cell names the state it is counting.
-    expect(cells[2].textContent).toBe("routed");
+    expect(cells[2].textContent).toBe("Routed");
     expect(cells[3].textContent).toContain("2 dead-lettered");
     expect(cells[3].textContent).toContain("1 succeeded");
     expect(row.textContent).not.toContain("dead_lettered");
@@ -110,7 +126,13 @@ describe("Event activity summary", () => {
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
 
-    expect(await screen.findByText(/2026-09-01T09:00:17Z to 2026-09-01T10:00:47Z/)).toBeTruthy();
+    // The window is stated as a real time range. Whatever the Operator's locale formats the visible
+    // value into, the instants the API sent survive on the machine-readable attribute.
+    const window = await screen.findByRole("region", { name: "Event activity summary" });
+    expect(Array.from(window.querySelectorAll("time")).map((stamp) => stamp.getAttribute("datetime"))).toEqual([
+      "2026-09-01T09:00:17Z",
+      "2026-09-01T10:00:47Z",
+    ]);
     for (const [label, value] of [
       ["Events accepted", "5"],
       ["Awaiting routing", "1"],
@@ -150,7 +172,7 @@ describe("Event activity summary", () => {
     stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
-    await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" });
+    await ledgerRow(eventId);
 
     // The activity summary's "Events accepted" is the 60-minute window count (5), which the list's
     // own single visible row must never be mistaken for.
@@ -229,7 +251,7 @@ describe("Event inspector", () => {
     stubHttp(respondFor(page([]), { ...detail("succeeded"), delivery_attempts: [inProgress] }));
 
     renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
-    const item = (await screen.findByText(/in_progress/)).closest("li")!;
+    const item = (await screen.findByText(/In progress/)).closest("li")!;
 
     expect(item.className).not.toContain("failed");
     // No fabricated failure detail line for an attempt that has not finished yet.
@@ -259,7 +281,7 @@ describe("Event inspector", () => {
       `/tenants/${tenantId}/events/${eventId}`,
     );
 
-    const row = (await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" })).closest("tr")!;
+    const row = await ledgerRow(eventId);
     expect(row.querySelector("a[aria-current='page']")).toBeTruthy();
     // The inspector reads by the route's own Event id, independent of whether that row is loaded.
     await screen.findByRole("heading", { level: 2, name: `Event ${eventId}` });

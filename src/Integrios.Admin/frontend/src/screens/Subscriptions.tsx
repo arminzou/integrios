@@ -15,6 +15,7 @@ import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/field
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge } from "../ui/status";
 import { TransformPreview } from "./Previews";
 
 type SubscriptionListItem = components["schemas"]["SubscriptionListItemDto"];
@@ -150,7 +151,9 @@ export function SubscriptionsSection({
                       {subscription.name}
                     </Link>
                   </RowHeader>
-                  <TableCell>{subscription.status}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={subscription.status} />
+                  </TableCell>
                   <TableCell>{subscription.order_index}</TableCell>
                   <TableCell>{subscription.description ?? "—"}</TableCell>
                 </TableRow>
@@ -222,7 +225,9 @@ export function SubscriptionScreen({
       <Panel>
         <Details>
           <dt>Status</dt>
-          <dd>{current.status}</dd>
+          <dd>
+            <StatusBadge status={current.status} />
+          </dd>
           <dt>Order</dt>
           <dd>{current.order_index}</dd>
           <dt>Destination Connection</dt>

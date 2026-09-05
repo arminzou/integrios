@@ -13,6 +13,8 @@ import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Form, SelectField, TextField } from "../ui/fields";
 import { Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge, statusLabel } from "../ui/status";
+import { Timestamp } from "../ui/time";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
 type EventDelivery = components["schemas"]["EventDeliveryDto"];
@@ -309,12 +311,14 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                       {/* NavLink marks the selected row itself: the route is the selection, so
                           `aria-current` follows the URL rather than a separately tracked flag. */}
                       <NavLink className="underline" to={`/tenants/${tenantId}/events/${item.event_id}`} end>
-                        {item.accepted_at}
+                        <Timestamp value={item.accepted_at} />
                       </NavLink>
                     </RowHeader>
                     <TableCell>{item.event_type}</TableCell>
                     <TableCell className="font-mono text-sm">{item.source_event_id ?? "—"}</TableCell>
-                    <TableCell>{item.status}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={item.status} />
+                    </TableCell>
                     <TableCell>
                       <DeliveryCounts counts={item.deliveries} />
                     </TableCell>
@@ -363,7 +367,7 @@ function ActivitySummary({
   return (
     <section aria-label="Event activity summary" className="flex flex-col gap-3">
       <p className="m-0 text-ink-secondary">
-        Last 60 minutes, {data.window_start} to {data.window_end}.
+        Last 60 minutes, <Timestamp value={data.window_start} /> to <Timestamp value={data.window_end} />.
       </p>
       <ul className="m-0 flex list-none flex-wrap gap-3 p-0">
         {items.map((item) => (
@@ -389,14 +393,22 @@ function ActivitySummary({
 function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDeliveryCounts"] }) {
   const states: [string, number | string][] = [
     ["pending", counts.pending],
-    ["in flight", counts.in_flight],
+    ["in_flight", counts.in_flight],
     ["succeeded", counts.succeeded],
-    ["dead-lettered", counts.dead_lettered],
+    ["dead_lettered", counts.dead_lettered],
   ];
   const present = states.filter(([, count]) => Number(count) > 0);
 
-  if (present.length === 0) return <>No EventDeliveries</>;
-  return <>{present.map(([label, count]) => `${count} ${label}`).join(", ")}</>;
+  if (present.length === 0) return <span className="text-ink-secondary">No EventDeliveries</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {present.map(([status, count]) => (
+        <StatusBadge key={status} status={status}>
+          {count} {statusLabel(status).toLowerCase()}
+        </StatusBadge>
+      ))}
+    </span>
+  );
 }
 
 /// The selected Event's detail: a persistent inspector beside the ledger on wide screens, and the
@@ -459,13 +471,17 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
       </h2>
       <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-1 [&>dd]:m-0 [&>dd]:text-right [&>dt]:m-0 [&>dt]:font-medium [&>dt]:text-ink-secondary">
         <dt>Event status</dt>
-        <dd>{current.status}</dd>
+        <dd>
+          <StatusBadge status={current.status} />
+        </dd>
         <dt>Accepted</dt>
-        <dd>{current.accepted_at}</dd>
+        <dd>
+          <Timestamp value={current.accepted_at} />
+        </dd>
         <dt>Processed</dt>
-        <dd>{current.processed_at ?? "Not processed"}</dd>
+        <dd>{current.processed_at ? <Timestamp value={current.processed_at} /> : "Not processed"}</dd>
         <dt>Failed</dt>
-        <dd>{current.failed_at ?? "Not failed"}</dd>
+        <dd>{current.failed_at ? <Timestamp value={current.failed_at} /> : "Not failed"}</dd>
       </dl>
 
       <TraceId traceId={current.trace_id ?? null} />
@@ -489,12 +505,14 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                 {current.event_deliveries.map((delivery) => (
                   <TableRow key={delivery.event_delivery_id}>
                     <RowHeader className="font-mono text-sm">{delivery.subscription_id}</RowHeader>
-                    <TableCell>{delivery.status}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={delivery.status} />
+                    </TableCell>
                     <TableCell>
                       {delivery.lifetime_attempt_count} / {delivery.retry_cycle_attempt_count}
                     </TableCell>
-                    <TableCell>{delivery.deliver_after ?? "—"}</TableCell>
-                    <TableCell>{delivery.failed_at ?? "—"}</TableCell>
+                    <TableCell>{delivery.deliver_after ? <Timestamp value={delivery.deliver_after} /> : "—"}</TableCell>
+                    <TableCell>{delivery.failed_at ? <Timestamp value={delivery.failed_at} /> : "—"}</TableCell>
                     <TableCell>
                       <ReplayDelivery
                         tenantId={tenantId}
@@ -533,8 +551,11 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                   }`}
                 >
                   <p className="m-0">
-                    <time className="font-semibold">{attempt.started_at}</time> — attempt {attempt.attempt_number} to
-                    Subscription <span className="font-mono text-sm">{attempt.subscription_id}</span>: {attempt.status}
+                    <span className="font-semibold">
+                      <Timestamp value={attempt.started_at} />
+                    </span>{" "}
+                    — attempt {attempt.attempt_number} to Subscription{" "}
+                    <span className="font-mono text-sm">{attempt.subscription_id}</span>: {statusLabel(attempt.status)}
                   </p>
                   {failed ? (
                     <p className="m-0 text-ink-secondary">

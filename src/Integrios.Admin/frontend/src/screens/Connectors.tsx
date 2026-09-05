@@ -15,6 +15,7 @@ import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge } from "../ui/status";
 import { SourceContractPreview } from "./Previews";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
@@ -98,7 +99,9 @@ export function ConnectorsScreen() {
                   <TableCell className="font-mono text-sm">{connector.key}</TableCell>
                   <TableCell>{connector.contract_version}</TableCell>
                   <TableCell>{connector.direction}</TableCell>
-                  <TableCell>{connector.status}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={connector.status} />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -131,7 +134,13 @@ export function ConnectorScreen({ connectorId }: { connectorId: string }) {
   const current = connector.data;
   return (
     <Page>
-      <PageHeader title={current.name} />
+      <PageHeader title={current.name}>
+        In{" "}
+        <Link className="underline" to="/connectors">
+          this deployment's Connectors
+        </Link>
+        .
+      </PageHeader>
 
       <Panel>
         <Details>
@@ -144,7 +153,9 @@ export function ConnectorScreen({ connectorId }: { connectorId: string }) {
           <dt>Direction</dt>
           <dd>{current.direction}</dd>
           <dt>Status</dt>
-          <dd>{current.status}</dd>
+          <dd>
+            <StatusBadge status={current.status} />
+          </dd>
           <dt>Description</dt>
           <dd>{current.description ?? "—"}</dd>
         </Details>

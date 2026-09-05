@@ -15,6 +15,7 @@ import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/field
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge } from "../ui/status";
 
 /// Connections is the authoring pattern every other capability copies. Its parts, in the order they
 /// appear below:
@@ -135,7 +136,9 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
                       {connection.name}
                     </Link>
                   </RowHeader>
-                  <TableCell>{connection.status}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={connection.status} />
+                  </TableCell>
                   <TableCell>{connection.environment ?? "—"}</TableCell>
                   <TableCell>{connection.description ?? "—"}</TableCell>
                 </TableRow>
@@ -270,7 +273,9 @@ export function ConnectionScreen({ tenantId, connectionId }: { tenantId: string;
       <Panel>
         <Details>
           <dt>Status</dt>
-          <dd>{current.status}</dd>
+          <dd>
+            <StatusBadge status={current.status} />
+          </dd>
           <dt>Connector</dt>
           <dd>
             <Link className="font-mono text-sm underline" to={`/connectors/${current.connector_id}`}>
