@@ -184,6 +184,92 @@ button:disabled {
   padding: 16px;
 }
 
+/* A selected table row, e.g. the Event a persistent inspector is currently showing. Not scoped to
+   navigation: this is any row whose primary link is the current selection. */
+tr:has(a[aria-current="page"]) {
+  background: var(--selected-surface);
+}
+
+.activity-summary {
+  margin: 12px 0;
+}
+
+.activity-summary-window {
+  color: var(--ink-secondary);
+  margin: 0 0 8px;
+}
+
+.activity-summary-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activity-summary-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 120px;
+  text-align: left;
+}
+
+.activity-summary-list button[aria-pressed="true"] {
+  background: var(--selected-surface);
+  color: var(--selected-ink);
+  border-color: var(--selected-ink);
+}
+
+.activity-summary-value {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.filters-disclosure > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+/* The ledger and its selected Event's inspector: side by side above the desktop breakpoint, the
+   inspector following the ledger in document order below it. `EventInspector` in Events.tsx reads
+   this same breakpoint to decide whether selecting an Event should move focus to it. */
+.events-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .events-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .ledger-column {
+    flex: 1 1 55%;
+    min-width: 0;
+  }
+
+  .event-inspector {
+    flex: 1 1 45%;
+    min-width: 0;
+    position: sticky;
+    top: 16px;
+  }
+}
+
+.event-inspector {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 16px;
+}
+
 /* Not visual design — an accessibility floor the dashboard has to clear whatever it later looks
    like. WCAG 2.2 asks a pointer target to be at least 24x24, and a link is otherwise only as tall
    as its text, which leaves navigation and table links around 17px.

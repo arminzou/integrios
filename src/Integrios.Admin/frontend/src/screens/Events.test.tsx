@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { EventScreen, EventsScreen } from "./Events";
+import { EventsScreen } from "./Events";
 import { page, stubHttp, type Call } from "../test/http";
 
 afterEach(cleanup);
@@ -24,14 +24,39 @@ const routedEventWithDeadLetters = {
   deliveries: { pending: 0, in_flight: 0, succeeded: 1, dead_lettered: 2 },
 };
 
+// Deliberately not minute-aligned: a rolling 60-minute window's end is normally "now", which lands
+// mid-second. The round trip through the datetime-local inputs must preserve this to the second
+// rather than rounding down and silently excluding Events the summary's own count included.
+const activitySummary = {
+  events_accepted: 5,
+  awaiting_routing: 1,
+  unrouted: 1,
+  dead_lettered_deliveries: 2,
+  window_start: "2026-09-01T09:00:17Z",
+  window_end: "2026-09-01T10:00:47Z",
+};
+
 const eventsCall = (calls: Call[]) => calls.filter((call) => call.url.pathname.endsWith("/events"));
+
+/// Distinguishes the ledger list, the activity summary, and an Event's own detail read, all of which
+/// share the `.../events` path prefix, and falls the Source/Topic option reads back to an empty page.
+function respondFor(eventsBody: unknown, detailBody: unknown = page([])) {
+  return ({ url, method }: Call) => {
+    if (method === "POST") return { status: 202 };
+    if (url.pathname.endsWith("/activity-summary")) return { status: 200, body: activitySummary };
+    if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detailBody };
+    if (url.pathname.endsWith("/events")) return { status: 200, body: eventsBody };
+    return { status: 200, body: page([]) };
+  };
+}
+
+function openFilters() {
+  fireEvent.click(screen.getByText("Find an Event"));
+}
 
 describe("Event history", () => {
   it("reports Event status separately from Delivery state instead of rolling one into the other", async () => {
-    stubHttp(({ url }) => ({
-      status: 200,
-      body: url.pathname.endsWith("/events") ? page([routedEventWithDeadLetters]) : page([]),
-    }));
+    stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
     render(<EventsScreen tenantId={tenantId} />);
 
@@ -46,11 +71,12 @@ describe("Event history", () => {
   });
 
   it("sends a Delivery status filter as its own parameter and leaves Event status unset", async () => {
-    const calls = stubHttp(() => ({ status: 200, body: page([]) }));
+    const calls = stubHttp(respondFor(page([])));
 
     render(<EventsScreen tenantId={tenantId} />);
     await screen.findByText("No Events in this Tenant match these filters.");
 
+    openFilters();
     fireEvent.change(screen.getByLabelText("Delivery status"), { target: { value: "dead_lettered" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
@@ -63,16 +89,73 @@ describe("Event history", () => {
   });
 
   it("reports unavailable filter options instead of presenting an empty picker", async () => {
-    stubHttp(({ url }) =>
-      url.pathname.endsWith("/sources")
+    stubHttp((call) =>
+      call.url.pathname.endsWith("/sources")
         ? { status: 500, body: { title: "Sources are unavailable." } }
-        : { status: 200, body: page([]) },
+        : respondFor(page([]))(call),
     );
 
     render(<EventsScreen tenantId={tenantId} />);
+    openFilters();
 
     expect((await screen.findByRole("alert")).textContent).toContain("Sources are unavailable.");
     expect((screen.getByLabelText("Source") as HTMLSelectElement).disabled).toBe(true);
+  });
+});
+
+describe("Event activity summary", () => {
+  it("names the window and reports the four counts as pressable, unselected buttons", async () => {
+    stubHttp(respondFor(page([])));
+
+    render(<EventsScreen tenantId={tenantId} />);
+
+    expect(await screen.findByText(/2026-09-01T09:00:17Z to 2026-09-01T10:00:47Z/)).toBeTruthy();
+    for (const [label, value] of [
+      ["Events accepted", "5"],
+      ["Awaiting routing", "1"],
+      ["Unrouted", "1"],
+      ["Dead-lettered Deliveries", "2"],
+    ]) {
+      const button = screen.getByRole("button", { name: new RegExp(`${value}\\s*${label}`) });
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+    }
+  });
+
+  it("applies the documented filters and time range, marks itself pressed, and restarts paging", async () => {
+    const calls = stubHttp(respondFor(page([])));
+
+    render(<EventsScreen tenantId={tenantId} />);
+    const unrouted = await screen.findByRole("button", { name: /Unrouted/ });
+    fireEvent.click(unrouted);
+
+    expect(unrouted.getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(eventsCall(calls).length).toBeGreaterThan(1));
+    const applied = eventsCall(calls).at(-1)!;
+    expect(applied.url.searchParams.get("status")).toBe("unrouted");
+    expect(applied.url.searchParams.has("delivery_status")).toBe(false);
+    // The visible 60-minute window is applied to the ledger's own accepted-range filter, preserved
+    // to the second rather than rounded down to the minute.
+    expect(applied.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:00:17.000Z");
+    expect(applied.url.searchParams.get("accepted_to")).toBe("2026-09-01T10:00:47.000Z");
+    expect(applied.url.searchParams.has("after")).toBe(false);
+
+    // Editing a filter by hand deselects the summary item, so its pressed state never lies.
+    openFilters();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(unrouted.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("keeps the list's row count independent of the summary's own bounded counts", async () => {
+    stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    render(<EventsScreen tenantId={tenantId} />);
+    await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" });
+
+    // The activity summary's "Events accepted" is the 60-minute window count (5), which the list's
+    // own single visible row must never be mistaken for.
+    const acceptedButton = screen.getByRole("button", { name: /Events accepted/ });
+    expect(within(acceptedButton).getByText("5")).toBeTruthy();
+    expect(screen.getAllByRole("row")).toHaveLength(2); // header row plus the one Event row
   });
 });
 
@@ -98,13 +181,11 @@ const detail = (deliveryStatus: string) => ({
   delivery_attempts: [],
 });
 
-describe("Event investigation", () => {
+describe("Event inspector", () => {
   it("offers replay only for a dead-lettered Delivery, names it, and calls nothing until confirmed", async () => {
-    const calls = stubHttp(({ method }) =>
-      method === "POST" ? { status: 202 } : { status: 200, body: detail("dead_lettered") },
-    );
+    const calls = stubHttp(respondFor(page([]), detail("dead_lettered")));
 
-    render(<EventScreen tenantId={tenantId} eventId={eventId} />);
+    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Replay" }));
 
     expect(screen.getByText(new RegExp(`Replay the dead-lettered delivery to Subscription ${subscriptionId}`))).toBeTruthy();
@@ -119,17 +200,17 @@ describe("Event investigation", () => {
   });
 
   it("does not offer replay for a Delivery the API cannot replay", async () => {
-    stubHttp(() => ({ status: 200, body: detail("succeeded") }));
+    stubHttp(respondFor(page([]), detail("succeeded")));
 
-    render(<EventScreen tenantId={tenantId} eventId={eventId} />);
+    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     await screen.findByText("succeeded");
     expect(screen.queryByRole("button", { name: "Replay" })).toBeNull();
   });
 
   it("hands over the trace identity as an opaque value without linking to any backend", async () => {
-    stubHttp(() => ({ status: 200, body: detail("succeeded") }));
+    stubHttp(respondFor(page([]), detail("succeeded")));
 
-    render(<EventScreen tenantId={tenantId} eventId={eventId} />);
+    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     const traceField = (await screen.findByLabelText("Trace id")) as HTMLInputElement;
 
     expect(traceField.value).toBe("0af7651916cd43dd8448eb211c80319c");
@@ -137,5 +218,16 @@ describe("Event investigation", () => {
     // The dashboard does not know where traces live: no link may carry the trace id anywhere.
     for (const link of screen.queryAllByRole("link"))
       expect(link.getAttribute("href")).not.toContain("0af7651916cd43dd8448eb211c80319c");
+  });
+
+  it("marks the selected Event's row current and still renders the detail when the row is not loaded", async () => {
+    stubHttp(respondFor(page([routedEventWithDeadLetters]), detail("succeeded")));
+
+    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+
+    const row = (await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" })).closest("tr")!;
+    expect(row.querySelector("a[aria-current='page']")).toBeTruthy();
+    // The inspector reads by the route's own Event id, independent of whether that row is loaded.
+    await screen.findByRole("heading", { level: 2, name: `Event ${eventId}` });
   });
 });

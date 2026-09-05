@@ -6,7 +6,7 @@ import { Link } from "./ui/controls";
 import { useResource } from "./ui/useResource";
 import { ConnectorScreen, ConnectorsScreen } from "./screens/Connectors";
 import { ConnectionScreen, ConnectionsScreen } from "./screens/Connections";
-import { EventScreen, EventsScreen } from "./screens/Events";
+import { EventsScreen } from "./screens/Events";
 import { SourceScreen, SourcesScreen } from "./screens/Sources";
 import { SubscriptionScreen } from "./screens/Subscriptions";
 import { TenantApiKeysScreen } from "./screens/TenantApiKeys";
@@ -215,7 +215,7 @@ function Screen({ route }: { route: Route }) {
     case "events":
       return <EventsScreen tenantId={route.tenantId} />;
     case "event":
-      return <EventScreen tenantId={route.tenantId} eventId={route.eventId} />;
+      return <EventsScreen tenantId={route.tenantId} selectedEventId={route.eventId} />;
     case "tenantApiKeys":
       return <TenantApiKeysScreen tenantId={route.tenantId} />;
     case "sources":

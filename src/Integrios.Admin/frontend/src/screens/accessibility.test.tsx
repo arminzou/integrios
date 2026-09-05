@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { expectNoAccessibilityViolations } from "../test/axe";
 import { page, stubHttp } from "../test/http";
 import { ConnectorsScreen } from "./Connectors";
-import { EventScreen, EventsScreen } from "./Events";
+import { EventsScreen } from "./Events";
 import { SourcesScreen } from "./Sources";
 import { TenantApiKeysScreen } from "./TenantApiKeys";
 import { TenantScreen, TenantsScreen } from "./Tenants";
@@ -125,8 +125,8 @@ describe("Accessibility of the Operator workflows", () => {
     await expectNoAccessibilityViolations(events);
     cleanup();
 
-    const event = renderScreen(<EventScreen tenantId={tenantId} eventId={eventId} />);
-    await screen.findByRole("heading", { level: 1 });
+    const event = renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    await screen.findByRole("heading", { level: 1, name: "Events" });
     await expectNoAccessibilityViolations(event);
   });
 
