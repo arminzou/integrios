@@ -53,6 +53,9 @@ td a {
 }
 
 .topbar-row {
+  width: 100%;
+  max-width: var(--measure);
+  margin-inline: auto;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -127,6 +130,8 @@ td a {
 }
 
 #main {
+  max-width: var(--measure);
+  margin-inline: auto;
   padding: 24px 16px;
 }
 

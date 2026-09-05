@@ -29,6 +29,10 @@
   --danger-ink: #85504c;
   --danger-surface: #f4eeee;
 
+  /* The one content measure. The topbar spans the viewport; the row inside it and the document
+     below share this width, so navigation stays aligned with the page it labels. */
+  --measure: 1400px;
+
   --radius: 6px;
   /* A bounded content group — an activity-summary metric, the ledger, the inspector panel. */
   --radius-card: 10px;
