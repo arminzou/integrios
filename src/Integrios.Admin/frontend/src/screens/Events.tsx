@@ -553,9 +553,9 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                   <TableHead scope="col" title="Lifetime attempts / attempts in the current retry cycle">
                     Attempts
                   </TableHead>
+                  <TableHead scope="col">Recovery</TableHead>
                   <TableHead scope="col">Deliver after</TableHead>
                   <TableHead scope="col">Failed</TableHead>
-                  <TableHead scope="col">Recovery</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -568,8 +568,6 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                     <TableCell>
                       {delivery.lifetime_attempt_count} / {delivery.retry_cycle_attempt_count}
                     </TableCell>
-                    <TableCell>{delivery.deliver_after ? <Timestamp value={delivery.deliver_after} /> : "—"}</TableCell>
-                    <TableCell>{delivery.failed_at ? <Timestamp value={delivery.failed_at} /> : "—"}</TableCell>
                     <TableCell>
                       <ReplayDelivery
                         tenantId={tenantId}
@@ -581,6 +579,8 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                         }}
                       />
                     </TableCell>
+                    <TableCell>{delivery.deliver_after ? <Timestamp value={delivery.deliver_after} /> : "—"}</TableCell>
+                    <TableCell>{delivery.failed_at ? <Timestamp value={delivery.failed_at} /> : "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

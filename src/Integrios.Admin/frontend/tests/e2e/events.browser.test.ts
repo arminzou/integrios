@@ -98,7 +98,22 @@ afterAll(async () => {
   await server?.close();
 });
 
-async function openEvents(path: string, viewport: { width: number; height: number }): Promise<Page> {
+const deadLetteredDelivery = {
+  event_delivery_id: "99999999-9999-9999-9999-999999999999",
+  subscription_id: "4d8e-billing-sink",
+  destination_connection_id: "88888888-8888-8888-8888-888888888888",
+  status: "dead_lettered",
+  lifetime_attempt_count: 8,
+  retry_cycle_attempt_count: 5,
+  deliver_after: null,
+  failed_at: "2026-09-01T09:39:50Z",
+};
+
+async function openEvents(
+  path: string,
+  viewport: { width: number; height: number },
+  deliveries: unknown[] = [],
+): Promise<Page> {
   const browserPage = await browser.newPage({ viewport });
   await browserPage.route("**/auth/session", (route) => route.fulfill({ json: session }));
   await browserPage.route(`**/admin/tenants/${tenantId}/events/activity-summary*`, (route) =>
@@ -106,7 +121,7 @@ async function openEvents(path: string, viewport: { width: number; height: numbe
   );
   await browserPage.route(`**/admin/tenants/${tenantId}/events/*/deliveries`, (route) => {
     const eventId = new URL(route.request().url()).pathname.split("/").at(-2)!;
-    return route.fulfill({ json: eventDetail(eventId) });
+    return route.fulfill({ json: { ...eventDetail(eventId), event_deliveries: deliveries } });
   });
   await browserPage.route(`**/admin/tenants/${tenantId}/events*`, (route) =>
     route.fulfill({ json: listPage([secondEvent, loadedEvent]) }),
@@ -215,6 +230,29 @@ describe("The Event ledger and inspector in a real browser", () => {
     expect(await detailPage.getByRole("link", { name: `Event ${unloadedEventId}` }).count()).toBe(0);
     await detailPage.close();
   }, 60_000);
+
+  it("keeps the recovery action inside the inspector, not past the edge of a table that scrolls", async () => {
+    // The EventDelivery table is wider than the inspector panel, so something has to be the part
+    // that scrolls. It must not be the recovery control: Replay is the only recovery the platform
+    // offers, and a control reachable only by discovering that an inner table scrolls sideways is
+    // one an Operator triaging a dead letter will not find. The columns that overflow are the ones
+    // that are read rather than acted on.
+    const wide = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 1512, height: 950 }, [
+      deadLetteredDelivery,
+    ]);
+
+    const reach = await wide.evaluate(() => {
+      const inspector = document.querySelector('aside[aria-label="Event detail"]')!;
+      const scroller = inspector.querySelector('[data-slot="table-container"]')!;
+      const replay = [...inspector.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Replay");
+      if (!replay) return { found: false, inside: false };
+      return { found: true, inside: replay.getBoundingClientRect().right <= scroller.getBoundingClientRect().right };
+    });
+
+    expect(reach.found).toBe(true);
+    expect(reach.inside).toBe(true);
+    await wide.close();
+  });
 
   it("lays the inspector out beside the ledger above the desktop breakpoint and below it under 900px", async () => {
     const wide = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 1280, height: 900 });
