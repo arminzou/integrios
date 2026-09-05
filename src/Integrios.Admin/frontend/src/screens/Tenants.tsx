@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
@@ -285,6 +285,7 @@ function EditTenant({ tenant }: { tenant: Tenant }) {
             <Button type="submit" className="self-start" disabled={save.isPending}>
               Save changes
             </Button>
+            <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
           </form>
         </Panel>
       </Form>

@@ -224,6 +224,29 @@ describe("Event inspector", () => {
     );
   });
 
+  it("keeps the replay confirmation after the Delivery leaves the state that offered it", async () => {
+    // A replayed Delivery stops being dead-lettered, which is the only state the replay control
+    // renders under. The confirmation must not live inside that control: it would unmount at the
+    // moment it finally had something to report, flashing rather than reporting.
+    let deliveryStatus = "dead_lettered";
+    stubHttp(({ url, method }) => {
+      if (method === "POST") {
+        deliveryStatus = "pending";
+        return { status: 202 };
+      }
+      if (url.pathname.endsWith("/activity-summary")) return { status: 200, body: activitySummary };
+      if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detail(deliveryStatus) };
+      return { status: 200, body: page([]) };
+    });
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Replay" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replay this delivery" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Replay" })).toBeNull());
+    expect(screen.getByText("Queued for delivery again.")).toBeTruthy();
+  });
+
   it("does not offer replay for a Delivery the API cannot replay", async () => {
     stubHttp(respondFor(page([]), detail("succeeded")));
 

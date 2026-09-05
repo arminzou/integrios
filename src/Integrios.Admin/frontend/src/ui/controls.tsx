@@ -159,6 +159,43 @@ export function LoadMore({ hasMore, busy, onLoadMore }: { hasMore: boolean; busy
   );
 }
 
+/// The rhythm the rows will occupy, so a list does not jump when they land. Plain bars rather than a
+/// table: a table with no rows in it would announce columns and headers that are not there yet, so
+/// the bars are decorative and the wrapper carries the announcement instead. The pulse is an opacity
+/// change, and the platform's reduced-motion rule already removes it.
+function ListSkeleton() {
+  return (
+    <div role="status" aria-busy="true">
+      <span className="sr-only">Loading…</span>
+      <div aria-hidden="true" className="overflow-hidden rounded-lg border bg-card">
+        {Array.from({ length: 5 }, (_, row) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder rows with no identity
+          <div key={row} className="flex gap-4 border-b px-4 py-3 last:border-b-0">
+            {Array.from({ length: 4 }, (_, cell) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder cells with no identity
+              <div key={cell} className="h-4 flex-1 animate-pulse rounded bg-surface-quiet" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/// A write that only stops being busy leaves an Operator guessing whether it landed. This says so,
+/// and is announced rather than only shown. The element is always rendered so the live region exists
+/// before its content changes, which is what makes the change announced at all.
+///
+/// The wording names what changed in the same words as the control that changed it: a button reading
+/// "Deactivate Tenant" reports "Tenant deactivated", never a generic "Success".
+export function WriteStatus({ done, children }: { done: boolean; children: ReactNode }) {
+  return (
+    <p role="status" className="m-0 text-sm text-ink-secondary">
+      {done ? children : null}
+    </p>
+  );
+}
+
 /// What a list shows when it has no rows to show: still loading, failed, or genuinely empty. The
 /// empty text names the scope that was searched so an empty Tenant is not mistaken for a failure.
 export function ListStatus({
@@ -175,7 +212,7 @@ export function ListStatus({
   emptyText: string;
 }) {
   if (problem) return <p role="alert">{problem.detail ?? `The list could not be read (${problem.status}).`}</p>;
-  if (busy && !loaded) return <p>Loading…</p>;
+  if (busy && !loaded) return <ListSkeleton />;
   if (loaded && empty) return <p>{emptyText}</p>;
   return null;
 }

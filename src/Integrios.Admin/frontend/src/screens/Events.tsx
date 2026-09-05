@@ -3,14 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, NavLink } from "react-router";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { CopyValue } from "../ui/copy";
 import { Form, SelectField, TextField } from "../ui/fields";
 import { Panel, RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge, statusLabel } from "../ui/status";
@@ -419,6 +418,10 @@ function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDelive
 function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: string }) {
   const queryClient = useQueryClient();
   const eventKey = ["event", tenantId, eventId];
+  // Held here rather than on the replay control: a replayed Delivery leaves `dead_lettered`, which
+  // is exactly the condition that control renders under, so it is gone by the time the write it
+  // just made has anything to report. The inspector is keyed by Event id and survives the re-read.
+  const [replayed, setReplayed] = useState(false);
   const event = useQuery({
     queryKey: eventKey,
     queryFn: () =>
@@ -484,10 +487,15 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
         <dd>{current.failed_at ? <Timestamp value={current.failed_at} /> : "Not failed"}</dd>
       </dl>
 
-      <TraceId traceId={current.trace_id ?? null} />
+      {current.trace_id ? (
+        <CopyValue id="event-trace-id" label="Trace id" value={current.trace_id} />
+      ) : (
+        <p>This Event carries no trace identity.</p>
+      )}
 
       <section className="flex flex-col gap-2">
         <h3 className="m-0 text-lg">EventDeliveries</h3>
+        <WriteStatus done={replayed}>Queued for delivery again.</WriteStatus>
         {current.event_deliveries?.length ? (
           <div className="overflow-x-auto">
             <TableCard caption="One EventDelivery per matched Subscription">
@@ -518,7 +526,10 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                         tenantId={tenantId}
                         eventId={eventId}
                         delivery={delivery}
-                        onReplayed={() => queryClient.invalidateQueries({ queryKey: eventKey })}
+                        onReplayed={() => {
+                          setReplayed(true);
+                          void queryClient.invalidateQueries({ queryKey: eventKey });
+                        }}
                       />
                     </TableCell>
                   </TableRow>
@@ -572,42 +583,6 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
         )}
       </section>
     </aside>
-  );
-}
-
-/// The trace identity is an opaque lookup value for whatever observability backend the deployment
-/// runs. The dashboard hands it over and does not know, link to, or embed that backend.
-function TraceId({ traceId }: { traceId: string | null }) {
-  const [copied, setCopied] = useState(false);
-  const field = useRef<HTMLInputElement>(null);
-
-  if (!traceId) return <p>This Event carries no trace identity.</p>;
-
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor="event-trace-id">Trace id</Label>
-      <Input id="event-trace-id" className="font-mono text-sm" ref={field} readOnly value={traceId} />
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            // Clipboard access can be unavailable or refused; selecting the value still lets the
-            // Operator copy it, so the control is never a dead end.
-            field.current?.select();
-            void navigator.clipboard
-              ?.writeText(traceId)
-              .then(() => setCopied(true))
-              .catch(() => setCopied(false));
-          }}
-        >
-          Copy trace id
-        </Button>
-        <span role="status" className="text-sm text-ink-secondary">
-          {copied ? "Trace id copied." : ""}
-        </span>
-      </div>
-    </div>
   );
 }
 
