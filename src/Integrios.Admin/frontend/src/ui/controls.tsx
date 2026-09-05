@@ -1,6 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { Problem } from "../api/problem";
-import { navigate } from "../routes";
 
 /// A collapsed "Find an X" filter panel or "New X" create panel, shared across every capability's
 /// list screen so neither a filter form nor a create form permanently dominates the page above the
@@ -155,25 +154,4 @@ export function ListStatus({
   if (busy && !loaded) return <p>Loading…</p>;
   if (loaded && empty) return <p>{emptyText}</p>;
   return null;
-}
-
-/// A real anchor, so copying, opening in a new tab, and middle-clicking behave as the Operator
-/// expects; only a plain left click is taken over to avoid a full document reload. `current` marks
-/// the active navigation destination with `aria-current`, the same signal assistive technology and
-/// the selected-surface style key off.
-export function Link({ to, children, current }: { to: string; children: ReactNode; current?: boolean }) {
-  return (
-    <a
-      href={to}
-      aria-current={current ? "page" : undefined}
-      onClick={(event) => {
-        if (event.defaultPrevented || event.button !== 0) return;
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault();
-        navigate(to);
-      }}
-    >
-      {children}
-    </a>
-  );
 }

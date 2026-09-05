@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
+import { renderScreen } from "../test/router";
 import { ConnectorsScreen } from "./Connectors";
 
 afterEach(cleanup);
@@ -27,7 +28,7 @@ describe("Installing the first Connector", () => {
       method === "PUT" ? { status: 201, body: installed } : { status: 200, body: page([]) },
     );
 
-    render(<ConnectorsScreen />);
+    const { router } = renderScreen(<ConnectorsScreen />);
     await screen.findByText("No Connectors match this filter.");
 
     fireEvent.change(screen.getByLabelText("Key"), { target: { value: "http" } });
@@ -42,6 +43,7 @@ describe("Installing the first Connector", () => {
     const install = calls.find((call) => call.method === "PUT")!;
     expect(install.url.pathname).toBe("/admin/connectors/http/versions/2");
     expect(install.body).toEqual({ key: "http" });
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/connectors/${installed.id}`));
   });
 
   it("reports a rejected manifest instead of appearing to install one", async () => {
@@ -51,7 +53,7 @@ describe("Installing the first Connector", () => {
         : { status: 200, body: page([]) },
     );
 
-    render(<ConnectorsScreen />);
+    renderScreen(<ConnectorsScreen />);
     const key = await screen.findByLabelText("Key");
     fireEvent.change(key, { target: { value: "HTTP" } });
     fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: "{}" } });
@@ -65,7 +67,7 @@ describe("Installing the first Connector", () => {
   it("refuses a manifest that is not JSON before it reaches the server", async () => {
     const calls = stubHttp(() => ({ status: 200, body: page([]) }));
 
-    render(<ConnectorsScreen />);
+    renderScreen(<ConnectorsScreen />);
     fireEvent.change(await screen.findByLabelText("Key"), { target: { value: "http" } });
     fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: "{not json" } });
     fireEvent.click(screen.getByRole("button", { name: "Install Connector" }));

@@ -115,6 +115,67 @@ async function openEvents(path: string, viewport: { width: number; height: numbe
 }
 
 describe("The Event ledger and inspector in a real browser", () => {
+  it("preserves the filtered ledger while selection follows links, back, forward, and refresh", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
+    await page.getByRole("button", { name: /Events accepted/ }).click();
+    const row = page.getByRole("link", { name: /2026-09-01T09:30:00Z/ });
+    const href = await row.getAttribute("href");
+    expect(href).toBe(`/tenants/${tenantId}/events/${loadedEventId}`);
+    await row.click();
+    await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
+    expect(await page.getByRole("button", { name: /Events accepted/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(await row.getAttribute("aria-current")).toBe("page");
+    expect(
+      await page
+        .getByRole("navigation", { name: "Deployment" })
+        .getByRole("link", { name: "Tenants" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      await page
+        .getByRole("navigation", { name: "Tenant", exact: true })
+        .getByRole("link", { name: "Events" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+
+    await page.goBack();
+    await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor({ state: "hidden" });
+    expect(await row.getAttribute("aria-current")).toBeNull();
+    expect(await page.getByRole("button", { name: /Events accepted/ }).getAttribute("aria-pressed")).toBe("true");
+    await page.goForward();
+    await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
+    expect(await row.getAttribute("aria-current")).toBe("page");
+    await page.reload();
+    await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
+    expect(await row.getAttribute("aria-current")).toBe("page");
+    await page.close();
+  }, 60_000);
+
+  it("opens an Event by middle-click without navigating the original ledger", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
+    // Context-level routes also answer the new tab's first request.
+    await page.context().route("**/auth/session", (route) => route.fulfill({ json: session }));
+    await page.context().route("**/admin/**", (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const body = path.endsWith("/deliveries")
+        ? eventDetail(loadedEventId)
+        : path.endsWith("/activity-summary")
+          ? summary
+          : path === `/admin/tenants/${tenantId}`
+            ? tenant
+            : listPage([loadedEvent]);
+      return route.fulfill({ json: body });
+    });
+    const opened = page.context().waitForEvent("page");
+    await page.getByRole("link", { name: /2026-09-01T09:30:00Z/ }).click({ button: "middle" });
+    const tab = await opened;
+    await tab.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
+    expect(new URL(page.url()).pathname).toBe(`/tenants/${tenantId}/events`);
+    expect(new URL(tab.url()).pathname).toBe(`/tenants/${tenantId}/events/${loadedEventId}`);
+    await tab.close();
+    await page.close();
+  }, 60_000);
+
   it("moves focus to the inspector heading on selection only when it is not already beside the ledger", async () => {
     const narrow = await openEvents(`/tenants/${tenantId}/events`, { width: 500, height: 900 });
     await narrow.getByRole("link", { name: /2026-09-01T09:30:00Z/ }).click();

@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
+import { renderScreen } from "../test/router";
 import { EventsScreen } from "./Events";
 
 afterEach(cleanup);
@@ -58,7 +59,7 @@ describe("Event history", () => {
   it("reports Event status separately from Delivery state instead of rolling one into the other", async () => {
     stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
-    render(<EventsScreen tenantId={tenantId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} />);
 
     const row = (await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" })).closest("tr")!;
     const cells = within(row).getAllByRole("cell");
@@ -73,7 +74,7 @@ describe("Event history", () => {
   it("sends a Delivery status filter as its own parameter and leaves Event status unset", async () => {
     const calls = stubHttp(respondFor(page([])));
 
-    render(<EventsScreen tenantId={tenantId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} />);
     await screen.findByText("No Events in this Tenant match these filters.");
 
     openFilters();
@@ -95,7 +96,7 @@ describe("Event history", () => {
         : respondFor(page([]))(call),
     );
 
-    render(<EventsScreen tenantId={tenantId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} />);
     openFilters();
 
     expect((await screen.findByRole("alert")).textContent).toContain("Sources are unavailable.");
@@ -107,7 +108,7 @@ describe("Event activity summary", () => {
   it("names the window and reports the four counts as pressable, unselected buttons", async () => {
     stubHttp(respondFor(page([])));
 
-    render(<EventsScreen tenantId={tenantId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} />);
 
     expect(await screen.findByText(/2026-09-01T09:00:17Z to 2026-09-01T10:00:47Z/)).toBeTruthy();
     for (const [label, value] of [
@@ -124,7 +125,7 @@ describe("Event activity summary", () => {
   it("applies the documented filters and time range, marks itself pressed, and restarts paging", async () => {
     const calls = stubHttp(respondFor(page([])));
 
-    render(<EventsScreen tenantId={tenantId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} />);
     const unrouted = await screen.findByRole("button", { name: /Unrouted/ });
     fireEvent.click(unrouted);
 
@@ -148,7 +149,7 @@ describe("Event activity summary", () => {
   it("keeps the list's row count independent of the summary's own bounded counts", async () => {
     stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
-    render(<EventsScreen tenantId={tenantId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} />);
     await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" });
 
     // The activity summary's "Events accepted" is the 60-minute window count (5), which the list's
@@ -185,7 +186,7 @@ describe("Event inspector", () => {
   it("offers replay only for a dead-lettered Delivery, names it, and calls nothing until confirmed", async () => {
     const calls = stubHttp(respondFor(page([]), detail("dead_lettered")));
 
-    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Replay" }));
 
     expect(
@@ -204,7 +205,7 @@ describe("Event inspector", () => {
   it("does not offer replay for a Delivery the API cannot replay", async () => {
     stubHttp(respondFor(page([]), detail("succeeded")));
 
-    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     await screen.findByText("succeeded");
     expect(screen.queryByRole("button", { name: "Replay" })).toBeNull();
   });
@@ -227,7 +228,7 @@ describe("Event inspector", () => {
     };
     stubHttp(respondFor(page([]), { ...detail("succeeded"), delivery_attempts: [inProgress] }));
 
-    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     const item = (await screen.findByText(/in_progress/)).closest("li")!;
 
     expect(item.className).not.toContain("failed");
@@ -238,7 +239,7 @@ describe("Event inspector", () => {
   it("hands over the trace identity as an opaque value without linking to any backend", async () => {
     stubHttp(respondFor(page([]), detail("succeeded")));
 
-    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     const traceField = (await screen.findByLabelText("Trace id")) as HTMLInputElement;
 
     expect(traceField.value).toBe("0af7651916cd43dd8448eb211c80319c");
@@ -251,7 +252,12 @@ describe("Event inspector", () => {
   it("marks the selected Event's row current and still renders the detail when the row is not loaded", async () => {
     stubHttp(respondFor(page([routedEventWithDeadLetters]), detail("succeeded")));
 
-    render(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    // The row's current state is the route, not a prop: the ledger link marks itself when the URL
+    // is that Event's own, which is what makes a copied link and a clicked row agree.
+    renderScreen(
+      <EventsScreen tenantId={tenantId} selectedEventId={eventId} />,
+      `/tenants/${tenantId}/events/${eventId}`,
+    );
 
     const row = (await screen.findByRole("link", { name: "2026-09-01T10:00:00Z" })).closest("tr")!;
     expect(row.querySelector("a[aria-current='page']")).toBeTruthy();

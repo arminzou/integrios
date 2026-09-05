@@ -1,9 +1,9 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { navigate } from "../routes";
-import { ConfirmAction, Disclosure, Field, FormError, fieldProps, Link, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
 import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
@@ -86,6 +86,7 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
 }
 
 function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
+  const navigate = useNavigate();
   const connectors = useOptions<ConnectorListItem>(
     () => api.GET("/admin/connectors", { params: { query: { limit: 100 } } }),
     "connector-options",

@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
+import { renderScreen } from "../test/router";
 import { TenantApiKeysScreen } from "./TenantApiKeys";
 
 afterEach(cleanup);
@@ -29,7 +30,7 @@ describe("Tenant API keys", () => {
         : { status: 200, body: page([listItem]) },
     );
 
-    render(<TenantApiKeysScreen tenantId={tenantId} />);
+    renderScreen(<TenantApiKeysScreen tenantId={tenantId} />);
     fireEvent.click(screen.getByText("New Tenant API key"));
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Tenant API key" }));
@@ -48,7 +49,7 @@ describe("Tenant API keys", () => {
       method === "POST" ? { status: 200 } : { status: 200, body: page([listItem]) },
     );
 
-    render(<TenantApiKeysScreen tenantId={tenantId} />);
+    renderScreen(<TenantApiKeysScreen tenantId={tenantId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
 
     expect(screen.getByText(/Revoke the Tenant API key "Ingest" \(itk_live_ab\)\?/)).toBeTruthy();

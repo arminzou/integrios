@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
+import { renderScreen } from "../test/router";
 import { TenantScreen, TenantsScreen } from "./Tenants";
 
 afterEach(cleanup);
@@ -27,7 +28,7 @@ describe("Tenants list", () => {
   it("reports a request that could not reach Admin instead of loading forever", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
 
-    render(<TenantsScreen />);
+    renderScreen(<TenantsScreen />);
 
     expect((await screen.findByRole("alert")).textContent).toContain("The Admin API could not be reached.");
     expect(screen.queryByText("Loading…")).toBeNull();
@@ -43,7 +44,7 @@ describe("Tenants list", () => {
         : { status: 200, body: page([tenant()], "cursor-1") },
     );
 
-    render(<TenantsScreen />);
+    renderScreen(<TenantsScreen />);
     await screen.findByRole("link", { name: "Acme" });
     expect(listCalls(calls)[0].url.searchParams.has("after")).toBe(false);
 
@@ -62,7 +63,7 @@ describe("Tenants list", () => {
         : { status: 200, body: page([tenant()], "cursor-1") },
     );
 
-    render(<TenantsScreen />);
+    renderScreen(<TenantsScreen />);
     await screen.findByRole("link", { name: "Acme" });
 
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "disabled" } });
@@ -95,7 +96,7 @@ describe("Tenant authoring", () => {
         : { status: 200, body: page([]) },
     );
 
-    render(<TenantsScreen />);
+    renderScreen(<TenantsScreen />);
     fireEvent.click(screen.getByText("New Tenant"));
     const slug = await screen.findByLabelText("Slug");
     fireEvent.change(slug, { target: { value: "acme" } });
@@ -112,7 +113,7 @@ describe("Tenant authoring", () => {
   it("names the Tenant before deactivating it and calls nothing until it is confirmed", async () => {
     const calls = stubHttp(({ method }) => (method === "POST" ? { status: 200 } : { status: 200, body: tenant() }));
 
-    render(<TenantScreen tenantId={tenantId} />);
+    renderScreen(<TenantScreen tenantId={tenantId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Deactivate Tenant" }));
 
     expect(screen.getByText(/Deactivate the Tenant "Acme" \(acme\)\?/)).toBeTruthy();

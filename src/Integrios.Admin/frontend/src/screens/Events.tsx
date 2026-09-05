@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { Link, NavLink } from "react-router";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, Field, FormError, fieldProps, Link, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
@@ -293,12 +294,11 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 {list.items.map((item) => (
                   <tr key={item.event_id}>
                     <th scope="row">
-                      <Link
-                        to={`/tenants/${tenantId}/events/${item.event_id}`}
-                        current={item.event_id === selectedEventId}
-                      >
+                      {/* NavLink marks the selected row itself: the route is the selection, so
+                          `aria-current` follows the URL rather than a separately tracked flag. */}
+                      <NavLink to={`/tenants/${tenantId}/events/${item.event_id}`} end>
                         {item.accepted_at}
-                      </Link>
+                      </NavLink>
                     </th>
                     <td>{item.event_type}</td>
                     <td>{item.source_event_id ?? "—"}</td>

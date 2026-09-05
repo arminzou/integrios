@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, Field, FormError, fieldProps, Link, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 

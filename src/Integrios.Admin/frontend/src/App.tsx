@@ -1,16 +1,9 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
 import type { components } from "./api/schema";
-import { type Route, useRoute } from "./routes";
-import { ConnectionScreen, ConnectionsScreen } from "./screens/Connections";
-import { ConnectorScreen, ConnectorsScreen } from "./screens/Connectors";
-import { EventsScreen } from "./screens/Events";
-import { SourceScreen, SourcesScreen } from "./screens/Sources";
-import { SubscriptionScreen } from "./screens/Subscriptions";
-import { TenantApiKeysScreen } from "./screens/TenantApiKeys";
-import { TenantScreen, TenantsScreen } from "./screens/Tenants";
-import { TopicScreen, TopicsScreen } from "./screens/Topics";
-import { Link } from "./ui/controls";
+import { isIdentifier } from "./identifiers";
+import { sectionHrefs, sectionLabels, sectionOrder, type TenantSection } from "./sections";
 import { useResource } from "./ui/useResource";
 
 type Tenant = components["schemas"]["TenantDto"];
@@ -86,43 +79,47 @@ function BrandMark() {
 }
 
 function SignedIn({ session }: { session: OperatorSession }) {
-  const route = useRoute();
-  const tenantId = "tenantId" in route ? route.tenantId : null;
+  // The same identifier check the route table applies: without it the shell would read a Tenant the
+  // matched route has already refused, turning a malformed URL into an Admin request.
+  const params = useParams();
+  const tenantId = Object.values(params).every(isIdentifier) ? (params.tenantId ?? null) : null;
   const tenant = useTenant(tenantId);
-  const section = tenantSectionOf(route);
+  const section = useTenantSection();
 
   return (
     <div className="shell">
-      <TopNav session={session} route={route} tenantId={tenantId} tenant={tenant} />
+      <TopNav session={session} tenantId={tenantId} tenant={tenant} />
       <main id="main">
-        {section ? (
+        {section && tenantId ? (
           <p className="breadcrumb">
             {tenantDisplayName(tenant)} / {sectionLabels[section]}
           </p>
         ) : null}
-        <Screen route={route} />
+        <Outlet />
       </main>
     </div>
   );
 }
 
-function isConnectorsSection(route: Route): boolean {
-  return route.name === "connectors" || route.name === "connector";
+/// The matched route tags itself with the Tenant section it belongs to, so the shell reads that
+/// rather than re-deriving it from the path it already matched.
+function useTenantSection(): TenantSection | null {
+  const matches = useMatches();
+  const handle = matches.at(-1)?.handle as { section?: TenantSection } | undefined;
+  return handle?.section ?? null;
 }
 
 function TopNav({
   session,
-  route,
   tenantId,
   tenant,
 }: {
   session: OperatorSession;
-  route: Route;
   tenantId: string | null;
   tenant: ReturnType<typeof useTenant>;
 }) {
-  const connectorsActive = isConnectorsSection(route);
   const headerRef = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
 
   // The sticky inspector on the Events screen sits below whatever this topbar's real height turns
   // out to be — one row when no Tenant is selected, two when one is — rather than a guessed pixel
@@ -149,14 +146,16 @@ function TopNav({
         <BrandMark />
         <ul className="nav-list">
           <li>
-            <Link to="/tenants" current={!connectorsActive && route.name !== "unknown"}>
-              Tenants
-            </Link>
+            {pathname === "/" ? (
+              <Link to="/tenants" aria-current="page">
+                Tenants
+              </Link>
+            ) : (
+              <NavLink to="/tenants">Tenants</NavLink>
+            )}
           </li>
           <li>
-            <Link to="/connectors" current={connectorsActive}>
-              Connectors
-            </Link>
+            <NavLink to="/connectors">Connectors</NavLink>
           </li>
         </ul>
         <div className="operator-identity">
@@ -173,44 +172,9 @@ function TopNav({
           </form>
         </div>
       </nav>
-      {tenantId ? <TenantNav tenantId={tenantId} route={route} tenant={tenant} /> : null}
+      {tenantId ? <TenantNav tenantId={tenantId} tenant={tenant} /> : null}
     </header>
   );
-}
-
-type TenantSection = "overview" | "events" | "connections" | "sources" | "topics" | "apiKeys";
-
-const sectionLabels: Record<TenantSection, string> = {
-  overview: "Overview",
-  events: "Events",
-  connections: "Connections",
-  sources: "Sources",
-  topics: "Topics",
-  apiKeys: "API keys",
-};
-
-function tenantSectionOf(route: Route): TenantSection | null {
-  switch (route.name) {
-    case "tenant":
-      return "overview";
-    case "events":
-    case "event":
-      return "events";
-    case "connections":
-    case "connection":
-      return "connections";
-    case "sources":
-    case "source":
-      return "sources";
-    case "topics":
-    case "topic":
-    case "subscription":
-      return "topics";
-    case "tenantApiKeys":
-      return "apiKeys";
-    default:
-      return null;
-  }
 }
 
 /// Reads the current Tenant once for the whole shell, so navigation and the breadcrumb name it
@@ -232,85 +196,19 @@ function tenantDisplayName(tenant: ReturnType<typeof useTenant>): string {
 
 /// Names the current Tenant explicitly in navigation rather than leaving it implied by the route's
 /// opaque id.
-function TenantNav({
-  tenantId,
-  route,
-  tenant,
-}: {
-  tenantId: string;
-  route: Route;
-  tenant: ReturnType<typeof useTenant>;
-}) {
-  const section = tenantSectionOf(route);
-
-  const items: { section: TenantSection; href: string }[] = [
-    { section: "overview", href: `/tenants/${tenantId}` },
-    { section: "events", href: `/tenants/${tenantId}/events` },
-    { section: "connections", href: `/tenants/${tenantId}/connections` },
-    { section: "sources", href: `/tenants/${tenantId}/sources` },
-    { section: "topics", href: `/tenants/${tenantId}/topics` },
-    { section: "apiKeys", href: `/tenants/${tenantId}/tenant-api-keys` },
-  ];
-
+function TenantNav({ tenantId, tenant }: { tenantId: string; tenant: ReturnType<typeof useTenant> }) {
   return (
     <nav className="topbar-row tenant-row" aria-label="Tenant">
       <span className="tenant-name">{tenantDisplayName(tenant)}</span>
       <ul className="nav-list">
-        {items.map((item) => (
-          <li key={item.section}>
-            <Link to={item.href} current={item.section === section}>
-              {sectionLabels[item.section]}
-            </Link>
+        {sectionOrder.map((section) => (
+          <li key={section}>
+            <NavLink to={sectionHrefs[section](tenantId)} end={section === "overview"}>
+              {sectionLabels[section]}
+            </NavLink>
           </li>
         ))}
       </ul>
     </nav>
   );
-}
-
-function Screen({ route }: { route: Route }) {
-  switch (route.name) {
-    case "tenants":
-      return <TenantsScreen />;
-    case "tenant":
-      return <TenantScreen tenantId={route.tenantId} />;
-    case "connections":
-      return <ConnectionsScreen tenantId={route.tenantId} />;
-    case "connection":
-      return <ConnectionScreen tenantId={route.tenantId} connectionId={route.connectionId} />;
-    case "events":
-      return <EventsScreen tenantId={route.tenantId} />;
-    case "event":
-      return <EventsScreen tenantId={route.tenantId} selectedEventId={route.eventId} />;
-    case "tenantApiKeys":
-      return <TenantApiKeysScreen tenantId={route.tenantId} />;
-    case "sources":
-      return <SourcesScreen tenantId={route.tenantId} />;
-    case "source":
-      return <SourceScreen tenantId={route.tenantId} sourceId={route.sourceId} />;
-    case "topics":
-      return <TopicsScreen tenantId={route.tenantId} />;
-    case "topic":
-      return <TopicScreen tenantId={route.tenantId} topicId={route.topicId} />;
-    case "subscription":
-      return (
-        <SubscriptionScreen tenantId={route.tenantId} topicId={route.topicId} subscriptionId={route.subscriptionId} />
-      );
-    case "connectors":
-      return <ConnectorsScreen />;
-    case "connector":
-      return <ConnectorScreen connectorId={route.connectorId} />;
-    case "unknown":
-      return (
-        <>
-          <h1>Not found</h1>
-          <p role="alert">
-            No Operator screen owns <code>{route.path}</code>.
-          </p>
-          <p>
-            <Link to="/tenants">Go to Tenants</Link>
-          </p>
-        </>
-      );
-  }
 }

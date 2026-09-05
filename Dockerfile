@@ -19,7 +19,7 @@
 # packaged Acceptance run is what proves Admin actually got it.
 ARG DASHBOARD=none
 
-FROM node:22.21.1-bookworm-slim AS node
+FROM node:22.22.0-bookworm-slim AS node
 FROM mcr.microsoft.com/dotnet/sdk:10.0.102 AS build
 ARG PROJECT
 WORKDIR /src

@@ -10,7 +10,11 @@ export function stubHttp(respond: (call: Call) => { status: number; body?: unkno
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | string, init?: RequestInit) => {
-      const request = input instanceof Request ? input : new Request(input, init);
+      // The typed client addresses the Admin API absolutely, but the session bootstrap calls
+      // `fetch("/auth/session")` directly, and `Request` rejects a relative URL. Resolving against
+      // the page's own origin is what the browser does with the same call.
+      const request =
+        input instanceof Request ? input : new Request(new URL(input, "http://localhost").toString(), init);
       const text = await request.clone().text();
       const call: Call = {
         method: request.method,

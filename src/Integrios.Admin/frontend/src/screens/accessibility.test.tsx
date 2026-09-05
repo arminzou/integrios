@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAccessibilityViolations } from "../test/axe";
 import { page, stubHttp } from "../test/http";
+import { renderScreen as renderInRouter } from "../test/router";
 import { ConnectionsScreen } from "./Connections";
 import { ConnectorsScreen } from "./Connectors";
 import { EventsScreen } from "./Events";
@@ -75,8 +76,8 @@ const eventDetail = {
 
 /// Screens are rendered inside a landmark because that is how the shell renders them; asserting on a
 /// bare fragment would report a missing landmark the real page has.
-function renderScreen(element: React.ReactElement) {
-  return render(<main>{element}</main>).container;
+function renderScreen(element: React.ReactElement, path = "/") {
+  return renderInRouter(<main>{element}</main>, path).container;
 }
 
 describe("Accessibility of the Operator workflows", () => {

@@ -1,9 +1,9 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { navigate } from "../routes";
-import { Field, FormError, fieldProps, Link, ListStatus, LoadMore } from "../ui/controls";
+import { Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
 import { formatJson, parseJson } from "../ui/json";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
@@ -15,6 +15,7 @@ type Connector = components["schemas"]["ConnectorDto"];
 
 /// Connectors are deployment-wide rather than Tenant-scoped, so this screen carries no Tenant.
 export function ConnectorsScreen() {
+  const navigate = useNavigate();
   const [direction, setDirection] = useState("");
   const list = useCursorList<ConnectorListItem>(
     (after) =>
