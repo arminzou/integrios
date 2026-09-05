@@ -60,7 +60,13 @@ describe("Installing the first Connector", () => {
     fireEvent.click(screen.getByRole("button", { name: "Install Connector" }));
 
     const message = await screen.findByText("A Connector key must be lowercase.");
-    expect(key.getAttribute("aria-describedby")?.split(" ")).toEqual(["install-connector-key-hint", message.id]);
+    // What a screen reader announces for the control: its hint, and the message the server sent.
+    const described = (key.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ");
+    expect(described).toContain("stable identifier");
+    expect(described).toContain(message.textContent);
     expect((key as HTMLInputElement).value).toBe("HTTP");
   });
 

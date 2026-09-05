@@ -66,10 +66,15 @@ describe("Creating a Connection", () => {
     await waitFor(() => expect(name.getAttribute("aria-invalid")).toBe("true"));
     expect(describedText(name)).toContain("A Connection called sink already exists.");
 
-    // Everything the server did not attribute to a rendered field is still reported, once.
-    const formLevel = screen.getAllByRole("alert").map((alert) => alert.textContent ?? "");
-    expect(formLevel.join(" ")).toContain("The Tenant is not active.");
-    expect(formLevel.join(" ")).not.toContain("already exists");
+    // Everything the server did not attribute to a rendered field is still reported.
+    expect(
+      screen
+        .getAllByRole("alert")
+        .map((alert) => alert.textContent ?? "")
+        .join(" "),
+    ).toContain("The Tenant is not active.");
+    // The field's own message is beside its control and is not repeated at form level.
+    expect(screen.getAllByText("A Connection called sink already exists.")).toHaveLength(1);
   });
 
   it("never sends a configuration that is not well-formed JSON", async () => {
