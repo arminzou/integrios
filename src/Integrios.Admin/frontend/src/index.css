@@ -165,4 +165,20 @@
     padding: 10px 12px;
     overflow-x: auto;
   }
+
+  /* The primitives fade colour and the focus ring in on interaction. An Operator who has asked the
+     platform for less motion gets none of it: the transitions are cut to an imperceptible duration
+     rather than removed, so a state change still lands in one step instead of never arriving. */
+  @media (prefers-reduced-motion: reduce) {
+    /* biome-ignore-start lint/complexity/noImportantStyles: the preference has to beat every utility that sets a duration */
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    /* biome-ignore-end lint/complexity/noImportantStyles: end of the reduced-motion override */
+  }
 }

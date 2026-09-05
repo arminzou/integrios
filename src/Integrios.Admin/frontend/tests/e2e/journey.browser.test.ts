@@ -102,6 +102,12 @@ async function closeView(page: Page): Promise<void> {
   await page.close();
 }
 
+/// A screen can carry more than one form, and they share field names, so a control is addressed by
+/// its label within the form that owns it — the same handle the stubbed browser tests use.
+function formNamed(page: Page, heading: string) {
+  return page.locator("form").filter({ hasText: heading });
+}
+
 /// Reads the deployment directly, to confirm what the journey wrote actually landed.
 async function readAdmin(path: string): Promise<Record<string, unknown>> {
   const response = await fetch(`${adminOrigin}${path}`, { headers: { authorization: operatorKey! } });
@@ -117,8 +123,9 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     // Tenant.
     let view = await openDashboard("/tenants");
     await view.click("text=New Tenant");
-    await view.fill("#create-tenant-slug", run);
-    await view.fill("#create-tenant-name", `Journey ${run}`);
+    const tenantForm = formNamed(view, "Create a Tenant");
+    await tenantForm.getByLabel("Slug").fill(run);
+    await tenantForm.getByLabel("Name").fill(`Journey ${run}`);
     await view.click("text=Create Tenant");
     const tenantId = await created(view, /\/tenants\/[0-9a-f-]{36}$/, "Tenant");
     await closeView(view);
@@ -126,9 +133,10 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     // Connection.
     view = await openDashboard(`/tenants/${tenantId}/connections`);
     await view.click("text=New Connection");
-    await view.selectOption("#create-connection-connector", connectors[0].id);
-    await view.fill("#create-connection-name", `${run}-sink`);
-    await view.fill("#create-connection-config", '{"base_uri":"http://mocksink:8080"}');
+    const connectionForm = formNamed(view, "Create a Connection");
+    await connectionForm.getByLabel("Connector").selectOption(connectors[0].id);
+    await connectionForm.getByLabel("Name").fill(`${run}-sink`);
+    await connectionForm.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://mocksink:8080"}');
     await view.click("text=Create Connection");
     const connectionId = await created(view, /\/connections\/[0-9a-f-]{36}$/, "Connection");
     await closeView(view);
@@ -136,15 +144,16 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     // Topic.
     view = await openDashboard(`/tenants/${tenantId}/topics`);
     await view.click("text=New Topic");
-    await view.fill("#create-topic-name", `${run}-orders`);
+    await formNamed(view, "Create a Topic").getByLabel("Name").fill(`${run}-orders`);
     await view.click("text=Create Topic");
     const topicId = await created(view, /\/topics\/[0-9a-f-]{36}$/, "Topic");
 
     // Subscription, authored on the Topic it belongs to.
     await view.click("text=New Subscription");
-    await view.fill("#create-subscription-name", `${run}-to-sink`);
-    await view.selectOption("#create-subscription-destination", connectionId);
-    await view.fill("#create-subscription-match-rules", `{"event_type":"${run}.created"}`);
+    const subscriptionForm = formNamed(view, "Create a Subscription");
+    await subscriptionForm.getByLabel("Name").fill(`${run}-to-sink`);
+    await subscriptionForm.getByLabel("Destination Connection").selectOption(connectionId);
+    await subscriptionForm.getByLabel("Match rules (JSON)").fill(`{"event_type":"${run}.created"}`);
     await view.click("text=Create Subscription");
     await created(view, /\/subscriptions\/[0-9a-f-]{36}$/, "Subscription");
     await closeView(view);
@@ -152,10 +161,11 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     // Source.
     view = await openDashboard(`/tenants/${tenantId}/sources`);
     await view.click("text=New Source");
-    await view.selectOption("#create-source-connection", connectionId);
-    await view.selectOption("#create-source-topic", topicId);
-    await view.selectOption("#create-source-type", "event_api");
-    await view.fill("#create-source-configuration", '{"source_contract":"event_json"}');
+    const sourceForm = formNamed(view, "Create a Source");
+    await sourceForm.getByLabel("Connection").selectOption(connectionId);
+    await sourceForm.getByLabel("Topic").selectOption(topicId);
+    await sourceForm.getByLabel("Type").selectOption("event_api");
+    await sourceForm.getByLabel("Configuration (JSON)").fill('{"source_contract":"event_json"}');
     await view.click("text=Create Source");
     await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
     await closeView(view);

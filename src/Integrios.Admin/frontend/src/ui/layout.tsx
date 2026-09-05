@@ -46,11 +46,13 @@ export function Panel({ className, asChild, ...props }: ComponentProps<"div"> & 
   return <Box className={cn("max-w-2xl rounded-lg border bg-card p-6 text-card-foreground", className)} {...props} />;
 }
 
-/// The definition list every detail screen uses for its stored state: labels in one column, values
-/// in the other, wrapping to one column when there is no room for two.
+/// The definition list every detail screen uses for its stored state: labels beside their values
+/// where there is room for two columns, and label above value where there is not. Two columns at
+/// 320 CSS pixels would leave the value column narrower than the identifiers it has to hold, which
+/// is what makes the document itself scroll sideways.
 export function Details({ children }: { children: ReactNode }) {
   return (
-    <dl className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-6 gap-y-3 [&>dd]:m-0 [&>dt]:m-0 [&>dt]:font-medium">
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] [&>dd]:m-0 [&>dt]:m-0 [&>dt]:font-medium">
       {children}
     </dl>
   );

@@ -39,6 +39,48 @@ const tenants = {
   next_cursor: null,
 };
 
+const stamps = { created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z" };
+
+const connector = {
+  id: "33333333-3333-3333-3333-333333333333",
+  key: "http",
+  contract_version: 1,
+  name: "HTTP",
+  direction: "both",
+  status: "active",
+  description: null,
+  ...stamps,
+};
+
+const connection = {
+  id: "44444444-4444-4444-4444-444444444444",
+  tenant_id: tenants.items[0].id,
+  connector_id: connector.id,
+  name: "orders-sink",
+  status: "active",
+  environment: "production",
+  description: "Delivers orders to the ERP",
+  ...stamps,
+};
+
+const summary = {
+  window_start: "2026-09-01T12:00:00Z",
+  window_end: "2026-09-01T13:00:00Z",
+  events_accepted: 128,
+  awaiting_routing: 3,
+  unrouted: 2,
+  dead_lettered_deliveries: 5,
+};
+
+const event = {
+  event_id: "55555555-5555-5555-5555-555555555555",
+  event_type: "order.created",
+  source_event_id: "ord-1001",
+  status: "routed",
+  accepted_at: "2026-09-01T12:45:00Z",
+  deliveries: { pending: 0, in_flight: 0, succeeded: 1, dead_lettered: 1 },
+};
+
 let server: ViteDevServer;
 let browser: Browser;
 let origin: string;
@@ -59,11 +101,19 @@ afterAll(async () => {
   await server?.close();
 });
 
-async function openDashboard(path = "/tenants"): Promise<Page> {
-  const page = await browser.newPage();
+async function openDashboard(path = "/tenants", options: Parameters<Browser["newPage"]>[0] = {}): Promise<Page> {
+  const page = await browser.newPage(options);
   await page.route("**/auth/session", (route) => route.fulfill({ json: session }));
-  await page.route("**/admin/tenants/*", (route) => route.fulfill({ json: tenants.items[0] }));
-  await page.route("**/admin/tenants*", (route) => route.fulfill({ json: tenants }));
+  await page.route("**/admin/**", (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/activity-summary")) return route.fulfill({ json: summary });
+    if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
+    if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
+    if (pathname.endsWith("/admin/tenants")) return route.fulfill({ json: tenants });
+    if (pathname.endsWith("/connections")) return route.fulfill({ json: { items: [connection], next_cursor: null } });
+    if (pathname.endsWith("/events")) return route.fulfill({ json: { items: [event], next_cursor: null } });
+    return route.fulfill({ json: { items: [], next_cursor: null } });
+  });
   await page.goto(`${origin}${path}`);
   await page.getByRole("heading", { level: 1 }).waitFor();
   return page;
@@ -139,18 +189,61 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   }, 60_000);
 
-  // Two screens, because they carry different link shapes: the list has navigation and table
-  // links, the detail has the capability list. Each is a separate target-size rule.
+  // One case per shape of control the dashboard has: navigation and table links, the capability
+  // list, an authoring form, and the Event summary's pressed buttons beside the ledger. Contrast and
+  // target size are measured, so each needs real layout rather than jsdom.
   it.each([
-    ["the list", "/tenants"],
-    ["a detail screen", `/tenants/${tenants.items[0].id}`],
+    ["the list", "/tenants", null],
+    ["a detail screen", `/tenants/${tenants.items[0].id}`, null],
+    ["an authoring screen with its create form open", `/tenants/${tenants.items[0].id}/connections`, "New Connection"],
+    ["the Event ledger and its activity summary", `/tenants/${tenants.items[0].id}/events`, "Find an Event"],
   ])(
     "passes the accessibility rules that need real layout on %s",
-    async (_name, path) => {
+    async (_name, path, disclosure) => {
       const page = await openDashboard(path);
+      // A collapsed panel carries no violations to find; the form inside it does.
+      if (disclosure) await page.click(`text=${disclosure}`);
       expect(await accessibilityViolations(page)).toEqual([]);
       await page.close();
     },
     60_000,
   );
+
+  // 320 CSS pixels is the narrowest width the dashboard supports. A table may scroll inside its own
+  // region there; the document itself may not, because a page that slides sideways hides half of
+  // itself from an Operator who cannot see it happening.
+  it.each([
+    ["the list", "/tenants"],
+    ["a detail screen", `/tenants/${tenants.items[0].id}`],
+    ["an authoring screen", `/tenants/${tenants.items[0].id}/connections`],
+    ["the Event ledger", `/tenants/${tenants.items[0].id}/events`],
+  ])(
+    "has no horizontal document overflow at 320 CSS pixels on %s",
+    async (_name, path) => {
+      const page = await openDashboard(path, { viewport: { width: 320, height: 900 } });
+
+      const document_ = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+
+      expect(document_.scrollWidth).toBeLessThanOrEqual(document_.clientWidth);
+      await page.close();
+    },
+    60_000,
+  );
+
+  it("removes the primitives' motion for an Operator who asked the platform for less of it", async () => {
+    const page = await openDashboard("/tenants", { reducedMotion: "reduce" });
+
+    // Every control the shell and the list render, not a sample: a transition left in place here is
+    // one an Operator asked not to be shown.
+    const durations = await page.$$eval("a[href], button, input, select, textarea, summary, tr", (elements) =>
+      elements.map((element) => getComputedStyle(element).transitionDuration),
+    );
+
+    expect(durations.length).toBeGreaterThan(0);
+    expect(durations.filter((duration) => Number.parseFloat(duration) > 0.001)).toEqual([]);
+    await page.close();
+  }, 60_000);
 });
