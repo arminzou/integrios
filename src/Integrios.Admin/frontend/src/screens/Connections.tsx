@@ -4,19 +4,15 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import type { components } from "../api/schema";
 import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
+import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
@@ -83,17 +79,14 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
   );
 
   return (
-    <div className="flex flex-col gap-8">
-      <header>
-        <h1>Connections</h1>
-        <p className="text-ink-secondary">
-          In{" "}
-          <Link className="underline" to={`/tenants/${tenantId}`}>
-            this Tenant
-          </Link>
-          .
-        </p>
-      </header>
+    <Page>
+      <PageHeader title="Connections">
+        In{" "}
+        <Link className="underline" to={`/tenants/${tenantId}`}>
+          this Tenant
+        </Link>
+        .
+      </PageHeader>
 
       <Disclosure label="New Connection">
         <CreateConnection tenantId={tenantId} onCreated={list.reload} />
@@ -101,19 +94,11 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
 
       <section className="flex flex-col gap-4">
         <h2>All Connections</h2>
-        <div className="flex max-w-56 flex-col gap-2">
-          <Label htmlFor="connection-status">Status</Label>
-          <NativeSelect
-            id="connection-status"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="w-auto"
-          >
-            <option value="">Any status</option>
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
-          </NativeSelect>
-        </div>
+        <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
+          <option value="">Any status</option>
+          <option value="active">Active</option>
+          <option value="disabled">Disabled</option>
+        </Filter>
 
         <ListStatus
           busy={list.busy}
@@ -123,37 +108,34 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
           emptyText="This Tenant has no Connections matching this filter."
         />
         {list.items.length > 0 ? (
-          <Card className="gap-0 overflow-hidden py-0">
-            <Table className="caption-top">
-              <TableCaption className="mt-0 px-4 pt-4 pb-2 text-left">Connections, newest first</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">Name</TableHead>
-                  <TableHead scope="col">Status</TableHead>
-                  <TableHead scope="col">Environment</TableHead>
-                  <TableHead scope="col">Description</TableHead>
+          <TableCard caption="Connections, newest first">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Name</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Environment</TableHead>
+                <TableHead scope="col">Description</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.items.map((connection) => (
+                <TableRow key={connection.id}>
+                  <RowHeader>
+                    <Link className="underline" to={`/tenants/${tenantId}/connections/${connection.id}`}>
+                      {connection.name}
+                    </Link>
+                  </RowHeader>
+                  <TableCell>{connection.status}</TableCell>
+                  <TableCell>{connection.environment ?? "—"}</TableCell>
+                  <TableCell>{connection.description ?? "—"}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.items.map((connection) => (
-                  <TableRow key={connection.id}>
-                    <TableHead scope="row" className="font-normal whitespace-normal">
-                      <Link className="underline" to={`/tenants/${tenantId}/connections/${connection.id}`}>
-                        {connection.name}
-                      </Link>
-                    </TableHead>
-                    <TableCell>{connection.status}</TableCell>
-                    <TableCell>{connection.environment ?? "—"}</TableCell>
-                    <TableCell>{connection.description ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+              ))}
+            </TableBody>
+          </TableCard>
         ) : null}
         <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
       </section>
-    </div>
+    </Page>
   );
 }
 
@@ -198,94 +180,44 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
 
   return (
     <Form {...form}>
-      <form className="flex max-w-2xl flex-col gap-4 rounded-lg border bg-surface p-6" onSubmit={submit}>
-        <h2>Create a Connection</h2>
-        <FormError message={formError(connectors.problem)} />
-        <FormError message={formError(problem, createFields)} />
+      <Panel asChild>
+        <form className="flex flex-col gap-4" onSubmit={submit}>
+          <h2>Create a Connection</h2>
+          <FormError message={formError(connectors.problem)} />
+          <FormError message={formError(problem, createFields)} />
 
-        <FormField
-          control={form.control}
-          name="connector_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Connector</FormLabel>
-              <FormControl>
-                <NativeSelect {...field} disabled={connectorOptionsUnavailable} required>
-                  <option value="">Choose a Connector</option>
-                  {connectors.items.map((connector) => (
-                    <option key={connector.id} value={connector.id}>
-                      {connector.name} (v{connector.contract_version}, {connector.direction})
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormControl>
-              {connectors.truncated ? <FormDescription>Showing the first 100 Connectors.</FormDescription> : null}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <SelectField
+            control={form.control}
+            name="connector_id"
+            label="Connector"
+            hint={connectors.truncated ? "Showing the first 100 Connectors." : undefined}
+            disabled={connectorOptionsUnavailable}
+            required
+          >
+            <option value="">Choose a Connector</option>
+            {connectors.items.map((connector) => (
+              <option key={connector.id} value={connector.id}>
+                {connector.name} (v{connector.contract_version}, {connector.direction})
+              </option>
+            ))}
+          </SelectField>
+          <TextField control={form.control} name="name" label="Name" required />
+          <TextAreaField
+            control={form.control}
+            name="config"
+            label="Configuration (JSON)"
+            hint="The Connector's manifest defines what this document must contain."
+            className="min-h-40 font-mono text-sm"
+            required
+          />
+          <TextField control={form.control} name="environment" label="Environment (optional)" />
+          <TextField control={form.control} name="description" label="Description (optional)" />
 
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input {...field} required />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="config"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Configuration (JSON)</FormLabel>
-              <FormControl>
-                <Textarea {...field} className="min-h-40 font-mono text-sm" required />
-              </FormControl>
-              <FormDescription>The Connector's manifest defines what this document must contain.</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="environment"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Environment (optional)</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description (optional)</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <Button type="submit" className="self-start" disabled={busy || connectorOptionsUnavailable}>
-          Create Connection
-        </Button>
-      </form>
+          <Button type="submit" className="self-start" disabled={busy || connectorOptionsUnavailable}>
+            Create Connection
+          </Button>
+        </form>
+      </Panel>
     </Form>
   );
 }
@@ -312,20 +244,17 @@ export function ConnectionScreen({ tenantId, connectionId }: { tenantId: string;
 
   const current = connection.data;
   return (
-    <div className="flex flex-col gap-8">
-      <header>
-        <h1>{current.name}</h1>
-        <p className="text-ink-secondary">
-          In{" "}
-          <Link className="underline" to={`/tenants/${tenantId}/connections`}>
-            this Tenant's Connections
-          </Link>
-          .
-        </p>
-      </header>
+    <Page>
+      <PageHeader title={current.name}>
+        In{" "}
+        <Link className="underline" to={`/tenants/${tenantId}/connections`}>
+          this Tenant's Connections
+        </Link>
+        .
+      </PageHeader>
 
-      <Card className="max-w-2xl gap-0 px-6 py-5">
-        <dl className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-6 gap-y-3 [&>dd]:m-0 [&>dt]:m-0 [&>dt]:font-medium">
+      <Panel>
+        <Details>
           <dt>Status</dt>
           <dd>{current.status}</dd>
           <dt>Connector</dt>
@@ -340,8 +269,8 @@ export function ConnectionScreen({ tenantId, connectionId }: { tenantId: string;
           <dd>{current.source_verification ? current.source_verification.scheme : "Not configured"}</dd>
           <dt>Destination authentication</dt>
           <dd>{current.destination_authentication ? current.destination_authentication.scheme : "Not configured"}</dd>
-        </dl>
-      </Card>
+        </Details>
+      </Panel>
 
       <section className="flex max-w-2xl flex-col gap-2">
         <h2>Configuration</h2>
@@ -349,7 +278,7 @@ export function ConnectionScreen({ tenantId, connectionId }: { tenantId: string;
       </section>
 
       <EditConnection key={current.updated_at} tenantId={tenantId} connection={current} onSaved={connection.reload} />
-    </div>
+    </Page>
   );
 }
 
@@ -397,70 +326,27 @@ function EditConnection({
   return (
     <div className="flex flex-col gap-6">
       <Form {...form}>
-        <form className="flex max-w-2xl flex-col gap-4 rounded-lg border bg-surface p-6" onSubmit={submit}>
-          <h2>Edit {connection.name}</h2>
-          <FormError message={formError(problem, editFields)} />
+        <Panel asChild>
+          <form className="flex flex-col gap-4" onSubmit={submit}>
+            <h2>Edit {connection.name}</h2>
+            <FormError message={formError(problem, editFields)} />
 
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input {...field} required />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+            <TextField control={form.control} name="name" label="Name" required />
+            <TextAreaField
+              control={form.control}
+              name="config"
+              label="Configuration (JSON)"
+              className="min-h-40 font-mono text-sm"
+              required
+            />
+            <TextField control={form.control} name="environment" label="Environment (optional)" />
+            <TextField control={form.control} name="description" label="Description (optional)" />
 
-          <FormField
-            control={form.control}
-            name="config"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Configuration (JSON)</FormLabel>
-                <FormControl>
-                  <Textarea {...field} className="min-h-56 font-mono text-sm" required />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="environment"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Environment (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <Button type="submit" className="self-start" disabled={busy}>
-            Save changes
-          </Button>
-        </form>
+            <Button type="submit" className="self-start" disabled={busy}>
+              Save changes
+            </Button>
+          </form>
+        </Panel>
       </Form>
 
       {connection.status === "active" ? (

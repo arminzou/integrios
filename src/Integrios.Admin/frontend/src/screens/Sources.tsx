@@ -1,10 +1,18 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
-import { fieldError, formError } from "../api/problem";
+import { formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
+import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
+import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
@@ -21,6 +29,28 @@ const sourceTypes = [
   { value: "queue", label: "Queue" },
 ];
 
+const createFields = ["connection_id", "topic_id", "type", "configuration"] as const;
+const editFields = ["configuration"] as const;
+
+/// A domain JSON document, authored as text: well-formedness is all the dashboard checks, and the
+/// server stays the authority on whether the document is valid for this Source type.
+const jsonDocument = z.string().superRefine((text, ctx) => {
+  const parsed = parseJson(text);
+  if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+});
+
+const createSchema = z.object({
+  connection_id: z.string().min(1, "Choose a Connection."),
+  topic_id: z.string().min(1, "Choose a Topic."),
+  type: z.string().min(1, "Choose a type."),
+  configuration: jsonDocument,
+});
+
+const editSchema = z.object({ configuration: jsonDocument });
+
+type CreateValues = z.infer<typeof createSchema>;
+type EditValues = z.infer<typeof editSchema>;
+
 export function SourcesScreen({ tenantId }: { tenantId: string }) {
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
@@ -36,73 +66,77 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
   );
 
   return (
-    <>
-      <h1>Sources</h1>
-      <p>
-        In <Link to={`/tenants/${tenantId}`}>this Tenant</Link>.
-      </p>
+    <Page>
+      <PageHeader title="Sources">
+        In{" "}
+        <Link className="underline" to={`/tenants/${tenantId}`}>
+          this Tenant
+        </Link>
+        .
+      </PageHeader>
 
       <Disclosure label="New Source">
         <CreateSource tenantId={tenantId} onCreated={list.reload} />
       </Disclosure>
 
-      <h2>All Sources</h2>
-      <Field id="source-status" label="Status">
-        <select {...fieldProps("source-status")} value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">Any status</option>
-          <option value="active">Active</option>
-          <option value="revoked">Revoked</option>
-        </select>
-      </Field>
-      <Field id="source-type" label="Type">
-        <select {...fieldProps("source-type")} value={type} onChange={(event) => setType(event.target.value)}>
-          <option value="">Any type</option>
-          {sourceTypes.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <ListStatus
-        busy={list.busy}
-        loaded={list.loaded}
-        problem={list.problem}
-        empty={list.items.length === 0}
-        emptyText="This Tenant has no Sources matching these filters."
-      />
-      {list.items.length > 0 ? (
-        <div className="table-card">
-          <table>
-            <caption>Sources, newest first</caption>
-            <thead>
-              <tr>
-                <th scope="col">Source</th>
-                <th scope="col">Type</th>
-                <th scope="col">Status</th>
-                <th scope="col">Topic</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.items.map((source) => (
-                <tr key={source.id}>
-                  <th scope="row">
-                    <Link to={`/tenants/${tenantId}/sources/${source.id}`}>{source.id}</Link>
-                  </th>
-                  <td>{source.type}</td>
-                  <td>{source.status}</td>
-                  <td>
-                    <Link to={`/tenants/${tenantId}/topics/${source.topic_id}`}>{source.topic_id}</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="flex flex-col gap-4">
+        <h2>All Sources</h2>
+        <div className="flex flex-wrap gap-4">
+          <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="revoked">Revoked</option>
+          </Filter>
+          <Filter id="source-type" label="Type" value={type} onChange={setType}>
+            <option value="">Any type</option>
+            {sourceTypes.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Filter>
         </div>
-      ) : null}
-      <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
-    </>
+
+        <ListStatus
+          busy={list.busy}
+          loaded={list.loaded}
+          problem={list.problem}
+          empty={list.items.length === 0}
+          emptyText="This Tenant has no Sources matching these filters."
+        />
+        {list.items.length > 0 ? (
+          <TableCard caption="Sources, newest first">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Source</TableHead>
+                <TableHead scope="col">Type</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Topic</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.items.map((source) => (
+                <TableRow key={source.id}>
+                  <RowHeader>
+                    <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/sources/${source.id}`}>
+                      {source.id}
+                    </Link>
+                  </RowHeader>
+                  <TableCell>{source.type}</TableCell>
+                  <TableCell>{source.status}</TableCell>
+                  <TableCell>
+                    <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
+                      {source.topic_id}
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </TableCard>
+        ) : null}
+        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+      </section>
+    </Page>
   );
 }
 
@@ -122,112 +156,93 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
       }),
     `topic-options|${tenantId}`,
   );
-
-  const [connectionId, setConnectionId] = useState("");
-  const [topicId, setTopicId] = useState("");
-  const [type, setType] = useState("webhook");
-  const [configuration, setConfiguration] = useState("{}");
-  const [configurationError, setConfigurationError] = useState<string | undefined>(undefined);
   const { busy, problem, run } = useAction();
   const optionsUnavailable = connections.busy || topics.busy || connections.problem !== null || topics.problem !== null;
 
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        const parsed = parseJson(configuration);
-        setConfigurationError(parsed.error);
-        if (parsed.error !== undefined) return;
+  const form = useForm<CreateValues>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { connection_id: "", topic_id: "", type: "webhook", configuration: "{}" },
+  });
 
-        void run(
-          () =>
-            api.POST("/admin/tenants/{tenantId}/sources", {
-              params: { path: { tenantId } },
-              body: { connection_id: connectionId, topic_id: topicId, type, configuration: parsed.value },
-            }),
-          (created) => {
-            onCreated();
-            if (created) navigate(`/tenants/${tenantId}/sources/${created.id}`);
+  const submit = form.handleSubmit(async (values) => {
+    const failure = await run(
+      () =>
+        api.POST("/admin/tenants/{tenantId}/sources", {
+          params: { path: { tenantId } },
+          body: {
+            connection_id: values.connection_id,
+            topic_id: values.topic_id,
+            type: values.type,
+            configuration: parseJson(values.configuration).value,
           },
-        );
-      }}
-    >
-      <h2>Create a Source</h2>
-      <FormError message={formError(connections.problem ?? topics.problem)} />
-      <FormError message={formError(problem, ["connection_id", "topic_id", "type", "configuration"])} />
-      <Field
-        id="create-source-connection"
-        label="Connection"
-        error={fieldError(problem, "connection_id")}
-        hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
-      >
-        <select
-          {...fieldProps("create-source-connection", fieldError(problem, "connection_id"), connections.truncated)}
-          value={connectionId}
-          onChange={(event) => setConnectionId(event.target.value)}
-          disabled={connections.busy || connections.problem !== null}
-          required
-        >
-          <option value="">Choose a Connection</option>
-          {connections.items.map((connection) => (
-            <option key={connection.id} value={connection.id}>
-              {connection.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field
-        id="create-source-topic"
-        label="Topic"
-        error={fieldError(problem, "topic_id")}
-        hint={topics.truncated ? "Showing the first 100 active Topics." : undefined}
-      >
-        <select
-          {...fieldProps("create-source-topic", fieldError(problem, "topic_id"), topics.truncated)}
-          value={topicId}
-          onChange={(event) => setTopicId(event.target.value)}
-          disabled={topics.busy || topics.problem !== null}
-          required
-        >
-          <option value="">Choose a Topic</option>
-          {topics.items.map((topic) => (
-            <option key={topic.id} value={topic.id}>
-              {topic.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field id="create-source-type" label="Type" error={fieldError(problem, "type")}>
-        <select
-          {...fieldProps("create-source-type", fieldError(problem, "type"))}
-          value={type}
-          onChange={(event) => setType(event.target.value)}
-          required
-        >
-          {sourceTypes.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field
-        id="create-source-configuration"
-        label="Configuration (JSON)"
-        error={configurationError ?? fieldError(problem, "configuration")}
-      >
-        <textarea
-          {...fieldProps("create-source-configuration", configurationError ?? fieldError(problem, "configuration"))}
-          rows={8}
-          value={configuration}
-          onChange={(event) => setConfiguration(event.target.value)}
-          required
-        />
-      </Field>
-      <button type="submit" disabled={busy || optionsUnavailable}>
-        Create Source
-      </button>
-    </form>
+        }),
+      (created) => {
+        onCreated();
+        if (created) navigate(`/tenants/${tenantId}/sources/${created.id}`);
+      },
+    );
+    if (failure) applyProblem(form, failure, createFields);
+  });
+
+  return (
+    <Form {...form}>
+      <Panel asChild>
+        <form className="flex flex-col gap-4" onSubmit={submit}>
+          <h2>Create a Source</h2>
+          <FormError message={formError(connections.problem ?? topics.problem)} />
+          <FormError message={formError(problem, createFields)} />
+
+          <SelectField
+            control={form.control}
+            name="connection_id"
+            label="Connection"
+            hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
+            disabled={connections.busy || connections.problem !== null}
+            required
+          >
+            <option value="">Choose a Connection</option>
+            {connections.items.map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connection.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            control={form.control}
+            name="topic_id"
+            label="Topic"
+            hint={topics.truncated ? "Showing the first 100 active Topics." : undefined}
+            disabled={topics.busy || topics.problem !== null}
+            required
+          >
+            <option value="">Choose a Topic</option>
+            {topics.items.map((topic) => (
+              <option key={topic.id} value={topic.id}>
+                {topic.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField control={form.control} name="type" label="Type" required>
+            {sourceTypes.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </SelectField>
+          <TextAreaField
+            control={form.control}
+            name="configuration"
+            label="Configuration (JSON)"
+            className="min-h-40 font-mono text-sm"
+            required
+          />
+
+          <Button type="submit" className="self-start" disabled={busy || optionsUnavailable}>
+            Create Source
+          </Button>
+        </form>
+      </Panel>
+    </Form>
   );
 }
 
@@ -248,78 +263,89 @@ export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceI
 
   const current = source.data;
   return (
-    <>
-      <h1>Source {current.id}</h1>
-      <p>
-        In <Link to={`/tenants/${tenantId}/sources`}>this Tenant's Sources</Link>.
-      </p>
-      <dl>
-        <dt>Type</dt>
-        <dd>{current.type}</dd>
-        <dt>Status</dt>
-        <dd>{current.status}</dd>
-        <dt>Connection</dt>
-        <dd>
-          <Link to={`/tenants/${tenantId}/connections/${current.connection_id}`}>{current.connection_id}</Link>
-        </dd>
-        <dt>Topic</dt>
-        <dd>
-          <Link to={`/tenants/${tenantId}/topics/${current.topic_id}`}>{current.topic_id}</Link>
-        </dd>
-        <dt>Revoked</dt>
-        <dd>{current.revoked_at ?? "Not revoked"}</dd>
-      </dl>
+    <Page>
+      <PageHeader title={`Source ${current.id}`}>
+        In{" "}
+        <Link className="underline" to={`/tenants/${tenantId}/sources`}>
+          this Tenant's Sources
+        </Link>
+        .
+      </PageHeader>
+
+      <Panel>
+        <Details>
+          <dt>Type</dt>
+          <dd>{current.type}</dd>
+          <dt>Status</dt>
+          <dd>{current.status}</dd>
+          <dt>Connection</dt>
+          <dd>
+            <Link
+              className="font-mono text-sm underline"
+              to={`/tenants/${tenantId}/connections/${current.connection_id}`}
+            >
+              {current.connection_id}
+            </Link>
+          </dd>
+          <dt>Topic</dt>
+          <dd>
+            <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/topics/${current.topic_id}`}>
+              {current.topic_id}
+            </Link>
+          </dd>
+          <dt>Revoked</dt>
+          <dd>{current.revoked_at ?? "Not revoked"}</dd>
+        </Details>
+      </Panel>
 
       <EditSource key={current.updated_at} tenantId={tenantId} source={current} onSaved={source.reload} />
-    </>
+    </Page>
   );
 }
 
 /// The Admin API owns exactly one Source update — its configuration. Type, Connection, and Topic are
 /// fixed at creation, so they are shown rather than offered as editable fields.
 function EditSource({ tenantId, source, onSaved }: { tenantId: string; source: Source; onSaved: () => void }) {
-  const [configuration, setConfiguration] = useState(() => formatJson(source.configuration));
-  const [configurationError, setConfigurationError] = useState<string | undefined>(undefined);
   const { busy, problem, run } = useAction();
+  const form = useForm<EditValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues: { configuration: formatJson(source.configuration) },
+  });
+
+  const submit = form.handleSubmit(async (values) => {
+    const failure = await run(
+      () =>
+        api.PATCH("/admin/tenants/{tenantId}/sources/{id}", {
+          params: { path: { tenantId, id: source.id } },
+          body: { configuration: parseJson(values.configuration).value },
+        }),
+      onSaved,
+    );
+    if (failure) applyProblem(form, failure, editFields);
+  });
 
   return (
-    <>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          const parsed = parseJson(configuration);
-          setConfigurationError(parsed.error);
-          if (parsed.error !== undefined) return;
+    <div className="flex flex-col gap-6">
+      <Form {...form}>
+        <Panel asChild>
+          <form className="flex flex-col gap-4" onSubmit={submit}>
+            <h2>Edit configuration</h2>
+            <FormError message={formError(problem, editFields)} />
 
-          void run(
-            () =>
-              api.PATCH("/admin/tenants/{tenantId}/sources/{id}", {
-                params: { path: { tenantId, id: source.id } },
-                body: { configuration: parsed.value },
-              }),
-            onSaved,
-          );
-        }}
-      >
-        <h2>Edit configuration</h2>
-        <FormError message={formError(problem, ["configuration"])} />
-        <Field
-          id="source-configuration"
-          label="Configuration (JSON)"
-          error={configurationError ?? fieldError(problem, "configuration")}
-        >
-          <textarea
-            {...fieldProps("source-configuration", configurationError ?? fieldError(problem, "configuration"))}
-            rows={12}
-            value={configuration}
-            onChange={(event) => setConfiguration(event.target.value)}
-            required
-          />
-        </Field>
-        <button type="submit" disabled={busy}>
-          Save configuration
-        </button>
-      </form>
+            <TextAreaField
+              control={form.control}
+              name="configuration"
+              label="Configuration (JSON)"
+              className="min-h-56 font-mono text-sm"
+              required
+            />
+
+            <Button type="submit" className="self-start" disabled={busy}>
+              Save configuration
+            </Button>
+          </form>
+        </Panel>
+      </Form>
 
       {source.status === "active" ? (
         <ConfirmAction
@@ -338,6 +364,6 @@ function EditSource({ tenantId, source, onSaved }: { tenantId: string; source: S
           }
         />
       ) : null}
-    </>
+    </div>
   );
 }

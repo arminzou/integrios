@@ -1,10 +1,18 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
-import { fieldError, formError } from "../api/problem";
+import { formError } from "../api/problem";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, Field, FormError, fieldProps, ListStatus, LoadMore } from "../ui/controls";
+import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
+import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
+import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { useAction } from "../ui/useAction";
 import { useCursorList } from "../ui/useCursorList";
 import { useOptions } from "../ui/useOptions";
@@ -24,11 +32,50 @@ const writeFields = [
   "http_delivery",
   "order_index",
   "description",
-];
+] as const;
+
+/// The rows the form itself renders. `http_delivery` is not one of them: the server names the whole
+/// delivery configuration, which is spread across four controls here, so its message stays at form
+/// level rather than being attached to an arbitrary one of them.
+const formFields = [
+  "name",
+  "destination_connection_id",
+  "order_index",
+  "match_rules",
+  "mapping",
+  "description",
+] as const;
 
 /// The version the dashboard authors. The server owns the meaning of each version, so an existing
 /// Subscription keeps whatever version it already carries rather than being silently upgraded.
 const currentHttpDeliveryVersion = 1;
+
+const jsonDocument = z.string().superRefine((text, ctx) => {
+  const parsed = parseJson(text);
+  if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+});
+
+/// An empty mapping is a real choice: it means the Event is delivered unmapped.
+const optionalJsonDocument = z.string().superRefine((text, ctx) => {
+  if (text.trim() === "") return;
+  const parsed = parseJson(text);
+  if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+});
+
+const subscriptionSchema = z.object({
+  name: z.string().trim().min(1, "Enter a name."),
+  destination_connection_id: z.string().min(1, "Choose a Connection."),
+  order_index: z.string().regex(/^-?\d+$/, "Enter a whole number."),
+  match_rules: jsonDocument,
+  mapping: optionalJsonDocument,
+  method: z.string().min(1),
+  path: z.string(),
+  body: z.string().min(1, "Enter a body format."),
+  headers: jsonDocument,
+  description: z.string(),
+});
+
+type SubscriptionValues = z.infer<typeof subscriptionSchema>;
 
 export function SubscriptionsSection({
   tenantId,
@@ -53,7 +100,7 @@ export function SubscriptionsSection({
   );
 
   return (
-    <>
+    <section className="flex flex-col gap-6">
       <h2>Subscriptions on {topicName}</h2>
       <Disclosure label="New Subscription">
         <SubscriptionForm
@@ -66,59 +113,55 @@ export function SubscriptionsSection({
         />
       </Disclosure>
 
-      <h3>All Subscriptions</h3>
-      <Field id="subscription-status" label="Status">
-        <select
-          {...fieldProps("subscription-status")}
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-        >
+      <div className="flex flex-col gap-4">
+        <h3>All Subscriptions</h3>
+        <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
           <option value="">Any status</option>
           <option value="active">Active</option>
           <option value="disabled">Disabled</option>
-        </select>
-      </Field>
+        </Filter>
 
-      <ListStatus
-        busy={list.busy}
-        loaded={list.loaded}
-        problem={list.problem}
-        empty={list.items.length === 0}
-        emptyText={`${topicName} has no Subscriptions matching this filter.`}
-      />
-      {list.items.length > 0 ? (
-        <div className="table-card">
-          <table>
-            <caption>Subscriptions on {topicName}, newest first</caption>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Status</th>
-                <th scope="col">Order</th>
-                <th scope="col">Description</th>
-              </tr>
-            </thead>
-            <tbody>
+        <ListStatus
+          busy={list.busy}
+          loaded={list.loaded}
+          problem={list.problem}
+          empty={list.items.length === 0}
+          emptyText={`${topicName} has no Subscriptions matching this filter.`}
+        />
+        {list.items.length > 0 ? (
+          <TableCard caption={`Subscriptions on ${topicName}, newest first`}>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Name</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Order</TableHead>
+                <TableHead scope="col">Description</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {list.items.map((subscription) => (
-                <tr key={subscription.id}>
-                  <th scope="row">
-                    <Link to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}>
+                <TableRow key={subscription.id}>
+                  <RowHeader>
+                    <Link
+                      className="underline"
+                      to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}
+                    >
                       {subscription.name}
                     </Link>
-                  </th>
-                  <td>{subscription.status}</td>
-                  <td>{subscription.order_index}</td>
-                  <td>{subscription.description ?? "—"}</td>
-                </tr>
+                  </RowHeader>
+                  <TableCell>{subscription.status}</TableCell>
+                  <TableCell>{subscription.order_index}</TableCell>
+                  <TableCell>{subscription.description ?? "—"}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-      <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+            </TableBody>
+          </TableCard>
+        ) : null}
+        <LoadMore cursor={list.cursor} busy={list.busy} onLoadMore={list.loadMore} />
+      </div>
 
       <TransformPreview />
-    </>
+    </section>
   );
 }
 
@@ -153,23 +196,32 @@ export function SubscriptionScreen({
 
   const current = subscription.data;
   return (
-    <>
-      <h1>{current.name}</h1>
-      <p>
-        On <Link to={`/tenants/${tenantId}/topics/${topicId}`}>its Topic</Link>.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd>{current.status}</dd>
-        <dt>Order</dt>
-        <dd>{current.order_index}</dd>
-        <dt>Destination Connection</dt>
-        <dd>
-          <Link to={`/tenants/${tenantId}/connections/${current.destination_connection_id}`}>
-            {current.destination_connection_id}
-          </Link>
-        </dd>
-      </dl>
+    <Page>
+      <PageHeader title={current.name}>
+        On{" "}
+        <Link className="underline" to={`/tenants/${tenantId}/topics/${topicId}`}>
+          its Topic
+        </Link>
+        .
+      </PageHeader>
+
+      <Panel>
+        <Details>
+          <dt>Status</dt>
+          <dd>{current.status}</dd>
+          <dt>Order</dt>
+          <dd>{current.order_index}</dd>
+          <dt>Destination Connection</dt>
+          <dd>
+            <Link
+              className="font-mono text-sm underline"
+              to={`/tenants/${tenantId}/connections/${current.destination_connection_id}`}
+            >
+              {current.destination_connection_id}
+            </Link>
+          </dd>
+        </Details>
+      </Panel>
 
       <SubscriptionForm
         key={current.updated_at}
@@ -181,25 +233,27 @@ export function SubscriptionScreen({
 
       <TransformPreview />
 
-      <FormError message={formError(problem)} />
-      {current.status === "active" ? (
-        <ConfirmAction
-          label="Deactivate Subscription"
-          question={`Deactivate the Subscription "${current.name}"? It stops receiving Events from this Topic.`}
-          confirmLabel={`Deactivate ${current.name}`}
-          busy={busy}
-          onConfirm={() =>
-            void run(
-              () =>
-                api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/deactivate", {
-                  params: { path: { tenantId, topicId, id: current.id } },
-                }),
-              subscription.reload,
-            )
-          }
-        />
-      ) : null}
-    </>
+      <div className="flex flex-col gap-3">
+        <FormError message={formError(problem)} />
+        {current.status === "active" ? (
+          <ConfirmAction
+            label="Deactivate Subscription"
+            question={`Deactivate the Subscription "${current.name}"? It stops receiving Events from this Topic.`}
+            confirmLabel={`Deactivate ${current.name}`}
+            busy={busy}
+            onConfirm={() =>
+              void run(
+                () =>
+                  api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/deactivate", {
+                    params: { path: { tenantId, topicId, id: current.id } },
+                  }),
+                subscription.reload,
+              )
+            }
+          />
+        ) : null}
+      </div>
+    </Page>
   );
 }
 
@@ -223,198 +277,134 @@ function SubscriptionForm({
       }),
     `connection-options|${tenantId}`,
   );
-
-  const prefix = subscription ? "subscription" : "create-subscription";
-  const [name, setName] = useState(subscription?.name ?? "");
-  const [destination, setDestination] = useState(subscription?.destination_connection_id ?? "");
-  const [orderIndex, setOrderIndex] = useState(String(subscription?.order_index ?? 0));
-  const [description, setDescription] = useState(subscription?.description ?? "");
-  const [matchRules, setMatchRules] = useState(() => formatJson(subscription?.match_rules) || "{}");
-  const [matchRulesError, setMatchRulesError] = useState<string | undefined>(undefined);
-  const [mapping, setMapping] = useState(() => formatJson(subscription?.mapping_config));
-  const [mappingError, setMappingError] = useState<string | undefined>(undefined);
-  const [method, setMethod] = useState(subscription?.http_delivery.method ?? "POST");
-  const [path, setPath] = useState(subscription?.http_delivery.path ?? "");
-  const [body, setBody] = useState(subscription?.http_delivery.body ?? "json");
-  const [headers, setHeaders] = useState(() => formatJson(subscription?.http_delivery.headers) || "{}");
-  const [headersError, setHeadersError] = useState<string | undefined>(undefined);
   const { busy, problem, run } = useAction();
   const connectionOptionsUnavailable = connections.busy || connections.problem !== null;
 
+  const form = useForm<SubscriptionValues>({
+    resolver: zodResolver(subscriptionSchema),
+    defaultValues: {
+      name: subscription?.name ?? "",
+      destination_connection_id: subscription?.destination_connection_id ?? "",
+      order_index: String(subscription?.order_index ?? 0),
+      match_rules: formatJson(subscription?.match_rules) || "{}",
+      mapping: formatJson(subscription?.mapping_config),
+      method: subscription?.http_delivery.method ?? "POST",
+      path: subscription?.http_delivery.path ?? "",
+      body: subscription?.http_delivery.body ?? "json",
+      headers: formatJson(subscription?.http_delivery.headers) || "{}",
+      description: subscription?.description ?? "",
+    },
+  });
+
+  const submit = form.handleSubmit(async (values) => {
+    const httpDelivery: HttpDelivery = {
+      version: subscription?.http_delivery.version ?? currentHttpDeliveryVersion,
+      method: values.method,
+      path: values.path || null,
+      headers: parseJson(values.headers).value as Record<string, string>,
+      body: values.body,
+    };
+    const requestBody = {
+      name: values.name,
+      match_rules: parseJson(values.match_rules).value,
+      destination_connection_id: values.destination_connection_id,
+      mapping: values.mapping.trim() === "" ? null : parseJson(values.mapping).value,
+      http_delivery: httpDelivery,
+      order_index: Number(values.order_index),
+      description: values.description.trim() || null,
+    };
+
+    const failure = await run(
+      () =>
+        subscription
+          ? api.PATCH("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
+              params: { path: { tenantId, topicId, id: subscription.id } },
+              body: requestBody,
+            })
+          : api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
+              params: { path: { tenantId, topicId } },
+              body: requestBody,
+            }),
+      onSaved,
+    );
+    if (failure) applyProblem(form, failure, formFields);
+  });
+
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
+    <Form {...form}>
+      <Panel asChild>
+        <form className="flex flex-col gap-4" onSubmit={submit}>
+          <h3>{subscription ? `Edit ${subscription.name}` : "Create a Subscription"}</h3>
+          <FormError message={formError(connections.problem)} />
+          <FormError message={formError(problem, writeFields)} />
 
-        const parsedRules = parseJson(matchRules);
-        setMatchRulesError(parsedRules.error);
-        const parsedHeaders = parseJson(headers);
-        setHeadersError(parsedHeaders.error);
-        // An empty mapping is a real choice: it means the Event is delivered unmapped.
-        const parsedMapping = mapping.trim() === "" ? { value: null } : parseJson(mapping);
-        setMappingError(parsedMapping.error);
-        if (parsedRules.error !== undefined || parsedHeaders.error !== undefined || parsedMapping.error !== undefined)
-          return;
-
-        const httpDelivery: HttpDelivery = {
-          version: subscription?.http_delivery.version ?? currentHttpDeliveryVersion,
-          method,
-          path: path || null,
-          headers: parsedHeaders.value as Record<string, string>,
-          body,
-        };
-        const requestBody = {
-          name,
-          match_rules: parsedRules.value,
-          destination_connection_id: destination,
-          mapping: parsedMapping.value,
-          http_delivery: httpDelivery,
-          order_index: Number(orderIndex),
-          description: description || null,
-        };
-
-        void run(
-          () =>
-            subscription
-              ? api.PATCH("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
-                  params: { path: { tenantId, topicId, id: subscription.id } },
-                  body: requestBody,
-                })
-              : api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
-                  params: { path: { tenantId, topicId } },
-                  body: requestBody,
-                }),
-          onSaved,
-        );
-      }}
-    >
-      <h3>{subscription ? `Edit ${subscription.name}` : "Create a Subscription"}</h3>
-      <FormError message={formError(connections.problem)} />
-      <FormError message={formError(problem, writeFields)} />
-
-      <Field id={`${prefix}-name`} label="Name" error={fieldError(problem, "name")}>
-        <input
-          {...fieldProps(`${prefix}-name`, fieldError(problem, "name"))}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          required
-        />
-      </Field>
-      <Field
-        id={`${prefix}-destination`}
-        label="Destination Connection"
-        error={fieldError(problem, "destination_connection_id")}
-        hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
-      >
-        <select
-          {...fieldProps(
-            `${prefix}-destination`,
-            fieldError(problem, "destination_connection_id"),
-            connections.truncated,
-          )}
-          value={destination}
-          onChange={(event) => setDestination(event.target.value)}
-          disabled={connectionOptionsUnavailable}
-          required
-        >
-          <option value="">Choose a Connection</option>
-          {connections.items.map((connection) => (
-            <option key={connection.id} value={connection.id}>
-              {connection.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field
-        id={`${prefix}-order`}
-        label="Order"
-        error={fieldError(problem, "order_index")}
-        hint="Lower numbers are delivered first."
-      >
-        <input
-          {...fieldProps(`${prefix}-order`, fieldError(problem, "order_index"), true)}
-          type="number"
-          step={1}
-          value={orderIndex}
-          onChange={(event) => setOrderIndex(event.target.value)}
-          required
-        />
-      </Field>
-      <Field
-        id={`${prefix}-match-rules`}
-        label="Match rules (JSON)"
-        error={matchRulesError ?? fieldError(problem, "match_rules")}
-      >
-        <textarea
-          {...fieldProps(`${prefix}-match-rules`, matchRulesError ?? fieldError(problem, "match_rules"))}
-          rows={6}
-          value={matchRules}
-          onChange={(event) => setMatchRules(event.target.value)}
-          required
-        />
-      </Field>
-      <Field
-        id={`${prefix}-mapping`}
-        label="Mapping (JSON, optional)"
-        error={mappingError ?? fieldError(problem, "mapping")}
-        hint="Leave empty to deliver the Event unmapped."
-      >
-        <textarea
-          {...fieldProps(`${prefix}-mapping`, mappingError ?? fieldError(problem, "mapping"), true)}
-          rows={6}
-          value={mapping}
-          onChange={(event) => setMapping(event.target.value)}
-        />
-      </Field>
-
-      <fieldset>
-        <legend>HTTP delivery</legend>
-        <Field id={`${prefix}-method`} label="Method">
-          <select
-            {...fieldProps(`${prefix}-method`)}
-            value={method}
-            onChange={(event) => setMethod(event.target.value)}
+          <TextField control={form.control} name="name" label="Name" required />
+          <SelectField
+            control={form.control}
+            name="destination_connection_id"
+            label="Destination Connection"
+            hint={connections.truncated ? "Showing the first 100 active Connections." : undefined}
+            disabled={connectionOptionsUnavailable}
             required
           >
-            {["POST", "PUT", "PATCH", "DELETE", "GET"].map((verb) => (
-              <option key={verb} value={verb}>
-                {verb}
+            <option value="">Choose a Connection</option>
+            {connections.items.map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connection.name}
               </option>
             ))}
-          </select>
-        </Field>
-        <Field id={`${prefix}-path`} label="Path (optional)">
-          <input {...fieldProps(`${prefix}-path`)} value={path} onChange={(event) => setPath(event.target.value)} />
-        </Field>
-        <Field id={`${prefix}-body`} label="Body">
-          <input
-            {...fieldProps(`${prefix}-body`)}
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
+          </SelectField>
+          <TextField
+            control={form.control}
+            name="order_index"
+            label="Order"
+            hint="Lower numbers are delivered first."
+            type="number"
+            step={1}
             required
           />
-        </Field>
-        <Field id={`${prefix}-headers`} label="Headers (JSON object)" error={headersError}>
-          <textarea
-            {...fieldProps(`${prefix}-headers`, headersError)}
-            rows={4}
-            value={headers}
-            onChange={(event) => setHeaders(event.target.value)}
+          <TextAreaField
+            control={form.control}
+            name="match_rules"
+            label="Match rules (JSON)"
+            className="min-h-32 font-mono text-sm"
             required
           />
-        </Field>
-      </fieldset>
+          <TextAreaField
+            control={form.control}
+            name="mapping"
+            label="Mapping (JSON, optional)"
+            hint="Leave empty to deliver the Event unmapped."
+            className="min-h-32 font-mono text-sm"
+          />
 
-      <Field id={`${prefix}-description`} label="Description (optional)" error={fieldError(problem, "description")}>
-        <input
-          {...fieldProps(`${prefix}-description`, fieldError(problem, "description"))}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </Field>
-      <button type="submit" disabled={busy || connectionOptionsUnavailable}>
-        {subscription ? "Save changes" : "Create Subscription"}
-      </button>
-    </form>
+          <fieldset className="flex flex-col gap-4 rounded-md border p-4">
+            <legend className="px-1 text-sm font-medium">HTTP delivery</legend>
+            <SelectField control={form.control} name="method" label="Method" required>
+              {["POST", "PUT", "PATCH", "DELETE", "GET"].map((verb) => (
+                <option key={verb} value={verb}>
+                  {verb}
+                </option>
+              ))}
+            </SelectField>
+            <TextField control={form.control} name="path" label="Path (optional)" />
+            <TextField control={form.control} name="body" label="Body" required />
+            <TextAreaField
+              control={form.control}
+              name="headers"
+              label="Headers (JSON object)"
+              className="min-h-24 font-mono text-sm"
+              required
+            />
+          </fieldset>
+
+          <TextField control={form.control} name="description" label="Description (optional)" />
+
+          <Button type="submit" className="self-start" disabled={busy || connectionOptionsUnavailable}>
+            {subscription ? "Save changes" : "Create Subscription"}
+          </Button>
+        </form>
+      </Panel>
+    </Form>
   );
 }

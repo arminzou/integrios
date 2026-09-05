@@ -149,6 +149,13 @@ async function open(path: string): Promise<{ page: Page; writes: Request[] }> {
   return { page: browserPage, writes };
 }
 
+/// A screen can carry more than one form — a Topic page holds the Topic's own fields and the create
+/// panel for its Subscriptions — and both use the same field names. Controls are therefore addressed
+/// by label within the form that owns them, which is also what asserts the label association.
+function formNamed(view: Page, heading: string) {
+  return view.locator("form").filter({ hasText: heading });
+}
+
 async function submitted(
   writes: Request[],
 ): Promise<{ method: string; pathname: string; body: Record<string, unknown> }> {
@@ -168,11 +175,10 @@ describe("Create forms, filled through a real browser", () => {
     // The create form sits behind a "New Connection" disclosure so it does not permanently
     // dominate the list above it.
     await view.click("text=New Connection");
-    // Addressed by label rather than by id: the form's controls take the id their label points at
-    // from the form primitive, so the label association is the stable handle and is worth asserting.
-    await view.getByLabel("Connector").selectOption(connectorId);
-    await view.getByLabel("Name").fill("sink");
-    await view.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://sink.invalid"}');
+    const form = formNamed(view, "Create a Connection");
+    await form.getByLabel("Connector").selectOption(connectorId);
+    await form.getByLabel("Name").fill("sink");
+    await form.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://sink.invalid"}');
     await view.click("text=Create Connection");
     await view.waitForFunction(() => true);
 
@@ -193,7 +199,7 @@ describe("Create forms, filled through a real browser", () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics`);
 
     await view.click("text=New Topic");
-    await view.fill("#create-topic-name", "orders");
+    await formNamed(view, "Create a Topic").getByLabel("Name").fill("orders");
     await view.click("text=Create Topic");
 
     const sent = await submitted(writes);
@@ -208,10 +214,11 @@ describe("Create forms, filled through a real browser", () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}`);
 
     await view.click("text=New Subscription");
-    await view.fill("#create-subscription-name", "to-sink");
-    await view.selectOption("#create-subscription-destination", connectionId);
-    await view.fill("#create-subscription-order", "3");
-    await view.fill("#create-subscription-match-rules", '{"all":[]}');
+    const form = formNamed(view, "Create a Subscription");
+    await form.getByLabel("Name").fill("to-sink");
+    await form.getByLabel("Destination Connection").selectOption(connectionId);
+    await form.getByLabel("Order").fill("3");
+    await form.getByLabel("Match rules (JSON)").fill('{"all":[]}');
     await view.click("text=Create Subscription");
 
     const sent = await submitted(writes);
@@ -230,10 +237,11 @@ describe("Create forms, filled through a real browser", () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
 
     await view.click("text=New Source");
-    await view.selectOption("#create-source-connection", connectionId);
-    await view.selectOption("#create-source-topic", topicId);
-    await view.selectOption("#create-source-type", "webhook");
-    await view.fill("#create-source-configuration", '{"path":"/hook"}');
+    const form = formNamed(view, "Create a Source");
+    await form.getByLabel("Connection").selectOption(connectionId);
+    await form.getByLabel("Topic").selectOption(topicId);
+    await form.getByLabel("Type").selectOption("webhook");
+    await form.getByLabel("Configuration (JSON)").fill('{"path":"/hook"}');
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -256,7 +264,7 @@ describe("Update and deactivate, driven through a real browser", () => {
   it("sends an updated Connection with its config reparsed and its schemes untouched", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/connections/${connectionId}`);
 
-    await view.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://moved.invalid"}');
+    await formNamed(view, "Edit sink").getByLabel("Configuration (JSON)").fill('{"base_uri":"http://moved.invalid"}');
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);
@@ -272,7 +280,7 @@ describe("Update and deactivate, driven through a real browser", () => {
   it("sends an updated Subscription with a numeric order and a mapping that stays null", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`);
 
-    await view.fill("#subscription-order", "7");
+    await formNamed(view, "Edit to-sink").getByLabel("Order").fill("7");
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);

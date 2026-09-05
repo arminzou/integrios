@@ -114,11 +114,16 @@ describe("The dashboard in a real browser", () => {
       const stop = await page.evaluate(() => {
         const active = document.activeElement as HTMLElement | null;
         if (!active || active === document.body) return null;
+        const style = getComputedStyle(active);
+        // A mark the browser draws for keyboard focus only. Reading it after a scripted .focus()
+        // would report nothing, because :focus-visible does not match that. A control may mark
+        // focus with the browser's own outline or, like the vendored primitives, with a drawn ring;
+        // what this asserts is that a keyboard Operator can see where they are, not which of the
+        // two the control chose.
+        const marked = style.outlineStyle !== "none" || style.boxShadow !== "none";
         return {
           tag: active.tagName.toLowerCase(),
-          // A ring the browser draws for keyboard focus only. Reading it after a scripted
-          // .focus() would report nothing, because :focus-visible does not match that.
-          ring: active.matches(":focus-visible") ? getComputedStyle(active).outlineStyle : "none",
+          ring: active.matches(":focus-visible") && marked ? "visible" : "none",
         };
       });
       if (!stop) break;
