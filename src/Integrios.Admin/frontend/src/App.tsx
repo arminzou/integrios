@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
@@ -7,39 +7,22 @@ import { call } from "./api/query";
 import { isIdentifier } from "./identifiers";
 import { sectionHrefs, sectionLabels, sectionOrder, type TenantSection } from "./sections";
 
-type State =
-  | { status: "loading" }
-  | { status: "anonymous" }
-  | { status: "signedIn"; session: OperatorSession }
-  | { status: "failed"; message: string };
-
+/// The session bootstrap is a server read like every other read in the dashboard, so it is read the
+/// same way. The four-state union and the cancellation flag it needed were an inline reimplementation
+/// of what the query client already does; `isPending`, `error`, and `data` are the same three states
+/// without the bookkeeping. A signed-out deployment answers 401, which `loadSession` reports as a
+/// null session rather than as a failure — being signed out is an answer, not an error.
 export function App() {
-  const [state, setState] = useState<State>({ status: "loading" });
+  const session = useQuery({ queryKey: ["session"], queryFn: loadSession });
 
-  useEffect(() => {
-    let cancelled = false;
-    loadSession()
-      .then((session) => {
-        if (cancelled) return;
-        setState(session ? { status: "signedIn", session } : { status: "anonymous" });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setState({ status: "failed", message: error instanceof Error ? error.message : String(error) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (state.status === "loading") return <Shell>Checking your session…</Shell>;
-  if (state.status === "failed")
+  if (session.isPending) return <Shell>Checking your session…</Shell>;
+  if (session.isError)
     return (
       <Shell>
-        <p role="alert">{state.message}</p>
+        <p role="alert">{session.error instanceof Error ? session.error.message : String(session.error)}</p>
       </Shell>
     );
-  if (state.status === "anonymous")
+  if (!session.data)
     return (
       <Shell>
         <p>
@@ -48,7 +31,7 @@ export function App() {
       </Shell>
     );
 
-  return <SignedIn session={state.session} />;
+  return <SignedIn session={session.data} />;
 }
 
 /// Authentication loading, failure, and anonymous states use the same brand and layout as the
