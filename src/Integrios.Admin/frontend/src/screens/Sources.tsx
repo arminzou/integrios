@@ -37,6 +37,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
+import { activeOnly, nameIn, useConnectionOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
@@ -71,6 +72,8 @@ type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
 
 export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string; selectedSourceId?: string }) {
+  const connectionOptions = useConnectionOptions(tenantId);
+  const topicOptions = useTopicOptions(tenantId);
   const [status, setStatus] = useFilterParam("status");
   const [type, setType] = useFilterParam("type");
   const create = useCreatePanel("new-source");
@@ -140,7 +143,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             >
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">Source</TableHead>
+                  <TableHead scope="col">Connection</TableHead>
                   <TableHead scope="col">Topic</TableHead>
                   <TableHead scope="col">Type</TableHead>
                   <TableHead scope="col">Status</TableHead>
@@ -155,12 +158,12 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                         to={`/tenants/${tenantId}/sources/${source.id}`}
                         end
                       >
-                        {source.id}
+                        {nameIn(connectionOptions.data?.items, source.connection_id)}
                       </NavLink>
                     </RowHeader>
                     <TableCell>
                       <Link className="font-mono text-[13px]" to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
-                        {source.topic_id}
+                        → {nameIn(topicOptions.data?.items, source.topic_id)}
                       </Link>
                     </TableCell>
                     <TableCell>{source.type}</TableCell>
@@ -189,24 +192,8 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
 function CreateSource({ tenantId }: { tenantId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const connections = useQuery({
-    queryKey: ["connection-options", tenantId],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/connections", {
-          params: { path: { tenantId }, query: { status: "active", limit: 100 } },
-        }),
-      ),
-  });
-  const topics = useQuery({
-    queryKey: ["topic-options", tenantId],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/topics", {
-          params: { path: { tenantId }, query: { status: "active", limit: 100 } },
-        }),
-      ),
-  });
+  const connections = useConnectionOptions(tenantId);
+  const topics = useTopicOptions(tenantId);
   const optionsUnavailable = connections.isPending || topics.isPending || connections.isError || topics.isError;
 
   const form = useForm<CreateValues>({
@@ -254,7 +241,7 @@ function CreateSource({ tenantId }: { tenantId: string }) {
             required
           >
             <option value="">Choose a Connection</option>
-            {(connections.data?.items ?? []).map((connection) => (
+            {activeOnly(connections.data?.items).map((connection) => (
               <option key={connection.id} value={connection.id}>
                 {connection.name}
               </option>
@@ -269,7 +256,7 @@ function CreateSource({ tenantId }: { tenantId: string }) {
             required
           >
             <option value="">Choose a Topic</option>
-            {(topics.data?.items ?? []).map((topic) => (
+            {activeOnly(topics.data?.items).map((topic) => (
               <option key={topic.id} value={topic.id}>
                 {topic.name}
               </option>
@@ -300,6 +287,8 @@ function CreateSource({ tenantId }: { tenantId: string }) {
 }
 
 function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: string }) {
+  const connectionOptions = useConnectionOptions(tenantId);
+  const topicOptions = useTopicOptions(tenantId);
   const [notice, setNotice] = useState("");
   const source = useQuery({
     queryKey: ["source", tenantId, sourceId],
@@ -333,17 +322,14 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
         <dd>{current.type}</dd>
         <dt>Connection</dt>
         <dd>
-          <Link
-            className="font-mono text-sm underline"
-            to={`/tenants/${tenantId}/connections/${current.connection_id}`}
-          >
-            {current.connection_id}
+          <Link className="font-mono" to={`/tenants/${tenantId}/connections/${current.connection_id}`}>
+            {nameIn(connectionOptions.data?.items, current.connection_id)}
           </Link>
         </dd>
         <dt>Topic</dt>
         <dd>
-          <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/topics/${current.topic_id}`}>
-            {current.topic_id}
+          <Link className="font-mono" to={`/tenants/${tenantId}/topics/${current.topic_id}`}>
+            {nameIn(topicOptions.data?.items, current.topic_id)}
           </Link>
         </dd>
         <dt>Revoked</dt>

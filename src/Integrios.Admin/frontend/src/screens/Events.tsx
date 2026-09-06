@@ -12,6 +12,7 @@ import { appliedNote, ConfirmAction, FilterBar, FormError, ListStatus, LoadMore,
 import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
 import { FilterSelectField, FilterTextField, Form } from "../ui/fields";
 import { CloseInspector, Inspector, InspectorPlaceholder, PageHeader, RowHeader, TableCard } from "../ui/layout";
+import { nameIn, useConnectionOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge, statusLabel } from "../ui/status";
 import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
 
@@ -142,13 +143,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         api.GET("/admin/tenants/{tenantId}/sources", { params: { path: { tenantId }, query: { limit: 100 } } }),
       ),
   });
-  const topics = useQuery({
-    queryKey: ["topic-options", tenantId],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/topics", { params: { path: { tenantId }, query: { limit: 100 } } }),
-      ),
-  });
+  const topics = useTopicOptions(tenantId);
 
   // Source and Topic scope the summary, matching the ledger's own ownership checks; Event-status
   // and Delivery-status filters do not, so the four summary values stay comparable to each other.
@@ -505,6 +500,10 @@ function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDelive
 /// or not that row is in the ledger's currently loaded page, and a replay only re-reads this Event
 /// rather than the whole ledger.
 function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: string }) {
+  // A dead-lettered Delivery is read to find out where it was going. The destination has a name the
+  // Tenant's own Connection list already carries; the Subscription does not, because the Admin API
+  // lists Subscriptions under their Topic and an Event does not say which Topic matched it.
+  const connectionOptions = useConnectionOptions(tenantId);
   const queryClient = useQueryClient();
   const eventKey = ["event", tenantId, eventId];
   // Held here rather than on the replay control: a replayed Delivery leaves `dead_lettered`, which
@@ -619,7 +618,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                 <div className="min-w-0 text-[13px]">
                   <span className="block truncate font-mono">{delivery.subscription_id}</span>
                   <span className="block truncate font-mono text-xs text-ink-secondary">
-                    → {delivery.destination_connection_id}
+                    → {nameIn(connectionOptions.data?.items, delivery.destination_connection_id)}
                   </span>
                   <span className="block text-xs text-ink-secondary">
                     <span title="Lifetime attempts / attempts in the current retry cycle">

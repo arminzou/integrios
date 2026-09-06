@@ -15,6 +15,7 @@ import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { activeOnly, useConnectionOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { TransformPreview } from "./Previews";
 
@@ -292,15 +293,7 @@ function SubscriptionForm({
   onSaved?: (saved: Subscription | undefined) => void;
 }) {
   const queryClient = useQueryClient();
-  const connections = useQuery({
-    queryKey: ["connection-options", tenantId],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/connections", {
-          params: { path: { tenantId }, query: { status: "active", limit: 100 } },
-        }),
-      ),
-  });
+  const connections = useConnectionOptions(tenantId);
   const connectionOptionsUnavailable = connections.isPending || connections.isError;
 
   const form = useForm<SubscriptionValues>({
@@ -380,7 +373,7 @@ function SubscriptionForm({
             required
           >
             <option value="">Choose a Connection</option>
-            {(connections.data?.items ?? []).map((connection) => (
+            {activeOnly(connections.data?.items).map((connection) => (
               <option key={connection.id} value={connection.id}>
                 {connection.name}
               </option>

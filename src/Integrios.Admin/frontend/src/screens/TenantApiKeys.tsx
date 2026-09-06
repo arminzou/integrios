@@ -24,6 +24,7 @@ import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
+import { Timestamp } from "../ui/time";
 
 type TenantApiKeyListItem = components["schemas"]["TenantApiKeyListItemDto"];
 type CreatedKey = components["schemas"]["CreateTenantApiKeyResult"];
@@ -117,8 +118,12 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
                   <TableCell>
                     <StatusBadge status={key.state} />
                   </TableCell>
-                  <TableCell>{key.expires_at ?? "Never"}</TableCell>
-                  <TableCell>{key.last_used_at ?? "Never used"}</TableCell>
+                  <TableCell className="text-ink-secondary">
+                    {key.expires_at ? <Timestamp value={key.expires_at} /> : "Never"}
+                  </TableCell>
+                  <TableCell className="text-ink-secondary">
+                    {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}
+                  </TableCell>
                   <TableCell>
                     <RevokeTenantApiKey
                       tenantId={tenantId}

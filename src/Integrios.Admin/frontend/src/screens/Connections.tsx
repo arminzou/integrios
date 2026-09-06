@@ -37,6 +37,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
+import { useConnectorOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { Timestamp } from "../ui/time";
 
@@ -297,7 +298,20 @@ function CreateConnection({ tenantId }: { tenantId: string }) {
   );
 }
 
+/// The Connector a Connection was built from, as an Operator names it: the manifest key and the
+/// contract version it is pinned to. Falls back to the identifier when the list has not resolved it.
+function connectorLabel(
+  connectors: { id: string; key: string; contract_version: number | string }[] | undefined,
+  id: string,
+): string {
+  const connector = connectors?.find((item) => item.id === id);
+  return connector ? `${connector.key} v${connector.contract_version}` : id;
+}
+
 function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; connectionId: string }) {
+  // A Connection is built from a Connector, and which one it was is the first thing an Operator
+  // checks when its configuration looks wrong. The identifier answers a different question.
+  const connectors = useConnectorOptions();
   const [notice, setNotice] = useState("");
   const connection = useQuery({
     queryKey: ["connection", tenantId, connectionId],
@@ -335,8 +349,8 @@ function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; con
       <Details className="border-b pb-3.5">
         <dt>Connector</dt>
         <dd>
-          <Link className="font-mono text-sm underline" to={`/connectors/${current.connector_id}`}>
-            {current.connector_id}
+          <Link className="font-mono" to={`/connectors/${current.connector_id}`}>
+            {connectorLabel(connectors.data?.items, current.connector_id)}
           </Link>
         </dd>
         <dt>Environment</dt>
