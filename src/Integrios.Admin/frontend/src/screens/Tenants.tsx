@@ -219,7 +219,10 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
   if (!tenant.data) return <p>Loading…</p>;
 
   const current = tenant.data;
-  const deadLettered = Number(activity.data?.dead_lettered_deliveries ?? 0);
+  // The banner offers to take an Operator to work that needs them, so it counts what is
+  // outstanding rather than what failed inside the summary's hour — the tile below still reports
+  // the windowed figure, under the label that says so.
+  const deadLettered = Number(overview.data?.dead_lettered_deliveries ?? 0);
 
   return (
     <Page>

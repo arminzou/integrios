@@ -181,17 +181,17 @@ function Rail({
   );
 }
 
+/// Outstanding, not recent. This read was originally the Event activity summary, which is windowed
+/// to the last hour — so a Tenant with nine Deliveries that exhausted their retries this morning
+/// showed no badge at all, which is the one thing a badge for unattended work must never do. The
+/// Tenant overview counts the same Deliveries without a window, and is the read the Overview screen
+/// already makes, so the shell shares it rather than issuing its own.
 function useDeadLetteredCount(tenantId: string): number {
-  const summary = useQuery({
-    // The unscoped key the Events screen uses when neither a Source nor a Topic filter is applied,
-    // so an Operator arriving at the ledger reuses this read rather than issuing a second one.
-    queryKey: ["activity-summary", tenantId, { sourceId: "", topicId: "" }],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/events/activity-summary", { params: { path: { tenantId }, query: {} } }),
-      ),
+  const overview = useQuery({
+    queryKey: ["tenant-overview", tenantId],
+    queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
   });
-  return Number(summary.data?.dead_lettered_deliveries ?? 0);
+  return Number(overview.data?.dead_lettered_deliveries ?? 0);
 }
 
 /// Reads the current Tenant once for the whole shell, so navigation and the breadcrumb name it

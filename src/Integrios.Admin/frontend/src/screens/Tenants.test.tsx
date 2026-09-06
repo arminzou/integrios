@@ -120,6 +120,49 @@ describe("Tenants list", () => {
   });
 });
 
+describe("The Tenant overview's attention banner", () => {
+  it("counts Deliveries that are still dead-lettered, not only ones that failed in the last hour", async () => {
+    // The banner and the rail badge exist to take an Operator to work nobody has attended to. A
+    // dead-lettered Delivery stays dead-lettered until it is replayed, so counting it inside the
+    // activity summary's rolling hour hid every failure older than that — and reported zero, which
+    // is the one answer a control for unattended work must never give while work is outstanding.
+    stubHttp(({ url }) => {
+      if (url.pathname.endsWith("/overview"))
+        return {
+          status: 200,
+          body: {
+            topics: 1,
+            connections: 1,
+            sources: 1,
+            subscriptions: 1,
+            live_api_keys: 1,
+            dead_lettered_deliveries: 9,
+            ingestion_endpoint: "http://localhost:5231/",
+          },
+        };
+      if (url.pathname.endsWith("/activity-summary"))
+        return {
+          status: 200,
+          // The window is empty: everything failed before it started.
+          body: {
+            events_accepted: 0,
+            awaiting_routing: 0,
+            unrouted: 0,
+            dead_lettered_deliveries: 0,
+            window_start: "2026-09-06T16:00:00Z",
+            window_end: "2026-09-06T17:00:00Z",
+          },
+        };
+      return { status: 200, body: tenant() };
+    });
+
+    renderScreen(<TenantScreen tenantId={tenantId} />, `/tenants/${tenantId}`);
+
+    expect(await screen.findByText("9 dead-lettered Deliveries")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open Events" })).toBeTruthy();
+  });
+});
+
 describe("Tenant authoring", () => {
   it("shows a rejected field's own message beside it and keeps what the Operator typed", async () => {
     stubHttp(({ method }) =>
