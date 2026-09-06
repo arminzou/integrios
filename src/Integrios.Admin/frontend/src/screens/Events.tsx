@@ -491,7 +491,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
   }, [eventId, event.data, event.isError]);
 
   const panel =
-    "flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-6 min-[900px]:sticky min-[900px]:flex-[1_1_45%] min-[900px]:top-[calc(var(--topbar-height)+1rem)]";
+    "flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-6 min-[900px]:sticky min-[900px]:flex-[1_1_45%] min-[900px]:top-4";
 
   const problem = asProblem(event.error);
   if (problem)

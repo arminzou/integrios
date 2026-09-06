@@ -35,45 +35,66 @@ td a {
   padding: 4px 6px;
 }
 
-/* The signed-in shell: a top-navigation bar instead of a persistent side rail. Its first row is
-   always present; the Tenant-scoped second row appears only once a Tenant is selected, so a
-   deployment-wide screen never claims a Tenant it does not have. */
+/* The rail states its own, larger boxes below; this keeps the two from compounding. */
+.rail nav a,
+.rail li a {
+  padding: 6px 10px;
+}
+
+/* The signed-in shell: a persistent left rail beside the document. The rail groups destinations by
+   the scope they belong to, which is what a horizontal row could not express — when no Tenant is
+   open the Tenant group is absent rather than blank. Below 860px the same markup lays out as a
+   horizontal band, the wrapping behaviour the previous top navigation was verified with at 320. */
 .shell {
   min-height: 100vh;
   background: var(--canvas);
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  align-items: start;
 }
 
-.topbar {
+.rail {
   position: sticky;
   top: 0;
-  z-index: 1;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(8px);
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.signed-out-bar {
+  padding: 12px 16px;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
-.topbar-row {
-  width: 100%;
-  max-width: var(--measure);
-  margin-inline: auto;
+.nav-group {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  padding: 8px 16px;
+  flex-direction: column;
+  gap: 2px;
 }
 
-/* The contextual Tenant row wraps or scrolls within its own region at narrow widths rather than
-   forcing the document to overflow; it never collapses behind a pointer-only control. */
-.tenant-row {
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-quiet) 92%, transparent);
+/* Says which scope the destinations beneath it belong to. The nav landmark carries the same word,
+   so a screen reader announces the grouping the sighted reader sees. */
+.nav-label {
+  margin: 0 0 4px;
+  padding-inline: 10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding-inline: 8px;
   font-family: var(--font-serif);
   font-weight: 600;
 }
@@ -93,46 +114,133 @@ td a {
   font-size: 0.75rem;
 }
 
+/* The current Tenant, and the way back to the list to change it. */
+.rail .tenant-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+.rail .tenant-switch:hover,
+.rail .tenant-switch:focus-visible {
+  background: var(--hover-surface);
+}
+
 .tenant-name {
   font-weight: 600;
 }
 
+.tenant-meta {
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
 .nav-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 2px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.topbar a {
+.rail a {
+  display: block;
+  border-radius: var(--radius);
+  padding: 6px 10px;
   text-decoration: none;
 }
 
-.topbar a:hover,
-.topbar a:focus-visible {
-  text-decoration: underline;
+.rail .nav-list a:hover,
+.rail .nav-list a:focus-visible {
+  background: var(--hover-surface);
 }
 
 .nav-list a[aria-current="page"] {
   background: var(--selected-surface);
   color: var(--selected-ink);
-  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+/* Pushed to the bottom of the column, where an identity belongs and where it stops competing with
+   the destinations above it. */
+.rail-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 .operator-identity {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-left: auto;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
 }
 
 #main {
+  width: 100%;
   max-width: var(--measure);
   margin-inline: auto;
   padding: 24px 16px;
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A band rather than a column, and deliberately not sticky: at this width the screen is short and
+     the ledger needs the height more than the navigation needs to stay put. */
+  .rail {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .nav-group,
+  .nav-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .rail .tenant-switch {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 0;
+  }
+
+  .rail-foot {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
 }
 
 /* Names the current Tenant and section above a page's own heading, so the Tenant is never only

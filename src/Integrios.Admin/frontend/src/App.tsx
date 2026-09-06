@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
@@ -40,10 +40,8 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
       <SkipLink />
-      <header className="topbar">
-        <div className="topbar-row">
-          <BrandMark />
-        </div>
+      <header className="signed-out-bar">
+        <BrandMark />
       </header>
       <main id="main" tabIndex={-1}>
         {children}
@@ -52,9 +50,9 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/// The first thing a keyboard reaches. The topbar carries up to two rows of navigation, so without
-/// this every screen costs that many tab stops before its own content. `#main` takes `tabIndex={-1}`
-/// so following the link moves focus rather than only scrolling.
+/// The first thing a keyboard reaches. The rail carries every destination in the dashboard, so
+/// without this every screen costs that many tab stops before its own content. `#main` takes
+/// `tabIndex={-1}` so following the link moves focus rather than only scrolling.
 function SkipLink() {
   return (
     <a
@@ -97,7 +95,7 @@ function SignedIn({ session }: { session: OperatorSession }) {
   return (
     <div className="shell">
       <SkipLink />
-      <TopNav session={session} tenantId={tenantId} tenant={tenant} />
+      <Rail session={session} tenantId={tenantId} tenant={tenant} />
       <main id="main" tabIndex={-1}>
         {section && tenantId ? (
           <p className="breadcrumb">
@@ -119,7 +117,15 @@ function useRouteHandle(): RouteHandle {
   return (matches.at(-1)?.handle as RouteHandle | undefined) ?? {};
 }
 
-function TopNav({
+/// The signed-in navigation. A rail rather than a bar because the two scopes this dashboard has —
+/// deployment-wide and Tenant-scoped — are a grouping a horizontal row cannot express: in a rail
+/// each group carries its own label, and when no Tenant is open the Tenant group is simply absent
+/// rather than a row left blank. It also spends the axis the product can spare; the ledger is the
+/// widest thing here and wants the horizontal space navigation would otherwise take.
+///
+/// Below 860 CSS pixels it lays out as a horizontal band instead, which is the same wrapping
+/// behaviour the previous top navigation was verified with at 320.
+function Rail({
   session,
   tenantId,
   tenant,
@@ -128,34 +134,20 @@ function TopNav({
   tenantId: string | null;
   tenant: ReturnType<typeof useTenant>;
 }) {
-  const headerRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
 
-  // The sticky inspector on the Events screen sits below whatever this topbar's real height turns
-  // out to be — one row when no Tenant is selected, two when one is — rather than a guessed pixel
-  // offset that drifts out of sync the moment this header's own content changes.
-  // `tenantId` is a re-run trigger rather than a value this effect reads: it is what re-measures the
-  // header when the Tenant row appears or disappears and the bar's height changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tenantId is an intentional re-run trigger
-  useEffect(() => {
-    const element = headerRef.current;
-    if (!element) return;
-    const updateHeight = () => {
-      document.documentElement.style.setProperty("--topbar-height", `${element.offsetHeight}px`);
-    };
-    updateHeight();
-    if (typeof ResizeObserver !== "function") return;
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [tenantId]);
-
   return (
-    <header className="topbar" ref={headerRef}>
-      <nav className="topbar-row" aria-label="Deployment">
-        <BrandMark />
+    <div className="rail">
+      <BrandMark />
+
+      {tenantId ? <TenantNav tenantId={tenantId} tenant={tenant} /> : null}
+
+      <nav className="nav-group" aria-label="Deployment">
+        <p className="nav-label">Deployment</p>
         <ul className="nav-list">
           <li>
+            {/* `/` is an alias for the Tenants list rather than a redirect, so it keeps any query
+                and fragment a copied link carried. NavLink cannot mark that one case itself. */}
             {pathname === "/" ? (
               <Link to="/tenants" aria-current="page">
                 Tenants
@@ -168,24 +160,24 @@ function TopNav({
             <NavLink to="/connectors">Connectors</NavLink>
           </li>
         </ul>
-        <div className="operator-identity">
-          <span>
-            Signed in as <strong>{session.display_name}</strong>
-            {session.email ? ` (${session.email})` : ""}.
-          </span>
-          {/* A native form submission carries no custom header, so the antiforgery token must
-              travel through the server-configured form field rather than the header name used by
-              the typed client's own requests. */}
-          <form method="post" action="/auth/logout">
-            <input type="hidden" name={session.antiforgery_form_field_name} value={session.antiforgery_token} />
-            <Button type="submit" variant="outline" size="sm">
-              Sign out
-            </Button>
-          </form>
-        </div>
       </nav>
-      {tenantId ? <TenantNav tenantId={tenantId} tenant={tenant} /> : null}
-    </header>
+
+      <div className="rail-foot">
+        <span className="operator-identity">
+          Signed in as <strong>{session.display_name}</strong>
+          {session.email ? ` (${session.email})` : ""}.
+        </span>
+        {/* A native form submission carries no custom header, so the antiforgery token must
+            travel through the server-configured form field rather than the header name used by
+            the typed client's own requests. */}
+        <form method="post" action="/auth/logout">
+          <input type="hidden" name={session.antiforgery_form_field_name} value={session.antiforgery_token} />
+          <Button type="submit" variant="outline" size="sm">
+            Sign out
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -206,11 +198,16 @@ function tenantDisplayName(tenant: ReturnType<typeof useTenant>): string {
 }
 
 /// Names the current Tenant explicitly in navigation rather than leaving it implied by the route's
-/// opaque id.
+/// opaque id. The name doubles as the way back to the Tenants list: the route stays authoritative
+/// for which Tenant is open, so this is an affordance for changing it, never a second source of it.
 function TenantNav({ tenantId, tenant }: { tenantId: string; tenant: ReturnType<typeof useTenant> }) {
   return (
-    <nav className="topbar-row tenant-row" aria-label="Tenant">
-      <span className="tenant-name">{tenantDisplayName(tenant)}</span>
+    <nav className="nav-group" aria-label="Tenant">
+      <p className="nav-label">Tenant</p>
+      <Link className="tenant-switch" to="/tenants">
+        <span className="tenant-name">{tenantDisplayName(tenant)}</span>
+        {tenant.data?.environment ? <span className="tenant-meta">{tenant.data.environment}</span> : null}
+      </Link>
       <ul className="nav-list">
         {sectionOrder.map((section) => (
           <li key={section}>

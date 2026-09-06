@@ -29,17 +29,12 @@
   --danger-ink: #85504c;
   --danger-surface: #f4eeee;
 
-  /* The one content measure. The topbar spans the viewport; the row inside it and the document
-     below share this width, so navigation stays aligned with the page it labels. */
+  /* The one content measure, applied to the document beside the rail. */
   --measure: 1400px;
 
   --radius: 6px;
   /* A bounded content group — an activity-summary metric, the ledger, the inspector panel. */
   --radius-card: 10px;
-
-  /* Measured from the real topbar in App.tsx and kept in sync via ResizeObserver; this fallback
-     only covers the instant before that first measurement lands. */
-  --topbar-height: 56px;
 }
 
 @theme inline {
