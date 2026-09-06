@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Delivery;
 using Integrios.Application.Ingestion;
 using Integrios.Tests.Shared;
@@ -52,6 +53,36 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         attempt.ResponseBody.ShouldBe(AdminApiFixture.SeededResponseBody);
         attempt.ResponseStatusCode.ShouldBe(503);
         attempt.ResponseBodyTruncated.ShouldBeFalse();
+    }
+
+    // The Overview's tiles. Counted from what the seed actually creates, so a count that starts
+    // reporting a neighbouring Tenant's rows fails here rather than on screen.
+    [Fact]
+    public async Task TenantOverview_CountsOnlyThisTenantsConfiguration()
+    {
+        await fixture.SeedDeadLetteredDeliveryAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/overview"));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        TenantOverviewDto? overview = await response.Content.ReadFromJsonAsync<TenantOverviewDto>(HostJson.Options);
+        overview.ShouldNotBeNull();
+        overview.Topics.ShouldBe(1);
+        overview.Sources.ShouldBe(1);
+        overview.Subscriptions.ShouldBe(1);
+        // The seed adds one destination Connection beside the Tenant's own source Connection.
+        overview.Connections.ShouldBe(2);
+        overview.IngestionEndpoint.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task TenantOverview_IsNotFoundForATenantThatDoesNotExist()
+    {
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{Guid.NewGuid()}/overview"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     // Criterion 4. Bodies belong to the one Event a reader asked for, never to a page of rows: a

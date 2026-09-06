@@ -40,6 +40,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IEventDiagnosticsLookup)] = [Host.Admin],
         [typeof(ITenantEventHistory)] = [Host.Admin],
         [typeof(ITenantEventActivitySummary)] = [Host.Admin],
+        [typeof(ITenantOverview)] = [Host.Admin],
         [typeof(IOperatorIdentityStore)] = [Host.Admin],
         [typeof(IConnectorReader)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],

@@ -17,6 +17,7 @@ public sealed class TenantsEndpoints : IEndpointGroup
         group.MapGet(GetTenantById, "/{id:guid}").Produces<TenantDto>();
         group.MapPatch(UpdateTenant, "/{id:guid}").Produces<TenantDto>();
         group.MapPost(DeactivateTenant, "/{id:guid}/deactivate");
+        group.MapGet(GetTenantOverview, "/{id:guid}/overview").Produces<TenantOverviewDto>();
     }
 
     private static async Task<IResult> CreateTenant(
@@ -59,6 +60,18 @@ public sealed class TenantsEndpoints : IEndpointGroup
     {
         var response = await mediator.Send(
             new UpdateTenantCommand(id, request.Name, request.Description, request.Environment),
+            cancellationToken);
+        return response is null ? Results.NotFound() : Results.Ok(response);
+    }
+
+    private static async Task<IResult> GetTenantOverview(
+        Guid id,
+        IMediator mediator,
+        PublicIngestionBaseUri ingestion,
+        CancellationToken cancellationToken)
+    {
+        TenantOverviewDto? response = await mediator.Send(
+            new GetTenantOverviewQuery(id, ingestion.Value.ToString()),
             cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
