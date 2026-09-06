@@ -26,18 +26,20 @@ public sealed class IngestionApiFixture : IDisposable
     public StubEventApiSourceResolver EventApiSourceResolver { get; } = new();
     public StubSourceEndpointResolver SourceEndpointResolver { get; } = new();
     public StubQueueSourceReader QueueSourceReader { get; } = new();
+    public StubTenantApiKeyUseRecorder TenantApiKeyUse { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
     public IngestionApiFixture()
     {
         Factory = new CustomApiFactory(
             TenantApiKeyRepository, EventAcceptance, EventLookup, EventApiSourceResolver, SourceEndpointResolver,
-            QueueSourceReader);
+            QueueSourceReader, TenantApiKeyUse);
     }
 
     public void Reset()
     {
         TenantApiKeyRepository.Result = null;
+        TenantApiKeyUse.Recorded.Clear();
         EventLookup.GetEventResult = null;
         EventApiSourceResolver.Result = new ResolvedEventApiSource
         {
@@ -61,7 +63,8 @@ internal sealed class CustomApiFactory(
     StubTenantEventLookup eventLookup,
     StubEventApiSourceResolver eventApiSourceResolver,
     StubSourceEndpointResolver sourceEndpointResolver,
-    StubQueueSourceReader queueSourceReader) : WebApplicationFactory<Program>
+    StubQueueSourceReader queueSourceReader,
+    StubTenantApiKeyUseRecorder tenantApiKeyUseRecorder) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -83,6 +86,7 @@ internal sealed class CustomApiFactory(
             services.AddSingleton<IEventApiSourceResolver>(eventApiSourceResolver);
             services.AddSingleton<ISourceEndpointResolver>(sourceEndpointResolver);
             services.AddSingleton<IQueueSourceReader>(queueSourceReader);
+            services.AddSingleton<ITenantApiKeyUseRecorder>(tenantApiKeyUseRecorder);
         });
     }
 }
@@ -100,6 +104,17 @@ public sealed class StubActiveTenantApiKeyLookup : IActiveTenantApiKeyLookup
         return Task.FromResult(Result);
     }
 
+}
+
+public sealed class StubTenantApiKeyUseRecorder : ITenantApiKeyUseRecorder
+{
+    public List<(Guid TenantApiKeyId, DateTimeOffset UsedAt)> Recorded { get; } = [];
+
+    public Task RecordUseAsync(Guid tenantApiKeyId, DateTimeOffset usedAt, CancellationToken cancellationToken)
+    {
+        Recorded.Add((tenantApiKeyId, usedAt));
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class StubEventAcceptance : IEventAcceptance

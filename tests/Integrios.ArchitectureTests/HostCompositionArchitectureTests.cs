@@ -26,6 +26,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IOperatorKeyLifecycle)] = [Host.Admin],
         [typeof(ITenantApiKeyRepository)] = [Host.Admin],
         [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
+        [typeof(ITenantApiKeyUseRecorder)] = [Host.Ingestion],
         [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
         [typeof(IDestinationAuthenticatorRegistry)] = [Host.Admin, Host.Worker],
         [typeof(IConnectionRepository)] = [Host.Admin],
@@ -284,6 +285,7 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddIngestionInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IActiveTenantApiKeyLookup>(provider);
+        AssertResolves<ITenantApiKeyUseRecorder>(provider);
         AssertResolves<IEventApiSourceResolver>(provider);
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<ISourceVerifier>(provider);

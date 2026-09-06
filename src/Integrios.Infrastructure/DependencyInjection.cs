@@ -105,6 +105,7 @@ public static class DependencyInjection
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
         services.AddSingleton<IActiveTenantApiKeyLookup, ActiveTenantApiKeyLookup>();
+        services.AddSingleton<ITenantApiKeyUseRecorder, TenantApiKeyUseRecorder>();
         services.AddSingleton<IEventApiSourceResolver, EventApiSourceResolver>();
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
         services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();

@@ -12,7 +12,8 @@ public sealed class TenantApiKeyAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IActiveTenantApiKeyLookup activeTenantApiKeyLookup)
+    IActiveTenantApiKeyLookup activeTenantApiKeyLookup,
+    ITenantApiKeyUseRecorder tenantApiKeyUseRecorder)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "TenantApiKey";
@@ -34,6 +35,14 @@ public sealed class TenantApiKeyAuthHandler(
             Tenant = result.Value.Tenant,
             TenantApiKey = result.Value.TenantApiKey,
         });
+
+        // The key authenticated a request, which is the only thing that makes "last used" true.
+        // Awaited rather than fired and forgotten: the resolution above means this runs at most once
+        // an hour per key, and a detached task would outlive the request scope it borrows its
+        // connection from for no latency worth having.
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        if (TenantApiKeyUse.ShouldRecord(result.Value.TenantApiKey.LastUsedAt, now))
+            await tenantApiKeyUseRecorder.RecordUseAsync(result.Value.TenantApiKey.Id, now, Context.RequestAborted);
 
         var claims = new[] { new Claim(ClaimTypes.NameIdentifier, result.Value.Tenant.Id.ToString()) };
         var identity = new ClaimsIdentity(claims, Scheme.Name);
