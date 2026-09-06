@@ -9,7 +9,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, Disclosure, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -117,11 +117,13 @@ export function SubscriptionsSection({
 
       <div className="flex flex-col gap-4">
         <h3>All Subscriptions</h3>
-        <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
-          <option value="">Any status</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
-        </Filter>
+        <FilterBar applied={(status ? 1 : 0) as number}>
+          <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </Filter>
+        </FilterBar>
 
         <ListStatus
           busy={list.isFetching}

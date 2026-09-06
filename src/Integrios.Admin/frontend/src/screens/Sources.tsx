@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, Disclosure, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -85,19 +85,21 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
       <section className="flex flex-col gap-4">
         <h2>All Sources</h2>
         <div className="flex flex-wrap gap-4">
-          <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-            <option value="">Any status</option>
-            <option value="active">Active</option>
-            <option value="revoked">Revoked</option>
-          </Filter>
-          <Filter id="source-type" label="Type" value={type} onChange={setType}>
-            <option value="">Any type</option>
-            {sourceTypes.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Filter>
+          <FilterBar applied={((status ? 1 : 0) as number) + ((type ? 1 : 0) as number)}>
+            <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
+              <option value="">Any status</option>
+              <option value="active">Active</option>
+              <option value="revoked">Revoked</option>
+            </Filter>
+            <Filter id="source-type" label="Type" value={type} onChange={setType}>
+              <option value="">Any type</option>
+              {sourceTypes.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Filter>
+          </FilterBar>
         </div>
 
         <ListStatus

@@ -62,11 +62,26 @@ async function ledgerRow(id: string): Promise<HTMLTableRowElement> {
   });
 }
 
-function openFilters() {
-  fireEvent.click(screen.getByText("Find an Event"));
-}
-
 describe("Event history", () => {
+  // The ledger has to say what it is showing without being asked. A filtered view that looks
+  // identical to an unfiltered one is the failure this replaced a disclosure to prevent.
+  it("states its scope on screen, and offers a clear only once something is applied", async () => {
+    stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const unfiltered = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
+    // Every control is reachable without opening anything.
+    expect(await screen.findByLabelText("Event status")).toBeTruthy();
+    expect(screen.getByLabelText("Delivery status")).toBeTruthy();
+    expect(screen.queryByText(/filter.? applied/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
+    unfiltered.unmount();
+
+    renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events?status=unrouted`);
+
+    expect(await screen.findByText("1 filter applied.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBeTruthy();
+  });
+
   it("reports Event status separately from Delivery state instead of rolling one into the other", async () => {
     stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
@@ -93,7 +108,6 @@ describe("Event history", () => {
     renderScreen(<EventsScreen tenantId={tenantId} />);
     await screen.findByText("No Events in this Tenant match these filters.");
 
-    openFilters();
     fireEvent.change(screen.getByLabelText("Delivery status"), { target: { value: "dead_lettered" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
@@ -121,7 +135,6 @@ describe("Event history", () => {
     expect(read.get("accepted_from")).toBe("2026-09-01T09:00:17.000Z");
 
     // The form opens showing the scope in force, not the empty defaults.
-    openFilters();
     expect((screen.getByLabelText("Source Event id") as HTMLInputElement).value).toBe("order-42");
   });
 
@@ -131,7 +144,6 @@ describe("Event history", () => {
     const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
     await screen.findByText("No Events in this Tenant match these filters.");
 
-    openFilters();
     fireEvent.change(screen.getByLabelText("Delivery status"), { target: { value: "dead_lettered" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
@@ -148,7 +160,6 @@ describe("Event history", () => {
     );
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
-    openFilters();
 
     expect((await screen.findByRole("alert")).textContent).toContain("Sources are unavailable.");
     expect((screen.getByLabelText("Source") as HTMLSelectElement).disabled).toBe(true);
@@ -198,7 +209,6 @@ describe("Event activity summary", () => {
     expect(applied.url.searchParams.has("after")).toBe(false);
 
     // Editing a filter by hand deselects the summary item, so its pressed state never lies.
-    openFilters();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(unrouted.getAttribute("aria-pressed")).toBe("false");
   });

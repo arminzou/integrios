@@ -8,10 +8,10 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { CopyValue } from "../ui/copy";
 import { Form, SelectField, TextField } from "../ui/fields";
-import { Panel, RowHeader, TableCard } from "../ui/layout";
+import { RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge, statusLabel } from "../ui/status";
 import { Timestamp } from "../ui/time";
 
@@ -114,6 +114,9 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.toString();
   const applied = useMemo(() => readFilters(new URLSearchParams(query)), [query]);
+  // What is actually narrowing the ledger right now, counted from the URL rather than from the form,
+  // so a value typed but not yet applied is not claimed as scope.
+  const appliedCount = Object.values(applied).filter(Boolean).length;
   // Which activity-summary item, if any, produced the current filters. Cleared whenever the
   // Operator edits filters by hand, so the pressed state never lies about what is actually applied.
   const [activeSummary, setActiveSummary] = useState<SummaryKey | null>(null);
@@ -221,112 +224,102 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
         <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
 
-        <Disclosure label="Find an Event">
-          <Form {...form}>
-            <Panel asChild className="max-w-none">
-              <form
-                className="flex flex-col gap-4"
-                onSubmit={form.handleSubmit((values) => {
-                  setSearchParams(writeFilters(values));
-                  setActiveSummary(null);
-                })}
+        <Form {...form}>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={form.handleSubmit((values) => {
+              setSearchParams(writeFilters(values));
+              setActiveSummary(null);
+            })}
+          >
+            <FormError message={formError(asProblem(sources.error ?? topics.error))} />
+
+            <FilterBar
+              applied={appliedCount}
+              onClear={() => {
+                setSearchParams(new URLSearchParams());
+                setActiveSummary(null);
+              }}
+            >
+              <SelectField
+                control={form.control}
+                name="status"
+                label="Event status"
+                hint="How far the Event itself got."
               >
-                <FormError message={formError(asProblem(sources.error ?? topics.error))} />
+                <option value="">Any Event status</option>
+                {eventStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </SelectField>
+              {/* Delivery status is a separate filter over Delivery state. An Event matches when one
+                  of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
+              <SelectField
+                control={form.control}
+                name="deliveryStatus"
+                label="Delivery status"
+                hint="Matches Events with at least one EventDelivery in this state."
+              >
+                <option value="">Any Delivery status</option>
+                {deliveryStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </SelectField>
+              <SelectField
+                control={form.control}
+                name="sourceId"
+                label="Source"
+                hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
+                disabled={sources.isPending || sources.isError}
+              >
+                <option value="">Any Source</option>
+                {(sources.data?.items ?? []).map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.type} · {source.id}
+                  </option>
+                ))}
+              </SelectField>
+              <SelectField
+                control={form.control}
+                name="topicId"
+                label="Topic"
+                hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+                disabled={topics.isPending || topics.isError}
+              >
+                <option value="">Any Topic</option>
+                {(topics.data?.items ?? []).map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.name}
+                  </option>
+                ))}
+              </SelectField>
+              <TextField
+                control={form.control}
+                name="sourceEventId"
+                label="Source Event id"
+                hint="The identity the sending system gave the Event. Matched exactly."
+              />
+              <TextField
+                control={form.control}
+                name="acceptedFrom"
+                label="Accepted from"
+                type="datetime-local"
+                step="1"
+              />
+              <TextField control={form.control} name="acceptedTo" label="Accepted to" type="datetime-local" step="1" />
 
-                <SelectField
-                  control={form.control}
-                  name="status"
-                  label="Event status"
-                  hint="How far the Event itself got."
-                >
-                  <option value="">Any Event status</option>
-                  {eventStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </SelectField>
-                {/* Delivery status is a separate filter over Delivery state. An Event matches when one
-                    of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
-                <SelectField
-                  control={form.control}
-                  name="deliveryStatus"
-                  label="Delivery status"
-                  hint="Matches Events with at least one EventDelivery in this state."
-                >
-                  <option value="">Any Delivery status</option>
-                  {deliveryStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </SelectField>
-                <SelectField
-                  control={form.control}
-                  name="sourceId"
-                  label="Source"
-                  hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
-                  disabled={sources.isPending || sources.isError}
-                >
-                  <option value="">Any Source</option>
-                  {(sources.data?.items ?? []).map((source) => (
-                    <option key={source.id} value={source.id}>
-                      {source.type} · {source.id}
-                    </option>
-                  ))}
-                </SelectField>
-                <SelectField
-                  control={form.control}
-                  name="topicId"
-                  label="Topic"
-                  hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
-                  disabled={topics.isPending || topics.isError}
-                >
-                  <option value="">Any Topic</option>
-                  {(topics.data?.items ?? []).map((topic) => (
-                    <option key={topic.id} value={topic.id}>
-                      {topic.name}
-                    </option>
-                  ))}
-                </SelectField>
-                <TextField
-                  control={form.control}
-                  name="sourceEventId"
-                  label="Source Event id"
-                  hint="The identity the sending system gave the Event. Matched exactly."
-                />
-                <TextField
-                  control={form.control}
-                  name="acceptedFrom"
-                  label="Accepted from"
-                  type="datetime-local"
-                  step="1"
-                />
-                <TextField
-                  control={form.control}
-                  name="acceptedTo"
-                  label="Accepted to"
-                  type="datetime-local"
-                  step="1"
-                />
-
-                <div className="flex flex-wrap gap-3">
-                  <Button type="submit">Apply filters</Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setSearchParams(new URLSearchParams());
-                      setActiveSummary(null);
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              </form>
-            </Panel>
-          </Form>
-        </Disclosure>
+              {/* Apply stays explicit. Seven controls that each re-queried on change would issue six
+                  requests on the way to the scope the Operator actually wanted. */}
+              <Button type="submit" className="self-end">
+                Apply filters
+              </Button>
+            </FilterBar>
+          </form>
+        </Form>
 
         <div className="flex flex-col gap-4">
           <ListStatus

@@ -9,7 +9,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { FormError, ListStatus, LoadMore } from "../ui/controls";
+import { FilterBar, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -63,12 +63,14 @@ export function ConnectorsScreen() {
 
       <section className="flex flex-col gap-4">
         <h2>All Connectors</h2>
-        <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
-          <option value="">Any direction</option>
-          <option value="source">Source</option>
-          <option value="destination">Destination</option>
-          <option value="both">Both</option>
-        </Filter>
+        <FilterBar applied={(direction ? 1 : 0) as number}>
+          <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
+            <option value="">Any direction</option>
+            <option value="source">Source</option>
+            <option value="destination">Destination</option>
+            <option value="both">Both</option>
+          </Filter>
+        </FilterBar>
 
         <ListStatus
           busy={list.isFetching}

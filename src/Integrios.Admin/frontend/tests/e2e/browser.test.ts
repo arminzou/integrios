@@ -196,7 +196,8 @@ describe("The dashboard in a real browser", () => {
     ["the list", "/tenants", null],
     ["a detail screen", `/tenants/${tenants.items[0].id}`, null],
     ["an authoring screen with its create form open", `/tenants/${tenants.items[0].id}/connections`, "New Connection"],
-    ["the Event ledger and its activity summary", `/tenants/${tenants.items[0].id}/events`, "Find an Event"],
+    // The Event ledger's filters are on screen from the start, so there is nothing to open here.
+    ["the Event ledger and its activity summary", `/tenants/${tenants.items[0].id}/events`, undefined],
   ])(
     "passes the accessibility rules that need real layout on %s",
     async (_name, path, disclosure) => {
