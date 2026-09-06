@@ -211,7 +211,9 @@ describe("Create forms, filled through a real browser", () => {
   }, 60_000);
 
   it("sends a Subscription with a numeric order, an object delivery, and a null mapping", async () => {
-    const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}`);
+    // Subscription authoring keeps its own route below the Topic; the Topic id alone now selects
+    // the Topic beside the Topics list and summarises its Subscriptions rather than authoring them.
+    const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}/subscriptions`);
 
     await view.click("text=New Subscription");
     const form = formNamed(view, "Create a Subscription");

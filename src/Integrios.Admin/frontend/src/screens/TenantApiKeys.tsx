@@ -1,7 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { NavLink } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,7 +23,19 @@ import {
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
-import { Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import {
+  CloseInspector,
+  Details,
+  Inspector,
+  InspectorPlaceholder,
+  Page,
+  PageHeader,
+  Panel,
+  RowHeader,
+  SplitList,
+  SplitView,
+  TableCard,
+} from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 import { Timestamp } from "../ui/time";
 
@@ -39,7 +52,13 @@ const createSchema = z.object({
 
 type CreateValues = z.infer<typeof createSchema>;
 
-export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
+export function TenantApiKeysScreen({
+  tenantId,
+  selectedTenantApiKeyId,
+}: {
+  tenantId: string;
+  selectedTenantApiKeyId?: string;
+}) {
   const [notice, setNotice] = useState("");
   const [state, setState] = useFilterParam("state");
   const create = useCreatePanel("new-tenant-api-key");
@@ -87,57 +106,148 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
           empty={keys.length === 0}
           emptyText="This Tenant has no API keys matching this filter."
         />
-        {keys.length > 0 ? (
-          <TableCard
-            caption={`Tenant API keys, newest first${appliedNote(state ? 1 : 0)}`}
-            footer={
-              <LoadMore
-                hasMore={list.hasNextPage}
-                busy={list.isFetching}
-                loaded={keys.length}
-                onLoadMore={() => void list.fetchNextPage()}
-              />
-            }
-          >
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">Name</TableHead>
-                <TableHead scope="col">Prefix</TableHead>
-                <TableHead scope="col">State</TableHead>
-                <TableHead scope="col">Expires</TableHead>
-                <TableHead scope="col">Last used</TableHead>
-                <TableHead scope="col">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {keys.map((key) => (
-                <TableRow key={key.id}>
-                  <RowHeader>{key.name}</RowHeader>
-                  {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
-                  <TableCell className="font-mono text-[13px]">{key.key_prefix}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={key.state} />
-                  </TableCell>
-                  <TableCell className="text-ink-secondary">
-                    {key.expires_at ? <Timestamp value={key.expires_at} /> : "Never"}
-                  </TableCell>
-                  <TableCell className="text-ink-secondary">
-                    {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}
-                  </TableCell>
-                  <TableCell>
-                    <RevokeTenantApiKey
-                      tenantId={tenantId}
-                      apiKey={key}
-                      onDone={() => setNotice(`${key.name} revoked.`)}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </TableCard>
-        ) : null}
+        <SplitView>
+          <SplitList>
+            {keys.length > 0 ? (
+              <TableCard
+                caption={`Tenant API keys, newest first${appliedNote(state ? 1 : 0)}`}
+                footer={
+                  <LoadMore
+                    hasMore={list.hasNextPage}
+                    busy={list.isFetching}
+                    loaded={keys.length}
+                    onLoadMore={() => void list.fetchNextPage()}
+                  />
+                }
+              >
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Name</TableHead>
+                    <TableHead scope="col">Prefix</TableHead>
+                    <TableHead scope="col">State</TableHead>
+                    <TableHead scope="col">Expires</TableHead>
+                    <TableHead scope="col">Last used</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {keys.map((key) => (
+                    <TableRow key={key.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                      <RowHeader>
+                        <NavLink className="no-underline" to={`/tenants/${tenantId}/tenant-api-keys/${key.id}`} end>
+                          {key.name}
+                        </NavLink>
+                      </RowHeader>
+                      {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
+                      <TableCell className="font-mono text-[13px]">{key.key_prefix}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={key.state} />
+                      </TableCell>
+                      <TableCell className="text-ink-secondary">
+                        {key.expires_at ? <Timestamp value={key.expires_at} /> : "Never"}
+                      </TableCell>
+                      <TableCell className="text-ink-secondary">
+                        {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </TableCard>
+            ) : null}
+          </SplitList>
+
+          {selectedTenantApiKeyId ? (
+            <TenantApiKeyInspector
+              key={selectedTenantApiKeyId}
+              tenantId={tenantId}
+              tenantApiKeyId={selectedTenantApiKeyId}
+              onRevoked={(name) => setNotice(`${name} revoked.`)}
+            />
+          ) : (
+            <InspectorPlaceholder label="Tenant API key detail">
+              Select a key to read when it was last used and to revoke it.
+            </InspectorPlaceholder>
+          )}
+        </SplitView>
       </section>
     </Page>
+  );
+}
+
+/// The selected key beside the list. It reads the key by its own id rather than off the loaded page,
+/// so a copied link resolves the same detail whether or not that row is in the list's current page.
+function TenantApiKeyInspector({
+  tenantId,
+  tenantApiKeyId,
+  onRevoked,
+}: {
+  tenantId: string;
+  tenantApiKeyId: string;
+  onRevoked: (name: string) => void;
+}) {
+  const apiKey = useQuery({
+    queryKey: ["tenant-api-key", tenantId, tenantApiKeyId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/tenant-api-keys/{id}", {
+          params: { path: { tenantId, id: tenantApiKeyId } },
+        }),
+      ),
+  });
+
+  const closed = `/tenants/${tenantId}/tenant-api-keys`;
+  const problem = asProblem(apiKey.error);
+  if (problem)
+    return (
+      <Inspector label="Tenant API key detail">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="m-0">Tenant API key</h2>
+          <CloseInspector to={closed} label="Close the Tenant API key detail" />
+        </div>
+        <p role="alert">{problem.detail ?? `This key could not be read (${problem.status}).`}</p>
+      </Inspector>
+    );
+  if (!apiKey.data) return <Inspector label="Tenant API key detail">Loading…</Inspector>;
+
+  const current = apiKey.data;
+  return (
+    <Inspector label="Tenant API key detail">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="min-w-0">
+          {current.name}
+          {/* Only the prefix exists to show. The token itself is hashed at rest and was displayed
+              once, at creation. */}
+          <span className="block font-mono text-xs break-all text-ink-secondary">{current.key_prefix}…</span>
+        </h2>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.state} className="mt-0.5" />
+          <CloseInspector to={closed} label="Close the Tenant API key detail" />
+        </div>
+      </div>
+
+      <Details className="border-b pb-3.5">
+        <dt>Created</dt>
+        <dd>
+          <Timestamp value={current.created_at} />
+        </dd>
+        <dt>Expires</dt>
+        <dd>{current.expires_at ? <Timestamp value={current.expires_at} /> : "Never"}</dd>
+        <dt>Last used</dt>
+        <dd>{current.last_used_at ? <Timestamp value={current.last_used_at} /> : "Never used"}</dd>
+      </Details>
+
+      {current.description ? <p className="m-0 text-[13px] text-ink-secondary">{current.description}</p> : null}
+
+      <RevokeTenantApiKey
+        tenantId={tenantId}
+        apiKey={{
+          id: current.id,
+          name: current.name,
+          keyPrefix: current.key_prefix,
+          revoked: current.state === "revoked",
+        }}
+        onDone={() => onRevoked(current.name)}
+      />
+    </Inspector>
   );
 }
 
@@ -147,7 +257,9 @@ function RevokeTenantApiKey({
   onDone,
 }: {
   tenantId: string;
-  apiKey: TenantApiKeyListItem;
+  // The two reads spell the same field differently — the list says `state`, the detail says
+  // `status` — so the control takes what it actually needs rather than either DTO.
+  apiKey: { id: string; name: string; keyPrefix: string; revoked: boolean };
   onDone: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -164,13 +276,18 @@ function RevokeTenantApiKey({
     },
   });
 
-  if (apiKey.state === "revoked") return <span>Revoked</span>;
+  if (apiKey.revoked)
+    return (
+      <p className="m-0 text-[13px] text-ink-secondary">
+        Revoked keys are kept so a request that still carries one can be recognised in the logs.
+      </p>
+    );
 
   return (
     <div className="flex flex-col items-start gap-2">
       <ConfirmAction
         label="Revoke"
-        question={`Revoke the Tenant API key "${apiKey.name}" (${apiKey.key_prefix})? Callers using it stop being authenticated immediately.`}
+        question={`Revoke the Tenant API key "${apiKey.name}" (${apiKey.keyPrefix})? Callers using it stop being authenticated immediately.`}
         confirmLabel={`Revoke ${apiKey.name}`}
         busy={revoke.isPending}
         onConfirm={() => revoke.mutate()}

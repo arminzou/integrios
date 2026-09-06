@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router";
+import { Link, NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,7 +23,20 @@ import {
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
-import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import {
+  CloseInspector,
+  Details,
+  Inspector,
+  InspectorPlaceholder,
+  Page,
+  PageHeader,
+  Panel,
+  RowHeader,
+  SplitList,
+  SplitView,
+  TableCard,
+} from "../ui/layout";
+import { nameIn, useConnectionOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { SubscriptionsSection } from "./Subscriptions";
 
@@ -40,7 +53,7 @@ type TopicValues = z.infer<typeof topicSchema>;
 
 const optional = (text: string) => text.trim() || null;
 
-export function TopicsScreen({ tenantId }: { tenantId: string }) {
+export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; selectedTopicId?: string }) {
   const [status, setStatus] = useFilterParam("status");
   const create = useCreatePanel("new-topic");
   const list = useInfiniteQuery({
@@ -85,44 +98,162 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
           empty={topics.length === 0}
           emptyText="This Tenant has no Topics matching this filter."
         />
-        {topics.length > 0 ? (
-          <TableCard
-            caption={`Topics, newest first${appliedNote(status ? 1 : 0)}`}
-            footer={
-              <LoadMore
-                hasMore={list.hasNextPage}
-                busy={list.isFetching}
-                loaded={topics.length}
-                onLoadMore={() => void list.fetchNextPage()}
-              />
-            }
-          >
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">Name</TableHead>
-                <TableHead scope="col">Description</TableHead>
-                <TableHead scope="col">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {topics.map((topic) => (
-                <TableRow key={topic.id}>
-                  <RowHeader className="whitespace-nowrap">
-                    <Link className="font-mono no-underline" to={`/tenants/${tenantId}/topics/${topic.id}`}>
-                      {topic.name}
-                    </Link>
-                  </RowHeader>
-                  <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={topic.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </TableCard>
-        ) : null}
+        <SplitView>
+          <SplitList>
+            {topics.length > 0 ? (
+              <TableCard
+                caption={`Topics, newest first${appliedNote(status ? 1 : 0)}`}
+                footer={
+                  <LoadMore
+                    hasMore={list.hasNextPage}
+                    busy={list.isFetching}
+                    loaded={topics.length}
+                    onLoadMore={() => void list.fetchNextPage()}
+                  />
+                }
+              >
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Name</TableHead>
+                    <TableHead scope="col">Description</TableHead>
+                    <TableHead scope="col">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {topics.map((topic) => (
+                    <TableRow key={topic.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                      <RowHeader className="whitespace-nowrap">
+                        {/* The route is the selection, so `aria-current` follows the URL rather than a
+                        separately tracked flag — the same contract every other ledger has. */}
+                        <NavLink className="font-mono no-underline" to={`/tenants/${tenantId}/topics/${topic.id}`} end>
+                          {topic.name}
+                        </NavLink>
+                      </RowHeader>
+                      <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={topic.status} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </TableCard>
+            ) : null}
+          </SplitList>
+
+          {selectedTopicId ? (
+            <TopicInspector key={selectedTopicId} tenantId={tenantId} topicId={selectedTopicId} />
+          ) : (
+            <InspectorPlaceholder label="Topic detail">
+              Select a Topic to read its Subscriptions and what they match.
+            </InspectorPlaceholder>
+          )}
+        </SplitView>
       </section>
     </Page>
+  );
+}
+
+/// The selected Topic beside the list. Its Subscriptions are summarised here rather than authored
+/// here: what an Operator reads off a Topic is what matches it and where that goes, and a create
+/// panel, a filter and a cursor-paged table inside a 400-pixel panel would be a list-with-detail
+/// nested inside a detail. Authoring keeps its own route, which this panel links to.
+function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: string }) {
+  const [notice, setNotice] = useState("");
+  const connections = useConnectionOptions(tenantId);
+  const topic = useQuery({
+    queryKey: ["topic", tenantId, topicId],
+    queryFn: () =>
+      call(() => api.GET("/admin/tenants/{tenantId}/topics/{id}", { params: { path: { tenantId, id: topicId } } })),
+  });
+  // A summary, not the list: enough Subscriptions to see the shape of the Topic, with the authoring
+  // route carrying the rest. It has no cursor because it is not paging anything.
+  const subscriptions = useQuery({
+    queryKey: ["subscription-summary", tenantId, topicId],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
+          params: { path: { tenantId, topicId }, query: { limit: 20 } },
+        }),
+      ),
+  });
+
+  const problem = asProblem(topic.error);
+  if (problem)
+    return (
+      <Inspector label="Topic detail">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="m-0">Topic</h2>
+          <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
+        </div>
+        <p role="alert">{problem.detail ?? `This Topic could not be read (${problem.status}).`}</p>
+      </Inspector>
+    );
+  if (!topic.data) return <Inspector label="Topic detail">Loading…</Inspector>;
+
+  const current = topic.data;
+  const matched = subscriptions.data?.items ?? [];
+
+  return (
+    <Inspector label="Topic detail">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="font-mono break-all">{current.name}</h2>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.status} className="mt-0.5" />
+          <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
+        </div>
+      </div>
+
+      <Details className="border-b pb-3.5">
+        <dt>Description</dt>
+        <dd>{current.description ?? "—"}</dd>
+        <dt>Subscriptions</dt>
+        <dd className="tabular-nums">{subscriptions.isPending ? "…" : matched.length}</dd>
+      </Details>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="eyebrow">Subscriptions</h3>
+        {subscriptions.isPending ? <p className="m-0 text-[13px] text-ink-secondary">Loading…</p> : null}
+        {/* A Topic nothing matches accepts Events and routes none of them, which is the established
+            signal for a missing Subscription rather than an empty section. */}
+        {subscriptions.isSuccess && matched.length === 0 ? (
+          <p className="m-0 text-[13px] text-ink-secondary">
+            No Subscription matches this Topic, so nothing accepted here is ever routed.
+          </p>
+        ) : null}
+        {matched.map((subscription) => (
+          <div
+            key={subscription.id}
+            className="flex items-center justify-between gap-2 rounded-md border bg-surface-quiet px-2.5 py-2"
+          >
+            <div className="min-w-0 text-[13px]">
+              <Link
+                className="block truncate no-underline"
+                to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}
+              >
+                {subscription.name}
+              </Link>
+              <span className="block truncate font-mono text-xs text-ink-secondary">
+                → {nameIn(connections.data?.items, subscription.destination_connection_id)}
+              </span>
+            </div>
+            <StatusBadge status={subscription.status} className="shrink-0" />
+          </div>
+        ))}
+        <Button asChild variant="outline" size="sm" className="self-start">
+          <Link className="no-underline" to={`/tenants/${tenantId}/topics/${topicId}/subscriptions`}>
+            Manage Subscriptions
+          </Link>
+        </Button>
+      </section>
+
+      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
+      <EditTopic
+        key={current.updated_at}
+        tenantId={tenantId}
+        topic={current}
+        onDone={() => setNotice("Topic deactivated.")}
+      />
+    </Inspector>
   );
 }
 
@@ -171,8 +302,9 @@ function CreateTopic({ tenantId }: { tenantId: string }) {
   );
 }
 
+/// The Subscription authoring workspace: a create panel, a filter and a cursor-paged list, which is
+/// what would not fit in the inspector beside the Topics list. Reached from that panel.
 export function TopicScreen({ tenantId, topicId }: { tenantId: string; topicId: string }) {
-  const [notice, setNotice] = useState("");
   const topic = useQuery({
     queryKey: ["topic", tenantId, topicId],
     queryFn: () =>
@@ -192,30 +324,18 @@ export function TopicScreen({ tenantId, topicId }: { tenantId: string; topicId: 
   const current = topic.data;
   return (
     <Page>
-      <PageHeader title={current.name}>
-        In{" "}
-        <Link className="underline" to={`/tenants/${tenantId}/topics`}>
-          this Tenant's Topics
-        </Link>
-        .
+      <PageHeader
+        title={`Subscriptions on ${current.name}`}
+        action={
+          <Button asChild variant="outline">
+            <Link className="no-underline" to={`/tenants/${tenantId}/topics/${topicId}`}>
+              Back to the Topic
+            </Link>
+          </Button>
+        }
+      >
+        A Subscription matches Events on this Topic and delivers them to one Connection.
       </PageHeader>
-
-      <Panel>
-        <Details>
-          <dt>Status</dt>
-          <dd>{current.status}</dd>
-          <dt>Description</dt>
-          <dd>{current.description ?? "—"}</dd>
-        </Details>
-      </Panel>
-
-      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-      <EditTopic
-        key={current.updated_at}
-        tenantId={tenantId}
-        topic={current}
-        onDone={() => setNotice("Topic deactivated.")}
-      />
 
       {/* Subscriptions are owned by the Topic in the API, so they are authored where they live
           rather than from a separate Tenant-level list that would have to reintroduce the Topic. */}

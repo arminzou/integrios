@@ -112,6 +112,17 @@ export const routeConfig: RouteObject[] = [
         element: <Ids>{({ tenantId }) => <TenantApiKeysScreen tenantId={tenantId} />}</Ids>,
       },
       {
+        path: "tenants/:tenantId/tenant-api-keys/:tenantApiKeyId",
+        handle: { section: "apiKeys" satisfies TenantSection },
+        element: (
+          <Ids>
+            {({ tenantId, tenantApiKeyId }) => (
+              <TenantApiKeysScreen tenantId={tenantId} selectedTenantApiKeyId={tenantApiKeyId} />
+            )}
+          </Ids>
+        ),
+      },
+      {
         path: "tenants/:tenantId/sources",
         handle: { section: "sources" satisfies TenantSection },
         element: <Ids>{({ tenantId }) => <SourcesScreen tenantId={tenantId} />}</Ids>,
@@ -130,6 +141,11 @@ export const routeConfig: RouteObject[] = [
       },
       {
         path: "tenants/:tenantId/topics/:topicId",
+        handle: { section: "topics" satisfies TenantSection },
+        element: <Ids>{({ tenantId, topicId }) => <TopicsScreen tenantId={tenantId} selectedTopicId={topicId} />}</Ids>,
+      },
+      {
+        path: "tenants/:tenantId/topics/:topicId/subscriptions",
         handle: { section: "topics" satisfies TenantSection },
         element: <Ids>{({ tenantId, topicId }) => <TopicScreen tenantId={tenantId} topicId={topicId} />}</Ids>,
       },

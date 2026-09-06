@@ -43,7 +43,7 @@ internal sealed class CreateTenantApiKeyCommandHandler(ITenantApiKeyRepository r
         TenantApiKey created = await repository.CreateAsync(tenantApiKey, cancellationToken);
         return new CreateTenantApiKeyResult
         {
-            TenantApiKey = TenantApiKeyDto.From(created),
+            TenantApiKey = TenantApiKeyDto.From(created, DateTimeOffset.UtcNow),
             Token = rawKey,
         };
     }

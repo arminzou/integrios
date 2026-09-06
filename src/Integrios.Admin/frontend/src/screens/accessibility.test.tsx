@@ -157,7 +157,7 @@ describe("Accessibility of the Operator workflows", () => {
     }));
 
     const container = renderScreen(<TopicScreen tenantId={tenantId} topicId={topicId} />);
-    await screen.findByRole("heading", { level: 1, name: "orders" });
+    await screen.findByRole("heading", { level: 1, name: "Subscriptions on orders" });
     await expectNoAccessibilityViolations(container);
   });
 });

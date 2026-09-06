@@ -12,6 +12,6 @@ internal sealed class GetTenantApiKeyByIdQueryHandler(ITenantApiKeyRepository re
     public async Task<TenantApiKeyDto?> Handle(GetTenantApiKeyByIdQuery query, CancellationToken cancellationToken)
     {
         TenantApiKey? key = await repository.GetByIdAsync(query.TenantId, query.Id, cancellationToken);
-        return key is null ? null : TenantApiKeyDto.From(key);
+        return key is null ? null : TenantApiKeyDto.From(key, DateTimeOffset.UtcNow);
     }
 }

@@ -47,7 +47,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         body.ShouldNotBeNull();
         body.TenantApiKey.Name.ShouldBe("ingest-key");
         body.TenantApiKey.TenantId.ShouldBe(fixture.TenantId);
-        body.TenantApiKey.Status.ShouldBe("active");
+        body.TenantApiKey.State.ShouldBe("active");
 
         // Token format: intg_<64hex>
         body.Token.ShouldStartWith("intg_", Case.Sensitive);

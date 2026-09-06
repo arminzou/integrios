@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
@@ -45,11 +45,18 @@ describe("Tenant API keys", () => {
   });
 
   it("names the key it is about to revoke and does not revoke until confirmed", async () => {
-    const calls = stubHttp(({ method }) =>
-      method === "POST" ? { status: 200 } : { status: 200, body: page([listItem]) },
-    );
+    // The panel reads the key by its own id, so the stub answers the detail path with a key rather
+    // than with the list every other GET returns.
+    const calls = stubHttp(({ method, url }) => {
+      if (method === "POST") return { status: 200 };
+      if (url.pathname.endsWith(`/tenant-api-keys/${keyId}`))
+        return { status: 200, body: { ...listItem, status: listItem.state } };
+      return { status: 200, body: page([listItem]) };
+    });
 
-    renderScreen(<TenantApiKeysScreen tenantId={tenantId} />);
+    // Revoke lives in the panel that names the key rather than on the row, so the key has to be
+    // the selected one for the control to exist at all.
+    renderScreen(<TenantApiKeysScreen tenantId={tenantId} selectedTenantApiKeyId={keyId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
 
     expect(screen.getByText(/Revoke the Tenant API key "Ingest" \(itk_live_ab\)\?/)).toBeTruthy();
@@ -57,8 +64,7 @@ describe("Tenant API keys", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Revoke Ingest" }));
 
-    const revoke = await screen.findByRole("table");
-    expect(revoke).toBeTruthy();
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
     expect(calls.find((call) => call.method === "POST")!.url.pathname).toBe(
       `/admin/tenants/${tenantId}/tenant-api-keys/${keyId}/revoke`,
     );

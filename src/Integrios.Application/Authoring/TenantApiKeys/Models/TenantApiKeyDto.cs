@@ -9,19 +9,19 @@ public sealed record TenantApiKeyDto
     public required Guid TenantId { get; init; }
     public required string Name { get; init; }
     public required string KeyPrefix { get; init; }
-    public required string Status { get; init; }
+    public required string State { get; init; }
     public string? Description { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? ExpiresAt { get; init; }
     public DateTimeOffset? LastUsedAt { get; init; }
 
-    public static TenantApiKeyDto From(TenantApiKey key) => new()
+    public static TenantApiKeyDto From(TenantApiKey key, DateTimeOffset now) => new()
     {
         Id = key.Id,
         TenantId = key.TenantId,
         Name = key.Name,
         KeyPrefix = key.KeyPrefix,
-        Status = key.Status.ToString().ToLowerInvariant(),
+        State = TenantApiKeyState.From(key, now),
         Description = key.Description,
         CreatedAt = key.CreatedAt,
         ExpiresAt = key.ExpiresAt,
