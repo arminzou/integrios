@@ -1,6 +1,8 @@
 import { cn } from "cn";
 import { Slot } from "radix-ui";
 import type { ComponentProps, ReactNode } from "react";
+import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableCaption, TableHead } from "@/components/ui/table";
 
@@ -109,13 +111,44 @@ export function SplitList({ children }: { children: ReactNode }) {
 
 /// Sticky at desktop so the detail stays put while the list beside it is scanned. It carries its
 /// own accessible name because it is a complementary region, not a second page.
-export function Inspector({ label, children }: { label: string; children: ReactNode }) {
+export function Inspector({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
   return (
     <aside
       aria-label={label}
-      className="flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4 min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none"
+      className={cn(
+        "flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4 min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none",
+        className,
+      )}
     >
       {children}
     </aside>
+  );
+}
+
+/// The column the inspector will occupy, held open while nothing is selected. Without it, choosing
+/// the first row takes 400 pixels away from the ledger and reflows every column under the pointer
+/// that was just used — and an Operator who has not yet clicked anything has no way to know the
+/// detail panel is there at all. Desktop only: below the split it would be a box saying nothing
+/// between the filters and the rows.
+export function InspectorPlaceholder({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Inspector label={label} className="hidden min-[1180px]:flex">
+      <p className="m-0 text-[13px] text-ink-secondary">{children}</p>
+    </Inspector>
+  );
+}
+
+/// The way back to an unselected list. The route is the selection, so closing the panel is a
+/// navigation like opening it was — which keeps back, forward, and a copied link all meaning the
+/// same thing they did before.
+export function CloseInspector({ to, label }: { to: string; label: string }) {
+  return (
+    <Button asChild variant="ghost" size="icon-sm" title={label}>
+      <Link to={to} aria-label={label}>
+        <svg aria-hidden="true" viewBox="0 0 12 12" className="size-3">
+          <path d="M3 3l6 6M9 3l-6 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </Link>
+    </Button>
   );
 }

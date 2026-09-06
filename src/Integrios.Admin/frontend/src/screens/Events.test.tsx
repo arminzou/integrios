@@ -367,6 +367,43 @@ describe("Event inspector", () => {
     expect(screen.queryByRole("button", { name: "Replay" })).toBeNull();
   });
 
+  it("shows the most recent attempts and holds the rest of the retry history behind a control", async () => {
+    // A destination that has been failing for a while accumulates attempts the inspector cannot show
+    // at once in a 400-pixel panel. What an Operator is triaging is the recent end, so that is what
+    // is shown unasked — and it must be the recent end, not the first five, or the panel would open
+    // on history and hide the failure being investigated.
+    const attempt = (number: number) => ({
+      attempt_id: `aaaaaaaa-0000-0000-0000-00000000000${number}`,
+      event_delivery_id: deliveryId,
+      subscription_id: subscriptionId,
+      destination_connection_id: "88888888-8888-8888-8888-888888888888",
+      attempt_number: number,
+      status: "failed",
+      failure_phase: "http",
+      response_status_code: 503,
+      error_message: null,
+      started_at: `2026-09-01T10:0${number}:00Z`,
+      completed_at: `2026-09-01T10:0${number}:01Z`,
+    });
+    const all = [1, 2, 3, 4, 5, 6, 7, 8].map(attempt);
+    stubHttp(respondFor(page([]), { ...detail("dead_lettered"), delivery_attempts: all }));
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    const timeline = await screen.findByRole("list", {
+      name: "Every attempt made against this Event's EventDeliveries",
+    });
+
+    expect(within(timeline).getAllByRole("listitem")).toHaveLength(5);
+    expect(within(timeline).getByText(/attempt 8 to Subscription/)).toBeTruthy();
+    expect(within(timeline).queryByText(/attempt 3 to Subscription/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all 8 attempts" }));
+
+    expect(within(timeline).getAllByRole("listitem")).toHaveLength(8);
+    expect(within(timeline).getByText(/attempt 1 to Subscription/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+  });
+
   it("renders an in-progress Delivery attempt neutrally, not as a failure", async () => {
     // A worker leases an attempt as "in_progress" before it finishes, and a dead lease can leave one
     // stuck there indefinitely. Neither is a failure, and the timeline must not guess otherwise.

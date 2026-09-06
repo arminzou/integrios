@@ -24,7 +24,19 @@ import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/field
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { Details, Inspector, Page, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
+import {
+  CloseInspector,
+  Details,
+  Inspector,
+  InspectorPlaceholder,
+  Page,
+  PageHeader,
+  Panel,
+  RowHeader,
+  SplitList,
+  SplitView,
+  TableCard,
+} from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 import { Timestamp } from "../ui/time";
 
@@ -189,7 +201,11 @@ export function ConnectionsScreen({
               fed a new id, which is what keeps a stale name from being on screen when focus moves. */}
         {selectedConnectionId ? (
           <ConnectionInspector key={selectedConnectionId} tenantId={tenantId} connectionId={selectedConnectionId} />
-        ) : null}
+        ) : (
+          <InspectorPlaceholder label="Connection detail">
+            Select a Connection to read its configuration and authentication here.
+          </InspectorPlaceholder>
+        )}
       </SplitView>
     </Page>
   );
@@ -310,7 +326,10 @@ function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; con
           Operator checks before reading anything else in the panel. */}
       <div className="flex items-start justify-between gap-3">
         <h2 className="font-mono break-all">{current.name}</h2>
-        <StatusBadge status={current.status} className="mt-0.5 shrink-0" />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.status} className="mt-0.5" />
+          <CloseInspector to={`/tenants/${tenantId}/connections`} label="Close the Connection detail" />
+        </div>
       </div>
 
       <Details className="border-b pb-3.5">

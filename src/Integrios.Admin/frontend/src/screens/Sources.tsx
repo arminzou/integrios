@@ -24,7 +24,19 @@ import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { Details, Inspector, Page, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
+import {
+  CloseInspector,
+  Details,
+  Inspector,
+  InspectorPlaceholder,
+  Page,
+  PageHeader,
+  Panel,
+  RowHeader,
+  SplitList,
+  SplitView,
+  TableCard,
+} from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
@@ -164,7 +176,11 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
 
         {selectedSourceId ? (
           <SourceInspector key={selectedSourceId} tenantId={tenantId} sourceId={selectedSourceId} />
-        ) : null}
+        ) : (
+          <InspectorPlaceholder label="Source detail">
+            Select a Source to read the Connection and Topic it binds together.
+          </InspectorPlaceholder>
+        )}
       </SplitView>
     </Page>
   );
@@ -306,7 +322,10 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
     <Inspector label="Source detail">
       <div className="flex items-start justify-between gap-3">
         <h2 className="font-mono break-all">{current.id}</h2>
-        <StatusBadge status={current.status} className="mt-0.5 shrink-0" />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.status} className="mt-0.5" />
+          <CloseInspector to={`/tenants/${tenantId}/sources`} label="Close the Source detail" />
+        </div>
       </div>
 
       <Details className="border-b pb-3.5">

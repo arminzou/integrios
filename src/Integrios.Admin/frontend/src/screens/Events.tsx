@@ -11,7 +11,7 @@ import type { components } from "../api/schema";
 import { appliedNote, ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
 import { FilterSelectField, FilterTextField, Form } from "../ui/fields";
-import { PageHeader, RowHeader, TableCard } from "../ui/layout";
+import { CloseInspector, Inspector, InspectorPlaceholder, PageHeader, RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge, statusLabel } from "../ui/status";
 import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
 
@@ -21,6 +21,10 @@ type EventActivitySummary = components["schemas"]["EventActivitySummaryDto"];
 
 const eventStatuses = ["accepted", "processing", "routed", "unrouted", "failed", "dead_lettered"];
 const deliveryStatuses = ["pending", "in_flight", "succeeded", "dead_lettered"];
+
+/// How much of a retry history the inspector shows unasked. Enough to cover one exhausted budget
+/// and the attempt that preceded it; the rest is there on request.
+const attemptWindow = 5;
 
 /// Above this width the ledger and the selected Event's inspector sit side by side, so moving focus
 /// to the inspector on selection would only be disorienting; below it the inspector follows the
@@ -412,7 +416,11 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               receive it. */}
         {selectedEventId ? (
           <EventInspector key={selectedEventId} tenantId={tenantId} eventId={selectedEventId} />
-        ) : null}
+        ) : (
+          <InspectorPlaceholder label="Event detail">
+            Select an Event to read its Deliveries, attempts, and trace identity here.
+          </InspectorPlaceholder>
+        )}
       </div>
     </div>
   );
@@ -503,6 +511,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
   // is exactly the condition that control renders under, so it is gone by the time the write it
   // just made has anything to report. The inspector is keyed by Event id and survives the re-read.
   const [replayed, setReplayed] = useState(false);
+  const [allAttempts, setAllAttempts] = useState(false);
   const event = useQuery({
     queryKey: eventKey,
     queryFn: () =>
@@ -527,34 +536,46 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
     if (isNarrow) heading.current?.focus();
   }, [eventId, event.data, event.isError]);
 
-  const panel =
-    "flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4 min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none";
+  const closed = `/tenants/${tenantId}/events`;
 
   const problem = asProblem(event.error);
   if (problem)
     return (
-      <aside className={panel} aria-label="Event detail">
-        <h2 ref={heading} tabIndex={-1} className="m-0">
-          Event
-        </h2>
+      <Inspector label="Event detail">
+        {/* The close is offered on a failed read too: an Event that cannot be read is exactly when
+            an Operator wants the ledger back, and without this the only way out is the browser. */}
+        <div className="flex items-start justify-between gap-3">
+          <h2 ref={heading} tabIndex={-1} className="m-0">
+            Event
+          </h2>
+          <CloseInspector to={closed} label="Close the Event detail" />
+        </div>
         <p role="alert">{problem.detail ?? `This Event could not be read (${problem.status}).`}</p>
-      </aside>
+      </Inspector>
     );
   if (!event.data)
     return (
-      <aside className={panel} aria-label="Event detail">
+      <Inspector label="Event detail">
         <p>Loading…</p>
-      </aside>
+      </Inspector>
     );
 
   const current = event.data;
+  const attempts = current.delivery_attempts ?? [];
+  // The most recent attempts are the ones being triaged; a long retry history is context an Operator
+  // asks for rather than scrolls past. Ordered oldest first, so the recent end is the tail.
+  const shownAttempts = allAttempts ? attempts : attempts.slice(-attemptWindow);
+
   return (
-    <aside className={panel} aria-label="Event detail">
+    <Inspector label="Event detail">
       <div className="flex items-start justify-between gap-3">
         <h2 ref={heading} tabIndex={-1} className="min-w-0">
           Event <span className="block font-mono text-xs break-all text-ink-secondary">{current.event_id}</span>
         </h2>
-        <StatusBadge status={current.status} className="mt-0.5 shrink-0" />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.status} className="mt-0.5" />
+          <CloseInspector to={closed} label="Close the Event detail" />
+        </div>
       </div>
       <dl className="m-0 grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-b pb-3.5 text-[13px] [&>dd]:m-0 [&>dd]:text-right [&>dt]:m-0 [&>dt]:text-ink-secondary">
         <dt>Accepted</dt>
@@ -640,12 +661,17 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
 
       <section className="flex flex-col gap-2">
         <h3 className="eyebrow">Delivery timeline</h3>
-        {current.delivery_attempts?.length ? (
+        {attempts.length > shownAttempts.length ? (
+          <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setAllAttempts(true)}>
+            Show all {attempts.length} attempts
+          </Button>
+        ) : null}
+        {attempts.length ? (
           <ol
             className="m-0 list-none border-l pl-5"
             aria-label="Every attempt made against this Event's EventDeliveries"
           >
-            {current.delivery_attempts.map((attempt) => {
+            {shownAttempts.map((attempt) => {
               // Only a terminal "failed" attempt gets the failure marker and its detail line.
               // "in_progress" (leased but not yet finished) and any other in-flight status are
               // neither success nor failure yet, and must not be painted red on a guess.
@@ -696,7 +722,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
           <p>No delivery attempts have been made for this Event.</p>
         )}
       </section>
-    </aside>
+    </Inspector>
   );
 }
 
