@@ -10,11 +10,21 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
+import {
+  appliedNote,
+  ConfirmAction,
+  FilterBar,
+  FormError,
+  ListStatus,
+  LoadMore,
+  useCreatePanel,
+  WriteStatus,
+} from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge } from "../ui/status";
 import { SubscriptionsSection } from "./Subscriptions";
 
 type Topic = components["schemas"]["AdminTopicResponse"];
@@ -52,11 +62,7 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
   return (
     <Page>
       <PageHeader title="Topics" action={<Button {...create.triggerProps}>New Topic</Button>}>
-        In{" "}
-        <Link className="underline" to={`/tenants/${tenantId}`}>
-          this Tenant
-        </Link>
-        .
+        A Topic is the Tenant-scoped stream Subscriptions match against. Its name is immutable.
       </PageHeader>
 
       <Panel {...create.panelProps} className="max-w-none">
@@ -64,12 +70,13 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
       </Panel>
 
       <section className="flex flex-col gap-4">
-        <h2>All Topics</h2>
-        <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
-          <option value="">Any status</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
-        </Filter>
+        <FilterBar applied={status ? 1 : 0}>
+          <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
+            <option value="">Any</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </Filter>
+        </FilterBar>
 
         <ListStatus
           busy={list.isFetching}
@@ -80,7 +87,7 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
         />
         {topics.length > 0 ? (
           <TableCard
-            caption="Topics, newest first"
+            caption={`Topics, newest first${appliedNote(status ? 1 : 0)}`}
             footer={
               <LoadMore
                 hasMore={list.hasNextPage}
@@ -93,20 +100,22 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
-                <TableHead scope="col">Status</TableHead>
                 <TableHead scope="col">Description</TableHead>
+                <TableHead scope="col">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {topics.map((topic) => (
                 <TableRow key={topic.id}>
-                  <RowHeader>
-                    <Link className="underline" to={`/tenants/${tenantId}/topics/${topic.id}`}>
+                  <RowHeader className="whitespace-nowrap">
+                    <Link className="font-mono no-underline" to={`/tenants/${tenantId}/topics/${topic.id}`}>
                       {topic.name}
                     </Link>
                   </RowHeader>
-                  <TableCell>{topic.status}</TableCell>
-                  <TableCell>{topic.description ?? "—"}</TableCell>
+                  <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={topic.status} />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

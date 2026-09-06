@@ -2,7 +2,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,11 +9,21 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
+import {
+  appliedNote,
+  ConfirmAction,
+  FilterBar,
+  FormError,
+  ListStatus,
+  LoadMore,
+  useCreatePanel,
+  WriteStatus,
+} from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { StatusBadge } from "../ui/status";
 
 type TenantApiKeyListItem = components["schemas"]["TenantApiKeyListItemDto"];
 type CreatedKey = components["schemas"]["CreateTenantApiKeyResult"];
@@ -52,11 +61,7 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
   return (
     <Page>
       <PageHeader title="Tenant API keys" action={<Button {...create.triggerProps}>New Tenant API key</Button>}>
-        In{" "}
-        <Link className="underline" to={`/tenants/${tenantId}`}>
-          this Tenant
-        </Link>
-        .
+        Tenant credentials for the intake endpoint. The token itself is shown once, at creation.
       </PageHeader>
 
       <Panel {...create.panelProps} className="max-w-none">
@@ -64,13 +69,14 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
       </Panel>
 
       <section className="flex flex-col gap-4">
-        <h2>All Tenant API keys</h2>
-        <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
-          <option value="">Any state</option>
-          <option value="active">Active</option>
-          <option value="expired">Expired</option>
-          <option value="revoked">Revoked</option>
-        </Filter>
+        <FilterBar applied={state ? 1 : 0}>
+          <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
+            <option value="">Any</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+            <option value="revoked">Revoked</option>
+          </Filter>
+        </FilterBar>
 
         <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
         <ListStatus
@@ -82,7 +88,7 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
         />
         {keys.length > 0 ? (
           <TableCard
-            caption="Tenant API keys, newest first"
+            caption={`Tenant API keys, newest first${appliedNote(state ? 1 : 0)}`}
             footer={
               <LoadMore
                 hasMore={list.hasNextPage}
@@ -107,8 +113,10 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
                 <TableRow key={key.id}>
                   <RowHeader>{key.name}</RowHeader>
                   {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
-                  <TableCell className="font-mono text-sm">{key.key_prefix}</TableCell>
-                  <TableCell>{key.state}</TableCell>
+                  <TableCell className="font-mono text-[13px]">{key.key_prefix}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={key.state} />
+                  </TableCell>
                   <TableCell>{key.expires_at ?? "Never"}</TableCell>
                   <TableCell>{key.last_used_at ?? "Never used"}</TableCell>
                   <TableCell>

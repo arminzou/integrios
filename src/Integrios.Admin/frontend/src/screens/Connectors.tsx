@@ -9,7 +9,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { FilterBar, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { appliedNote, FilterBar, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -53,7 +53,9 @@ export function ConnectorsScreen() {
 
   return (
     <Page>
-      <PageHeader title="Connectors">Connectors are installed for the whole deployment, not for one Tenant.</PageHeader>
+      <PageHeader title="Connectors">
+        Deployment-wide capability definitions. Connections are built from these, per Tenant.
+      </PageHeader>
 
       {/* Unlike Connections' create form, this one is never collapsed behind a disclosure: a fresh
           deployment installs no Connectors, and this list is the only screen it can reach, so the
@@ -62,10 +64,9 @@ export function ConnectorsScreen() {
       <ApplyManifest onApplied={(installed) => installed && navigate(`/connectors/${installed.id}`)} />
 
       <section className="flex flex-col gap-4">
-        <h2>All Connectors</h2>
         <FilterBar applied={(direction ? 1 : 0) as number}>
           <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
-            <option value="">Any direction</option>
+            <option value="">Any</option>
             <option value="source">Source</option>
             <option value="destination">Destination</option>
             <option value="both">Both</option>
@@ -81,7 +82,7 @@ export function ConnectorsScreen() {
         />
         {connectors.length > 0 ? (
           <TableCard
-            caption="Connectors, newest first"
+            caption={`Connectors, newest first${appliedNote(direction ? 1 : 0)}`}
             footer={
               <LoadMore
                 hasMore={list.hasNextPage}
@@ -104,11 +105,11 @@ export function ConnectorsScreen() {
               {connectors.map((connector) => (
                 <TableRow key={connector.id}>
                   <RowHeader>
-                    <Link className="underline" to={`/connectors/${connector.id}`}>
+                    <Link className="no-underline" to={`/connectors/${connector.id}`}>
                       {connector.name}
                     </Link>
                   </RowHeader>
-                  <TableCell className="font-mono text-sm">{connector.key}</TableCell>
+                  <TableCell className="font-mono text-[13px]">{connector.key}</TableCell>
                   <TableCell>{connector.contract_version}</TableCell>
                   <TableCell>{connector.direction}</TableCell>
                   <TableCell>
@@ -173,7 +174,7 @@ export function ConnectorScreen({ connectorId }: { connectorId: string }) {
       </Panel>
 
       <section className="flex max-w-2xl flex-col gap-2">
-        <h2>Manifest</h2>
+        <h4 className="eyebrow">Manifest</h4>
         <pre className="text-sm">{formatJson(current.manifest)}</pre>
       </section>
 

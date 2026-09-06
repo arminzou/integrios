@@ -67,10 +67,8 @@ function SkipLink() {
 function BrandMark() {
   return (
     <span className="brand">
-      <span className="brand-mark" aria-hidden="true">
-        I
-      </span>
-      Integrios Operator
+      <span className="brand-mark" aria-hidden="true" />
+      Integrios
     </span>
   );
 }
@@ -163,22 +161,37 @@ function Rail({
       </nav>
 
       <div className="rail-foot">
-        <span className="operator-identity">
-          Signed in as <strong>{session.display_name}</strong>
-          {session.email ? ` (${session.email})` : ""}.
+        {/* The identity is a label, not a sentence: the rail has room for a name and the role it is
+            acting in, and the email only repeats what the name already said. */}
+        <span className="operator-identity" title={session.email ?? undefined}>
+          <strong>{session.display_name}</strong>
+          <span>Operator</span>
         </span>
         {/* A native form submission carries no custom header, so the antiforgery token must
             travel through the server-configured form field rather than the header name used by
             the typed client's own requests. */}
         <form method="post" action="/auth/logout">
           <input type="hidden" name={session.antiforgery_form_field_name} value={session.antiforgery_token} />
-          <Button type="submit" variant="outline" size="sm">
+          <Button type="submit" variant="outline" size="sm" className="shrink-0">
             Sign out
           </Button>
         </form>
       </div>
     </div>
   );
+}
+
+function useDeadLetteredCount(tenantId: string): number {
+  const summary = useQuery({
+    // The unscoped key the Events screen uses when neither a Source nor a Topic filter is applied,
+    // so an Operator arriving at the ledger reuses this read rather than issuing a second one.
+    queryKey: ["activity-summary", tenantId, { sourceId: "", topicId: "" }],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/events/activity-summary", { params: { path: { tenantId }, query: {} } }),
+      ),
+  });
+  return Number(summary.data?.dead_lettered_deliveries ?? 0);
 }
 
 /// Reads the current Tenant once for the whole shell, so navigation and the breadcrumb name it
@@ -201,6 +214,12 @@ function tenantDisplayName(tenant: ReturnType<typeof useTenant>): string {
 /// opaque id. The name doubles as the way back to the Tenants list: the route stays authoritative
 /// for which Tenant is open, so this is an affordance for changing it, never a second source of it.
 function TenantNav({ tenantId, tenant }: { tenantId: string; tenant: ReturnType<typeof useTenant> }) {
+  // A count rides the destination it belongs to: work that has stopped retrying is the one thing an
+  // Operator has to see from wherever they are standing, not only from the ledger that lists it. It
+  // is the same Tenant-scoped summary the Overview and the Events screen read, so the shell costs no
+  // request they were not already making.
+  const deadLettered = useDeadLetteredCount(tenantId);
+
   return (
     <nav className="nav-group" aria-label="Tenant">
       <p className="nav-label">Tenant</p>
@@ -213,6 +232,7 @@ function TenantNav({ tenantId, tenant }: { tenantId: string; tenant: ReturnType<
           <li key={section}>
             <NavLink to={sectionHrefs[section](tenantId)} end={section === "overview"}>
               {sectionLabels[section]}
+              {section === "events" && deadLettered > 0 ? <span className="nav-count">{deadLettered}</span> : null}
             </NavLink>
           </li>
         ))}

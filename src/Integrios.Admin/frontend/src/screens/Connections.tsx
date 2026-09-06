@@ -10,13 +10,23 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
+import {
+  appliedNote,
+  ConfirmAction,
+  FilterBar,
+  FormError,
+  ListStatus,
+  LoadMore,
+  useCreatePanel,
+  WriteStatus,
+} from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
 import { Details, Inspector, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
+import { Timestamp } from "../ui/time";
 
 /// Connections is the authoring pattern every other capability copies. Its parts, in the order they
 /// appear below:
@@ -101,11 +111,7 @@ export function ConnectionsScreen({
     <SplitView>
       <SplitList>
         <PageHeader title="Connections" action={<Button {...create.triggerProps}>New Connection</Button>}>
-          In{" "}
-          <Link className="underline" to={`/tenants/${tenantId}`}>
-            this Tenant
-          </Link>
-          .
+          Tenant-owned endpoints built from a Connector. A Subscription delivers to one of these.
         </PageHeader>
 
         <Panel {...create.panelProps} className="max-w-none">
@@ -113,10 +119,9 @@ export function ConnectionsScreen({
         </Panel>
 
         <section className="flex flex-col gap-4">
-          <h2>All Connections</h2>
           <FilterBar applied={(status ? 1 : 0) as number}>
             <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
-              <option value="">Any status</option>
+              <option value="">Any</option>
               <option value="active">Active</option>
               <option value="disabled">Disabled</option>
             </Filter>
@@ -131,7 +136,7 @@ export function ConnectionsScreen({
           />
           {connections.length > 0 ? (
             <TableCard
-              caption="Connections, newest first"
+              caption={`Connections, newest first${appliedNote(status ? 1 : 0)}`}
               footer={
                 <LoadMore
                   hasMore={list.hasNextPage}
@@ -144,26 +149,34 @@ export function ConnectionsScreen({
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Name</TableHead>
-                  <TableHead scope="col">Status</TableHead>
                   <TableHead scope="col">Environment</TableHead>
+                  <TableHead scope="col">Status</TableHead>
                   <TableHead scope="col">Description</TableHead>
+                  <TableHead scope="col">Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {connections.map((connection) => (
                   <TableRow key={connection.id} className="has-[a[aria-current=page]]:bg-selected-surface">
-                    <RowHeader>
+                    <RowHeader className="whitespace-nowrap">
                       {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract the Event ledger already has. */}
-                      <NavLink className="underline" to={`/tenants/${tenantId}/connections/${connection.id}`} end>
+                      <NavLink
+                        className="font-mono no-underline"
+                        to={`/tenants/${tenantId}/connections/${connection.id}`}
+                        end
+                      >
                         {connection.name}
                       </NavLink>
                     </RowHeader>
+                    <TableCell>{connection.environment ?? "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={connection.status} />
                     </TableCell>
-                    <TableCell>{connection.environment ?? "—"}</TableCell>
-                    <TableCell>{connection.description ?? "—"}</TableCell>
+                    <TableCell className="text-ink-secondary">{connection.description ?? "—"}</TableCell>
+                    <TableCell className="text-ink-secondary">
+                      <Timestamp value={connection.updated_at} />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -292,32 +305,34 @@ function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; con
   const current = connection.data;
   return (
     <Inspector label="Connection detail">
-      <h2 className="m-0 text-2xl">{current.name}</h2>
+      {/* The identity on the left, the state that qualifies it on the right: the two things an
+          Operator checks before reading anything else in the panel. */}
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="font-mono break-all">{current.name}</h2>
+        <StatusBadge status={current.status} className="mt-0.5 shrink-0" />
+      </div>
 
-      <Panel>
-        <Details>
-          <dt>Status</dt>
-          <dd>
-            <StatusBadge status={current.status} />
-          </dd>
-          <dt>Connector</dt>
-          <dd>
-            <Link className="font-mono text-sm underline" to={`/connectors/${current.connector_id}`}>
-              {current.connector_id}
-            </Link>
-          </dd>
-          <dt>Environment</dt>
-          <dd>{current.environment ?? "—"}</dd>
-          <dt>Source verification</dt>
-          <dd>{current.source_verification ? current.source_verification.scheme : "Not configured"}</dd>
-          <dt>Destination authentication</dt>
-          <dd>{current.destination_authentication ? current.destination_authentication.scheme : "Not configured"}</dd>
-        </Details>
-      </Panel>
+      <Details className="border-b pb-3.5">
+        <dt>Connector</dt>
+        <dd>
+          <Link className="font-mono text-sm underline" to={`/connectors/${current.connector_id}`}>
+            {current.connector_id}
+          </Link>
+        </dd>
+        <dt>Environment</dt>
+        <dd>{current.environment ?? "—"}</dd>
+        <dt>Source verification</dt>
+        <dd>{current.source_verification ? current.source_verification.scheme : "Not configured"}</dd>
+        <dt>Destination authentication</dt>
+        <dd>{current.destination_authentication ? current.destination_authentication.scheme : "Not configured"}</dd>
+      </Details>
 
-      <section className="flex max-w-2xl flex-col gap-2">
-        <h2>Configuration</h2>
-        <pre className="max-w-2xl text-sm">{formatJson(current.config)}</pre>
+      <section className="flex min-w-0 flex-col gap-2">
+        <h4 className="eyebrow">Configuration</h4>
+        <pre className="text-xs">{formatJson(current.config)}</pre>
+        <p className="m-0 text-xs text-ink-secondary">
+          An update replaces this object outright rather than merging fields.
+        </p>
       </section>
 
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>

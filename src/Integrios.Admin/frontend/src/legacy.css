@@ -93,25 +93,20 @@ td a {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding-inline: 8px;
-  font-family: var(--font-serif);
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-/* A generic single-letter mark, not a reproduction of any product's brand — just a solid-fill
-   square so the wordmark reads as an app identity at a glance. */
+/* A generic mark, not a reproduction of any product's brand — just a solid-fill square so the
+   wordmark reads as an app identity at a glance. */
 .brand-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
+  flex: none;
+  width: 18px;
+  height: 18px;
   background: var(--ink);
-  color: var(--surface);
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.75rem;
+  border-radius: 4px;
 }
 
 /* The current Tenant, and the way back to the list to change it. */
@@ -168,18 +163,32 @@ td a {
 }
 
 /* Pushed to the bottom of the column, where an identity belongs and where it stops competing with
-   the destinations above it. */
+   the destinations above it. The identity and the way out of the session sit on one line: the name
+   is the label, and sign out is the only control the foot carries. */
 .rail-foot {
   margin-top: auto;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 
 .operator-identity {
-  font-size: 0.8125rem;
+  min-width: 0;
+}
+
+.operator-identity strong {
+  display: block;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.operator-identity span {
+  display: block;
+  font-size: 0.75rem;
   color: var(--ink-secondary);
 }
 
@@ -187,7 +196,8 @@ td a {
   width: 100%;
   max-width: var(--measure);
   margin-inline: auto;
-  padding: 24px 16px;
+  padding: 24px;
+  min-width: 0;
 }
 
 @media (max-width: 860px) {
@@ -235,11 +245,13 @@ td a {
 
   .rail-foot {
     margin-top: 0;
+    margin-left: auto;
     padding-top: 0;
     border-top: 0;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
+  }
+
+  #main {
+    padding: 16px;
   }
 }
 
@@ -247,6 +259,24 @@ td a {
    implied by the contextual nav row above it. */
 .breadcrumb {
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
-  margin: 0 0 8px;
+  font-size: 0.75rem;
+  margin: 0 0 6px;
+}
+
+/* A count rides the destination it belongs to, so dead-lettered work is visible from anywhere in
+   the Tenant rather than only from the ledger that lists it. */
+.nav-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--danger-surface);
+  color: var(--danger-ink);
+}
+
+.nav-list a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }

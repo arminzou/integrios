@@ -256,27 +256,30 @@ export function FilterBar({
   onClear?: () => void;
 }) {
   return (
-    <section aria-label="Filters" className="flex flex-col gap-3">
-      {/* A grid rather than a wrapping row: each control is a label, an input and sometimes a hint
-          of its own height, and left to flex they align on whichever edge the tallest one sets,
-          scattering the hints between rows. Fixed tracks keep every field a tidy column. */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] items-start gap-x-4 gap-y-3">{children}</div>
+    // A wrapping row of compact controls rather than a grid of labelled fields: each control is one
+    // line tall and carries its own value, so the bar costs the list a single row of height and an
+    // Operator reads the whole scope in one pass. How many are applied is stated on the list's own
+    // caption, where the rows it produced are.
+    <section aria-label="Filters" className="flex flex-wrap items-center gap-2">
+      {children}
       {applied > 0 ? (
-        <p className="m-0 flex flex-wrap items-center gap-3 text-sm text-ink-secondary">
-          <span>
-            {applied} filter{applied === 1 ? "" : "s"} applied.
-          </span>
-          {onClear ? (
-            <Button type="button" variant="outline" size="sm" onClick={onClear}>
-              Clear filters
-            </Button>
-          ) : (
-            <ClearFilters size="sm" />
-          )}
-        </p>
+        onClear ? (
+          <Button type="button" variant="ghost" onClick={onClear}>
+            Clear filters
+          </Button>
+        ) : (
+          <ClearFilters />
+        )
       ) : null}
     </section>
   );
+}
+
+/// How many filters a list is under, in the words its caption already uses. Empty when the list is
+/// showing everything, so an unfiltered caption says nothing extra.
+export function appliedNote(applied: number): string {
+  if (applied === 0) return "";
+  return ` · ${applied} filter${applied === 1 ? "" : "s"} applied`;
 }
 
 function ClearFilters({ size }: { size?: "sm" }) {
@@ -285,7 +288,7 @@ function ClearFilters({ size }: { size?: "sm" }) {
 
   if (params.toString() === "") return null;
   return (
-    <Button asChild variant="outline" size={size}>
+    <Button asChild variant="ghost" size={size}>
       {/* The base layer hands links their underline back, which a control shaped like a button
           should not carry. */}
       <Link to={pathname} className="no-underline">
@@ -312,12 +315,6 @@ export function ListStatus({
 }) {
   if (problem) return <p role="alert">{problem.detail ?? `The list could not be read (${problem.status}).`}</p>;
   if (busy && !loaded) return <ListSkeleton />;
-  if (loaded && empty)
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <p className="m-0">{emptyText}</p>
-        <ClearFilters />
-      </div>
-    );
+  if (loaded && empty) return <p className="m-0">{emptyText}</p>;
   return null;
 }

@@ -123,7 +123,7 @@ export function SubscriptionsSection({
         <h3>All Subscriptions</h3>
         <FilterBar applied={(status ? 1 : 0) as number}>
           <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
-            <option value="">Any status</option>
+            <option value="">Any</option>
             <option value="active">Active</option>
             <option value="disabled">Disabled</option>
           </Filter>

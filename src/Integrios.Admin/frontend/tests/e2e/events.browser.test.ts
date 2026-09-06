@@ -232,25 +232,34 @@ describe("The Event ledger and inspector in a real browser", () => {
   }, 60_000);
 
   it("keeps the recovery action inside the inspector, not past the edge of a table that scrolls", async () => {
-    // The EventDelivery table is wider than the inspector panel, so something has to be the part
-    // that scrolls. It must not be the recovery control: Replay is the only recovery the platform
-    // offers, and a control reachable only by discovering that an inner table scrolls sideways is
-    // one an Operator triaging a dead letter will not find. The columns that overflow are the ones
-    // that are read rather than acted on.
+    // Replay is the only recovery the platform offers, and a control reachable only by discovering
+    // that something inside the inspector scrolls sideways is one an Operator triaging a dead letter
+    // will not find. So nothing in the inspector scrolls sideways, and Replay sits inside its edge.
     const wide = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 1512, height: 950 }, [
       deadLetteredDelivery,
     ]);
 
     const reach = await wide.evaluate(() => {
       const inspector = document.querySelector('aside[aria-label="Event detail"]')!;
-      const scroller = inspector.querySelector('[data-slot="table-container"]')!;
       const replay = [...inspector.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Replay");
-      if (!replay) return { found: false, inside: false };
-      return { found: true, inside: replay.getBoundingClientRect().right <= scroller.getBoundingClientRect().right };
+      // Only what Replay is actually inside. A JSON body deliberately scrolls sideways rather than
+      // wrapping an identifier mid-string; that is content being read, not a control being hidden.
+      const scrolls = (() => {
+        for (let node = replay?.parentElement; node && node !== inspector; node = node.parentElement)
+          if (node.scrollWidth > node.clientWidth + 1) return true;
+        return false;
+      })();
+      if (!replay) return { found: false, inside: false, scrolls };
+      return {
+        found: true,
+        inside: replay.getBoundingClientRect().right <= inspector.getBoundingClientRect().right,
+        scrolls,
+      };
     });
 
     expect(reach.found).toBe(true);
     expect(reach.inside).toBe(true);
+    expect(reach.scrolls).toBe(false);
     await wide.close();
   });
 

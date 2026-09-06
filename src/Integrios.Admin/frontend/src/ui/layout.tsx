@@ -8,7 +8,7 @@ import { Table, TableCaption, TableHead } from "@/components/ui/table";
 /// and the bounded groups beneath it. Only the shape is shared — what a page is about stays in the
 /// screen that owns it.
 export function Page({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("flex flex-col gap-8", className)}>{children}</div>;
+  return <div className={cn("flex flex-col gap-5", className)}>{children}</div>;
 }
 
 /// Title, one line saying where the page sits, and the page's own primary action at the trailing
@@ -30,7 +30,7 @@ export function PageHeader({
     <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
       <div className="min-w-0">
         <h1>{title}</h1>
-        {children ? <p className="m-0 text-ink-secondary">{children}</p> : null}
+        {children ? <p className="m-0 max-w-[64ch] text-ink-secondary">{children}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </header>
@@ -43,11 +43,15 @@ export function TableCard({ caption, footer, children }: { caption: string; foot
   return (
     <Card className="gap-0 overflow-hidden py-0">
       <Table className="caption-top">
-        <TableCaption className="mt-0 px-4 pt-4 pb-2 text-left">{caption}</TableCaption>
+        <TableCaption className="mt-0 border-b px-4 py-3 text-left text-[13px]">{caption}</TableCaption>
         {children}
       </Table>
       {/* Paging belongs to the list it pages, not to the space under it. */}
-      {footer ? <div className="flex items-center justify-between gap-3 border-t px-4 py-2">{footer}</div> : null}
+      {footer ? (
+        <div className="flex h-13 items-center justify-between gap-3 border-t px-4 text-[13px] text-ink-secondary">
+          {footer}
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -69,9 +73,14 @@ export function Panel({ className, asChild, ...props }: ComponentProps<"div"> & 
 /// where there is room for two columns, and label above value where there is not. Two columns at
 /// 320 CSS pixels would leave the value column narrower than the identifiers it has to hold, which
 /// is what makes the document itself scroll sideways.
-export function Details({ children }: { children: ReactNode }) {
+export function Details({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] [&>dd]:m-0 [&>dt]:m-0 [&>dt]:font-medium">
+    <dl
+      className={cn(
+        "grid grid-cols-1 gap-x-3 gap-y-1.5 text-[13px] sm:grid-cols-[minmax(0,auto)_minmax(0,1fr)] [&>dd]:m-0 [&>dd]:break-words sm:[&>dd]:text-right [&>dt]:m-0 [&>dt]:text-ink-secondary",
+        className,
+      )}
+    >
       {children}
     </dl>
   );
@@ -83,14 +92,14 @@ export function Details({ children }: { children: ReactNode }) {
 /// compares rows and reads one in the same place.
 export function SplitView({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-6 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-8">
+    <div className="flex flex-col gap-5 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-4">
       {children}
     </div>
   );
 }
 
 export function SplitList({ children }: { children: ReactNode }) {
-  return <Page className="min-w-0 min-[1180px]:flex-[1_1_55%]">{children}</Page>;
+  return <Page className="min-w-0 min-[1180px]:flex-1">{children}</Page>;
 }
 
 /// Sticky at desktop so the detail stays put while the list beside it is scanned. It carries its
@@ -99,7 +108,7 @@ export function Inspector({ label, children }: { label: string; children: ReactN
   return (
     <aside
       aria-label={label}
-      className="flex min-w-0 flex-col gap-6 rounded-lg border bg-card p-6 min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:flex-[1_1_45%]"
+      className="flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4 min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none"
     >
       {children}
     </aside>

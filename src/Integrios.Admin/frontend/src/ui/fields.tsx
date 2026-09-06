@@ -99,6 +99,29 @@ export function SelectField<TValues extends FieldValues>({
   );
 }
 
+/// A list filter, compact enough to sit in a permanently visible row above the list it scopes. It
+/// carries its own current value, so a filtered list is legible as filtered without opening
+/// anything, and an applied one is tinted as well as worded.
+///
+/// It stays a real `<select>` under a borrowed appearance: the platform element brings the keyboard,
+/// the mobile picker, and the type-ahead, and only its own arrow is replaced so the control reads as
+/// one pill rather than a label beside a box.
+export const filterPill =
+  "inline-flex h-9 max-w-full items-center gap-2 rounded-md border bg-surface px-2.5 text-sm whitespace-nowrap hover:bg-hover-surface data-[applied=true]:border-accent-border data-[applied=true]:bg-selected-surface data-[applied=true]:text-selected-ink";
+
+// Capped so one long option — a Source named by its identifier — cannot stretch the pill across the
+// bar. The select still opens at its natural width; only the closed control is bounded.
+const filterControl =
+  "max-w-44 min-w-0 cursor-pointer appearance-none overflow-hidden rounded-sm bg-transparent font-medium text-ellipsis outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
+
+export function FilterCaret() {
+  return (
+    <span aria-hidden="true" className="text-ink-secondary">
+      ⌄
+    </span>
+  );
+}
+
 /// A list filter, which belongs to the list rather than to a form: it re-reads from the first cursor
 /// as soon as it changes, so there is nothing to submit and no schema to validate.
 export function Filter({
@@ -115,11 +138,72 @@ export function Filter({
   children: ReactNode;
 }) {
   return (
-    <div className="flex max-w-56 flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <NativeSelect id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+    <span className={filterPill} data-applied={String(value !== "")}>
+      <Label htmlFor={id} className="font-normal text-ink-secondary">
+        {label}
+      </Label>
+      <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className={filterControl}>
         {children}
-      </NativeSelect>
-    </div>
+      </select>
+      <FilterCaret />
+    </span>
   );
+}
+
+/// The same pill over a form field, for the one list whose filters are applied on submit rather than
+/// on change. The hint a full-height field would print under the control becomes the pill's title
+/// and its accessible description, so the row stays one line tall without losing the sentence.
+export function FilterSelectField<TValues extends FieldValues>({
+  control,
+  name,
+  label,
+  hint,
+  children,
+  ...select
+}: Row<TValues> & Omit<ComponentProps<"select">, "name">) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <label className={filterPill} data-applied={String(Boolean(field.value))} title={hintText(hint)}>
+          <span className="truncate text-ink-secondary">{label}</span>
+          <select {...field} {...select} aria-label={label} className={filterControl}>
+            {children}
+          </select>
+          <FilterCaret />
+        </label>
+      )}
+    />
+  );
+}
+
+export function FilterTextField<TValues extends FieldValues>({
+  control,
+  name,
+  label,
+  hint,
+  ...input
+}: Row<TValues> & Omit<ComponentProps<"input">, "name">) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <label className={filterPill} data-applied={String(Boolean(field.value))} title={hintText(hint)}>
+          <span className="truncate text-ink-secondary">{label}</span>
+          <input
+            {...field}
+            {...input}
+            aria-label={label}
+            className="min-w-0 appearance-none rounded-sm bg-transparent font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+        </label>
+      )}
+    />
+  );
+}
+
+function hintText(hint: ReactNode): string | undefined {
+  return typeof hint === "string" ? hint : undefined;
 }

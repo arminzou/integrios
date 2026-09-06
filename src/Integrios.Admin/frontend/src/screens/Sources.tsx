@@ -10,7 +10,16 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
+import {
+  appliedNote,
+  ConfirmAction,
+  FilterBar,
+  FormError,
+  ListStatus,
+  LoadMore,
+  useCreatePanel,
+  WriteStatus,
+} from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -73,11 +82,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
     <SplitView>
       <SplitList>
         <PageHeader title="Sources" action={<Button {...create.triggerProps}>New Source</Button>}>
-          In{" "}
-          <Link className="underline" to={`/tenants/${tenantId}`}>
-            this Tenant
-          </Link>
-          .
+          A Source binds one Connection to one Topic and selects the contract its input is read as.
         </PageHeader>
 
         <Panel {...create.panelProps} className="max-w-none">
@@ -85,24 +90,21 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
         </Panel>
 
         <section className="flex flex-col gap-4">
-          <h2>All Sources</h2>
-          <div className="flex flex-wrap gap-4">
-            <FilterBar applied={((status ? 1 : 0) as number) + ((type ? 1 : 0) as number)}>
-              <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-                <option value="">Any status</option>
-                <option value="active">Active</option>
-                <option value="revoked">Revoked</option>
-              </Filter>
-              <Filter id="source-type" label="Type" value={type} onChange={setType}>
-                <option value="">Any type</option>
-                {sourceTypes.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Filter>
-            </FilterBar>
-          </div>
+          <FilterBar applied={((status ? 1 : 0) as number) + ((type ? 1 : 0) as number)}>
+            <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
+              <option value="">Any</option>
+              <option value="active">Active</option>
+              <option value="revoked">Revoked</option>
+            </Filter>
+            <Filter id="source-type" label="Type" value={type} onChange={setType}>
+              <option value="">Any</option>
+              {sourceTypes.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Filter>
+          </FilterBar>
 
           <ListStatus
             busy={list.isFetching}
@@ -113,7 +115,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
           />
           {sources.length > 0 ? (
             <TableCard
-              caption="Sources, newest first"
+              caption={`Sources, newest first${appliedNote((status ? 1 : 0) + (type ? 1 : 0))}`}
               footer={
                 <LoadMore
                   hasMore={list.hasNextPage}
@@ -126,9 +128,9 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Source</TableHead>
+                  <TableHead scope="col">Topic</TableHead>
                   <TableHead scope="col">Type</TableHead>
                   <TableHead scope="col">Status</TableHead>
-                  <TableHead scope="col">Topic</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -136,24 +138,21 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                   <TableRow key={source.id} className="has-[a[aria-current=page]]:bg-selected-surface">
                     <RowHeader>
                       <NavLink
-                        className="font-mono text-sm underline"
+                        className="font-mono text-[13px] no-underline"
                         to={`/tenants/${tenantId}/sources/${source.id}`}
                         end
                       >
                         {source.id}
                       </NavLink>
                     </RowHeader>
+                    <TableCell>
+                      <Link className="font-mono text-[13px]" to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
+                        {source.topic_id}
+                      </Link>
+                    </TableCell>
                     <TableCell>{source.type}</TableCell>
                     <TableCell>
                       <StatusBadge status={source.status} />
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        className="font-mono text-sm underline"
-                        to={`/tenants/${tenantId}/topics/${source.topic_id}`}
-                      >
-                        {source.topic_id}
-                      </Link>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -304,35 +303,32 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
   const current = source.data;
   return (
     <Inspector label="Source detail">
-      <h2 className="m-0 font-mono text-lg break-all">{current.id}</h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="font-mono break-all">{current.id}</h2>
+        <StatusBadge status={current.status} className="mt-0.5 shrink-0" />
+      </div>
 
-      <Panel>
-        <Details>
-          <dt>Type</dt>
-          <dd>{current.type}</dd>
-          <dt>Status</dt>
-          <dd>
-            <StatusBadge status={current.status} />
-          </dd>
-          <dt>Connection</dt>
-          <dd>
-            <Link
-              className="font-mono text-sm underline"
-              to={`/tenants/${tenantId}/connections/${current.connection_id}`}
-            >
-              {current.connection_id}
-            </Link>
-          </dd>
-          <dt>Topic</dt>
-          <dd>
-            <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/topics/${current.topic_id}`}>
-              {current.topic_id}
-            </Link>
-          </dd>
-          <dt>Revoked</dt>
-          <dd>{current.revoked_at ?? "Not revoked"}</dd>
-        </Details>
-      </Panel>
+      <Details className="border-b pb-3.5">
+        <dt>Type</dt>
+        <dd>{current.type}</dd>
+        <dt>Connection</dt>
+        <dd>
+          <Link
+            className="font-mono text-sm underline"
+            to={`/tenants/${tenantId}/connections/${current.connection_id}`}
+          >
+            {current.connection_id}
+          </Link>
+        </dd>
+        <dt>Topic</dt>
+        <dd>
+          <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/topics/${current.topic_id}`}>
+            {current.topic_id}
+          </Link>
+        </dd>
+        <dt>Revoked</dt>
+        <dd>{current.revoked_at ?? "Not revoked"}</dd>
+      </Details>
 
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
       <EditSource

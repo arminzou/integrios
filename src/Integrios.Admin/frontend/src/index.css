@@ -143,12 +143,18 @@
     letter-spacing: -0.01em;
   }
 
-  /* A page's own title, scaled up to give it a clear point of orientation, distinct from the
-     secondary headings (`Create a Tenant`, `EventDeliveries`, …) beneath it. */
+  /* The three sizes the screens actually use: a page's own title, the heading on a bounded group
+     (an inspector, a panel), and nothing between them. A console is dense — a title scaled past the
+     ledger it introduces takes width from the data and gives back only emphasis. */
   h1 {
-    font-size: clamp(1.75rem, 1.5rem + 1vw, 2.375rem);
-    letter-spacing: -0.02em;
-    margin: 0 0 12px;
+    font-size: 1.5rem;
+    margin: 0 0 2px;
+  }
+
+  h2,
+  h3 {
+    font-size: 1.0625rem;
+    margin: 0;
   }
 
   /* Monospace is limited to identifiers, trace values, and JSON documents. */
@@ -179,5 +185,20 @@
       scroll-behavior: auto !important;
     }
     /* biome-ignore-end lint/complexity/noImportantStyles: end of the reduced-motion override */
+  }
+}
+
+/* The quiet label over a group inside a panel — `EventDeliveries`, `Configuration`, `Manifest`. It
+   is a heading, not a title: the panel above it already said what is being read, so this only names
+   the part. Sans-serif and uppercase rather than the serif the titles carry. */
+@layer components {
+  .eyebrow {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-secondary);
   }
 }

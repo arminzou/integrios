@@ -101,7 +101,8 @@ describe("Event history", () => {
 
     renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events?status=unrouted`);
 
-    expect(await screen.findByText("1 filter applied.")).toBeTruthy();
+    // How many filters are applied is stated on the list's own caption, beside what it is a list of.
+    expect(await screen.findByText(/Events, newest first · 1 filter applied/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Clear filters" })).toBeTruthy();
   });
 
@@ -362,7 +363,7 @@ describe("Event inspector", () => {
     stubHttp(respondFor(page([]), detail("succeeded")));
 
     renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
-    await screen.findByText("succeeded");
+    await screen.findByLabelText("Trace id");
     expect(screen.queryByRole("button", { name: "Replay" })).toBeNull();
   });
 

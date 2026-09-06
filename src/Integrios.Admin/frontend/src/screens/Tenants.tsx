@@ -10,7 +10,16 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
+import {
+  appliedNote,
+  ConfirmAction,
+  FilterBar,
+  FormError,
+  ListStatus,
+  LoadMore,
+  useCreatePanel,
+  WriteStatus,
+} from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -58,19 +67,22 @@ export function TenantsScreen() {
 
   return (
     <Page>
-      <PageHeader title="Tenants" action={<Button {...create.triggerProps}>New Tenant</Button>} />
+      <PageHeader title="Tenants" action={<Button {...create.triggerProps}>New Tenant</Button>}>
+        Every Tenant in this deployment. A Tenant is an ownership and isolation boundary, not a user.
+      </PageHeader>
 
       <Panel {...create.panelProps} className="max-w-none">
         <CreateTenant />
       </Panel>
 
       <section className="flex flex-col gap-4">
-        <h2>All Tenants</h2>
-        <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
-          <option value="">Any status</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
-        </Filter>
+        <FilterBar applied={status ? 1 : 0}>
+          <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
+            <option value="">Any</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </Filter>
+        </FilterBar>
 
         <ListStatus
           busy={list.isFetching}
@@ -81,7 +93,7 @@ export function TenantsScreen() {
         />
         {tenants.length > 0 ? (
           <TableCard
-            caption="Tenants, newest first"
+            caption={`Tenants, newest first${appliedNote(status ? 1 : 0)}`}
             footer={
               <LoadMore
                 hasMore={list.hasNextPage}
@@ -95,23 +107,25 @@ export function TenantsScreen() {
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
                 <TableHead scope="col">Slug</TableHead>
-                <TableHead scope="col">Status</TableHead>
                 <TableHead scope="col">Environment</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Description</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tenants.map((tenant) => (
                 <TableRow key={tenant.id}>
-                  <RowHeader>
-                    <Link className="underline" to={`/tenants/${tenant.id}`}>
+                  <RowHeader className="whitespace-nowrap">
+                    <Link className="no-underline" to={`/tenants/${tenant.id}`}>
                       {tenant.name}
                     </Link>
                   </RowHeader>
-                  <TableCell>{tenant.slug}</TableCell>
+                  <TableCell className="font-mono text-[13px] whitespace-nowrap">{tenant.slug}</TableCell>
+                  <TableCell>{tenant.environment ?? "—"}</TableCell>
                   <TableCell>
                     <StatusBadge status={tenant.status} />
                   </TableCell>
-                  <TableCell>{tenant.environment ?? "—"}</TableCell>
+                  <TableCell className="text-ink-secondary">{tenant.description ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -238,7 +252,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
 
       <section aria-label="Configured in this Tenant">
-        <ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3 p-0">
+        <ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(9.375rem,1fr))] gap-2.5 p-0">
           {(
             [
               ["Topics", overview.data?.topics],
@@ -248,22 +262,22 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
               ["Live API keys", overview.data?.live_api_keys],
             ] as const
           ).map(([label, value]) => (
-            <li key={label} className="rounded-lg border bg-surface px-4 py-3">
-              <span className="block font-serif text-2xl tabular-nums">{value ?? "—"}</span>
-              <span className="text-sm text-ink-secondary">{label}</span>
+            <li key={label} className="rounded-lg border bg-surface px-3.5 py-3">
+              <span className="block font-serif text-2xl leading-tight tabular-nums">{value ?? "—"}</span>
+              <span className="text-[13px] text-ink-secondary">{label}</span>
             </li>
           ))}
         </ul>
       </section>
 
-      <div className="grid gap-4 min-[1180px]:grid-cols-2">
-        <Panel className="max-w-none">
-          <h2 className="m-0 mb-4 text-lg">Tenant</h2>
+      <div className="grid gap-4 min-[1180px]:grid-cols-[minmax(0,1fr)_25rem]">
+        <Panel className="max-w-none p-4">
+          <h2 className="mb-3.5">Tenant</h2>
           <Details>
             <dt>Name</dt>
             <dd>{current.name}</dd>
             <dt>Slug</dt>
-            <dd className="font-mono text-sm">{current.slug}</dd>
+            <dd className="font-mono text-[13px]">{current.slug}</dd>
             <dt>Environment</dt>
             <dd>{current.environment ?? "—"}</dd>
             <dt>Status</dt>
@@ -275,13 +289,13 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
               <Timestamp value={current.created_at} />
             </dd>
             <dt>Ingestion endpoint</dt>
-            <dd className="font-mono text-sm break-all">{overview.data?.ingestion_endpoint ?? "—"}</dd>
+            <dd className="font-mono text-[13px] break-all">{overview.data?.ingestion_endpoint ?? "—"}</dd>
           </Details>
           {current.description ? <p className="m-0 mt-4 text-ink-secondary">{current.description}</p> : null}
         </Panel>
 
-        <Panel className="max-w-none">
-          <h2 className="m-0 mb-4 text-lg">Last 60 minutes</h2>
+        <Panel className="max-w-none p-4">
+          <h2 className="mb-3.5">Last 60 minutes</h2>
           <Details>
             <dt>Events accepted</dt>
             <dd className="tabular-nums">{activity.data?.events_accepted ?? "—"}</dd>
