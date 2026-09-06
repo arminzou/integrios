@@ -217,8 +217,8 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Connection> CreateAsync(Connection value, CancellationToken cancellationToken = default) =>
             Task.FromResult(value);
 
-        public Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, OperationalStatus? status, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
-            Task.FromResult<(IReadOnlyList<Connection>, string?)>(([connection], null));
+        public Task<(IReadOnlyList<ConnectionListRow> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, ConnectionListFilter filter, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
+            Task.FromResult<(IReadOnlyList<ConnectionListRow>, string?)>(([new ConnectionListRow(connection, "http")], null));
 
         public Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ConnectionUsage(false, false));

@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
 import type { Control, FieldValues, Path } from "react-hook-form";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -147,6 +147,56 @@ export function Filter({
       </select>
       <FilterCaret />
     </span>
+  );
+}
+
+/// Finding a row by name, as the one free-text filter a list carries. It commits on Enter and on
+/// blur rather than on every keystroke: each committed value is a different query with its own
+/// pages, so typing a nine-character name straight into the URL would restart the cursor nine
+/// times and issue eight reads nobody asked for.
+export function FilterSearch({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [typed, setTyped] = useState(value);
+
+  // The URL can change without this control having produced it — Clear filters, the back button, a
+  // pasted link — and the box follows it rather than keeping a value the list is not reading under.
+  useEffect(() => setTyped(value), [value]);
+
+  const commit = () => {
+    if (typed.trim() !== value) onChange(typed.trim());
+  };
+
+  return (
+    <form
+      className={filterPill}
+      data-applied={String(Boolean(value))}
+      onSubmit={(event) => {
+        event.preventDefault();
+        commit();
+      }}
+    >
+      <Label htmlFor={id} className="font-normal text-ink-secondary">
+        {label}
+      </Label>
+      <input
+        id={id}
+        type="search"
+        value={typed}
+        placeholder="Any"
+        onChange={(event) => setTyped(event.target.value)}
+        onBlur={commit}
+        className="min-w-0 appearance-none rounded-sm bg-transparent font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      />
+    </form>
   );
 }
 

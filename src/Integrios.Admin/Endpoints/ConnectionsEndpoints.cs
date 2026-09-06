@@ -43,13 +43,21 @@ public sealed class ConnectionsEndpoints : IEndpointGroup
         Guid tenantId,
         IMediator mediator,
         string? status,
+        string? environment,
+        string? connector,
+        string? name,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
+        var filter = new ConnectionListFilter(
+            ListFilter.ParseEnum<OperationalStatus>(status, "Connection status must be active or disabled."),
+            ListFilter.Trimmed(environment),
+            ListFilter.Trimmed(connector),
+            ListFilter.Trimmed(name));
         ConnectionListDto response = await mediator.Send(
-            new ListConnectionsByTenantQuery(tenantId, ListFilter.ParseEnum<OperationalStatus>(status, "Connection status must be active or disabled."), after, limit),
+            new ListConnectionsByTenantQuery(tenantId, filter, after, limit),
             cancellationToken);
         return Results.Ok(response);
     }

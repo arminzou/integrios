@@ -20,7 +20,7 @@ import {
   useCreatePanel,
   WriteStatus,
 } from "../ui/controls";
-import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
+import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
@@ -37,7 +37,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { useConnectorOptions } from "../ui/options";
+import { useConnectionOptions, useConnectorOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { Timestamp } from "../ui/time";
 
@@ -103,15 +103,35 @@ export function ConnectionsScreen({
   selectedConnectionId?: string;
 }) {
   const [status, setStatus] = useFilterParam("status");
+  const [environment, setEnvironment] = useFilterParam("environment");
+  const [connector, setConnector] = useFilterParam("connector");
+  const [name, setName] = useFilterParam("name");
+  const connectors = useConnectorOptions();
+  const connectionOptions = useConnectionOptions(tenantId);
+  const applied = [status, environment, connector, name].filter(Boolean).length;
+  // Environment is free text on a Connection, so there is no vocabulary to enumerate — the options
+  // are the values this Tenant actually uses, read off the Connection list the screen already holds
+  // for naming. ponytail: first hundred Connections, which is what that read carries; a Tenant past
+  // that needs the Admin API to answer "which environments" rather than the dashboard inferring it.
+  const environments: string[] = [
+    ...new Set((connectionOptions.data?.items ?? []).map((item) => item.environment).filter((value) => value !== null)),
+  ].sort();
   const create = useCreatePanel("new-connection");
   const list = useInfiniteQuery({
-    queryKey: ["connections", tenantId, { status }],
+    queryKey: ["connections", tenantId, { status, environment, connector, name }],
     queryFn: ({ pageParam }) =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/connections", {
           params: {
             path: { tenantId },
-            query: { status: status || undefined, after: pageParam ?? undefined, limit: 20 },
+            query: {
+              status: status || undefined,
+              environment: environment || undefined,
+              connector: connector || undefined,
+              name: name || undefined,
+              after: pageParam ?? undefined,
+              limit: 20,
+            },
           },
         }),
       ),
@@ -130,12 +150,32 @@ export function ConnectionsScreen({
         <CreateConnection tenantId={tenantId} />
       </Panel>
 
-      <FilterBar applied={status ? 1 : 0}>
+      <FilterBar applied={applied}>
         <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
           <option value="">Any</option>
           <option value="active">Active</option>
           <option value="disabled">Disabled</option>
         </Filter>
+        {/* The environments a Tenant actually uses, read off the rows it already has rather than
+            from a fixed list: environment is free text on a Connection, so there is no vocabulary
+            to enumerate. */}
+        <Filter id="connection-environment" label="Environment" value={environment} onChange={setEnvironment}>
+          <option value="">Any</option>
+          {environments.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </Filter>
+        <Filter id="connection-connector" label="Connector" value={connector} onChange={setConnector}>
+          <option value="">Any</option>
+          {(connectors.data?.items ?? []).map((option) => (
+            <option key={option.id} value={option.key}>
+              {option.key}
+            </option>
+          ))}
+        </Filter>
+        <FilterSearch id="connection-name" label="Find by name" value={name} onChange={setName} />
       </FilterBar>
 
       <ListStatus
@@ -150,7 +190,7 @@ export function ConnectionsScreen({
         <SplitList>
           {connections.length > 0 ? (
             <TableCard
-              caption={`Connections, newest first${appliedNote(status ? 1 : 0)}`}
+              caption={`Connections, newest first${appliedNote(applied)}`}
               footer={
                 <LoadMore
                   hasMore={list.hasNextPage}
@@ -163,6 +203,7 @@ export function ConnectionsScreen({
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Connector</TableHead>
                   <TableHead scope="col">Environment</TableHead>
                   <TableHead scope="col">Status</TableHead>
                   <TableHead scope="col">Description</TableHead>
@@ -183,6 +224,7 @@ export function ConnectionsScreen({
                         {connection.name}
                       </NavLink>
                     </RowHeader>
+                    <TableCell className="font-mono text-[13px]">{connection.connector_key}</TableCell>
                     <TableCell>{connection.environment ?? "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={connection.status} />

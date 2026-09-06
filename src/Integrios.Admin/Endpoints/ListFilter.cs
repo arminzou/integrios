@@ -13,4 +13,11 @@ internal static class ListFilter
             return parsed;
         throw new InvalidListFilterException(message);
     }
+
+    /// An optional free-text query value, with blank treated as absent so `?name=` scopes nothing.
+    public static string? Trimmed(string? value)
+    {
+        string? trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
 }

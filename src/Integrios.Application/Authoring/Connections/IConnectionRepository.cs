@@ -9,7 +9,7 @@ public interface IConnectionRepository
 {
     Task<Connection> CreateAsync(Connection connection, CancellationToken cancellationToken);
     Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
-    Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, OperationalStatus? status, string? afterCursor, int limit, CancellationToken cancellationToken);
+    Task<(IReadOnlyList<ConnectionListRow> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, ConnectionListFilter filter, string? afterCursor, int limit, CancellationToken cancellationToken);
     Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
     Task<Connection?> UpdateAsync(
         Guid tenantId,

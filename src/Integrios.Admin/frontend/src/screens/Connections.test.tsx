@@ -33,8 +33,11 @@ async function openCreateForm(respond: (call: Call) => { status: number; body?: 
   fireEvent.click(screen.getByText("New Connection"));
   await screen.findByRole("option", { name: /HTTP/ });
 
-  fireEvent.change(screen.getByLabelText("Connector"), { target: { value: connectorId } });
-  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "sink" } });
+  // The list now carries a Connector filter and a Connector column of its own, so the create form's
+  // own control is reached through the form rather than through the whole document.
+  const form = within(screen.getByRole("heading", { name: "Create a Connection" }).closest("form") as HTMLElement);
+  fireEvent.change(form.getByLabelText("Connector"), { target: { value: connectorId } });
+  fireEvent.change(form.getByLabelText("Name"), { target: { value: "sink" } });
   return calls;
 }
 

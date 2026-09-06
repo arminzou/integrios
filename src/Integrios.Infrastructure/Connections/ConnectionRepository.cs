@@ -69,42 +69,84 @@ internal sealed class ConnectionRepository(IntegriosDbContext context, IDataProt
             connection => connection.TenantId == tenantId && connection.Id == id,
             cancellationToken);
 
-    public async Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(
+    public async Task<(IReadOnlyList<ConnectionListRow> Items, string? NextCursor)> ListByTenantAsync(
         Guid tenantId,
-        OperationalStatus? status,
+        ConnectionListFilter filter,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
-        string cursorScope = $"connections:{tenantId:N}:{status?.ToString() ?? "all"}";
+        // Every filter reaches the scope. A cursor is only valid for the filters it was issued
+        // under, so one omitted here would let a stale cursor page through a different set under a
+        // token the caller has no way to tell apart.
+        string cursorScope = string.Join(
+            ':',
+            "connections",
+            tenantId.ToString("N"),
+            filter.Status?.ToString() ?? "all",
+            filter.Environment ?? "all",
+            filter.ConnectorKey ?? "all",
+            filter.NameContains ?? "all");
         bool hasCursor = afterCursor is not null;
         if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
             throw new InvalidCursorException();
 
-        IQueryable<Connection> query = context.Connections.AsNoTracking()
+        // Filtered and ordered on the Connection itself, with the Connector key resolved in the
+        // projection afterwards. Projecting first and filtering the projection is what EF cannot
+        // translate: the predicates then sit on a constructed type rather than on a mapped column.
+        IQueryable<Connection> connections = context.Connections.AsNoTracking()
             .Where(connection => connection.TenantId == tenantId);
-        if (status is not null)
-            query = query.Where(connection => connection.Status == status);
+
+        if (filter.Status is not null)
+            connections = connections.Where(connection => connection.Status == filter.Status);
+        if (filter.Environment is not null)
+            connections = connections.Where(connection => connection.Environment == filter.Environment);
+        if (filter.ConnectorKey is not null)
+        {
+            connections = connections.Where(connection => context.Connectors
+                .Any(connector => connector.Id == connection.ConnectorId && connector.Key == filter.ConnectorKey));
+        }
+        // Contains rather than equals: this is the "find it by name" control rather than a second
+        // exact filter. Lowered on both sides so it does not depend on the collation the provider
+        // happens to use, and so an Operator need not match the casing a Connection was created with.
+        if (filter.NameContains is not null)
+        {
+            string lowered = filter.NameContains.ToLowerInvariant();
+            connections = connections.Where(connection => connection.Name.ToLower().Contains(lowered));
+        }
         if (hasCursor)
         {
-            query = query.Where(connection =>
+            connections = connections.Where(connection =>
                 connection.CreatedAt < cursorCreatedAt
                 || (connection.CreatedAt == cursorCreatedAt && connection.Id.CompareTo(cursorId) < 0));
         }
 
-        List<Connection> items = await query
+        var page = await connections
             .OrderByDescending(connection => connection.CreatedAt)
             .ThenByDescending(connection => connection.Id)
             .Take(limit + 1)
+            .Select(connection => new
+            {
+                Connection = connection,
+                ConnectorKey = context.Connectors
+                    .Where(connector => connector.Id == connection.ConnectorId)
+                    .Select(connector => connector.Key)
+                    .FirstOrDefault(),
+            })
             .ToListAsync(cancellationToken);
+
+        List<ConnectionListRow> items = page
+            .Select(row => new ConnectionListRow(row.Connection, row.ConnectorKey ?? ""))
+            .ToList();
 
         string? nextCursor = null;
         if (items.Count > limit)
         {
             items.RemoveAt(items.Count - 1);
-            nextCursor = PageCursor.Encode(dataProtectionProvider, cursorScope, items[^1].CreatedAt, items[^1].Id, DateTimeOffset.UtcNow);
+            nextCursor = PageCursor.Encode(
+                dataProtectionProvider, cursorScope, items[^1].Connection.CreatedAt, items[^1].Connection.Id, DateTimeOffset.UtcNow);
         }
 
         return (items, nextCursor);
