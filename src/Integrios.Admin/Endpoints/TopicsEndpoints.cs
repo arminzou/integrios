@@ -35,11 +35,15 @@ public sealed class TopicsEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken,
         string? status,
+        string? name = null,
         string? after = null,
         int limit = 20)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var dto = await mediator.Send(new ListTopicsByTenantQuery(tenantId, ListFilter.ParseEnum<OperationalStatus>(status, "Topic status must be active or disabled."), after, limit), cancellationToken);
+        var filter = new TopicListFilter(
+            ListFilter.ParseEnum<OperationalStatus>(status, "Topic status must be active or disabled."),
+            ListFilter.Trimmed(name));
+        var dto = await mediator.Send(new ListTopicsByTenantQuery(tenantId, filter, after, limit), cancellationToken);
         return Results.Ok(AdminTopicListResponse.From(dto));
     }
 
@@ -91,6 +95,7 @@ internal sealed record AdminTopicResponse(
     string Name,
     string Status,
     string? Description,
+    int SubscriptionCount,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
@@ -100,6 +105,7 @@ internal sealed record AdminTopicResponse(
         dto.Name,
         dto.Status,
         dto.Description,
+        dto.SubscriptionCount,
         dto.CreatedAt,
         dto.UpdatedAt);
 }

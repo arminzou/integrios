@@ -20,7 +20,7 @@ import {
   useCreatePanel,
   WriteStatus,
 } from "../ui/controls";
-import { Filter, Form, TextField } from "../ui/fields";
+import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import {
@@ -55,15 +55,22 @@ const optional = (text: string) => text.trim() || null;
 
 export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; selectedTopicId?: string }) {
   const [status, setStatus] = useFilterParam("status");
+  const [name, setName] = useFilterParam("name");
+  const applied = [status, name].filter(Boolean).length;
   const create = useCreatePanel("new-topic");
   const list = useInfiniteQuery({
-    queryKey: ["topics", tenantId, { status }],
+    queryKey: ["topics", tenantId, { status, name }],
     queryFn: ({ pageParam }) =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/topics", {
           params: {
             path: { tenantId },
-            query: { status: status || undefined, after: pageParam ?? undefined, limit: 20 },
+            query: {
+              status: status || undefined,
+              name: name || undefined,
+              after: pageParam ?? undefined,
+              limit: 20,
+            },
           },
         }),
       ),
@@ -83,12 +90,13 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
       </Panel>
 
       <section className="flex flex-col gap-4">
-        <FilterBar applied={status ? 1 : 0}>
+        <FilterBar applied={applied}>
           <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
             <option value="">Any</option>
             <option value="active">Active</option>
             <option value="disabled">Disabled</option>
           </Filter>
+          <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
         </FilterBar>
 
         <ListStatus
@@ -102,7 +110,7 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
           <SplitList>
             {topics.length > 0 ? (
               <TableCard
-                caption={`Topics, newest first${appliedNote(status ? 1 : 0)}`}
+                caption={`Topics, newest first${appliedNote(applied)}`}
                 footer={
                   <LoadMore
                     hasMore={list.hasNextPage}
@@ -116,6 +124,7 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                   <TableRow>
                     <TableHead scope="col">Name</TableHead>
                     <TableHead scope="col">Description</TableHead>
+                    <TableHead scope="col">Subscriptions</TableHead>
                     <TableHead scope="col">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -130,6 +139,9 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                         </NavLink>
                       </RowHeader>
                       <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
+                      {/* A Topic nothing subscribes to accepts Events and routes none of them, so
+                          the count is what the list is scanned for rather than a detail. */}
+                      <TableCell className="tabular-nums">{topic.subscription_count}</TableCell>
                       <TableCell>
                         <StatusBadge status={topic.status} />
                       </TableCell>
@@ -207,7 +219,7 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
         <dt>Description</dt>
         <dd>{current.description ?? "—"}</dd>
         <dt>Subscriptions</dt>
-        <dd className="tabular-nums">{subscriptions.isPending ? "…" : matched.length}</dd>
+        <dd className="tabular-nums">{current.subscription_count}</dd>
       </Details>
 
       <section className="flex flex-col gap-2">

@@ -29,8 +29,11 @@ describe("Installing the first Connector", () => {
     );
 
     const { router } = renderScreen(<ConnectorsScreen />);
-    await screen.findByText("No Connectors match this filter.");
+    await screen.findByText(/No Connectors are installed/);
 
+    // The panel is collapsed like every other create panel; the empty state above names the control
+    // that opens it, so a deployment with none is told the way out rather than left to find it.
+    fireEvent.click(screen.getByRole("button", { name: "Apply manifest" }));
     fireEvent.change(screen.getByLabelText("Key"), { target: { value: "http" } });
     fireEvent.change(screen.getByLabelText("Contract version"), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: '{"key":"http"}' } });
@@ -54,7 +57,8 @@ describe("Installing the first Connector", () => {
     );
 
     renderScreen(<ConnectorsScreen />);
-    const key = await screen.findByLabelText("Key");
+    fireEvent.click(await screen.findByRole("button", { name: "Apply manifest" }));
+    const key = screen.getByLabelText("Key");
     fireEvent.change(key, { target: { value: "HTTP" } });
     fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: "{}" } });
     fireEvent.click(screen.getByRole("button", { name: "Install Connector" }));
@@ -74,7 +78,8 @@ describe("Installing the first Connector", () => {
     const calls = stubHttp(() => ({ status: 200, body: page([]) }));
 
     renderScreen(<ConnectorsScreen />);
-    fireEvent.change(await screen.findByLabelText("Key"), { target: { value: "http" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Apply manifest" }));
+    fireEvent.change(screen.getByLabelText("Key"), { target: { value: "http" } });
     fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: "{not json" } });
     fireEvent.click(screen.getByRole("button", { name: "Install Connector" }));
 

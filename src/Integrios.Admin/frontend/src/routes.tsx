@@ -3,7 +3,7 @@ import { isRouteErrorResponse, Link, type RouteObject, useLocation, useParams, u
 import { App } from "./App";
 import { isIdentifier } from "./identifiers";
 import { ConnectionsScreen } from "./screens/Connections";
-import { ConnectorScreen, ConnectorsScreen } from "./screens/Connectors";
+import { ConnectorsScreen } from "./screens/Connectors";
 import { EventsScreen } from "./screens/Events";
 import { SourcesScreen } from "./screens/Sources";
 import { SubscriptionScreen } from "./screens/Subscriptions";
@@ -164,7 +164,7 @@ export const routeConfig: RouteObject[] = [
       {
         path: "connectors/:connectorId",
         handle: { title: "Connector" },
-        element: <Ids>{({ connectorId }) => <ConnectorScreen connectorId={connectorId} />}</Ids>,
+        element: <Ids>{({ connectorId }) => <ConnectorsScreen selectedConnectorId={connectorId} />}</Ids>,
       },
       { path: "*", handle: { title: "Not found" }, element: <NotFound /> },
     ],

@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,12 +9,24 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { appliedNote, FilterBar, FormError, ListStatus, LoadMore } from "../ui/controls";
+import { appliedNote, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel } from "../ui/controls";
 import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import {
+  CloseInspector,
+  Details,
+  Inspector,
+  InspectorPlaceholder,
+  Page,
+  PageHeader,
+  Panel,
+  RowHeader,
+  SplitList,
+  SplitView,
+  TableCard,
+} from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 import { SourceContractPreview } from "./Previews";
 
@@ -35,9 +47,10 @@ const applySchema = z.object({
 type ApplyValues = z.infer<typeof applySchema>;
 
 /// Connectors are deployment-wide rather than Tenant-scoped, so this screen carries no Tenant.
-export function ConnectorsScreen() {
+export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?: string } = {}) {
   const navigate = useNavigate();
   const [direction, setDirection] = useFilterParam("direction");
+  const apply = useCreatePanel("apply-connector-manifest");
   const list = useInfiniteQuery({
     queryKey: ["connectors", { direction }],
     queryFn: ({ pageParam }) =>
@@ -53,15 +66,19 @@ export function ConnectorsScreen() {
 
   return (
     <Page>
-      <PageHeader title="Connectors">
+      <PageHeader title="Connectors" action={<Button {...apply.triggerProps}>Apply manifest</Button>}>
         Deployment-wide capability definitions. Connections are built from these, per Tenant.
       </PageHeader>
 
-      {/* Unlike Connections' create form, this one is never collapsed behind a disclosure: a fresh
-          deployment installs no Connectors, and this list is the only screen it can reach, so the
-          form that gets it out of that state must stay immediately visible rather than
-          discoverable-only. */}
-      <ApplyManifest onApplied={(installed) => installed && navigate(`/connectors/${installed.id}`)} />
+      {/* Opened for a deployment that has installed nothing: that deployment can reach no other
+          screen, so the form that gets it out of that state must not be behind a control it has to
+          discover first. Once a Connector exists it collapses like every other create panel. */}
+      {/* Collapsed like every other create panel. A deployment that has installed nothing can reach
+          no other screen, so the way out is not left to be discovered — the empty state below names
+          the control by the words on it rather than the form being permanently open. */}
+      <Panel {...apply.panelProps} className="max-w-none">
+        <ApplyManifest onApplied={(installed) => installed && navigate(`/connectors/${installed.id}`)} />
+      </Panel>
 
       <section className="flex flex-col gap-4">
         <FilterBar applied={(direction ? 1 : 0) as number}>
@@ -78,48 +95,66 @@ export function ConnectorsScreen() {
           loaded={list.isSuccess}
           problem={asProblem(list.error)}
           empty={connectors.length === 0}
-          emptyText="No Connectors match this filter."
+          emptyText={
+            direction
+              ? "No Connectors match this filter."
+              : "No Connectors are installed. Use Apply manifest, above, to install the first one."
+          }
         />
-        {connectors.length > 0 ? (
-          <TableCard
-            caption={`Connectors, newest first${appliedNote(direction ? 1 : 0)}`}
-            footer={
-              <LoadMore
-                hasMore={list.hasNextPage}
-                busy={list.isFetching}
-                loaded={connectors.length}
-                onLoadMore={() => void list.fetchNextPage()}
-              />
-            }
-          >
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">Name</TableHead>
-                <TableHead scope="col">Key</TableHead>
-                <TableHead scope="col">Contract version</TableHead>
-                <TableHead scope="col">Direction</TableHead>
-                <TableHead scope="col">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {connectors.map((connector) => (
-                <TableRow key={connector.id}>
-                  <RowHeader>
-                    <Link className="no-underline" to={`/connectors/${connector.id}`}>
-                      {connector.name}
-                    </Link>
-                  </RowHeader>
-                  <TableCell className="font-mono text-[13px]">{connector.key}</TableCell>
-                  <TableCell>{connector.contract_version}</TableCell>
-                  <TableCell>{connector.direction}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={connector.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </TableCard>
-        ) : null}
+        <SplitView>
+          <SplitList>
+            {connectors.length > 0 ? (
+              <TableCard
+                caption={`Connectors, newest first${appliedNote(direction ? 1 : 0)}`}
+                footer={
+                  <LoadMore
+                    hasMore={list.hasNextPage}
+                    busy={list.isFetching}
+                    loaded={connectors.length}
+                    onLoadMore={() => void list.fetchNextPage()}
+                  />
+                }
+              >
+                <TableHeader>
+                  <TableRow>
+                    {/* The key is what an Operator writes in a manifest and what a Connection is built
+                    from, so it names the row; the presentation name follows it. */}
+                    <TableHead scope="col">Key</TableHead>
+                    <TableHead scope="col">Name</TableHead>
+                    <TableHead scope="col">Direction</TableHead>
+                    <TableHead scope="col">Contract</TableHead>
+                    <TableHead scope="col">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {connectors.map((connector) => (
+                    <TableRow key={connector.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                      <RowHeader className="whitespace-nowrap">
+                        <NavLink className="font-mono no-underline" to={`/connectors/${connector.id}`} end>
+                          {connector.key}
+                        </NavLink>
+                      </RowHeader>
+                      <TableCell>{connector.name}</TableCell>
+                      <TableCell>{connector.direction}</TableCell>
+                      <TableCell className="tabular-nums">v{connector.contract_version}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={connector.status} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </TableCard>
+            ) : null}
+          </SplitList>
+
+          {selectedConnectorId ? (
+            <ConnectorInspector key={selectedConnectorId} connectorId={selectedConnectorId} />
+          ) : (
+            <InspectorPlaceholder label="Connector detail">
+              Select a Connector to read its manifest and what it permits.
+            </InspectorPlaceholder>
+          )}
+        </SplitView>
       </section>
 
       <SourceContractPreview />
@@ -127,7 +162,10 @@ export function ConnectorsScreen() {
   );
 }
 
-export function ConnectorScreen({ connectorId }: { connectorId: string }) {
+/// The selected Connector beside the list. A Connector is deployment-wide and read far more often
+/// than it is applied — a Connection's configuration is validated against this manifest — so the
+/// manifest is what the panel is mostly for.
+function ConnectorInspector({ connectorId }: { connectorId: string }) {
   const connector = useQuery({
     queryKey: ["connector", connectorId],
     queryFn: () => call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: connectorId } } })),
@@ -136,50 +174,53 @@ export function ConnectorScreen({ connectorId }: { connectorId: string }) {
   const problem = asProblem(connector.error);
   if (problem)
     return (
-      <>
-        <h1>Connector</h1>
+      <Inspector label="Connector detail">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="m-0">Connector</h2>
+          <CloseInspector to="/connectors" label="Close the Connector detail" />
+        </div>
         <p role="alert">{problem.detail ?? `This Connector could not be read (${problem.status}).`}</p>
-      </>
+      </Inspector>
     );
-  if (!connector.data) return <p>Loading…</p>;
+  if (!connector.data) return <Inspector label="Connector detail">Loading…</Inspector>;
 
   const current = connector.data;
   return (
-    <Page>
-      <PageHeader title={current.name}>
-        In{" "}
-        <Link className="underline" to="/connectors">
-          this deployment's Connectors
-        </Link>
-        .
-      </PageHeader>
+    <Inspector label="Connector detail">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="min-w-0">
+          {current.name}
+          <span className="block font-mono text-xs break-all text-ink-secondary">
+            {current.key} · contract v{current.contract_version}
+          </span>
+        </h2>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.status} className="mt-0.5" />
+          <CloseInspector to="/connectors" label="Close the Connector detail" />
+        </div>
+      </div>
 
-      <Panel>
-        <Details>
-          <dt>Key</dt>
-          <dd className="font-mono text-sm">{current.key}</dd>
-          <dt>Contract version</dt>
-          <dd>{current.contract_version}</dd>
-          <dt>Manifest schema version</dt>
-          <dd>{current.manifest_schema_version}</dd>
-          <dt>Direction</dt>
-          <dd>{current.direction}</dd>
-          <dt>Status</dt>
-          <dd>
-            <StatusBadge status={current.status} />
-          </dd>
-          <dt>Description</dt>
-          <dd>{current.description ?? "—"}</dd>
-        </Details>
-      </Panel>
+      <Details className="border-b pb-3.5">
+        <dt>Direction</dt>
+        <dd>{current.direction}</dd>
+        <dt>Contract version</dt>
+        <dd className="tabular-nums">{current.contract_version}</dd>
+        <dt>Manifest schema</dt>
+        <dd className="tabular-nums">{current.manifest_schema_version}</dd>
+      </Details>
 
-      <section className="flex max-w-2xl flex-col gap-2">
+      {current.description ? <p className="m-0 text-[13px] text-ink-secondary">{current.description}</p> : null}
+
+      <section className="flex min-w-0 flex-col gap-2">
         <h4 className="eyebrow">Manifest</h4>
-        <pre className="text-sm">{formatJson(current.manifest)}</pre>
+        <pre className="text-xs">{formatJson(current.manifest)}</pre>
+        <p className="m-0 text-xs text-ink-secondary">
+          Applied by an Operator. A Connector is deployment-wide and shared by every Tenant.
+        </p>
       </section>
 
       <ApplyManifest key={current.updated_at} connector={current} />
-    </Page>
+    </Inspector>
   );
 }
 

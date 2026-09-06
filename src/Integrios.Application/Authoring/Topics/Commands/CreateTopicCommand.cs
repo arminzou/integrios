@@ -21,6 +21,6 @@ internal sealed class CreateTopicCommandHandler(ITopicRepository topicRepository
             command.Name,
             command.Description,
             cancellationToken);
-        return TopicDto.From(topic);
+        return TopicDto.From(topic, subscriptionCount: 0);
     }
 }
