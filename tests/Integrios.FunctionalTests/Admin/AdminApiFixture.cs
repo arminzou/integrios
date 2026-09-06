@@ -61,6 +61,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await SeedAsync(connection);
     }
 
+    public const string SeededResponseBody = "{\"error\":\"upstream unavailable\"}";
+
     public async Task<(Guid EventId, Guid DeliveryId)> SeedDeadLetteredDeliveryAsync()
     {
         Guid topicId = Guid.NewGuid();
@@ -92,8 +94,10 @@ public sealed class AdminApiFixture : IAsyncLifetime
             VALUES (@DeliveryId, @EventId, @SubscriptionId, @DestinationConnectionId,
                 {{{database.Json("@Snapshot")}}}, 'http', 'dead_lettered', 1, 1, {{{database.Now}}});
             INSERT INTO delivery_attempts
-                (id, event_delivery_id, attempt_number, status, failure_phase, started_at, completed_at)
-            VALUES (@AttemptId, @DeliveryId, 1, 'failed', 'http', {{{database.Now}}}, {{{database.Now}}});
+                (id, event_delivery_id, attempt_number, status, failure_phase, started_at, completed_at,
+                 request_payload, response_status_code, response_body, response_body_truncated)
+            VALUES (@AttemptId, @DeliveryId, 1, 'failed', 'http', {{{database.Now}}}, {{{database.Now}}},
+                {{{database.Json("@RequestPayload")}}}, 503, @ResponseBody, {{{database.False}}});
             """, new
         {
             TenantId,
@@ -112,6 +116,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
             DestinationConfig = "{\"base_uri\":\"http://localhost:5054/sink/recovery\"}",
             MatchRules = "{\"event_types\":[\"recovery.test\"]}",
             Payload = "{\"recovery\":true}",
+            RequestPayload = "{\"sent\":\"body\"}",
+            ResponseBody = SeededResponseBody,
             SourceConfig = "{}",
             Snapshot = "{\"version\":1,\"base_uri\":\"http://localhost:5054/sink/recovery\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}"
         });

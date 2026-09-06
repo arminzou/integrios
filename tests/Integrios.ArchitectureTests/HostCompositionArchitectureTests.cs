@@ -34,6 +34,10 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingestion],
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingestion],
+        // Admin alone. The data plane resolves ITenantEventLookup for the same Event; this port is
+        // what adds the accepted payload and the destination's response body, and neither may be
+        // reachable from a TenantApiKey-authenticated request.
+        [typeof(IEventDiagnosticsLookup)] = [Host.Admin],
         [typeof(ITenantEventHistory)] = [Host.Admin],
         [typeof(ITenantEventActivitySummary)] = [Host.Admin],
         [typeof(IOperatorIdentityStore)] = [Host.Admin],

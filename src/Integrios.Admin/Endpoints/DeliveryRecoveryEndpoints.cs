@@ -1,5 +1,4 @@
 using Integrios.Application.Delivery;
-using Integrios.Application.Ingestion;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -10,7 +9,7 @@ public sealed class DeliveryRecoveryEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapGet(GetDeliveries).Produces<EventDto>();
+        group.MapGet(GetDeliveries).Produces<EventDiagnosticsDto>();
         group.MapPost(ReplayDelivery, "/{deliveryId:guid}/replay");
     }
 
@@ -20,7 +19,7 @@ public sealed class DeliveryRecoveryEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        EventDto? response = await mediator.Send(
+        EventDiagnosticsDto? response = await mediator.Send(
             new GetEventDeliveryRecoveryQuery(tenantId, eventId),
             cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);

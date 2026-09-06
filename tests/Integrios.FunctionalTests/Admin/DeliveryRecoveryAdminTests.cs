@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Integrios.Application.Delivery;
 using Integrios.Application.Ingestion;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -30,6 +31,68 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
     }
 
     [Fact]
+    public async Task OperatorKey_ReadsWhatWasSentAndWhatCameBack()
+    {
+        var (eventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries"));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        EventDiagnosticsDto? diagnostics =
+            await response.Content.ReadFromJsonAsync<EventDiagnosticsDto>(HostJson.Options);
+        diagnostics.ShouldNotBeNull();
+
+        diagnostics.Payload.ShouldNotBeNull();
+        diagnostics.Payload!.Value.GetProperty("recovery").GetBoolean().ShouldBeTrue();
+
+        DeliveryAttemptDiagnosticsDto attempt = diagnostics.DeliveryAttempts.ShouldHaveSingleItem();
+        attempt.RequestPayload.ShouldNotBeNull();
+        attempt.RequestPayload!.Value.GetProperty("sent").GetString().ShouldBe("body");
+        attempt.ResponseBody.ShouldBe(AdminApiFixture.SeededResponseBody);
+        attempt.ResponseStatusCode.ShouldBe(503);
+        attempt.ResponseBodyTruncated.ShouldBeFalse();
+    }
+
+    // Criterion 4. Bodies belong to the one Event a reader asked for, never to a page of rows: a
+    // ledger that carried them would put them through every log, cache and history entry that a
+    // list request touches.
+    [Fact]
+    public async Task EventList_NeverReturnsPayloadOrDeliveryBodies()
+    {
+        await fixture.SeedDeadLetteredDeliveryAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/events"));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        string body = await response.Content.ReadAsStringAsync();
+        using JsonDocument document = JsonDocument.Parse(body);
+        foreach (string forbidden in new[] { "payload", "metadata", "request_payload", "response_body", "response_body_truncated" })
+            PropertyNames(document.RootElement).ShouldNotContain(forbidden);
+    }
+
+    private static IEnumerable<string> PropertyNames(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (JsonProperty property in element.EnumerateObject())
+                {
+                    yield return property.Name;
+                    foreach (string nested in PropertyNames(property.Value))
+                        yield return nested;
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (JsonElement item in element.EnumerateArray())
+                    foreach (string nested in PropertyNames(item))
+                        yield return nested;
+                break;
+        }
+    }
+
+    [Fact]
     public async Task OperatorKey_CanInspectAndReplayOneDeadLetteredDelivery()
     {
         var (eventId, deliveryId) = await fixture.SeedDeadLetteredDeliveryAsync();
@@ -37,7 +100,7 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
 
         HttpResponseMessage historyResponse = await client.SendAsync(AdminRequest(HttpMethod.Get, route));
         historyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        EventDto? history = await historyResponse.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
+        EventDiagnosticsDto? history = await historyResponse.Content.ReadFromJsonAsync<EventDiagnosticsDto>(HostJson.Options);
         history.ShouldNotBeNull();
         EventDeliveryDto delivery = history.EventDeliveries.ShouldHaveSingleItem();
         delivery.EventDeliveryId.ShouldBe(deliveryId);

@@ -343,6 +343,45 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         return client.SendAsync(message);
     }
 
+    // The data plane answers a Tenant. A destination's response body is the Operator's downstream
+    // system talking, and the accepted payload has no reason to travel back out here either, so
+    // neither may appear on this response however the Admin contract grows.
+    [Fact]
+    public async Task GetEvent_NeverReturnsPayloadOrDeliveryBodies()
+    {
+        var accepted = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-no-bodies"));
+        accepted.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var result = await accepted.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
+        result.ShouldNotBeNull();
+
+        HttpResponseMessage response = await GetEventAsync(result.EventId);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        foreach (string forbidden in new[] { "payload", "metadata", "request_payload", "response_body", "response_body_truncated" })
+            PropertyNames(document.RootElement).ShouldNotContain(forbidden);
+    }
+
+    private static IEnumerable<string> PropertyNames(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (JsonProperty property in element.EnumerateObject())
+                {
+                    yield return property.Name;
+                    foreach (string nested in PropertyNames(property.Value))
+                        yield return nested;
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (JsonElement item in element.EnumerateArray())
+                    foreach (string nested in PropertyNames(item))
+                        yield return nested;
+                break;
+        }
+    }
+
     private Task<HttpResponseMessage> GetEventAsync(Guid eventId, string? authHeader = null)
     {
         var message = new HttpRequestMessage(HttpMethod.Get, $"/events/{eventId}");
