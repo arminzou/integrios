@@ -90,6 +90,11 @@ export function Details({ children, className }: { children: ReactNode; classNam
 /// following it in document order where there is not. The Event ledger established the shape; every
 /// capability whose detail is a detail rather than a workspace of its own uses it, so an Operator
 /// compares rows and reads one in the same place.
+///
+/// Only the list and the detail are inside it. The page's title, its summary, and its filters
+/// describe the whole screen rather than the ledger alone, so they run the full width above this;
+/// pulling them into the list column would squeeze a one-line filter bar into four wrapped rows and
+/// leave the inspector starting level with the page title instead of with the rows it explains.
 export function SplitView({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col gap-5 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-4">
@@ -99,7 +104,7 @@ export function SplitView({ children }: { children: ReactNode }) {
 }
 
 export function SplitList({ children }: { children: ReactNode }) {
-  return <Page className="min-w-0 min-[1180px]:flex-1">{children}</Page>;
+  return <div className="min-w-0 min-[1180px]:flex-1">{children}</div>;
 }
 
 /// Sticky at desktop so the detail stays put while the list beside it is scanned. It carries its

@@ -24,7 +24,7 @@ import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/field
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { Details, Inspector, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
+import { Details, Inspector, Page, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 import { Timestamp } from "../ui/time";
 
@@ -108,32 +108,33 @@ export function ConnectionsScreen({
   const connections = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <SplitView>
-      <SplitList>
-        <PageHeader title="Connections" action={<Button {...create.triggerProps}>New Connection</Button>}>
-          Tenant-owned endpoints built from a Connector. A Subscription delivers to one of these.
-        </PageHeader>
+    <Page>
+      <PageHeader title="Connections" action={<Button {...create.triggerProps}>New Connection</Button>}>
+        Tenant-owned endpoints built from a Connector. A Subscription delivers to one of these.
+      </PageHeader>
 
-        <Panel {...create.panelProps} className="max-w-none">
-          <CreateConnection tenantId={tenantId} />
-        </Panel>
+      <Panel {...create.panelProps} className="max-w-none">
+        <CreateConnection tenantId={tenantId} />
+      </Panel>
 
-        <section className="flex flex-col gap-4">
-          <FilterBar applied={(status ? 1 : 0) as number}>
-            <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
-              <option value="">Any</option>
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
-            </Filter>
-          </FilterBar>
+      <FilterBar applied={status ? 1 : 0}>
+        <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
+          <option value="">Any</option>
+          <option value="active">Active</option>
+          <option value="disabled">Disabled</option>
+        </Filter>
+      </FilterBar>
 
-          <ListStatus
-            busy={list.isFetching}
-            loaded={list.isSuccess}
-            problem={asProblem(list.error)}
-            empty={connections.length === 0}
-            emptyText="This Tenant has no Connections matching this filter."
-          />
+      <ListStatus
+        busy={list.isFetching}
+        loaded={list.isSuccess}
+        problem={asProblem(list.error)}
+        empty={connections.length === 0}
+        emptyText="This Tenant has no Connections matching this filter."
+      />
+
+      <SplitView>
+        <SplitList>
           {connections.length > 0 ? (
             <TableCard
               caption={`Connections, newest first${appliedNote(status ? 1 : 0)}`}
@@ -182,15 +183,15 @@ export function ConnectionsScreen({
               </TableBody>
             </TableCard>
           ) : null}
-        </section>
-      </SplitList>
+        </SplitList>
 
-      {/* Keyed by Connection id so switching rows is a distinct panel rather than the same one fed
-          a new id, which is what keeps a stale name from being on screen when focus moves. */}
-      {selectedConnectionId ? (
-        <ConnectionInspector key={selectedConnectionId} tenantId={tenantId} connectionId={selectedConnectionId} />
-      ) : null}
-    </SplitView>
+        {/* Keyed by Connection id so switching rows is a distinct panel rather than the same one
+              fed a new id, which is what keeps a stale name from being on screen when focus moves. */}
+        {selectedConnectionId ? (
+          <ConnectionInspector key={selectedConnectionId} tenantId={tenantId} connectionId={selectedConnectionId} />
+        ) : null}
+      </SplitView>
+    </Page>
   );
 }
 

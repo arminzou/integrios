@@ -24,7 +24,7 @@ import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { Details, Inspector, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
+import { Details, Inspector, Page, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
@@ -79,40 +79,41 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
   const sources = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <SplitView>
-      <SplitList>
-        <PageHeader title="Sources" action={<Button {...create.triggerProps}>New Source</Button>}>
-          A Source binds one Connection to one Topic and selects the contract its input is read as.
-        </PageHeader>
+    <Page>
+      <PageHeader title="Sources" action={<Button {...create.triggerProps}>New Source</Button>}>
+        A Source binds one Connection to one Topic and selects the contract its input is read as.
+      </PageHeader>
 
-        <Panel {...create.panelProps} className="max-w-none">
-          <CreateSource tenantId={tenantId} />
-        </Panel>
+      <Panel {...create.panelProps} className="max-w-none">
+        <CreateSource tenantId={tenantId} />
+      </Panel>
 
-        <section className="flex flex-col gap-4">
-          <FilterBar applied={((status ? 1 : 0) as number) + ((type ? 1 : 0) as number)}>
-            <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-              <option value="">Any</option>
-              <option value="active">Active</option>
-              <option value="revoked">Revoked</option>
-            </Filter>
-            <Filter id="source-type" label="Type" value={type} onChange={setType}>
-              <option value="">Any</option>
-              {sourceTypes.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Filter>
-          </FilterBar>
+      <FilterBar applied={(status ? 1 : 0) + (type ? 1 : 0)}>
+        <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
+          <option value="">Any</option>
+          <option value="active">Active</option>
+          <option value="revoked">Revoked</option>
+        </Filter>
+        <Filter id="source-type" label="Type" value={type} onChange={setType}>
+          <option value="">Any</option>
+          {sourceTypes.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Filter>
+      </FilterBar>
 
-          <ListStatus
-            busy={list.isFetching}
-            loaded={list.isSuccess}
-            problem={asProblem(list.error)}
-            empty={sources.length === 0}
-            emptyText="This Tenant has no Sources matching these filters."
-          />
+      <ListStatus
+        busy={list.isFetching}
+        loaded={list.isSuccess}
+        problem={asProblem(list.error)}
+        empty={sources.length === 0}
+        emptyText="This Tenant has no Sources matching these filters."
+      />
+
+      <SplitView>
+        <SplitList>
           {sources.length > 0 ? (
             <TableCard
               caption={`Sources, newest first${appliedNote((status ? 1 : 0) + (type ? 1 : 0))}`}
@@ -159,13 +160,13 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
               </TableBody>
             </TableCard>
           ) : null}
-        </section>
-      </SplitList>
+        </SplitList>
 
-      {selectedSourceId ? (
-        <SourceInspector key={selectedSourceId} tenantId={tenantId} sourceId={selectedSourceId} />
-      ) : null}
-    </SplitView>
+        {selectedSourceId ? (
+          <SourceInspector key={selectedSourceId} tenantId={tenantId} sourceId={selectedSourceId} />
+        ) : null}
+      </SplitView>
+    </Page>
   );
 }
 

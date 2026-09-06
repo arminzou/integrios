@@ -208,136 +208,139 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   }
 
   return (
-    <div
-      data-layout="events"
-      className="flex flex-col gap-5 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-4"
-    >
-      <div className="flex min-w-0 flex-col gap-5 min-[1180px]:flex-1">
-        <PageHeader
-          title="Events"
-          action={
-            <Button asChild variant="outline">
-              <Link className="no-underline" to={`/tenants/${tenantId}`}>
-                Tenant overview
-              </Link>
-            </Button>
-          }
+    // Title, summary and filters describe the whole screen, so they run its full width; only the
+    // ledger and the Event it has open are the two columns.
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Events"
+        action={
+          <Button asChild variant="outline">
+            <Link className="no-underline" to={`/tenants/${tenantId}`}>
+              Tenant overview
+            </Link>
+          </Button>
+        }
+      >
+        Everything accepted for this Tenant, newest first.
+      </PageHeader>
+
+      <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
+
+      <Form {...form}>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={form.handleSubmit((values) => {
+            setSearchParams(writeFilters(values));
+            setActiveSummary(null);
+          })}
         >
-          Everything accepted for this Tenant, newest first.
-        </PageHeader>
+          <FormError message={formError(asProblem(sources.error ?? topics.error))} />
 
-        <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
-
-        <Form {...form}>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={form.handleSubmit((values) => {
-              setSearchParams(writeFilters(values));
+          <FilterBar
+            applied={appliedCount}
+            onClear={() => {
+              setSearchParams(new URLSearchParams());
               setActiveSummary(null);
-            })}
+            }}
           >
-            <FormError message={formError(asProblem(sources.error ?? topics.error))} />
-
-            <FilterBar
-              applied={appliedCount}
-              onClear={() => {
-                setSearchParams(new URLSearchParams());
-                setActiveSummary(null);
-              }}
+            <FilterSelectField
+              control={form.control}
+              name="status"
+              label="Event status"
+              hint="How far the Event itself got."
             >
-              <FilterSelectField
-                control={form.control}
-                name="status"
-                label="Event status"
-                hint="How far the Event itself got."
-              >
-                <option value="">Any</option>
-                {eventStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {statusLabel(status)}
-                  </option>
-                ))}
-              </FilterSelectField>
-              {/* Delivery status is a separate filter over Delivery state. An Event matches when one
+              <option value="">Any</option>
+              {eventStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {statusLabel(status)}
+                </option>
+              ))}
+            </FilterSelectField>
+            {/* Delivery status is a separate filter over Delivery state. An Event matches when one
                   of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
-              <FilterSelectField
-                control={form.control}
-                name="deliveryStatus"
-                label="Delivery status"
-                hint="Matches Events with at least one EventDelivery in this state."
-              >
-                <option value="">Any</option>
-                {deliveryStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {statusLabel(status)}
-                  </option>
-                ))}
-              </FilterSelectField>
-              <FilterSelectField
-                control={form.control}
-                name="sourceId"
-                label="Source"
-                hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
-                disabled={sources.isPending || sources.isError}
-              >
-                <option value="">Any</option>
-                {(sources.data?.items ?? []).map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.type} · {source.id}
-                  </option>
-                ))}
-              </FilterSelectField>
-              <FilterSelectField
-                control={form.control}
-                name="topicId"
-                label="Topic"
-                hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
-                disabled={topics.isPending || topics.isError}
-              >
-                <option value="">Any</option>
-                {(topics.data?.items ?? []).map((topic) => (
-                  <option key={topic.id} value={topic.id}>
-                    {topic.name}
-                  </option>
-                ))}
-              </FilterSelectField>
-              <FilterTextField
-                control={form.control}
-                name="sourceEventId"
-                label="Source Event id"
-                placeholder="Any"
-                hint="The identity the sending system gave the Event. Matched exactly."
-              />
-              <FilterTextField
-                control={form.control}
-                name="acceptedFrom"
-                label="Accepted from"
-                type="datetime-local"
-                step="1"
-              />
-              <FilterTextField
-                control={form.control}
-                name="acceptedTo"
-                label="Accepted to"
-                type="datetime-local"
-                step="1"
-              />
+            <FilterSelectField
+              control={form.control}
+              name="deliveryStatus"
+              label="Delivery status"
+              hint="Matches Events with at least one EventDelivery in this state."
+            >
+              <option value="">Any</option>
+              {deliveryStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {statusLabel(status)}
+                </option>
+              ))}
+            </FilterSelectField>
+            <FilterSelectField
+              control={form.control}
+              name="sourceId"
+              label="Source"
+              hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
+              disabled={sources.isPending || sources.isError}
+            >
+              <option value="">Any</option>
+              {(sources.data?.items ?? []).map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.type} · {source.id}
+                </option>
+              ))}
+            </FilterSelectField>
+            <FilterSelectField
+              control={form.control}
+              name="topicId"
+              label="Topic"
+              hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+              disabled={topics.isPending || topics.isError}
+            >
+              <option value="">Any</option>
+              {(topics.data?.items ?? []).map((topic) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.name}
+                </option>
+              ))}
+            </FilterSelectField>
+            <FilterTextField
+              control={form.control}
+              name="sourceEventId"
+              label="Source Event id"
+              placeholder="Any"
+              hint="The identity the sending system gave the Event. Matched exactly."
+            />
+            <FilterTextField
+              control={form.control}
+              name="acceptedFrom"
+              label="Accepted from"
+              type="datetime-local"
+              step="1"
+            />
+            <FilterTextField
+              control={form.control}
+              name="acceptedTo"
+              label="Accepted to"
+              type="datetime-local"
+              step="1"
+            />
 
-              {/* Apply stays explicit. Seven controls that each re-queried on change would issue six
+            {/* Apply stays explicit. Seven controls that each re-queried on change would issue six
                   requests on the way to the scope the Operator actually wanted. */}
-              <Button type="submit">Apply filters</Button>
-            </FilterBar>
-          </form>
-        </Form>
+            <Button type="submit">Apply filters</Button>
+          </FilterBar>
+        </form>
+      </Form>
 
-        <div className="flex flex-col gap-4">
-          <ListStatus
-            busy={list.isFetching}
-            loaded={list.isSuccess}
-            problem={asProblem(list.error)}
-            empty={events.length === 0}
-            emptyText="No Events in this Tenant match these filters."
-          />
+      <ListStatus
+        busy={list.isFetching}
+        loaded={list.isSuccess}
+        problem={asProblem(list.error)}
+        empty={events.length === 0}
+        emptyText="No Events in this Tenant match these filters."
+      />
+
+      <div
+        data-layout="events"
+        className="flex flex-col gap-5 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-4"
+      >
+        <div className="min-w-0 min-[1180px]:flex-1">
           {events.length > 0 ? (
             <TableCard
               caption={`Events, newest first${appliedNote(appliedCount)}`}
@@ -401,13 +404,16 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             </TableCard>
           ) : null}
         </div>
-      </div>
 
-      {/* Keyed by Event id: switching the selection is a distinct inspector, not the same one fed a
-          new id. Without this, `useResource`'s state clear lands on a later render than the id
-          change itself, so the previous Event's data (and its now-detached heading) would still be
-          on screen at the instant focus tries to move, and the fresh heading would never receive it. */}
-      {selectedEventId ? <EventInspector key={selectedEventId} tenantId={tenantId} eventId={selectedEventId} /> : null}
+        {/* Keyed by Event id: switching the selection is a distinct inspector, not the same one fed
+              a new id. Without this, `useResource`'s state clear lands on a later render than the id
+              change itself, so the previous Event's data (and its now-detached heading) would still
+              be on screen at the instant focus tries to move, and the fresh heading would never
+              receive it. */}
+        {selectedEventId ? (
+          <EventInspector key={selectedEventId} tenantId={tenantId} eventId={selectedEventId} />
+        ) : null}
+      </div>
     </div>
   );
 }
