@@ -257,7 +257,10 @@ export function FilterBar({
 }) {
   return (
     <section aria-label="Filters" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">{children}</div>
+      {/* A grid rather than a wrapping row: each control is a label, an input and sometimes a hint
+          of its own height, and left to flex they align on whichever edge the tallest one sets,
+          scattering the hints between rows. Fixed tracks keep every field a tidy column. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] items-start gap-x-4 gap-y-3">{children}</div>
       {applied > 0 ? (
         <p className="m-0 flex flex-wrap items-center gap-3 text-sm text-ink-secondary">
           <span>
