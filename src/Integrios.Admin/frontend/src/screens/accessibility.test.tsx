@@ -124,11 +124,12 @@ describe("Accessibility of the Operator workflows", () => {
     stubHttp(() => ({ status: 200, body: tenant }));
 
     const container = renderScreen(<TenantScreen tenantId={tenantId} />);
-    await screen.findByRole("heading", { level: 1, name: "Acme" });
+    await screen.findByRole("heading", { level: 1, name: "Overview" });
     await expectNoAccessibilityViolations(container);
 
-    // The confirmation is a state the screen only reaches on request, so it is checked in that state
-    // rather than only in its resting one.
+    // Editing and the confirmation are states the screen only reaches on request, so they are
+    // checked in those states rather than only in its resting one.
+    fireEvent.click(screen.getByRole("button", { name: "Edit Tenant" }));
     fireEvent.click(screen.getByRole("button", { name: "Deactivate Tenant" }));
     await expectNoAccessibilityViolations(container);
   });

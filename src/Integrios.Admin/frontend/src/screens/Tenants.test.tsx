@@ -154,7 +154,8 @@ describe("Tenant authoring", () => {
     const calls = stubHttp(({ method }) => (method === "POST" ? { status: 200 } : { status: 200, body: tenant() }));
 
     renderScreen(<TenantScreen tenantId={tenantId} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Deactivate Tenant" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Tenant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate Tenant" }));
 
     expect(screen.getByText(/Deactivate the Tenant "Acme" \(acme\)\?/)).toBeTruthy();
     expect(calls.some((call) => call.method === "POST")).toBe(false);
@@ -181,7 +182,8 @@ describe("Deactivating a Tenant", () => {
     });
 
     renderScreen(<TenantScreen tenantId={tenantId} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Deactivate Tenant" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Tenant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate Tenant" }));
     fireEvent.click(screen.getByRole("button", { name: "Deactivate Acme" }));
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "Deactivate Tenant" })).toBeNull());

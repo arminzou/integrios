@@ -16,6 +16,7 @@ import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
+import { Timestamp } from "../ui/time";
 
 type Tenant = components["schemas"]["TenantDto"];
 
@@ -175,71 +176,129 @@ function CreateTenant() {
 
 export function TenantScreen({ tenantId }: { tenantId: string }) {
   const [notice, setNotice] = useState("");
+  const edit = useCreatePanel("edit-tenant");
   const tenant = useQuery({
     queryKey: ["tenant", tenantId],
     queryFn: () => call(() => api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } })),
+  });
+  // What this Tenant has configured. Counts only, and only configuration: the ledger is a cursor
+  // list with no total, and a count of Events here would make the two disagree.
+  const overview = useQuery({
+    queryKey: ["tenant-overview", tenantId],
+    queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
+  });
+  // The same read the ledger uses, unscoped, so both screens report the same window.
+  const activity = useQuery({
+    queryKey: ["activity-summary", tenantId, {}],
+    queryFn: () =>
+      call(() => api.GET("/admin/tenants/{tenantId}/events/activity-summary", { params: { path: { tenantId } } })),
   });
 
   const problem = asProblem(tenant.error);
   if (problem)
     return (
       <>
-        <h1>Tenant</h1>
+        <h1>Overview</h1>
         <p role="alert">{problem.detail ?? `This Tenant could not be read (${problem.status}).`}</p>
       </>
     );
   if (!tenant.data) return <p>Loading…</p>;
 
   const current = tenant.data;
+  const deadLettered = Number(activity.data?.dead_lettered_deliveries ?? 0);
+
   return (
     <Page>
-      <PageHeader title={current.name}>
-        In{" "}
-        <Link className="underline" to="/tenants">
-          this deployment's Tenants
-        </Link>
-        .
+      <PageHeader title="Overview" action={<Button {...edit.triggerProps}>Edit Tenant</Button>}>
+        What is configured for {current.name}, and what currently needs an Operator.
       </PageHeader>
 
-      <Panel>
-        <Details>
-          <dt>Slug</dt>
-          <dd>{current.slug}</dd>
-          <dt>Status</dt>
-          <dd>
-            <StatusBadge status={current.status} />
-          </dd>
-          <dt>Environment</dt>
-          <dd>{current.environment ?? "—"}</dd>
-          <dt>Description</dt>
-          <dd>{current.description ?? "—"}</dd>
-        </Details>
-      </Panel>
+      {/* Absent when there is nothing to act on. A banner that is always there stops being read. */}
+      {deadLettered > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-danger-surface bg-danger-surface p-4 text-danger-ink">
+          <div>
+            <strong>
+              {deadLettered} dead-lettered {deadLettered === 1 ? "Delivery" : "Deliveries"}
+            </strong>
+            <p className="m-0 text-sm">
+              These have exhausted their retry budget. Replay is offered on each one in the Event inspector.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link className="no-underline" to={`/tenants/${tenantId}/events?delivery_status=dead_lettered`}>
+              Open Events
+            </Link>
+          </Button>
+        </div>
+      ) : null}
 
-      <section className="flex flex-col gap-3">
-        <h2>Capabilities in {current.name}</h2>
-        <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-          {[
-            ["Connections", "connections"],
-            ["Topics and Subscriptions", "topics"],
-            ["Sources", "sources"],
-            ["Tenant API keys", "tenant-api-keys"],
-            ["Events and Deliveries", "events"],
-          ].map(([label, segment]) => (
-            <li key={segment}>
-              <Link
-                className="inline-flex rounded-md border bg-surface px-3 py-2 text-sm no-underline hover:bg-hover-surface"
-                to={`/tenants/${tenantId}/${segment}`}
-              >
-                {label}
-              </Link>
+      <Panel {...edit.panelProps} className="max-w-none">
+        <EditTenant key={current.updated_at} tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
+      </Panel>
+      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
+
+      <section aria-label="Configured in this Tenant">
+        <ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3 p-0">
+          {(
+            [
+              ["Topics", overview.data?.topics],
+              ["Connections", overview.data?.connections],
+              ["Sources", overview.data?.sources],
+              ["Subscriptions", overview.data?.subscriptions],
+              ["Live API keys", overview.data?.live_api_keys],
+            ] as const
+          ).map(([label, value]) => (
+            <li key={label} className="rounded-lg border bg-surface px-4 py-3">
+              <span className="block font-serif text-2xl tabular-nums">{value ?? "—"}</span>
+              <span className="text-sm text-ink-secondary">{label}</span>
             </li>
           ))}
         </ul>
       </section>
 
-      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-      <EditTenant key={current.updated_at} tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
+      <div className="grid gap-4 min-[1180px]:grid-cols-2">
+        <Panel className="max-w-none">
+          <h2 className="m-0 mb-4 text-lg">Tenant</h2>
+          <Details>
+            <dt>Name</dt>
+            <dd>{current.name}</dd>
+            <dt>Slug</dt>
+            <dd className="font-mono text-sm">{current.slug}</dd>
+            <dt>Environment</dt>
+            <dd>{current.environment ?? "—"}</dd>
+            <dt>Status</dt>
+            <dd>
+              <StatusBadge status={current.status} />
+            </dd>
+            <dt>Created</dt>
+            <dd>
+              <Timestamp value={current.created_at} />
+            </dd>
+            <dt>Ingestion endpoint</dt>
+            <dd className="font-mono text-sm break-all">{overview.data?.ingestion_endpoint ?? "—"}</dd>
+          </Details>
+          {current.description ? <p className="m-0 mt-4 text-ink-secondary">{current.description}</p> : null}
+        </Panel>
+
+        <Panel className="max-w-none">
+          <h2 className="m-0 mb-4 text-lg">Last 60 minutes</h2>
+          <Details>
+            <dt>Events accepted</dt>
+            <dd className="tabular-nums">{activity.data?.events_accepted ?? "—"}</dd>
+            <dt>Awaiting routing</dt>
+            <dd className="tabular-nums">{activity.data?.awaiting_routing ?? "—"}</dd>
+            <dt>Unrouted</dt>
+            <dd className="tabular-nums">{activity.data?.unrouted ?? "—"}</dd>
+            <dt>Dead-lettered Deliveries</dt>
+            <dd className="tabular-nums">{activity.data?.dead_lettered_deliveries ?? "—"}</dd>
+          </Details>
+          <Button asChild variant="outline" size="sm" className="mt-4 self-start">
+            <Link className="no-underline" to={`/tenants/${tenantId}/events`}>
+              Open the ledger
+            </Link>
+          </Button>
+        </Panel>
+      </div>
     </Page>
   );
 }
