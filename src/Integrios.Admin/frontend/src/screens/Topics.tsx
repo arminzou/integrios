@@ -79,7 +79,17 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
           emptyText="This Tenant has no Topics matching this filter."
         />
         {topics.length > 0 ? (
-          <TableCard caption="Topics, newest first">
+          <TableCard
+            caption="Topics, newest first"
+            footer={
+              <LoadMore
+                hasMore={list.hasNextPage}
+                busy={list.isFetching}
+                loaded={topics.length}
+                onLoadMore={() => void list.fetchNextPage()}
+              />
+            }
+          >
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
@@ -102,7 +112,6 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );

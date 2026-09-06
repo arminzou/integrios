@@ -52,3 +52,52 @@ export function Timestamp({ value }: { value: string }) {
     </time>
   );
 }
+
+/// Once rows are grouped by the day they fall on, the day is stated once on the separator and each
+/// row carries only its time. Same reasoning as dropping the year: repeating on every row what the
+/// group already says costs width the ledger needs for what differs.
+const timeOnly = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+const dayHeading = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "short",
+  day: "numeric",
+});
+
+/// The local calendar day an instant falls on, as a value rows can be grouped by.
+export function localDay(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+export function dayLabel(value: string, now = new Date()): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  if (localDay(value) === localDay(now.toISOString())) return "Today";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (localDay(value) === localDay(yesterday.toISOString())) return "Yesterday";
+  return dayHeading.format(date);
+}
+
+/// The same instant as `Timestamp`, with the day left to the group separator above it.
+export function TimeOfDay({ value }: { value: string }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+
+  return (
+    <time
+      dateTime={value}
+      title={`${value}
+${since(value)}`}
+      className="whitespace-nowrap tabular-nums"
+    >
+      {timeOnly.format(date)}
+    </time>
+  );
+}

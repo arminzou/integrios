@@ -39,13 +39,15 @@ export function PageHeader({
 
 /// A list in its own bordered card, with the caption naming the ordering above the rows rather than
 /// below them. The table scrolls inside the card, so a wide list never makes the document scroll.
-export function TableCard({ caption, children }: { caption: string; children: ReactNode }) {
+export function TableCard({ caption, footer, children }: { caption: string; footer?: ReactNode; children: ReactNode }) {
   return (
     <Card className="gap-0 overflow-hidden py-0">
       <Table className="caption-top">
         <TableCaption className="mt-0 px-4 pt-4 pb-2 text-left">{caption}</TableCaption>
         {children}
       </Table>
+      {/* Paging belongs to the list it pages, not to the space under it. */}
+      {footer ? <div className="flex items-center justify-between gap-3 border-t px-4 py-2">{footer}</div> : null}
     </Card>
   );
 }

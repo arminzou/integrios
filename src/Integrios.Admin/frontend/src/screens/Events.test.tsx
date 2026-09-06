@@ -63,6 +63,29 @@ async function ledgerRow(id: string): Promise<HTMLTableRowElement> {
 }
 
 describe("Event history", () => {
+  it("states the day once and leaves each row carrying only its time", async () => {
+    const earlier = {
+      ...routedEventWithDeadLetters,
+      event_id: "11111111-2222-3333-4444-555555555555",
+      accepted_at: "2026-08-31T22:15:00Z",
+    };
+    stubHttp(respondFor(page([routedEventWithDeadLetters, earlier])));
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+
+    const row = await ledgerRow(eventId);
+    // The instant the API sent is still on the attribute a machine reads, and still exact.
+    const stamp = within(row).getByRole("rowheader").querySelector("time");
+    expect(stamp?.getAttribute("datetime")).toBe("2026-09-01T10:00:00Z");
+    // What is rendered no longer repeats the day the separator above it already states.
+    expect(stamp?.textContent).not.toContain("Sep");
+
+    // Two Events on different local days produce two separators, each naming its own group.
+    expect(
+      screen.getAllByRole("columnheader").filter((cell) => cell.getAttribute("scope") === "colgroup"),
+    ).toHaveLength(2);
+  });
+
   // The ledger has to say what it is showing without being asked. A filtered view that looks
   // identical to an unfiltered one is the failure this replaced a disclosure to prevent.
   it("states its scope on screen, and offers a clear only once something is applied", async () => {
@@ -223,7 +246,9 @@ describe("Event activity summary", () => {
     // own single visible row must never be mistaken for.
     const acceptedButton = screen.getByRole("button", { name: /Events accepted/ });
     expect(within(acceptedButton).getByText("5")).toBeTruthy();
-    expect(screen.getAllByRole("row")).toHaveLength(2); // header row plus the one Event row
+    // Counted by Events rather than by rows: the ledger also carries a column header and a day
+    // separator, and neither is a row the summary could ever be confused with.
+    expect(screen.getAllByRole("rowheader")).toHaveLength(1);
   });
 });
 

@@ -80,7 +80,17 @@ export function ConnectorsScreen() {
           emptyText="No Connectors match this filter."
         />
         {connectors.length > 0 ? (
-          <TableCard caption="Connectors, newest first">
+          <TableCard
+            caption="Connectors, newest first"
+            footer={
+              <LoadMore
+                hasMore={list.hasNextPage}
+                busy={list.isFetching}
+                loaded={connectors.length}
+                onLoadMore={() => void list.fetchNextPage()}
+              />
+            }
+          >
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
@@ -109,7 +119,6 @@ export function ConnectorsScreen() {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
 
       <SourceContractPreview />

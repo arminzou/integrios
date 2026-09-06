@@ -79,7 +79,17 @@ export function TenantsScreen() {
           emptyText="No Tenants match this filter."
         />
         {tenants.length > 0 ? (
-          <TableCard caption="Tenants, newest first">
+          <TableCard
+            caption="Tenants, newest first"
+            footer={
+              <LoadMore
+                hasMore={list.hasNextPage}
+                busy={list.isFetching}
+                loaded={tenants.length}
+                onLoadMore={() => void list.fetchNextPage()}
+              />
+            }
+          >
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
@@ -106,7 +116,6 @@ export function TenantsScreen() {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );

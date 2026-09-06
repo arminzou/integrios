@@ -111,7 +111,17 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
           emptyText="This Tenant has no Sources matching these filters."
         />
         {sources.length > 0 ? (
-          <TableCard caption="Sources, newest first">
+          <TableCard
+            caption="Sources, newest first"
+            footer={
+              <LoadMore
+                hasMore={list.hasNextPage}
+                busy={list.isFetching}
+                loaded={sources.length}
+                onLoadMore={() => void list.fetchNextPage()}
+              />
+            }
+          >
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Source</TableHead>
@@ -142,7 +152,6 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );

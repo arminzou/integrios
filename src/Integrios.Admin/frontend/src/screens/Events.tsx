@@ -1,5 +1,5 @@
 import { type UseQueryResult, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, NavLink, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,11 @@ import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
-import { CopyValue } from "../ui/copy";
+import { CopyInline, CopyValue } from "../ui/copy";
 import { Form, SelectField, TextField } from "../ui/fields";
 import { RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge, statusLabel } from "../ui/status";
-import { Timestamp } from "../ui/time";
+import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
 type EventDelivery = components["schemas"]["EventDeliveryDto"];
@@ -330,7 +330,17 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             emptyText="No Events in this Tenant match these filters."
           />
           {events.length > 0 ? (
-            <TableCard caption="Events, newest first">
+            <TableCard
+              caption="Events, newest first"
+              footer={
+                <LoadMore
+                  hasMore={list.hasNextPage}
+                  busy={list.isFetching}
+                  loaded={events.length}
+                  onLoadMore={() => void list.fetchNextPage()}
+                />
+              }
+            >
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Accepted</TableHead>
@@ -341,29 +351,46 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {events.map((item) => (
-                  <TableRow key={item.event_id} className="has-[a[aria-current=page]]:bg-selected-surface">
-                    <RowHeader>
-                      {/* NavLink marks the selected row itself: the route is the selection, so
-                          `aria-current` follows the URL rather than a separately tracked flag. */}
-                      <NavLink className="underline" to={`/tenants/${tenantId}/events/${item.event_id}`} end>
-                        <Timestamp value={item.accepted_at} />
-                      </NavLink>
-                    </RowHeader>
-                    <TableCell>{item.event_type}</TableCell>
-                    <TableCell className="font-mono text-sm">{item.source_event_id ?? "—"}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={item.status} />
-                    </TableCell>
-                    <TableCell>
-                      <DeliveryCounts counts={item.deliveries} />
-                    </TableCell>
-                  </TableRow>
+                {events.map((item, index) => (
+                  <Fragment key={item.event_id}>
+                    {/* The day is stated once, where it changes, so every row below it carries only
+                        its time. The ledger is ordered by acceptance, so a change of day is always
+                        a boundary rather than something that can recur. */}
+                    {index === 0 || localDay(item.accepted_at) !== localDay(events[index - 1].accepted_at) ? (
+                      <TableRow className="hover:bg-transparent">
+                        <th scope="colgroup" colSpan={5} className="bg-muted px-4 py-1 text-left text-xs font-medium">
+                          {dayLabel(item.accepted_at)}
+                        </th>
+                      </TableRow>
+                    ) : null}
+                    <TableRow className="group has-[a[aria-current=page]]:bg-selected-surface">
+                      <RowHeader>
+                        {/* NavLink marks the selected row itself: the route is the selection, so
+                            `aria-current` follows the URL rather than a separately tracked flag. */}
+                        <NavLink className="underline" to={`/tenants/${tenantId}/events/${item.event_id}`} end>
+                          <TimeOfDay value={item.accepted_at} />
+                        </NavLink>
+                      </RowHeader>
+                      <TableCell>{item.event_type}</TableCell>
+                      <TableCell>
+                        {item.source_event_id ? (
+                          <CopyInline label="Source Event id" value={item.source_event_id} />
+                        ) : (
+                          <span className="text-ink-secondary">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={item.status} />
+                      </TableCell>
+                      <TableCell>
+                        <DeliveryCounts counts={item.deliveries} />
+                      </TableCell>
+                    </TableRow>
+                  </Fragment>
                 ))}
               </TableBody>
             </TableCard>
           ) : null}
-          <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
         </div>
       </div>
 

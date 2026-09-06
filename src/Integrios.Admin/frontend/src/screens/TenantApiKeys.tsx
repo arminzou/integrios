@@ -81,7 +81,17 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
           emptyText="This Tenant has no API keys matching this filter."
         />
         {keys.length > 0 ? (
-          <TableCard caption="Tenant API keys, newest first">
+          <TableCard
+            caption="Tenant API keys, newest first"
+            footer={
+              <LoadMore
+                hasMore={list.hasNextPage}
+                busy={list.isFetching}
+                loaded={keys.length}
+                onLoadMore={() => void list.fetchNextPage()}
+              />
+            }
+          >
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
@@ -113,7 +123,6 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );

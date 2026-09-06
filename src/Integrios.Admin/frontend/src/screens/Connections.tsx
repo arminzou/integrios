@@ -123,7 +123,17 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
           emptyText="This Tenant has no Connections matching this filter."
         />
         {connections.length > 0 ? (
-          <TableCard caption="Connections, newest first">
+          <TableCard
+            caption="Connections, newest first"
+            footer={
+              <LoadMore
+                hasMore={list.hasNextPage}
+                busy={list.isFetching}
+                loaded={connections.length}
+                onLoadMore={() => void list.fetchNextPage()}
+              />
+            }
+          >
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
@@ -150,7 +160,6 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </section>
     </Page>
   );

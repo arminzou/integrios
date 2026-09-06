@@ -171,12 +171,31 @@ export function ConfirmAction({
 
 /// The one way further rows are read: an explicit request for the next cursor, never infinite
 /// scroll and never a page number.
-export function LoadMore({ hasMore, busy, onLoadMore }: { hasMore: boolean; busy: boolean; onLoadMore: () => void }) {
-  if (!hasMore) return null;
+/// Forward-only paging, stated in the terms the cursor actually supports: how many rows are loaded,
+/// and whether there are more. Never a total or a page number — the Admin API issues neither.
+export function LoadMore({
+  hasMore,
+  busy,
+  loaded,
+  onLoadMore,
+}: {
+  hasMore: boolean;
+  busy: boolean;
+  loaded?: number;
+  onLoadMore: () => void;
+}) {
+  if (!hasMore && loaded === undefined) return null;
   return (
-    <Button type="button" variant="outline" className="self-start" onClick={onLoadMore} disabled={busy}>
-      Load more
-    </Button>
+    <>
+      <span className="text-sm text-ink-secondary">
+        {loaded === undefined ? null : `Showing ${loaded} ${loaded === 1 ? "row" : "rows"}`}
+      </span>
+      {hasMore ? (
+        <Button type="button" variant="outline" size="sm" onClick={onLoadMore} disabled={busy}>
+          Load more
+        </Button>
+      ) : null}
+    </>
   );
 }
 

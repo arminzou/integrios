@@ -137,7 +137,17 @@ export function SubscriptionsSection({
           emptyText={`${topicName} has no Subscriptions matching this filter.`}
         />
         {subscriptions.length > 0 ? (
-          <TableCard caption={`Subscriptions on ${topicName}, newest first`}>
+          <TableCard
+            caption={`Subscriptions on ${topicName}, newest first`}
+            footer={
+              <LoadMore
+                hasMore={list.hasNextPage}
+                busy={list.isFetching}
+                loaded={subscriptions.length}
+                onLoadMore={() => void list.fetchNextPage()}
+              />
+            }
+          >
             <TableHeader>
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
@@ -167,7 +177,6 @@ export function SubscriptionsSection({
             </TableBody>
           </TableCard>
         ) : null}
-        <LoadMore hasMore={list.hasNextPage} busy={list.isFetching} onLoadMore={() => void list.fetchNextPage()} />
       </div>
 
       <TransformPreview />
