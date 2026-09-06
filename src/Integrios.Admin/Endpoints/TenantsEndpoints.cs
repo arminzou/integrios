@@ -2,6 +2,8 @@ using Integrios.Application.Authoring.Tenants;
 using Integrios.Domain.Enums;
 using MediatR;
 
+using Microsoft.AspNetCore.Mvc;
+
 namespace Integrios.Admin.Endpoints;
 
 public sealed class TenantsEndpoints : IEndpointGroup
@@ -67,7 +69,10 @@ public sealed class TenantsEndpoints : IEndpointGroup
     private static async Task<IResult> GetTenantOverview(
         Guid id,
         IMediator mediator,
-        PublicIngestionBaseUri ingestion,
+        // Explicit because the type is a concrete registration rather than an interface: minimal-API
+        // parameter inference only reads it as a service while a container is present, so metadata
+        // built without one infers a body parameter and refuses the GET.
+        [FromServices] PublicIngestionBaseUri ingestion,
         CancellationToken cancellationToken)
     {
         TenantOverviewDto? response = await mediator.Send(
