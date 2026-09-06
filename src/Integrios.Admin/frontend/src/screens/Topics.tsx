@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -32,6 +32,7 @@ const optional = (text: string) => text.trim() || null;
 
 export function TopicsScreen({ tenantId }: { tenantId: string }) {
   const [status, setStatus] = useFilterParam("status");
+  const create = useCreatePanel("new-topic");
   const list = useInfiniteQuery({
     queryKey: ["topics", tenantId, { status }],
     queryFn: ({ pageParam }) =>
@@ -50,7 +51,7 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
 
   return (
     <Page>
-      <PageHeader title="Topics">
+      <PageHeader title="Topics" action={<Button {...create.triggerProps}>New Topic</Button>}>
         In{" "}
         <Link className="underline" to={`/tenants/${tenantId}`}>
           this Tenant
@@ -58,9 +59,9 @@ export function TopicsScreen({ tenantId }: { tenantId: string }) {
         .
       </PageHeader>
 
-      <Disclosure label="New Topic">
+      <Panel {...create.panelProps} className="max-w-none">
         <CreateTopic tenantId={tenantId} />
-      </Disclosure>
+      </Panel>
 
       <section className="flex flex-col gap-4">
         <h2>All Topics</h2>

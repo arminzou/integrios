@@ -141,12 +141,15 @@ describe("The dashboard in a real browser", () => {
     // form carries — is in the DOM and is not a tab stop, so counting it here would fail the test
     // for the browser doing the right thing. A closed disclosure's own content is the same case:
     // still in the DOM, but not reachable until its <summary> is activated, so only the summary
-    // itself is a stop.
+    // itself is a stop. A create panel that is rendered but `hidden` is the same case again: it
+    // stays in the DOM so `aria-controls` on its trigger resolves, and it is not focusable until
+    // the trigger opens it.
     const expected = await page.$$eval(
       "a[href], button, input:not([type=hidden]), select, textarea, summary",
       (elements) =>
         elements
           .filter((element) => !element.hasAttribute("disabled"))
+          .filter((element) => element.closest("[hidden]") === null)
           .filter((element) => {
             const closedAncestor = element.closest("details:not([open])");
             if (!closedAncestor) return true;

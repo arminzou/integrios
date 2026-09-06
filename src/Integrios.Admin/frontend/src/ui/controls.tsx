@@ -31,6 +31,26 @@ export function Disclosure({ label, children }: { label: string; children: React
   );
 }
 
+/// The create panel's open state, lifted so the control that opens it can sit in the page header
+/// where a primary action belongs, while the form itself stays below the header in reading order.
+///
+/// The panel is rendered and hidden rather than unmounted, so `aria-controls` always resolves to a
+/// real element and the browser announces the relationship whether or not it is open.
+export function useCreatePanel(id: string) {
+  const [open, setOpen] = useState(false);
+  return {
+    open,
+    close: () => setOpen(false),
+    triggerProps: {
+      type: "button" as const,
+      "aria-expanded": open,
+      "aria-controls": id,
+      onClick: () => setOpen((value) => !value),
+    },
+    panelProps: { id, hidden: !open },
+  };
+}
+
 /// Attributes that tie a control to its own label and error message. Screens spread these onto the
 /// control itself so a failed field announces its message rather than only turning a colour.
 export function fieldProps(id: string, error?: string, hasHint = false) {

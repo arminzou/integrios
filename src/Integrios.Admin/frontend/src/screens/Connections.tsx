@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -74,6 +74,7 @@ const optional = (text: string) => text.trim() || null;
 
 export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
   const [status, setStatus] = useFilterParam("status");
+  const create = useCreatePanel("new-connection");
   const list = useInfiniteQuery({
     queryKey: ["connections", tenantId, { status }],
     queryFn: ({ pageParam }) =>
@@ -92,7 +93,7 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
 
   return (
     <Page>
-      <PageHeader title="Connections">
+      <PageHeader title="Connections" action={<Button {...create.triggerProps}>New Connection</Button>}>
         In{" "}
         <Link className="underline" to={`/tenants/${tenantId}`}>
           this Tenant
@@ -100,9 +101,9 @@ export function ConnectionsScreen({ tenantId }: { tenantId: string }) {
         .
       </PageHeader>
 
-      <Disclosure label="New Connection">
+      <Panel {...create.panelProps} className="max-w-none">
         <CreateConnection tenantId={tenantId} />
-      </Disclosure>
+      </Panel>
 
       <section className="flex flex-col gap-4">
         <h2>All Connections</h2>

@@ -11,11 +11,28 @@ export function Page({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-8">{children}</div>;
 }
 
-export function PageHeader({ title, children }: { title: ReactNode; children?: ReactNode }) {
+/// Title, one line saying where the page sits, and the page's own primary action at the trailing
+/// edge, closed by a rule. The action is a slot rather than a prop pair so a screen hands over the
+/// control it already owns — including its confirmation and pending states — instead of this shape
+/// having to know what a capability's primary action is.
+///
+/// A screen with no primary action passes none, and the row is then just a title.
+export function PageHeader({
+  title,
+  action,
+  children,
+}: {
+  title: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
-    <header>
-      <h1>{title}</h1>
-      {children ? <p className="text-ink-secondary">{children}</p> : null}
+    <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
+      <div className="min-w-0">
+        <h1>{title}</h1>
+        {children ? <p className="m-0 text-ink-secondary">{children}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </header>
   );
 }

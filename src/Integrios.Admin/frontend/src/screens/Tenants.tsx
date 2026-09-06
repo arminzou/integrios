@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -41,6 +41,7 @@ const optional = (text: string) => text.trim() || null;
 
 export function TenantsScreen() {
   const [status, setStatus] = useFilterParam("status");
+  const create = useCreatePanel("new-tenant");
   const list = useInfiniteQuery({
     queryKey: ["tenants", { status }],
     queryFn: ({ pageParam }) =>
@@ -56,11 +57,11 @@ export function TenantsScreen() {
 
   return (
     <Page>
-      <PageHeader title="Tenants" />
+      <PageHeader title="Tenants" action={<Button {...create.triggerProps}>New Tenant</Button>} />
 
-      <Disclosure label="New Tenant">
+      <Panel {...create.panelProps} className="max-w-none">
         <CreateTenant />
-      </Disclosure>
+      </Panel>
 
       <section className="flex flex-col gap-4">
         <h2>All Tenants</h2>

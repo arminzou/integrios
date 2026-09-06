@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -52,6 +52,7 @@ type EditValues = z.infer<typeof editSchema>;
 export function SourcesScreen({ tenantId }: { tenantId: string }) {
   const [status, setStatus] = useFilterParam("status");
   const [type, setType] = useFilterParam("type");
+  const create = useCreatePanel("new-source");
   const list = useInfiniteQuery({
     queryKey: ["sources", tenantId, { status, type }],
     queryFn: ({ pageParam }) =>
@@ -70,7 +71,7 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
 
   return (
     <Page>
-      <PageHeader title="Sources">
+      <PageHeader title="Sources" action={<Button {...create.triggerProps}>New Source</Button>}>
         In{" "}
         <Link className="underline" to={`/tenants/${tenantId}`}>
           this Tenant
@@ -78,9 +79,9 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
         .
       </PageHeader>
 
-      <Disclosure label="New Source">
+      <Panel {...create.panelProps} className="max-w-none">
         <CreateSource tenantId={tenantId} />
-      </Disclosure>
+      </Panel>
 
       <section className="flex flex-col gap-4">
         <h2>All Sources</h2>

@@ -92,4 +92,21 @@ describe("Creating a Connection", () => {
     expect(describedText(config)).toContain("JSON");
     expect(writes(calls)).toEqual([]);
   });
+
+  it("opens the create panel from the page header, and says what the action controls", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<ConnectionsScreen tenantId={tenantId} />);
+
+    const trigger = await screen.findByRole("button", { name: "New Connection" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    // The panel it names is in the document even while closed, so the relationship always resolves.
+    const panelId = trigger.getAttribute("aria-controls");
+    expect(panelId).toBe("new-connection");
+    expect(document.getElementById(panelId as string)?.hasAttribute("hidden")).toBe(true);
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(panelId as string)?.hasAttribute("hidden")).toBe(false);
+  });
 });

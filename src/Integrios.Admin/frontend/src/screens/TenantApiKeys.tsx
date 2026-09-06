@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -32,6 +32,7 @@ type CreateValues = z.infer<typeof createSchema>;
 export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
   const [notice, setNotice] = useState("");
   const [state, setState] = useFilterParam("state");
+  const create = useCreatePanel("new-tenant-api-key");
   const list = useInfiniteQuery({
     queryKey: ["tenant-api-keys", tenantId, { state }],
     queryFn: ({ pageParam }) =>
@@ -50,7 +51,7 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
 
   return (
     <Page>
-      <PageHeader title="Tenant API keys">
+      <PageHeader title="Tenant API keys" action={<Button {...create.triggerProps}>New Tenant API key</Button>}>
         In{" "}
         <Link className="underline" to={`/tenants/${tenantId}`}>
           this Tenant
@@ -58,9 +59,9 @@ export function TenantApiKeysScreen({ tenantId }: { tenantId: string }) {
         .
       </PageHeader>
 
-      <Disclosure label="New Tenant API key">
+      <Panel {...create.panelProps} className="max-w-none">
         <CreateTenantApiKey tenantId={tenantId} />
-      </Disclosure>
+      </Panel>
 
       <section className="flex flex-col gap-4">
         <h2>All Tenant API keys</h2>

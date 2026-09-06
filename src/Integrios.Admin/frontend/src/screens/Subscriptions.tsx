@@ -9,7 +9,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -85,6 +85,7 @@ export function SubscriptionsSection({
   topicName: string;
 }) {
   const [status, setStatus] = useFilterParam("status");
+  const create = useCreatePanel("new-subscription");
   const navigate = useNavigate();
   const list = useInfiniteQuery({
     queryKey: ["subscriptions", tenantId, topicId, { status }],
@@ -104,8 +105,11 @@ export function SubscriptionsSection({
 
   return (
     <section className="flex flex-col gap-6">
-      <h2>Subscriptions on {topicName}</h2>
-      <Disclosure label="New Subscription">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
+        <h2 className="m-0">Subscriptions on {topicName}</h2>
+        <Button {...create.triggerProps}>New Subscription</Button>
+      </div>
+      <Panel {...create.panelProps} className="max-w-none">
         <SubscriptionForm
           tenantId={tenantId}
           topicId={topicId}
@@ -113,7 +117,7 @@ export function SubscriptionsSection({
             if (created) navigate(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${created.id}`);
           }}
         />
-      </Disclosure>
+      </Panel>
 
       <div className="flex flex-col gap-4">
         <h3>All Subscriptions</h3>
