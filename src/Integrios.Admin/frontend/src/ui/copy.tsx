@@ -84,3 +84,67 @@ export function CopyInline({ label, value }: { label: string; value: string }) {
     </span>
   );
 }
+
+/// A stored body, shown as what it is. JSON is rendered indented because an Operator reading a
+/// failed Delivery is looking for one field in a shape they did not write; anything that does not
+/// parse is shown exactly as stored, because a destination that returns HTML or a bare string is
+/// itself the finding.
+///
+/// Truncation is stated rather than left to be inferred from length. A fragment presented as a
+/// whole body is worse than no body at all: it reads as a complete response that happens to end
+/// strangely.
+export function BodyPanel({
+  label,
+  value,
+  truncated,
+  note,
+}: {
+  label: string;
+  value: unknown;
+  truncated?: boolean;
+  note?: string;
+}) {
+  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="m-0 text-sm font-semibold">{label}</h4>
+        <div className="flex items-center gap-2">
+          {truncated ? (
+            <span className="rounded-full border border-warning-surface bg-warning-surface px-2 py-0.5 text-xs text-warning-ink">
+              Truncated
+            </span>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void navigator.clipboard
+                ?.writeText(text)
+                .then(() => setCopied(true))
+                .catch(() => setCopied(false));
+            }}
+          >
+            Copy
+          </Button>
+        </div>
+      </div>
+      <pre className="m-0 max-h-64 overflow-auto rounded-md border bg-surface-quiet p-3 font-mono text-xs whitespace-pre-wrap">
+        {text}
+      </pre>
+      {truncated ? (
+        <p className="m-0 text-xs text-ink-secondary">
+          Only the first 8 KiB the destination returned is stored. {note}
+        </p>
+      ) : note ? (
+        <p className="m-0 text-xs text-ink-secondary">{note}</p>
+      ) : null}
+      <span role="status" className="sr-only">
+        {copied ? `${label} copied.` : ""}
+      </span>
+    </section>
+  );
+}

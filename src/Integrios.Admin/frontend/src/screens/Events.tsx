@@ -9,7 +9,7 @@ import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
-import { CopyInline, CopyValue } from "../ui/copy";
+import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
 import { Form, SelectField, TextField } from "../ui/fields";
 import { RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge, statusLabel } from "../ui/status";
@@ -314,7 +314,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
               {/* Apply stays explicit. Seven controls that each re-queried on change would issue six
                   requests on the way to the scope the Operator actually wanted. */}
-              <Button type="submit" className="self-end">
+              <Button type="submit" className="col-span-full justify-self-start self-end">
                 Apply filters
               </Button>
             </FilterBar>
@@ -551,6 +551,13 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
         <dd>{current.failed_at ? <Timestamp value={current.failed_at} /> : "Not failed"}</dd>
       </dl>
 
+      {current.payload !== undefined && current.payload !== null ? (
+        <BodyPanel label="Accepted payload" value={current.payload} />
+      ) : null}
+      {current.metadata !== undefined && current.metadata !== null ? (
+        <BodyPanel label="Metadata" value={current.metadata} />
+      ) : null}
+
       {current.trace_id ? (
         <CopyValue id="event-trace-id" label="Trace id" value={current.trace_id} />
       ) : (
@@ -647,6 +654,19 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                         .join(" ") || "No response was recorded"}
                       {attempt.error_message ? `. ${attempt.error_message}` : "."}
                     </p>
+                  ) : null}
+                  {/* What was sent and what came back, on the attempt that did it rather than on
+                      the Event: a retry cycle can send the same payload to a destination that
+                      answers differently each time, and it is the difference that diagnoses it. */}
+                  {attempt.request_payload !== undefined && attempt.request_payload !== null ? (
+                    <BodyPanel label="Sent" value={attempt.request_payload} note="After any Subscription mapping." />
+                  ) : null}
+                  {attempt.response_body ? (
+                    <BodyPanel
+                      label="Returned"
+                      value={attempt.response_body}
+                      truncated={attempt.response_body_truncated}
+                    />
                   ) : null}
                 </li>
               );

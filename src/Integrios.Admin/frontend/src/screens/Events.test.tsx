@@ -275,6 +275,47 @@ const detail = (deliveryStatus: string) => ({
 });
 
 describe("Event inspector", () => {
+  it("shows what was accepted, what was sent, and what the destination returned", async () => {
+    stubHttp(
+      respondFor(page([routedEventWithDeadLetters]), {
+        ...detail("dead_lettered"),
+        payload: { orderId: "SO-4014", total: 1673 },
+        delivery_attempts: [
+          {
+            attempt_id: "aaaaaaaa-0000-0000-0000-000000000001",
+            event_delivery_id: deliveryId,
+            subscription_id: subscriptionId,
+            destination_connection_id: "88888888-8888-8888-8888-888888888888",
+            attempt_number: 3,
+            status: "failed",
+            failure_phase: "http",
+            response_status_code: 503,
+            error_message: null,
+            started_at: "2026-09-01T10:00:02Z",
+            completed_at: "2026-09-01T10:00:03Z",
+            request_payload: { order: "SO-4014" },
+            response_body: '{"error":"upstream unavailable"}',
+            response_body_truncated: true,
+          },
+        ],
+      }),
+    );
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+
+    expect(await screen.findByRole("heading", { name: "Accepted payload" })).toBeTruthy();
+    expect(screen.getByText(/"orderId": "SO-4014"/)).toBeTruthy();
+
+    // What was sent is the mapped body, not the accepted one, and is labelled as such.
+    expect(screen.getByRole("heading", { name: "Sent" })).toBeTruthy();
+    expect(screen.getByText(/"order": "SO-4014"/)).toBeTruthy();
+
+    // A stored fragment says so rather than reading as a whole response that ends strangely.
+    expect(screen.getByRole("heading", { name: "Returned" })).toBeTruthy();
+    expect(screen.getByText('{"error":"upstream unavailable"}')).toBeTruthy();
+    expect(screen.getByText("Truncated")).toBeTruthy();
+  });
+
   it("offers replay only for a dead-lettered Delivery, names it, and calls nothing until confirmed", async () => {
     const calls = stubHttp(respondFor(page([]), detail("dead_lettered")));
 
