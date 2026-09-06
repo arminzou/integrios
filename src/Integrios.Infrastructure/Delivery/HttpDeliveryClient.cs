@@ -11,6 +11,11 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
     // "Bounded" per the design: never wait longer than this even if a provider asks for more.
     private static readonly TimeSpan MaxRetryAfter = TimeSpan.FromMinutes(15);
 
+    // The ceiling on what is kept for diagnosis. Applied at capture rather than at read because the
+    // value is a foreign server's output: unbounded by contract, and an error page from a
+    // misconfigured proxy can be megabytes.
+    internal const int CaptureMaxBytes = 8 * 1024;
+
     public async Task<DeliveryResult> DeliverAsync(
         OutboundHttpMessage outboundRequest,
         HttpSuccessRule? successRule,
@@ -56,28 +61,45 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
             int statusCode = (int)response.StatusCode;
             TimeSpan? retryAfter = ParseRetryAfter(response, statusCode);
 
+            // Read once, capped by whichever bound is larger, and serve both readers from those
+            // bytes: the response stream can only be consumed once, and capture must not change
+            // what an outcome rule is allowed to see.
+            bool evaluatesBody = successRule is { Evaluator: "json_boolean" };
+            int ruleMaxBytes = evaluatesBody
+                ? successRule!.MaxBodyBytes ?? HttpSuccessRule.DefaultMaxBodyBytes
+                : 0;
+
+            (byte[] body, bool moreRemained) = await ReadCappedAsync(
+                response, Math.Max(CaptureMaxBytes, ruleMaxBytes), cancellationToken);
+
+            bool truncated = moreRemained || body.Length > CaptureMaxBytes;
+            string? captured = Capture(body);
+
             if (!response.IsSuccessStatusCode)
             {
                 return new DeliveryResult(
-                    false, statusCode, FailurePhase: DeliveryFailurePhase.Http, RetryAfter: retryAfter);
+                    false, statusCode, FailurePhase: DeliveryFailurePhase.Http, RetryAfter: retryAfter,
+                    ResponseBody: captured, ResponseBodyTruncated: truncated);
             }
 
-            if (successRule is not { Evaluator: "json_boolean" })
-                return new DeliveryResult(true, statusCode);
+            if (!evaluatesBody)
+                return new DeliveryResult(
+                    true, statusCode, ResponseBody: captured, ResponseBodyTruncated: truncated);
 
-            byte[]? body = await ReadBoundedBodyAsync(
-                response, successRule.MaxBodyBytes ?? HttpSuccessRule.DefaultMaxBodyBytes, cancellationToken);
-            if (body is null)
+            if (moreRemained || body.Length > ruleMaxBytes)
             {
                 return new DeliveryResult(
                     false, statusCode, "Response body exceeded the configured outcome-evaluation bound.",
-                    FailurePhase: DeliveryFailurePhase.Http);
+                    FailurePhase: DeliveryFailurePhase.Http,
+                    ResponseBody: captured, ResponseBodyTruncated: truncated);
             }
 
             bool accepted = HttpSuccessEvaluator.Evaluate(successRule, body, out string? diagnostic);
             return accepted
-                ? new DeliveryResult(true, statusCode)
-                : new DeliveryResult(false, statusCode, diagnostic, FailurePhase: DeliveryFailurePhase.Http);
+                ? new DeliveryResult(true, statusCode, ResponseBody: captured, ResponseBodyTruncated: truncated)
+                : new DeliveryResult(
+                    false, statusCode, diagnostic, FailurePhase: DeliveryFailurePhase.Http,
+                    ResponseBody: captured, ResponseBodyTruncated: truncated);
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -116,25 +138,37 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
         return delta.Value > MaxRetryAfter ? MaxRetryAfter : delta.Value;
     }
 
-    // Bounded so a provider cannot force the Worker to buffer an unbounded response merely because
-    // its manifest opted into HTTP success rule evaluation.
-    private static async Task<byte[]?> ReadBoundedBodyAsync(
-        HttpResponseMessage response, int maxBytes, CancellationToken cancellationToken)
+    // Reads at most `cap` bytes and reports whether the body continued past them, so a destination
+    // cannot dictate how much the Worker buffers. The caller decides what exceeding a bound means:
+    // for an outcome rule it is a failure, for capture it is a truncation.
+    private static async Task<(byte[] Body, bool MoreRemained)> ReadCappedAsync(
+        HttpResponseMessage response, int cap, CancellationToken cancellationToken)
     {
-        if (response.Content.Headers.ContentLength is { } contentLength && contentLength > maxBytes)
-            return null;
-
         await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var buffer = new MemoryStream();
         byte[] chunk = new byte[8192];
         int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
-        {
-            if (buffer.Length + read > maxBytes)
-                return null;
+        while (buffer.Length <= cap && (read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
             buffer.Write(chunk, 0, read);
-        }
 
-        return buffer.ToArray();
+        byte[] body = buffer.ToArray();
+        return body.Length > cap ? (body[..cap], true) : (body, false);
+    }
+
+    // Decoded with `flush: false` so a multi-byte character split by the ceiling is dropped rather
+    // than stored as a replacement character the destination never sent.
+    private static string? Capture(byte[] body)
+    {
+        if (body.Length == 0)
+            return null;
+
+        ReadOnlySpan<byte> bounded = body.Length > CaptureMaxBytes
+            ? body.AsSpan(0, CaptureMaxBytes)
+            : body;
+
+        Decoder decoder = Encoding.UTF8.GetDecoder();
+        char[] chars = new char[Encoding.UTF8.GetMaxCharCount(bounded.Length)];
+        int count = decoder.GetChars(bounded, chars, flush: false);
+        return count == 0 ? null : new string(chars, 0, count);
     }
 }

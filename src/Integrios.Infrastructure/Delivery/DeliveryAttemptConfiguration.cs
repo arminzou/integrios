@@ -47,6 +47,9 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
             .HasColumnType("jsonb")
             .HasColumnName("request_payload");
         entity.Property(e => e.ResponseBody).HasColumnName("response_body");
+        entity.Property(e => e.ResponseBodyTruncated)
+            .HasDefaultValue(false)
+            .HasColumnName("response_body_truncated");
         entity.Property(e => e.ResponseStatusCode).HasColumnName("response_status_code");
         entity.Property(e => e.StartedAt)
             .HasDefaultValueSql("now()")

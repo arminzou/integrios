@@ -32,6 +32,54 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         attempt.CompletedAt.ShouldNotBeNull();
     }
 
+    // The provider-specific UPDATE and the migrated column, exercised on whichever provider the run
+    // is configured for. A body is diagnosis material, so it has to survive the write, not just the
+    // client that produced it.
+    [Fact]
+    public async Task Delivery_PersistsTheCapturedResponseBody()
+    {
+        const string body = """{"error":"upstream unavailable"}""";
+        fixture.DeliveryClient.ShouldSucceed = false;
+        fixture.DeliveryClient.ResponseBody = body;
+
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        await fixture.RunWorkerBatchAsync();
+
+        var delivery = (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem();
+        var attempt = (await fixture.GetDeliveryAttemptsAsync(delivery.Id)).ShouldHaveSingleItem();
+        attempt.ResponseBody.ShouldBe(body);
+        attempt.ResponseBodyTruncated.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task SuccessfulDelivery_PersistsItsResponseBodyToo()
+    {
+        const string body = """{"received":true}""";
+        fixture.DeliveryClient.ResponseBody = body;
+
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        await fixture.RunWorkerBatchAsync();
+
+        var delivery = (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem();
+        var attempt = (await fixture.GetDeliveryAttemptsAsync(delivery.Id)).ShouldHaveSingleItem();
+        attempt.Status.ShouldBe("succeeded");
+        attempt.ResponseBody.ShouldBe(body);
+    }
+
+    [Fact]
+    public async Task TruncatedResponseBody_IsRecordedAsTruncated()
+    {
+        fixture.DeliveryClient.ResponseBody = new string('a', 32);
+        fixture.DeliveryClient.ResponseBodyTruncated = true;
+
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        await fixture.RunWorkerBatchAsync();
+
+        var delivery = (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem();
+        var attempt = (await fixture.GetDeliveryAttemptsAsync(delivery.Id)).ShouldHaveSingleItem();
+        attempt.ResponseBodyTruncated.ShouldBeTrue();
+    }
+
     [Fact]
     public async Task FailedDelivery_RecordsOneAttempt_WithFailedStatusAndErrorInfo()
     {

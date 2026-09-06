@@ -217,6 +217,12 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("response_body");
 
+                    b.Property<bool>("ResponseBodyTruncated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("response_body_truncated");
+
                     b.Property<int?>("ResponseStatusCode")
                         .HasColumnType("int")
                         .HasColumnName("response_status_code");

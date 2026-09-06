@@ -55,7 +55,8 @@ public sealed record DeliveryAttemptCompletion(
     string? ResponseBody,
     string? ErrorMessage,
     bool IsTerminalFailure = false,
-    TimeSpan? RetryAfter = null);
+    TimeSpan? RetryAfter = null,
+    bool ResponseBodyTruncated = false);
 
 public enum DeliveryFinalizationStatus
 {

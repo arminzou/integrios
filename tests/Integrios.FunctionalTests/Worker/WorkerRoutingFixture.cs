@@ -157,10 +157,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         (await QueryAsync<AttemptRow>(
             """
             SELECT id AS Id, event_delivery_id AS EventDeliveryId, attempt_number AS AttemptNumber,
-                status AS Status, failure_phase AS FailurePhase, completed_at AS CompletedAt
+                status AS Status, failure_phase AS FailurePhase, completed_at AS CompletedAt,
+                response_body AS ResponseBody, response_body_truncated AS ResponseBodyTruncated
             FROM delivery_attempts WHERE event_delivery_id=@DeliveryId ORDER BY attempt_number
             """, new { DeliveryId = deliveryId })).Select(row => new DeliveryAttemptState(
-                row.Id, row.EventDeliveryId, row.AttemptNumber, row.Status, row.FailurePhase, Offset(row.CompletedAt))).ToList();
+                row.Id, row.EventDeliveryId, row.AttemptNumber, row.Status, row.FailurePhase, Offset(row.CompletedAt),
+                row.ResponseBody, row.ResponseBodyTruncated)).ToList();
 
     public async Task<EventDeliveryState> GetEventDeliveryAsync(Guid deliveryId)
     {
@@ -788,6 +790,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         public string Status { get; init; } = string.Empty;
         public string? FailurePhase { get; init; }
         public object? CompletedAt { get; init; }
+        public string? ResponseBody { get; init; }
+        public bool ResponseBodyTruncated { get; init; }
     }
     private sealed record OutboxRetryRow { public int AttemptCount { get; init; } public object? DeliverAfter { get; init; } }
     private sealed record SnapshotRow { public string HttpExecutionSnapshotJson { get; init; } = string.Empty; public string ConnectorKey { get; init; } = string.Empty; public string? MappingConfigJson { get; init; } }
@@ -803,7 +807,8 @@ public sealed record EventDeliveryState(
 
 public sealed record DeliveryAttemptState(
     Guid Id, Guid EventDeliveryId, int AttemptNumber, string Status,
-    string? FailurePhase, DateTimeOffset? CompletedAt);
+    string? FailurePhase, DateTimeOffset? CompletedAt,
+    string? ResponseBody = null, bool ResponseBodyTruncated = false);
 
 public sealed record EventDeliverySnapshot(
     string HttpExecutionSnapshotJson, string ConnectorKey, string? MappingConfigJson);

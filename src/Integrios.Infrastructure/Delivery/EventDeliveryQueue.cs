@@ -322,7 +322,8 @@ internal sealed class EventDeliveryQueue(
                 UPDATE delivery_attempts
                 SET status = @AttemptStatus, failure_phase = @FailurePhase,
                     request_payload = @RequestPayloadJson, response_status_code = @ResponseStatusCode,
-                    response_body = @ResponseBody, error_message = @ErrorMessage, completed_at = @DatabaseNow
+                    response_body = @ResponseBody, response_body_truncated = @ResponseBodyTruncated,
+                    error_message = @ErrorMessage, completed_at = @DatabaseNow
                 WHERE id = @AttemptId AND event_delivery_id = @DeliveryId AND status = N'in_progress';
                 SELECT @@ROWCOUNT;
                 """
@@ -333,6 +334,7 @@ internal sealed class EventDeliveryQueue(
                     request_payload = CAST(@RequestPayloadJson AS jsonb),
                     response_status_code = @ResponseStatusCode,
                     response_body = @ResponseBody,
+                    response_body_truncated = @ResponseBodyTruncated,
                     error_message = @ErrorMessage,
                     completed_at = @DatabaseNow
                 WHERE id = @AttemptId
@@ -348,6 +350,7 @@ internal sealed class EventDeliveryQueue(
                     completion.RequestPayloadJson,
                     completion.ResponseStatusCode,
                     completion.ResponseBody,
+                    completion.ResponseBodyTruncated,
                     completion.ErrorMessage,
                     owner.DatabaseNow
                 },

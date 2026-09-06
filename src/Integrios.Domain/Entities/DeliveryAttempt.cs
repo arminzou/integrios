@@ -12,6 +12,7 @@ public sealed record DeliveryAttempt
     public JsonElement? RequestPayload { get; init; }
     public int? ResponseStatusCode { get; init; }
     public string? ResponseBody { get; init; }
+    public bool ResponseBodyTruncated { get; init; }
     public string? ErrorMessage { get; init; }
     public required DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }

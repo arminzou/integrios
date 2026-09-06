@@ -236,6 +236,108 @@ public sealed class HttpDeliveryClientTests
         Content = new StringContent(json, Encoding.UTF8, "application/json")
     };
 
+    [Theory]
+    [InlineData(HttpStatusCode.OK)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task DeliverAsync_CapturesTheResponseBody_OnSuccessAndFailureAlike(HttpStatusCode status)
+    {
+        const string body = """{"error":"upstream unavailable"}""";
+        var client = new HttpDeliveryClient(new HttpClient(Responds(status, body)));
+
+        var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
+
+        result.ResponseBody.ShouldBe(body);
+        result.ResponseBodyTruncated.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task DeliverAsync_BodyOverTheCeiling_IsStoredTruncatedAndFlagged()
+    {
+        string body = new('a', HttpDeliveryClient.CaptureMaxBytes + 1);
+        var client = new HttpDeliveryClient(new HttpClient(Responds(HttpStatusCode.OK, body)));
+
+        var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
+
+        result.ResponseBodyTruncated.ShouldBeTrue();
+        result.ResponseBody!.Length.ShouldBe(HttpDeliveryClient.CaptureMaxBytes);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_BodyExactlyAtTheCeiling_IsNotReportedAsTruncated()
+    {
+        string body = new('a', HttpDeliveryClient.CaptureMaxBytes);
+        var client = new HttpDeliveryClient(new HttpClient(Responds(HttpStatusCode.OK, body)));
+
+        var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
+
+        result.ResponseBodyTruncated.ShouldBeFalse();
+        result.ResponseBody!.Length.ShouldBe(HttpDeliveryClient.CaptureMaxBytes);
+    }
+
+    // A character split by the ceiling is dropped rather than kept as a replacement character the
+    // destination never sent.
+    [Fact]
+    public async Task DeliverAsync_MultiByteCharacterSplitByTheCeiling_IsDroppedNotCorrupted()
+    {
+        // One byte short of the ceiling, so the three-byte character that follows straddles it.
+        string body = new string('a', HttpDeliveryClient.CaptureMaxBytes - 1) + "€uro";
+        var client = new HttpDeliveryClient(new HttpClient(Responds(HttpStatusCode.OK, body)));
+
+        var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
+
+        result.ResponseBodyTruncated.ShouldBeTrue();
+        result.ResponseBody.ShouldBe(new string('a', HttpDeliveryClient.CaptureMaxBytes - 1));
+        result.ResponseBody!.ShouldNotContain('�');
+    }
+
+    [Fact]
+    public async Task DeliverAsync_EmptyResponseBody_IsStoredAsNullRatherThanBlank()
+    {
+        var client = new HttpDeliveryClient(new HttpClient(Responds(HttpStatusCode.NoContent, "")));
+
+        var result = await client.DeliverAsync(Request("https://downstream.example"), null, CancellationToken.None);
+
+        result.ResponseBody.ShouldBeNull();
+        result.ResponseBodyTruncated.ShouldBeFalse();
+    }
+
+    // Capture reads the same bytes an outcome rule reads. A rule that still accepts the body proves
+    // capture did not consume the stream out from under it.
+    [Fact]
+    public async Task DeliverAsync_WithAnOutcomeRule_EvaluatesAndCapturesTheSameBody()
+    {
+        const string body = """{"ok":true}""";
+        var rule = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true, MaxBodyBytes = 64 };
+        var client = new HttpDeliveryClient(new HttpClient(Responds(HttpStatusCode.OK, body)));
+
+        var result = await client.DeliverAsync(Request("https://downstream.example"), rule, CancellationToken.None);
+
+        result.Succeeded.ShouldBeTrue();
+        result.ResponseBody.ShouldBe(body);
+    }
+
+    // The rule's own bound still governs the outcome, and is unaffected by the larger capture read.
+    [Fact]
+    public async Task DeliverAsync_BodyOverTheOutcomeRuleBound_StillFailsButIsCaptured()
+    {
+        string body = $$"""{"ok":true,"pad":"{{new string('a', 200)}}"}""";
+        var rule = new HttpSuccessRule { Evaluator = "json_boolean", Field = "ok", Expected = true, MaxBodyBytes = 64 };
+        var client = new HttpDeliveryClient(new HttpClient(Responds(HttpStatusCode.OK, body)));
+
+        var result = await client.DeliverAsync(Request("https://downstream.example"), rule, CancellationToken.None);
+
+        result.Succeeded.ShouldBeFalse();
+        result.Error.ShouldBe("Response body exceeded the configured outcome-evaluation bound.");
+        result.ResponseBody.ShouldBe(body);
+        result.ResponseBodyTruncated.ShouldBeFalse();
+    }
+
+    private static StubHandler Responds(HttpStatusCode status, string body) =>
+        new((_, _) => Task.FromResult(new HttpResponseMessage(status)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        }));
+
     private static OutboundHttpMessage Request(string uri, params (string Name, string Value)[] headers) =>
         new("POST", uri, headers.ToDictionary(h => h.Name, h => h.Value, StringComparer.OrdinalIgnoreCase), "{}");
 
