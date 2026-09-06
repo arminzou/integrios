@@ -148,7 +148,10 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await view.click("text=Create Topic");
     const topicId = await created(view, /\/topics\/[0-9a-f-]{36}$/, "Topic");
 
-    // Subscription, authored on the Topic it belongs to.
+    // Subscription, authored on the Topic it belongs to. Creating the Topic lands on the Topic
+    // selected beside the Topics list, which summarises its Subscriptions; authoring them is the
+    // route below it, which that panel links to.
+    await view.click("text=Manage Subscriptions");
     await view.click("text=New Subscription");
     const subscriptionForm = formNamed(view, "Create a Subscription");
     await subscriptionForm.getByLabel("Name").fill(`${run}-to-sink`);
