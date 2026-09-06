@@ -7,8 +7,8 @@ import { Table, TableCaption, TableHead } from "@/components/ui/table";
 /// The page chrome every capability repeats: a title, an optional line saying where the page sits,
 /// and the bounded groups beneath it. Only the shape is shared — what a page is about stays in the
 /// screen that owns it.
-export function Page({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-8">{children}</div>;
+export function Page({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("flex flex-col gap-8", className)}>{children}</div>;
 }
 
 /// Title, one line saying where the page sits, and the page's own primary action at the trailing
@@ -74,5 +74,34 @@ export function Details({ children }: { children: ReactNode }) {
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] [&>dd]:m-0 [&>dt]:m-0 [&>dt]:font-medium">
       {children}
     </dl>
+  );
+}
+
+/// A list with the selected row's detail beside it where there is room for two columns, and
+/// following it in document order where there is not. The Event ledger established the shape; every
+/// capability whose detail is a detail rather than a workspace of its own uses it, so an Operator
+/// compares rows and reads one in the same place.
+export function SplitView({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-6 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-8">
+      {children}
+    </div>
+  );
+}
+
+export function SplitList({ children }: { children: ReactNode }) {
+  return <Page className="min-w-0 min-[1180px]:flex-[1_1_55%]">{children}</Page>;
+}
+
+/// Sticky at desktop so the detail stays put while the list beside it is scanned. It carries its
+/// own accessible name because it is a complementary region, not a second page.
+export function Inspector({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <aside
+      aria-label={label}
+      className="flex min-w-0 flex-col gap-6 rounded-lg border bg-card p-6 min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:flex-[1_1_45%]"
+    >
+      {children}
+    </aside>
   );
 }

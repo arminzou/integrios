@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
@@ -108,5 +108,50 @@ describe("Creating a Connection", () => {
     fireEvent.click(trigger);
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(panelId as string)?.hasAttribute("hidden")).toBe(false);
+  });
+});
+
+const connectionId = "44444444-4444-4444-4444-444444444444";
+
+const connection = {
+  id: connectionId,
+  tenant_id: tenantId,
+  connector_id: connectorId,
+  name: "northwind-erp",
+  status: "active",
+  environment: "production",
+  description: "Order and payment records into the ERP.",
+  config: { base_uri: "http://erp.internal/hooks" },
+  source_verification: null,
+  destination_authentication: null,
+  created_at: "2026-09-01T00:00:00Z",
+  updated_at: "2026-09-01T00:00:00Z",
+};
+
+describe("Connection selection", () => {
+  it("reads the selected Connection beside the list it was chosen from", async () => {
+    stubHttp(({ url }) => {
+      if (url.pathname.endsWith("/connections")) return { status: 200, body: page([connection]) };
+      if (url.pathname.endsWith(connectionId)) return { status: 200, body: connection };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
+      return { status: 200, body: page([]) };
+    });
+
+    renderScreen(
+      <ConnectionsScreen tenantId={tenantId} selectedConnectionId={connectionId} />,
+      `/tenants/${tenantId}/connections/${connectionId}`,
+    );
+
+    // The list is still there to compare against, and the detail is a region of its own.
+    await screen.findByRole("heading", { level: 1, name: "Connections" });
+    const panel = await screen.findByRole("complementary", { name: "Connection detail" });
+    expect(within(panel).getByRole("heading", { name: "northwind-erp" })).toBeTruthy();
+
+    // The route is the selection, so the row it came from says so.
+    const row = screen.getByRole("link", { name: "northwind-erp" });
+    expect(row.getAttribute("aria-current")).toBe("page");
+
+    // The destructive action names what it will change, and stays in the panel that shows it.
+    expect(within(panel).getByRole("button", { name: /Deactivate/ })).toBeTruthy();
   });
 });

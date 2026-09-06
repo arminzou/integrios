@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { isRouteErrorResponse, Link, type RouteObject, useLocation, useParams, useRouteError } from "react-router";
 import { App } from "./App";
 import { isIdentifier } from "./identifiers";
-import { ConnectionScreen, ConnectionsScreen } from "./screens/Connections";
+import { ConnectionsScreen } from "./screens/Connections";
 import { ConnectorScreen, ConnectorsScreen } from "./screens/Connectors";
 import { EventsScreen } from "./screens/Events";
-import { SourceScreen, SourcesScreen } from "./screens/Sources";
+import { SourcesScreen } from "./screens/Sources";
 import { SubscriptionScreen } from "./screens/Subscriptions";
 import { TenantApiKeysScreen } from "./screens/TenantApiKeys";
 import { TenantScreen, TenantsScreen } from "./screens/Tenants";
@@ -90,7 +90,9 @@ export const routeConfig: RouteObject[] = [
         handle: { section: "connections" satisfies TenantSection },
         element: (
           <Ids>
-            {({ tenantId, connectionId }) => <ConnectionScreen tenantId={tenantId} connectionId={connectionId} />}
+            {({ tenantId, connectionId }) => (
+              <ConnectionsScreen tenantId={tenantId} selectedConnectionId={connectionId} />
+            )}
           </Ids>
         ),
       },
@@ -117,7 +119,9 @@ export const routeConfig: RouteObject[] = [
       {
         path: "tenants/:tenantId/sources/:sourceId",
         handle: { section: "sources" satisfies TenantSection },
-        element: <Ids>{({ tenantId, sourceId }) => <SourceScreen tenantId={tenantId} sourceId={sourceId} />}</Ids>,
+        element: (
+          <Ids>{({ tenantId, sourceId }) => <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />}</Ids>
+        ),
       },
       {
         path: "tenants/:tenantId/topics",

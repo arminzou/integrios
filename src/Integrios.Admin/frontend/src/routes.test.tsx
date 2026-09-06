@@ -70,6 +70,14 @@ describe("Route values that are not identifiers", () => {
     }));
   }
 
+  it("renders the Connection panel beside its list, from the route alone", async () => {
+    stubSignedIn();
+
+    renderApp("/tenants/11111111-1111-1111-1111-111111111111/connections/44444444-4444-4444-4444-444444444444");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Connections" })).toBeTruthy();
+  });
+
   // A path parameter matches any segment, but these values are handed to the Admin API as
   // identifiers. The route table has to refuse a malformed one rather than pass it through.
   it("refuses a Tenant id that is not an identifier instead of passing it to the API", async () => {

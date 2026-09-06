@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router";
+import { Link, NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,7 +15,7 @@ import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { Details, Inspector, PageHeader, Panel, RowHeader, SplitList, SplitView, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
@@ -49,7 +49,7 @@ const editSchema = z.object({ configuration: jsonDocument });
 type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
 
-export function SourcesScreen({ tenantId }: { tenantId: string }) {
+export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string; selectedSourceId?: string }) {
   const [status, setStatus] = useFilterParam("status");
   const [type, setType] = useFilterParam("type");
   const create = useCreatePanel("new-source");
@@ -70,90 +70,103 @@ export function SourcesScreen({ tenantId }: { tenantId: string }) {
   const sources = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <Page>
-      <PageHeader title="Sources" action={<Button {...create.triggerProps}>New Source</Button>}>
-        In{" "}
-        <Link className="underline" to={`/tenants/${tenantId}`}>
-          this Tenant
-        </Link>
-        .
-      </PageHeader>
+    <SplitView>
+      <SplitList>
+        <PageHeader title="Sources" action={<Button {...create.triggerProps}>New Source</Button>}>
+          In{" "}
+          <Link className="underline" to={`/tenants/${tenantId}`}>
+            this Tenant
+          </Link>
+          .
+        </PageHeader>
 
-      <Panel {...create.panelProps} className="max-w-none">
-        <CreateSource tenantId={tenantId} />
-      </Panel>
+        <Panel {...create.panelProps} className="max-w-none">
+          <CreateSource tenantId={tenantId} />
+        </Panel>
 
-      <section className="flex flex-col gap-4">
-        <h2>All Sources</h2>
-        <div className="flex flex-wrap gap-4">
-          <FilterBar applied={((status ? 1 : 0) as number) + ((type ? 1 : 0) as number)}>
-            <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-              <option value="">Any status</option>
-              <option value="active">Active</option>
-              <option value="revoked">Revoked</option>
-            </Filter>
-            <Filter id="source-type" label="Type" value={type} onChange={setType}>
-              <option value="">Any type</option>
-              {sourceTypes.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Filter>
-          </FilterBar>
-        </div>
+        <section className="flex flex-col gap-4">
+          <h2>All Sources</h2>
+          <div className="flex flex-wrap gap-4">
+            <FilterBar applied={((status ? 1 : 0) as number) + ((type ? 1 : 0) as number)}>
+              <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
+                <option value="">Any status</option>
+                <option value="active">Active</option>
+                <option value="revoked">Revoked</option>
+              </Filter>
+              <Filter id="source-type" label="Type" value={type} onChange={setType}>
+                <option value="">Any type</option>
+                {sourceTypes.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Filter>
+            </FilterBar>
+          </div>
 
-        <ListStatus
-          busy={list.isFetching}
-          loaded={list.isSuccess}
-          problem={asProblem(list.error)}
-          empty={sources.length === 0}
-          emptyText="This Tenant has no Sources matching these filters."
-        />
-        {sources.length > 0 ? (
-          <TableCard
-            caption="Sources, newest first"
-            footer={
-              <LoadMore
-                hasMore={list.hasNextPage}
-                busy={list.isFetching}
-                loaded={sources.length}
-                onLoadMore={() => void list.fetchNextPage()}
-              />
-            }
-          >
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">Source</TableHead>
-                <TableHead scope="col">Type</TableHead>
-                <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col">Topic</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sources.map((source) => (
-                <TableRow key={source.id}>
-                  <RowHeader>
-                    <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/sources/${source.id}`}>
-                      {source.id}
-                    </Link>
-                  </RowHeader>
-                  <TableCell>{source.type}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={source.status} />
-                  </TableCell>
-                  <TableCell>
-                    <Link className="font-mono text-sm underline" to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
-                      {source.topic_id}
-                    </Link>
-                  </TableCell>
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={sources.length === 0}
+            emptyText="This Tenant has no Sources matching these filters."
+          />
+          {sources.length > 0 ? (
+            <TableCard
+              caption="Sources, newest first"
+              footer={
+                <LoadMore
+                  hasMore={list.hasNextPage}
+                  busy={list.isFetching}
+                  loaded={sources.length}
+                  onLoadMore={() => void list.fetchNextPage()}
+                />
+              }
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Source</TableHead>
+                  <TableHead scope="col">Type</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  <TableHead scope="col">Topic</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </TableCard>
-        ) : null}
-      </section>
-    </Page>
+              </TableHeader>
+              <TableBody>
+                {sources.map((source) => (
+                  <TableRow key={source.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                    <RowHeader>
+                      <NavLink
+                        className="font-mono text-sm underline"
+                        to={`/tenants/${tenantId}/sources/${source.id}`}
+                        end
+                      >
+                        {source.id}
+                      </NavLink>
+                    </RowHeader>
+                    <TableCell>{source.type}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={source.status} />
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        className="font-mono text-sm underline"
+                        to={`/tenants/${tenantId}/topics/${source.topic_id}`}
+                      >
+                        {source.topic_id}
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </TableCard>
+          ) : null}
+        </section>
+      </SplitList>
+
+      {selectedSourceId ? (
+        <SourceInspector key={selectedSourceId} tenantId={tenantId} sourceId={selectedSourceId} />
+      ) : null}
+    </SplitView>
   );
 }
 
@@ -270,7 +283,7 @@ function CreateSource({ tenantId }: { tenantId: string }) {
   );
 }
 
-export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceId: string }) {
+function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: string }) {
   const [notice, setNotice] = useState("");
   const source = useQuery({
     queryKey: ["source", tenantId, sourceId],
@@ -281,23 +294,17 @@ export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceI
   const problem = asProblem(source.error);
   if (problem)
     return (
-      <>
-        <h1>Source</h1>
+      <Inspector label="Source detail">
+        <h2 className="m-0">Source</h2>
         <p role="alert">{problem.detail ?? `This Source could not be read (${problem.status}).`}</p>
-      </>
+      </Inspector>
     );
-  if (!source.data) return <p>Loading…</p>;
+  if (!source.data) return <Inspector label="Source detail">Loading…</Inspector>;
 
   const current = source.data;
   return (
-    <Page>
-      <PageHeader title={`Source ${current.id}`}>
-        In{" "}
-        <Link className="underline" to={`/tenants/${tenantId}/sources`}>
-          this Tenant's Sources
-        </Link>
-        .
-      </PageHeader>
+    <Inspector label="Source detail">
+      <h2 className="m-0 font-mono text-lg break-all">{current.id}</h2>
 
       <Panel>
         <Details>
@@ -334,7 +341,7 @@ export function SourceScreen({ tenantId, sourceId }: { tenantId: string; sourceI
         source={current}
         onDone={() => setNotice("Source revoked.")}
       />
-    </Page>
+    </Inspector>
   );
 }
 
