@@ -29,9 +29,6 @@
   --danger-ink: #85504c;
   --danger-surface: #f4eeee;
 
-  /* The one content measure, applied to the document beside the rail. */
-  --measure: 1400px;
-
   --radius: 6px;
   /* A bounded content group — an activity-summary metric, the ledger, the inspector panel. */
   --radius-card: 10px;

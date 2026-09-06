@@ -192,10 +192,14 @@ td a {
   color: var(--ink-secondary);
 }
 
+/* The document fills the width the rail leaves it. There is no page-level measure: the only thing
+   one would bound here is the ledger, and a ledger wants width — every column it truncates instead
+   is a value an Operator has to open a row to read. What genuinely needs a measure states its own,
+   where the reason for it is visible: a page's lede is 64 characters, an authoring form is `2xl`,
+   the inspector is a fixed 400 pixels. A cap here centred the document inside its own column, which
+   on a 2048-pixel monitor opened a 208-pixel gap between the navigation and the thing it navigates. */
 #main {
   width: 100%;
-  max-width: var(--measure);
-  margin-inline: auto;
   padding: 24px;
   min-width: 0;
 }
