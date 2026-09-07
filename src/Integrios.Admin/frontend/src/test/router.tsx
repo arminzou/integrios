@@ -1,6 +1,6 @@
 import { transferableAbortController } from "node:util";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, vi } from "vitest";
@@ -31,4 +31,13 @@ export function renderApp(initialPath: string) {
 /// A cache of its own per test: what one test read must never answer another test's read.
 function withQueries(children: ReactElement) {
   return <QueryClientProvider client={createQueryClient()}>{children}</QueryClientProvider>;
+}
+
+/// Choosing from the vendored listbox, as a person does: press the control, then pick the option by
+/// its name. It replaces `fireEvent.change` on a `<select>`, which addressed an element that no
+/// longer exists — and which asserted less, because it set a value without opening anything.
+export async function chooseOption(control: HTMLElement, option: string | RegExp) {
+  control.focus();
+  fireEvent.keyDown(control, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: option }));
 }

@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -86,10 +87,9 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
       <section className="flex flex-col gap-4">
         <FilterBar applied={(direction ? 1 : 0) as number}>
           <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
-            <option value="">Any</option>
-            <option value="source">Source</option>
-            <option value="destination">Destination</option>
-            <option value="both">Both</option>
+            <SelectItem value="source">Source</SelectItem>
+            <SelectItem value="destination">Destination</SelectItem>
+            <SelectItem value="both">Both</SelectItem>
           </Filter>
         </FilterBar>
 

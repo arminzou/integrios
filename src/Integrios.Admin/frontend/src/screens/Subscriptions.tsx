@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -125,9 +126,8 @@ export function SubscriptionsSection({
         <h3>All Subscriptions</h3>
         <FilterBar applied={(status ? 1 : 0) as number}>
           <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
-            <option value="">Any</option>
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="disabled">Disabled</SelectItem>
           </Filter>
         </FilterBar>
 
@@ -380,11 +380,10 @@ function SubscriptionForm({
             disabled={connectionOptionsUnavailable}
             required
           >
-            <option value="">Choose a Connection</option>
             {activeOnly(connections.data?.items).map((connection) => (
-              <option key={connection.id} value={connection.id}>
+              <SelectItem key={connection.id} value={connection.id}>
                 {connection.name}
-              </option>
+              </SelectItem>
             ))}
           </SelectField>
           <TextField
@@ -415,9 +414,9 @@ function SubscriptionForm({
             <legend className="px-1 text-sm font-medium">HTTP delivery</legend>
             <SelectField control={form.control} name="method" label="Method" required>
               {["POST", "PUT", "PATCH", "DELETE", "GET"].map((verb) => (
-                <option key={verb} value={verb}>
+                <SelectItem key={verb} value={verb}>
                   {verb}
-                </option>
+                </SelectItem>
               ))}
             </SelectField>
             <TextField control={form.control} name="path" label="Path (optional)" />

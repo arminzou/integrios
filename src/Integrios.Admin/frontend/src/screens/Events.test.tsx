@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
-import { renderScreen } from "../test/router";
+import { chooseOption, renderScreen } from "../test/router";
 import { EventsScreen } from "./Events";
 
 afterEach(cleanup);
@@ -132,7 +132,7 @@ describe("Event history", () => {
     renderScreen(<EventsScreen tenantId={tenantId} />);
     await screen.findByText("No Events in this Tenant match these filters.");
 
-    fireEvent.change(screen.getByLabelText("Delivery status"), { target: { value: "dead_lettered" } });
+    await chooseOption(screen.getByLabelText("Delivery status"), "Dead-lettered");
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
     await waitFor(() => expect(eventsCall(calls).length).toBeGreaterThan(1));
@@ -168,7 +168,7 @@ describe("Event history", () => {
     const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
     await screen.findByText("No Events in this Tenant match these filters.");
 
-    fireEvent.change(screen.getByLabelText("Delivery status"), { target: { value: "dead_lettered" } });
+    await chooseOption(screen.getByLabelText("Delivery status"), "Dead-lettered");
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
     await waitFor(() => expect(router.state.location.search).toBe("?delivery_status=dead_lettered"));

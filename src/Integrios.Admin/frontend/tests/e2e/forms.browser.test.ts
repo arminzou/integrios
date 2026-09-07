@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { type Browser, chromium, type Page, type Request } from "playwright";
+import { type Browser, chromium, type Locator, type Page, type Request } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -8,7 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 ///
 /// The jsdom tests dispatch React's synthetic events directly, and hand-driving the page through a
 /// devtools protocol sets `.value` without React ever seeing it — neither exercises what a person
-/// typing into the form actually produces. Playwright's fill and selectOption do, which is why the
+/// typing into the form actually produces. Playwright's fill and a real listbox interaction do,
+/// which is why the
 /// request these assertions inspect is the request the API would really receive.
 ///
 /// What they check is the part the type system cannot: the coercions between a form, which holds
@@ -159,6 +160,13 @@ function formNamed(view: Page, name: string) {
   return view.getByRole("form", { name });
 }
 
+/// The pickers are a scripted listbox rather than a `<select>`, so there is no `selectOption` to
+/// call: a person opens the control and presses the option, and so does this.
+async function choose(control: Locator, option: string | RegExp) {
+  await control.click();
+  await control.page().getByRole("option", { name: option }).click();
+}
+
 async function submitted(
   writes: Request[],
 ): Promise<{ method: string; pathname: string; body: Record<string, unknown> }> {
@@ -179,7 +187,7 @@ describe("Create forms, filled through a real browser", () => {
     // dominate the list above it.
     await view.click("text=New Connection");
     const form = formNamed(view, "Create a Connection");
-    await form.getByLabel("Connector").selectOption(connectorId);
+    await choose(form.getByLabel("Connector"), /HTTP/);
     await form.getByLabel("Name").fill("sink");
     await form.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://sink.invalid"}');
     await view.click("text=Create Connection");
@@ -221,7 +229,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.click("text=New Subscription");
     const form = formNamed(view, "Create a Subscription");
     await form.getByLabel("Name").fill("to-sink");
-    await form.getByLabel("Destination Connection").selectOption(connectionId);
+    await choose(form.getByLabel("Destination Connection"), /sink/);
     await form.getByLabel("Order").fill("3");
     await form.getByLabel("Match rules (JSON)").fill('{"all":[]}');
     await view.click("text=Create Subscription");
@@ -243,9 +251,9 @@ describe("Create forms, filled through a real browser", () => {
 
     await view.click("text=New Source");
     const form = formNamed(view, "Create a Source");
-    await form.getByLabel("Connection").selectOption(connectionId);
-    await form.getByLabel("Topic").selectOption(topicId);
-    await form.getByLabel("Type").selectOption("webhook");
+    await choose(form.getByLabel("Connection"), /sink/);
+    await choose(form.getByLabel("Topic"), /orders/);
+    await choose(form.getByLabel("Type"), "Webhook");
     await form.getByLabel("Configuration (JSON)").fill('{"path":"/hook"}');
     await view.click("text=Create Source");
 

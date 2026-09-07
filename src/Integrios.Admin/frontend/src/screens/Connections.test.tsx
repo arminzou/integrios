@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
-import { renderScreen } from "../test/router";
+import { chooseOption, renderScreen } from "../test/router";
 import { ConnectionsScreen } from "./Connections";
 
 afterEach(cleanup);
@@ -31,12 +31,13 @@ async function openCreateForm(respond: (call: Call) => { status: number; body?: 
 
   await screen.findByRole("heading", { level: 1, name: "Connections" });
   fireEvent.click(screen.getByText("New Connection"));
-  await screen.findByRole("option", { name: /HTTP/ });
 
   // The list now carries a Connector filter and a Connector column of its own, so the create form's
-  // own control is reached through the form rather than through the whole document.
-  const form = within(screen.getByRole("form", { name: "Create a Connection" }));
-  fireEvent.change(form.getByLabelText("Connector"), { target: { value: connectorId } });
+  // own control is reached through the form rather than through the whole document. Options exist
+  // only while the listbox is open, so choosing one is also what waits for the Connectors to load —
+  // the previous version could set a value for an option that was never there.
+  const form = within(await screen.findByRole("form", { name: "Create a Connection" }));
+  await chooseOption(form.getByLabelText("Connector"), /HTTP/);
   fireEvent.change(form.getByLabelText("Name"), { target: { value: "sink" } });
   return calls;
 }

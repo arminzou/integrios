@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
-import { renderScreen } from "../test/router";
+import { chooseOption, renderScreen } from "../test/router";
 import { TenantScreen, TenantsScreen } from "./Tenants";
 
 afterEach(cleanup);
@@ -83,7 +83,7 @@ describe("Tenants list", () => {
     );
 
     renderScreen(<TenantsScreen />);
-    fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "disabled" } });
+    await chooseOption(await screen.findByLabelText("Status"), "Disabled");
     await screen.findByRole("link", { name: "Beta" });
 
     await act(async () => {
@@ -104,7 +104,7 @@ describe("Tenants list", () => {
     renderScreen(<TenantsScreen />);
     await screen.findByRole("link", { name: "Acme" });
 
-    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "disabled" } });
+    await chooseOption(screen.getByLabelText("Status"), "Disabled");
 
     // The rows read under the previous filter are discarded immediately, not left on screen while
     // the new first page is still in flight.
@@ -241,7 +241,7 @@ describe("Filtering the Tenants list", () => {
     const { router } = renderScreen(<TenantsScreen />, "/tenants?status=disabled");
 
     await waitFor(() => expect(calls.some((call) => call.url.searchParams.get("status") === "disabled")).toBe(true));
-    expect((await screen.findByLabelText("Status")) as HTMLSelectElement).toHaveProperty("value", "disabled");
+    expect((await screen.findByLabelText("Status")).textContent).toContain("Disabled");
 
     // An empty list that is empty because of the filter says how to stop filtering.
     fireEvent.click(await screen.findByRole("link", { name: "Clear filters" }));

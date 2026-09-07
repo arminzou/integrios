@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Link, NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -107,16 +108,14 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
 
       <FilterBar applied={(status ? 1 : 0) + (type ? 1 : 0)}>
         <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-          <option value="">Any</option>
-          <option value="active">Active</option>
-          <option value="revoked">Revoked</option>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="revoked">Revoked</SelectItem>
         </Filter>
         <Filter id="source-type" label="Type" value={type} onChange={setType}>
-          <option value="">Any</option>
           {sourceTypes.map((option) => (
-            <option key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value}>
               {option.label}
-            </option>
+            </SelectItem>
           ))}
         </Filter>
       </FilterBar>
@@ -242,11 +241,10 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
           disabled={connections.isPending || connections.isError}
           required
         >
-          <option value="">Choose a Connection</option>
           {activeOnly(connections.data?.items).map((connection) => (
-            <option key={connection.id} value={connection.id}>
+            <SelectItem key={connection.id} value={connection.id}>
               {connection.name}
-            </option>
+            </SelectItem>
           ))}
         </SelectField>
         <SelectField
@@ -257,18 +255,17 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
           disabled={topics.isPending || topics.isError}
           required
         >
-          <option value="">Choose a Topic</option>
           {activeOnly(topics.data?.items).map((topic) => (
-            <option key={topic.id} value={topic.id}>
+            <SelectItem key={topic.id} value={topic.id}>
               {topic.name}
-            </option>
+            </SelectItem>
           ))}
         </SelectField>
         <SelectField control={form.control} name="type" label="Type" required>
           {sourceTypes.map((option) => (
-            <option key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value}>
               {option.label}
-            </option>
+            </SelectItem>
           ))}
         </SelectField>
         <TextAreaField

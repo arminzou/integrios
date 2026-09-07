@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -81,9 +82,8 @@ export function TenantsScreen() {
       <section className="flex flex-col gap-4">
         <FilterBar applied={status ? 1 : 0}>
           <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
-            <option value="">Any</option>
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="disabled">Disabled</SelectItem>
           </Filter>
         </FilterBar>
 

@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, NavLink, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -248,11 +249,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               label="Event status"
               hint="How far the Event itself got."
             >
-              <option value="">Any</option>
               {eventStatuses.map((status) => (
-                <option key={status} value={status}>
+                <SelectItem key={status} value={status}>
                   {statusLabel(status)}
-                </option>
+                </SelectItem>
               ))}
             </FilterSelectField>
             {/* Delivery status is a separate filter over Delivery state. An Event matches when one
@@ -263,11 +263,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               label="Delivery status"
               hint="Matches Events with at least one EventDelivery in this state."
             >
-              <option value="">Any</option>
               {deliveryStatuses.map((status) => (
-                <option key={status} value={status}>
+                <SelectItem key={status} value={status}>
                   {statusLabel(status)}
-                </option>
+                </SelectItem>
               ))}
             </FilterSelectField>
             <FilterSelectField
@@ -277,11 +276,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
               disabled={sources.isPending || sources.isError}
             >
-              <option value="">Any</option>
               {(sources.data?.items ?? []).map((source) => (
-                <option key={source.id} value={source.id}>
+                <SelectItem key={source.id} value={source.id}>
                   {source.type} · {source.id}
-                </option>
+                </SelectItem>
               ))}
             </FilterSelectField>
             <FilterSelectField
@@ -291,11 +289,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
               disabled={topics.isPending || topics.isError}
             >
-              <option value="">Any</option>
               {(topics.data?.items ?? []).map((topic) => (
-                <option key={topic.id} value={topic.id}>
+                <SelectItem key={topic.id} value={topic.id}>
                   {topic.name}
-                </option>
+                </SelectItem>
               ))}
             </FilterSelectField>
             <FilterTextField

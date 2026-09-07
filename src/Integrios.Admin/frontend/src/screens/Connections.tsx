@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Link, NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -156,27 +157,24 @@ export function ConnectionsScreen({
       <FilterBar applied={applied}>
         <FilterSearch id="connection-name" label="Find by name" value={name} onChange={setName} />
         <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
-          <option value="">Any</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="disabled">Disabled</SelectItem>
         </Filter>
         {/* The environments a Tenant actually uses, read off the rows it already has rather than
             from a fixed list: environment is free text on a Connection, so there is no vocabulary
             to enumerate. */}
         <Filter id="connection-environment" label="Environment" value={environment} onChange={setEnvironment}>
-          <option value="">Any</option>
           {environments.map((option) => (
-            <option key={option} value={option}>
+            <SelectItem key={option} value={option}>
               {option}
-            </option>
+            </SelectItem>
           ))}
         </Filter>
         <Filter id="connection-connector" label="Connector" value={connector} onChange={setConnector}>
-          <option value="">Any</option>
           {(connectors.data?.items ?? []).map((option) => (
-            <option key={option.id} value={option.key}>
+            <SelectItem key={option.id} value={option.key}>
               {option.key}
-            </option>
+            </SelectItem>
           ))}
         </Filter>
       </FilterBar>
@@ -315,11 +313,10 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
           disabled={connectorOptionsUnavailable}
           required
         >
-          <option value="">Choose a Connector</option>
           {(connectors.data?.items ?? []).map((connector) => (
-            <option key={connector.id} value={connector.id}>
+            <SelectItem key={connector.id} value={connector.id}>
               {connector.name} (v{connector.contract_version}, {connector.direction})
-            </option>
+            </SelectItem>
           ))}
         </SelectField>
         <TextField control={form.control} name="name" label="Name" required />

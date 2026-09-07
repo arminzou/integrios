@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { NavLink } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -93,10 +94,9 @@ export function TenantApiKeysScreen({
       <section className="flex flex-col gap-4">
         <FilterBar applied={state ? 1 : 0}>
           <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
-            <option value="">Any</option>
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-            <option value="revoked">Revoked</option>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="expired">Expired</SelectItem>
+            <SelectItem value="revoked">Revoked</SelectItem>
           </Filter>
         </FilterBar>
 
