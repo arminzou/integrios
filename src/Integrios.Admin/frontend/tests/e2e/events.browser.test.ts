@@ -145,18 +145,22 @@ describe("The Event ledger and inspector in a real browser", () => {
     await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
     expect(await page.getByRole("button", { name: /Events accepted/ }).getAttribute("aria-pressed")).toBe("true");
     expect(await row.getAttribute("aria-current")).toBe("page");
+    // `aria-current="page"` names the page being viewed, so exactly one destination carries it.
+    // Tenants is the ancestor scope of the open Tenant, not the current page; marking it too left
+    // two rail destinations selected at once, which says nothing about which scope is open.
     expect(
       await page
         .getByRole("navigation", { name: "Deployment" })
         .getByRole("link", { name: "Tenants" })
         .getAttribute("aria-current"),
-    ).toBe("page");
+    ).toBeNull();
     expect(
       await page
         .getByRole("navigation", { name: "Tenant", exact: true })
         .getByRole("link", { name: "Events" })
         .getAttribute("aria-current"),
     ).toBe("page");
+    expect(await page.locator('[data-shell="rail"] a[aria-current="page"]').count()).toBe(1);
 
     await page.goBack();
     await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor({ state: "hidden" });

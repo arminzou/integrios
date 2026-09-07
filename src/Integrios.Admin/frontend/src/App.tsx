@@ -216,7 +216,10 @@ function Rail({
                 Tenants
               </Link>
             ) : (
-              <NavLink to="/tenants" className={`group ${navLink}`}>
+              // `end` so Tenants is not also marked current on every Tenant-scoped screen beneath
+              // it. It is the ancestor scope of the open Tenant, and `aria-current="page"` names
+              // the page being viewed, not the branch it sits on.
+              <NavLink to="/tenants" end className={`group ${navLink}`}>
                 <NavIcon icon={Building2} />
                 Tenants
               </NavLink>
