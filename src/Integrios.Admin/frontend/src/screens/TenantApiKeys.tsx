@@ -13,11 +13,11 @@ import type { components } from "../api/schema";
 import {
   appliedNote,
   ConfirmAction,
+  CreateSheet,
   FilterBar,
   FormError,
   ListStatus,
   LoadMore,
-  useCreatePanel,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
@@ -61,7 +61,6 @@ export function TenantApiKeysScreen({
 }) {
   const [notice, setNotice] = useState("");
   const [state, setState] = useFilterParam("state");
-  const create = useCreatePanel("new-tenant-api-key");
   const list = useInfiniteQuery({
     queryKey: ["tenant-api-keys", tenantId, { state }],
     queryFn: ({ pageParam }) =>
@@ -80,13 +79,16 @@ export function TenantApiKeysScreen({
 
   return (
     <Page>
-      <PageHeader title="API keys" action={<Button {...create.triggerProps}>New API key</Button>}>
+      <PageHeader
+        title="API keys"
+        action={
+          <CreateSheet label="New API key" description="The token is shown once, at creation">
+            {(close) => <CreateTenantApiKey tenantId={tenantId} onCreated={close} />}
+          </CreateSheet>
+        }
+      >
         Tenant credentials for the intake endpoint. The token itself is shown once, at creation.
       </PageHeader>
-
-      <Panel {...create.panelProps} className="max-w-none">
-        <CreateTenantApiKey tenantId={tenantId} />
-      </Panel>
 
       <section className="flex flex-col gap-4">
         <FilterBar applied={state ? 1 : 0}>
@@ -299,7 +301,7 @@ function RevokeTenantApiKey({
   );
 }
 
-function CreateTenantApiKey({ tenantId }: { tenantId: string }) {
+function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
   const [created, setCreated] = useState<CreatedKey | null>(null);
   const queryClient = useQueryClient();
   const form = useForm<CreateValues>({
@@ -337,26 +339,23 @@ function CreateTenantApiKey({ tenantId }: { tenantId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <Form {...form}>
-        <Panel asChild>
-          <form className="flex flex-col gap-4" onSubmit={submit}>
-            <h2>Create a Tenant API key</h2>
-            <FormError message={formError(asProblem(create.error), createFields)} />
+        <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Tenant API key">
+          <FormError message={formError(asProblem(create.error), createFields)} />
 
-            <TextField control={form.control} name="name" label="Name" required />
-            <TextField control={form.control} name="description" label="Description (optional)" />
-            <TextField
-              control={form.control}
-              name="expires_at"
-              label="Expires (optional)"
-              hint="Leave empty for a key that does not expire."
-              type="datetime-local"
-            />
+          <TextField control={form.control} name="name" label="Name" required />
+          <TextField control={form.control} name="description" label="Description (optional)" />
+          <TextField
+            control={form.control}
+            name="expires_at"
+            label="Expires (optional)"
+            hint="Leave empty for a key that does not expire."
+            type="datetime-local"
+          />
 
-            <Button type="submit" className="self-start" disabled={create.isPending}>
-              Create Tenant API key
-            </Button>
-          </form>
-        </Panel>
+          <Button type="submit" className="self-start" disabled={create.isPending}>
+            Create Tenant API key
+          </Button>
+        </form>
       </Form>
 
       {/* The token exists in this response and nowhere else — the server stores only its hash, so it
@@ -371,7 +370,18 @@ function CreateTenantApiKey({ tenantId }: { tenantId: string }) {
             <output className="rounded-md border bg-surface-quiet px-3 py-2 font-mono text-sm break-all">
               {created.token}
             </output>
-            <Button type="button" variant="outline" className="self-start" onClick={() => setCreated(null)}>
+            {/* The sheet stays open through the create: this token is in that one response and
+                nowhere else, so closing on success would destroy the only copy of it. Dismissing the
+                message is what says the Operator has it, and only then does the sheet close. */}
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              onClick={() => {
+                setCreated(null);
+                onCreated();
+              }}
+            >
               I have copied the key
             </Button>
           </section>

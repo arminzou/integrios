@@ -13,12 +13,12 @@ import type { components } from "../api/schema";
 import {
   appliedNote,
   ConfirmAction,
+  CreateSheet,
   Disclosure,
   FilterBar,
   FormError,
   ListStatus,
   LoadMore,
-  useCreatePanel,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
@@ -117,7 +117,6 @@ export function ConnectionsScreen({
   const environments: string[] = [
     ...new Set((connectionOptions.data?.items ?? []).map((item) => item.environment).filter((value) => value !== null)),
   ].sort();
-  const create = useCreatePanel("new-connection");
   const list = useInfiniteQuery({
     queryKey: ["connections", tenantId, { status, environment, connector, name }],
     queryFn: ({ pageParam }) =>
@@ -143,13 +142,16 @@ export function ConnectionsScreen({
 
   return (
     <Page>
-      <PageHeader title="Connections" action={<Button {...create.triggerProps}>New Connection</Button>}>
+      <PageHeader
+        title="Connections"
+        action={
+          <CreateSheet label="New Connection" description="Tenant-owned endpoint built from a Connector">
+            {(close) => <CreateConnection tenantId={tenantId} onCreated={close} />}
+          </CreateSheet>
+        }
+      >
         Tenant-owned endpoints built from a Connector. A Subscription delivers to one of these.
       </PageHeader>
-
-      <Panel {...create.panelProps} className="max-w-none">
-        <CreateConnection tenantId={tenantId} />
-      </Panel>
 
       <FilterBar applied={applied}>
         <FilterSearch id="connection-name" label="Find by name" value={name} onChange={setName} />
@@ -256,7 +258,7 @@ export function ConnectionsScreen({
   );
 }
 
-function CreateConnection({ tenantId }: { tenantId: string }) {
+function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const connectors = useQuery({
@@ -290,6 +292,7 @@ function CreateConnection({ tenantId }: { tenantId: string }) {
       ),
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ["connections", tenantId] });
+      onCreated();
       if (created) navigate(`/tenants/${tenantId}/connections/${created.id}`);
     },
   });
@@ -300,44 +303,41 @@ function CreateConnection({ tenantId }: { tenantId: string }) {
 
   return (
     <Form {...form}>
-      <Panel asChild>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h2>Create a Connection</h2>
-          <FormError message={formError(asProblem(connectors.error))} />
-          <FormError message={formError(asProblem(create.error), createFields)} />
+      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Connection">
+        <FormError message={formError(asProblem(connectors.error))} />
+        <FormError message={formError(asProblem(create.error), createFields)} />
 
-          <SelectField
-            control={form.control}
-            name="connector_id"
-            label="Connector"
-            hint={connectors.data?.next_cursor ? "Showing the first 100 Connectors." : undefined}
-            disabled={connectorOptionsUnavailable}
-            required
-          >
-            <option value="">Choose a Connector</option>
-            {(connectors.data?.items ?? []).map((connector) => (
-              <option key={connector.id} value={connector.id}>
-                {connector.name} (v{connector.contract_version}, {connector.direction})
-              </option>
-            ))}
-          </SelectField>
-          <TextField control={form.control} name="name" label="Name" required />
-          <TextAreaField
-            control={form.control}
-            name="config"
-            label="Configuration (JSON)"
-            hint="The Connector's manifest defines what this document must contain."
-            className="min-h-40 font-mono text-sm"
-            required
-          />
-          <TextField control={form.control} name="environment" label="Environment (optional)" />
-          <TextField control={form.control} name="description" label="Description (optional)" />
+        <SelectField
+          control={form.control}
+          name="connector_id"
+          label="Connector"
+          hint={connectors.data?.next_cursor ? "Showing the first 100 Connectors." : undefined}
+          disabled={connectorOptionsUnavailable}
+          required
+        >
+          <option value="">Choose a Connector</option>
+          {(connectors.data?.items ?? []).map((connector) => (
+            <option key={connector.id} value={connector.id}>
+              {connector.name} (v{connector.contract_version}, {connector.direction})
+            </option>
+          ))}
+        </SelectField>
+        <TextField control={form.control} name="name" label="Name" required />
+        <TextAreaField
+          control={form.control}
+          name="config"
+          label="Configuration (JSON)"
+          hint="The Connector's manifest defines what this document must contain."
+          className="min-h-40 font-mono text-sm"
+          required
+        />
+        <TextField control={form.control} name="environment" label="Environment (optional)" />
+        <TextField control={form.control} name="description" label="Description (optional)" />
 
-          <Button type="submit" className="self-start" disabled={create.isPending || connectorOptionsUnavailable}>
-            Create Connection
-          </Button>
-        </form>
-      </Panel>
+        <Button type="submit" className="self-start" disabled={create.isPending || connectorOptionsUnavailable}>
+          Create Connection
+        </Button>
+      </form>
     </Form>
   );
 }

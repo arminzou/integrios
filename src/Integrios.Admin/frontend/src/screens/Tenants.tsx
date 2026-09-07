@@ -13,11 +13,12 @@ import type { components } from "../api/schema";
 import {
   appliedNote,
   ConfirmAction,
+  CreateSheet,
+  Disclosure,
   FilterBar,
   FormError,
   ListStatus,
   LoadMore,
-  useCreatePanel,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
@@ -51,7 +52,6 @@ const optional = (text: string) => text.trim() || null;
 
 export function TenantsScreen() {
   const [status, setStatus] = useFilterParam("status");
-  const create = useCreatePanel("new-tenant");
   const list = useInfiniteQuery({
     queryKey: ["tenants", { status }],
     queryFn: ({ pageParam }) =>
@@ -67,13 +67,16 @@ export function TenantsScreen() {
 
   return (
     <Page>
-      <PageHeader title="Tenants" action={<Button {...create.triggerProps}>New Tenant</Button>}>
+      <PageHeader
+        title="Tenants"
+        action={
+          <CreateSheet label="New Tenant" description="An ownership and isolation boundary, not a user">
+            {(close) => <CreateTenant onCreated={close} />}
+          </CreateSheet>
+        }
+      >
         Every Tenant in this deployment. A Tenant is an ownership and isolation boundary, not a user.
       </PageHeader>
-
-      <Panel {...create.panelProps} className="max-w-none">
-        <CreateTenant />
-      </Panel>
 
       <section className="flex flex-col gap-4">
         <FilterBar applied={status ? 1 : 0}>
@@ -137,7 +140,7 @@ export function TenantsScreen() {
   );
 }
 
-function CreateTenant() {
+function CreateTenant({ onCreated }: { onCreated: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const form = useForm<CreateValues>({
@@ -160,6 +163,7 @@ function CreateTenant() {
     onSuccess: (created) => {
       form.reset();
       void queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      onCreated();
       if (created) navigate(`/tenants/${created.id}`);
     },
   });
@@ -170,28 +174,24 @@ function CreateTenant() {
 
   return (
     <Form {...form}>
-      <Panel asChild>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h2>Create a Tenant</h2>
-          <FormError message={formError(asProblem(create.error), createFields)} />
+      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Tenant">
+        <FormError message={formError(asProblem(create.error), createFields)} />
 
-          <TextField control={form.control} name="slug" label="Slug" required />
-          <TextField control={form.control} name="name" label="Name" required />
-          <TextField control={form.control} name="environment" label="Environment (optional)" />
-          <TextField control={form.control} name="description" label="Description (optional)" />
+        <TextField control={form.control} name="slug" label="Slug" required />
+        <TextField control={form.control} name="name" label="Name" required />
+        <TextField control={form.control} name="environment" label="Environment (optional)" />
+        <TextField control={form.control} name="description" label="Description (optional)" />
 
-          <Button type="submit" className="self-start" disabled={create.isPending}>
-            Create Tenant
-          </Button>
-        </form>
-      </Panel>
+        <Button type="submit" className="self-start" disabled={create.isPending}>
+          Create Tenant
+        </Button>
+      </form>
     </Form>
   );
 }
 
 export function TenantScreen({ tenantId }: { tenantId: string }) {
   const [notice, setNotice] = useState("");
-  const edit = useCreatePanel("edit-tenant");
   const tenant = useQuery({
     queryKey: ["tenant", tenantId],
     queryFn: () => call(() => api.GET("/admin/tenants/{id}", { params: { path: { id: tenantId } } })),
@@ -227,14 +227,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
 
   return (
     <Page>
-      <PageHeader
-        title="Overview"
-        action={
-          <Button variant="outline" {...edit.triggerProps}>
-            Edit Tenant
-          </Button>
-        }
-      >
+      <PageHeader title="Overview">
         What is configured for {current.name}, and what currently needs an Operator.
       </PageHeader>
 
@@ -257,9 +250,9 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         </div>
       ) : null}
 
-      <Panel {...edit.panelProps} className="max-w-none">
+      <Disclosure label="Edit this Tenant">
         <EditTenant key={current.updated_at} tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
-      </Panel>
+      </Disclosure>
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
 
       <section aria-label="Configured in this Tenant">

@@ -9,7 +9,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { appliedNote, Disclosure, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel } from "../ui/controls";
+import { appliedNote, CreateSheet, Disclosure, FilterBar, FormError, ListStatus, LoadMore } from "../ui/controls";
 import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -50,7 +50,6 @@ type ApplyValues = z.infer<typeof applySchema>;
 export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?: string } = {}) {
   const navigate = useNavigate();
   const [direction, setDirection] = useFilterParam("direction");
-  const apply = useCreatePanel("apply-connector-manifest");
   const list = useInfiniteQuery({
     queryKey: ["connectors", { direction }],
     queryFn: ({ pageParam }) =>
@@ -69,23 +68,20 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
       <PageHeader
         title="Connectors"
         action={
-          <Button variant="outline" {...apply.triggerProps}>
-            Apply manifest
-          </Button>
+          <CreateSheet label="Apply manifest" description="Install or update a deployment-wide Connector">
+            {(close) => (
+              <ApplyManifest
+                onApplied={(installed) => {
+                  close();
+                  if (installed) navigate(`/connectors/${installed.id}`);
+                }}
+              />
+            )}
+          </CreateSheet>
         }
       >
         Deployment-wide capability definitions. Connections are built from these, per Tenant.
       </PageHeader>
-
-      {/* Opened for a deployment that has installed nothing: that deployment can reach no other
-          screen, so the form that gets it out of that state must not be behind a control it has to
-          discover first. Once a Connector exists it collapses like every other create panel. */}
-      {/* Collapsed like every other create panel. A deployment that has installed nothing can reach
-          no other screen, so the way out is not left to be discovered — the empty state below names
-          the control by the words on it rather than the form being permanently open. */}
-      <Panel {...apply.panelProps} className="max-w-none">
-        <ApplyManifest onApplied={(installed) => installed && navigate(`/connectors/${installed.id}`)} />
-      </Panel>
 
       <section className="flex flex-col gap-4">
         <FilterBar applied={(direction ? 1 : 0) as number}>

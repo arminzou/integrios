@@ -13,12 +13,12 @@ import type { components } from "../api/schema";
 import {
   appliedNote,
   ConfirmAction,
+  CreateSheet,
   Disclosure,
   FilterBar,
   FormError,
   ListStatus,
   LoadMore,
-  useCreatePanel,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
@@ -58,7 +58,6 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
   const [status, setStatus] = useFilterParam("status");
   const [name, setName] = useFilterParam("name");
   const applied = [status, name].filter(Boolean).length;
-  const create = useCreatePanel("new-topic");
   const list = useInfiniteQuery({
     queryKey: ["topics", tenantId, { status, name }],
     queryFn: ({ pageParam }) =>
@@ -82,13 +81,16 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
 
   return (
     <Page>
-      <PageHeader title="Topics" action={<Button {...create.triggerProps}>New Topic</Button>}>
+      <PageHeader
+        title="Topics"
+        action={
+          <CreateSheet label="New Topic" description="The Tenant-scoped stream Subscriptions match against">
+            {(close) => <CreateTopic tenantId={tenantId} onCreated={close} />}
+          </CreateSheet>
+        }
+      >
         A Topic is the Tenant-scoped stream Subscriptions match against. Its name is immutable.
       </PageHeader>
-
-      <Panel {...create.panelProps} className="max-w-none">
-        <CreateTopic tenantId={tenantId} />
-      </Panel>
 
       <section className="flex flex-col gap-4">
         <FilterBar applied={applied}>
@@ -274,7 +276,7 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
   );
 }
 
-function CreateTopic({ tenantId }: { tenantId: string }) {
+function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const form = useForm<TopicValues>({
@@ -292,6 +294,7 @@ function CreateTopic({ tenantId }: { tenantId: string }) {
       ),
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ["topics", tenantId] });
+      onCreated();
       if (created) navigate(`/tenants/${tenantId}/topics/${created.id}`);
     },
   });
@@ -302,19 +305,16 @@ function CreateTopic({ tenantId }: { tenantId: string }) {
 
   return (
     <Form {...form}>
-      <Panel asChild>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h2>Create a Topic</h2>
-          <FormError message={formError(asProblem(create.error), writeFields)} />
+      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Topic">
+        <FormError message={formError(asProblem(create.error), writeFields)} />
 
-          <TextField control={form.control} name="name" label="Name" required />
-          <TextField control={form.control} name="description" label="Description (optional)" />
+        <TextField control={form.control} name="name" label="Name" required />
+        <TextField control={form.control} name="description" label="Description (optional)" />
 
-          <Button type="submit" className="self-start" disabled={create.isPending}>
-            Create Topic
-          </Button>
-        </form>
-      </Panel>
+        <Button type="submit" className="self-start" disabled={create.isPending}>
+          Create Topic
+        </Button>
+      </form>
     </Form>
   );
 }

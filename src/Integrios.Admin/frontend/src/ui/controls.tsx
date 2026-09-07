@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
 import type { Problem } from "../api/problem";
 
 /// A collapsed "Find an X" filter panel or "New X" create panel, shared across every capability's
@@ -36,19 +37,36 @@ export function Disclosure({ label, children }: { label: string; children: React
 ///
 /// The panel is rendered and hidden rather than unmounted, so `aria-controls` always resolves to a
 /// real element and the browser announces the relationship whether or not it is open.
-export function useCreatePanel(id: string) {
+/// Creating something opens a sheet from the trailing edge rather than a panel above the list. The
+/// list keeps its width and its position - measured on Connections at 1512, the alternatives moved
+/// it 657 pixels down the page or took 73 pixels off it - and the half-filled form is a dialog the
+/// Operator dismisses rather than a region of the page they have to scroll past.
+///
+/// The trigger and the sheet are one element so a screen hands the page header a single action, and
+/// the content is portalled out of the layout it would otherwise sit inside.
+export function CreateSheet({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description?: string;
+  /// Handed a way to close, because a create that succeeded should not leave its own form standing.
+  children: (close: () => void) => ReactNode;
+}) {
   const [open, setOpen] = useState(false);
-  return {
-    open,
-    close: () => setOpen(false),
-    triggerProps: {
-      type: "button" as const,
-      "aria-expanded": open,
-      "aria-controls": id,
-      onClick: () => setOpen((value) => !value),
-    },
-    panelProps: { id, hidden: !open },
-  };
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button type="button">{label}</Button>
+      </SheetTrigger>
+      <SheetContent aria-label={label}>
+        <SheetHeader title={label} description={description} />
+        {children(() => setOpen(false))}
+      </SheetContent>
+    </Sheet>
+  );
 }
 
 /// Attributes that tie a control to its own label and error message. Screens spread these onto the

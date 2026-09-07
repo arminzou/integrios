@@ -35,7 +35,7 @@ async function openCreateForm(respond: (call: Call) => { status: number; body?: 
 
   // The list now carries a Connector filter and a Connector column of its own, so the create form's
   // own control is reached through the form rather than through the whole document.
-  const form = within(screen.getByRole("heading", { name: "Create a Connection" }).closest("form") as HTMLElement);
+  const form = within(screen.getByRole("form", { name: "Create a Connection" }));
   fireEvent.change(form.getByLabelText("Connector"), { target: { value: connectorId } });
   fireEvent.change(form.getByLabelText("Name"), { target: { value: "sink" } });
   return calls;
@@ -96,21 +96,26 @@ describe("Creating a Connection", () => {
     expect(writes(calls)).toEqual([]);
   });
 
-  it("opens the create panel from the page header, and says what the action controls", async () => {
+  it("creates from a sheet that is announced as a dialog and closes on Escape", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
     renderScreen(<ConnectionsScreen tenantId={tenantId} />);
 
     const trigger = await screen.findByRole("button", { name: "New Connection" });
+    // A trigger that opens a dialog says so, and says whether it is open, before it is pressed.
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    // The panel it names is in the document even while closed, so the relationship always resolves.
-    const panelId = trigger.getAttribute("aria-controls");
-    expect(panelId).toBe("new-connection");
-    expect(document.getElementById(panelId as string)?.hasAttribute("hidden")).toBe(true);
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     fireEvent.click(trigger);
+
+    const sheet = await screen.findByRole("dialog", { name: "New Connection" });
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(document.getElementById(panelId as string)?.hasAttribute("hidden")).toBe(false);
+    // The form is inside the dialog rather than in the page behind it.
+    expect(sheet.querySelector("form")).toBeTruthy();
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });
 

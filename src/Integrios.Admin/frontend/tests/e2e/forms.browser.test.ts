@@ -152,8 +152,11 @@ async function open(path: string): Promise<{ page: Page; writes: Request[] }> {
 /// A screen can carry more than one form — a Topic page holds the Topic's own fields and the create
 /// panel for its Subscriptions — and both use the same field names. Controls are therefore addressed
 /// by label within the form that owns them, which is also what asserts the label association.
-function formNamed(view: Page, heading: string) {
-  return view.locator("form").filter({ hasText: heading });
+/// A form is addressed by its accessible name. The create forms live inside a sheet that carries the
+/// title, and the edit forms behind a disclosure that carries theirs, so neither repeats a heading
+/// on screen — the name is stated on the form itself instead of inferred from text near it.
+function formNamed(view: Page, name: string) {
+  return view.getByRole("form", { name });
 }
 
 async function submitted(
@@ -269,10 +272,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     // Editing is a deliberate act now rather than the panel's resting state, and the form names
     // itself instead of repeating on screen the heading its disclosure already carries.
     await view.click("text=Edit this Connection");
-    await view
-      .getByRole("form", { name: "Edit sink" })
-      .getByLabel("Configuration (JSON)")
-      .fill('{"base_uri":"http://moved.invalid"}');
+    await formNamed(view, "Edit sink").getByLabel("Configuration (JSON)").fill('{"base_uri":"http://moved.invalid"}');
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);

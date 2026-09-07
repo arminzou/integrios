@@ -13,11 +13,11 @@ import type { components } from "../api/schema";
 import {
   appliedNote,
   ConfirmAction,
+  CreateSheet,
   FilterBar,
   FormError,
   ListStatus,
   LoadMore,
-  useCreatePanel,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
@@ -76,7 +76,6 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
   const topicOptions = useTopicOptions(tenantId);
   const [status, setStatus] = useFilterParam("status");
   const [type, setType] = useFilterParam("type");
-  const create = useCreatePanel("new-source");
   const list = useInfiniteQuery({
     queryKey: ["sources", tenantId, { status, type }],
     queryFn: ({ pageParam }) =>
@@ -95,13 +94,16 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
 
   return (
     <Page>
-      <PageHeader title="Sources" action={<Button {...create.triggerProps}>New Source</Button>}>
+      <PageHeader
+        title="Sources"
+        action={
+          <CreateSheet label="New Source" description="A Source binds one Connection to one Topic">
+            {(close) => <CreateSource tenantId={tenantId} onCreated={close} />}
+          </CreateSheet>
+        }
+      >
         A Source binds one Connection to one Topic and selects the contract its input is read as.
       </PageHeader>
-
-      <Panel {...create.panelProps} className="max-w-none">
-        <CreateSource tenantId={tenantId} />
-      </Panel>
 
       <FilterBar applied={(status ? 1 : 0) + (type ? 1 : 0)}>
         <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
@@ -190,7 +192,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
   );
 }
 
-function CreateSource({ tenantId }: { tenantId: string }) {
+function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const connections = useConnectionOptions(tenantId);
@@ -217,6 +219,7 @@ function CreateSource({ tenantId }: { tenantId: string }) {
       ),
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
+      onCreated();
       if (created) navigate(`/tenants/${tenantId}/sources/${created.id}`);
     },
   });
@@ -227,62 +230,59 @@ function CreateSource({ tenantId }: { tenantId: string }) {
 
   return (
     <Form {...form}>
-      <Panel asChild>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h2>Create a Source</h2>
-          <FormError message={formError(asProblem(connections.error ?? topics.error))} />
-          <FormError message={formError(asProblem(create.error), createFields)} />
+      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Source">
+        <FormError message={formError(asProblem(connections.error ?? topics.error))} />
+        <FormError message={formError(asProblem(create.error), createFields)} />
 
-          <SelectField
-            control={form.control}
-            name="connection_id"
-            label="Connection"
-            hint={connections.data?.next_cursor ? "Showing the first 100 active Connections." : undefined}
-            disabled={connections.isPending || connections.isError}
-            required
-          >
-            <option value="">Choose a Connection</option>
-            {activeOnly(connections.data?.items).map((connection) => (
-              <option key={connection.id} value={connection.id}>
-                {connection.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            control={form.control}
-            name="topic_id"
-            label="Topic"
-            hint={topics.data?.next_cursor ? "Showing the first 100 active Topics." : undefined}
-            disabled={topics.isPending || topics.isError}
-            required
-          >
-            <option value="">Choose a Topic</option>
-            {activeOnly(topics.data?.items).map((topic) => (
-              <option key={topic.id} value={topic.id}>
-                {topic.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField control={form.control} name="type" label="Type" required>
-            {sourceTypes.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </SelectField>
-          <TextAreaField
-            control={form.control}
-            name="configuration"
-            label="Configuration (JSON)"
-            className="min-h-40 font-mono text-sm"
-            required
-          />
+        <SelectField
+          control={form.control}
+          name="connection_id"
+          label="Connection"
+          hint={connections.data?.next_cursor ? "Showing the first 100 active Connections." : undefined}
+          disabled={connections.isPending || connections.isError}
+          required
+        >
+          <option value="">Choose a Connection</option>
+          {activeOnly(connections.data?.items).map((connection) => (
+            <option key={connection.id} value={connection.id}>
+              {connection.name}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          control={form.control}
+          name="topic_id"
+          label="Topic"
+          hint={topics.data?.next_cursor ? "Showing the first 100 active Topics." : undefined}
+          disabled={topics.isPending || topics.isError}
+          required
+        >
+          <option value="">Choose a Topic</option>
+          {activeOnly(topics.data?.items).map((topic) => (
+            <option key={topic.id} value={topic.id}>
+              {topic.name}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField control={form.control} name="type" label="Type" required>
+          {sourceTypes.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+        <TextAreaField
+          control={form.control}
+          name="configuration"
+          label="Configuration (JSON)"
+          className="min-h-40 font-mono text-sm"
+          required
+        />
 
-          <Button type="submit" className="self-start" disabled={create.isPending || optionsUnavailable}>
-            Create Source
-          </Button>
-        </form>
-      </Panel>
+        <Button type="submit" className="self-start" disabled={create.isPending || optionsUnavailable}>
+          Create Source
+        </Button>
+      </form>
     </Form>
   );
 }

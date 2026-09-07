@@ -9,7 +9,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel, WriteStatus } from "../ui/controls";
+import { ConfirmAction, CreateSheet, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -86,7 +86,6 @@ export function SubscriptionsSection({
   topicName: string;
 }) {
   const [status, setStatus] = useFilterParam("status");
-  const create = useCreatePanel("new-subscription");
   const navigate = useNavigate();
   const list = useInfiniteQuery({
     queryKey: ["subscriptions", tenantId, topicId, { status }],
@@ -108,17 +107,19 @@ export function SubscriptionsSection({
     <section className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
         <h2 className="m-0">Subscriptions on {topicName}</h2>
-        <Button {...create.triggerProps}>New Subscription</Button>
+        <CreateSheet label="New Subscription" description={`Routes matching Events from ${topicName}`}>
+          {(close) => (
+            <SubscriptionForm
+              tenantId={tenantId}
+              topicId={topicId}
+              onSaved={(created) => {
+                close();
+                if (created) navigate(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${created.id}`);
+              }}
+            />
+          )}
+        </CreateSheet>
       </div>
-      <Panel {...create.panelProps} className="max-w-none">
-        <SubscriptionForm
-          tenantId={tenantId}
-          topicId={topicId}
-          onSaved={(created) => {
-            if (created) navigate(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${created.id}`);
-          }}
-        />
-      </Panel>
 
       <div className="flex flex-col gap-4">
         <h3>All Subscriptions</h3>
@@ -360,8 +361,13 @@ function SubscriptionForm({
   return (
     <Form {...form}>
       <Panel asChild>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h3>{subscription ? `Edit ${subscription.name}` : "Create a Subscription"}</h3>
+        <form
+          className="flex flex-col gap-4"
+          aria-label={subscription ? `Edit ${subscription.name}` : "Create a Subscription"}
+          onSubmit={submit}
+        >
+          {/* Inside a sheet the title is above; on the edit path this heading is the only one. */}
+          {subscription ? <h3>Edit {subscription.name}</h3> : null}
           <FormError message={formError(asProblem(connections.error))} />
           <FormError message={formError(asProblem(save.error), writeFields)} />
 
