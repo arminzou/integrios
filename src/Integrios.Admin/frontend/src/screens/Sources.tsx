@@ -417,6 +417,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
         <div className="flex flex-col items-start gap-2">
           <ConfirmAction
             label="Revoke Source"
+            consequence="Revoking a Source stops it accepting Events. It cannot be restored, and a replacement is a new Source with a new identifier."
             question={`Revoke the ${source.type} Source ${source.id}? It stops accepting Events and cannot be restored.`}
             confirmLabel={`Revoke ${source.id}`}
             busy={revoke.isPending}

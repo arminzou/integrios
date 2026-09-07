@@ -288,6 +288,7 @@ function RevokeTenantApiKey({
     <div className="flex flex-col items-start gap-2">
       <ConfirmAction
         label="Revoke"
+        consequence={`Revoking ${apiKey.name} rejects every request carrying it, immediately and permanently.`}
         question={`Revoke the Tenant API key "${apiKey.name}" (${apiKey.keyPrefix})? Callers using it stop being authenticated immediately.`}
         confirmLabel={`Revoke ${apiKey.name}`}
         busy={revoke.isPending}

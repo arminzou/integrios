@@ -102,12 +102,18 @@ export function FormError({ message }: { message?: string }) {
 export function ConfirmAction({
   label,
   question,
+  consequence,
   confirmLabel,
   busy,
   onConfirm,
 }: {
   label: string;
   question: string;
+  /// What the action does to everything around it, stated before it is reached rather than only
+  /// once it is armed. An Operator deciding whether to deactivate a Connection needs to know what
+  /// stops working while they are still deciding; a confirmation that explains itself only after
+  /// the click has already asked them to commit before informing them.
+  consequence?: string;
   confirmLabel?: string;
   busy?: boolean;
   onConfirm: () => void;
@@ -127,16 +133,18 @@ export function ConfirmAction({
 
   if (!armed)
     return (
-      <Button
-        ref={triggerRef}
-        type="button"
-        variant="outline"
-        className="self-start"
-        disabled={busy}
-        onClick={() => setArmed(true)}
-      >
-        {label}
-      </Button>
+      <Zone consequence={consequence}>
+        <Button
+          ref={triggerRef}
+          type="button"
+          variant="outline"
+          className="self-start"
+          disabled={busy}
+          onClick={() => setArmed(true)}
+        >
+          {label}
+        </Button>
+      </Zone>
     );
 
   return (
@@ -166,6 +174,20 @@ export function ConfirmAction({
         Cancel
       </Button>
     </span>
+  );
+}
+
+/// The surface a destructive action sits on, tinted with the failure role so it reads as consequential
+/// before it is read as a button. Without a consequence to state there is nothing to set apart, so
+/// the action is returned bare rather than boxed for its own sake.
+function Zone({ consequence, children }: { consequence?: string; children: ReactNode }) {
+  if (!consequence) return <>{children}</>;
+
+  return (
+    <div className="flex flex-col items-start gap-2.5 rounded-lg bg-danger-surface p-3">
+      <p className="m-0 text-[13px] text-danger-ink">{consequence}</p>
+      {children}
+    </div>
   );
 }
 

@@ -269,6 +269,7 @@ export function SubscriptionScreen({
         {current.status === "active" ? (
           <ConfirmAction
             label="Deactivate Subscription"
+            consequence={`Deactivating ${current.name} stops it receiving Events from this Topic. Deliveries already queued are not cancelled.`}
             question={`Deactivate the Subscription "${current.name}"? It stops receiving Events from this Topic.`}
             confirmLabel={`Deactivate ${current.name}`}
             busy={deactivate.isPending}

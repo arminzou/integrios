@@ -266,7 +266,13 @@ describe("Update and deactivate, driven through a real browser", () => {
   it("sends an updated Connection with its config reparsed and its schemes untouched", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/connections/${connectionId}`);
 
-    await formNamed(view, "Edit sink").getByLabel("Configuration (JSON)").fill('{"base_uri":"http://moved.invalid"}');
+    // Editing is a deliberate act now rather than the panel's resting state, and the form names
+    // itself instead of repeating on screen the heading its disclosure already carries.
+    await view.click("text=Edit this Connection");
+    await view
+      .getByRole("form", { name: "Edit sink" })
+      .getByLabel("Configuration (JSON)")
+      .fill('{"base_uri":"http://moved.invalid"}');
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);

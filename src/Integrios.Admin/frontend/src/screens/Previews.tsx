@@ -89,7 +89,6 @@ export function SourceContractPreview() {
     <Form {...form}>
       <Panel asChild>
         <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h2>Preview a Source contract</h2>
           <p className="m-0 text-ink-secondary">
             Nothing is saved. This evaluates a schema and mapping against a sample payload.
           </p>

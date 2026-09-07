@@ -13,6 +13,7 @@ import type { components } from "../api/schema";
 import {
   appliedNote,
   ConfirmAction,
+  Disclosure,
   FilterBar,
   FormError,
   ListStatus,
@@ -401,22 +402,23 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
 
   return (
     <div className="flex flex-col gap-6">
-      <Form {...form}>
-        <Panel asChild>
-          <form className="flex flex-col gap-4" onSubmit={submit}>
-            <h2>Edit {topic.name}</h2>
-            <FormError message={formError(asProblem(save.error), writeFields)} />
+      <Disclosure label="Edit this Topic">
+        <Form {...form}>
+          <Panel asChild>
+            <form className="flex flex-col gap-4" aria-label={`Edit ${topic.name}`} onSubmit={submit}>
+              <FormError message={formError(asProblem(save.error), writeFields)} />
 
-            <TextField control={form.control} name="name" label="Name" required />
-            <TextField control={form.control} name="description" label="Description (optional)" />
+              <TextField control={form.control} name="name" label="Name" required />
+              <TextField control={form.control} name="description" label="Description (optional)" />
 
-            <Button type="submit" className="self-start" disabled={save.isPending}>
-              Save changes
-            </Button>
-            <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
-          </form>
-        </Panel>
-      </Form>
+              <Button type="submit" className="self-start" disabled={save.isPending}>
+                Save changes
+              </Button>
+              <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
+            </form>
+          </Panel>
+        </Form>
+      </Disclosure>
 
       {topic.status === "active" ? (
         <div className="flex flex-col items-start gap-2">

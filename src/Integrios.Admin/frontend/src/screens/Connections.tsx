@@ -13,6 +13,7 @@ import type { components } from "../api/schema";
 import {
   appliedNote,
   ConfirmAction,
+  Disclosure,
   FilterBar,
   FormError,
   ListStatus,
@@ -491,35 +492,37 @@ function EditConnection({
 
   return (
     <div className="flex flex-col gap-6">
-      <Form {...form}>
-        <Panel asChild>
-          <form className="flex flex-col gap-4" onSubmit={submit}>
-            <h2>Edit {connection.name}</h2>
-            <FormError message={formError(asProblem(save.error), editFields)} />
+      <Disclosure label="Edit this Connection">
+        <Form {...form}>
+          <Panel asChild>
+            <form className="flex flex-col gap-4" aria-label={`Edit ${connection.name}`} onSubmit={submit}>
+              <FormError message={formError(asProblem(save.error), editFields)} />
 
-            <TextField control={form.control} name="name" label="Name" required />
-            <TextAreaField
-              control={form.control}
-              name="config"
-              label="Configuration (JSON)"
-              className="min-h-40 font-mono text-sm"
-              required
-            />
-            <TextField control={form.control} name="environment" label="Environment (optional)" />
-            <TextField control={form.control} name="description" label="Description (optional)" />
+              <TextField control={form.control} name="name" label="Name" required />
+              <TextAreaField
+                control={form.control}
+                name="config"
+                label="Configuration (JSON)"
+                className="min-h-40 font-mono text-sm"
+                required
+              />
+              <TextField control={form.control} name="environment" label="Environment (optional)" />
+              <TextField control={form.control} name="description" label="Description (optional)" />
 
-            <Button type="submit" className="self-start" disabled={save.isPending}>
-              Save changes
-            </Button>
-            <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
-          </form>
-        </Panel>
-      </Form>
+              <Button type="submit" className="self-start" disabled={save.isPending}>
+                Save changes
+              </Button>
+              <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
+            </form>
+          </Panel>
+        </Form>
+      </Disclosure>
 
       {connection.status === "active" ? (
         <div className="flex flex-col items-start gap-2">
           <ConfirmAction
             label="Deactivate Connection"
+            consequence={`Deactivating ${connection.name} stops every Subscription that delivers to it. Deliveries already queued are not cancelled.`}
             question={`Deactivate the Connection "${connection.name}"? Sources and Subscriptions that use it stop working.`}
             confirmLabel={`Deactivate ${connection.name}`}
             busy={deactivate.isPending}

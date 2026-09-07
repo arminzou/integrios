@@ -396,6 +396,7 @@ function EditTenant({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) 
         <div className="flex flex-col items-start gap-2">
           <ConfirmAction
             label="Deactivate Tenant"
+            consequence={`Deactivating ${tenant.name} stops its Sources accepting Events. Its configuration is kept.`}
             question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
             confirmLabel={`Deactivate ${tenant.name}`}
             busy={deactivate.isPending}

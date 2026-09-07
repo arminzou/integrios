@@ -9,7 +9,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { appliedNote, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel } from "../ui/controls";
+import { appliedNote, Disclosure, FilterBar, FormError, ListStatus, LoadMore, useCreatePanel } from "../ui/controls";
 import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -165,7 +165,12 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
         </SplitView>
       </section>
 
-      <SourceContractPreview />
+      {/* A dry run is a tool an Operator occasionally reaches for, not what this page is. Expanded by
+          default it was taller than the list it sat under, so the screen read as a form with a list
+          on top of it. */}
+      <Disclosure label="Preview a Source contract">
+        <SourceContractPreview />
+      </Disclosure>
     </Page>
   );
 }
