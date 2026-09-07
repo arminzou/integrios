@@ -356,8 +356,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         DbTransaction transaction,
         Guid eventId)
     {
+        // SQL Server locks index rows, not rows: without INDEX(0) this seeks the event_id index and
+        // locks only that index row, which fanout never reads, so its READPAST has nothing to skip.
+        // Postgres FOR UPDATE locks the tuple itself and needs no equivalent.
         string sql = database.Provider == "sqlserver"
-            ? "SELECT id FROM outbox WITH (UPDLOCK, ROWLOCK) WHERE event_id = @EventId"
+            ? "SELECT id FROM outbox WITH (UPDLOCK, ROWLOCK, INDEX(0)) WHERE event_id = @EventId"
             : "SELECT id FROM outbox WHERE event_id = @EventId FOR UPDATE";
         return await connection.ExecuteScalarAsync<Guid?>(
             sql, new { EventId = eventId }, transaction) is not null;
