@@ -32,7 +32,7 @@ export function PageHeader({
     <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
       <div className="min-w-0">
         <h1>{title}</h1>
-        {children ? <p className="m-0 max-w-[64ch] text-ink-secondary">{children}</p> : null}
+        {children ? <p className="m-0 max-w-[64ch] text-sm text-ink-secondary">{children}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </header>

@@ -72,7 +72,7 @@ const shell = "grid min-h-screen grid-cols-1 items-start bg-canvas shell:grid-co
 const document_ = "w-full min-w-0 p-4 shell:p-6";
 
 const rail =
-  "flex flex-row flex-wrap items-center gap-x-3 gap-y-2 border-b bg-surface px-3 py-4 " +
+  "flex flex-row flex-wrap items-center gap-x-3 gap-y-2 border-b bg-surface px-3 py-4 text-sm " +
   "shell:sticky shell:top-0 shell:h-screen shell:flex-col shell:flex-nowrap shell:items-stretch " +
   "shell:gap-5 shell:overflow-y-auto shell:border-r shell:border-b-0";
 
