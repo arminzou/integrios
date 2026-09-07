@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
@@ -44,14 +44,16 @@ export function Disclosure({ label, children }: { label: string; children: React
 ///
 /// The trigger and the sheet are one element so a screen hands the page header a single action, and
 /// the content is portalled out of the layout it would otherwise sit inside.
-export function CreateSheet({
+function FormSheet({
   label,
   description,
+  variant,
   children,
 }: {
   label: string;
   description?: string;
-  /// Handed a way to close, because a create that succeeded should not leave its own form standing.
+  variant: "default" | "outline";
+  /// Handed a way to close, because a write that succeeded should not leave its own form standing.
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -59,7 +61,9 @@ export function CreateSheet({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button type="button">{label}</Button>
+        <Button type="button" variant={variant}>
+          {label}
+        </Button>
       </SheetTrigger>
       <SheetContent aria-label={label}>
         <SheetHeader title={label} description={description} />
@@ -67,6 +71,17 @@ export function CreateSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+export function CreateSheet(props: Omit<ComponentProps<typeof FormSheet>, "variant">) {
+  return <FormSheet {...props} variant="default" />;
+}
+
+/// Editing opens the same way creating does. A detail panel is for reading what is stored; changing
+/// it is a task with its own surface, and running the two together is what made the panel long
+/// enough to bury the destructive action underneath a form nobody had asked to open.
+export function EditSheet(props: Omit<ComponentProps<typeof FormSheet>, "variant">) {
+  return <FormSheet {...props} variant="outline" />;
 }
 
 /// Attributes that tie a control to its own label and error message. Screens spread these onto the

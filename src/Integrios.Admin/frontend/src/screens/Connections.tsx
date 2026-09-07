@@ -15,7 +15,7 @@ import {
   appliedNote,
   ConfirmAction,
   CreateSheet,
-  Disclosure,
+  EditSheet,
   FilterBar,
   FormError,
   ListStatus,
@@ -33,7 +33,6 @@ import {
   InspectorPlaceholder,
   Page,
   PageHeader,
-  Panel,
   RowHeader,
   SplitList,
   SplitView,
@@ -483,16 +482,21 @@ function EditConnection({
     },
   });
 
-  const submit = form.handleSubmit((values) =>
-    save.mutate(values, { onError: (failure) => applyProblem(form, failure, editFields) }),
-  );
-
   return (
     <div className="flex flex-col gap-6">
-      <Disclosure label="Edit this Connection">
-        <Form {...form}>
-          <Panel asChild>
-            <form className="flex flex-col gap-4" aria-label={`Edit ${connection.name}`} onSubmit={submit}>
+      <EditSheet label="Edit this Connection">
+        {(close) => (
+          <Form {...form}>
+            <form
+              className="flex flex-col gap-4"
+              aria-label={`Edit ${connection.name}`}
+              onSubmit={form.handleSubmit((values) =>
+                save.mutate(values, {
+                  onSuccess: close,
+                  onError: (failure) => applyProblem(form, failure, editFields),
+                }),
+              )}
+            >
               <FormError message={formError(asProblem(save.error), editFields)} />
 
               <TextField control={form.control} name="name" label="Name" required />
@@ -511,9 +515,9 @@ function EditConnection({
               </Button>
               <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
             </form>
-          </Panel>
-        </Form>
-      </Disclosure>
+          </Form>
+        )}
+      </EditSheet>
 
       {connection.status === "active" ? (
         <div className="flex flex-col items-start gap-2">

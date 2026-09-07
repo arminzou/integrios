@@ -10,7 +10,16 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, CreateSheet, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import {
+  ConfirmAction,
+  CreateSheet,
+  EditSheet,
+  FilterBar,
+  FormError,
+  ListStatus,
+  LoadMore,
+  WriteStatus,
+} from "../ui/controls";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -260,7 +269,17 @@ export function SubscriptionScreen({
         </Details>
       </Panel>
 
-      <SubscriptionForm key={current.updated_at} tenantId={tenantId} topicId={topicId} subscription={current} />
+      <EditSheet label="Edit this Subscription" description={`Routes matching Events from this Topic`}>
+        {(close) => (
+          <SubscriptionForm
+            key={current.updated_at}
+            tenantId={tenantId}
+            topicId={topicId}
+            subscription={current}
+            onSaved={close}
+          />
+        )}
+      </EditSheet>
 
       <TransformPreview />
 
@@ -366,8 +385,8 @@ function SubscriptionForm({
           aria-label={subscription ? `Edit ${subscription.name}` : "Create a Subscription"}
           onSubmit={submit}
         >
-          {/* Inside a sheet the title is above; on the edit path this heading is the only one. */}
-          {subscription ? <h3>Edit {subscription.name}</h3> : null}
+          {/* Both paths open in a sheet that carries the title, so the form states its name rather
+              than repeating a heading under one. */}
           <FormError message={formError(asProblem(connections.error))} />
           <FormError message={formError(asProblem(save.error), writeFields)} />
 

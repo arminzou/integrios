@@ -330,6 +330,8 @@ describe("Update and deactivate, driven through a real browser", () => {
   it("sends an updated Subscription with a numeric order and a mapping that stays null", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`);
 
+    // Editing opens the same sheet creating does, so the form is reached by opening it.
+    await view.click("text=Edit this Subscription");
     await formNamed(view, "Edit to-sink").getByLabel("Order").fill("7");
     await view.click("text=Save changes");
 

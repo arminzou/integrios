@@ -15,7 +15,7 @@ import {
   appliedNote,
   ConfirmAction,
   CreateSheet,
-  Disclosure,
+  EditSheet,
   FilterBar,
   FormError,
   ListStatus,
@@ -32,7 +32,6 @@ import {
   InspectorPlaceholder,
   Page,
   PageHeader,
-  Panel,
   RowHeader,
   SplitList,
   SplitView,
@@ -396,16 +395,21 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
     },
   });
 
-  const submit = form.handleSubmit((values) =>
-    save.mutate(values, { onError: (failure) => applyProblem(form, failure, writeFields) }),
-  );
-
   return (
     <div className="flex flex-col gap-6">
-      <Disclosure label="Edit this Topic">
-        <Form {...form}>
-          <Panel asChild>
-            <form className="flex flex-col gap-4" aria-label={`Edit ${topic.name}`} onSubmit={submit}>
+      <EditSheet label="Edit this Topic">
+        {(close) => (
+          <Form {...form}>
+            <form
+              className="flex flex-col gap-4"
+              aria-label={`Edit ${topic.name}`}
+              onSubmit={form.handleSubmit((values) =>
+                save.mutate(values, {
+                  onSuccess: close,
+                  onError: (failure) => applyProblem(form, failure, writeFields),
+                }),
+              )}
+            >
               <FormError message={formError(asProblem(save.error), writeFields)} />
 
               <TextField control={form.control} name="name" label="Name" required />
@@ -416,9 +420,9 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
               </Button>
               <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
             </form>
-          </Panel>
-        </Form>
-      </Disclosure>
+          </Form>
+        )}
+      </EditSheet>
 
       {topic.status === "active" ? (
         <div className="flex flex-col items-start gap-2">

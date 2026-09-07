@@ -15,7 +15,7 @@ import {
   appliedNote,
   ConfirmAction,
   CreateSheet,
-  Disclosure,
+  EditSheet,
   FilterBar,
   FormError,
   ListStatus,
@@ -250,9 +250,10 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         </div>
       ) : null}
 
-      <Disclosure label="Edit this Tenant">
-        <EditTenant key={current.updated_at} tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
-      </Disclosure>
+      <EditSheet label="Edit this Tenant">
+        {(close) => <EditTenant key={current.updated_at} tenant={current} onSaved={close} />}
+      </EditSheet>
+      <DeactivateTenant tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
 
       <section aria-label="Configured in this Tenant">
@@ -321,7 +322,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
   );
 }
 
-function EditTenant({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
+function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }) {
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["tenant", tenant.id] });
@@ -351,53 +352,61 @@ function EditTenant({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) 
     onSuccess: reread,
   });
 
-  const deactivate = useMutation({
-    mutationFn: () => call(() => api.POST("/admin/tenants/{id}/deactivate", { params: { path: { id: tenant.id } } })),
-    onSuccess: () => {
-      reread();
-      onDone();
-    },
-  });
-
-  const submit = form.handleSubmit((values) =>
-    save.mutate(values, { onError: (failure) => applyProblem(form, failure, updateFields) }),
-  );
-
   return (
     <div className="flex flex-col gap-6">
       <Form {...form}>
-        <Panel asChild>
-          <form className="flex flex-col gap-4" onSubmit={submit}>
-            <h2>Edit {tenant.name}</h2>
-            <FormError message={formError(asProblem(save.error), updateFields)} />
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={form.handleSubmit((values) =>
+            save.mutate(values, {
+              onSuccess: onSaved,
+              onError: (failure) => applyProblem(form, failure, updateFields),
+            }),
+          )}
+        >
+          <h2>Edit {tenant.name}</h2>
+          <FormError message={formError(asProblem(save.error), updateFields)} />
 
-            <TextField control={form.control} name="name" label="Name" required />
-            <TextField control={form.control} name="environment" label="Environment (optional)" />
-            <TextField control={form.control} name="description" label="Description (optional)" />
+          <TextField control={form.control} name="name" label="Name" required />
+          <TextField control={form.control} name="environment" label="Environment (optional)" />
+          <TextField control={form.control} name="description" label="Description (optional)" />
 
-            <Button type="submit" className="self-start" disabled={save.isPending}>
-              Save changes
-            </Button>
-            <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
-          </form>
-        </Panel>
+          <Button type="submit" className="self-start" disabled={save.isPending}>
+            Save changes
+          </Button>
+          <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
+        </form>
       </Form>
+    </div>
+  );
+}
 
-      {/* Deactivation is offered only where the API actually owns it; there is no invented
-          reactivation to make the pair look symmetrical. */}
-      {tenant.status === "active" ? (
-        <div className="flex flex-col items-start gap-2">
-          <ConfirmAction
-            label="Deactivate Tenant"
-            consequence={`Deactivating ${tenant.name} stops its Sources accepting Events. Its configuration is kept.`}
-            question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
-            confirmLabel={`Deactivate ${tenant.name}`}
-            busy={deactivate.isPending}
-            onConfirm={() => deactivate.mutate()}
-          />
-          <FormError message={formError(asProblem(deactivate.error))} />
-        </div>
-      ) : null}
+/// Deactivation is offered only where the API actually owns it; there is no invented reactivation to
+/// make the pair look symmetrical. It sits on the screen rather than inside the edit sheet, because
+/// it is not part of editing and a form is not a thing to scroll past to reach it.
+function DeactivateTenant({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const deactivate = useMutation({
+    mutationFn: () => call(() => api.POST("/admin/tenants/{id}/deactivate", { params: { path: { id: tenant.id } } })),
+    onSuccess: () => {
+      onDone();
+      return queryClient.invalidateQueries({ queryKey: ["tenant", tenant.id] });
+    },
+  });
+
+  if (tenant.status !== "active") return null;
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <ConfirmAction
+        label="Deactivate Tenant"
+        consequence={`Deactivating ${tenant.name} stops its Sources accepting Events. Its configuration is kept.`}
+        question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
+        confirmLabel={`Deactivate ${tenant.name}`}
+        busy={deactivate.isPending}
+        onConfirm={() => deactivate.mutate()}
+      />
+      <FormError message={formError(asProblem(deactivate.error))} />
     </div>
   );
 }

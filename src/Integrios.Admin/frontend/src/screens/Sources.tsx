@@ -15,6 +15,7 @@ import {
   appliedNote,
   ConfirmAction,
   CreateSheet,
+  EditSheet,
   FilterBar,
   FormError,
   ListStatus,
@@ -32,7 +33,6 @@ import {
   InspectorPlaceholder,
   Page,
   PageHeader,
-  Panel,
   RowHeader,
   SplitList,
   SplitView,
@@ -382,33 +382,39 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
     },
   });
 
-  const submit = form.handleSubmit((values) =>
-    save.mutate(values, { onError: (failure) => applyProblem(form, failure, editFields) }),
-  );
-
   return (
     <div className="flex flex-col gap-6">
-      <Form {...form}>
-        <Panel asChild>
-          <form className="flex flex-col gap-4" onSubmit={submit}>
-            <h2>Edit configuration</h2>
-            <FormError message={formError(asProblem(save.error), editFields)} />
+      <EditSheet label="Edit this Source" description="An update replaces the configuration outright">
+        {(close) => (
+          <Form {...form}>
+            <form
+              className="flex flex-col gap-4"
+              aria-label={`Edit ${source.type} Source`}
+              onSubmit={form.handleSubmit((values) =>
+                save.mutate(values, {
+                  onSuccess: close,
+                  onError: (failure) => applyProblem(form, failure, editFields),
+                }),
+              )}
+            >
+              <FormError message={formError(asProblem(save.error), editFields)} />
 
-            <TextAreaField
-              control={form.control}
-              name="configuration"
-              label="Configuration (JSON)"
-              className="min-h-56 font-mono text-sm"
-              required
-            />
+              <TextAreaField
+                control={form.control}
+                name="configuration"
+                label="Configuration (JSON)"
+                className="min-h-56 font-mono text-sm"
+                required
+              />
 
-            <Button type="submit" className="self-start" disabled={save.isPending}>
-              Save configuration
-            </Button>
-            <WriteStatus done={save.isSuccess}>Configuration saved.</WriteStatus>
-          </form>
-        </Panel>
-      </Form>
+              <Button type="submit" className="self-start" disabled={save.isPending}>
+                Save configuration
+              </Button>
+              <WriteStatus done={save.isSuccess}>Configuration saved.</WriteStatus>
+            </form>
+          </Form>
+        )}
+      </EditSheet>
 
       {source.status === "active" ? (
         <div className="flex flex-col items-start gap-2">
