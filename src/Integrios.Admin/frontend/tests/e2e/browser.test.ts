@@ -221,7 +221,7 @@ describe("The dashboard in a real browser", () => {
   // at narrow — the reverse of either is the failure this change would show up as.
   it("puts the rail beside the document at desktop and above it when narrow", async () => {
     const wide = await openDashboard("/tenants", { viewport: { width: 1512, height: 900 } });
-    const wideRail = await wide.locator(".rail").boundingBox();
+    const wideRail = await wide.locator("[data-shell=rail]").boundingBox();
     const wideMain = await wide.locator("#main").boundingBox();
     expect(wideRail).not.toBeNull();
     expect(wideMain).not.toBeNull();
@@ -231,7 +231,7 @@ describe("The dashboard in a real browser", () => {
     await wide.close();
 
     const narrow = await openDashboard("/tenants", { viewport: { width: 320, height: 900 } });
-    const narrowRail = await narrow.locator(".rail").boundingBox();
+    const narrowRail = await narrow.locator("[data-shell=rail]").boundingBox();
     const narrowMain = await narrow.locator("#main").boundingBox();
     // Above: the document starts below the band, and the band spans the full width.
     expect(narrowMain!.y).toBeGreaterThanOrEqual(narrowRail!.y + narrowRail!.height);

@@ -1,4 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  Activity,
+  ArrowDownToLine,
+  Building2,
+  Hash,
+  KeyRound,
+  LayoutDashboard,
+  type LucideIcon,
+  Package,
+  Waypoints,
+} from "lucide-react";
 import { type ReactNode, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -38,16 +49,67 @@ export function App() {
 /// signed-in shell without rendering navigation that assumes a session.
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="shell">
+    <div className={shell}>
       <SkipLink />
-      <header className="signed-out-bar">
+      <header className="border-b bg-surface px-4 py-3">
         <BrandMark />
       </header>
-      <main id="main" tabIndex={-1}>
+      <main id="main" tabIndex={-1} className={document_}>
         {children}
       </main>
     </div>
   );
+}
+
+/// The signed-in shell, written as utilities on the markup it belongs to. A column beside the
+/// document above the `shell` breakpoint, and the wrapping band below it that the previous top
+/// navigation was verified with at 320 — so the narrow layout is the base and the column is the
+/// variant, rather than a media query undoing a desktop default.
+const shell = "grid min-h-screen grid-cols-1 items-start bg-canvas shell:grid-cols-[232px_minmax(0,1fr)]";
+
+/// No page-level measure: the only thing one would bound here is the ledger, and a ledger wants
+/// width. What genuinely needs a measure states its own, where the reason for it is visible.
+const document_ = "w-full min-w-0 p-4 shell:p-6";
+
+const rail =
+  "flex flex-row flex-wrap items-center gap-x-3 gap-y-2 border-b bg-surface px-3 py-4 " +
+  "shell:sticky shell:top-0 shell:h-screen shell:flex-col shell:flex-nowrap shell:items-stretch " +
+  "shell:gap-5 shell:overflow-y-auto shell:border-r shell:border-b-0";
+
+const navGroup = "flex flex-row flex-wrap items-center gap-0.5 shell:flex-col shell:items-stretch";
+
+/// Hidden below the breakpoint rather than removed: the band has no room for a group label, but the
+/// `nav` landmark still carries the same word, so the grouping survives for a screen reader.
+const navLabel =
+  "sr-only shell:not-sr-only shell:m-0 shell:mb-1 shell:px-2.5 shell:text-[0.6875rem] " +
+  "shell:font-semibold shell:tracking-[0.07em] shell:text-ink-secondary shell:uppercase";
+
+const navList = "m-0 flex list-none flex-row flex-wrap items-center gap-0.5 p-0 shell:flex-col shell:items-stretch";
+
+/// States its own box, larger than the 24x24 floor the base layer gives a standalone link.
+const navLink =
+  "flex items-center gap-2 rounded-md px-2.5 py-1.5 no-underline hover:bg-hover-surface " +
+  "focus-visible:bg-hover-surface aria-[current=page]:bg-selected-surface " +
+  "aria-[current=page]:font-semibold aria-[current=page]:text-selected-ink shell:w-full";
+
+/// An icon is a landmark for a destination an Operator returns to daily. It never carries meaning
+/// the label does not already carry, so it is hidden from assistive technology and no label is
+/// dropped in favour of one. Connections and Connectors take deliberately unlike shapes: they are
+/// the two nouns that are already confused, and near-identical glyphs would agree with the
+/// confusion rather than help.
+const navIcon = "size-4 shrink-0 text-ink-secondary group-aria-[current=page]:text-selected-ink";
+
+const sectionIcons: Record<TenantSection, LucideIcon> = {
+  overview: LayoutDashboard,
+  events: Activity,
+  connections: Waypoints,
+  sources: ArrowDownToLine,
+  topics: Hash,
+  apiKeys: KeyRound,
+};
+
+function NavIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon className={navIcon} aria-hidden="true" focusable="false" />;
 }
 
 /// The first thing a keyboard reaches. The rail carries every destination in the dashboard, so
@@ -66,8 +128,10 @@ function SkipLink() {
 
 function BrandMark() {
   return (
-    <span className="brand">
-      <span className="brand-mark" aria-hidden="true" />
+    <span className="inline-flex items-center gap-[9px] px-2 font-semibold tracking-[-0.01em]">
+      {/* A generic mark, not a reproduction of any product's brand — a solid square so the wordmark
+          reads as an app identity at a glance. */}
+      <span className="size-[18px] flex-none rounded bg-ink" aria-hidden="true" />
       Integrios
     </span>
   );
@@ -91,12 +155,12 @@ function SignedIn({ session }: { session: OperatorSession }) {
   }, [section, title, tenantName]);
 
   return (
-    <div className="shell">
+    <div className={shell}>
       <SkipLink />
       <Rail session={session} tenantId={tenantId} tenant={tenant} />
-      <main id="main" tabIndex={-1}>
+      <main id="main" tabIndex={-1} className={document_}>
         {section && tenantId ? (
-          <p className="breadcrumb">
+          <p className="m-0 mb-1.5 text-xs text-ink-secondary">
             {tenantDisplayName(tenant)} / {sectionLabels[section]}
           </p>
         ) : null}
@@ -135,37 +199,44 @@ function Rail({
   const { pathname } = useLocation();
 
   return (
-    <div className="rail">
+    <div className={rail} data-shell="rail">
       <BrandMark />
 
       {tenantId ? <TenantNav tenantId={tenantId} tenant={tenant} /> : null}
 
-      <nav className="nav-group" aria-label="Deployment">
-        <p className="nav-label">Deployment</p>
-        <ul className="nav-list">
+      <nav className={navGroup} aria-label="Deployment">
+        <p className={navLabel}>Deployment</p>
+        <ul className={navList}>
           <li>
             {/* `/` is an alias for the Tenants list rather than a redirect, so it keeps any query
                 and fragment a copied link carried. NavLink cannot mark that one case itself. */}
             {pathname === "/" ? (
-              <Link to="/tenants" aria-current="page">
+              <Link to="/tenants" aria-current="page" className={`group ${navLink}`}>
+                <NavIcon icon={Building2} />
                 Tenants
               </Link>
             ) : (
-              <NavLink to="/tenants">Tenants</NavLink>
+              <NavLink to="/tenants" className={`group ${navLink}`}>
+                <NavIcon icon={Building2} />
+                Tenants
+              </NavLink>
             )}
           </li>
           <li>
-            <NavLink to="/connectors">Connectors</NavLink>
+            <NavLink to="/connectors" className={`group ${navLink}`}>
+              <NavIcon icon={Package} />
+              Connectors
+            </NavLink>
           </li>
         </ul>
       </nav>
 
-      <div className="rail-foot">
+      <div className="ml-auto flex items-center justify-between gap-2 shell:mt-auto shell:ml-0 shell:border-t shell:pt-3">
         {/* The identity is a label, not a sentence: the rail has room for a name and the role it is
             acting in, and the email only repeats what the name already said. */}
-        <span className="operator-identity" title={session.email ?? undefined}>
-          <strong>{session.display_name}</strong>
-          <span>Operator</span>
+        <span className="min-w-0" title={session.email ?? undefined}>
+          <strong className="block overflow-hidden font-medium text-ellipsis">{session.display_name}</strong>
+          <span className="block text-xs text-ink-secondary">Operator</span>
         </span>
         {/* A native form submission carries no custom header, so the antiforgery token must
             travel through the server-configured form field rather than the header name used by
@@ -221,18 +292,30 @@ function TenantNav({ tenantId, tenant }: { tenantId: string; tenant: ReturnType<
   const deadLettered = useDeadLetteredCount(tenantId);
 
   return (
-    <nav className="nav-group" aria-label="Tenant">
-      <p className="nav-label">Tenant</p>
-      <Link className="tenant-switch" to="/tenants">
-        <span className="tenant-name">{tenantDisplayName(tenant)}</span>
-        {tenant.data?.environment ? <span className="tenant-meta">{tenant.data.environment}</span> : null}
+    <nav className={navGroup} aria-label="Tenant">
+      <p className={navLabel}>Tenant</p>
+      <Link
+        className="flex flex-row items-baseline gap-1.5 rounded-md border px-2.5 py-2 no-underline hover:bg-hover-surface focus-visible:bg-hover-surface shell:mb-1.5 shell:flex-col shell:items-stretch shell:gap-px"
+        to="/tenants"
+      >
+        <span className="font-semibold">{tenantDisplayName(tenant)}</span>
+        {tenant.data?.environment ? (
+          <span className="text-xs text-ink-secondary">{tenant.data.environment}</span>
+        ) : null}
       </Link>
-      <ul className="nav-list">
+      <ul className={navList}>
         {sectionOrder.map((section) => (
           <li key={section}>
-            <NavLink to={sectionHrefs[section](tenantId)} end={section === "overview"}>
+            <NavLink to={sectionHrefs[section](tenantId)} end={section === "overview"} className={`group ${navLink}`}>
+              <NavIcon icon={sectionIcons[section]} />
               {sectionLabels[section]}
-              {section === "events" && deadLettered > 0 ? <span className="nav-count">{deadLettered}</span> : null}
+              {/* A count rides the destination it belongs to, so work that has stopped retrying is
+                  visible from anywhere in the Tenant rather than only from the ledger listing it. */}
+              {section === "events" && deadLettered > 0 ? (
+                <span className="ml-auto rounded-full bg-danger-surface px-1.5 py-px text-xs text-danger-ink tabular-nums">
+                  {deadLettered}
+                </span>
+              ) : null}
             </NavLink>
           </li>
         ))}

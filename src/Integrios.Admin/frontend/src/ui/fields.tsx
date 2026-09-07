@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
 import type { Control, FieldValues, Path } from "react-hook-form";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -114,12 +115,11 @@ export const filterPill =
 const filterControl =
   "max-w-44 min-w-0 cursor-pointer appearance-none overflow-hidden rounded-sm bg-transparent font-medium text-ellipsis outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
+/// Drawn rather than borrowed from the font: the glyph this used to be (U+2304) lands on a
+/// different baseline in every font it falls back through, and a caret that floats is the loudest
+/// thing about an otherwise quiet control.
 export function FilterCaret() {
-  return (
-    <span aria-hidden="true" className="text-ink-secondary">
-      ⌄
-    </span>
-  );
+  return <ChevronDown aria-hidden="true" focusable="false" className="size-3 shrink-0 text-ink-secondary" />;
 }
 
 /// A list filter, which belongs to the list rather than to a form: it re-reads from the first cursor

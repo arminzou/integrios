@@ -8,7 +8,6 @@
    second half of that block is the vocabulary the vendored shadcn/ui primitives are written
    against, mapped onto these roles rather than given colors of their own. */
 @import "tailwindcss";
-@import "./legacy.css" layer(components);
 
 :root {
   color-scheme: light;
@@ -81,6 +80,10 @@
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: Georgia, "Times New Roman", ui-serif, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Where the signed-in shell stops being a column beside the document and becomes a band above it.
+     Named because several utilities depend on the same width and a retyped number drifts. */
+  --breakpoint-shell: 53.75rem;
 }
 
 /* Tailwind's preflight strips the browser's own element defaults, which the screens that have not
@@ -88,6 +91,17 @@
    `revert` hands those elements back to the browser stylesheet until each screen states its own
    spacing; this block shrinks with every capability that migrates and goes away with the last one. */
 @layer base {
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  a {
+    color: var(--ink);
+  }
+
   h1,
   h2,
   h3,
@@ -121,6 +135,22 @@
 
   a {
     text-decoration: revert;
+  }
+
+  /* Not visual design — an accessibility floor the dashboard has to clear whatever it later looks
+     like. WCAG 2.2 asks a pointer target to be at least 24x24, and a link is otherwise only as tall
+     as its text, which leaves navigation and table links around 17px.
+
+     Only links that stand alone as targets get a box: navigation, list entries, and table cells. A
+     link inside a sentence is exempt from the rule and stays flowing text, because padding it would
+     break the line it sits in for no accessibility gain. It sits in `base` so a component that
+     states its own larger box — the rail's destinations do — simply wins with a utility. */
+  nav a,
+  li a,
+  th a,
+  td a {
+    display: inline-block;
+    padding: 4px 6px;
   }
 
   code,
