@@ -113,6 +113,7 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                 caption={`Topics, newest first${appliedNote(applied)}`}
                 footer={
                   <LoadMore
+                    noun="Topic"
                     hasMore={list.hasNextPage}
                     busy={list.isFetching}
                     loaded={topics.length}

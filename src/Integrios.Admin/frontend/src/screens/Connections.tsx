@@ -193,6 +193,7 @@ export function ConnectionsScreen({
               caption={`Connections, newest first${appliedNote(applied)}`}
               footer={
                 <LoadMore
+                  noun="Connection"
                   hasMore={list.hasNextPage}
                   busy={list.isFetching}
                   loaded={connections.length}

@@ -142,6 +142,7 @@ export function SubscriptionsSection({
             caption={`Subscriptions on ${topicName}, newest first`}
             footer={
               <LoadMore
+                noun="Subscription"
                 hasMore={list.hasNextPage}
                 busy={list.isFetching}
                 loaded={subscriptions.length}

@@ -169,6 +169,12 @@ export function ConfirmAction({
   );
 }
 
+/// Plural by the one rule English keeps: a trailing sibilant takes -es. Every noun a list here
+/// counts is a domain word the product chose, so nothing irregular reaches this.
+function plural(noun: string): string {
+  return /(s|x|z|ch|sh)$/i.test(noun) ? `${noun}es` : `${noun}s`;
+}
+
 /// The one way further rows are read: an explicit request for the next cursor, never infinite
 /// scroll and never a page number.
 /// Forward-only paging, stated in the terms the cursor actually supports: how many rows are loaded,
@@ -177,18 +183,22 @@ export function LoadMore({
   hasMore,
   busy,
   loaded,
+  noun,
   onLoadMore,
 }: {
   hasMore: boolean;
   busy: boolean;
   loaded?: number;
+  /// What was counted, singular. A footer that says "3 rows" makes the reader look up to remember
+  /// what a row is here; naming the thing costs one word and answers it.
+  noun: string;
   onLoadMore: () => void;
 }) {
   if (!hasMore && loaded === undefined) return null;
   return (
     <>
       <span className="text-sm text-ink-secondary">
-        {loaded === undefined ? null : `Showing ${loaded} ${loaded === 1 ? "row" : "rows"}`}
+        {loaded === undefined ? null : `Showing ${loaded} ${loaded === 1 ? noun : plural(noun)}`}
       </span>
       {hasMore ? (
         <Button type="button" variant="outline" size="sm" onClick={onLoadMore} disabled={busy}>

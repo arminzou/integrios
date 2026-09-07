@@ -134,6 +134,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
               caption={`Sources, newest first${appliedNote((status ? 1 : 0) + (type ? 1 : 0))}`}
               footer={
                 <LoadMore
+                  noun="Source"
                   hasMore={list.hasNextPage}
                   busy={list.isFetching}
                   loaded={sources.length}

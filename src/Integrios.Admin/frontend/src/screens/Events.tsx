@@ -345,6 +345,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               caption={`Events, newest first${appliedNote(appliedCount)}`}
               footer={
                 <LoadMore
+                  noun="Event"
                   hasMore={list.hasNextPage}
                   busy={list.isFetching}
                   loaded={events.length}

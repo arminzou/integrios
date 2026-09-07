@@ -66,7 +66,14 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
 
   return (
     <Page>
-      <PageHeader title="Connectors" action={<Button {...apply.triggerProps}>Apply manifest</Button>}>
+      <PageHeader
+        title="Connectors"
+        action={
+          <Button variant="outline" {...apply.triggerProps}>
+            Apply manifest
+          </Button>
+        }
+      >
         Deployment-wide capability definitions. Connections are built from these, per Tenant.
       </PageHeader>
 
@@ -108,6 +115,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                 caption={`Connectors, newest first${appliedNote(direction ? 1 : 0)}`}
                 footer={
                   <LoadMore
+                    noun="Connector"
                     hasMore={list.hasNextPage}
                     busy={list.isFetching}
                     loaded={connectors.length}

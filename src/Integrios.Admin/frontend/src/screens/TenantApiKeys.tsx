@@ -80,7 +80,7 @@ export function TenantApiKeysScreen({
 
   return (
     <Page>
-      <PageHeader title="Tenant API keys" action={<Button {...create.triggerProps}>New Tenant API key</Button>}>
+      <PageHeader title="API keys" action={<Button {...create.triggerProps}>New API key</Button>}>
         Tenant credentials for the intake endpoint. The token itself is shown once, at creation.
       </PageHeader>
 
@@ -110,9 +110,10 @@ export function TenantApiKeysScreen({
           <SplitList>
             {keys.length > 0 ? (
               <TableCard
-                caption={`Tenant API keys, newest first${appliedNote(state ? 1 : 0)}`}
+                caption={`API keys, newest first${appliedNote(state ? 1 : 0)}`}
                 footer={
                   <LoadMore
+                    noun="API key"
                     hasMore={list.hasNextPage}
                     busy={list.isFetching}
                     loaded={keys.length}

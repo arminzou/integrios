@@ -96,6 +96,7 @@ export function TenantsScreen() {
             caption={`Tenants, newest first${appliedNote(status ? 1 : 0)}`}
             footer={
               <LoadMore
+                noun="Tenant"
                 hasMore={list.hasNextPage}
                 busy={list.isFetching}
                 loaded={tenants.length}
@@ -226,7 +227,14 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
 
   return (
     <Page>
-      <PageHeader title="Overview" action={<Button {...edit.triggerProps}>Edit Tenant</Button>}>
+      <PageHeader
+        title="Overview"
+        action={
+          <Button variant="outline" {...edit.triggerProps}>
+            Edit Tenant
+          </Button>
+        }
+      >
         What is configured for {current.name}, and what currently needs an Operator.
       </PageHeader>
 
