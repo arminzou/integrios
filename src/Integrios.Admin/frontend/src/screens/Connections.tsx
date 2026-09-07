@@ -151,6 +151,7 @@ export function ConnectionsScreen({
       </Panel>
 
       <FilterBar applied={applied}>
+        <FilterSearch id="connection-name" label="Find by name" value={name} onChange={setName} />
         <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
           <option value="">Any</option>
           <option value="active">Active</option>
@@ -175,7 +176,6 @@ export function ConnectionsScreen({
             </option>
           ))}
         </Filter>
-        <FilterSearch id="connection-name" label="Find by name" value={name} onChange={setName} />
       </FilterBar>
 
       <ListStatus

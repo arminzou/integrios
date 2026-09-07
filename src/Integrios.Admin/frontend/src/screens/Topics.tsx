@@ -91,12 +91,12 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
 
       <section className="flex flex-col gap-4">
         <FilterBar applied={applied}>
+          <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
           <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
             <option value="">Any</option>
             <option value="active">Active</option>
             <option value="disabled">Disabled</option>
           </Filter>
-          <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
         </FilterBar>
 
         <ListStatus

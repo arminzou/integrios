@@ -177,7 +177,7 @@ export function FilterSearch({
 
   return (
     <form
-      className={filterPill}
+      className={`${filterPill} min-w-52 flex-1`}
       data-applied={String(Boolean(value))}
       onSubmit={(event) => {
         event.preventDefault();

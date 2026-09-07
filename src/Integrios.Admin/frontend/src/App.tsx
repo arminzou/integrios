@@ -159,15 +159,33 @@ function SignedIn({ session }: { session: OperatorSession }) {
       <SkipLink />
       <Rail session={session} tenantId={tenantId} tenant={tenant} />
       <main id="main" tabIndex={-1} className={document_}>
-        {section && tenantId ? (
-          <p className="m-0 mb-1.5 text-xs text-ink-secondary">
-            {tenantDisplayName(tenant)} / {sectionLabels[section]}
-          </p>
-        ) : null}
+        <Breadcrumb section={section} title={title} tenantId={tenantId} tenant={tenant} />
         <Outlet />
       </main>
     </div>
   );
+}
+
+/// Where the page sits, starting at the deployment rather than at the open Tenant: a Tenant is a
+/// scope inside the deployment, and the trail that omits it cannot say so. A deployment-wide screen
+/// carries a single segment rather than nothing, because the line above the title is where a page
+/// states its place, and leaving it blank on two screens makes them read as placeless.
+function Breadcrumb({
+  section,
+  title,
+  tenantId,
+  tenant,
+}: {
+  section?: TenantSection;
+  title?: string;
+  tenantId: string | null;
+  tenant: ReturnType<typeof useTenant>;
+}) {
+  const trail =
+    section && tenantId ? ["Tenants", tenantDisplayName(tenant), sectionLabels[section]] : title ? [title] : [];
+  if (trail.length === 0) return null;
+
+  return <p className="m-0 mb-1.5 text-xs text-ink-secondary">{trail.join(" / ")}</p>;
 }
 
 /// The matched route tags itself with the Tenant section it belongs to and the name its tab should
