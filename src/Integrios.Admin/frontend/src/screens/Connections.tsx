@@ -39,7 +39,7 @@ import {
 } from "../ui/layout";
 import { useConnectionOptions, useConnectorOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
-import { Timestamp } from "../ui/time";
+import { Day } from "../ui/time";
 
 /// Connections is the authoring pattern every other capability copies. Its parts, in the order they
 /// appear below:
@@ -232,7 +232,7 @@ export function ConnectionsScreen({
                     </TableCell>
                     <TableCell className="text-ink-secondary">{connection.description ?? "—"}</TableCell>
                     <TableCell className="text-ink-secondary">
-                      <Timestamp value={connection.updated_at} />
+                      <Day value={connection.updated_at} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -382,7 +382,10 @@ function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; con
       {/* The identity on the left, the state that qualifies it on the right: the two things an
           Operator checks before reading anything else in the panel. */}
       <div className="flex items-start justify-between gap-3">
-        <h2 className="font-mono break-all">{current.name}</h2>
+        <div className="min-w-0">
+          <h2 className="font-mono break-all">{current.name}</h2>
+          <span className="block font-mono text-xs break-all text-ink-secondary">{current.id}</span>
+        </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.status} className="mt-0.5" />
           <CloseInspector to={`/tenants/${tenantId}/connections`} label="Close the Connection detail" />

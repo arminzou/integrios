@@ -130,10 +130,14 @@ export function Inspector({ label, className, children }: { label: string; class
 /// that was just used — and an Operator who has not yet clicked anything has no way to know the
 /// detail panel is there at all. Desktop only: below the split it would be a box saying nothing
 /// between the filters and the rows.
+/// The column stays reserved before anything is in it, so selecting a row never reflows the rows
+/// under the pointer that selected it. What it must not do is read as an empty card: the reserve is
+/// not yet filled, which is a different thing from a box with nothing in it, so it carries the
+/// sentence and no border.
 export function InspectorPlaceholder({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Inspector label={label} className="hidden min-[1180px]:flex">
-      <p className="m-0 text-[13px] text-ink-secondary">{children}</p>
+    <Inspector label={label} className="hidden border-0 bg-transparent p-0 min-[1180px]:flex min-[1180px]:pt-0.5">
+      <p className="m-0 max-w-[34ch] text-[13px] text-ink-secondary">{children}</p>
     </Inspector>
   );
 }

@@ -37,7 +37,7 @@ import {
   TableCard,
 } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
-import { Timestamp } from "../ui/time";
+import { Day, Timestamp } from "../ui/time";
 
 type TenantApiKeyListItem = components["schemas"]["TenantApiKeyListItemDto"];
 type CreatedKey = components["schemas"]["CreateTenantApiKeyResult"];
@@ -144,7 +144,7 @@ export function TenantApiKeysScreen({
                         <StatusBadge status={key.state} />
                       </TableCell>
                       <TableCell className="text-ink-secondary">
-                        {key.expires_at ? <Timestamp value={key.expires_at} /> : "Never"}
+                        {key.expires_at ? <Day value={key.expires_at} /> : "Never"}
                       </TableCell>
                       <TableCell className="text-ink-secondary">
                         {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}

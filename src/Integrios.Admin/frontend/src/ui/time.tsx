@@ -53,6 +53,28 @@ export function Timestamp({ value }: { value: string }) {
   );
 }
 
+/// A calendar day, for a column where the time of day is not the fact being read. An Updated column
+/// answers "how stale is this", which a date answers and seconds only clutter; the exact instant is
+/// still on `dateTime` and in the title, so nothing is lost to the shorter reading. `Timestamp` stays
+/// where the time is the answer — two attempts in one retry cycle are seconds apart.
+const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+
+export function Day({ value }: { value: string }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+
+  return (
+    <time
+      dateTime={value}
+      title={`${value}
+${since(value)}`}
+      className="whitespace-nowrap tabular-nums"
+    >
+      {day.format(date)}
+    </time>
+  );
+}
+
 /// Once rows are grouped by the day they fall on, the day is stated once on the separator and each
 /// row carries only its time. Same reasoning as dropping the year: repeating on every row what the
 /// group already says costs width the ledger needs for what differs.
