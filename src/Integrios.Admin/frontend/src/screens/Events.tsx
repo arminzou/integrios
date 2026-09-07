@@ -569,8 +569,16 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
   return (
     <Inspector label="Event detail">
       <div className="flex items-start justify-between gap-3">
-        <h2 ref={heading} tabIndex={-1} className="min-w-0">
-          Event <span className="block font-mono text-xs break-all text-ink-secondary">{current.event_id}</span>
+        {/* Truncated rather than wrapped: a 36-character identifier broken over three lines at 320
+            is the largest thing in the panel and says nothing more than its first characters do.
+            What an Operator does with it is paste it elsewhere, so the affordance is the copy. */}
+        <h2 ref={heading} tabIndex={-1} className="group min-w-0">
+          {/* The space is explicit: the heading's accessible name is "Event <id>", and JSX drops a
+              trailing space before an element on the next line. */}
+          Event{" "}
+          <span className="block text-xs text-ink-secondary">
+            <CopyInline label="Event id" value={current.event_id} />
+          </span>
         </h2>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.status} className="mt-0.5" />
