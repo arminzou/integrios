@@ -18,7 +18,7 @@
   --surface-quiet: #fafafa;
   --ink: #171717;
   --ink-secondary: #707070;
-  --border: #e5e5e5;
+  --border: #ebebeb;
   --accent-border: #d8d8d8;
   --selected-surface: #ededed;
   --selected-ink: #333333;
@@ -69,7 +69,9 @@
   --color-destructive: var(--danger-ink);
   --color-destructive-foreground: var(--danger-surface);
   --color-border: var(--border);
-  --color-input: var(--border);
+  /* A control's outline is not structure: it is what says the control is operable, so fields and
+     the outline button keep the accent border rather than following the structural rule down. */
+  --color-input: var(--accent-border);
   --color-ring: var(--accent-border);
 
   --radius-sm: calc(var(--radius) - 2px);
