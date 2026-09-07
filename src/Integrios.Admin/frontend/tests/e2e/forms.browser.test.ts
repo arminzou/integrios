@@ -180,6 +180,40 @@ async function submitted(
 }
 
 describe("Create forms, filled through a real browser", () => {
+  /// Moved down from jsdom when the Connector picker became a menu: reaching a rejected write means
+  /// submitting a valid Connection first, and choosing a Connector needs a layout engine.
+  it("puts each rejected field beside its own control and everything else at form level", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/connections`);
+    // Registered after the helper's own handler, so this is the one that answers the write.
+    await view.route("**/admin/**", (route) => {
+      const request = route.request();
+      if (request.method() === "GET") return route.fallback();
+      return route.fulfill({
+        status: 400,
+        contentType: "application/problem+json",
+        json: {
+          title: "The Connection was rejected.",
+          errors: { Name: ["That name is already taken."], "": ["The deployment refused the write."] },
+        },
+      });
+    });
+
+    await view.click("text=New Connection");
+    const form = formNamed(view, "Create a Connection");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await form.getByLabel("Name").fill("sink");
+    await form.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://sink.invalid"}');
+    await view.click("text=Create Connection");
+
+    // The field-keyed message lands on the control it names, whatever casing the server used.
+    const name = form.getByLabel("Name");
+    await expect.poll(() => name.getAttribute("aria-invalid")).toBe("true");
+    await view.getByText("That name is already taken.").waitFor();
+    // What is attributed to no rendered field is still said, at the level of the form.
+    await view.getByText("The deployment refused the write.").waitFor();
+    await view.close();
+  }, 60_000);
+
   it("sends a Connection with its config parsed out of the textarea", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/connections`);
 

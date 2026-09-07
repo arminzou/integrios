@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
-import { chooseOption, renderScreen } from "../test/router";
+import { renderScreen } from "../test/router";
 import { EventsScreen } from "./Events";
 
 afterEach(cleanup);
@@ -126,23 +126,6 @@ describe("Event history", () => {
     expect(row.textContent).not.toContain("dead_lettered");
   });
 
-  it("sends a Delivery status filter as its own parameter and leaves Event status unset", async () => {
-    const calls = stubHttp(respondFor(page([])));
-
-    renderScreen(<EventsScreen tenantId={tenantId} />);
-    await screen.findByText("No Events in this Tenant match these filters.");
-
-    await chooseOption(screen.getByLabelText("Delivery status"), "Dead-lettered");
-    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
-
-    await waitFor(() => expect(eventsCall(calls).length).toBeGreaterThan(1));
-    const applied = eventsCall(calls).at(-1)!;
-    expect(applied.url.searchParams.get("delivery_status")).toBe("dead_lettered");
-    expect(applied.url.searchParams.has("status")).toBe(false);
-    // A changed filter restarts from the first cursor rather than reusing one issued for the old scope.
-    expect(applied.url.searchParams.has("after")).toBe(false);
-  });
-
   it("restores the ledger's scope from the URL, so a filtered view is a link", async () => {
     const calls = stubHttp(respondFor(page([])));
 
@@ -160,20 +143,6 @@ describe("Event history", () => {
 
     // The form opens showing the scope in force, not the empty defaults.
     expect((screen.getByLabelText("Source Event id") as HTMLInputElement).value).toBe("order-42");
-  });
-
-  it("writes applied filters to the URL under the Admin API's own parameter names", async () => {
-    stubHttp(respondFor(page([])));
-
-    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
-    await screen.findByText("No Events in this Tenant match these filters.");
-
-    await chooseOption(screen.getByLabelText("Delivery status"), "Dead-lettered");
-    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
-
-    await waitFor(() => expect(router.state.location.search).toBe("?delivery_status=dead_lettered"));
-    // Applying is a navigation, so the previous scope is what Back returns to.
-    expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/events`);
   });
 
   it("reports unavailable filter options instead of presenting an empty picker", async () => {

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
-import { chooseOption, renderScreen } from "../test/router";
+import { renderScreen } from "../test/router";
 import { TenantScreen, TenantsScreen } from "./Tenants";
 
 afterEach(cleanup);
@@ -82,8 +82,9 @@ describe("Tenants list", () => {
       }),
     );
 
-    renderScreen(<TenantsScreen />);
-    await chooseOption(await screen.findByLabelText("Status"), "Disabled");
+    const { router } = renderScreen(<TenantsScreen />, "/tenants");
+    await screen.findByLabelText("Status");
+    await act(() => router.navigate("/tenants?status=disabled"));
     await screen.findByRole("link", { name: "Beta" });
 
     await act(async () => {
@@ -101,10 +102,10 @@ describe("Tenants list", () => {
         : { status: 200, body: page([tenant()], "cursor-1") },
     );
 
-    renderScreen(<TenantsScreen />);
+    const { router } = renderScreen(<TenantsScreen />, "/tenants");
     await screen.findByRole("link", { name: "Acme" });
 
-    await chooseOption(screen.getByLabelText("Status"), "Disabled");
+    await act(() => router.navigate("/tenants?status=disabled"));
 
     // The rows read under the previous filter are discarded immediately, not left on screen while
     // the new first page is still in flight.

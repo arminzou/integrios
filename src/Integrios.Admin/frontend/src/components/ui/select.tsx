@@ -43,7 +43,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
+  position = "popper",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
@@ -51,11 +51,12 @@ function SelectContent({
       <SelectPrimitive.Content
         data-slot="select-content"
         position={position}
-        // Item-aligned rather than popper-positioned: the menu opens over the control with the
-        // current option under the pointer, which is how the native control this replaces behaves,
-        // so the change is one of appearance rather than of where things land. It also needs no
-        // layout engine, which is what lets the interaction be exercised outside a browser at all —
-        // popper measures elements, and jsdom lays nothing out.
+        align="start"
+        sideOffset={4}
+        // Below the control and aligned to its leading edge, never over it: a menu that covers the
+        // thing it belongs to hides the label saying which filter is being changed. Positioning it
+        // means measuring, which needs a layout engine — so the open menu is decidable in a browser
+        // and nowhere else, and the tests that operate one live in the browser layer.
         className={cn(
           "relative z-50 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-y-auto rounded-md border bg-surface p-1 text-sm shadow-[0_8px_24px_-16px_rgb(23_23_23/0.4)]",
           className,

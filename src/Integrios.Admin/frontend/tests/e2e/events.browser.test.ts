@@ -284,4 +284,36 @@ describe("The Event ledger and inspector in a real browser", () => {
     expect(narrowLayout).toBe("column");
     await narrow.close();
   }, 60_000);
+  /// Applying a filter is now a menu interaction, so what it sends and what it writes to the URL
+  /// can only be decided where a menu can open. These two moved down from jsdom when the picker
+  /// stopped being a native `<select>`.
+  it("sends the applied Delivery status as its own parameter and restarts the cursor", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
+
+    await page.getByLabel("Delivery status").click();
+    await page.getByRole("option", { name: "Dead-lettered" }).click();
+
+    const read = page.waitForRequest((request) => request.url().includes("delivery_status"));
+    await page.getByRole("button", { name: "Apply filters" }).click();
+    const applied = new URL((await read).url());
+    expect(applied.searchParams.get("delivery_status")).toBe("dead_lettered");
+    // Event status is a different filter and stays unset by applying this one.
+    expect(applied.searchParams.has("status")).toBe(false);
+    // A changed filter restarts from the first cursor rather than reusing one issued for the old scope.
+    expect(applied.searchParams.has("after")).toBe(false);
+    await page.close();
+  }, 60_000);
+
+  it("writes an applied filter to the URL under the Admin API's own parameter name", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
+
+    await page.getByLabel("Delivery status").click();
+    await page.getByRole("option", { name: "Dead-lettered" }).click();
+    await page.getByRole("button", { name: "Apply filters" }).click();
+
+    await page.waitForFunction(() => window.location.search === "?delivery_status=dead_lettered");
+    // Applying is a navigation, so the previous scope is what Back returns to.
+    expect(new URL(page.url()).pathname).toBe(`/tenants/${tenantId}/events`);
+    await page.close();
+  }, 60_000);
 });

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
-import { chooseOption, renderScreen } from "../test/router";
+import { renderScreen } from "../test/router";
 import { ConnectionsScreen } from "./Connections";
 
 afterEach(cleanup);
@@ -32,12 +32,11 @@ async function openCreateForm(respond: (call: Call) => { status: number; body?: 
   await screen.findByRole("heading", { level: 1, name: "Connections" });
   fireEvent.click(screen.getByText("New Connection"));
 
-  // The list now carries a Connector filter and a Connector column of its own, so the create form's
-  // own control is reached through the form rather than through the whole document. Options exist
-  // only while the listbox is open, so choosing one is also what waits for the Connectors to load —
-  // the previous version could set a value for an option that was never there.
+  // The list carries a Connector filter and a Connector column of its own, so the create form's own
+  // controls are reached through the form rather than through the whole document. The Connector
+  // picker is not touched here: it is a menu, and opening one needs a layout engine, so what it
+  // takes to submit a valid Connection is proven in the browser layer instead.
   const form = within(await screen.findByRole("form", { name: "Create a Connection" }));
-  await chooseOption(form.getByLabelText("Connector"), /HTTP/);
   fireEvent.change(form.getByLabelText("Name"), { target: { value: "sink" } });
   return calls;
 }
@@ -49,38 +48,6 @@ const describedText = (control: HTMLElement) =>
     .join(" ");
 
 describe("Creating a Connection", () => {
-  it("puts each rejected field beside its own control and everything else at form level", async () => {
-    await openCreateForm((call) =>
-      call.method === "GET"
-        ? { status: 200, body: page(call.url.pathname.endsWith("/connectors") ? [connector] : []) }
-        : {
-            status: 400,
-            body: {
-              title: "The Connection was rejected.",
-              // The server names fields in its own casing, and attributes what belongs to no
-              // rendered field to none at all.
-              errors: { Name: ["A Connection called sink already exists."], "": ["The Tenant is not active."] },
-            },
-          },
-    );
-
-    fireEvent.submit(screen.getByRole("button", { name: "Create Connection" }).closest("form")!);
-
-    const name = await screen.findByLabelText("Name");
-    await waitFor(() => expect(name.getAttribute("aria-invalid")).toBe("true"));
-    expect(describedText(name)).toContain("A Connection called sink already exists.");
-
-    // Everything the server did not attribute to a rendered field is still reported.
-    expect(
-      screen
-        .getAllByRole("alert")
-        .map((alert) => alert.textContent ?? "")
-        .join(" "),
-    ).toContain("The Tenant is not active.");
-    // The field's own message is beside its control and is not repeated at form level.
-    expect(screen.getAllByText("A Connection called sink already exists.")).toHaveLength(1);
-  });
-
   it("never sends a configuration that is not well-formed JSON", async () => {
     const calls = await openCreateForm((call) => ({
       status: 200,
@@ -94,6 +61,7 @@ describe("Creating a Connection", () => {
     await waitFor(() => expect(config.getAttribute("aria-invalid")).toBe("true"));
     // The message is the parser's own, not a generic "invalid" the Operator cannot act on.
     expect(describedText(config)).toContain("JSON");
+    // The message on this field is what proves the rule fired; nothing is sent either way.
     expect(writes(calls)).toEqual([]);
   });
 
