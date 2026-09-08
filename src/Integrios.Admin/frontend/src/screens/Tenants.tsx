@@ -288,7 +288,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
               ["Topics", overview.data?.topics, `/tenants/${tenantId}/topics`],
               ["Connections", overview.data?.connections, `/tenants/${tenantId}/connections`],
               ["Sources", overview.data?.sources, `/tenants/${tenantId}/sources`],
-              ["Subscriptions", overview.data?.subscriptions, `/tenants/${tenantId}/topics`],
+              ["Subscriptions", overview.data?.subscriptions, `/tenants/${tenantId}/subscriptions`],
               ["Live API keys", overview.data?.live_api_keys, `/tenants/${tenantId}/tenant-api-keys`],
             ] as const
           ).map(([label, value, to]) => (

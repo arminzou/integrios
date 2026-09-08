@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router";
+import { Link, NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import {
+  appliedNote,
   ConfirmAction,
   CreateSheet,
   EditSheet,
@@ -20,16 +21,28 @@ import {
   LoadMore,
   WriteStatus,
 } from "../ui/controls";
-import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
+import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
-import { activeOnly, useConnectionOptions } from "../ui/options";
+import {
+  CloseInspector,
+  Details,
+  Inspector,
+  InspectorPlaceholder,
+  Page,
+  PageHeader,
+  Panel,
+  RowHeader,
+  SplitList,
+  SplitView,
+  TableCard,
+} from "../ui/layout";
+import { activeOnly, useConnectionOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { TransformPreview } from "./Previews";
 
-type SubscriptionListItem = components["schemas"]["SubscriptionListItemDto"];
+type SubscriptionByTenantListItem = components["schemas"]["SubscriptionByTenantListItemDto"];
 type Subscription = components["schemas"]["SubscriptionDto"];
 type HttpDelivery = components["schemas"]["HttpDeliveryConfiguration"];
 
@@ -86,119 +99,234 @@ const subscriptionSchema = z.object({
 
 type SubscriptionValues = z.infer<typeof subscriptionSchema>;
 
-export function SubscriptionsSection({
+export function SubscriptionsScreen({
   tenantId,
-  topicId,
-  topicName,
+  selectedTopicId,
+  selectedSubscriptionId,
 }: {
   tenantId: string;
-  topicId: string;
-  topicName: string;
+  selectedTopicId?: string;
+  selectedSubscriptionId?: string;
 }) {
+  const [name, setName] = useFilterParam("name");
+  const [topicId, setTopicId] = useFilterParam("topic_id");
+  const [connectionId, setConnectionId] = useFilterParam("connection_id");
   const [status, setStatus] = useFilterParam("status");
-  const navigate = useNavigate();
+  const topics = useTopicOptions(tenantId);
+  const connections = useConnectionOptions(tenantId);
+  const applied = [name, topicId, connectionId, status].filter(Boolean).length;
   const list = useInfiniteQuery({
-    queryKey: ["subscriptions", tenantId, topicId, { status }],
+    queryKey: ["tenant-subscriptions", tenantId, { name, topicId, connectionId, status }],
     queryFn: ({ pageParam }) =>
       call(() =>
-        api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
+        api.GET("/admin/tenants/{tenantId}/subscriptions", {
           params: {
-            path: { tenantId, topicId },
-            query: { status: status || undefined, after: pageParam ?? undefined, limit: 20 },
+            path: { tenantId },
+            query: {
+              name: name || undefined,
+              topic_id: topicId || undefined,
+              connection_id: connectionId || undefined,
+              status: status || undefined,
+              after: pageParam ?? undefined,
+              limit: 20,
+            },
           },
         }),
       ),
     initialPageParam: null as string | null,
-    getNextPageParam: nextCursor<SubscriptionListItem>,
+    getNextPageParam: nextCursor<SubscriptionByTenantListItem>,
   });
   const subscriptions = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <section className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
-        <h2 className="m-0">Subscriptions on {topicName}</h2>
-        <CreateSheet label="New Subscription" description={`Routes matching Events from ${topicName}`}>
-          {(close) => (
-            <SubscriptionForm
-              tenantId={tenantId}
-              topicId={topicId}
-              onSaved={(created) => {
-                close();
-                if (created) navigate(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${created.id}`);
-              }}
-            />
-          )}
-        </CreateSheet>
-      </div>
+    <Page>
+      <PageHeader
+        title="Subscriptions"
+        action={
+          <CreateSheet label="New Subscription" description="Routes matching Events from one Topic">
+            {(close) => <CreateTenantSubscription tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
+          </CreateSheet>
+        }
+      >
+        Tenant-wide routes from Topics to destination Connections.
+      </PageHeader>
 
-      <div className="flex flex-col gap-4">
-        <h3>All Subscriptions</h3>
-        <FilterBar applied={(status ? 1 : 0) as number}>
-          <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="disabled">Disabled</SelectItem>
-          </Filter>
-        </FilterBar>
+      <FilterBar applied={applied}>
+        <FilterSearch id="subscription-name" label="Find by name" value={name} onChange={setName} />
+        <Filter
+          id="subscription-topic"
+          label="Topic"
+          value={topicId}
+          onChange={setTopicId}
+          hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+        >
+          {(topics.data?.items ?? []).map((topic) => (
+            <SelectItem key={topic.id} value={topic.id}>
+              {topic.name}
+            </SelectItem>
+          ))}
+        </Filter>
+        <Filter
+          id="subscription-connection"
+          label="Connection"
+          value={connectionId}
+          onChange={setConnectionId}
+          hint={connections.data?.next_cursor ? "Showing the first 100 Connections." : undefined}
+        >
+          {(connections.data?.items ?? []).map((connection) => (
+            <SelectItem key={connection.id} value={connection.id}>
+              {connection.name}
+            </SelectItem>
+          ))}
+        </Filter>
+        <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="disabled">Disabled</SelectItem>
+        </Filter>
+      </FilterBar>
 
-        <ListStatus
-          busy={list.isFetching}
-          loaded={list.isSuccess}
-          problem={asProblem(list.error)}
-          empty={subscriptions.length === 0}
-          emptyText={`${topicName} has no Subscriptions matching this filter.`}
-        />
-        {subscriptions.length > 0 ? (
-          <TableCard
-            caption={`Subscriptions on ${topicName}, newest first`}
-            footer={
-              <LoadMore
-                noun="Subscription"
-                hasMore={list.hasNextPage}
-                busy={list.isFetching}
-                loaded={subscriptions.length}
-                onLoadMore={() => void list.fetchNextPage()}
-              />
-            }
-          >
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">Name</TableHead>
-                <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col" className="text-right">
-                  Order
-                </TableHead>
-                <TableHead scope="col">Description</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {subscriptions.map((subscription) => (
-                <TableRow key={subscription.id}>
-                  <RowHeader>
-                    <Link
-                      className="no-underline"
-                      to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}
-                    >
-                      {subscription.name}
-                    </Link>
-                  </RowHeader>
-                  <TableCell>
-                    <StatusBadge status={subscription.status} />
-                  </TableCell>
-                  <TableCell className="text-right">{subscription.order_index}</TableCell>
-                  <TableCell className="text-ink-secondary">{subscription.description ?? "—"}</TableCell>
+      <SplitView>
+        <SplitList>
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={subscriptions.length === 0}
+            emptyText="This Tenant has no Subscriptions matching this filter."
+          />
+          {subscriptions.length > 0 ? (
+            <TableCard
+              caption={`Subscriptions, newest first${appliedNote(applied)}`}
+              footer={
+                <LoadMore
+                  noun="Subscription"
+                  hasMore={list.hasNextPage}
+                  busy={list.isFetching}
+                  loaded={subscriptions.length}
+                  onLoadMore={() => void list.fetchNextPage()}
+                />
+              }
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Topic</TableHead>
+                  <TableHead scope="col">Destination Connection</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Order
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </TableCard>
-        ) : null}
-      </div>
+              </TableHeader>
+              <TableBody>
+                {subscriptions.map((subscription) => (
+                  <TableRow key={subscription.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                    <RowHeader>
+                      <NavLink
+                        className="no-underline"
+                        to={`/tenants/${tenantId}/subscriptions/${subscription.topic_id}/${subscription.id}`}
+                        end
+                      >
+                        {subscription.name}
+                      </NavLink>
+                    </RowHeader>
+                    <TableCell>
+                      <Link className="no-underline" to={`/tenants/${tenantId}/topics/${subscription.topic_id}`}>
+                        {subscription.topic_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        className="no-underline"
+                        to={`/tenants/${tenantId}/connections/${subscription.destination_connection_id}`}
+                      >
+                        {subscription.destination_connection_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={subscription.status} />
+                    </TableCell>
+                    <TableCell className="text-right">{subscription.order_index}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </TableCard>
+          ) : null}
+        </SplitList>
 
+        {selectedTopicId && selectedSubscriptionId ? (
+          <SubscriptionInspector
+            key={selectedSubscriptionId}
+            tenantId={tenantId}
+            topicId={selectedTopicId}
+            subscriptionId={selectedSubscriptionId}
+          />
+        ) : (
+          <InspectorPlaceholder label="Subscription detail">
+            Select a Subscription to inspect its Topic, destination and delivery order.
+          </InspectorPlaceholder>
+        )}
+      </SplitView>
+
+      {/* The mapping sandbox follows the list it belongs to rather than sitting inside a
+          Subscription: it evaluates a transform against a sample document and persists nothing, so
+          it is a tool for authoring any Subscription here, not detail about the selected one. */}
       <TransformPreview />
-    </section>
+    </Page>
   );
 }
 
-export function SubscriptionScreen({
+function CreateTenantSubscription({
+  tenantId,
+  defaultTopicId,
+  onCreated,
+}: {
+  tenantId: string;
+  defaultTopicId: string;
+  onCreated: () => void;
+}) {
+  const navigate = useNavigate();
+  const topics = useTopicOptions(tenantId);
+  const topicForm = useForm<{ topic_id: string }>({ defaultValues: { topic_id: defaultTopicId } });
+  const topicId = topicForm.watch("topic_id");
+  const topic = topics.data?.items.find((item) => item.id === topicId);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Form {...topicForm}>
+        <SelectField
+          control={topicForm.control}
+          name="topic_id"
+          label="Topic"
+          hint={topics.data?.next_cursor ? "Showing the first 100 active Topics." : undefined}
+          disabled={topics.isPending || topics.isError}
+          required
+        >
+          {activeOnly(topics.data?.items).map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.name}
+            </SelectItem>
+          ))}
+        </SelectField>
+      </Form>
+      <FormError message={formError(asProblem(topics.error))} />
+      {topic ? (
+        <SubscriptionForm
+          tenantId={tenantId}
+          topicId={topic.id}
+          onSaved={(created) => {
+            onCreated();
+            if (created) navigate(`/tenants/${tenantId}/subscriptions/${topic.id}/${created.id}`);
+          }}
+        />
+      ) : (
+        <p className="m-0 text-sm text-ink-secondary">Choose the Topic this Subscription consumes.</p>
+      )}
+    </div>
+  );
+}
+
+function SubscriptionInspector({
   tenantId,
   topicId,
   subscriptionId,
@@ -227,52 +355,54 @@ export function SubscriptionScreen({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["subscription", tenantId, topicId, subscriptionId] });
       void queryClient.invalidateQueries({ queryKey: ["subscriptions", tenantId, topicId] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant-subscriptions", tenantId] });
     },
   });
 
   const problem = asProblem(subscription.error);
   if (problem)
     return (
-      <>
-        <h1>Subscription</h1>
+      <Inspector label="Subscription detail">
+        <div className="flex items-start justify-between gap-3">
+          <h2>Subscription</h2>
+          <CloseInspector to={`/tenants/${tenantId}/subscriptions`} label="Close the Subscription detail" />
+        </div>
         <p role="alert">{problem.detail ?? `This Subscription could not be read (${problem.status}).`}</p>
-      </>
+      </Inspector>
     );
-  if (!subscription.data) return <p>Loading…</p>;
+  if (!subscription.data) return <Inspector label="Subscription detail">Loading…</Inspector>;
 
   const current = subscription.data;
   return (
-    <Page>
-      <PageHeader title={current.name}>
-        On{" "}
-        <Link className="underline" to={`/tenants/${tenantId}/topics/${topicId}`}>
-          its Topic
-        </Link>
-        .
-      </PageHeader>
+    <Inspector label="Subscription detail">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2>{current.name}</h2>
+          <span className="block font-mono text-xs break-all text-ink-secondary">{current.id}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.status} className="mt-0.5" />
+          <CloseInspector to={`/tenants/${tenantId}/subscriptions`} label="Close the Subscription detail" />
+        </div>
+      </div>
 
-      <Panel>
-        <Details>
-          <dt>Status</dt>
-          <dd>
-            <StatusBadge status={current.status} />
-          </dd>
-          <dt>Order</dt>
-          <dd>{current.order_index}</dd>
-          <dt>Destination Connection</dt>
-          <dd>
-            <Link
-              className="font-mono text-sm underline"
-              to={`/tenants/${tenantId}/connections/${current.destination_connection_id}`}
-            >
-              {current.destination_connection_id}
-            </Link>
-          </dd>
-        </Details>
-      </Panel>
+      <Details>
+        <dt>Topic</dt>
+        <dd>
+          <Link to={`/tenants/${tenantId}/topics/${topicId}`}>Open Topic</Link>
+        </dd>
+        <dt>Destination Connection</dt>
+        <dd>
+          <Link to={`/tenants/${tenantId}/connections/${current.destination_connection_id}`}>Open Connection</Link>
+        </dd>
+        <dt>Order</dt>
+        <dd>{current.order_index}</dd>
+        <dt>Description</dt>
+        <dd>{current.description ?? "—"}</dd>
+      </Details>
 
       <div className="flex flex-wrap items-start gap-2">
-        <EditSheet label="Edit" description={`Routes matching Events from this Topic`}>
+        <EditSheet label="Edit" description="Routes matching Events from this Topic">
           {(close) => (
             <SubscriptionForm
               key={current.updated_at}
@@ -295,13 +425,9 @@ export function SubscriptionScreen({
         ) : null}
       </div>
 
-      <TransformPreview />
-
-      <div className="flex flex-col gap-3">
-        <WriteStatus done={deactivate.isSuccess}>Subscription deactivated.</WriteStatus>
-        <FormError message={formError(asProblem(deactivate.error))} />
-      </div>
-    </Page>
+      <WriteStatus done={deactivate.isSuccess}>Subscription deactivated.</WriteStatus>
+      <FormError message={formError(asProblem(deactivate.error))} />
+    </Inspector>
   );
 }
 
@@ -371,6 +497,7 @@ function SubscriptionForm({
     },
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ["subscriptions", tenantId, topicId] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant-subscriptions", tenantId] });
       if (subscription)
         void queryClient.invalidateQueries({ queryKey: ["subscription", tenantId, topicId, subscription.id] });
       onSaved?.(saved);

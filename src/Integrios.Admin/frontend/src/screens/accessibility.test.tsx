@@ -7,14 +7,13 @@ import { ConnectionsScreen } from "./Connections";
 import { ConnectorsScreen } from "./Connectors";
 import { EventsScreen } from "./Events";
 import { SourcesScreen } from "./Sources";
+import { SubscriptionsScreen } from "./Subscriptions";
 import { TenantApiKeysScreen } from "./TenantApiKeys";
 import { TenantScreen, TenantsScreen } from "./Tenants";
-import { TopicScreen } from "./Topics";
 
 afterEach(cleanup);
 
 const tenantId = "11111111-1111-1111-1111-111111111111";
-const topicId = "22222222-2222-2222-2222-222222222222";
 const eventId = "55555555-5555-5555-5555-555555555555";
 
 const tenant = {
@@ -23,16 +22,6 @@ const tenant = {
   name: "Acme",
   status: "active",
   environment: "production",
-  description: null,
-  created_at: "2026-09-01T00:00:00Z",
-  updated_at: "2026-09-01T00:00:00Z",
-};
-
-const topic = {
-  id: topicId,
-  tenant_id: tenantId,
-  name: "orders",
-  status: "active",
   description: null,
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
@@ -149,14 +138,11 @@ describe("Accessibility of the Operator workflows", () => {
     await expectNoAccessibilityViolations(event);
   });
 
-  it("passes the automated rules on a Topic and its Subscriptions", async () => {
-    stubHttp(({ url }) => ({
-      status: 200,
-      body: url.pathname.endsWith("/subscriptions") || url.pathname.endsWith("/connections") ? page([]) : topic,
-    }));
+  it("passes the automated rules on the Tenant-wide Subscriptions list", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
 
-    const container = renderScreen(<TopicScreen tenantId={tenantId} topicId={topicId} />);
-    await screen.findByRole("heading", { level: 1, name: "Subscriptions on orders" });
+    const container = renderScreen(<SubscriptionsScreen tenantId={tenantId} />);
+    await screen.findByRole("heading", { level: 1, name: "Subscriptions" });
     await expectNoAccessibilityViolations(container);
   });
 });

@@ -37,9 +37,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { nameIn, useConnectionOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
-import { SubscriptionsSection } from "./Subscriptions";
 
 type Topic = components["schemas"]["AdminTopicResponse"];
 
@@ -176,7 +174,6 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
 /// nested inside a detail. Authoring keeps its own route, which this panel links to.
 function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: string }) {
   const [notice, setNotice] = useState("");
-  const connections = useConnectionOptions(tenantId);
   const topic = useQuery({
     queryKey: ["topic", tenantId, topicId],
     queryFn: () =>
@@ -248,19 +245,19 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
             <div className="min-w-0 text-[13px]">
               <Link
                 className="block truncate no-underline"
-                to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}
+                to={`/tenants/${tenantId}/subscriptions/${topicId}/${subscription.id}`}
               >
                 {subscription.name}
               </Link>
               <span className="block truncate font-mono text-xs text-ink-secondary">
-                → {nameIn(connections.data?.items, subscription.destination_connection_id)}
+                → {subscription.destination_connection_name}
               </span>
             </div>
             <StatusBadge status={subscription.status} className="shrink-0" />
           </div>
         ))}
         <Button asChild variant="outline" size="sm" className="self-start">
-          <Link className="no-underline" to={`/tenants/${tenantId}/topics/${topicId}/subscriptions`}>
+          <Link className="no-underline" to={`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`}>
             Manage Subscriptions
           </Link>
         </Button>
@@ -317,48 +314,6 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
         </Button>
       </form>
     </Form>
-  );
-}
-
-/// The Subscription authoring workspace: a create panel, a filter and a cursor-paged list, which is
-/// what would not fit in the inspector beside the Topics list. Reached from that panel.
-export function TopicScreen({ tenantId, topicId }: { tenantId: string; topicId: string }) {
-  const topic = useQuery({
-    queryKey: ["topic", tenantId, topicId],
-    queryFn: () =>
-      call(() => api.GET("/admin/tenants/{tenantId}/topics/{id}", { params: { path: { tenantId, id: topicId } } })),
-  });
-
-  const problem = asProblem(topic.error);
-  if (problem)
-    return (
-      <>
-        <h1>Topic</h1>
-        <p role="alert">{problem.detail ?? `This Topic could not be read (${problem.status}).`}</p>
-      </>
-    );
-  if (!topic.data) return <p>Loading…</p>;
-
-  const current = topic.data;
-  return (
-    <Page>
-      <PageHeader
-        title={`Subscriptions on ${current.name}`}
-        action={
-          <Button asChild variant="outline">
-            <Link className="no-underline" to={`/tenants/${tenantId}/topics/${topicId}`}>
-              Back to the Topic
-            </Link>
-          </Button>
-        }
-      >
-        A Subscription matches Events on this Topic and delivers them to one Connection.
-      </PageHeader>
-
-      {/* Subscriptions are owned by the Topic in the API, so they are authored where they live
-          rather than from a separate Tenant-level list that would have to reintroduce the Topic. */}
-      <SubscriptionsSection tenantId={tenantId} topicId={topicId} topicName={current.name} />
-    </Page>
   );
 }
 

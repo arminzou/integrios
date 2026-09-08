@@ -58,6 +58,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ISourceQueries)] = [Host.Admin],
         [typeof(IEventDeliveryQueue)] = [Host.Worker],
         [typeof(ISubscriptionRepository)] = [Host.Admin],
+        [typeof(ISubscriptionQueries)] = [Host.Admin],
         [typeof(ITenantRepository)] = [Host.Admin],
         [typeof(ITopicRepository)] = [Host.Admin],
         [typeof(ITransformEvaluator)] = [Host.Admin, Host.Worker, Host.Ingestion]
@@ -258,6 +259,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
         AssertResolves<ITopicRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
+        AssertResolves<ISubscriptionQueries>(scope.ServiceProvider);
         AssertResolves<IDestinationAuthenticatorRegistry>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
         AssertResolves<ITenantEventLookup>(scope.ServiceProvider);
@@ -304,6 +306,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IConnectionRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
+        AssertOmits<ISubscriptionQueries>(provider);
         AssertOmits<IOutboxFanout>(provider);
         AssertOmits<IEventDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
@@ -352,6 +355,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IConnectorReader>(scope.ServiceProvider);
         AssertOmits<IConnectorManifestStore>(scope.ServiceProvider);
         AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
+        AssertOmits<ISubscriptionQueries>(scope.ServiceProvider);
         AssertOmits<ITenantEventActivitySummary>(scope.ServiceProvider);
     }
 

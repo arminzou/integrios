@@ -6,10 +6,10 @@ import { ConnectionsScreen } from "./screens/Connections";
 import { ConnectorsScreen } from "./screens/Connectors";
 import { EventsScreen } from "./screens/Events";
 import { SourcesScreen } from "./screens/Sources";
-import { SubscriptionScreen } from "./screens/Subscriptions";
+import { SubscriptionsScreen } from "./screens/Subscriptions";
 import { TenantApiKeysScreen } from "./screens/TenantApiKeys";
 import { TenantScreen, TenantsScreen } from "./screens/Tenants";
-import { TopicScreen, TopicsScreen } from "./screens/Topics";
+import { TopicsScreen } from "./screens/Topics";
 import type { TenantSection } from "./sections";
 
 /// Every route names the Tenant it works inside, because Tenant is an ownership boundary rather
@@ -145,17 +145,21 @@ export const routeConfig: RouteObject[] = [
         element: <Ids>{({ tenantId, topicId }) => <TopicsScreen tenantId={tenantId} selectedTopicId={topicId} />}</Ids>,
       },
       {
-        path: "tenants/:tenantId/topics/:topicId/subscriptions",
-        handle: { section: "topics" satisfies TenantSection },
-        element: <Ids>{({ tenantId, topicId }) => <TopicScreen tenantId={tenantId} topicId={topicId} />}</Ids>,
+        path: "tenants/:tenantId/subscriptions",
+        handle: { section: "subscriptions" satisfies TenantSection },
+        element: <Ids>{({ tenantId }) => <SubscriptionsScreen tenantId={tenantId} />}</Ids>,
       },
       {
-        path: "tenants/:tenantId/topics/:topicId/subscriptions/:subscriptionId",
-        handle: { section: "topics" satisfies TenantSection },
+        path: "tenants/:tenantId/subscriptions/:topicId/:subscriptionId",
+        handle: { section: "subscriptions" satisfies TenantSection },
         element: (
           <Ids>
             {({ tenantId, topicId, subscriptionId }) => (
-              <SubscriptionScreen tenantId={tenantId} topicId={topicId} subscriptionId={subscriptionId} />
+              <SubscriptionsScreen
+                tenantId={tenantId}
+                selectedTopicId={topicId}
+                selectedSubscriptionId={subscriptionId}
+              />
             )}
           </Ids>
         ),

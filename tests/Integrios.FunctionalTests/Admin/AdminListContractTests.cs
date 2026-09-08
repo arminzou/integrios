@@ -120,6 +120,71 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
     }
 
     [Fact]
+    public async Task SubscriptionsByTenant_FilterAndNameTheirTopicAndDestination()
+    {
+        Guid firstTopic = Guid.NewGuid();
+        Guid secondTopic = Guid.NewGuid();
+        Guid firstConnection = Guid.NewGuid();
+        Guid secondConnection = Guid.NewGuid();
+        Guid first = Guid.NewGuid();
+        Guid second = Guid.NewGuid();
+        Guid excluded = Guid.NewGuid();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await ExecuteAsync($$$"""
+            INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at) VALUES
+            (@FirstTopic, @TenantId, 'Orders', 'active', @Now, @Now),
+            (@SecondTopic, @TenantId, 'Invoices', 'active', @Now, @Now);
+            INSERT INTO connections (id, tenant_id, connector_id, name, config, status, created_at, updated_at) VALUES
+            (@FirstConnection, @TenantId, @ConnectorId, 'Primary CRM', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now),
+            (@SecondConnection, @TenantId, @ConnectorId, 'Archive', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now);
+            INSERT INTO subscriptions
+                (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status, created_at, updated_at) VALUES
+            (@First, @TenantId, @FirstTopic, 'Send priority orders', {{{fixture.Json("@Rules")}}}, @FirstConnection, 1, 'active', @Now, @Now),
+            (@Second, @TenantId, @FirstTopic, 'Archive orders', {{{fixture.Json("@Rules")}}}, @SecondConnection, 2, 'disabled', @Now, @Now),
+            (@Excluded, @TenantId, @SecondTopic, 'Send invoices', {{{fixture.Json("@Rules")}}}, @FirstConnection, 3, 'active', @Now, @Now);
+            """,
+            new
+            {
+                fixture.TenantId,
+                ConnectorId = fixture.HttpConnectorId,
+                FirstTopic = firstTopic,
+                SecondTopic = secondTopic,
+                FirstConnection = firstConnection,
+                SecondConnection = secondConnection,
+                First = first,
+                Second = second,
+                Excluded = excluded,
+                Now = now,
+                Config = "{}",
+                Rules = "{}",
+            });
+
+        string root = $"/admin/tenants/{fixture.TenantId}/subscriptions";
+        JsonElement row = (await GetListAsync($"{root}?name=PRIORITY")).GetProperty("items")[0];
+        row.GetProperty("id").GetGuid().ShouldBe(first);
+        row.GetProperty("topic_name").GetString().ShouldBe("Orders");
+        row.GetProperty("destination_connection_name").GetString().ShouldBe("Primary CRM");
+        JsonElement topicRow = (await GetListAsync($"/admin/tenants/{fixture.TenantId}/topics/{firstTopic}/subscriptions"))
+            .GetProperty("items")
+            .EnumerateArray()
+            .Single(item => item.GetProperty("id").GetGuid() == first);
+        topicRow.GetProperty("destination_connection_name").GetString().ShouldBe("Primary CRM");
+        topicRow.TryGetProperty("topic_name", out _).ShouldBeFalse();
+        (await ListIdsAsync($"{root}?topic_id={firstTopic}&connection_id={secondConnection}&status=disabled")).ShouldBe([second]);
+        (await ListIdsAsync($"{root}?topic_id={secondTopic}")).ShouldBe([excluded]);
+        (await ListIdsAsync($"/admin/tenants/{fixture.OtherTenantId}/subscriptions?topic_id={firstTopic}")).ShouldBeEmpty();
+        (await client.SendAsync(AdminRequest(HttpMethod.Get, $"{root}?topic_id=invalid"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await client.SendAsync(AdminRequest(HttpMethod.Get, $"{root}?status=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        JsonElement page = await GetListAsync($"{root}?topic_id={firstTopic}&limit=1");
+        string cursor = Uri.EscapeDataString(page.GetProperty("next_cursor").GetString()!);
+        (await GetListAsync($"{root}?topic_id={firstTopic}&limit=1&after={cursor}"))
+            .GetProperty("items").GetArrayLength().ShouldBe(1);
+        foreach (string changed in new[] { "", $"topic_id={secondTopic}", $"topic_id={firstTopic}&status=active", $"topic_id={firstTopic}&name=orders" })
+            (await client.SendAsync(AdminRequest(HttpMethod.Get, $"{root}?{changed}&after={cursor}"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Tenants_SearchNameOrSlugAndEnvironment_AndBindEachFilterToCursor()
     {
         Guid first = Guid.NewGuid();

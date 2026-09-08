@@ -111,7 +111,8 @@ function readFor(pathname: string): unknown {
   if (/\/connections$/.test(pathname)) return page([connection]);
   // A next_cursor here is what makes the option reads' own hundred-row cap observable.
   if (/\/topics$/.test(pathname)) return page([topic], "more-topics");
-  if (/\/subscriptions$/.test(pathname)) return page([subscriptionDetail]);
+  if (/\/subscriptions$/.test(pathname))
+    return page([{ ...subscriptionDetail, topic_name: topic.name, destination_connection_name: connection.name }]);
   if (/\/sources$/.test(pathname)) return page([{ ...sourceDetail, source_contract: "event_json" }]);
   return page([]);
 }
@@ -304,11 +305,14 @@ describe("Create forms, filled through a real browser", () => {
   }, 60_000);
 
   it("sends a Subscription with a numeric order, an object delivery, and a null mapping", async () => {
-    // Subscription authoring keeps its own route below the Topic; the Topic id alone now selects
-    // the Topic beside the Topics list and summarises its Subscriptions rather than authoring them.
-    const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}/subscriptions`);
+    // Opening management from a Topic carries the Topic as the list filter. New Subscription reuses
+    // that selection, while the write itself remains on the Topic-owned API route.
+    const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
 
     await view.click("text=New Subscription");
+    expect(await view.getByRole("dialog", { name: "New Subscription" }).getByLabel("Topic").textContent()).toContain(
+      "orders",
+    );
     const form = formNamed(view, "Create a Subscription");
     await form.getByLabel("Name").fill("to-sink");
     await choose(form.getByLabel("Destination Connection"), /sink/);
@@ -376,7 +380,7 @@ describe("Update and deactivate, driven through a real browser", () => {
   }, 60_000);
 
   it("sends an updated Subscription with a numeric order and a mapping that stays null", async () => {
-    const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`);
+    const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
 
     // Editing opens the same sheet creating does, so the form is reached by opening it.
     await view.getByRole("button", { name: "Edit", exact: true }).click();

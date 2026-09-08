@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<ISourceRepository, SourceRepository>();
         services.AddScoped<ISourceQueries, SourceQueries>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+        services.AddScoped<ISubscriptionQueries, SubscriptionQueries>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
         // Operator-only. Deliberately absent from AddIngestionInfrastructureServices: a destination's
         // response body is the Operator's downstream system talking, and the data plane must have no

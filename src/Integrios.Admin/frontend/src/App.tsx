@@ -3,6 +3,7 @@ import {
   Activity,
   ArrowDownToLine,
   Building2,
+  GitBranch,
   Hash,
   KeyRound,
   LayoutDashboard,
@@ -113,6 +114,7 @@ const sectionIcons: Record<TenantSection, LucideIcon> = {
   connections: Waypoints,
   sources: ArrowDownToLine,
   topics: Hash,
+  subscriptions: GitBranch,
   apiKeys: KeyRound,
 };
 

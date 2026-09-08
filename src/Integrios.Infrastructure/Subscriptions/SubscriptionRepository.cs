@@ -1,17 +1,14 @@
 using System.Text.Json;
-using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Authoring.Subscriptions;
-using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.Infrastructure.Subscriptions;
 
-internal sealed class SubscriptionRepository(IntegriosDbContext context, IDataProtectionProvider dataProtectionProvider) : ISubscriptionRepository
+internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubscriptionRepository
 {
     public async Task<Subscription?> CreateAsync(
         Guid tenantId,
@@ -72,48 +69,6 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context, IDataPr
                 && subscription.TopicId == topicId
                 && subscription.Id == id,
             cancellationToken);
-
-    public async Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(
-        Guid tenantId,
-        Guid topicId,
-        OperationalStatus? status,
-        string? afterCursor,
-        int limit,
-        CancellationToken cancellationToken)
-    {
-        DateTimeOffset cursorCreatedAt = default;
-        Guid cursorId = default;
-        string cursorScope = $"subscriptions:{tenantId:N}:{topicId:N}:{status?.ToString() ?? "all"}";
-        bool hasCursor = afterCursor is not null;
-        if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
-            throw new InvalidCursorException();
-
-        IQueryable<Subscription> query = context.Subscriptions.AsNoTracking().Where(subscription =>
-            subscription.TenantId == tenantId && subscription.TopicId == topicId);
-        if (status is not null)
-            query = query.Where(subscription => subscription.Status == status);
-        if (hasCursor)
-        {
-            query = query.Where(subscription =>
-                subscription.CreatedAt < cursorCreatedAt
-                || (subscription.CreatedAt == cursorCreatedAt && subscription.Id.CompareTo(cursorId) < 0));
-        }
-
-        List<Subscription> items = await query
-            .OrderByDescending(subscription => subscription.CreatedAt)
-            .ThenByDescending(subscription => subscription.Id)
-            .Take(limit + 1)
-            .ToListAsync(cancellationToken);
-
-        string? nextCursor = null;
-        if (items.Count > limit)
-        {
-            items.RemoveAt(items.Count - 1);
-            nextCursor = PageCursor.Encode(dataProtectionProvider, cursorScope, items[^1].CreatedAt, items[^1].Id, DateTimeOffset.UtcNow);
-        }
-
-        return (items, nextCursor);
-    }
 
     public async Task<Subscription?> UpdateAsync(
         Guid tenantId,

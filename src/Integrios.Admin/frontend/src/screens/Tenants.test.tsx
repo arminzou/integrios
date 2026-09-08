@@ -25,7 +25,7 @@ function tenant(overrides: Record<string, unknown> = {}) {
 const listCalls = (calls: Call[]) => calls.filter((call) => call.method === "GET");
 
 describe("Tenants list", () => {
-  it("places the full-width name search before the compact filters", async () => {
+  it("places the name search before the compact filters", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
     renderScreen(<TenantsScreen />, "/tenants");
@@ -221,7 +221,7 @@ describe("Tenant Overview navigation", () => {
       ["Topics", `/tenants/${tenantId}/topics`],
       ["Connections", `/tenants/${tenantId}/connections`],
       ["Sources", `/tenants/${tenantId}/sources`],
-      ["Subscriptions", `/tenants/${tenantId}/topics`],
+      ["Subscriptions", `/tenants/${tenantId}/subscriptions`],
       ["Live API keys", `/tenants/${tenantId}/tenant-api-keys`],
     ] as const;
     for (const [name, href] of destinations)

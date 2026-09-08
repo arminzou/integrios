@@ -24,9 +24,9 @@ describe("The route table", () => {
   });
 
   it("carries every owning route value for a nested Subscription", () => {
-    const match = matchRoutes(routeConfig, `/tenants/${tenant}/topics/${topic}/subscriptions/${subscription}`)?.at(-1);
+    const match = matchRoutes(routeConfig, `/tenants/${tenant}/subscriptions/${topic}/${subscription}`)?.at(-1);
 
-    expect(match?.route.path).toBe("tenants/:tenantId/topics/:topicId/subscriptions/:subscriptionId");
+    expect(match?.route.path).toBe("tenants/:tenantId/subscriptions/:topicId/:subscriptionId");
     expect(match?.params).toEqual({ tenantId: tenant, topicId: topic, subscriptionId: subscription });
   });
 
@@ -99,7 +99,7 @@ describe("Route values that are not identifiers", () => {
   it.each([
     "/tenants/not-a-tenant/sources",
     `/tenants/${tenant}/topics/not-a-topic`,
-    `/tenants/${tenant}/topics/${topic}/subscriptions/not-a-subscription`,
+    `/tenants/${tenant}/subscriptions/${topic}/not-a-subscription`,
     "/connectors/not-a-connector",
   ])("never issues an Admin request for the refused route %s", async (path) => {
     const calls = stubHttp(({ url }) => ({
