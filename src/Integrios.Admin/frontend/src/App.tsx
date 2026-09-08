@@ -154,7 +154,7 @@ function SessionGate({
 /// document above the `shell` breakpoint, and the wrapping band below it that the previous top
 /// navigation was verified with at 320 — so the narrow layout is the base and the column is the
 /// variant, rather than a media query undoing a desktop default.
-const shell = "grid min-h-screen grid-cols-1 items-start bg-canvas shell:grid-cols-[232px_minmax(0,1fr)]";
+const shell = "grid min-h-screen grid-cols-1 items-start bg-canvas shell:grid-cols-[16rem_minmax(0,1fr)]";
 
 /// No page-level measure: the only thing one would bound here is the ledger, and a ledger wants
 /// width. What genuinely needs a measure states its own, where the reason for it is visible.
