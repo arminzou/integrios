@@ -22,6 +22,7 @@ import {
   LoadMore,
   WriteStatus,
 } from "../ui/controls";
+import { CopyInline } from "../ui/copy";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -374,9 +375,11 @@ function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; con
       {/* The identity on the left, the state that qualifies it on the right: the two things an
           Operator checks before reading anything else in the panel. */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="group min-w-0">
           <h2 className="font-mono break-all">{current.name}</h2>
-          <span className="block font-mono text-xs break-all text-ink-secondary">{current.id}</span>
+          <span className="block text-xs text-ink-secondary">
+            <CopyInline label="Connection id" value={current.id} />
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.status} className="mt-0.5" />

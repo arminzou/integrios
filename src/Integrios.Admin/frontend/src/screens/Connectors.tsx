@@ -199,7 +199,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
       <div className="flex items-start justify-between gap-3">
         <h2 className="min-w-0">
           {current.name}
-          <span className="block font-mono text-xs break-all text-ink-secondary">
+          <span className="block font-mono text-xs font-normal break-all text-ink-secondary">
             {current.key} · contract v{current.contract_version}
           </span>
         </h2>

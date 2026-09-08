@@ -13,10 +13,10 @@ import type { ReactNode } from "react";
 type Tone = "quiet" | "success" | "attention" | "failure";
 
 const tones: Record<Tone, string> = {
-  quiet: "border-border bg-surface-quiet text-ink-secondary",
-  success: "border-success-surface bg-success-surface text-success-ink",
-  attention: "border-warning-surface bg-warning-surface text-warning-ink",
-  failure: "border-danger-surface bg-danger-surface text-danger-ink",
+  quiet: "bg-surface-quiet text-ink-secondary",
+  success: "bg-success-surface text-success-ink",
+  attention: "bg-warning-surface text-warning-ink",
+  failure: "bg-danger-surface text-danger-ink",
 };
 
 /// Attention is a state an Operator may need to act on; failure is one the platform has stopped
@@ -94,7 +94,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
         tones[toneFor[status] ?? "quiet"],
         className,
       )}

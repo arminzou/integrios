@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,12 +49,17 @@ export function CopyValue({ id, label, value }: { id: string; label: string; val
 ///
 /// It stays reachable without a pointer: `group-focus-within` shows it once tabbing reaches it, so
 /// it is never a hover-only affordance.
-export function CopyInline({ label, value }: { label: string; value: string }) {
+///
+/// Nothing is ever clipped. An identifier that ends in an ellipsis cannot be read back or compared
+/// against one in a ticket, and the copy control does not help an Operator who cannot see which of
+/// two ids they are copying. A panel wraps it; a ledger keeps it on one line and lets the card the
+/// table sits in scroll, which is the width that ledger already absorbs for every other column.
+export function CopyInline({ label, value, oneLine }: { label: string; value: string; oneLine?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   return (
     <span className="flex items-center gap-1">
-      <span className="truncate font-mono text-sm">{value}</span>
+      <span className={cn("font-mono", oneLine ? "whitespace-nowrap" : "block break-all")}>{value}</span>
       <Button
         type="button"
         variant="ghost"
@@ -113,9 +119,7 @@ export function BodyPanel({
         <h4 className="m-0 text-sm font-semibold">{label}</h4>
         <div className="flex items-center gap-2">
           {truncated ? (
-            <span className="rounded-full border border-warning-surface bg-warning-surface px-2 py-0.5 text-xs text-warning-ink">
-              Truncated
-            </span>
+            <span className="rounded-full bg-warning-surface px-2 py-0.5 text-xs text-warning-ink">Truncated</span>
           ) : null}
           <Button
             type="button"
@@ -132,7 +136,7 @@ export function BodyPanel({
           </Button>
         </div>
       </div>
-      <pre className="m-0 max-h-64 overflow-auto rounded-md border bg-surface-quiet p-3 font-mono text-xs whitespace-pre-wrap">
+      <pre className="m-0 max-h-64 overflow-auto rounded-md bg-surface-quiet p-3 font-mono text-xs whitespace-pre-wrap">
         {text}
       </pre>
       {truncated ? (

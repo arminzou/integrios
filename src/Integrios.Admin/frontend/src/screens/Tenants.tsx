@@ -262,7 +262,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
 
       {/* Absent when there is nothing to act on. A banner that is always there stops being read. */}
       {deadLettered > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-danger-surface bg-danger-surface p-4 text-danger-ink">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-danger-surface p-4 text-danger-ink">
           <div>
             <strong>
               {deadLettered} dead-lettered {deadLettered === 1 ? "Delivery" : "Deliveries"}

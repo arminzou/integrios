@@ -114,8 +114,8 @@ function SessionGate({
             </div>
             {alert || detail ? (
               <div
-                className={`mt-5 flex gap-2.5 rounded-md border p-4 text-sm ${
-                  alert ? "border-transparent bg-danger-surface text-danger-ink" : "bg-surface-quiet"
+                className={`mt-5 flex gap-2.5 rounded-md p-4 text-sm ${
+                  alert ? "bg-danger-surface text-danger-ink" : "bg-surface-quiet"
                 }`}
                 role={alert ? "alert" : undefined}
               >

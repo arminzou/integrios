@@ -22,6 +22,7 @@ import {
   LoadMore,
   WriteStatus,
 } from "../ui/controls";
+import { CopyInline } from "../ui/copy";
 import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -326,7 +327,12 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
   return (
     <Inspector label="Source detail">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="font-mono break-all">{current.id}</h2>
+        <h2 className="group min-w-0">
+          Source{" "}
+          <span className="block text-xs font-normal text-ink-secondary">
+            <CopyInline label="Source id" value={current.id} />
+          </span>
+        </h2>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.status} className="mt-0.5" />
           <CloseInspector to={`/tenants/${tenantId}/sources`} label="Close the Source detail" />

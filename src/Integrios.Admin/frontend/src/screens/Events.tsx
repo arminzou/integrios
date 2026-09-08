@@ -381,9 +381,9 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                         </NavLink>
                       </RowHeader>
                       <TableCell>{item.event_type}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-[13px]">
                         {item.source_event_id ? (
-                          <CopyInline label="Source Event id" value={item.source_event_id} />
+                          <CopyInline oneLine label="Source Event id" value={item.source_event_id} />
                         ) : (
                           <span className="text-ink-secondary">—</span>
                         )}
@@ -566,14 +566,14 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
   return (
     <Inspector label="Event detail">
       <div className="flex items-start justify-between gap-3">
-        {/* Truncated rather than wrapped: a 36-character identifier broken over three lines at 320
-            is the largest thing in the panel and says nothing more than its first characters do.
-            What an Operator does with it is paste it elsewhere, so the affordance is the copy. */}
+        {/* The identifier under a panel heading is the same shape on every detail screen: mono, one
+            step down, in secondary ink, and wrapped rather than clipped so it reads whole. This one
+            adds the copy control the others lack, because pasting it elsewhere is what it is for. */}
         <h2 ref={heading} tabIndex={-1} className="group min-w-0">
           {/* The space is explicit: the heading's accessible name is "Event <id>", and JSX drops a
               trailing space before an element on the next line. */}
           Event{" "}
-          <span className="block text-xs text-ink-secondary">
+          <span className="block text-xs font-normal text-ink-secondary">
             <CopyInline label="Event id" value={current.event_id} />
           </span>
         </h2>
@@ -619,7 +619,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
             {current.event_deliveries.map((delivery) => (
               <li
                 key={delivery.event_delivery_id}
-                className="flex items-center justify-between gap-2 rounded-md border bg-surface-quiet px-2.5 py-2"
+                className="flex items-center justify-between gap-2 rounded-md bg-surface-quiet px-2.5 py-2"
               >
                 <div className="min-w-0 text-[13px]">
                   <span className="block truncate font-mono">{delivery.subscription_id}</span>
@@ -660,7 +660,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
             ))}
           </ul>
         ) : (
-          <p>This Event has no EventDeliveries.</p>
+          <p className="m-0 text-[13px]">This Event has no EventDeliveries.</p>
         )}
       </section>
 
@@ -673,7 +673,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
         ) : null}
         {attempts.length ? (
           <ol
-            className="m-0 list-none border-l border-dotted pl-5"
+            className="m-0 list-none border-l border-dotted pl-5 text-[13px]"
             aria-label="Every attempt made against this Event's EventDeliveries"
           >
             {shownAttempts.map((attempt) => {
@@ -699,7 +699,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                     <StatusBadge status={attempt.status} />
                     <span className="text-ink-secondary">
                       attempt {attempt.attempt_number} to Subscription{" "}
-                      <span className="font-mono text-[13px]">{attempt.subscription_id}</span>
+                      <span className="font-mono">{attempt.subscription_id}</span>
                     </span>
                   </p>
                   {failed ? (
@@ -731,7 +731,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
             })}
           </ol>
         ) : (
-          <p>No delivery attempts have been made for this Event.</p>
+          <p className="m-0 text-[13px]">No delivery attempts have been made for this Event.</p>
         )}
       </section>
     </Inspector>

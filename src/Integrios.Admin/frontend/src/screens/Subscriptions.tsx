@@ -21,6 +21,7 @@ import {
   LoadMore,
   WriteStatus,
 } from "../ui/controls";
+import { CopyInline } from "../ui/copy";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -372,9 +373,11 @@ function SubscriptionInspector({
   return (
     <Inspector label="Subscription detail">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="group min-w-0">
           <h2>{current.name}</h2>
-          <span className="block font-mono text-xs break-all text-ink-secondary">{current.id}</span>
+          <span className="block text-xs text-ink-secondary">
+            <CopyInline label="Subscription id" value={current.id} />
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.status} className="mt-0.5" />

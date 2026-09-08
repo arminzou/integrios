@@ -22,6 +22,7 @@ import {
   LoadMore,
   WriteStatus,
 } from "../ui/controls";
+import { CopyInline } from "../ui/copy";
 import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -210,9 +211,11 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
   return (
     <Inspector label="Topic detail">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="group min-w-0">
           <h2 className="font-mono break-all">{current.name}</h2>
-          <span className="block font-mono text-xs break-all text-ink-secondary">{current.id}</span>
+          <span className="block text-xs text-ink-secondary">
+            <CopyInline label="Topic id" value={current.id} />
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.status} className="mt-0.5" />
@@ -240,7 +243,7 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
         {matched.map((subscription) => (
           <div
             key={subscription.id}
-            className="flex items-center justify-between gap-2 rounded-md border bg-surface-quiet px-2.5 py-2"
+            className="flex items-center justify-between gap-2 rounded-md bg-surface-quiet px-2.5 py-2"
           >
             <div className="min-w-0 text-[13px]">
               <Link

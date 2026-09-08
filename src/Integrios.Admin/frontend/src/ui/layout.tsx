@@ -1,10 +1,10 @@
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Table, TableCaption, TableHead } from "@/components/ui/table";
 import { cn } from "cn";
 import { Slot } from "radix-ui";
 import type { ComponentProps, ReactNode } from "react";
 import { Link } from "react-router";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Table, TableCaption, TableHead } from "@/components/ui/table";
 
 /// The page chrome every capability repeats: a title, an optional line saying where the page sits,
 /// and the bounded groups beneath it. Only the shape is shared — what a page is about stays in the
@@ -14,7 +14,8 @@ export function Page({ children, className }: { children: ReactNode; className?:
 }
 
 /// Title, one line saying where the page sits, and the page's own primary action at the trailing
-/// edge, closed by a rule. The action is a slot rather than a prop pair so a screen hands over the
+/// edge. No rule under it: the page's own gap already separates the title from what it introduces,
+/// and a full-width line there only repeats that separation in ink. The action is a slot rather than a prop pair so a screen hands over the
 /// control it already owns — including its confirmation and pending states — instead of this shape
 /// having to know what a capability's primary action is.
 ///
@@ -29,7 +30,7 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
+    <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
         <h1>{title}</h1>
         {children ? <p className="m-0 max-w-[64ch] text-sm text-ink-secondary">{children}</p> : null}
@@ -142,7 +143,7 @@ export function Inspector({ label, className, children }: { label: string; class
 export function InspectorPlaceholder({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Inspector label={label} className="hidden border-0 bg-transparent p-0 min-[1180px]:flex min-[1180px]:pt-0.5">
-      <p className="m-0 max-w-[34ch] text-[13px] text-ink-secondary">{children}</p>
+      <p className="m-0 text-[13px] text-ink-secondary">{children}</p>
     </Inspector>
   );
 }

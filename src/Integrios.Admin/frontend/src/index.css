@@ -34,7 +34,10 @@
   --surface-quiet: #fafafa;
   --ink: #171717;
   --ink-secondary: #707070;
-  --border: #ebebeb;
+  /* Structure is a hairline, not a line: translucent so one value reads correctly on the white
+     surface and on the canvas behind it, and light enough that a screen of stacked rules recedes
+     into the page instead of drawing the eye down it. */
+  --border: rgba(0, 0, 0, 0.06);
   --accent-border: #d8d8d8;
   --selected-surface: #ededed;
   --selected-ink: #333333;
@@ -228,7 +231,6 @@
   pre {
     font-family: var(--font-mono);
     background: var(--surface-quiet);
-    border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 10px 12px;
     overflow-x: auto;

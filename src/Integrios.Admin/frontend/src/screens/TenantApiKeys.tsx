@@ -219,7 +219,9 @@ function TenantApiKeyInspector({
           {current.name}
           {/* Only the prefix exists to show. The token itself is hashed at rest and was displayed
               once, at creation. */}
-          <span className="block font-mono text-xs break-all text-ink-secondary">{current.key_prefix}…</span>
+          <span className="block font-mono text-xs font-normal break-all text-ink-secondary">
+            {current.key_prefix}…
+          </span>
         </h2>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.state} className="mt-0.5" />
@@ -367,7 +369,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
             <p role="status" className="m-0 text-ink-secondary">
               This key is shown once. It cannot be read again after you dismiss this message.
             </p>
-            <output className="rounded-md border bg-surface-quiet px-3 py-2 font-mono text-sm break-all">
+            <output className="rounded-md bg-surface-quiet px-3 py-2 font-mono text-sm break-all">
               {created.token}
             </output>
             {/* The sheet stays open through the create: this token is in that one response and
