@@ -2,16 +2,20 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ArrowDownToLine,
+  ArrowRight,
   Building2,
   GitBranch,
   Hash,
+  Info,
   KeyRound,
   LayoutDashboard,
   type LucideIcon,
   Package,
+  RotateCcw,
+  TriangleAlert,
   Waypoints,
 } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
@@ -27,36 +31,120 @@ import { sectionHrefs, sectionLabels, sectionOrder, type TenantSection } from ".
 export function App() {
   const session = useQuery({ queryKey: ["session"], queryFn: loadSession });
 
-  if (session.isPending) return <Shell>Checking your session…</Shell>;
+  if (session.isPending) return <SessionGate title="Integrios Operator" copy="Checking your session…" />;
   if (session.isError)
     return (
-      <Shell>
-        <p role="alert">{session.error instanceof Error ? session.error.message : String(session.error)}</p>
-      </Shell>
+      <SessionGate
+        title="Integrios Operator"
+        copy="This is not a sign-in problem. The deployment answered, but not with a session."
+        alert={session.error instanceof Error ? session.error.message : String(session.error)}
+        detail="Signing in again will not help until the Admin API answers."
+        action="Retry"
+        onRetry={() => session.refetch()}
+      />
     );
-  if (!session.data)
-    return (
-      <Shell>
-        <p>
-          <a href={signInHref()}>Sign in</a> to administer this deployment.
-        </p>
-      </Shell>
-    );
+  if (!session.data) return <SignedOutGate />;
 
   return <SignedIn session={session.data} />;
 }
 
-/// Authentication loading, failure, and anonymous states use the same brand and layout as the
-/// signed-in shell without rendering navigation that assumes a session.
-function Shell({ children }: { children: ReactNode }) {
+function SignedOutGate() {
+  const query = new URLSearchParams(location.search);
+  if (query.get("error") === "access_denied")
+    return (
+      <SessionGate
+        title="Sign-in did not complete"
+        copy="Nothing was signed in. Trying again is safe."
+        alert="Your identity provider refused this sign-in."
+        detail="If it keeps refusing, ask whoever administers it whether you are assigned to this application."
+        action="Try again"
+      />
+    );
+
+  if (query.get("signed_out") === "1")
+    return (
+      <SessionGate
+        title="You are signed out"
+        copy="This Integrios session has ended. Your identity provider session was left as it was."
+        action="Sign in again"
+      />
+    );
+
+  const deepLink = location.pathname !== "/" || location.search !== "";
   return (
-    <div className={shell}>
+    <SessionGate
+      title="Integrios Operator"
+      copy="Sign in to administer this deployment."
+      detail={deepLink ? "You will be returned to the page you were on." : undefined}
+      action="Sign in"
+    />
+  );
+}
+
+function SessionGate({
+  title,
+  copy,
+  alert,
+  detail,
+  action,
+  onRetry,
+}: {
+  title: string;
+  copy: string;
+  alert?: string;
+  detail?: string;
+  action?: string;
+  onRetry?: () => void;
+}) {
+  const Icon = alert ? TriangleAlert : Info;
+  const ActionIcon = onRetry || alert ? RotateCcw : ArrowRight;
+
+  return (
+    <div className="grid min-h-screen bg-canvas">
       <SkipLink />
-      <header className="border-b bg-surface px-4 py-3">
-        <BrandMark />
-      </header>
-      <main id="main" tabIndex={-1} className={document_}>
-        {children}
+      <main id="main" tabIndex={-1} className="grid place-items-center px-5 py-10">
+        <div className="flex w-full max-w-[400px] flex-col gap-6">
+          <BrandMark />
+          <section className="rounded-lg border bg-surface p-6 sm:p-8" aria-labelledby="session-title">
+            <div className="flex flex-col">
+              <h1 id="session-title" className="min-h-[72px] text-2xl">
+                {title}
+              </h1>
+              <p className="m-0 text-sm text-ink-secondary">{copy}</p>
+            </div>
+            {alert || detail ? (
+              <div
+                className={`mt-5 flex gap-2.5 rounded-md border p-4 text-sm ${
+                  alert ? "border-transparent bg-danger-surface text-danger-ink" : "bg-surface-quiet"
+                }`}
+                role={alert ? "alert" : undefined}
+              >
+                <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <div>
+                  {alert ? <strong className="block font-semibold">{alert}</strong> : null}
+                  {detail ? (
+                    <p className={`m-0 ${alert ? "text-danger-ink" : "text-ink-secondary"}`}>{detail}</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {action ? (
+              onRetry ? (
+                <Button className="mt-3 w-full" variant="outline" onClick={onRetry}>
+                  {action}
+                  <ActionIcon aria-hidden="true" />
+                </Button>
+              ) : (
+                <Button asChild className="mt-3 w-full">
+                  <a href={signInHref()}>
+                    {action}
+                    <ActionIcon aria-hidden="true" />
+                  </a>
+                </Button>
+              )
+            ) : null}
+          </section>
+        </div>
       </main>
     </div>
   );

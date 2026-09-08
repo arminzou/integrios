@@ -31,7 +31,7 @@ public static class OperatorSessionEndpoints
     /// person out of their identity provider everywhere is not this dashboard's decision.
     private static IResult SignOutOperator() =>
         Results.SignOut(
-            new AuthenticationProperties { RedirectUri = "/" },
+            new AuthenticationProperties { RedirectUri = "/?signed_out=1" },
             [CookieAuthenticationDefaults.AuthenticationScheme]);
 
     /// The one safe request the SPA makes before any mutation. It reports the signed-in User and

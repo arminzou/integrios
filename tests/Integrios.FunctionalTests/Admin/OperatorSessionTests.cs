@@ -4,6 +4,7 @@ using System.Text.Json;
 using Integrios.Admin;
 using Integrios.Admin.Auth;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Integrios.FunctionalTests.Admin;
 
@@ -123,6 +124,7 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
         using HttpResponseMessage logout = await SendAsync(
             client, HttpMethod.Post, OperatorSessionEndpoints.LogoutPath, session.Cookies, "",
             (session.AntiforgeryHeaderName, session.AntiforgeryToken));
+        logout.Headers.Location?.OriginalString.ShouldBe("/?signed_out=1");
         logout.Headers.TryGetValues("Set-Cookie", out var cleared).ShouldBeTrue();
         Dictionary<string, string> afterLogout = Merge(session.Cookies, cleared!);
         afterLogout[OperatorSessionOptions.CookieName].ShouldBeEmpty();
@@ -179,6 +181,25 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
         forged.Headers.TryGetValues("Set-Cookie", out var cookies);
         (cookies ?? []).ShouldNotContain(value => value.Contains(OperatorSessionOptions.CookieName, StringComparison.Ordinal)
             && !value.Contains(OperatorSessionOptions.CookieName + "=;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ProviderRefusal_ReturnsToTheDashboardInsteadOfChallengingAgain()
+    {
+        using HttpClient client = Client(fixture.AliceHost);
+        using HttpResponseMessage challenge = await client.GetAsync(OperatorSessionEndpoints.LoginPath);
+        string state = QueryHelpers.ParseQuery(challenge.Headers.Location!.Query)["state"].ToString();
+        Dictionary<string, string> cookies = Merge(
+            new Dictionary<string, string>(StringComparer.Ordinal), challenge.Headers.GetValues("Set-Cookie"));
+
+        using HttpResponseMessage refused = await SendAsync(
+            client,
+            HttpMethod.Get,
+            $"/auth/callback?error=access_denied&state={Uri.EscapeDataString(state)}",
+            cookies);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Found);
+        refused.Headers.Location?.OriginalString.ShouldBe("/?error=access_denied");
     }
 
     [Theory]

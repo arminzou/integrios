@@ -119,6 +119,12 @@ public static class OperatorAuthentication
                     options.Scope.Add(scope);
 
                 options.Events.OnTokenValidated = ResolveOperatorUserAsync;
+                options.Events.OnAccessDenied = context =>
+                {
+                    context.Response.Redirect("/?error=access_denied");
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                };
             });
         }
 

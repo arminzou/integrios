@@ -134,6 +134,38 @@ async function accessibilityViolations(page: Page): Promise<string[]> {
 }
 
 describe("The dashboard in a real browser", () => {
+  it.each([
+    ["a first arrival", "/", 401],
+    ["a remembered deep link", `/tenants/${tenants.items[0].id}/events`, 401],
+    ["a completed sign-out", "/?signed_out=1", 401],
+    ["a refused sign-in", "/?error=access_denied", 401],
+    ["an unreadable session", "/", 503],
+  ])("keeps the signed-out Gate accessible for %s", async (_name, path, status) => {
+    const page = await browser.newPage({ viewport: { width: 320, height: 900 } });
+    await page.route("**/auth/session", (route) => route.fulfill({ status }));
+    await page.goto(`${origin}${path}`);
+
+    await page.getByRole("heading", { level: 1 }).waitFor();
+    expect(await accessibilityViolations(page)).toEqual([]);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    const focus = await page.evaluate(() => {
+      const active = document.activeElement as HTMLElement;
+      return {
+        role: active.tagName.toLowerCase(),
+        marked: active.matches(":focus-visible") && getComputedStyle(active).boxShadow !== "none",
+      };
+    });
+    expect(["a", "button"]).toContain(focus.role);
+    expect(focus.marked).toBe(true);
+
+    await page.close();
+  });
+
   it("reaches every control by keyboard, in reading order, with a visible focus ring", async () => {
     const page = await openDashboard();
 

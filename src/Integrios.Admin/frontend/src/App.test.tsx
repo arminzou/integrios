@@ -32,17 +32,40 @@ describe("Application session", () => {
     expect((await screen.findByRole("link", { name: "Sign in" })).getAttribute("href")).toBe(
       "/auth/login?return_to=%2Ftenants%3Fstatus%3Dactive",
     );
+    expect(screen.getByRole("heading", { name: "Integrios Operator" })).toBeTruthy();
+    expect(screen.getByText("You will be returned to the page you were on.")).toBeTruthy();
   });
 
-  it("reports a failed session bootstrap", async () => {
+  it.each([
+    ["/?signed_out=1", "You are signed out", "Sign in again", "Your identity provider session was left as it was."],
+    ["/?error=access_denied", "Sign-in did not complete", "Try again", "Your identity provider refused this sign-in."],
+  ])("renders the anonymous state carried by %s", async (path, heading, action, message) => {
+    history.replaceState(null, "", path);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(null, { status: 503 })),
+      vi.fn(async () => new Response(null, { status: 401 })),
     );
+
+    renderApp("/");
+
+    expect(await screen.findByRole("heading", { name: heading })).toBeTruthy();
+    expect(screen.getByRole("link", { name: action })).toBeTruthy();
+    expect(screen.getByText(message, { exact: false })).toBeTruthy();
+  });
+
+  it("reports and retries a failed session bootstrap", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetch);
 
     renderApp("/tenants");
 
-    expect((await screen.findByRole("alert")).textContent).toBe("The session could not be read (503).");
+    expect(await screen.findByText("The session could not be read (503).", { selector: "strong" })).toBeTruthy();
+    screen.getByRole("button", { name: "Retry" }).click();
+    expect(await screen.findByRole("link", { name: "Sign in" })).toBeTruthy();
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("renders the signed-in shell, unknown route, and server-named logout token", async () => {
