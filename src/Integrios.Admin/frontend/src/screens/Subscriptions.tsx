@@ -213,9 +213,6 @@ export function SubscriptionsScreen({
                   <TableHead scope="col">Topic</TableHead>
                   <TableHead scope="col">Destination Connection</TableHead>
                   <TableHead scope="col">Status</TableHead>
-                  <TableHead scope="col" className="text-right">
-                    Order
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,7 +243,6 @@ export function SubscriptionsScreen({
                     <TableCell>
                       <StatusBadge status={subscription.status} />
                     </TableCell>
-                    <TableCell className="text-right">{subscription.order_index}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
