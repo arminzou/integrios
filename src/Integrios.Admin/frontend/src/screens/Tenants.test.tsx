@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
@@ -25,6 +25,20 @@ function tenant(overrides: Record<string, unknown> = {}) {
 const listCalls = (calls: Call[]) => calls.filter((call) => call.method === "GET");
 
 describe("Tenants list", () => {
+  it("places the full-width name search before the compact filters", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<TenantsScreen />, "/tenants");
+
+    const filters = await screen.findByRole("region", { name: "Filters" });
+    const name = within(filters).getByRole("searchbox", { name: "Name or slug" });
+    expect(within(filters).getByRole("searchbox", { name: "Environment" })).toBeTruthy();
+    // The name search leads the row; how it is drawn is measured in the browser, where there is
+    // layout and colour to measure, rather than pinned here as a list of class names.
+    expect(filters.querySelector("input, button")).toBe(name);
+    expect(name.getAttribute("placeholder")).toBe("Name or slug");
+  });
+
   it.each(["Name or slug", "Environment"])(
     "applies %s and restarts paging, then restores the URL value",
     async (label) => {
@@ -143,46 +157,79 @@ describe("Tenants list", () => {
   });
 });
 
+/// The overview screen reads two endpoints, and every test here needs a shape from both. The
+/// activity summary is deliberately an empty window: what the attention banner reports is the
+/// outstanding count, and it must not depend on anything the rolling hour happened to catch.
+const stubOverview = (overview: Record<string, number>) =>
+  stubHttp(({ url }) => {
+    if (url.pathname.endsWith("/overview"))
+      return {
+        status: 200,
+        body: {
+          topics: 1,
+          connections: 1,
+          sources: 1,
+          subscriptions: 1,
+          live_api_keys: 1,
+          dead_lettered_deliveries: 0,
+          ingestion_endpoint: "http://localhost:5231/",
+          ...overview,
+        },
+      };
+    if (url.pathname.endsWith("/activity-summary"))
+      return {
+        status: 200,
+        body: {
+          events_accepted: 0,
+          awaiting_routing: 0,
+          unrouted: 0,
+          dead_lettered_deliveries: 0,
+          window_start: "2026-09-06T16:00:00Z",
+          window_end: "2026-09-06T17:00:00Z",
+        },
+      };
+    return { status: 200, body: tenant() };
+  });
+
 describe("The Tenant overview's attention banner", () => {
   it("counts Deliveries that are still dead-lettered, not only ones that failed in the last hour", async () => {
     // The banner and the rail badge exist to take an Operator to work nobody has attended to. A
     // dead-lettered Delivery stays dead-lettered until it is replayed, so counting it inside the
     // activity summary's rolling hour hid every failure older than that — and reported zero, which
     // is the one answer a control for unattended work must never give while work is outstanding.
-    stubHttp(({ url }) => {
-      if (url.pathname.endsWith("/overview"))
-        return {
-          status: 200,
-          body: {
-            topics: 1,
-            connections: 1,
-            sources: 1,
-            subscriptions: 1,
-            live_api_keys: 1,
-            dead_lettered_deliveries: 9,
-            ingestion_endpoint: "http://localhost:5231/",
-          },
-        };
-      if (url.pathname.endsWith("/activity-summary"))
-        return {
-          status: 200,
-          // The window is empty: everything failed before it started.
-          body: {
-            events_accepted: 0,
-            awaiting_routing: 0,
-            unrouted: 0,
-            dead_lettered_deliveries: 0,
-            window_start: "2026-09-06T16:00:00Z",
-            window_end: "2026-09-06T17:00:00Z",
-          },
-        };
-      return { status: 200, body: tenant() };
-    });
+    stubOverview({ dead_lettered_deliveries: 9 });
 
     renderScreen(<TenantScreen tenantId={tenantId} />, `/tenants/${tenantId}`);
 
     expect(await screen.findByText("9 dead-lettered Deliveries")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open Events" })).toBeTruthy();
+  });
+});
+
+describe("Tenant Overview navigation", () => {
+  it("keeps Tenant actions in the header and links each configuration summary", async () => {
+    stubOverview({ connections: 2, sources: 3, subscriptions: 4, live_api_keys: 5 });
+
+    renderScreen(<TenantScreen tenantId={tenantId} />, `/tenants/${tenantId}`);
+
+    const header = (await screen.findByRole("heading", { name: "Overview" })).closest("header")!;
+    expect(within(header).getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(within(header).getByRole("button", { name: "Deactivate" })).toBeTruthy();
+
+    const summary = screen.getByRole("region", { name: "Configured in this Tenant" });
+    const destinations = [
+      ["Topics", `/tenants/${tenantId}/topics`],
+      ["Connections", `/tenants/${tenantId}/connections`],
+      ["Sources", `/tenants/${tenantId}/sources`],
+      ["Subscriptions", `/tenants/${tenantId}/topics`],
+      ["Live API keys", `/tenants/${tenantId}/tenant-api-keys`],
+    ] as const;
+    for (const [name, href] of destinations)
+      expect(
+        within(summary)
+          .getByRole("link", { name: new RegExp(name) })
+          .getAttribute("href"),
+      ).toBe(href);
   });
 });
 
@@ -220,7 +267,7 @@ describe("Tenant authoring", () => {
     const calls = stubHttp(({ method }) => (method === "POST" ? { status: 200 } : { status: 200, body: tenant() }));
 
     renderScreen(<TenantScreen tenantId={tenantId} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Deactivate Tenant" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate" }));
 
     expect(screen.getByText(/Deactivate the Tenant "Acme" \(acme\)\?/)).toBeTruthy();
     expect(calls.some((call) => call.method === "POST")).toBe(false);
@@ -247,10 +294,10 @@ describe("Deactivating a Tenant", () => {
     });
 
     renderScreen(<TenantScreen tenantId={tenantId} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Deactivate Tenant" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate" }));
     fireEvent.click(screen.getByRole("button", { name: "Deactivate Acme" }));
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Deactivate Tenant" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Deactivate" })).toBeNull());
     expect(screen.getByText("Tenant deactivated.")).toBeTruthy();
   });
 });

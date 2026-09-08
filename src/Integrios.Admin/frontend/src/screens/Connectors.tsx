@@ -93,19 +93,19 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
           </Filter>
         </FilterBar>
 
-        <ListStatus
-          busy={list.isFetching}
-          loaded={list.isSuccess}
-          problem={asProblem(list.error)}
-          empty={connectors.length === 0}
-          emptyText={
-            direction
-              ? "No Connectors match this filter."
-              : "No Connectors are installed. Use Apply manifest, above, to install the first one."
-          }
-        />
         <SplitView>
           <SplitList>
+            <ListStatus
+              busy={list.isFetching}
+              loaded={list.isSuccess}
+              problem={asProblem(list.error)}
+              empty={connectors.length === 0}
+              emptyText={
+                direction
+                  ? "No Connectors match this filter."
+                  : "No Connectors are installed. Use Apply manifest, above, to install the first one."
+              }
+            />
             {connectors.length > 0 ? (
               <TableCard
                 caption={`Connectors, newest first${appliedNote(direction ? 1 : 0)}`}
@@ -133,14 +133,14 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                 <TableBody>
                   {connectors.map((connector) => (
                     <TableRow key={connector.id} className="has-[a[aria-current=page]]:bg-selected-surface">
-                      <RowHeader className="whitespace-nowrap">
-                        <NavLink className="font-mono no-underline" to={`/connectors/${connector.id}`} end>
+                      <RowHeader>
+                        <NavLink className="font-mono text-[13px] no-underline" to={`/connectors/${connector.id}`} end>
                           {connector.key}
                         </NavLink>
                       </RowHeader>
                       <TableCell>{connector.name}</TableCell>
                       <TableCell>{connector.direction}</TableCell>
-                      <TableCell className="tabular-nums">v{connector.contract_version}</TableCell>
+                      <TableCell>v{connector.contract_version}</TableCell>
                       <TableCell>
                         <StatusBadge status={connector.status} />
                       </TableCell>

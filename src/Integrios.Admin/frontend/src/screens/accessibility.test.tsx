@@ -129,7 +129,7 @@ describe("Accessibility of the Operator workflows", () => {
 
     // Editing and the confirmation are states the screen only reaches on request, so they are
     // checked in those states rather than only in its resting one.
-    fireEvent.click(screen.getByRole("button", { name: "Deactivate Tenant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
     await expectNoAccessibilityViolations(container);
   });
 

@@ -178,6 +178,26 @@ it("applies the list filters through their controls and keeps them usable at 320
   }
 }, 60_000);
 
+/// The dashboard is light-only, and `color-scheme: light` settles only what the browser paints, not
+/// what Tailwind's `dark:` variant matches — that answers to the operating system unless it is bound
+/// to something else. Every vendored shadcn primitive arrives carrying `dark:` utilities, so this
+/// asserts the binding rather than the absence of any one of them: an Operator whose system is dark
+/// gets the light theme these fields are drawn for, with no fill behind them.
+it("leaves an edit form's fields unfilled for an Operator whose system is in dark mode", async () => {
+  const { page: view } = await open(`/tenants/${tenantId}`);
+  try {
+    await view.emulateMedia({ colorScheme: "dark" });
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    // One field is the whole assertion: what is bound here is the `dark:` variant itself, once, for
+    // every utility in the build — so a second field would re-measure the same binding.
+    const control = view.getByRole("dialog", { name: "Edit" }).getByLabel("Name", { exact: true });
+    await control.waitFor();
+    expect(await control.evaluate((field) => getComputedStyle(field).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  } finally {
+    await view.close();
+  }
+}, 60_000);
+
 /// A screen can carry more than one form — a Topic page holds the Topic's own fields and the create
 /// panel for its Subscriptions — and both use the same field names. Controls are therefore addressed
 /// by label within the form that owns them, which is also what asserts the label association.
@@ -341,7 +361,7 @@ describe("Update and deactivate, driven through a real browser", () => {
 
     // Editing is a deliberate act now rather than the panel's resting state, and the form names
     // itself instead of repeating on screen the heading its disclosure already carries.
-    await view.click("text=Edit this Connection");
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
     await formNamed(view, "Edit sink").getByLabel("Configuration (JSON)").fill('{"base_uri":"http://moved.invalid"}');
     await view.click("text=Save changes");
 
@@ -359,7 +379,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`);
 
     // Editing opens the same sheet creating does, so the form is reached by opening it.
-    await view.click("text=Edit this Subscription");
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
     await formNamed(view, "Edit to-sink").getByLabel("Order").fill("7");
     await view.click("text=Save changes");
 
@@ -375,13 +395,13 @@ describe("Update and deactivate, driven through a real browser", () => {
   it("deactivates a Topic only after the confirmation naming it", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}`);
 
-    await view.click("text=Deactivate Topic");
+    await view.getByRole("button", { name: "Deactivate", exact: true }).click();
     await view.getByText(/Deactivate the Topic "orders"\?/).waitFor();
     // Arming the confirmation must not be the action itself.
     expect(writes, "Deactivation ran before it was confirmed.").toHaveLength(0);
 
     await view.getByRole("button", { name: "Cancel" }).click();
-    const trigger = view.getByRole("button", { name: "Deactivate Topic" });
+    const trigger = view.getByRole("button", { name: "Deactivate" });
     expect(await trigger.evaluate((button) => document.activeElement === button)).toBe(true);
 
     await trigger.click();
@@ -396,7 +416,7 @@ describe("Update and deactivate, driven through a real browser", () => {
   it("revokes a Source with the one DELETE the dashboard issues", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
 
-    await view.click("text=Revoke Source");
+    await view.getByRole("button", { name: "Revoke", exact: true }).click();
     expect(writes, "Revocation ran before it was confirmed.").toHaveLength(0);
     await view.click(`text=Revoke ${sourceId}`);
 

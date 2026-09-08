@@ -141,16 +141,15 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
         </Filter>
       </FilterBar>
 
-      <ListStatus
-        busy={list.isFetching}
-        loaded={list.isSuccess}
-        problem={asProblem(list.error)}
-        empty={sources.length === 0}
-        emptyText="This Tenant has no Sources matching these filters."
-      />
-
       <SplitView>
         <SplitList>
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={sources.length === 0}
+            emptyText="This Tenant has no Sources matching these filters."
+          />
           {sources.length > 0 ? (
             <TableCard
               caption={`Sources, newest first${appliedNote(applied)}`}
@@ -177,16 +176,12 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                 {sources.map((source) => (
                   <TableRow key={source.id} className="has-[a[aria-current=page]]:bg-selected-surface">
                     <RowHeader>
-                      <NavLink
-                        className="font-mono text-[13px] no-underline"
-                        to={`/tenants/${tenantId}/sources/${source.id}`}
-                        end
-                      >
+                      <NavLink className="no-underline" to={`/tenants/${tenantId}/sources/${source.id}`} end>
                         {nameIn(connectionOptions.data?.items, source.connection_id)}
                       </NavLink>
                     </RowHeader>
                     <TableCell>
-                      <Link className="font-mono text-[13px]" to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
+                      <Link to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
                         → {nameIn(topicOptions.data?.items, source.topic_id)}
                       </Link>
                     </TableCell>
@@ -406,52 +401,51 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <EditSheet label="Edit this Source" description="An update replaces the configuration outright">
-        {(close) => (
-          <Form {...form}>
-            <form
-              className="flex flex-col gap-4"
-              aria-label={`Edit ${source.type} Source`}
-              onSubmit={form.handleSubmit((values) =>
-                save.mutate(values, {
-                  onSuccess: close,
-                  onError: (failure) => applyProblem(form, failure, editFields),
-                }),
-              )}
-            >
-              <FormError message={formError(asProblem(save.error), editFields)} />
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start gap-2">
+        <EditSheet label="Edit" description="An update replaces the configuration outright">
+          {(close) => (
+            <Form {...form}>
+              <form
+                className="flex flex-col gap-4"
+                aria-label={`Edit ${source.type} Source`}
+                onSubmit={form.handleSubmit((values) =>
+                  save.mutate(values, {
+                    onSuccess: close,
+                    onError: (failure) => applyProblem(form, failure, editFields),
+                  }),
+                )}
+              >
+                <FormError message={formError(asProblem(save.error), editFields)} />
 
-              <TextAreaField
-                control={form.control}
-                name="configuration"
-                label="Configuration (JSON)"
-                className="min-h-56 font-mono text-sm"
-                required
-              />
+                <TextAreaField
+                  control={form.control}
+                  name="configuration"
+                  label="Configuration (JSON)"
+                  className="min-h-56 font-mono text-sm"
+                  required
+                />
 
-              <Button type="submit" className="self-start" disabled={save.isPending}>
-                Save configuration
-              </Button>
-              <WriteStatus done={save.isSuccess}>Configuration saved.</WriteStatus>
-            </form>
-          </Form>
-        )}
-      </EditSheet>
-
-      {source.status === "active" ? (
-        <div className="flex flex-col items-start gap-2">
+                <Button type="submit" className="self-start" disabled={save.isPending}>
+                  Save configuration
+                </Button>
+                <WriteStatus done={save.isSuccess}>Configuration saved.</WriteStatus>
+              </form>
+            </Form>
+          )}
+        </EditSheet>
+        {source.status === "active" ? (
           <ConfirmAction
-            label="Revoke Source"
+            label="Revoke"
             consequence="Revoking a Source stops it accepting Events. It cannot be restored, and a replacement is a new Source with a new identifier."
             question={`Revoke the ${source.type} Source ${source.id}? It stops accepting Events and cannot be restored.`}
             confirmLabel={`Revoke ${source.id}`}
             busy={revoke.isPending}
             onConfirm={() => revoke.mutate()}
           />
-          <FormError message={formError(asProblem(revoke.error))} />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
+      <FormError message={formError(asProblem(revoke.error))} />
     </div>
   );
 }

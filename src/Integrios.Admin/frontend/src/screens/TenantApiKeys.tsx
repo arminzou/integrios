@@ -101,15 +101,15 @@ export function TenantApiKeysScreen({
         </FilterBar>
 
         <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-        <ListStatus
-          busy={list.isFetching}
-          loaded={list.isSuccess}
-          problem={asProblem(list.error)}
-          empty={keys.length === 0}
-          emptyText="This Tenant has no API keys matching this filter."
-        />
         <SplitView>
           <SplitList>
+            <ListStatus
+              busy={list.isFetching}
+              loaded={list.isSuccess}
+              problem={asProblem(list.error)}
+              empty={keys.length === 0}
+              emptyText="This Tenant has no API keys matching this filter."
+            />
             {keys.length > 0 ? (
               <TableCard
                 caption={`API keys, newest first${appliedNote(state ? 1 : 0)}`}

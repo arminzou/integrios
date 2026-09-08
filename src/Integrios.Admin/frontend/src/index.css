@@ -9,6 +9,23 @@
    against, mapped onto these roles rather than given colors of their own. */
 @import "tailwindcss";
 
+/* `color-scheme: light` below settles what the browser paints; it does not settle what Tailwind's
+   `dark:` variant matches, which defaults to the operating system's own preference. A vendored
+   shadcn primitive arrives carrying `dark:` utilities as a matter of course, and under that default
+   they activate on an Operator whose OS is in dark mode - painting a dark theme's field fills onto
+   a page that is still light. Binding the variant to a class this app never sets is what makes
+   light-only true for every such utility, including the ones the next re-vendoring brings in. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@keyframes deferred-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 :root {
   color-scheme: light;
 
@@ -25,8 +42,12 @@
   --row-hover-surface: #f5f5f5;
   --warning-ink: #725f3c;
   --warning-surface: #f3efe7;
-  --danger-ink: #85504c;
-  --danger-surface: #f4eeee;
+  /* Failure is the loudest thing in the palette on purpose: it is the one state that has to win a
+     row an Operator is scanning, now that a settled success carries colour of its own. */
+  --danger-ink: #c62828;
+  --danger-surface: #fdecea;
+  --success-ink: #1b6e34;
+  --success-surface: #e8f3ec;
 
   --radius: 6px;
   /* A bounded content group — an activity-summary metric, the ledger, the inspector panel. */
@@ -48,6 +69,16 @@
   --color-warning-surface: var(--warning-surface);
   --color-danger-ink: var(--danger-ink);
   --color-danger-surface: var(--danger-surface);
+  --color-success-ink: var(--success-ink);
+  --color-success-surface: var(--success-surface);
+
+  /* A placeholder that is mounted at once but not shown for a moment. Most reads answer faster than
+     this, and a placeholder that appears and vanishes inside 200ms reads as a flicker rather than as
+     loading — so the element takes its space from the first frame while staying invisible, and only
+     a read slow enough to be worth reporting ever becomes visible. `both` is what holds it at zero
+     through the delay; the reduced-motion rule cuts the fade but not the delay, so an Operator who
+     asked for less motion still gets the wait rather than the flicker. */
+  --animate-deferred-reveal: deferred-reveal 150ms ease-out 200ms both;
 
   /* The names shadcn/ui primitives use, pointed at the roles above so a vendored component carries
      this palette without being rewritten, and the palette still has exactly one definition. */

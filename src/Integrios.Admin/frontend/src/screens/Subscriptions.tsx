@@ -164,7 +164,9 @@ export function SubscriptionsSection({
               <TableRow>
                 <TableHead scope="col">Name</TableHead>
                 <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col">Order</TableHead>
+                <TableHead scope="col" className="text-right">
+                  Order
+                </TableHead>
                 <TableHead scope="col">Description</TableHead>
               </TableRow>
             </TableHeader>
@@ -173,7 +175,7 @@ export function SubscriptionsSection({
                 <TableRow key={subscription.id}>
                   <RowHeader>
                     <Link
-                      className="underline"
+                      className="no-underline"
                       to={`/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscription.id}`}
                     >
                       {subscription.name}
@@ -182,8 +184,8 @@ export function SubscriptionsSection({
                   <TableCell>
                     <StatusBadge status={subscription.status} />
                   </TableCell>
-                  <TableCell>{subscription.order_index}</TableCell>
-                  <TableCell>{subscription.description ?? "—"}</TableCell>
+                  <TableCell className="text-right">{subscription.order_index}</TableCell>
+                  <TableCell className="text-ink-secondary">{subscription.description ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -269,26 +271,21 @@ export function SubscriptionScreen({
         </Details>
       </Panel>
 
-      <EditSheet label="Edit this Subscription" description={`Routes matching Events from this Topic`}>
-        {(close) => (
-          <SubscriptionForm
-            key={current.updated_at}
-            tenantId={tenantId}
-            topicId={topicId}
-            subscription={current}
-            onSaved={close}
-          />
-        )}
-      </EditSheet>
-
-      <TransformPreview />
-
-      <div className="flex flex-col gap-3">
-        <WriteStatus done={deactivate.isSuccess}>Subscription deactivated.</WriteStatus>
-        <FormError message={formError(asProblem(deactivate.error))} />
+      <div className="flex flex-wrap items-start gap-2">
+        <EditSheet label="Edit" description={`Routes matching Events from this Topic`}>
+          {(close) => (
+            <SubscriptionForm
+              key={current.updated_at}
+              tenantId={tenantId}
+              topicId={topicId}
+              subscription={current}
+              onSaved={close}
+            />
+          )}
+        </EditSheet>
         {current.status === "active" ? (
           <ConfirmAction
-            label="Deactivate Subscription"
+            label="Deactivate"
             consequence={`Deactivating ${current.name} stops it receiving Events from this Topic. Deliveries already queued are not cancelled.`}
             question={`Deactivate the Subscription "${current.name}"? It stops receiving Events from this Topic.`}
             confirmLabel={`Deactivate ${current.name}`}
@@ -296,6 +293,13 @@ export function SubscriptionScreen({
             onConfirm={() => deactivate.mutate()}
           />
         ) : null}
+      </div>
+
+      <TransformPreview />
+
+      <div className="flex flex-col gap-3">
+        <WriteStatus done={deactivate.isSuccess}>Subscription deactivated.</WriteStatus>
+        <FormError message={formError(asProblem(deactivate.error))} />
       </div>
     </Page>
   );

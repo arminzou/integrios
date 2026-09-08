@@ -34,7 +34,7 @@ export function PageHeader({
         <h1>{title}</h1>
         {children ? <p className="m-0 max-w-[64ch] text-sm text-ink-secondary">{children}</p> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="min-w-0 max-w-full">{action}</div> : null}
     </header>
   );
 }
@@ -60,8 +60,13 @@ export function TableCard({ caption, footer, children }: { caption: string; foot
 
 /// The cell that names a row — a `<th scope="row">`, so a screen reader announces the row by its
 /// identity, without the quiet uppercase treatment the column headers carry.
+///
+/// It keeps the header cell's own `whitespace-nowrap`. A name that wraps makes its row taller than
+/// the rows around it, so scrolling a ledger changes row height as it goes and the eye loses the
+/// column it was following; the table already scrolls sideways inside its own container, which is
+/// what absorbs a long name instead.
 export function RowHeader({ className, ...props }: ComponentProps<typeof TableHead>) {
-  return <TableHead scope="row" className={`font-normal whitespace-normal ${className ?? ""}`} {...props} />;
+  return <TableHead scope="row" className={cn("font-normal", className)} {...props} />;
 }
 
 /// A form or a read-only group as a bounded card, the same box the lists sit in. `asChild` hands the

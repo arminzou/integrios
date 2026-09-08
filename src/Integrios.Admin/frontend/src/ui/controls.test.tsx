@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmAction, Field, fieldProps } from "./controls";
 
@@ -15,13 +15,15 @@ describe("Shared controls", () => {
     expect(screen.getByLabelText("Name").getAttribute("aria-describedby")).toBe("name-hint name-error");
   });
 
-  it("returns focus to the trigger when confirmation is cancelled", () => {
+  it("returns focus to the trigger when confirmation is cancelled", async () => {
     render(<ConfirmAction label="Deactivate" question="Deactivate this?" onConfirm={vi.fn()} />);
     const trigger = screen.getByRole("button", { name: "Deactivate" });
     fireEvent.click(trigger);
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Deactivate" }));
+    const dialog = screen.getByRole("dialog", { name: "Deactivate" });
+    expect(within(dialog).getByText("Deactivate this?")).toBeTruthy();
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Deactivate" })));
   });
 });

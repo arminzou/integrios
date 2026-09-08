@@ -168,12 +168,20 @@ describe("The dashboard in a real browser", () => {
         const active = document.activeElement as HTMLElement | null;
         if (!active || active === document.body) return null;
         const style = getComputedStyle(active);
+        // A control whose focus mark is drawn on the box around it rather than on itself — the
+        // search filter, whose input sits inside a pill that tints on `focus-within`. Found by that
+        // box's own element rather than by a marker attribute, so nothing exists in the shipped DOM
+        // only to be selected from here.
+        const highlightedBox = active.closest<HTMLElement>("form, label");
         // A mark the browser draws for keyboard focus only. Reading it after a scripted .focus()
         // would report nothing, because :focus-visible does not match that. A control may mark
         // focus with the browser's own outline or, like the vendored primitives, with a drawn ring;
         // what this asserts is that a keyboard Operator can see where they are, not which of the
         // two the control chose.
-        const marked = style.outlineStyle !== "none" || style.boxShadow !== "none";
+        const marked =
+          style.outlineStyle !== "none" ||
+          style.boxShadow !== "none" ||
+          highlightedBox?.matches(":focus-within") === true;
         return {
           tag: active.tagName.toLowerCase(),
           ring: active.matches(":focus-visible") && marked ? "visible" : "none",
@@ -259,6 +267,85 @@ describe("The dashboard in a real browser", () => {
     },
     60_000,
   );
+
+  // A press has to be distinguishable from a hover, or a control under the pointer looks the same
+  // whether or not it is being pressed. Both mechanisms are covered: a filled variant presses from
+  // its translucent hover back to full strength, an outlined one from the hover surface down to the
+  // selected one. Held rather than clicked — a click resolves before anything can be measured.
+  it.each([
+    ["a filled button", "/tenants", "New Tenant"],
+    ["an outlined button", `/tenants/${tenants.items[0].id}`, "Edit"],
+  ])(
+    "answers a press distinguishably from a hover on %s",
+    async (_name, path, name) => {
+      // Reduced motion is what makes each state readable in one sample: the platform rule cuts every
+      // transition to an imperceptible step, so a colour is either the old one or the new one and
+      // never a value in between. Sampling a running transition would differ from the sample before
+      // it whatever the press did, which passes an assertion that only asks for a difference even
+      // with no `active` rule present at all. The press itself is a colour, not motion, so removing
+      // the animation removes nothing this is measuring.
+      const page = await openDashboard(path, { reducedMotion: "reduce" });
+      const button = page.getByRole("button", { name });
+      const background = () => button.evaluate((element) => getComputedStyle(element).backgroundColor);
+
+      // Polled rather than read straight after the pointer moves: the browser has not necessarily
+      // recomputed style by the time the next call arrives. Under reduced motion a poll is safe —
+      // with no transition running, the value it reads is one of the discrete states and never a
+      // frame between two of them.
+      const resting = await background();
+      await button.hover();
+      await expect.poll(background).not.toBe(resting);
+      const hovered = await background();
+
+      await page.mouse.down();
+      await expect.poll(background).not.toBe(hovered);
+      await page.mouse.up();
+
+      await page.close();
+    },
+    60_000,
+  );
+
+  // The loading cover is the document column and nothing else: it fills `<main>` exactly, and the
+  // rail beside it stays uncovered, because navigating away is the one thing worth doing while a
+  // slow read is outstanding. Positioned against the wrong ancestor it would either cover the rail
+  // too or shrink to the list it was rendered inside, and both still look plausible on a fast local
+  // read — so the list response is held open, which is the only way either is observable.
+  it("covers the document column while the list is read, and leaves the rail alone", async () => {
+    const page = await browser.newPage();
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/auth/session", (route) => route.fulfill({ json: session }));
+    await page.route("**/admin/**", async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
+      if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
+      if (pathname.endsWith("/connections")) {
+        await held;
+        return route.fulfill({ json: { items: [connection], next_cursor: null } });
+      }
+      return route.fulfill({ json: { items: [], next_cursor: null } });
+    });
+    await page.goto(`${origin}/tenants/${tenants.items[0].id}/connections`);
+
+    const cover = page.locator('[role="status"][aria-busy="true"]');
+    await cover.waitFor();
+    const covered = (await cover.boundingBox())!;
+    const main = (await page.locator("main").boundingBox())!;
+
+    // The whole column, to the pixel — and no more than it, which is what leaves the rail alone,
+    // because where `<main>` sits relative to the rail is already pinned by the layout test above.
+    expect(covered).toEqual(main);
+
+    // Gone once the rows are there, rather than left sitting over them.
+    release();
+    await page.locator("table").waitFor();
+    await expect.poll(() => cover.count()).toBe(0);
+
+    await page.close();
+  }, 60_000);
 
   it("removes the primitives' motion for an Operator who asked the platform for less of it", async () => {
     const page = await openDashboard("/tenants", { reducedMotion: "reduce" });

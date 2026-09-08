@@ -101,15 +101,15 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
           </Filter>
         </FilterBar>
 
-        <ListStatus
-          busy={list.isFetching}
-          loaded={list.isSuccess}
-          problem={asProblem(list.error)}
-          empty={topics.length === 0}
-          emptyText="This Tenant has no Topics matching this filter."
-        />
         <SplitView>
           <SplitList>
+            <ListStatus
+              busy={list.isFetching}
+              loaded={list.isSuccess}
+              problem={asProblem(list.error)}
+              empty={topics.length === 0}
+              emptyText="This Tenant has no Topics matching this filter."
+            />
             {topics.length > 0 ? (
               <TableCard
                 caption={`Topics, newest first${appliedNote(applied)}`}
@@ -127,24 +127,26 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                   <TableRow>
                     <TableHead scope="col">Name</TableHead>
                     <TableHead scope="col">Description</TableHead>
-                    <TableHead scope="col">Subscriptions</TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Subscriptions
+                    </TableHead>
                     <TableHead scope="col">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {topics.map((topic) => (
                     <TableRow key={topic.id} className="has-[a[aria-current=page]]:bg-selected-surface">
-                      <RowHeader className="whitespace-nowrap">
+                      <RowHeader>
                         {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract every other ledger has. */}
-                        <NavLink className="font-mono no-underline" to={`/tenants/${tenantId}/topics/${topic.id}`} end>
+                        <NavLink className="no-underline" to={`/tenants/${tenantId}/topics/${topic.id}`} end>
                           {topic.name}
                         </NavLink>
                       </RowHeader>
                       <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
                       {/* A Topic nothing subscribes to accepts Events and routes none of them, so
                           the count is what the list is scanned for rather than a detail. */}
-                      <TableCell className="tabular-nums">{topic.subscription_count}</TableCell>
+                      <TableCell className="text-right">{topic.subscription_count}</TableCell>
                       <TableCell>
                         <StatusBadge status={topic.status} />
                       </TableCell>
@@ -396,46 +398,45 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <EditSheet label="Edit this Topic">
-        {(close) => (
-          <Form {...form}>
-            <form
-              className="flex flex-col gap-4"
-              aria-label={`Edit ${topic.name}`}
-              onSubmit={form.handleSubmit((values) =>
-                save.mutate(values, {
-                  onSuccess: close,
-                  onError: (failure) => applyProblem(form, failure, writeFields),
-                }),
-              )}
-            >
-              <FormError message={formError(asProblem(save.error), writeFields)} />
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start gap-2">
+        <EditSheet label="Edit">
+          {(close) => (
+            <Form {...form}>
+              <form
+                className="flex flex-col gap-4"
+                aria-label={`Edit ${topic.name}`}
+                onSubmit={form.handleSubmit((values) =>
+                  save.mutate(values, {
+                    onSuccess: close,
+                    onError: (failure) => applyProblem(form, failure, writeFields),
+                  }),
+                )}
+              >
+                <FormError message={formError(asProblem(save.error), writeFields)} />
 
-              <TextField control={form.control} name="name" label="Name" required />
-              <TextField control={form.control} name="description" label="Description (optional)" />
+                <TextField control={form.control} name="name" label="Name" required />
+                <TextField control={form.control} name="description" label="Description (optional)" />
 
-              <Button type="submit" className="self-start" disabled={save.isPending}>
-                Save changes
-              </Button>
-              <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
-            </form>
-          </Form>
-        )}
-      </EditSheet>
-
-      {topic.status === "active" ? (
-        <div className="flex flex-col items-start gap-2">
+                <Button type="submit" className="self-start" disabled={save.isPending}>
+                  Save changes
+                </Button>
+                <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
+              </form>
+            </Form>
+          )}
+        </EditSheet>
+        {topic.status === "active" ? (
           <ConfirmAction
-            label="Deactivate Topic"
+            label="Deactivate"
             question={`Deactivate the Topic "${topic.name}"? Its Subscriptions stop receiving Events.`}
             confirmLabel={`Deactivate ${topic.name}`}
             busy={deactivate.isPending}
             onConfirm={() => deactivate.mutate()}
           />
-          <FormError message={formError(asProblem(deactivate.error))} />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
+      <FormError message={formError(asProblem(deactivate.error))} />
     </div>
   );
 }

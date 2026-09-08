@@ -95,6 +95,10 @@ describe("Event history", () => {
     // Every control is reachable without opening anything.
     expect(await screen.findByLabelText("Event status")).toBeTruthy();
     expect(screen.getByLabelText("Delivery status")).toBeTruthy();
+    const filters = screen.getByRole("region", { name: "Filters" });
+    const sourceEventId = within(filters).getByRole("searchbox", { name: "Source Event id" });
+    expect(filters.querySelector("input, button")).toBe(sourceEventId);
+    expect(sourceEventId.getAttribute("placeholder")).toBe("Source Event id");
     expect(screen.queryByText(/filter.? applied/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
     unfiltered.unmount();
@@ -394,9 +398,47 @@ describe("Event inspector", () => {
     renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     const item = (await screen.findByText(/In progress/)).closest("li")!;
 
-    expect(item.className).not.toContain("failed");
+    // The failure tone itself, not the word "failed" — which this class list never contained, so
+    // asserting on it passed whatever the marker was actually painted.
+    expect(item.className).not.toContain("danger");
     // No fabricated failure detail line for an attempt that has not finished yet.
     expect(within(item).queryByText(/HTTP/)).toBeNull();
+  });
+
+  it("tells a succeeded, an unfinished and a failed attempt apart by word as well as by marker", async () => {
+    // An Operator reads the timeline as a column of outcomes, so the three have to differ where the
+    // eye lands — and differ by their own word, never by colour alone.
+    const attempt = (number: number, status: string) => ({
+      attempt_id: `cccccccc-0000-0000-0000-00000000000${number}`,
+      event_delivery_id: deliveryId,
+      subscription_id: subscriptionId,
+      destination_connection_id: "88888888-8888-8888-8888-888888888888",
+      attempt_number: number,
+      status,
+      failure_phase: status === "failed" ? "http" : null,
+      response_status_code: status === "failed" ? 503 : null,
+      error_message: null,
+      started_at: `2026-09-01T10:0${number}:00Z`,
+      completed_at: status === "in_progress" ? null : `2026-09-01T10:0${number}:01Z`,
+    });
+    stubHttp(
+      respondFor(page([]), {
+        ...detail("dead_lettered"),
+        delivery_attempts: [attempt(1, "succeeded"), attempt(2, "in_progress"), attempt(3, "failed")],
+      }),
+    );
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    const timeline = await screen.findByRole("list", {
+      name: "Every attempt made against this Event's EventDeliveries",
+    });
+    const entries = within(timeline).getAllByRole("listitem");
+
+    expect(within(entries[0]).getByText("Succeeded")).toBeTruthy();
+    expect(within(entries[1]).getByText("In progress")).toBeTruthy();
+    expect(within(entries[2]).getByText("Failed")).toBeTruthy();
+    // Three outcomes, three markers: not the binary that painted a leased attempt like a settled one.
+    expect(new Set(entries.map((entry) => entry.className)).size).toBe(3);
   });
 
   it("hands over the trace identity as an opaque value without linking to any backend", async () => {

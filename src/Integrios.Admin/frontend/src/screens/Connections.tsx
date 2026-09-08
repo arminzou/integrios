@@ -178,16 +178,15 @@ export function ConnectionsScreen({
         </Filter>
       </FilterBar>
 
-      <ListStatus
-        busy={list.isFetching}
-        loaded={list.isSuccess}
-        problem={asProblem(list.error)}
-        empty={connections.length === 0}
-        emptyText="This Tenant has no Connections matching this filter."
-      />
-
       <SplitView>
         <SplitList>
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={connections.length === 0}
+            emptyText="This Tenant has no Connections matching this filter."
+          />
           {connections.length > 0 ? (
             <TableCard
               caption={`Connections, newest first${appliedNote(applied)}`}
@@ -214,14 +213,10 @@ export function ConnectionsScreen({
               <TableBody>
                 {connections.map((connection) => (
                   <TableRow key={connection.id} className="has-[a[aria-current=page]]:bg-selected-surface">
-                    <RowHeader className="whitespace-nowrap">
+                    <RowHeader>
                       {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract the Event ledger already has. */}
-                      <NavLink
-                        className="font-mono no-underline"
-                        to={`/tenants/${tenantId}/connections/${connection.id}`}
-                        end
-                      >
+                      <NavLink className="no-underline" to={`/tenants/${tenantId}/connections/${connection.id}`} end>
                         {connection.name}
                       </NavLink>
                     </RowHeader>
@@ -483,55 +478,54 @@ function EditConnection({
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <EditSheet label="Edit this Connection">
-        {(close) => (
-          <Form {...form}>
-            <form
-              className="flex flex-col gap-4"
-              aria-label={`Edit ${connection.name}`}
-              onSubmit={form.handleSubmit((values) =>
-                save.mutate(values, {
-                  onSuccess: close,
-                  onError: (failure) => applyProblem(form, failure, editFields),
-                }),
-              )}
-            >
-              <FormError message={formError(asProblem(save.error), editFields)} />
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start gap-2">
+        <EditSheet label="Edit">
+          {(close) => (
+            <Form {...form}>
+              <form
+                className="flex flex-col gap-4"
+                aria-label={`Edit ${connection.name}`}
+                onSubmit={form.handleSubmit((values) =>
+                  save.mutate(values, {
+                    onSuccess: close,
+                    onError: (failure) => applyProblem(form, failure, editFields),
+                  }),
+                )}
+              >
+                <FormError message={formError(asProblem(save.error), editFields)} />
 
-              <TextField control={form.control} name="name" label="Name" required />
-              <TextAreaField
-                control={form.control}
-                name="config"
-                label="Configuration (JSON)"
-                className="min-h-40 font-mono text-sm"
-                required
-              />
-              <TextField control={form.control} name="environment" label="Environment (optional)" />
-              <TextField control={form.control} name="description" label="Description (optional)" />
+                <TextField control={form.control} name="name" label="Name" required />
+                <TextAreaField
+                  control={form.control}
+                  name="config"
+                  label="Configuration (JSON)"
+                  className="min-h-40 font-mono text-sm"
+                  required
+                />
+                <TextField control={form.control} name="environment" label="Environment (optional)" />
+                <TextField control={form.control} name="description" label="Description (optional)" />
 
-              <Button type="submit" className="self-start" disabled={save.isPending}>
-                Save changes
-              </Button>
-              <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
-            </form>
-          </Form>
-        )}
-      </EditSheet>
-
-      {connection.status === "active" ? (
-        <div className="flex flex-col items-start gap-2">
+                <Button type="submit" className="self-start" disabled={save.isPending}>
+                  Save changes
+                </Button>
+                <WriteStatus done={save.isSuccess}>Changes saved.</WriteStatus>
+              </form>
+            </Form>
+          )}
+        </EditSheet>
+        {connection.status === "active" ? (
           <ConfirmAction
-            label="Deactivate Connection"
+            label="Deactivate"
             consequence={`Deactivating ${connection.name} stops every Subscription that delivers to it. Deliveries already queued are not cancelled.`}
             question={`Deactivate the Connection "${connection.name}"? Sources and Subscriptions that use it stop working.`}
             confirmLabel={`Deactivate ${connection.name}`}
             busy={deactivate.isPending}
             onConfirm={() => deactivate.mutate()}
           />
-          <FormError message={formError(asProblem(deactivate.error))} />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
+      <FormError message={formError(asProblem(deactivate.error))} />
     </div>
   );
 }

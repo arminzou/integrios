@@ -69,7 +69,15 @@ const shell = "grid min-h-screen grid-cols-1 items-start bg-canvas shell:grid-co
 
 /// No page-level measure: the only thing one would bound here is the ledger, and a ledger wants
 /// width. What genuinely needs a measure states its own, where the reason for it is visible.
-const document_ = "w-full min-w-0 p-4 shell:p-6";
+///
+/// `relative` and the screen minimum are what the loading cover resolves against: it fills this
+/// element and stops at its edges, so the rail beside it stays visible and operable while a read is
+/// outstanding, and it covers a whole column rather than however tall the page happened to be.
+///
+/// The minimum is confined to the two-column layout. Below that breakpoint the rail is a band above
+/// the document rather than a column beside it, so a full-viewport minimum here would put every
+/// page over the viewport by the height of that band and scroll a screen that has nothing to scroll.
+const document_ = "relative w-full min-w-0 p-4 shell:min-h-screen shell:p-6";
 
 const rail =
   "flex flex-row flex-wrap items-center gap-x-3 gap-y-2 border-b bg-surface px-3 py-4 text-sm " +

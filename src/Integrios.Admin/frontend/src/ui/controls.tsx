@@ -1,4 +1,6 @@
-import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
+import { LoaderCircle } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
+import { type ComponentProps, type ReactNode, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
@@ -131,96 +133,73 @@ export function FormError({ message }: { message?: string }) {
 }
 
 /// An irreversible action states what it is about to change, by name, before it can be confirmed.
-/// The confirmation takes focus so it is reachable and announced without a pointer.
+/// Confirmation is modal so its full question never reflows the compact action area that opened it;
+/// Radix moves focus in, traps it, answers Escape, and restores it to the trigger on close.
 export function ConfirmAction({
   label,
   question,
   consequence,
   confirmLabel,
   busy,
+  variant = "destructive",
   onConfirm,
 }: {
   label: string;
   question: string;
-  /// What the action does to everything around it, stated before it is reached rather than only
-  /// once it is armed. An Operator deciding whether to deactivate a Connection needs to know what
-  /// stops working while they are still deciding; a confirmation that explains itself only after
-  /// the click has already asked them to commit before informing them.
+  /// Destructive by default, because that is what an irreversible action usually is here — it takes
+  /// a capability away. Recovery is the exception: replaying a dead-lettered Delivery is irreversible
+  /// too, and confirmed for that reason, but it restores work rather than removing it, so it must not
+  /// wear the colour that means something is being taken away.
+  variant?: "destructive" | "outline";
+  /// What the action does to everything around it, read in the confirmation alongside the question
+  /// it answers. Opening the dialog is not the commitment — cancelling is free, and the destructive
+  /// button is a second, separate press — so this still reaches an Operator while they are deciding,
+  /// without a standing red panel on every screen that happens to carry a destructive action.
   consequence?: string;
   confirmLabel?: string;
   busy?: boolean;
   onConfirm: () => void;
 }) {
-  const [armed, setArmed] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
-  const restoreFocus = useRef(false);
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (armed) confirmRef.current?.focus();
-    else if (restoreFocus.current) {
-      restoreFocus.current = false;
-      triggerRef.current?.focus();
-    }
-  }, [armed]);
-
-  if (!armed)
-    return (
-      <Zone consequence={consequence}>
-        <Button
-          ref={triggerRef}
-          type="button"
-          variant="outline"
-          className="self-start"
-          disabled={busy}
-          onClick={() => setArmed(true)}
-        >
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
+      <DialogPrimitive.Trigger asChild>
+        <Button type="button" variant={variant} className="self-start" disabled={busy}>
           {label}
         </Button>
-      </Zone>
-    );
-
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: a <fieldset> needs a <legend> and is a form-control grouping; this is an inline confirmation named by aria-label
-    <span role="group" aria-label={label} className="flex flex-wrap items-center gap-3">
-      <span>{question}</span>
-      <Button
-        type="button"
-        variant="destructive"
-        ref={confirmRef}
-        disabled={busy}
-        onClick={() => {
-          setArmed(false);
-          onConfirm();
-        }}
-      >
-        {confirmLabel ?? label}
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => {
-          restoreFocus.current = true;
-          setArmed(false);
-        }}
-      >
-        Cancel
-      </Button>
-    </span>
-  );
-}
-
-/// The surface a destructive action sits on, tinted with the failure role so it reads as consequential
-/// before it is read as a button. Without a consequence to state there is nothing to set apart, so
-/// the action is returned bare rather than boxed for its own sake.
-function Zone({ consequence, children }: { consequence?: string; children: ReactNode }) {
-  if (!consequence) return <>{children}</>;
-
-  return (
-    <div className="flex flex-col items-start gap-2.5 rounded-lg bg-danger-surface p-3">
-      <p className="m-0 text-[13px] text-danger-ink">{consequence}</p>
-      {children}
-    </div>
+      </DialogPrimitive.Trigger>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-ink/20" />
+        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg border bg-surface p-5 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none">
+          <div>
+            <DialogPrimitive.Title className="m-0">{label}</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="m-0 mt-2 text-sm text-ink-secondary">
+              {question}
+            </DialogPrimitive.Description>
+          </div>
+          {consequence ? <p className="m-0 text-sm text-danger-ink">{consequence}</p> : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            <DialogPrimitive.Close asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogPrimitive.Close>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setOpen(false);
+                onConfirm();
+              }}
+            >
+              {confirmLabel ?? label}
+            </Button>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -264,25 +243,31 @@ export function LoadMore({
   );
 }
 
-/// The rhythm the rows will occupy, so a list does not jump when they land. Plain bars rather than a
-/// table: a table with no rows in it would announce columns and headers that are not there yet, so
-/// the bars are decorative and the wrapper carries the announcement instead. The pulse is an opacity
-/// change, and the platform's reduced-motion rule already removes it.
+/// A spinner over the whole document column while the list is being read. It is positioned against
+/// `<main>` rather than against the list, so it covers the page an Operator is waiting on and stops
+/// at the rail — which stays visible and operable, because navigating away is the one thing worth
+/// doing while a slow read is outstanding.
+///
+/// Being out of flow, it does not hold the rows' place: the page is this spinner and then it is the
+/// loaded screen. That is the trade a covering spinner makes against a placeholder shaped like the
+/// content, and it is why the cover is deferred rather than instant.
+///
+/// The word beside it is not decoration: the platform's reduced-motion rule cuts every animation to
+/// a single imperceptible step, which leaves an Operator who asked for less motion looking at a
+/// stationary circle. The label is what still says "loading" for them, and for anyone reading by ear.
+///
+/// Only the cover defers its reveal, and the announcement is not deferred with it: most reads answer
+/// faster than the delay, and a spinner that appears and vanishes inside a tenth of a second is the
+/// flicker this is here to avoid.
 function ListSkeleton() {
   return (
-    <div role="status" aria-busy="true">
-      <span className="sr-only">Loading…</span>
-      <div aria-hidden="true" className="overflow-hidden rounded-lg border bg-card">
-        {Array.from({ length: 5 }, (_, row) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder rows with no identity
-          <div key={row} className="flex gap-4 border-b px-4 py-3 last:border-b-0">
-            {Array.from({ length: 4 }, (_, cell) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder cells with no identity
-              <div key={cell} className="h-4 flex-1 animate-pulse rounded bg-surface-quiet" />
-            ))}
-          </div>
-        ))}
-      </div>
+    <div
+      role="status"
+      aria-busy="true"
+      className="animate-deferred-reveal absolute inset-0 z-20 flex items-center justify-center gap-2.5 bg-canvas text-ink-secondary"
+    >
+      <LoaderCircle aria-hidden="true" className="size-5 animate-spin" />
+      <span className="text-sm">Loading…</span>
     </div>
   );
 }

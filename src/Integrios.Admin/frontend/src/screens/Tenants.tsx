@@ -93,7 +93,13 @@ export function TenantsScreen() {
       <section className="flex flex-col gap-4">
         <FilterBar applied={applied}>
           <FilterSearch id="tenant-name" label="Name or slug" value={name} onChange={setName} />
-          <FilterSearch id="tenant-environment" label="Environment" value={environment} onChange={setEnvironment} />
+          <FilterSearch
+            id="tenant-environment"
+            label="Environment"
+            value={environment}
+            onChange={setEnvironment}
+            fullWidth={false}
+          />
           <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="disabled">Disabled</SelectItem>
@@ -132,7 +138,7 @@ export function TenantsScreen() {
             <TableBody>
               {tenants.map((tenant) => (
                 <TableRow key={tenant.id}>
-                  <RowHeader className="whitespace-nowrap">
+                  <RowHeader>
                     <Link className="no-underline" to={`/tenants/${tenant.id}`}>
                       {tenant.name}
                     </Link>
@@ -240,7 +246,17 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
 
   return (
     <Page>
-      <PageHeader title="Overview">
+      <PageHeader
+        title="Overview"
+        action={
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            <EditSheet label="Edit">
+              {(close) => <EditTenant key={current.updated_at} tenant={current} onSaved={close} />}
+            </EditSheet>
+            <DeactivateTenant tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
+          </div>
+        }
+      >
         What is configured for {current.name}, and what currently needs an Operator.
       </PageHeader>
 
@@ -263,26 +279,27 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         </div>
       ) : null}
 
-      <EditSheet label="Edit this Tenant">
-        {(close) => <EditTenant key={current.updated_at} tenant={current} onSaved={close} />}
-      </EditSheet>
-      <DeactivateTenant tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
 
       <section aria-label="Configured in this Tenant">
         <ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(9.375rem,1fr))] gap-2.5 p-0">
           {(
             [
-              ["Topics", overview.data?.topics],
-              ["Connections", overview.data?.connections],
-              ["Sources", overview.data?.sources],
-              ["Subscriptions", overview.data?.subscriptions],
-              ["Live API keys", overview.data?.live_api_keys],
+              ["Topics", overview.data?.topics, `/tenants/${tenantId}/topics`],
+              ["Connections", overview.data?.connections, `/tenants/${tenantId}/connections`],
+              ["Sources", overview.data?.sources, `/tenants/${tenantId}/sources`],
+              ["Subscriptions", overview.data?.subscriptions, `/tenants/${tenantId}/topics`],
+              ["Live API keys", overview.data?.live_api_keys, `/tenants/${tenantId}/tenant-api-keys`],
             ] as const
-          ).map(([label, value]) => (
-            <li key={label} className="rounded-lg border bg-surface px-3.5 py-3">
-              <span className="block font-serif text-2xl leading-tight tabular-nums">{value ?? "—"}</span>
-              <span className="text-[13px] text-ink-secondary">{label}</span>
+          ).map(([label, value, to]) => (
+            <li key={label}>
+              <Link
+                to={to}
+                className="block rounded-lg border bg-surface px-3.5 py-3 no-underline hover:bg-hover-surface focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <span className="block font-serif text-2xl leading-tight tabular-nums">{value ?? "—"}</span>
+                <span className="text-[13px] text-ink-secondary">{label}</span>
+              </Link>
             </li>
           ))}
         </ul>
@@ -412,8 +429,7 @@ function DeactivateTenant({ tenant, onDone }: { tenant: Tenant; onDone: () => vo
   return (
     <div className="flex flex-col items-start gap-2">
       <ConfirmAction
-        label="Deactivate Tenant"
-        consequence={`Deactivating ${tenant.name} stops its Sources accepting Events. Its configuration is kept.`}
+        label="Deactivate"
         question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
         confirmLabel={`Deactivate ${tenant.name}`}
         busy={deactivate.isPending}

@@ -1,4 +1,5 @@
 import { type UseQueryResult, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, NavLink, useSearchParams } from "react-router";
@@ -14,7 +15,7 @@ import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
 import { FilterSelectField, FilterTextField, Form } from "../ui/fields";
 import { CloseInspector, Inspector, InspectorPlaceholder, PageHeader, RowHeader, TableCard } from "../ui/layout";
 import { nameIn, useConnectionOptions, useTopicOptions } from "../ui/options";
-import { StatusBadge, statusLabel } from "../ui/status";
+import { StatusBadge, statusLabel, statusMarker } from "../ui/status";
 import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
@@ -243,6 +244,13 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               setActiveSummary(null);
             }}
           >
+            <FilterTextField
+              control={form.control}
+              name="sourceEventId"
+              label="Source Event id"
+              type="search"
+              hint="The identity the sending system gave the Event. Matched exactly."
+            />
             <FilterSelectField
               control={form.control}
               name="status"
@@ -297,13 +305,6 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             </FilterSelectField>
             <FilterTextField
               control={form.control}
-              name="sourceEventId"
-              label="Source Event id"
-              placeholder="Any"
-              hint="The identity the sending system gave the Event. Matched exactly."
-            />
-            <FilterTextField
-              control={form.control}
               name="acceptedFrom"
               label="Accepted from"
               type="datetime-local"
@@ -324,19 +325,18 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         </form>
       </Form>
 
-      <ListStatus
-        busy={list.isFetching}
-        loaded={list.isSuccess}
-        problem={asProblem(list.error)}
-        empty={events.length === 0}
-        emptyText="No Events in this Tenant match these filters."
-      />
-
       <div
         data-layout="events"
         className="flex flex-col gap-5 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-4"
       >
         <div className="min-w-0 min-[1180px]:flex-1">
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={events.length === 0}
+            emptyText="No Events in this Tenant match these filters."
+          />
           {events.length > 0 ? (
             <TableCard
               caption={`Events, newest first${appliedNote(appliedCount)}`}
@@ -673,7 +673,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
         ) : null}
         {attempts.length ? (
           <ol
-            className="m-0 list-none border-l pl-5"
+            className="m-0 list-none border-l border-dotted pl-5"
             aria-label="Every attempt made against this Event's EventDeliveries"
           >
             {shownAttempts.map((attempt) => {
@@ -684,16 +684,23 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
               return (
                 <li
                   key={attempt.attempt_id}
-                  className={`relative pb-4 last:pb-0 before:absolute before:top-1.5 before:-left-[25px] before:size-2.5 before:rounded-full before:content-[''] ${
-                    failed ? "before:bg-danger-ink" : "before:bg-selected-ink"
-                  }`}
+                  className={cn(
+                    "relative pb-4 last:pb-0 before:absolute before:top-1 before:-left-[25px] before:size-2.5 before:rounded-full before:content-['']",
+                    statusMarker(attempt.status),
+                  )}
                 >
-                  <p className="m-0">
+                  {/* Time, then outcome, then what was attempted. The badge sits at the same place
+                      on every entry so the column of them is readable top to bottom, which is how
+                      an Operator finds the attempt that failed rather than reading each sentence. */}
+                  <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-semibold">
                       <Timestamp value={attempt.started_at} />
-                    </span>{" "}
-                    — attempt {attempt.attempt_number} to Subscription{" "}
-                    <span className="font-mono text-sm">{attempt.subscription_id}</span>: {statusLabel(attempt.status)}
+                    </span>
+                    <StatusBadge status={attempt.status} />
+                    <span className="text-ink-secondary">
+                      attempt {attempt.attempt_number} to Subscription{" "}
+                      <span className="font-mono text-[13px]">{attempt.subscription_id}</span>
+                    </span>
                   </p>
                   {failed ? (
                     <p className="m-0 text-ink-secondary">
@@ -762,6 +769,7 @@ function ReplayDelivery({
     <div className="flex flex-col items-start gap-2">
       <ConfirmAction
         label="Replay"
+        variant="outline"
         question={`Replay the dead-lettered delivery to Subscription ${delivery.subscription_id}? It is queued for delivery again.`}
         confirmLabel="Replay this delivery"
         busy={replay.isPending}

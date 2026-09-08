@@ -48,4 +48,5 @@ it("shows the Source contract and restarts paging when the Topic filter changes"
   });
   expect(screen.queryByText("second_contract")).toBeNull();
   expect(screen.getByLabelText("Topic").textContent).toContain("orders");
+  expect(screen.getByRole("link", { name: "Clear filters" })).toBeTruthy();
 });
