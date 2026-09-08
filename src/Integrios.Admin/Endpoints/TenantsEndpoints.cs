@@ -36,12 +36,14 @@ public sealed class TenantsEndpoints : IEndpointGroup
     private static async Task<IResult> ListTenants(
         IMediator mediator,
         string? status,
+        string? environment,
+        string? name,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var response = await mediator.Send(new ListTenantsQuery(ListFilter.ParseEnum<OperationalStatus>(status, "Tenant status must be active or disabled."), after, limit), cancellationToken);
+        var response = await mediator.Send(new ListTenantsQuery(ListFilter.ParseEnum<OperationalStatus>(status, "Tenant status must be active or disabled."), ListFilter.Trimmed(environment), ListFilter.Trimmed(name), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 

@@ -25,6 +25,28 @@ function tenant(overrides: Record<string, unknown> = {}) {
 const listCalls = (calls: Call[]) => calls.filter((call) => call.method === "GET");
 
 describe("Tenants list", () => {
+  it.each(["Name or slug", "Environment"])(
+    "applies %s and restarts paging, then restores the URL value",
+    async (label) => {
+      const parameter = label === "Environment" ? "environment" : "name";
+      const calls = stubHttp(({ url }) => ({
+        status: 200,
+        body: page([tenant({ name: url.searchParams.has("after") ? "Second" : "Acme" })], "cursor-1"),
+      }));
+      const { router } = renderScreen(<TenantsScreen />, "/tenants");
+      await screen.findByRole("link", { name: "Acme" });
+      fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+      await screen.findByRole("link", { name: "Second" });
+      fireEvent.change(screen.getByLabelText(label), { target: { value: "  production  " } });
+      fireEvent.submit(screen.getByLabelText(label).closest("form")!);
+      await waitFor(() => expect(listCalls(calls).at(-1)!.url.searchParams.get(parameter)).toBe("production"));
+      expect(listCalls(calls).at(-1)!.url.searchParams.has("after")).toBe(false);
+      expect(router.state.location.search).toContain(`${parameter}=production`);
+      await act(() => router.navigate(`/tenants?${parameter}=restored`));
+      await waitFor(() => expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe("restored"));
+    },
+  );
+
   it("reports a request that could not reach Admin instead of loading forever", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
 

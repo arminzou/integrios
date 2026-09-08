@@ -81,6 +81,7 @@ public static class DependencyInjection
             services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
         services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<ISourceRepository, SourceRepository>();
+        services.AddScoped<ISourceQueries, SourceQueries>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
         // Operator-only. Deliberately absent from AddIngestionInfrastructureServices: a destination's

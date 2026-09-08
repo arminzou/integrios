@@ -60,7 +60,7 @@ const connector = {
   ...stamps,
 };
 
-const page = (items: unknown[]) => ({ items, next_cursor: null });
+const page = (items: unknown[], nextCursor: string | null = null) => ({ items, next_cursor: nextCursor });
 
 const subscriptionId = "77777777-7777-7777-7777-777777777777";
 const sourceId = "88888888-8888-8888-8888-888888888888";
@@ -109,9 +109,10 @@ function readFor(pathname: string): unknown {
   if (/\/sources\/[^/]+$/.test(pathname)) return sourceDetail;
   if (/\/topics\/[^/]+$/.test(pathname)) return topic;
   if (/\/connections$/.test(pathname)) return page([connection]);
-  if (/\/topics$/.test(pathname)) return page([topic]);
+  // A next_cursor here is what makes the option reads' own hundred-row cap observable.
+  if (/\/topics$/.test(pathname)) return page([topic], "more-topics");
   if (/\/subscriptions$/.test(pathname)) return page([subscriptionDetail]);
-  if (/\/sources$/.test(pathname)) return page([sourceDetail]);
+  if (/\/sources$/.test(pathname)) return page([{ ...sourceDetail, source_contract: "event_json" }]);
   return page([]);
 }
 
@@ -149,6 +150,33 @@ async function open(path: string): Promise<{ page: Page; writes: Request[] }> {
   await browserPage.getByRole("heading", { level: 1 }).waitFor();
   return { page: browserPage, writes };
 }
+
+it("applies the list filters through their controls and keeps them usable at 320px", async () => {
+  const { page: view } = await open("/tenants");
+  try {
+    await view.getByLabel("Name or slug", { exact: true }).fill("acme");
+    await view.getByLabel("Name or slug", { exact: true }).press("Enter");
+    await view.waitForURL("**/tenants?name=acme");
+    await view.getByLabel("Environment", { exact: true }).fill("production");
+    await view.getByLabel("Environment", { exact: true }).press("Enter");
+    await view.waitForURL("**environment=production");
+    await view.setViewportSize({ width: 320, height: 900 });
+    expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await view.goto(`${origin}/tenants/${tenantId}/sources`);
+    await view.getByText("event_json", { exact: true }).waitFor();
+    const request = view.waitForRequest((request) => new URL(request.url()).searchParams.get("topic_id") === topicId);
+    await view.getByLabel("Topic", { exact: true }).click();
+    // The real browser owns this positioned popup; this assertion proves the same limit described
+    // by the trigger is also visible where a sighted Operator chooses an option.
+    await view.getByRole("listbox").getByText("Showing the first 100 Topics.").waitFor();
+    await view.getByRole("option", { name: "orders" }).click();
+    expect(new URL((await request).url()).searchParams.has("after")).toBe(false);
+    await view.waitForURL(`**topic_id=${topicId}`);
+    expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  } finally {
+    await view.close();
+  }
+}, 60_000);
 
 /// A screen can carry more than one form — a Topic page holds the Topic's own fields and the create
 /// panel for its Subscriptions — and both use the same field names. Controls are therefore addressed

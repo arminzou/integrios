@@ -77,14 +77,22 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
   const topicOptions = useTopicOptions(tenantId);
   const [status, setStatus] = useFilterParam("status");
   const [type, setType] = useFilterParam("type");
+  const [topicId, setTopicId] = useFilterParam("topic_id");
+  const applied = [status, type, topicId].filter(Boolean).length;
   const list = useInfiniteQuery({
-    queryKey: ["sources", tenantId, { status, type }],
+    queryKey: ["sources", tenantId, { status, type, topicId }],
     queryFn: ({ pageParam }) =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/sources", {
           params: {
             path: { tenantId },
-            query: { status: status || undefined, type: type || undefined, after: pageParam ?? undefined, limit: 20 },
+            query: {
+              status: status || undefined,
+              type: type || undefined,
+              topic_id: topicId || undefined,
+              after: pageParam ?? undefined,
+              limit: 20,
+            },
           },
         }),
       ),
@@ -106,7 +114,20 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
         A Source binds one Connection to one Topic and selects the contract its input is read as.
       </PageHeader>
 
-      <FilterBar applied={(status ? 1 : 0) + (type ? 1 : 0)}>
+      <FilterBar applied={applied}>
+        <Filter
+          id="source-topic"
+          label="Topic"
+          value={topicId}
+          onChange={setTopicId}
+          hint={topicOptions.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+        >
+          {(topicOptions.data?.items ?? []).map((topic) => (
+            <SelectItem key={topic.id} value={topic.id}>
+              {topic.name}
+            </SelectItem>
+          ))}
+        </Filter>
         <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
           <SelectItem value="active">Active</SelectItem>
           <SelectItem value="revoked">Revoked</SelectItem>
@@ -132,7 +153,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
         <SplitList>
           {sources.length > 0 ? (
             <TableCard
-              caption={`Sources, newest first${appliedNote((status ? 1 : 0) + (type ? 1 : 0))}`}
+              caption={`Sources, newest first${appliedNote(applied)}`}
               footer={
                 <LoadMore
                   noun="Source"
@@ -148,6 +169,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                   <TableHead scope="col">Connection</TableHead>
                   <TableHead scope="col">Topic</TableHead>
                   <TableHead scope="col">Type</TableHead>
+                  <TableHead scope="col">Source contract</TableHead>
                   <TableHead scope="col">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -169,6 +191,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                       </Link>
                     </TableCell>
                     <TableCell>{source.type}</TableCell>
+                    <TableCell className="font-mono text-[13px]">{source.source_contract}</TableCell>
                     <TableCell>
                       <StatusBadge status={source.status} />
                     </TableCell>

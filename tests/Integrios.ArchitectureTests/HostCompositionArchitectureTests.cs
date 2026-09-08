@@ -55,6 +55,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
         [typeof(ISecretValidationReader)] = [Host.Worker],
         [typeof(ISourceRepository)] = [Host.Admin],
+        [typeof(ISourceQueries)] = [Host.Admin],
         [typeof(IEventDeliveryQueue)] = [Host.Worker],
         [typeof(ISubscriptionRepository)] = [Host.Admin],
         [typeof(ITenantRepository)] = [Host.Admin],

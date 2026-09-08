@@ -80,15 +80,18 @@ internal sealed class ConnectionRepository(IntegriosDbContext context, IDataProt
         Guid cursorId = default;
         // Every filter reaches the scope. A cursor is only valid for the filters it was issued
         // under, so one omitted here would let a stale cursor page through a different set under a
-        // token the caller has no way to tell apart.
-        string cursorScope = string.Join(
-            ':',
-            "connections",
-            tenantId.ToString("N"),
-            filter.Status?.ToString() ?? "all",
-            filter.Environment ?? "all",
-            filter.ConnectorKey ?? "all",
-            filter.NameContains ?? "all");
+        // token the caller has no way to tell apart. Serialized rather than colon-joined with an
+        // "all" sentinel: Environment, ConnectorKey and NameContains are Operator free text, so a
+        // literal "all" would share a scope with the filter being absent, and a value carrying the
+        // delimiter would shift one filter's text into the next field's slot.
+        string cursorScope = "connections:" + JsonSerializer.Serialize(new
+        {
+            tenantId,
+            filter.Status,
+            filter.Environment,
+            filter.ConnectorKey,
+            filter.NameContains,
+        });
         bool hasCursor = afterCursor is not null;
         if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
             throw new InvalidCursorException();
@@ -102,7 +105,12 @@ internal sealed class ConnectionRepository(IntegriosDbContext context, IDataProt
         if (filter.Status is not null)
             connections = connections.Where(connection => connection.Status == filter.Status);
         if (filter.Environment is not null)
-            connections = connections.Where(connection => connection.Environment == filter.Environment);
+        {
+            // Lowered on both sides for the same reason the name search is: Environment is free
+            // text an Operator types, not a value picked from what was stored.
+            string loweredEnvironment = filter.Environment.ToLowerInvariant();
+            connections = connections.Where(connection => connection.Environment!.ToLower() == loweredEnvironment);
+        }
         if (filter.ConnectorKey is not null)
         {
             connections = connections.Where(connection => context.Connectors

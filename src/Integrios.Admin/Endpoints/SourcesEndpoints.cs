@@ -32,7 +32,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
         return Results.Created($"/admin/tenants/{tenantId}/sources/{source.Id}", source);
     }
 
-    private static async Task<IResult> ListSources(Guid tenantId, IMediator mediator, string? status, string? type, string? after, int limit = 0, CancellationToken cancellationToken = default)
+    private static async Task<IResult> ListSources(Guid tenantId, IMediator mediator, string? status, string? type, Guid? topic_id, string? after, int limit = 0, CancellationToken cancellationToken = default)
     {
         SourceType? sourceType = type switch
         {
@@ -42,7 +42,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
             "queue" => SourceType.Queue,
             _ => throw new InvalidListFilterException("Source type must be event_api, webhook, or queue."),
         };
-        SourceListDto sources = await mediator.Send(new ListSourcesQuery(tenantId, ListFilter.ParseEnum<SourceStatus>(status, "Source status must be active or revoked."), sourceType, after, Math.Clamp(limit == 0 ? 20 : limit, 1, 100)), cancellationToken);
+        SourceListDto sources = await mediator.Send(new ListSourcesQuery(tenantId, ListFilter.ParseEnum<SourceStatus>(status, "Source status must be active or revoked."), sourceType, topic_id, after, Math.Clamp(limit == 0 ? 20 : limit, 1, 100)), cancellationToken);
         return Results.Ok(sources);
     }
 

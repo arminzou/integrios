@@ -22,7 +22,7 @@ import {
   LoadMore,
   WriteStatus,
 } from "../ui/controls";
-import { Filter, Form, TextField } from "../ui/fields";
+import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
@@ -53,12 +53,23 @@ const optional = (text: string) => text.trim() || null;
 
 export function TenantsScreen() {
   const [status, setStatus] = useFilterParam("status");
+  const [name, setName] = useFilterParam("name");
+  const [environment, setEnvironment] = useFilterParam("environment");
+  const applied = [status, name, environment].filter(Boolean).length;
   const list = useInfiniteQuery({
-    queryKey: ["tenants", { status }],
+    queryKey: ["tenants", { status, name, environment }],
     queryFn: ({ pageParam }) =>
       call(() =>
         api.GET("/admin/tenants", {
-          params: { query: { status: status || undefined, after: pageParam ?? undefined, limit: 20 } },
+          params: {
+            query: {
+              status: status || undefined,
+              name: name || undefined,
+              environment: environment || undefined,
+              after: pageParam ?? undefined,
+              limit: 20,
+            },
+          },
         }),
       ),
     initialPageParam: null as string | null,
@@ -80,7 +91,9 @@ export function TenantsScreen() {
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        <FilterBar applied={status ? 1 : 0}>
+        <FilterBar applied={applied}>
+          <FilterSearch id="tenant-name" label="Name or slug" value={name} onChange={setName} />
+          <FilterSearch id="tenant-environment" label="Environment" value={environment} onChange={setEnvironment} />
           <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="disabled">Disabled</SelectItem>
@@ -96,7 +109,7 @@ export function TenantsScreen() {
         />
         {tenants.length > 0 ? (
           <TableCard
-            caption={`Tenants, newest first${appliedNote(status ? 1 : 0)}`}
+            caption={`Tenants, newest first${appliedNote(applied)}`}
             footer={
               <LoadMore
                 noun="Tenant"
