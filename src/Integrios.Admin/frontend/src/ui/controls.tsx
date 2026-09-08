@@ -187,7 +187,7 @@ export function ConfirmAction({
             </DialogPrimitive.Close>
             <Button
               type="button"
-              variant="destructive"
+              variant={variant}
               disabled={busy}
               onClick={() => {
                 setOpen(false);

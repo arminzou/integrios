@@ -178,13 +178,23 @@ describe("The dashboard in a real browser", () => {
         // focus with the browser's own outline or, like the vendored primitives, with a drawn ring;
         // what this asserts is that a keyboard Operator can see where they are, not which of the
         // two the control chose.
-        const marked =
-          style.outlineStyle !== "none" ||
-          style.boxShadow !== "none" ||
-          highlightedBox?.matches(":focus-within") === true;
+        const directlyMarked = style.outlineStyle !== "none" || style.boxShadow !== "none";
+        let enclosingBoxMarked = false;
+        if (!directlyMarked && highlightedBox) {
+          const boxStyle = getComputedStyle(highlightedBox);
+          const resolvedColor = (token: string) => {
+            const probe = document.createElement("span");
+            probe.style.color = `var(${token})`;
+            document.body.append(probe);
+            const color = getComputedStyle(probe).color;
+            probe.remove();
+            return color;
+          };
+          enclosingBoxMarked = boxStyle.backgroundColor === resolvedColor("--selected-surface");
+        }
         return {
           tag: active.tagName.toLowerCase(),
-          ring: active.matches(":focus-visible") && marked ? "visible" : "none",
+          ring: active.matches(":focus-visible") && (directlyMarked || enclosingBoxMarked) ? "visible" : "none",
         };
       });
       if (!stop) break;
