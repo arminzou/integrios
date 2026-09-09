@@ -33,13 +33,7 @@ const contractSchema = z.object({
   sample_input: jsonDocument,
 });
 
-const transformSchema = z.object({
-  transform: jsonDocument,
-  sample_input: jsonDocument,
-});
-
 type ContractValues = z.infer<typeof contractSchema>;
-type TransformValues = z.infer<typeof transformSchema>;
 
 const documentOrNull = (text: string) => (text.trim() === "" ? null : parseJson(text).value);
 
@@ -117,65 +111,6 @@ export function SourceContractPreview() {
 
           <Button type="submit" variant="outline" className="self-start" disabled={preview.isPending}>
             Preview contract
-          </Button>
-          <Result output={output} />
-        </form>
-      </Panel>
-    </Form>
-  );
-}
-
-export function TransformPreview() {
-  const [output, setOutput] = useState<Preview | null>(null);
-  const form = useForm<TransformValues>({
-    resolver: zodResolver(transformSchema),
-    defaultValues: { transform: "{}", sample_input: "{}" },
-  });
-
-  const preview = useMutation({
-    mutationFn: (values: TransformValues) =>
-      call(() =>
-        api.POST("/admin/transform/preview", {
-          body: {
-            transform: parseJson(values.transform).value,
-            sample_input: parseJson(values.sample_input).value,
-            sample_context: null,
-          },
-        }),
-      ),
-    onSuccess: (result) => setOutput(result ?? null),
-  });
-
-  const submit = form.handleSubmit((values) => {
-    setOutput(null);
-    preview.mutate(values);
-  });
-
-  return (
-    <Form {...form}>
-      <Panel asChild>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h2>Preview a mapping</h2>
-          <p className="m-0 text-ink-secondary">Nothing is saved. This evaluates a mapping against a sample payload.</p>
-          <FormError message={formError(asProblem(preview.error))} />
-
-          <TextAreaField
-            control={form.control}
-            name="transform"
-            label="Mapping (JSON)"
-            className="min-h-32 font-mono text-sm"
-            required
-          />
-          <TextAreaField
-            control={form.control}
-            name="sample_input"
-            label="Sample input (JSON)"
-            className="min-h-32 font-mono text-sm"
-            required
-          />
-
-          <Button type="submit" variant="outline" className="self-start" disabled={preview.isPending}>
-            Preview mapping
           </Button>
           <Result output={output} />
         </form>

@@ -1,10 +1,10 @@
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Table, TableCaption, TableHead } from "@/components/ui/table";
 import { cn } from "cn";
 import { Slot } from "radix-ui";
 import type { ComponentProps, ReactNode } from "react";
 import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Table, TableCaption, TableHead } from "@/components/ui/table";
 
 /// The page chrome every capability repeats: a title, an optional line saying where the page sits,
 /// and the bounded groups beneath it. Only the shape is shared — what a page is about stays in the

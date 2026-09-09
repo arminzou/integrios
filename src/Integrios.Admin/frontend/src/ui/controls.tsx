@@ -48,11 +48,13 @@ export function Disclosure({ label, children }: { label: string; children: React
 /// the content is portalled out of the layout it would otherwise sit inside.
 function FormSheet({
   label,
+  title = label,
   description,
   variant,
   children,
 }: {
   label: string;
+  title?: string;
   description?: string;
   variant: "default" | "outline";
   /// Handed a way to close, because a write that succeeded should not leave its own form standing.
@@ -67,8 +69,8 @@ function FormSheet({
           {label}
         </Button>
       </SheetTrigger>
-      <SheetContent aria-label={label}>
-        <SheetHeader title={label} description={description} />
+      <SheetContent aria-label={title}>
+        <SheetHeader title={title} description={description} />
         {children(() => setOpen(false))}
       </SheetContent>
     </Sheet>

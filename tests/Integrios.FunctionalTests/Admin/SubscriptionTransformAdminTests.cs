@@ -184,6 +184,8 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
+        body.GetProperty("errors").GetProperty("mapping")[0].GetString()!.ShouldContain("JSONata", Case.Sensitive);
     }
 
     [Fact]
@@ -246,7 +248,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
-        body.GetProperty("errors").GetProperty("")[0].GetString()!.ShouldContain("expression", Case.Sensitive);
+        body.GetProperty("errors").GetProperty("transform")[0].GetString()!.ShouldContain("expression", Case.Sensitive);
     }
 
     [Fact]
@@ -257,7 +259,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             "/admin/transform/preview",
             new
             {
-                mapping = new
+                transform = new
                 {
                     engine = "jsonata",
                     version = "1",

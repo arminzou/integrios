@@ -156,7 +156,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     const subscriptionForm = formNamed(view, "Create a Subscription");
     await subscriptionForm.getByLabel("Name").fill(`${run}-to-sink`);
     await subscriptionForm.getByLabel("Destination Connection").selectOption(connectionId);
-    await subscriptionForm.getByLabel("Match rules (JSON)").fill(`{"event_type":"${run}.created"}`);
+    await subscriptionForm.getByLabel("Event type").fill(`${run}.created`);
     await view.click("text=Create Subscription");
     await created(view, /\/subscriptions\/[0-9a-f-]{36}$/, "Subscription");
     await closeView(view);

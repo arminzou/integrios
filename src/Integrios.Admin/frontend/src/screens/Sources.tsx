@@ -183,7 +183,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                     </RowHeader>
                     <TableCell>
                       <Link to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
-                        → {nameIn(topicOptions.data?.items, source.topic_id)}
+                        {nameIn(topicOptions.data?.items, source.topic_id)}
                       </Link>
                     </TableCell>
                     <TableCell>{source.type}</TableCell>

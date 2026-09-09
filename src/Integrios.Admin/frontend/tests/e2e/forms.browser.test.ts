@@ -64,6 +64,7 @@ const page = (items: unknown[], nextCursor: string | null = null) => ({ items, n
 
 const subscriptionId = "77777777-7777-7777-7777-777777777777";
 const sourceId = "88888888-8888-8888-8888-888888888888";
+const eventId = "99999999-9999-9999-9999-999999999999";
 
 const connectionDetail = {
   ...connection,
@@ -78,7 +79,11 @@ const subscriptionDetail = {
   name: "to-sink",
   match_rules: { event_type: "order.created" },
   destination_connection_id: connectionId,
-  mapping_config: null,
+  mapping_config: {
+    engine: "jsonata",
+    version: "1",
+    expression: '{ "order": orderId, "total": total, "placed_at": placedAt }',
+  },
   http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
   status: "active",
   order_index: 1,
@@ -106,6 +111,18 @@ function readFor(pathname: string): unknown {
   if (/^\/admin\/tenants\/[^/]+$/.test(pathname)) return tenant;
   if (/\/connections\/[^/]+$/.test(pathname)) return connectionDetail;
   if (/\/subscriptions\/[^/]+$/.test(pathname)) return subscriptionDetail;
+  if (/\/events\/[^/]+\/deliveries$/.test(pathname))
+    return {
+      event_id: eventId,
+      tenant_id: tenantId,
+      topic_id: topicId,
+      event_type: "order.created",
+      status: "routed",
+      accepted_at: "2026-09-08T12:00:00Z",
+      payload: { orderId: "SO-4014", total: 42, customer: { id: "C-14" }, "placed-at": "today" },
+      event_deliveries: [],
+      delivery_attempts: [],
+    };
   if (/\/sources\/[^/]+$/.test(pathname)) return sourceDetail;
   if (/\/topics\/[^/]+$/.test(pathname)) return topic;
   if (/\/connections$/.test(pathname)) return page([connection]);
@@ -113,6 +130,17 @@ function readFor(pathname: string): unknown {
   if (/\/topics$/.test(pathname)) return page([topic], "more-topics");
   if (/\/subscriptions$/.test(pathname))
     return page([{ ...subscriptionDetail, topic_name: topic.name, destination_connection_name: connection.name }]);
+  if (/\/events$/.test(pathname))
+    return page([
+      {
+        event_id: eventId,
+        topic_id: topicId,
+        event_type: "order.created",
+        status: "routed",
+        accepted_at: "2026-09-08T12:00:00Z",
+        deliveries: { pending: 0, in_flight: 0, succeeded: 1, dead_lettered: 0 },
+      },
+    ]);
   if (/\/sources$/.test(pathname)) return page([{ ...sourceDetail, source_contract: "event_json" }]);
   return page([]);
 }
@@ -144,6 +172,8 @@ async function open(path: string): Promise<{ page: Page; writes: Request[] }> {
     const request = route.request();
     if (request.method() === "GET") return route.fulfill({ json: readFor(new URL(request.url()).pathname) });
     writes.push(request);
+    if (new URL(request.url()).pathname === "/admin/transform/preview")
+      return route.fulfill({ json: { output: { order: "SO-4014" } } });
     return route.fulfill({ status: 201, json: { id: "66666666-6666-6666-6666-666666666666", ...stamps } });
   });
 
@@ -219,8 +249,9 @@ async function choose(control: Locator, option: string | RegExp) {
 async function submitted(
   writes: Request[],
 ): Promise<{ method: string; pathname: string; body: Record<string, unknown> }> {
-  const request = writes[0];
+  const request = writes.find((candidate) => new URL(candidate.url()).pathname !== "/admin/transform/preview");
   expect(request, "The form submitted no request at all.").toBeDefined();
+  if (!request) throw new Error("The form submitted no request at all.");
   return {
     method: request.method(),
     pathname: new URL(request.url()).pathname,
@@ -304,7 +335,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends a Subscription with a numeric order, an object delivery, and a null mapping", async () => {
+  it("sends a Subscription with an Event type and a fixed mapping envelope", async () => {
     // Opening management from a Topic carries the Topic as the list filter. New Subscription reuses
     // that selection, while the write itself remains on the Topic-owned API route.
     const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
@@ -316,18 +347,33 @@ describe("Create forms, filled through a real browser", () => {
     const form = formNamed(view, "Create a Subscription");
     await form.getByLabel("Name").fill("to-sink");
     await choose(form.getByLabel("Destination Connection"), /sink/);
-    await form.getByLabel("Order").fill("3");
-    await form.getByLabel("Match rules (JSON)").fill('{"all":[]}');
+    await form.getByLabel("Event type").fill("order.created");
+    expect(await form.getByLabel("Order").count()).toBe(0);
+    expect(await form.getByLabel("Match rules (JSON)").count()).toBe(0);
+    expect(await form.getByLabel("Mapping expression (optional)").count()).toBe(0);
+    const create = view.locator('form[aria-label="Create a Subscription"] button[type="submit"]');
+    await form.getByRole("button", { name: "Add mapping in Playground" }).click();
+    const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    await playground.getByLabel("Output field 1").fill("order");
+    await playground.getByLabel("Event field 1").selectOption("orderId");
+    expect(await create.isDisabled()).toBe(true);
+    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await playground.getByText('"order": "SO-4014"').waitFor();
+    await playground.getByRole("button", { name: "Confirm mapping change" }).click();
+    await form.getByText("Mapping change reviewed and ready to save.").waitFor();
+    expect(await create.isEnabled()).toBe(true);
     await view.click("text=Create Subscription");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/topics/${topicId}/subscriptions`);
-    // A number input still yields a string; the API takes an int32.
-    expect(sent.body.order_index).toBe(3);
-    expect(sent.body.match_rules).toEqual({ all: [] });
-    // An empty mapping is a real choice: deliver the Event unmapped.
-    expect(sent.body.mapping).toBeNull();
+    expect(sent.body.order_index).toBe(0);
+    expect(sent.body.match_rules).toEqual({ event_type: "order.created" });
+    expect(sent.body.mapping).toEqual({
+      engine: "jsonata",
+      version: "1",
+      expression: '{\n  "order": orderId\n}',
+    });
     expect(sent.body.http_delivery).toMatchObject({ version: 1, method: "POST", body: "json", headers: {} });
     await view.close();
   }, 60_000);
@@ -356,9 +402,9 @@ describe("Create forms, filled through a real browser", () => {
 
 describe("Update and deactivate, driven through a real browser", () => {
   // Tenant, Topic and Source updates send only plain strings and are covered by the jsdom suite.
-  // What is exercised here is what a string-only form has to convert: a parsed configuration
-  // document and a numeric order index, plus the two shapes with no other coverage at all — a
-  // confirmed deactivate, and the one DELETE the dashboard issues.
+  // What is exercised here is what a string-only form has to convert: parsed configuration
+  // documents, plus the two shapes with no other coverage at all — a confirmed deactivate and the
+  // one DELETE the dashboard issues.
 
   it("sends an updated Connection with its config reparsed and its schemes untouched", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/connections/${connectionId}`);
@@ -379,20 +425,157 @@ describe("Update and deactivate, driven through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends an updated Subscription with a numeric order and a mapping that stays null", async () => {
+  it("preserves a Subscription's hidden order while clearing its mapping", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
 
+    const mapping = view.getByRole("heading", { name: "Mapping" }).locator("..");
+    expect(await mapping.locator("dl").textContent()).toContain("order←orderId");
+    expect(await mapping.locator("dl").textContent()).toContain("placed_at←placedAt");
+    await mapping.getByText(/Evaluated per Event before delivery/).waitFor();
+    expect(await view.getByText("Order", { exact: true }).count()).toBe(0);
     // Editing opens the same sheet creating does, so the form is reached by opening it.
     await view.getByRole("button", { name: "Edit", exact: true }).click();
-    await formNamed(view, "Edit to-sink").getByLabel("Order").fill("7");
+    const form = formNamed(view, "Edit to-sink");
+    expect(await form.locator('section[aria-labelledby="mapping-summary-heading"] dl').textContent()).toContain(
+      "placed_at←placedAt",
+    );
+    expect(await form.getByLabel("Order").count()).toBe(0);
+    const save = view.locator('form[aria-label="Edit to-sink"] button[type="submit"]');
+    await form.getByRole("button", { name: "Edit in Playground" }).click();
+    const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    await playground.getByRole("button", { name: "Remove mapping 3" }).click();
+    await playground.getByRole("button", { name: "Remove mapping 2" }).click();
+    await playground.getByRole("button", { name: "Remove mapping 1" }).click();
+    await playground.getByText("No fields mapped. The accepted payload will be delivered unchanged.").waitFor();
+    expect(await save.isDisabled()).toBe(true);
+    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await playground
+      .getByRole("heading", { name: "Preview body" })
+      .locator("..")
+      .getByText('"orderId": "SO-4014"')
+      .waitFor();
+    await playground.getByRole("button", { name: "Confirm mapping change" }).click();
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("PATCH");
-    expect(sent.body.order_index).toBe(7);
-    // The stored Subscription has no mapping; editing another field must not invent one.
+    expect(sent.body.order_index).toBe(1);
     expect(sent.body.mapping).toBeNull();
     expect(sent.body.match_rules).toEqual({ event_type: "order.created" });
+    await view.close();
+  }, 60_000);
+
+  it("requires a fresh preview and confirmation before saving a changed mapping", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+
+    await view.getByRole("button", { name: "Playground", exact: true }).click();
+    const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    await playground.waitFor();
+    expect(await playground.getByLabel("Output field 1").inputValue()).toBe("order");
+    expect(await playground.getByLabel("Event field 1").inputValue()).toBe("orderId");
+    expect(await playground.getByLabel("Event field 1").locator('option[value="customer.id"]').count()).toBe(1);
+    expect(await playground.getByLabel("Event field 1").locator('option[value="`placed-at`"]').count()).toBe(1);
+    await playground.getByRole("button", { name: "Advanced JSONata" }).click();
+    expect(await playground.getByLabel("Playground mapping expression").inputValue()).toBe(
+      '{ "order": orderId, "total": total, "placed_at": placedAt }',
+    );
+    await playground.getByRole("button", { name: "Field mapping" }).click();
+    await playground.getByRole("button", { name: "Add field" }).click();
+    await playground.getByLabel("Output field 4").fill("type");
+    await playground.getByLabel("Event field 4").selectOption("$context.event_type");
+    await playground.getByText("Back to Subscription", { exact: true }).click();
+    const form = formNamed(view, "Edit to-sink");
+    await form.getByText("Preview and confirm this mapping change before saving the Subscription.").waitFor();
+    expect(await form.getByRole("button", { name: "Save changes" }).isDisabled()).toBe(true);
+
+    await form.getByRole("button", { name: "Edit in Playground" }).click();
+    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await playground.getByText('"order": "SO-4014"').waitFor();
+
+    const preview = writes.find((request) => new URL(request.url()).pathname === "/admin/transform/preview");
+    expect(preview?.postDataJSON()).toMatchObject({
+      transform: {
+        engine: "jsonata",
+        version: "1",
+        expression:
+          '{\n  "order": orderId,\n  "total": total,\n  "placed_at": placedAt,\n  "type": $context.event_type\n}',
+      },
+      sample_input: { orderId: "SO-4014", total: 42 },
+      sample_context: {
+        event_type: "order.created",
+        topic_name: "orders",
+        accepted_at: "2026-09-08T12:00:00Z",
+      },
+    });
+
+    await playground.getByRole("button", { name: "Paste sample JSON" }).click();
+    expect(await playground.getByRole("button", { name: "Confirm mapping change" }).isDisabled()).toBe(true);
+    await playground.getByLabel("Sample input (JSON)").fill('{"orderId":"manual-1"}');
+    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await playground.getByText('"order": "SO-4014"').waitFor();
+    await view.setViewportSize({ width: 320, height: 900 });
+    expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await playground.getByRole("button", { name: "Confirm mapping change" }).click();
+    await form.getByText("Mapping change reviewed and ready to save.").waitFor();
+    expect(await form.locator('section[aria-labelledby="mapping-summary-heading"] dl').textContent()).toContain(
+      "type←$context.event_type",
+    );
+    expect(await form.getByRole("button", { name: "Save changes" }).isEnabled()).toBe(true);
+    await view.close();
+  }, 60_000);
+
+  it("separates mapping syntax from manual-sample evaluation failure and restores focus", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+    const previews: Record<string, unknown>[] = [];
+    await view.route("**/admin/transform/preview", async (route) => {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      previews.push(body);
+      const expression = (body.transform as { expression: string }).expression;
+      return route.fulfill({
+        status: 400,
+        contentType: "application/problem+json",
+        json: {
+          title: "One or more validation errors occurred.",
+          errors: expression === "[" ? { transform: ["Invalid JSONata expression."] } : { "": ["items required"] },
+        },
+      });
+    });
+
+    await view.getByRole("button", { name: "Playground", exact: true }).click();
+    const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    await playground.getByRole("button", { name: "Advanced JSONata" }).click();
+    const expression = playground.getByLabel("Playground mapping expression");
+    await expression.fill("[");
+    expect(await playground.getByRole("button", { name: "Field mapping" }).isDisabled()).toBe(true);
+    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await playground.getByText("Invalid JSONata expression.").waitFor();
+    expect(await playground.getByText(/would retry and may dead-letter/).count()).toBe(0);
+    expect(await playground.getByRole("button", { name: "Confirm mapping change" }).isDisabled()).toBe(true);
+
+    await expression.fill('$error("items required")');
+    await playground.getByRole("button", { name: "Paste sample JSON" }).click();
+    await playground.getByLabel("Sample input (JSON)").fill('{"orderId":"manual-1"}');
+    await playground.getByLabel("Event type").fill("order.manual");
+    await playground.getByLabel("Accepted at").fill("2026-09-08T10:30");
+    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await playground.getByText(/would retry and may dead-letter/).waitFor();
+    expect(await playground.getByRole("button", { name: "Confirm mapping change" }).isDisabled()).toBe(true);
+    expect(previews.at(-1)).toMatchObject({
+      sample_input: { orderId: "manual-1" },
+      sample_context: { event_type: "order.manual", topic_name: "orders" },
+    });
+
+    await view.keyboard.press("Escape");
+    const reopen = formNamed(view, "Edit to-sink").getByRole("button", { name: "Edit in Playground" });
+    expect(await reopen.evaluate((button) => document.activeElement === button)).toBe(true);
+    await reopen.click();
+    await playground.getByRole("heading", { name: "Advanced JSONata" }).waitFor();
+    expect(await playground.getByLabel("Playground mapping expression").inputValue()).toBe('$error("items required")');
+    await view.keyboard.press("Escape");
+    await expect.poll(() => reopen.evaluate((button) => document.activeElement === button)).toBe(true);
+    await view.keyboard.press("Escape");
+    const trigger = view.getByRole("button", { name: "Playground", exact: true });
+    expect(await trigger.evaluate((button) => document.activeElement === button)).toBe(true);
     await view.close();
   }, 60_000);
 

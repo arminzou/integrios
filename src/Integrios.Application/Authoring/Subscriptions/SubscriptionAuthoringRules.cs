@@ -30,7 +30,7 @@ internal static class SubscriptionAuthoringRules
             "transform",
             out _);
         if (error is not null)
-            throw new SubscriptionValidationException(error);
+            throw new SubscriptionValidationException(error, "mapping");
     }
 
     private static bool HasValidMatchRulesShape(JsonElement matchRules)

@@ -25,7 +25,7 @@ public sealed class TransformEndpoints : IEndpointGroup
             cancellationToken);
         if (result.Error is not null)
             return Results.ValidationProblem(
-                new Dictionary<string, string[]> { [""] = [result.Error] },
+                new Dictionary<string, string[]> { [result.ErrorField ?? ""] = [result.Error] },
                 statusCode: StatusCodes.Status400BadRequest);
 
         using var doc = JsonDocument.Parse(result.OutputJson!);
