@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expressionFromFieldMappings, parseFieldMappings, payloadFieldPaths } from "./fieldMapping";
+import { expressionFromFieldMappings, parseFieldMappings, payloadFieldPaths, payloadPlaceholder } from "./fieldMapping";
 
 describe("field mappings", () => {
   it("round-trips the simple JSONata subset without accepting advanced expressions", () => {
@@ -20,5 +20,22 @@ describe("field mappings", () => {
       "`placed-at`",
       "items",
     ]);
+  });
+
+  it("builds null payload placeholders and excludes Event context", () => {
+    expect(
+      payloadPlaceholder([
+        { output: "customer", source: "customer.id" },
+        { output: "line", source: "items[0].sku" },
+        { output: "placed", source: "`placed-at`" },
+        { output: "type", source: "$context.event_type" },
+      ]),
+    ).toEqual({ customer: { id: null }, items: [{ sku: null }], "placed-at": null });
+    const hostile = payloadPlaceholder([
+      { output: "pollute", source: "__proto__.polluted" },
+      { output: "huge", source: "items[999999999].sku" },
+    ]);
+    expect(hostile).toEqual(JSON.parse('{"__proto__":{"polluted":null}}'));
+    expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
   });
 });

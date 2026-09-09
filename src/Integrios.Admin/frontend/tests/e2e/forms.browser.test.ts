@@ -59,6 +59,13 @@ const connector = {
   description: null,
   ...stamps,
 };
+const connectorDetail = {
+  ...connector,
+  manifest_schema_version: 1,
+  manifest: {
+    source_contracts: [{ key: "event_json", contract_version: 1, config: {} }],
+  },
+};
 
 const page = (items: unknown[], nextCursor: string | null = null) => ({ items, next_cursor: nextCursor });
 
@@ -106,8 +113,19 @@ const sourceDetail = {
 /// Per-endpoint stubs would be a fixture per screen for no extra coverage. Detail routes are
 /// matched before their lists, because a list path is a prefix of the detail path under it.
 function readFor(pathname: string): unknown {
+  if (/\/connectors\/[^/]+$/.test(pathname)) return connectorDetail;
   if (pathname === "/admin/connectors") return page([connector]);
   if (pathname === "/admin/tenants") return page([tenant]);
+  if (/\/overview$/.test(pathname))
+    return {
+      topics: 1,
+      connections: 1,
+      sources: 1,
+      subscriptions: 1,
+      live_api_keys: 1,
+      dead_lettered_deliveries: 0,
+      ingestion_endpoint: "http://localhost:5231/",
+    };
   if (/^\/admin\/tenants\/[^/]+$/.test(pathname)) return tenant;
   if (/\/connections\/[^/]+$/.test(pathname)) return connectionDetail;
   if (/\/subscriptions\/[^/]+$/.test(pathname)) return subscriptionDetail;
@@ -123,7 +141,7 @@ function readFor(pathname: string): unknown {
       event_deliveries: [],
       delivery_attempts: [],
     };
-  if (/\/sources\/[^/]+$/.test(pathname)) return sourceDetail;
+  if (/\/sources\/[^/]+$/.test(pathname)) return { ...sourceDetail, id: pathname.split("/").at(-1) };
   if (/\/topics\/[^/]+$/.test(pathname)) return topic;
   if (/\/connections$/.test(pathname)) return page([connection]);
   // A next_cursor here is what makes the option reads' own hundred-row cap observable.
@@ -378,24 +396,32 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends a Source with its type and configuration", async () => {
+  it("sends a Source, then opens its setup guide without narrow-screen overflow", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
 
     await view.click("text=New Source");
     const form = formNamed(view, "Create a Source");
     await choose(form.getByLabel("Connection"), /sink/);
     await choose(form.getByLabel("Topic"), /orders/);
-    await choose(form.getByLabel("Type"), "Webhook");
-    await form.getByLabel("Configuration (JSON)").fill('{"path":"/hook"}');
+    await choose(form.getByLabel("Type"), "Event API");
+    await form.getByLabel("Configuration (JSON)").fill('{"source_contract":"event_json"}');
     await view.click("text=Create Source");
+
+    const guide = view.getByRole("dialog", { name: "Publish through this Source" });
+    await guide.getByRole("heading", { name: "Construct the Event request" }).waitFor();
+    await view.setViewportSize({ width: 320, height: 900 });
+    expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await view.keyboard.press("Escape");
+    const reopen = view.getByRole("button", { name: "Open setup guide" });
+    expect(await reopen.evaluate((button) => document.activeElement === button)).toBe(true);
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources`);
     expect(sent.body.connection_id).toBe(connectionId);
     expect(sent.body.topic_id).toBe(topicId);
-    expect(sent.body.type).toBe("webhook");
-    expect(sent.body.configuration).toEqual({ path: "/hook" });
+    expect(sent.body.type).toBe("event_api");
+    expect(sent.body.configuration).toEqual({ source_contract: "event_json" });
     await view.close();
   }, 60_000);
 });
@@ -522,6 +548,45 @@ describe("Update and deactivate, driven through a real browser", () => {
     );
     expect(await form.getByRole("button", { name: "Save changes" }).isEnabled()).toBe(true);
     await view.close();
+  }, 60_000);
+
+  it("opens a Source guide from a Subscription with mapping context", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+    await view.route(`**/subscriptions/${subscriptionId}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        json: { ...subscriptionDetail, match_rules: { event_type: "order's.placed" } },
+      }),
+    );
+    await view.reload();
+
+    await view.getByRole("link", { name: new RegExp(sourceId) }).click();
+    await view.getByRole("heading", { name: "Publish through this Source" }).waitFor();
+    await view.getByText('"event_type": "order\'s.placed"').first().waitFor();
+    await view.getByText('"orderId": null').first().waitFor();
+    expect(
+      await view.getByRole("heading", { name: "cURL request" }).locator("../..").locator("pre").textContent(),
+    ).toContain(`order'"'"'s.placed`);
+
+    await view.close();
+
+    const advanced = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+    await advanced.page.route(`**/subscriptions/${subscriptionId}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        json: {
+          ...subscriptionDetail,
+          mapping_config: { engine: "jsonata", version: "1", expression: "$merge(payload)" },
+        },
+      }),
+    );
+    await advanced.page.reload();
+    await advanced.page.getByRole("link", { name: new RegExp(sourceId) }).click();
+    await advanced.page.getByRole("link", { name: "Open its Mapping Playground" }).click();
+    await advanced.page.getByRole("dialog", { name: "Mapping Playground" }).waitFor();
+    await advanced.page.close();
   }, 60_000);
 
   it("separates mapping syntax from manual-sample evaluation failure and restores focus", async () => {

@@ -2,9 +2,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type UseFormReturn, useForm } from "react-hook-form";
-import { Link, NavLink, useNavigate } from "react-router";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,6 +31,7 @@ import {
   type FieldMapping,
   parseFieldMappings,
   payloadFieldPaths,
+  payloadPlaceholder,
 } from "../ui/fieldMapping";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
@@ -424,6 +425,14 @@ function SubscriptionInspector({
   subscriptionId: string;
 }) {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const openPlayground =
+    (location.state as { openSubscriptionPlayground?: string } | null)?.openSubscriptionPlayground === subscriptionId;
+  useEffect(() => {
+    if (!openPlayground) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.pathname, location.search, navigate, openPlayground]);
   const subscription = useQuery({
     queryKey: ["subscription", tenantId, topicId, subscriptionId],
     queryFn: () =>
@@ -490,6 +499,8 @@ function SubscriptionInspector({
         <dd>{current.description ?? "—"}</dd>
       </Details>
 
+      <SubscriptionSourcePath tenantId={tenantId} topicId={topicId} subscription={current} />
+
       {mapping ? (
         <section className="flex min-w-0 flex-col gap-2">
           <h3 className="eyebrow">Mapping</h3>
@@ -512,7 +523,12 @@ function SubscriptionInspector({
             />
           )}
         </EditSheet>
-        <EditSheet label="Playground" title="Edit" description="Routes matching Events from this Topic">
+        <EditSheet
+          label="Playground"
+          title="Edit"
+          description="Routes matching Events from this Topic"
+          initialOpen={openPlayground}
+        >
           {(close) => (
             <SubscriptionForm
               key={`playground-${current.updated_at}`}
@@ -539,6 +555,103 @@ function SubscriptionInspector({
       <WriteStatus done={deactivate.isSuccess}>Subscription deactivated.</WriteStatus>
       <FormError message={formError(asProblem(deactivate.error))} />
     </Inspector>
+  );
+}
+
+function SubscriptionSourcePath({
+  tenantId,
+  topicId,
+  subscription,
+}: {
+  tenantId: string;
+  topicId: string;
+  subscription: Subscription;
+}) {
+  const sources = useQuery({
+    queryKey: ["subscription-sources", tenantId, topicId],
+    queryFn: async () => {
+      const items: components["schemas"]["SourceListItemDto"][] = [];
+      let after: string | undefined;
+      do {
+        const page = await call(() =>
+          api.GET("/admin/tenants/{tenantId}/sources", {
+            params: { path: { tenantId }, query: { topic_id: topicId, status: "active", after, limit: 100 } },
+          }),
+        );
+        items.push(...page.items);
+        after = page.next_cursor ?? undefined;
+      } while (after);
+      return items;
+    },
+  });
+  const eventType = subscriptionEventType(subscription.match_rules);
+  const fieldMappings = parseFieldMappings(mappingExpression(subscription.mapping_config));
+  const context = {
+    subscriptionId: subscription.id,
+    subscriptionPath: `/tenants/${tenantId}/subscriptions/${topicId}/${subscription.id}`,
+    eventType,
+    payload: payloadPlaceholder(fieldMappings ?? []),
+    advancedMapping: fieldMappings === undefined,
+  };
+  const items = sources.data ?? [];
+
+  return (
+    <section className="flex min-w-0 flex-col gap-2 border-y py-3.5" aria-labelledby="subscription-source-path">
+      <h3 id="subscription-source-path" className="m-0 text-sm">
+        How Events reach this Subscription
+      </h3>
+      <p className="m-0 text-[13px] text-ink-secondary">
+        Publishers address an active Source, not this Subscription. Matching Events then follow this configured path.
+      </p>
+      <ol aria-label="Subscription Event path" className="m-0 flex list-none flex-wrap items-center gap-1.5 text-xs">
+        <li className="rounded-full border px-2.5 py-1">{items.length === 1 ? "Source" : "Sources"}</li>
+        <li aria-hidden="true">→</li>
+        <li className="rounded-full border px-2.5 py-1">Topic</li>
+        <li aria-hidden="true">→</li>
+        <li className="rounded-full border px-2.5 py-1">Subscription</li>
+        <li aria-hidden="true">→</li>
+        <li className="rounded-full border px-2.5 py-1">Destination</li>
+      </ol>
+      <p className="m-0 text-sm">
+        Event type: <code>{eventType || "—"}</code>
+      </p>
+      {sources.isPending ? <p className="m-0 text-sm">Loading active Sources…</p> : null}
+      {sources.error ? (
+        <p role="alert">{asProblem(sources.error)?.detail ?? "Active Sources could not be read."}</p>
+      ) : null}
+      {!sources.isPending && !sources.error && items.length === 0 ? (
+        <p className="m-0 text-sm">
+          No active Source publishes to this Topic.{" "}
+          <Link to={`/tenants/${tenantId}/sources?topic_id=${topicId}`} state={{ openSourceCreate: true }}>
+            Create a Source
+          </Link>
+        </p>
+      ) : null}
+      {items.length > 0 ? (
+        <div className="flex min-w-0 flex-col gap-1.5">
+          {items.length > 1 ? <span className="text-xs text-ink-secondary">Choose an upstream Source:</span> : null}
+          {items.map((source) => (
+            <Button
+              key={source.id}
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-auto min-w-0 max-w-full justify-start whitespace-normal py-1.5"
+            >
+              <Link
+                className="min-w-0 no-underline"
+                to={`/tenants/${tenantId}/sources/${source.id}`}
+                state={{ openSourceGuide: source.id, sourceGuideContext: context }}
+              >
+                <span className="min-w-0 break-all text-left">
+                  {source.type} · {source.source_contract} · {source.id}
+                </span>
+              </Link>
+            </Button>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

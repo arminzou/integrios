@@ -16,8 +16,11 @@ beforeEach(() => {
 /// A screen is rendered directly, with its own props, inside just enough router to satisfy the
 /// links it contains. Its own behaviour is what the test is about; which URL resolved to it is
 /// `routes.test.tsx`'s job.
-export function renderScreen(element: ReactElement, initialPath = "/") {
-  const router = createMemoryRouter([{ path: "*", element }], { initialEntries: [initialPath] });
+export function renderScreen(
+  element: ReactElement,
+  initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/",
+) {
+  const router = createMemoryRouter([{ path: "*", element }], { initialEntries: [initialEntry] });
   return { ...render(withQueries(<RouterProvider router={router} />)), router };
 }
 

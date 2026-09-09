@@ -171,6 +171,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await sourceForm.getByLabel("Configuration (JSON)").fill('{"source_contract":"event_json"}');
     await view.click("text=Create Source");
     await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
+    await view.getByRole("dialog", { name: "Publish through this Source" }).waitFor();
     await closeView(view);
 
     // Everything the journey authored is readable from the deployment, not merely echoed by a form.

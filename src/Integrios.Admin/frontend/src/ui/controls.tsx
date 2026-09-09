@@ -50,17 +50,19 @@ function FormSheet({
   label,
   title = label,
   description,
+  initialOpen = false,
   variant,
   children,
 }: {
   label: string;
   title?: string;
   description?: string;
+  initialOpen?: boolean;
   variant: "default" | "outline";
   /// Handed a way to close, because a write that succeeded should not leave its own form standing.
   children: (close: () => void) => ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

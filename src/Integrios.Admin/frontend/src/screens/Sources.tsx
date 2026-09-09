@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, NavLink, useNavigate } from "react-router";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
@@ -41,6 +41,7 @@ import {
 } from "../ui/layout";
 import { activeOnly, nameIn, useConnectionOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
+import { SourceGuide } from "./SourceGuide";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
 type Source = components["schemas"]["SourceDto"];
@@ -74,6 +75,13 @@ type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
 
 export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string; selectedSourceId?: string }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const openCreate = (location.state as { openSourceCreate?: boolean } | null)?.openSourceCreate === true;
+  useEffect(() => {
+    if (!openCreate) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.pathname, location.search, navigate, openCreate]);
   const connectionOptions = useConnectionOptions(tenantId);
   const topicOptions = useTopicOptions(tenantId);
   const [status, setStatus] = useFilterParam("status");
@@ -107,8 +115,12 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
       <PageHeader
         title="Sources"
         action={
-          <CreateSheet label="New Source" description="A Source binds one Connection to one Topic">
-            {(close) => <CreateSource tenantId={tenantId} onCreated={close} />}
+          <CreateSheet
+            label="New Source"
+            description="A Source binds one Connection to one Topic"
+            initialOpen={openCreate}
+          >
+            {(close) => <CreateSource tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
           </CreateSheet>
         }
       >
@@ -210,7 +222,15 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
   );
 }
 
-function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
+function CreateSource({
+  tenantId,
+  defaultTopicId = "",
+  onCreated,
+}: {
+  tenantId: string;
+  defaultTopicId?: string;
+  onCreated: () => void;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const connections = useConnectionOptions(tenantId);
@@ -219,7 +239,7 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
 
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { connection_id: "", topic_id: "", type: "webhook", configuration: "{}" },
+    defaultValues: { connection_id: "", topic_id: defaultTopicId, type: "webhook", configuration: "{}" },
   });
 
   const create = useMutation({
@@ -238,7 +258,7 @@ function CreateSource({ tenantId, onCreated }: { tenantId: string; onCreated: ()
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
       onCreated();
-      if (created) navigate(`/tenants/${tenantId}/sources/${created.id}`);
+      if (created) navigate(`/tenants/${tenantId}/sources/${created.id}`, { state: { openSourceGuide: created.id } });
     },
   });
 
@@ -358,6 +378,7 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
         <dd>{current.revoked_at ?? "Not revoked"}</dd>
       </Details>
 
+      <SourceGuide tenantId={tenantId} source={current} />
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
       <EditSource
         key={current.updated_at}

@@ -104,11 +104,13 @@ export function BodyPanel({
   value,
   truncated,
   note,
+  copyable = true,
 }: {
   label: string;
   value: unknown;
   truncated?: boolean;
   note?: string;
+  copyable?: boolean;
 }) {
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   const [copied, setCopied] = useState(false);
@@ -121,19 +123,22 @@ export function BodyPanel({
           {truncated ? (
             <span className="rounded-full bg-warning-surface px-2 py-0.5 text-xs text-warning-ink">Truncated</span>
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void navigator.clipboard
-                ?.writeText(text)
-                .then(() => setCopied(true))
-                .catch(() => setCopied(false));
-            }}
-          >
-            Copy
-          </Button>
+          {copyable ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={`Copy ${label.toLowerCase()}`}
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(text)
+                  .then(() => setCopied(true))
+                  .catch(() => setCopied(false));
+              }}
+            >
+              Copy
+            </Button>
+          ) : null}
         </div>
       </div>
       <pre className="m-0 max-h-64 overflow-auto rounded-md bg-surface-quiet p-3 font-mono text-xs whitespace-pre-wrap">
