@@ -187,6 +187,14 @@
     padding: 4px 6px;
   }
 
+  /* The tap-target padding must not indent the text: in a table it would push a linked cell 6px
+     past the column's own edge, so the header label and the value below it stop lining up. Hanging
+     the horizontal padding outside the box keeps the 24x24 target and the column edge both. */
+  th a,
+  td a {
+    margin-inline: -6px;
+  }
+
   code,
   kbd,
   samp,
