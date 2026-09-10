@@ -185,7 +185,6 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
                 </p>
               </div>
             </section>
-
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
