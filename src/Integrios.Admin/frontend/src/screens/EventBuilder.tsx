@@ -340,7 +340,7 @@ export function EventBuilder({
                   spellCheck={false}
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
-                  className="min-h-56 font-mono text-sm"
+                  className="min-h-120 font-mono text-sm"
                 />
                 {bodyError ? (
                   <p role="alert" className="m-0 text-sm text-destructive">
