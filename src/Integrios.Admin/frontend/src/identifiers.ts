@@ -7,3 +7,16 @@ const uuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a
 export function isIdentifier(value: string | undefined): value is string {
   return value !== undefined && uuid.test(value);
 }
+
+/// The identifier shape the Admin API accepts wherever an Operator names something the platform has
+/// to match on — a Connector key, a Source contract key, a scheme or mapped field name: lower
+/// snake_case beginning with a letter. Read off a display name so an Operator does not have to
+/// transliterate one by hand. Anything that cannot begin an identifier is dropped rather than
+/// escaped, because this produces a name for the platform rather than a rendering of the original.
+export function snakeIdentifier(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^[^a-z]+/, "")
+    .replace(/_+$/, "");
+}

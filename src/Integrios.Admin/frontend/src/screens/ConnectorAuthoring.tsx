@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { type ReactNode, useState } from "react";
-import { useForm } from "react-hook-form";
+import { type ReactNode, useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form";
@@ -11,6 +11,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
 import type { components } from "../api/schema";
+import { snakeIdentifier } from "../identifiers";
 import { Callout, ConfirmAction, Disclosure, FormError } from "../ui/controls";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
@@ -313,6 +314,20 @@ export function ConnectorAuthoring({
         : blank,
   });
   const values = form.watch();
+
+  // The key follows the name until the Operator writes one themselves, and never touches a key that
+  // arrived with a manifest: a copied version's key is its identity, and an imported one is the
+  // author's own choice.
+  //
+  // Authorship is recorded from the Operator's own keystroke rather than read off the form's dirty
+  // state: that state is recomputed against the defaults whenever a field returns to one, which
+  // marked a key this form had written as authored — and froze it — the moment the name was cleared.
+  const [keyAuthored, setKeyAuthored] = useState(false);
+  const authoredName = useWatch({ control: form.control, name: "name" });
+  useEffect(() => {
+    if (from || keyAuthored) return;
+    form.setValue("key", snakeIdentifier(authoredName));
+  }, [from, keyAuthored, authoredName, form]);
   const manifest = buildManifest(values, advanced);
 
   const apply = useMutation({
@@ -359,6 +374,8 @@ export function ConnectorAuthoring({
     setKept(read.kept);
     setImported("");
     setGeneration(generation + 1);
+    // An imported key is the manifest author's own, so the name stops deciding it.
+    setKeyAuthored(true);
   };
 
   return (
@@ -374,7 +391,8 @@ export function ConnectorAuthoring({
             control={form.control}
             name="key"
             label="Key"
-            hint={from ? undefined : "The Connector's stable identifier, such as github."}
+            hint={from ? undefined : "Names this Connector in Connections and manifests."}
+            onChange={() => setKeyAuthored(true)}
             className="font-mono text-sm"
             readOnly={from !== undefined}
             required

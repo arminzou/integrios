@@ -65,6 +65,38 @@ describe("Authoring the first Connector", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/connectors/${installed.id}`));
   });
 
+  it("reads a key off the name until an Operator writes one of their own", async () => {
+    const calls = stubHttp(listOnly);
+
+    renderScreen(<ConnectorsScreen />);
+    openAuthoring();
+    const key = screen.getByLabelText("Key") as HTMLInputElement;
+
+    // Lower snake_case starting with a letter is what the Admin API accepts, so that is what a name
+    // is read down to — the leading digits of "3M" cannot begin a key and are dropped.
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "GitHub" } });
+    await waitFor(() => expect(key.value).toBe("github"));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "3M Field Service!" } });
+    await waitFor(() => expect(key.value).toBe("m_field_service"));
+
+    // Emptying the name empties the key with it. The form's dirty state turns over when a field
+    // returns to its default, which once made the key look authored and froze it a letter short.
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "" } });
+    await waitFor(() => expect(key.value).toBe(""));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Slack" } });
+    await waitFor(() => expect(key.value).toBe("slack"));
+
+    // Once the Operator writes a key, the name stops deciding it.
+    fireEvent.change(key, { target: { value: "field_service" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Something Else" } });
+    await waitFor(() => expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Something Else"));
+    expect(key.value).toBe("field_service");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
+    await waitFor(() => expect(applied(calls)).toBeDefined());
+    expect(applied(calls)!.url.pathname).toBe("/admin/connectors/field_service/versions/1");
+  });
+
   it("follows the chosen capabilities into the manifest's direction and its configuration schemas", async () => {
     const calls = stubHttp(listOnly);
 
@@ -129,7 +161,8 @@ describe("Authoring the first Connector", () => {
       .split(" ")
       .map((id) => document.getElementById(id)?.textContent ?? "")
       .join(" ");
-    expect(described).toContain("stable identifier");
+    // The field's own hint travels with the message rather than being replaced by it.
+    expect(described).toContain("Names this Connector");
     expect(described).toContain(message.textContent);
     // The draft is still standing, so the Operator corrects it rather than authoring it again.
     expect((key as HTMLInputElement).value).toBe("GITHUB");
