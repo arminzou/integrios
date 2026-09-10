@@ -116,7 +116,9 @@ function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
     <p
       data-slot="form-description"
       id={formDescriptionId}
-      className={cn("text-sm text-muted-foreground", error && "invisible", className)}
+      // The base stylesheet hands a paragraph the margins prose wants; a hint is a line of a form
+      // rather than prose, and the row's own gap is what spaces it from the control.
+      className={cn("m-0 text-sm text-muted-foreground", error && "invisible", className)}
       {...props}
     />
   );
@@ -136,21 +138,28 @@ export function MessageBubble({
   role,
   message,
   hint,
-  className,
+  /// Where the message hangs from. "hint" is the field's own hint line, directly under the control,
+  /// which is where a field's message belongs — the line is not being drawn while the message is up,
+  /// so the message fills that space rather than leaving a hole and landing on the next field.
+  /// "below" hangs under the whole box, for a message about a group rather than a control.
+  placement = "below",
 }: {
   id?: string;
   role?: "alert";
   message: React.ReactNode;
   hint?: React.ReactNode;
-  className?: string;
+  placement?: "hint" | "below";
 }) {
   return (
     <p
       id={id}
       role={role}
       className={cn(
-        "pointer-events-none absolute top-full left-0 z-20 mt-[7px] grid max-w-full grid-cols-[15px_1fr] gap-x-[7px] gap-y-[3px] rounded border border-danger-ink/35 bg-surface px-2.5 py-1.5 text-[12.5px] leading-[1.35] text-ink shadow-[0_3px_8px_rgb(23_23_23/0.14)] before:absolute before:-top-[5px] before:left-[13px] before:size-2 before:rotate-45 before:border-t before:border-l before:border-danger-ink/35 before:bg-surface before:content-['']",
-        className,
+        // The base stylesheet gives a paragraph its own margin, and the row gives the hint line a
+        // gap: both would push the message away from the control it points at. A pixel above the
+        // hint line puts the arrow's tip on the control's own edge.
+        placement === "hint" ? "-top-px m-0" : "top-full mt-[7px]",
+        "pointer-events-none absolute left-0 z-20 grid max-w-full grid-cols-[15px_1fr] gap-x-[7px] gap-y-[3px] rounded border border-danger-ink/35 bg-surface px-2.5 py-1.5 text-[12.5px] leading-[1.35] text-ink shadow-[0_3px_8px_rgb(23_23_23/0.14)] before:absolute before:-top-[5px] before:left-[13px] before:size-2 before:rotate-45 before:border-t before:border-l before:border-danger-ink/35 before:bg-surface before:content-['']",
       )}
     >
       <span
@@ -165,7 +174,11 @@ export function MessageBubble({
   );
 }
 
-function FormMessage({ hint, ...props }: React.ComponentProps<"p"> & { hint?: React.ReactNode }) {
+function FormMessage({
+  hint,
+  placement,
+  ...props
+}: React.ComponentProps<"p"> & { hint?: React.ReactNode; placement?: "hint" | "below" }) {
   const { error, formMessageId } = useFormField();
   const body = error ? String(error?.message ?? "") : props.children;
 
@@ -175,7 +188,7 @@ function FormMessage({ hint, ...props }: React.ComponentProps<"p"> & { hint?: Re
 
   // A rejected field announces its message rather than only turning a colour.
   return error ? (
-    <MessageBubble id={formMessageId} role="alert" message={body} hint={hint} />
+    <MessageBubble id={formMessageId} role="alert" message={body} hint={hint} placement={placement} />
   ) : (
     <p data-slot="form-message" id={formMessageId} className="text-sm text-destructive">
       {body}

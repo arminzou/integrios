@@ -425,10 +425,20 @@ describe("The dashboard in a real browser", () => {
     expect(await spacing()).toBe(before);
     // Floating is only useful if it floats where the field is: a message positioned against some
     // ancestor other than its own row lands somewhere else entirely, and still passes a text check.
-    const nameBox = (await page.getByLabel("Name", { exact: true }).boundingBox())!;
-    const messageBox = (await page.locator('[role="alert"]', { hasText: "Enter a name." }).boundingBox())!;
-    expect(messageBox.y - (nameBox.y + nameBox.height)).toBeLessThan(20);
-    expect(Math.abs(messageBox.x - nameBox.x)).toBeLessThan(4);
+    // Both cases: a field with no hint, and one whose hint line the message hangs from. Anchoring
+    // the message to the row instead of that line drops it a whole hint below the control it is
+    // about, onto the next field — while every text assertion still passes.
+    for (const [label, message] of [
+      ["Name", "Enter a name."],
+      ["Key", "Enter a key."],
+    ]) {
+      const control = (await page.getByLabel(label, { exact: true }).boundingBox())!;
+      const bubble = (await page.locator('[role="alert"]', { hasText: message }).boundingBox())!;
+      // Flush: the arrow rises about 7 pixels above the box, so this is the message's tip resting on
+      // the control's own edge rather than floating somewhere under it.
+      expect(bubble.y - (control.y + control.height)).toBeLessThan(10);
+      expect(Math.abs(bubble.x - control.x)).toBeLessThan(4);
+    }
     // The browser refused nothing: the form is what reported the failure.
     expect(
       await page.getByLabel("Name", { exact: true }).evaluate((element: HTMLInputElement) => element.validity.valid),
@@ -440,7 +450,7 @@ describe("The dashboard in a real browser", () => {
 
     // The message carries the field's hint, and the line that usually holds it keeps its box
     // without being drawn or announced.
-    const hint = "The Connector's stable identifier, such as github.";
+    const hint = "Names this Connector in Connections and manifests.";
     const message = page.locator('[role="alert"]', { hasText: "Enter a key." });
     expect(await message.textContent()).toContain(hint);
     const inline = page.locator("[data-slot=form-description]", { hasText: hint });
