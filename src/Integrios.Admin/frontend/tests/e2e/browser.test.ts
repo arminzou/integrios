@@ -310,6 +310,35 @@ describe("The dashboard in a real browser", () => {
     60_000,
   );
 
+  // The authoring flyout changes shape as capabilities are chosen. Whether that costs an Operator
+  // their place in the form is only decidable with layout: jsdom has no scroll position to lose.
+  it("keeps the Connector authoring flyout operable and in place at 320 CSS pixels", async () => {
+    const page = await openDashboard("/connectors", { viewport: { width: 320, height: 900 } });
+    await page.getByRole("button", { name: "New Connector" }).click();
+    const sheet = page.getByRole("dialog", { name: "New Connector" });
+    await sheet.waitFor();
+
+    await page.getByLabel("Name", { exact: true }).fill("GitHub");
+    await page.getByLabel("Key", { exact: true }).fill("github");
+
+    const deliver = sheet.getByRole("checkbox", { name: /Deliver Events over HTTP/ });
+    await deliver.focus();
+    const before = await sheet.evaluate((element) => element.scrollTop);
+    await page.keyboard.press("Space");
+
+    await sheet.getByRole("group", { name: "Allowed authentication" }).waitFor();
+    expect(await deliver.isChecked()).toBe(true);
+    // The section it revealed is rendered into the standing flyout, so neither the scroll position
+    // nor the control that opened it moves out from under the Operator.
+    expect(await sheet.evaluate((element) => element.scrollTop)).toBe(before);
+    expect(await deliver.evaluate((element) => element === document.activeElement)).toBe(true);
+
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+    await page.close();
+  }, 60_000);
+
   // A press has to be distinguishable from a hover, or a control under the pointer looks the same
   // whether or not it is being pressed. Both mechanisms are covered: a filled variant presses from
   // its translucent hover back to full strength, an outlined one from the hover surface down to the

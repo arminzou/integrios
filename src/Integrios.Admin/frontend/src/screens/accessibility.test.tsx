@@ -109,6 +109,18 @@ describe("Accessibility of the Operator workflows", () => {
     await expectNoAccessibilityViolations(container);
   });
 
+  it("passes the automated rules on the Connector authoring sheet", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    const container = renderScreen(<ConnectorsScreen />);
+    await screen.findByRole("heading", { level: 1, name: "Connectors" });
+    // The guided draft is a form of native checkboxes, radios and fieldsets, so it is checked in the
+    // state that has them rather than only in the screen's resting one.
+    fireEvent.click(screen.getByRole("button", { name: "New Connector" }));
+    await screen.findByRole("button", { name: "Create Connector" });
+    await expectNoAccessibilityViolations(container);
+  });
+
   it("passes the automated rules on a populated table and its confirmation", async () => {
     stubHttp(() => ({ status: 200, body: tenant }));
 

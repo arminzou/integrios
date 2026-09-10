@@ -29,6 +29,7 @@ import {
   TableCard,
 } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
+import { ConnectorAuthoring } from "./ConnectorAuthoring";
 import { SourceContractPreview } from "./Previews";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
@@ -69,9 +70,12 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
       <PageHeader
         title="Connectors"
         action={
-          <CreateSheet label="Apply manifest" description="Install or update a deployment-wide Connector">
+          <CreateSheet
+            label="New Connector"
+            description="Build a reusable capability definition without writing its manifest."
+          >
             {(close) => (
-              <ApplyManifest
+              <ConnectorAuthoring
                 onApplied={(installed) => {
                   close();
                   if (installed) navigate(`/connectors/${installed.id}`);
@@ -103,7 +107,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
               emptyText={
                 direction
                   ? "No Connectors match this filter."
-                  : "No Connectors are installed. Use Apply manifest, above, to install the first one."
+                  : "No Connectors are installed. Use New Connector, above, to author the first one."
               }
             />
             {connectors.length > 0 ? (
