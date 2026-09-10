@@ -1,20 +1,14 @@
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { NavLink, useNavigate } from "react-router";
-import { z } from "zod";
-import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
-import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { appliedNote, CreateSheet, Disclosure, FilterBar, FormError, ListStatus, LoadMore } from "../ui/controls";
-import { Filter, Form, TextAreaField, TextField } from "../ui/fields";
+import { appliedNote, CreateSheet, EditSheet, FilterBar, ListStatus, LoadMore } from "../ui/controls";
+import { Filter } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
-import { applyProblem } from "../ui/formProblem";
-import { formatJson, parseJson } from "../ui/json";
+import { formatJson } from "../ui/json";
 import {
   CloseInspector,
   Details,
@@ -22,7 +16,6 @@ import {
   InspectorPlaceholder,
   Page,
   PageHeader,
-  Panel,
   RowHeader,
   SplitList,
   SplitView,
@@ -30,23 +23,8 @@ import {
 } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 import { ConnectorAuthoring } from "./ConnectorAuthoring";
-import { SourceContractPreview } from "./Previews";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
-type Connector = components["schemas"]["ConnectorDto"];
-
-const applyFields = ["key"] as const;
-
-const applySchema = z.object({
-  key: z.string().trim().min(1, "Enter a key."),
-  contract_version: z.string().regex(/^[1-9]\d*$/, "Enter a version of 1 or more."),
-  manifest: z.string().superRefine((text, ctx) => {
-    const parsed = parseJson(text);
-    if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
-  }),
-});
-
-type ApplyValues = z.infer<typeof applySchema>;
 
 /// Connectors are deployment-wide rather than Tenant-scoped, so this screen carries no Tenant.
 export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?: string } = {}) {
@@ -164,13 +142,6 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
           )}
         </SplitView>
       </section>
-
-      {/* A dry run is a tool an Operator occasionally reaches for, not what this page is. Expanded by
-          default it was taller than the list it sat under, so the screen read as a form with a list
-          on top of it. */}
-      <Disclosure label="Preview a Source contract">
-        <SourceContractPreview />
-      </Disclosure>
     </Page>
   );
 }
@@ -179,6 +150,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
 /// than it is applied — a Connection's configuration is validated against this manifest — so the
 /// manifest is what the panel is mostly for.
 function ConnectorInspector({ connectorId }: { connectorId: string }) {
+  const navigate = useNavigate();
   const connector = useQuery({
     queryKey: ["connector", connectorId],
     queryFn: () => call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: connectorId } } })),
@@ -232,94 +204,24 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         </p>
       </section>
 
-      <ApplyManifest key={current.updated_at} connector={current} />
+      {/* An applied version is read here, never edited: authoring a change produces the next
+          version through the same guided form the first one came from. */}
+      <EditSheet
+        label="Create new version"
+        title="New Connector version"
+        description={`Copied from ${current.key} v${current.contract_version}. Review it, then apply it as a later version.`}
+      >
+        {(close) => (
+          <ConnectorAuthoring
+            key={current.updated_at}
+            from={current}
+            onApplied={(next) => {
+              close();
+              if (next) navigate(`/connectors/${next.id}`);
+            }}
+          />
+        )}
+      </EditSheet>
     </Inspector>
-  );
-}
-
-/// A Connector is authored by applying a manifest to one contract version, and that one call both
-/// installs a key the deployment does not have yet and updates one it does. So this is one form,
-/// not two: the only difference is whether the key is already decided. There is no field-level
-/// Connector editor, because the manifest is the Connector's own contract and the API owns no
-/// partial update of it.
-function ApplyManifest({
-  connector,
-  onApplied,
-}: {
-  connector?: Connector;
-  onApplied?: (applied: Connector | undefined) => void;
-}) {
-  const queryClient = useQueryClient();
-  const form = useForm<ApplyValues>({
-    resolver: zodResolver(applySchema),
-    defaultValues: {
-      key: connector?.key ?? "",
-      contract_version: String(connector?.contract_version ?? 1),
-      manifest: formatJson(connector?.manifest),
-    },
-  });
-
-  const apply = useMutation({
-    mutationFn: (values: ApplyValues) =>
-      call(() =>
-        api.PUT("/admin/connectors/{key}/versions/{contractVersion}", {
-          params: { path: { key: values.key, contractVersion: Number(values.contract_version) } },
-          body: parseJson(values.manifest).value,
-        }),
-      ),
-    onSuccess: (applied) => {
-      void queryClient.invalidateQueries({ queryKey: ["connectors"] });
-      void queryClient.invalidateQueries({ queryKey: ["connector-options"] });
-      if (connector) void queryClient.invalidateQueries({ queryKey: ["connector", connector.id] });
-      onApplied?.(applied);
-    },
-  });
-
-  const submit = form.handleSubmit((values) =>
-    apply.mutate(values, { onError: (failure) => applyProblem(form, failure, applyFields) }),
-  );
-
-  return (
-    <Form {...form}>
-      <Panel asChild>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <h2>{connector ? "Apply a manifest" : "Install a Connector"}</h2>
-          <FormError message={formError(asProblem(apply.error), applyFields)} />
-
-          {/* An existing Connector's key is its identity, so it is read-only rather than offered for
-              editing: changing it here would install a different Connector, not rename this one. */}
-          <TextField
-            control={form.control}
-            name="key"
-            label="Key"
-            hint={connector ? undefined : "The Connector's stable identifier, such as http."}
-            className="font-mono text-sm"
-            readOnly={connector !== undefined}
-            required
-          />
-          <TextField
-            control={form.control}
-            name="contract_version"
-            label="Contract version"
-            hint="Applying to a new version installs it; applying to an existing one updates that version."
-            type="number"
-            min={1}
-            step={1}
-            required
-          />
-          <TextAreaField
-            control={form.control}
-            name="manifest"
-            label="Manifest (JSON)"
-            className="min-h-64 font-mono text-sm"
-            required
-          />
-
-          <Button type="submit" className="self-start" disabled={apply.isPending}>
-            {connector ? "Apply manifest" : "Install Connector"}
-          </Button>
-        </form>
-      </Panel>
-    </Form>
   );
 }

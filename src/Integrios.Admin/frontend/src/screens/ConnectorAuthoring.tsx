@@ -275,15 +275,32 @@ function CheckRow({
 
 /// The guided New Connector draft. It produces the same manifest the Admin API already owns and
 /// applies it through the same immutable version route; nothing about the guided form is persisted.
-export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connector | undefined) => void }) {
+///
+/// `from` starts the draft as a copy of an applied version. A Connector version is immutable, so the
+/// copy is a new version the Operator chooses and reviews — never an edit of the version it came
+/// from, and never of one already behind it.
+export function ConnectorAuthoring({
+  from,
+  onApplied,
+}: {
+  from?: Connector;
+  onApplied?: (applied: Connector | undefined) => void;
+}) {
   const queryClient = useQueryClient();
-  const [advanced, setAdvanced] = useState<Advanced>(noAdvanced);
-  const [kept, setKept] = useState<string[]>([]);
+  const copied = from ? fromManifest((from.manifest ?? {}) as Record<string, unknown>) : undefined;
+  const [advanced, setAdvanced] = useState<Advanced>(copied?.advanced ?? noAdvanced);
+  const [kept, setKept] = useState<string[]>(copied?.kept ?? []);
   const [imported, setImported] = useState("");
   /// An import replaces the mapping under the Builder, whose sample and guided choices belong to the
   /// draft that is being discarded; remounting it is what discards them with it.
   const [generation, setGeneration] = useState(0);
-  const form = useForm<AuthoringValues>({ resolver: zodResolver(authoringSchema), defaultValues: blank });
+  const form = useForm<AuthoringValues>({
+    resolver: zodResolver(authoringSchema),
+    defaultValues:
+      from && copied
+        ? { ...copied.values, key: from.key, contract_version: String(Number(from.contract_version) + 1) }
+        : blank,
+  });
   const values = form.watch();
   const manifest = buildManifest(values, advanced);
 
@@ -304,11 +321,19 @@ export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connec
     },
   });
 
-  const submit = form.handleSubmit((current) =>
+  const submit = form.handleSubmit((current) => {
+    // Applying to a version that already exists updates it in place, which is what an immutable
+    // Connector version is not. Versions only move forward from the one being copied.
+    if (from && Number(current.contract_version) <= Number(from.contract_version)) {
+      form.setError("contract_version", {
+        message: `Version ${from.contract_version} is applied. Choose a later version.`,
+      });
+      return;
+    }
     apply.mutate(buildManifest(current, advanced), {
       onError: (failure) => applyProblem(form, failure, applyFields),
-    }),
-  );
+    });
+  });
 
   const importParse = imported.trim() === "" ? undefined : parseJson(imported);
   const importError =
@@ -332,12 +357,15 @@ export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connec
 
         <Section title="Basics" hint="Name the reusable external-system contract.">
           <TextField control={form.control} name="name" label="Name" required />
+          {/* A Connector's key is its identity: changing it here would author a different
+              Connector rather than a new version of this one. */}
           <TextField
             control={form.control}
             name="key"
             label="Key"
-            hint="The Connector's stable identifier, such as github."
+            hint={from ? undefined : "The Connector's stable identifier, such as github."}
             className="font-mono text-sm"
+            readOnly={from !== undefined}
             required
           />
           <TextAreaField control={form.control} name="description" label="Description" className="min-h-20" />
@@ -345,7 +373,11 @@ export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connec
             control={form.control}
             name="contract_version"
             label="Contract version"
-            hint="A Connector version is immutable. Applying to a new version installs it."
+            hint={
+              from
+                ? `Version ${from.contract_version} stays as it is. This applies a new one.`
+                : "A Connector version is immutable. Applying to a new version installs it."
+            }
             type="number"
             min={1}
             step={1}
@@ -573,7 +605,7 @@ export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connec
         </Section>
 
         <Button type="submit" className="self-start" disabled={apply.isPending}>
-          Create Connector
+          {from ? "Create version" : "Create Connector"}
         </Button>
       </form>
     </Form>
