@@ -193,7 +193,7 @@ function CreateTenant({ onCreated }: { onCreated: () => void }) {
 
   return (
     <Form {...form}>
-      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Tenant">
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Tenant">
         <FormError message={formError(asProblem(create.error), createFields)} />
 
         <TextField control={form.control} name="slug" label="Slug" required />
@@ -387,6 +387,7 @@ function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
       <Form {...form}>
         <form
           className="flex flex-col gap-4"
+          noValidate
           onSubmit={form.handleSubmit((values) =>
             save.mutate(values, {
               onSuccess: onSaved,

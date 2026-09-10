@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -10,7 +11,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
 import type { components } from "../api/schema";
-import { ConfirmAction, Disclosure, FormError } from "../ui/controls";
+import { Callout, ConfirmAction, Disclosure, FormError } from "../ui/controls";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
@@ -231,9 +232,19 @@ export function fromManifest(document: Record<string, unknown>): {
   };
 }
 
-function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+function Section({
+  title,
+  hint,
+  className,
+  children,
+}: {
+  title: string;
+  hint: string;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <section className="flex flex-col gap-3 border-t pt-4 first:border-t-0 first:pt-0">
+    <section className={cn("flex flex-col gap-3 border-t pt-4 first:border-t-0 first:pt-0", className)}>
       <div>
         <h3 className="m-0 text-sm font-semibold">{title}</h3>
         <p className="m-0 mt-0.5 text-xs text-ink-secondary">{hint}</p>
@@ -352,7 +363,7 @@ export function ConnectorAuthoring({
 
   return (
     <Form {...form}>
-      <form className="flex flex-col gap-5" onSubmit={submit}>
+      <form className="flex flex-col gap-5" noValidate onSubmit={submit}>
         <FormError message={formError(asProblem(apply.error), applyFields)} />
 
         <Section title="Basics" hint="Name the reusable external-system contract.">
@@ -385,7 +396,11 @@ export function ConnectorAuthoring({
           />
         </Section>
 
-        <Section title="Capabilities" hint="Choose what Connections built from this Connector may do.">
+        <Section
+          className="relative"
+          title="Capabilities"
+          hint="Choose what Connections built from this Connector may do."
+        >
           <FormField
             control={form.control}
             name="receive"
@@ -410,11 +425,7 @@ export function ConnectorAuthoring({
               />
             )}
           />
-          {form.formState.errors.receive?.message ? (
-            <p role="alert" className="m-0 text-sm text-destructive">
-              {form.formState.errors.receive.message}
-            </p>
-          ) : null}
+          <Callout message={form.formState.errors.receive?.message} />
         </Section>
 
         {values.receive ? (
@@ -469,7 +480,7 @@ export function ConnectorAuthoring({
                   className="font-mono text-sm"
                   required
                 />
-                <div className="flex flex-col gap-2">
+                <div className="relative flex flex-col gap-2">
                   <h4 className="m-0 text-sm font-medium">Integrios Event</h4>
                   <p className="m-0 text-xs text-ink-secondary">
                     How a request this contract accepts becomes an Event. event_type and payload are required.
@@ -482,11 +493,7 @@ export function ConnectorAuthoring({
                       Input requirements are configured on this contract.
                     </p>
                   )}
-                  {form.formState.errors.mapping?.message ? (
-                    <p role="alert" className="m-0 text-sm text-destructive">
-                      {form.formState.errors.mapping.message}
-                    </p>
-                  ) : null}
+                  <Callout message={form.formState.errors.mapping?.message} />
                   <EventBuilder
                     key={generation}
                     contractKey={values.contract_key}

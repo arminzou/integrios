@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { type ComponentProps, type ReactNode, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { MessageBubble } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
 import type { Problem } from "../api/problem";
 
@@ -126,6 +127,13 @@ export function Field({
       ) : null}
     </p>
   );
+}
+
+/// A message about something that has no control of its own — a group of choices, or a value
+/// authored on another surface — in the same floating shape a rejected field's message has. Its
+/// parent must be positioned, and should leave room below it: the message hangs under that box.
+export function Callout({ message }: { message?: string }) {
+  return message ? <MessageBubble role="alert" message={message} /> : null;
 }
 
 export function FormError({ message }: { message?: string }) {

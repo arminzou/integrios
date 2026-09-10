@@ -256,9 +256,13 @@ describe("Tenant authoring", () => {
 
     const message = await screen.findByText("A Tenant already uses this slug.");
     expect(slug.getAttribute("aria-invalid")).toBe("true");
-    // The form primitive names both the field's hint and its message; what matters here is that the
-    // rejected control points at the message the server sent.
-    expect(slug.getAttribute("aria-describedby")?.split(" ")).toContain(message.id);
+    // What the control is described as, read the way a screen reader reads it: the message the
+    // server sent, wherever the form primitive chose to put it.
+    const described = (slug.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ");
+    expect(described).toContain(message.textContent);
     // A rejected create must not look like a success by clearing the form.
     expect((slug as HTMLInputElement).value).toBe("acme");
   });

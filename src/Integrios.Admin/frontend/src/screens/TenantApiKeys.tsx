@@ -341,7 +341,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
   return (
     <div className="flex flex-col gap-4">
       <Form {...form}>
-        <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Tenant API key">
+        <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Tenant API key">
           <FormError message={formError(asProblem(create.error), createFields)} />
 
           <TextField control={form.control} name="name" label="Name" required />

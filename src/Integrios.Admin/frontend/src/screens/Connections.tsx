@@ -296,7 +296,7 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
 
   return (
     <Form {...form}>
-      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Connection">
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Connection">
         <FormError message={formError(asProblem(connectors.error))} />
         <FormError message={formError(asProblem(create.error), createFields)} />
 
@@ -489,6 +489,7 @@ function EditConnection({
               <form
                 className="flex flex-col gap-4"
                 aria-label={`Edit ${connection.name}`}
+                noValidate
                 onSubmit={form.handleSubmit((values) =>
                   save.mutate(values, {
                     onSuccess: close,

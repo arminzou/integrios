@@ -1258,6 +1258,7 @@ function SubscriptionForm({
         <form
           className="flex flex-col gap-4"
           aria-label={subscription ? `Edit ${subscription.name}` : "Create a Subscription"}
+          noValidate
           onSubmit={submit}
         >
           {/* Both paths open in a sheet that carries the title, so the form states its name rather

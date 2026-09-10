@@ -268,7 +268,7 @@ function CreateSource({
 
   return (
     <Form {...form}>
-      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Source">
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Source">
         <FormError message={formError(asProblem(connections.error ?? topics.error))} />
         <FormError message={formError(asProblem(create.error), createFields)} />
 
@@ -436,6 +436,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
               <form
                 className="flex flex-col gap-4"
                 aria-label={`Edit ${source.type} Source`}
+                noValidate
                 onSubmit={form.handleSubmit((values) =>
                   save.mutate(values, {
                     onSuccess: close,

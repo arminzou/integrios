@@ -306,7 +306,7 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
 
   return (
     <Form {...form}>
-      <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Create a Topic">
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Topic">
         <FormError message={formError(asProblem(create.error), writeFields)} />
 
         <TextField control={form.control} name="name" label="Name" required />
@@ -364,6 +364,7 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
               <form
                 className="flex flex-col gap-4"
                 aria-label={`Edit ${topic.name}`}
+                noValidate
                 onSubmit={form.handleSubmit((values) =>
                   save.mutate(values, {
                     onSuccess: close,

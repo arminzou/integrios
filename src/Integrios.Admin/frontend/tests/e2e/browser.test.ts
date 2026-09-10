@@ -396,6 +396,69 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   }, 60_000);
 
+  // Native constraint validation and layout are both browser behaviours: jsdom runs neither, so only
+  // here can the form's own message be told apart from the browser's bubble, and only here can what
+  // that message costs the form be measured.
+  it("reports a rejected field over the form, in its own words, without moving anything", async () => {
+    const page = await openDashboard("/connectors");
+    await page.getByRole("button", { name: "New Connector" }).click();
+    await page.getByRole("radio", { name: /Provider-native JSON/ }).check();
+    // The Source contract key arrives with a default, so emptying it is what makes it a failure.
+    await page.getByLabel("Source contract key").fill("");
+
+    // The distance between two controls, which scrolling cannot change.
+    const spacing = () =>
+      page.evaluate(() => {
+        const controls = document.querySelectorAll('[role="dialog"] input');
+        return Math.round(
+          controls[controls.length - 1].getBoundingClientRect().top - controls[0].getBoundingClientRect().top,
+        );
+      });
+    const before = await spacing();
+    await page.getByRole("button", { name: "Create Connector" }).click();
+
+    // Every empty required control is named by the schema, including the Source contract key,
+    // which is only required because this draft receives provider-native requests.
+    for (const message of ["Enter a name.", "Enter a key.", "Enter a Source contract key."])
+      await page.getByText(message).waitFor();
+
+    expect(await spacing()).toBe(before);
+    // Floating is only useful if it floats where the field is: a message positioned against some
+    // ancestor other than its own row lands somewhere else entirely, and still passes a text check.
+    const nameBox = (await page.getByLabel("Name", { exact: true }).boundingBox())!;
+    const messageBox = (await page.locator('[role="alert"]', { hasText: "Enter a name." }).boundingBox())!;
+    expect(messageBox.y - (nameBox.y + nameBox.height)).toBeLessThan(20);
+    expect(Math.abs(messageBox.x - nameBox.x)).toBeLessThan(4);
+    // The browser refused nothing: the form is what reported the failure.
+    expect(
+      await page.getByLabel("Name", { exact: true }).evaluate((element: HTMLInputElement) => element.validity.valid),
+    ).toBe(false);
+    // The screen carries a filter form of its own, so this asks the authoring one.
+    expect(await page.evaluate(() => document.querySelector<HTMLFormElement>('[role="dialog"] form')?.noValidate)).toBe(
+      true,
+    );
+
+    // The message carries the field's hint, and the line that usually holds it keeps its box
+    // without being drawn or announced.
+    const hint = "The Connector's stable identifier, such as github.";
+    const message = page.locator('[role="alert"]', { hasText: "Enter a key." });
+    expect(await message.textContent()).toContain(hint);
+    const inline = page.locator("[data-slot=form-description]", { hasText: hint });
+    expect(await inline.evaluate((element) => getComputedStyle(element).visibility)).toBe("hidden");
+    expect(await inline.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(0);
+    await page.close();
+  }, 60_000);
+
+  it("answers for its own fields on every authored form, not only the one", async () => {
+    const page = await openDashboard("/tenants");
+    await page.getByRole("button", { name: "New Tenant" }).click();
+    await page.getByRole("button", { name: "Create Tenant" }).click();
+
+    await page.getByText("Enter a slug.").waitFor();
+    await page.getByText("Enter a name.").waitFor();
+    await page.close();
+  }, 60_000);
+
   // A press has to be distinguishable from a hover, or a control under the pointer looks the same
   // whether or not it is being pressed. Both mechanisms are covered: a filled variant presses from
   // its translucent hover back to full strength, an outlined one from the hover surface down to the
