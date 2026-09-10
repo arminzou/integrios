@@ -14,6 +14,7 @@ import { ConfirmAction, Disclosure, FormError } from "../ui/controls";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
+import { EventBuilder } from "./EventBuilder";
 
 type Connector = components["schemas"]["ConnectorDto"];
 
@@ -121,7 +122,7 @@ export function buildManifest(values: AuthoringValues, advanced: Advanced): Reco
             key: native ? values.contract_key.trim() : "event_json",
             contract_version: 1,
             config: advanced.contract_config ?? {},
-            ...(advanced.contract_schema === undefined ? {} : { schema: advanced.contract_schema }),
+            ...(native && advanced.contract_schema !== undefined ? { schema: advanced.contract_schema } : {}),
             ...(native ? { mapping: { engine: "jsonata", version: "1", expression: values.mapping.trim() } } : {}),
           },
           ...advanced.extra_source_contracts,
@@ -279,6 +280,9 @@ export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connec
   const [advanced, setAdvanced] = useState<Advanced>(noAdvanced);
   const [kept, setKept] = useState<string[]>([]);
   const [imported, setImported] = useState("");
+  /// An import replaces the mapping under the Builder, whose sample and guided choices belong to the
+  /// draft that is being discarded; remounting it is what discards them with it.
+  const [generation, setGeneration] = useState(0);
   const form = useForm<AuthoringValues>({ resolver: zodResolver(authoringSchema), defaultValues: blank });
   const values = form.watch();
   const manifest = buildManifest(values, advanced);
@@ -318,6 +322,7 @@ export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connec
     setAdvanced(read.advanced);
     setKept(read.kept);
     setImported("");
+    setGeneration(generation + 1);
   };
 
   return (
@@ -432,14 +437,37 @@ export function ConnectorAuthoring({ onApplied }: { onApplied?: (applied: Connec
                   className="font-mono text-sm"
                   required
                 />
-                <TextAreaField
-                  control={form.control}
-                  name="mapping"
-                  label="Source mapping (JSONata)"
-                  hint="Produces the normalized Event: event_type and payload are required."
-                  className="min-h-32 font-mono text-sm"
-                  required
-                />
+                <div className="flex flex-col gap-2">
+                  <h4 className="m-0 text-sm font-medium">Integrios Event</h4>
+                  <p className="m-0 text-xs text-ink-secondary">
+                    How a request this contract accepts becomes an Event. event_type and payload are required.
+                  </p>
+                  <pre className="m-0 max-h-40 overflow-auto rounded-md border bg-surface p-2 text-xs">
+                    {values.mapping.trim() === "" ? "No mapping configured yet." : values.mapping}
+                  </pre>
+                  {advanced.contract_schema === undefined ? null : (
+                    <p className="m-0 text-xs text-ink-secondary">
+                      Input requirements are configured on this contract.
+                    </p>
+                  )}
+                  {form.formState.errors.mapping?.message ? (
+                    <p role="alert" className="m-0 text-sm text-destructive">
+                      {form.formState.errors.mapping.message}
+                    </p>
+                  ) : null}
+                  <EventBuilder
+                    key={generation}
+                    contractKey={values.contract_key}
+                    draft={{
+                      expression: values.mapping,
+                      schema: isObject(advanced.contract_schema) ? advanced.contract_schema : undefined,
+                    }}
+                    onUse={(built) => {
+                      form.setValue("mapping", built.expression, { shouldValidate: true });
+                      setAdvanced({ ...advanced, contract_schema: built.schema });
+                    }}
+                  />
+                </div>
               </>
             ) : (
               <p className="m-0 text-xs text-ink-secondary">

@@ -121,6 +121,21 @@ describe("Accessibility of the Operator workflows", () => {
     await expectNoAccessibilityViolations(container);
   });
 
+  it("passes the automated rules on the Integrios Event Builder", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<ConnectorsScreen />);
+    await screen.findByRole("heading", { level: 1, name: "Connectors" });
+    fireEvent.click(screen.getByRole("button", { name: "New Connector" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Provider-native JSON/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+    await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+
+    // The Builder is portalled out of the screen it opens from, so the whole document is what has
+    // to be checked rather than the rendered container.
+    await expectNoAccessibilityViolations(document.body);
+  });
+
   it("passes the automated rules on a populated table and its confirmation", async () => {
     stubHttp(() => ({ status: 200, body: tenant }));
 

@@ -70,7 +70,11 @@ export function payloadFieldPaths(value: unknown, prefix = ""): string[] {
   if (Array.isArray(value)) return prefix ? [prefix] : [];
 
   return Object.entries(value).flatMap(([key, child]) => {
-    const field = /^[A-Za-z_$][\w$]*$/.test(key) ? key : `\`${key.replaceAll("\\", "\\\\").replaceAll("`", "\\`")}\``;
+    // A backtick-quoted name runs to the next backtick and JSONata processes no escapes inside one,
+    // so a key containing a backtick cannot be addressed at all. It is left out rather than offered
+    // as a path that would fail to compile wherever it was used.
+    if (key.includes("`")) return [];
+    const field = /^[A-Za-z_$][\w$]*$/.test(key) ? key : `\`${key}\``;
     const path = prefix ? `${prefix}.${field}` : field;
     return child !== null && typeof child === "object" && !Array.isArray(child)
       ? payloadFieldPaths(child, path)

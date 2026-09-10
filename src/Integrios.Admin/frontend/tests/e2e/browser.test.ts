@@ -339,6 +339,63 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   }, 60_000);
 
+  // The Builder is the one surface that has to hold three columns of authoring at once. Whether they
+  // are readable side by side and stack rather than overflow when narrow is a layout fact, so it is
+  // decided here rather than in jsdom.
+  it.each([
+    ["side by side on a wide screen", 1512, true],
+    ["stacked at 320 CSS pixels", 320, false],
+  ])(
+    "lays the Integrios Event Builder out %s",
+    async (_name, width, beside) => {
+      const page = await openDashboard("/connectors", { viewport: { width, height: 900 } });
+      await page.getByRole("button", { name: "New Connector" }).click();
+      await page.getByRole("radio", { name: /Provider-native JSON/ }).check();
+      await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+
+      const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
+      await builder.waitFor();
+      const boxes = [];
+      for (const title of ["Representative request", "Event fields", "Normalized Event"])
+        boxes.push((await builder.getByRole("heading", { name: title }).boundingBox())!);
+
+      if (beside) {
+        expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
+        expect(boxes[2].x).toBeGreaterThan(boxes[1].x);
+        // Same row: a pane header carrying a button is a little taller, so they share a band
+        // rather than an exact offset.
+        expect(Math.abs(boxes[1].y - boxes[0].y)).toBeLessThan(24);
+      } else {
+        expect(boxes[1].y).toBeGreaterThan(boxes[0].y);
+        expect(boxes[2].y).toBeGreaterThan(boxes[1].y);
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+      ).toBe(true);
+      await page.close();
+    },
+    60_000,
+  );
+
+  it("inserts an Advanced JSONata suggestion from the keyboard alone", async () => {
+    const page = await openDashboard("/connectors");
+    await page.getByRole("button", { name: "New Connector" }).click();
+    await page.getByRole("radio", { name: /Provider-native JSON/ }).check();
+    await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    await page.getByRole("button", { name: "Advanced JSONata" }).click();
+
+    const editor = page.getByLabel("Source mapping expression");
+    await editor.fill("");
+    await editor.type("$ex");
+    await page.getByRole("list", { name: "JSONata suggestions" }).waitFor();
+    await page.keyboard.press("Enter");
+
+    // The caret is left inside the call it inserted, which is where the argument goes.
+    expect(await editor.inputValue()).toBe("$exists()");
+    expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(8);
+    await page.close();
+  }, 60_000);
+
   // A press has to be distinguishable from a hover, or a control under the pointer looks the same
   // whether or not it is being pressed. Both mechanisms are covered: a filled variant presses from
   // its translucent hover back to full strength, an outlined one from the hover surface down to the
