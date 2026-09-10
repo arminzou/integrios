@@ -47,6 +47,12 @@ function requirementsFrom(schema: Record<string, unknown> | undefined): InputReq
 
 type HeaderRow = { name: string; value: string };
 
+/// The share of an editor row each field takes. The leading one carries the name that has to be read
+/// exactly — a header like `x-hub-signature-256`, or a discovered field path — and a row is only
+/// about 400 pixels wide at three panes, so the split is not even.
+const leadField = "min-w-0 flex-[3]";
+const trailField = "min-w-0 flex-[2]";
+
 /// Which part of the Source-contract pipeline refused the preview. The Admin API answers with one
 /// message that names the document it was reading, so the stage is read back off that name rather
 /// than guessed at — an unrecognized message keeps the neutral label instead of a wrong one.
@@ -68,6 +74,18 @@ function Pane({ title, action, children }: { title: string; action?: ReactNode; 
       </header>
       <div className="flex min-w-0 flex-col gap-3 p-3">{children}</div>
     </section>
+  );
+}
+
+/// Taking one row back out. The icon is the whole control here rather than a supplement to a visible
+/// word, as it already is on the surfaces an Operator dismisses: a row repeated per header or per
+/// field cannot spend a third of its width on the label, and the accessible name still says exactly
+/// which row it removes.
+function RemoveRow({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button type="button" variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
+      <X aria-hidden="true" className="size-4" />
+    </Button>
   );
 }
 
@@ -268,7 +286,7 @@ export function EventBuilder({
                     <Input
                       aria-label={`Header ${index + 1} name`}
                       placeholder="x-header-name"
-                      className="font-mono text-sm"
+                      className={`${leadField} font-mono text-sm`}
                       value={row.name}
                       onChange={(event) =>
                         setHeaders(
@@ -281,6 +299,7 @@ export function EventBuilder({
                     <Input
                       aria-label={`Header ${index + 1} representative value`}
                       placeholder="Representative value"
+                      className={trailField}
                       value={row.value}
                       onChange={(event) =>
                         setHeaders(
@@ -290,15 +309,10 @@ export function EventBuilder({
                         )
                       }
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Remove header ${index + 1}`}
+                    <RemoveRow
+                      label={`Remove header ${index + 1}`}
                       onClick={() => setHeaders(headers.filter((_, at) => at !== index))}
-                    >
-                      Remove
-                    </Button>
+                    />
                   </div>
                 ))}
                 {headerError ? (
@@ -356,7 +370,7 @@ export function EventBuilder({
                         <div key={index} className="flex min-w-0 items-center gap-2">
                           <select
                             aria-label={`Required field ${index + 1}`}
-                            className="h-9 min-w-0 flex-1 rounded-md border bg-surface px-2 text-sm"
+                            className={`h-9 rounded-md border bg-surface px-2 text-sm ${leadField}`}
                             value={row.field}
                             onChange={(event) =>
                               setRequirements(
@@ -384,7 +398,7 @@ export function EventBuilder({
                               not establish the contract's type. */}
                           <select
                             aria-label={`Required field ${index + 1} type`}
-                            className="h-9 w-32 rounded-md border bg-surface px-2 text-sm"
+                            className={`h-9 rounded-md border bg-surface px-2 text-sm ${trailField}`}
                             value={row.type}
                             onChange={(event) =>
                               setRequirements(
@@ -401,15 +415,10 @@ export function EventBuilder({
                               </option>
                             ))}
                           </select>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Remove required field ${index + 1}`}
+                          <RemoveRow
+                            label={`Remove required field ${index + 1}`}
                             onClick={() => setRequirements(requirements.filter((_, at) => at !== index))}
-                          >
-                            Remove
-                          </Button>
+                          />
                         </div>
                       ))}
                       {mismatch ? (
@@ -702,7 +711,7 @@ function GuidedFields({
                 <Input
                   aria-label={`Payload field ${index + 1} name`}
                   placeholder="output_field"
-                  className="font-mono text-sm"
+                  className={`${trailField} font-mono text-sm`}
                   value={row.output}
                   onChange={(event) =>
                     onChange({
@@ -714,7 +723,7 @@ function GuidedFields({
                 />
                 <select
                   aria-label={`Payload field ${index + 1} source`}
-                  className="h-9 min-w-0 flex-1 rounded-md border bg-surface px-2 text-sm"
+                  className={`h-9 rounded-md border bg-surface px-2 text-sm ${leadField}`}
                   value={row.source}
                   onChange={(event) =>
                     onChange({
@@ -731,15 +740,10 @@ function GuidedFields({
                     </option>
                   ))}
                 </select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Remove payload field ${index + 1}`}
+                <RemoveRow
+                  label={`Remove payload field ${index + 1}`}
                   onClick={() => onChange({ payloadRows: guided.payloadRows.filter((_, at) => at !== index) })}
-                >
-                  Remove
-                </Button>
+                />
               </div>
             ))}
             {guided.payloadRows.every((row) => row.output.trim() === "" || row.source === "") ? (
