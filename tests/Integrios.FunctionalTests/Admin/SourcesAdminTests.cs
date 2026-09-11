@@ -49,6 +49,39 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         (await client.SendAsync(AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new { configuration }))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    // Intake resolves one revision per request and an accepted Event is never remapped, so the
+    // revision is what separates traffic normalized under the old contract from traffic normalized
+    // under the new one. An edit that leaves it behind makes that boundary unobservable.
+    [Fact]
+    public async Task NormalizationEdit_AdvancesTheSourceRevision()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+            input_requirements = new { type = "object", properties = new { id = new { type = "string" } }, required = new[] { "id" } },
+            mapping = new { engine = "jsonata", version = "1", expression = "{ \"event_type\": \"probe.created\", \"payload\": $ }" },
+        }));
+        create.StatusCode.ShouldBe(HttpStatusCode.Created);
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
+        {
+            configuration = new { },
+            input_requirements = new { type = "object", properties = new { id = new { type = "string" }, kind = new { type = "string" } }, required = new[] { "id" } },
+            mapping = new { engine = "jsonata", version = "1", expression = "{ \"event_type\": \"probe.updated\", \"payload\": $ }" },
+        }));
+        update.StatusCode.ShouldBe(HttpStatusCode.OK);
+        SourceDto updated = (await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+
+        updated.Revision.ShouldNotBe(source.Revision);
+    }
+
     [Fact]
     public async Task SourceAuthoring_CreatesEventApiAndQueueSources()
     {
