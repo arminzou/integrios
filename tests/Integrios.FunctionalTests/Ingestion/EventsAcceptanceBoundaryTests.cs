@@ -23,16 +23,16 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public EventsAcceptanceBoundaryTests(PostgresApiFixture fixture)
     {
         this.fixture = fixture;
-        tenantAAuthHeaderValue = $"TenantApiKey {PostgresApiFixture.TenantAToken}";
-        tenantBAuthHeaderValue = $"TenantApiKey {PostgresApiFixture.TenantBToken}";
+        tenantAAuthHeaderValue = $"Bearer {PostgresApiFixture.TenantAToken}";
+        tenantBAuthHeaderValue = $"Bearer {PostgresApiFixture.TenantBToken}";
     }
 
     public async Task InitializeAsync()
     {
         await fixture.ResetDataAsync();
-        Guid connectionId = await fixture.SeedSourceConnectorAsync(fixture.TenantAId, "payments-source");
+        Guid connectorId = await fixture.SeedSourceConnectorAsync(fixture.TenantAId, "payments-source");
         defaultTopicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
-        defaultSourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
+        defaultSourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectorId, defaultTopicId);
         client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -193,22 +193,22 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task PostEvents_WithInactiveConnection_Returns404()
+    public async Task PostEvents_WithInactiveConnector_Returns404()
     {
-        var connectionId = await fixture.SeedSourceConnectorAsync(
+        var connectorId = await fixture.SeedSourceConnectorAsync(
             fixture.TenantAId, "inactive-source", status: "disabled");
-        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
+        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectorId, defaultTopicId);
 
-        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-inactive-connection"));
+        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-inactive-connector"));
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task PostEvents_WithDestinationOnlyConnection_Returns404()
+    public async Task PostEvents_WithDestinationOnlyConnector_Returns404()
     {
-        var connectionId = await fixture.SeedSourceConnectorAsync(
+        var connectorId = await fixture.SeedSourceConnectorAsync(
             fixture.TenantAId, "destination-only", direction: "destination");
-        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
+        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectorId, defaultTopicId);
 
         var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-destination-only"));
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -217,9 +217,9 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task PostEvents_WithOtherTenantSourceId_Returns404()
     {
-        var connectionId = await fixture.SeedSourceConnectorAsync(fixture.TenantBId, "other-tenant-source");
+        var connectorId = await fixture.SeedSourceConnectorAsync(fixture.TenantBId, "other-tenant-source");
         var topicId = await fixture.SeedTopicAsync(fixture.TenantBId, "other-tenant-topic");
-        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantBId, connectionId, topicId);
+        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantBId, connectorId, topicId);
 
         var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-other-tenant"));
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -249,80 +249,6 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         var response = await client.SendAsync(message);
         response.StatusCode.ShouldBe(HttpStatusCode.UnsupportedMediaType);
-    }
-
-    [Fact]
-    public async Task PostEvents_PassthroughContractWithUnsupportedField_Returns422()
-    {
-        // topic_name is not an allowed Source-contract output field: a passthrough (no-mapping)
-        // contract rejects it outright, so the caller cannot smuggle Topic selection back into
-        // the request through the body.
-        Guid sourceId = await SeedContractSourceAsync("passthrough_unsupported_field_test", sourceContractHasMapping: false);
-
-        var response = await PostEventAsync(sourceId, new
-        {
-            event_type = "payment.created",
-            topic_name = "payments",
-            payload = new { amount = 500 },
-        });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
-    }
-
-    [Fact]
-    public async Task PostEvents_SchemaInvalidInput_Returns422()
-    {
-        JsonElement schema = JsonSerializer.Deserialize<JsonElement>(
-            """{"type":"object","properties":{"event_type":{"type":"string"}},"required":["event_type"],"additionalProperties":true}""");
-        Guid sourceId = await SeedContractSourceAsync(
-            "schema_test", sourceContractSchema: schema);
-
-        var response = await PostEventAsync(sourceId, new
-        {
-            // event_type must be a string per the declared schema; a number violates it.
-            event_type = 42,
-            payload = new { amount = 500 },
-        });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
-    }
-
-    [Fact]
-    public async Task PostEvents_IgnoresRetiredConnectorMapping()
-    {
-        Guid sourceId = await SeedContractSourceAsync(
-            "mapping_failure_test", sourceMappingExpression: "$error(\"boom\")");
-
-        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-mapping-failure"));
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
-    }
-
-    [Fact]
-    public async Task PostEvents_PassthroughContractMissingEventType_Returns422()
-    {
-        Guid sourceId = await SeedContractSourceAsync("passthrough_test", sourceContractHasMapping: false);
-
-        var response = await PostEventAsync(sourceId, new { payload = new { amount = 500 } });
-
-        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
-    }
-
-    private async Task<Guid> SeedContractSourceAsync(
-        string connectorKey,
-        bool sourceContractHasMapping = true,
-        string sourceMappingExpression = "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload, \"metadata\": metadata }",
-        JsonElement? sourceContractSchema = null)
-    {
-        string manifest = TestConnectorManifest.Create(
-            connectorKey, connectorKey, "source",
-            declarativeSourceContract: true,
-            sourceContractHasMapping: sourceContractHasMapping,
-            sourceMappingExpression: sourceMappingExpression,
-            sourceContractSchema: sourceContractSchema);
-        Guid connectionId = await fixture.SeedConnectorAsync(fixture.TenantAId, connectorKey, manifest);
-
-        return await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
     }
 
     private static object BuildBody(string? sourceEventId) => new

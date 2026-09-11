@@ -207,11 +207,11 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const form = await screen.findByRole("form", { name: `Edit ${subscription.name}` });
   fireEvent.change(within(form).getByLabelText("HTTP success rule (JSON, optional)"), {
-    target: { value: '{"evaluator":"json_path_boolean","field":"ok","expected":true}' },
+    target: { value: '{"evaluator":"json_boolean","field":"ok","expected":true}' },
   });
   fireEvent.submit(form);
   await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
   expect(calls.find((call) => call.method === "PATCH")!.body).toMatchObject({
-    http_success: { evaluator: "json_path_boolean", field: "ok", expected: true },
+    http_success: { evaluator: "json_boolean", field: "ok", expected: true },
   });
 });

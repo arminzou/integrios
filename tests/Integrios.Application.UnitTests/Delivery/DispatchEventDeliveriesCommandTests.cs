@@ -340,7 +340,7 @@ public sealed class DispatchEventDeliveriesCommandTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        string[] forbidden = ["tenant_id", "subscription_id", "connection_id"];
+        string[] forbidden = ["tenant_id", "subscription_id", "destination_id"];
         metrics.AllTagKeys.ShouldNotContain(key => forbidden.Contains(key));
     }
 

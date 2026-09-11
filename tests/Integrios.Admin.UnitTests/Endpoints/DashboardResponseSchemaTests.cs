@@ -19,8 +19,8 @@ public sealed class DashboardResponseSchemaTests
         "/tenants/{id:guid}",
         "/connectors",
         "/connectors/{id:guid}",
-        "/tenants/{tenantId:guid}/connections",
-        "/tenants/{tenantId:guid}/connections/{id:guid}",
+        "/tenants/{tenantId:guid}/destinations",
+        "/tenants/{tenantId:guid}/destinations/{id:guid}",
         "/tenants/{tenantId:guid}/tenant-api-keys",
         "/tenants/{tenantId:guid}/tenant-api-keys/{id:guid}",
         "/tenants/{tenantId:guid}/sources",
@@ -59,7 +59,7 @@ public sealed class DashboardResponseSchemaTests
         string[] createRoutes =
         [
             "/tenants",
-            "/tenants/{tenantId:guid}/connections",
+            "/tenants/{tenantId:guid}/destinations",
             "/tenants/{tenantId:guid}/tenant-api-keys",
             "/tenants/{tenantId:guid}/sources",
             "/tenants/{tenantId:guid}/topics",

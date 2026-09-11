@@ -259,7 +259,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             (@Second, @TenantId, @ConnectorId, @Topic, 'webhook', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'revoked', @Now, @Now, @Now),
             (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'queue', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL)
             """, new { Topic = topic, OtherTopic = otherTopic, First = first, Second = second, Excluded = excluded,
-                fixture.TenantId, ConnectorId = fixture.HttpConnectorId, Now = now, Configuration = "{\"source_contract\":\"event_json\",\"private_extra\":\"not a list field\"}" });
+                fixture.TenantId, ConnectorId = fixture.HttpConnectorId, Now = now, Configuration = "{\"private_extra\":\"not a list field\"}" });
 
         string root = $"/admin/tenants/{fixture.TenantId}/sources";
         (await ListIdsAsync($"{root}?topic_id={topic}")).Order().ShouldBe(new[] { first, second }.Order());

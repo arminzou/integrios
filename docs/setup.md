@@ -19,7 +19,7 @@ create a `.env` file (see the environment variables table below).
 
 The checkout includes the `secrets/` mount directory used by the default file-based secret
 provider. Secret files placed there are ignored by Git; the quickstart uses unauthenticated
-connections, so no secret values need to be added to its tracked documentation files.
+delivery, so no secret values need to be added to its tracked documentation files.
 
 `make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
 after migrations and before the services start. It creates only the first OperatorKey credential
@@ -66,36 +66,32 @@ TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: appli
 TOKEN=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/tenant-api-keys -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name":"acme-ingestion"}' | jq -r .token)
 
-# 4. Create Tenant-owned source and destination Connections from the same reusable Connector.
-# The destination selects open (unauthenticated) delivery by omitting destination_authentication,
-# which the applied HTTP example explicitly allows.
-SRC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-source\",\"config\":{},\"environment\":\"production\"}" | jq -r .id)
-DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/connections -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-erp\",\"config\":{\"base_uri\":\"http://mocksink:8080/sink/acme-erp\"},\"environment\":\"production\"}" | jq -r .id)
+# 4. Create a Tenant-owned Destination from the reusable Connector.
+# The Destination selects open (unauthenticated) delivery, which the applied HTTP example allows.
+DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/destinations -H "$AUTH" -H 'Content-Type: application/json' \
+  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"name\":\"acme-erp\",\"configuration\":{\"base_uri\":\"http://mocksink:8080/sink/acme-erp\"},\"authentication\":null,\"environment\":\"production\"}" | jq -r .id)
 
 # 5. Create a topic
 TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name":"payments"}' | jq -r .id)
 
-# 6. Create an event_api Source binding the source Connection to the Topic. source_contract
-# selects one of the Connector's declared source_contracts; the http Connector declares event_json,
-# which (with no mapping configured) treats the caller's raw request body as the Source output.
+# 6. Create an Event API Source directly from the Connector and Topic. Event API uses the fixed
+# Integrios Event JSON contract and does not configure verification, mapping, or identity extraction.
 SOURCE=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"connection_id\":\"$SRC\",\"topic_id\":\"$TOPIC\",\"type\":\"event_api\",\"configuration\":{\"source_contract\":\"event_json\"}}" | jq -r .id)
+  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"topic_id\":\"$TOPIC\",\"type\":\"event_api\",\"configuration\":{},\"verification\":null,\"input_requirements\":null,\"mapping\":null,\"event_identity_rule\":null}" | jq -r .id)
 
 # 7. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"acme-erp-sub\",\"match_rules\":{\"event_type\":\"payment.created\"},\"destination_connection_id\":\"$DST\",\"order_index\":0}" > /dev/null
+  -d "{\"name\":\"acme-erp-sub\",\"match_rules\":{\"event_type\":\"payment.created\"},\"destination_id\":\"$DST\",\"mapping\":null,\"http_delivery\":null,\"http_success\":null,\"order_index\":0}" > /dev/null
 
 # 8. Send an event to the data plane. source_id (query parameter) names the Source; the body is the
-# Source's event_json contract output directly -- event_type and payload are required,
-# source_event_id is optional and becomes part of the idempotency key ("$SOURCE:$source_event_id").
-EVENT=$(curl -s -X POST "$INGESTION/events?source_id=$SOURCE" -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
+# fixed Event API contract -- event_type and payload are required,
+# source_event_id is optional; Ingestion combines it with the Source id for idempotency.
+EVENT=$(curl -s -X POST "$INGESTION/events?source_id=$SOURCE" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"event_type":"payment.created","source_event_id":"demo-001","payload":{"paymentId":"pay_001","amount":1200}}' | jq -r .event_id)
 
 # 9. Check it was accepted and fanned out to the subscription
-curl -s $INGESTION/events/$EVENT -H "Authorization: TenantApiKey $TOKEN" | jq
+curl -s $INGESTION/events/$EVENT -H "Authorization: Bearer $TOKEN" | jq
 
 # 10. See it delivered in WireMock's request journal
 curl -s -X POST http://localhost:5054/__admin/requests/find \
@@ -103,24 +99,23 @@ curl -s -X POST http://localhost:5054/__admin/requests/find \
   -d '{"method":"POST","urlPath":"/sink/acme-erp"}' | jq
 ```
 
-Connection updates replace the complete `config` object rather than merging fields. A Connection's
-destination configuration schema is declared by its Connector's manifest; the example `http`
-Connector requires an absolute HTTP(S) `base_uri` with no query or fragment for any Connection an
-active Subscription references. This quickstart's source Connection carries no configuration
-because the `http` Connector's source side is empty by contract (see
-[architecture.md](architecture.md) for the full Connector/Connection model, including
+Destination updates replace the complete `configuration` object rather than merging fields. A
+Destination's configuration schema is declared by its Connector's manifest; the example `http`
+Connector requires an absolute HTTP(S) `base_uri` with no query or fragment for any Destination an
+active Subscription references (see [architecture.md](architecture.md) for the full Connector,
+Source, and Destination model, including
 Operator-authored Connectors such as the ones in the [GitHub-to-Slack
 walkthrough](github-to-slack-walkthrough.md)).
 
 A Topic's `name` is its immutable, Tenant-scoped stream identifier; changing it requires creating a
-new Topic. Topic updates may change only the `description`. A Source binds one Connection to one
-Topic and carries its own `configuration` (the selected `source_contract` and, for a Webhook Source,
-its generated `callback_id`); update a Source to change its `configuration`, not the Topic.
+new Topic. Topic updates may change only the `description`. A Source binds one Connector to one
+Topic and carries its own `configuration`; a Webhook Source also carries a generated `callback_id`.
+Update a Source to change its mutable configuration, input requirements, or mapping, not the Topic.
 
 The last command should show the delivery request, including its body and headers.
 
-> Inside Compose, services reach WireMock at `http://mocksink:8080` (used in the connection
-> config above); from your host it's `http://localhost:5054`.
+> Inside Compose, services reach WireMock at `http://mocksink:8080` (used in the Destination
+> configuration above); from your host it's `http://localhost:5054`.
 
 ### Exploring failure handling
 
@@ -136,7 +131,7 @@ curl -s -X POST http://localhost:5054/__admin/mappings -H 'Content-Type: applica
   -d "{\"id\":\"$CONTROL_ID\",\"priority\":1,\"request\":{\"method\":\"POST\",\"urlPath\":\"/sink/acme-erp\"},\"response\":{\"status\":500}}"
 
 FAIL_EVENT=$(curl -s -X POST "$INGESTION/events?source_id=$SOURCE" \
-  -H "Authorization: TenantApiKey $TOKEN" -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"event_type\":\"payment.created\",\"source_event_id\":\"demo-failure-$(date +%s)\",\"payload\":{\"paymentId\":\"pay_failure\",\"amount\":1200}}" \
   | jq -r .event_id)
 ```
@@ -145,12 +140,12 @@ Wait until all three attempts have failed. The third failed attempt exhausts the
 dead-letters this EventDelivery:
 
 ```bash
-until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
+until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: Bearer $TOKEN" \
   | jq -e '[.delivery_attempts[] | select(.status == "failed")] | length >= 3' > /dev/null; do
   sleep 5
 done
 
-curl -s $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
+curl -s $INGESTION/events/$FAIL_EVENT -H "Authorization: Bearer $TOKEN" \
   | jq '.delivery_attempts'
 ```
 
@@ -164,7 +159,7 @@ FAIL_DELIVERY=$(curl -s $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveri
   | jq -r '.event_deliveries[] | select(.status == "dead_lettered") | .event_delivery_id')
 curl -i -s -X POST $ADMIN/admin/tenants/$TENANT/events/$FAIL_EVENT/deliveries/$FAIL_DELIVERY/replay -H "$AUTH"
 
-until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: TenantApiKey $TOKEN" \
+until curl -fsS $INGESTION/events/$FAIL_EVENT -H "Authorization: Bearer $TOKEN" \
   | jq -e 'any(.delivery_attempts[]; .attempt_number >= 4 and .status == "succeeded")' > /dev/null; do
   sleep 2
 done
@@ -210,7 +205,7 @@ a working local value. Create a `.env` at the repo root only to override.
 
 ## Destination-authentication secrets
 
-Connections store logical secret references, never resolved values. The Worker resolves each
+Destinations store logical secret references, never resolved values. The Worker resolves each
 reference immediately before each delivery attempt. This means retries and replay use the current
 value after rotation.
 
@@ -252,7 +247,7 @@ Validate resolution without making deliveries:
 ```bash
 docker compose run --rm worker secrets validate --all
 docker compose run --rm worker secrets validate --tenant acme
-docker compose run --rm worker secrets validate --tenant acme --connection <connection-id>
+docker compose run --rm worker secrets validate --tenant acme --destination <destination-id>
 ```
 
 Validation prints references and resolution status, never values. Tenant slugs are lowercase DNS

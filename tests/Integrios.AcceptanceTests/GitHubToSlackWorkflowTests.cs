@@ -31,13 +31,12 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
 
         const string githubSecret = "acceptance-github-secret";
         await fixture.WriteSourceSecretAsync(tenantSlug, GitHubSecretReference, githubSecret);
-        Guid githubConnection = await CreateGitHubConnectionAsync(tenant, githubConnectorId);
         Guid topic = await CreateTopicAsync(tenant, "github-events");
-        string callbackPath = await CreateWebhookSourceAsync(tenant, githubConnection, topic);
+        string callbackPath = await CreateWebhookSourceAsync(tenant, githubConnectorId, topic);
 
         await fixture.WriteSecretAsync(tenantSlug, SlackSecretReference, "xoxb-acceptance-token");
-        Guid slackConnection = await CreateSlackConnectionAsync(tenant, slackConnectorId);
-        Guid subscription = await CreateSlackSubscriptionAsync(tenant, topic, slackConnection);
+        Guid slackDestination = await CreateSlackDestinationAsync(tenant, slackConnectorId);
+        Guid subscription = await CreateSlackSubscriptionAsync(tenant, topic, slackDestination);
 
         // Scenario 1: Slack's ok:true confirms a real success, traversing Event, Topic,
         // Subscription, EventDelivery, and DeliveryAttempt from one realistically signed
@@ -78,36 +77,16 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateGitHubConnectionAsync(Guid tenant, string connectorId)
+    private async Task<Guid> CreateSlackDestinationAsync(Guid tenant, string connectorId)
     {
         using HttpResponseMessage response = await PostAdminAsync(
-            $"/admin/tenants/{tenant}/connections",
-            new
-            {
-                connector_id = connectorId,
-                name = "github-source",
-                config = new { },
-                source_verification = new
-                {
-                    scheme = "hmac_sha256",
-                    config = new { },
-                    secret_refs = new { secret = GitHubSecretReference },
-                },
-                environment = "production",
-            });
-        return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
-    }
-
-    private async Task<Guid> CreateSlackConnectionAsync(Guid tenant, string connectorId)
-    {
-        using HttpResponseMessage response = await PostAdminAsync(
-            $"/admin/tenants/{tenant}/connections",
+            $"/admin/tenants/{tenant}/destinations",
             new
             {
                 connector_id = connectorId,
                 name = "slack-destination",
-                config = new { base_uri = "http://mocksink:8080/sink/slack" },
-                destination_authentication = new
+                configuration = new { base_uri = "http://mocksink:8080/sink/slack" },
+                authentication = new
                 {
                     scheme = "bearer_token",
                     config = new { },
@@ -125,11 +104,26 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<string> CreateWebhookSourceAsync(Guid tenant, Guid connection, Guid topic)
+    private async Task<string> CreateWebhookSourceAsync(Guid tenant, string connectorId, Guid topic)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant}/sources",
-            new { connection_id = connection, topic_id = topic, type = "webhook", configuration = new { source_contract = "verified_webhook" } });
+            new
+            {
+                connector_id = connectorId,
+                topic_id = topic,
+                type = "webhook",
+                configuration = new { },
+                verification = new { scheme = "hmac_sha256", config = new { }, secret_refs = new { secret = GitHubSecretReference } },
+                input_requirements = (object?)null,
+                mapping = new
+                {
+                    engine = "jsonata",
+                    version = "1",
+                    expression = """{ "event_type": "github." & $context.headers."x-github-event", "payload": $ }""",
+                },
+                event_identity_rule = new { kind = "header", value = "X-GitHub-Delivery" }
+            });
         JsonElement source = await AssertJsonAsync(response, HttpStatusCode.Created);
         return $"/webhooks/{source.GetProperty("configuration").GetProperty("callback_id").GetString()}";
     }
@@ -142,7 +136,7 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
             {
                 name = "push-to-slack",
                 match_rules = new { event_type = "github.push" },
-                destination_connection_id = destination,
+                destination_id = destination,
                 order_index = 0,
                 mapping = new
                 {
@@ -151,6 +145,7 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
                     expression = "{'channel': '#deploys', 'text': pusher.name & ' pushed to ' & repository.full_name}",
                 },
                 http_delivery = new { version = 1, method = "POST", headers = new { }, body = "json" },
+                http_success = new { evaluator = "json_boolean", field = "ok", expected = true },
             });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }

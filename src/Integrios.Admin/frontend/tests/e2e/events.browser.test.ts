@@ -101,7 +101,7 @@ afterAll(async () => {
 const deadLetteredDelivery = {
   event_delivery_id: "99999999-9999-9999-9999-999999999999",
   subscription_id: "4d8e-billing-sink",
-  destination_connection_id: "88888888-8888-8888-8888-888888888888",
+  destination_id: "88888888-8888-8888-8888-888888888888",
   status: "dead_lettered",
   lifetime_attempt_count: 8,
   retry_cycle_attempt_count: 5,

@@ -164,7 +164,6 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     {
         string configuration = JsonSerializer.Serialize(new
         {
-            source_contract = "event_json",
             transport = "azure_service_bus",
             authentication = new
             {

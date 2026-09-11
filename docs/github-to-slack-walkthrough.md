@@ -32,14 +32,14 @@ set).
 ## 1. Apply the example Connector manifests
 
 The [`examples/connectors/`](../examples/connectors/) directory carries the exact
-machine-validated manifests this walkthrough uses. `github.json` selects the authoring-safe
-`verified_webhook` Source contract; `slack.json` is generic HTTP with bearer-token
-authentication and a `json_boolean` success rule, because Slack's `chat.postMessage` can return
-HTTP 200 for a request it rejected. Apply is idempotent — a missing version is created, and
+machine-validated manifests this walkthrough uses. `github.json` declares bounded webhook
+verification choices; `slack.json` declares generic HTTP delivery with bearer-token
+authentication. The concrete Source mapping and Slack success rule are authored on the Tenant
+resources below. Apply is idempotent — a missing version is created, and
 re-applying the identical manifest is a no-op.
 
-Apply returns the created Connector, including its deployment-wide `id`, which every Connection
-against it references below.
+Apply returns the created Connector, including its deployment-wide `id`, which Sources and
+Destinations reference below.
 
 ```bash
 ADMIN=http://localhost:5150
@@ -65,20 +65,14 @@ TENANT=$(curl -s -X POST "$ADMIN/admin/tenants" -H "$AUTH" -H 'Content-Type: app
   -d '{"slug":"acme","name":"Acme","environment":"production"}' | jq -r .id)
 ```
 
-## 3. Create the GitHub source Connection
+## 3. Create a Topic and GitHub webhook Source
 
-The Connection's `source_verification` selects the `hmac_sha256` scheme and names one secret
-reference; it does not carry the secret value itself. Every source endpoint later created against
-this Connection shares this same verification secret — a different GitHub signing secret requires a
-different Connection.
+The Source selects the `hmac_sha256` verification scheme and names its secret reference; it does
+not carry the secret value itself. A different GitHub signing secret requires a different Source.
 
 ```bash
-GITHUB_CONN=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/connections" -H "$AUTH" \
-  -H 'Content-Type: application/json' \
-  -d "{\"connector_id\":\"$GITHUB_CONNECTOR\",\"name\":\"acme-github\",\"config\":{},
-       \"source_verification\":{\"scheme\":\"hmac_sha256\",\"config\":{},
-         \"secret_refs\":{\"secret\":\"github_webhook_secret\"}},
-       \"environment\":\"production\"}" | jq -r .id)
+TOPIC=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics" -H "$AUTH" \
+  -H 'Content-Type: application/json' -d '{"name":"github-events"}' | jq -r .id)
 ```
 
 Materialize the shared secret value the default file-based secret provider expects — generate one
@@ -94,24 +88,22 @@ printf '%s' "$GITHUB_SECRET" > ./secrets/source/acme/github_webhook_secret
 convention and the `configuration` provider alternative; source-verification secrets follow the
 exact same shape under `secrets/source/` instead of `secrets/destination/`.)
 
-## 4. Create a Topic, a webhook Source, and the callback URL
+## 4. Create the webhook Source and callback URL
 
-A Topic on its own accepts nothing; a **Source** is the resource that binds one Connection to one
-Topic and authorizes it to publish there. Creating a `webhook` Source against the GitHub Connection
-mints a stable `callback_id` — the sole routing coordinate GitHub's requests carry, per
-[architecture.md](architecture.md#source-model) — because the GitHub Connector's manifest declares
-the `verified_webhook` source contract. Revoking and re-creating the Source later mints a new
+A Topic on its own accepts nothing; a **Source** binds one Connector to one Topic and authorizes it
+to publish there. Creating a `webhook` Source mints a stable `callback_id` — the sole routing
+coordinate GitHub's requests carry. Revoking and re-creating the Source later mints a new
 `callback_id`; this one is stable for as long as the Source exists.
 
 ```bash
-TOPIC=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics" -H "$AUTH" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"github-events"}' | jq -r .id)
-
-CALLBACK_ID=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources" -H "$AUTH" \
-  -H 'Content-Type: application/json' \
-  -d "{\"connection_id\":\"$GITHUB_CONN\",\"topic_id\":\"$TOPIC\",\"type\":\"webhook\",
-       \"configuration\":{\"source_contract\":\"verified_webhook\"}}" \
+GITHUB_MAPPING='{"event_type":"github." & $context.headers."x-github-event","payload":$}'
+CALLBACK_ID=$(jq -n --arg connector "$GITHUB_CONNECTOR" --arg topic "$TOPIC" --arg mapping "$GITHUB_MAPPING" \
+  '{connector_id:$connector,topic_id:$topic,type:"webhook",configuration:{},
+    verification:{scheme:"hmac_sha256",config:{},secret_refs:{secret:"github_webhook_secret"}},
+    input_requirements:null,mapping:{engine:"jsonata",version:"1",expression:$mapping},
+    event_identity_rule:{kind:"header",value:"X-GitHub-Delivery"}}' \
+  | curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources" -H "$AUTH" \
+      -H 'Content-Type: application/json' --data-binary @- \
   | jq -r '.configuration.callback_id')
 
 CALLBACK_URL="$INGESTION/webhooks/$CALLBACK_ID"
@@ -128,9 +120,8 @@ walkthrough if you haven't already.
 In the GitHub repository or organization's **Settings → Webhooks → Add webhook**:
 
 - **Payload URL**: the `callback_url` from step 4.
-- **Content type**: `application/json` — the verified-webhook capability and this example's
-  `event_type_header`/`event_type_action_field` configuration both assume JSON; GitHub's
-  form-encoded content type is not accepted.
+- **Content type**: `application/json` — this Source's JSONata mapping reads GitHub's JSON body
+  and event header; GitHub's form-encoded content type is not accepted.
 - **Secret**: the exact value of `$GITHUB_SECRET` from step 3.
 - **Events**: at minimum, "Just the push event" is enough to exercise this walkthrough end to end.
 
@@ -138,17 +129,17 @@ GitHub sends a `ping` request immediately after you save the webhook. Integrios 
 ordinary `github.ping` Event — there is nothing special to check for it, and it will appear in the
 Event history alongside real pushes.
 
-## 6. Create the Slack destination Connection
+## 6. Create the Slack Destination
 
 `base_uri` is Slack's API base; the Subscription (step 8) supplies the relative
 `chat.postMessage` path.
 
 ```bash
-SLACK_CONN=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/connections" -H "$AUTH" \
+SLACK_DESTINATION=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/destinations" -H "$AUTH" \
   -H 'Content-Type: application/json' \
   -d "{\"connector_id\":\"$SLACK_CONNECTOR\",\"name\":\"acme-slack\",
-       \"config\":{\"base_uri\":\"https://slack.com/api\"},
-       \"destination_authentication\":{\"scheme\":\"bearer_token\",\"config\":{},
+       \"configuration\":{\"base_uri\":\"https://slack.com/api\"},
+       \"authentication\":{\"scheme\":\"bearer_token\",\"config\":{},
          \"secret_refs\":{\"token\":\"slack_bot_token\"}},
        \"environment\":\"production\"}" | jq -r .id)
 
@@ -162,23 +153,24 @@ platform strips it rather than failing. A line break *inside* the value is diffe
 genuine corruption and still fails closed, surfacing as a `request_construction` delivery failure
 with `Auth secret field 'token' contains a line break`.
 
-## 7. Subscribe GitHub pushes to the Slack Connection
+## 7. Subscribe GitHub pushes to the Slack Destination
 
 The transform is a JSONata expression evaluated with the Event payload as its root and platform
 metadata bound to `$context`; `http_delivery` supplies the method, relative path, and body shape,
-all owned by the Subscription rather than the Connection.
+all owned by the Subscription rather than the Destination.
 
 ```bash
 curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions" -H "$AUTH" \
   -H 'Content-Type: application/json' \
   -d "{\"name\":\"push-to-slack\",
        \"match_rules\":{\"event_type\":\"github.push\"},
-       \"destination_connection_id\":\"$SLACK_CONN\",
+       \"destination_id\":\"$SLACK_DESTINATION\",
        \"order_index\":0,
-       \"transform\":{\"engine\":\"jsonata\",\"version\":\"1\",
+       \"mapping\":{\"engine\":\"jsonata\",\"version\":\"1\",
          \"expression\":\"{'channel': '#deploys', 'text': pusher.name & ' pushed to ' & repository.full_name & ': ' & head_commit.message}\"},
        \"http_delivery\":{\"version\":1,\"method\":\"POST\",\"path\":\"chat.postMessage\",
-         \"headers\":{},\"body\":\"json\"}}" | jq
+         \"headers\":{},\"body\":\"json\"},
+       \"http_success\":{\"evaluator\":\"json_boolean\",\"field\":\"ok\",\"expected\":true}}" | jq
 ```
 
 Adjust the transform's hardcoded `#deploys` channel, or extend it to read a channel per repository,
@@ -186,7 +178,7 @@ before relying on this in a real workspace.
 
 ## 8. Push and observe
 
-An TenantApiKey is required to inspect an Event through Ingestion's authenticated `/events/{id}` endpoint,
+A TenantApiKey is required to inspect an Event through Ingestion's authenticated `/events/{id}` endpoint,
 even though GitHub itself never presents one — GitHub authenticates through source verification,
 not TenantApiKey. Create one now so you can look up the Event this webhook produces:
 
@@ -203,13 +195,13 @@ acceptance log line:
 
 ```bash
 EVENT=$(docker compose logs ingestion --no-color | grep -oE 'Accepted webhook event [0-9a-f-]+' | tail -1 | awk '{print $NF}')
-curl -s "$INGESTION/events/$EVENT" -H "Authorization: TenantApiKey $TOKEN" | jq
+curl -s "$INGESTION/events/$EVENT" -H "Authorization: Bearer $TOKEN" | jq
 ```
 
 A `delivery_attempts[].status` of `succeeded` with `response_status_code: 200` means Slack accepted
 and confirmed the message logically (`ok: true`); a `dead_lettered` EventDelivery despite an
-HTTP 200 attempt means Slack returned `ok: false`, which the `json_boolean` success rule in
-`slack.json` classifies as a terminal delivery failure rather than a false success.
+HTTP 200 attempt means Slack returned `ok: false`, which the Subscription's `json_boolean`
+success rule classifies as a terminal delivery failure rather than a false success.
 
 ## Recovery notes
 

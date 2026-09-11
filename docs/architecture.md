@@ -24,11 +24,12 @@ in one transaction. Worker reads fanout work from that same database, delivers o
 Tenant-owned destinations, and writes attempt state, retries, and dead-letters back to it.
 
 A **Source** (`event_api`, `webhook`, or `queue`) is the Operator-authored resource that binds one
-Connection to one Topic and authorizes it to publish there. Generic Event intake through the
+Connector version to one Topic and owns its intake contract. Generic Event intake through the
 `event_api` Source type, addressed by Source id and a TenantApiKey, remains the universal path. A
-`webhook` Source additionally lets a Connector's manifest verify and normalize a provider's HTTP
-request before it crosses the same durable Event-acceptance boundary; see [the GitHub-to-Slack
-walkthrough](github-to-slack-walkthrough.md) for a concrete, currently-shipped example. A `queue`
+`webhook` Source selects a Connector-declared verification capability and owns the validation and
+mapping of a provider's HTTP request before it crosses the same durable Event-acceptance boundary;
+see [the GitHub-to-Slack walkthrough](github-to-slack-walkthrough.md) for a concrete,
+currently-shipped example. A `queue`
 Source receives messages from an existing Azure Service Bus queue or topic subscription instead of
 accepting inbound HTTP requests.
 
@@ -37,11 +38,11 @@ accepting inbound HTTP requests.
 Integrios separates platform intent from runtime execution.
 
 **Control plane** (`Integrios.Admin`): Operator-owned Tenant lifecycle, Connector authoring,
-Connection configuration and secret references, Topic and Subscription authoring, and transform
+Source and Destination configuration and secret references, Topic and Subscription authoring, and transform
 preview. Tenants never receive control-plane authority.
 
 **Data plane** (`Integrios.Ingestion` and `Integrios.Worker`): request authentication and Tenant
-resolution, source-Connection and Topic validation, durable Event acceptance, fanout, transformation,
+resolution, Source and Topic validation, durable Event acceptance, fanout, transformation,
 HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
 
 The services share the configured PostgreSQL or SQL Server 2022+ database. Admin owns configuration
@@ -56,52 +57,45 @@ at runtime.
 - **Connector** is a deployment-wide reusable declarative HTTP contract for an external-system
   class. It is explicitly applied by the Operator, shared across Tenants, and contains no Tenant
   data or executable code.
-- **Connection** is a Tenant-owned configured instance of one Connector. It owns Tenant-specific
-  endpoint configuration plus separate source-verification and destination-authentication
-  selections and secret references. A Connection is not itself a source or a destination; a
-  **Source** or a Subscription's `destination_connection_id` gives it that role.
-- **Source** is a Tenant-owned resource, persisted independently of both the Connection and the
-  Topic it binds together, that authorizes one Connection to publish into one Topic. Its `type`
-  (`event_api`, `webhook`, or `queue`) selects the intake mechanism, and its `configuration` names
-  the Connector-declared `source_contract` it uses (plus, for a `webhook` Source, a
-  platform-generated `callback_id`).
+- **Source** is a Tenant-owned resource bound immutably to one Connector version and one Topic.
+  Its `type` (`event_api`, `webhook`, or `queue`) selects the intake mechanism. Webhook and queue
+  Sources own verification or queue authentication, input requirements, Event mapping, and an
+  optional immutable Event-identity rule; a webhook also carries a platform-generated `callback_id`.
+- **Destination** is a Tenant-owned reusable outbound system instance bound immutably to one
+  Connector version. It owns base URI, fixed path boundary, destination configuration,
+  authentication, secret references, and lifecycle.
 - **Topic** is a Tenant-owned named Event stream. Configured Sources may publish to it.
 - **Subscription** independently filters a Topic, optionally transforms matching Events, and
-  delivers them through one destination Connection. It owns the versioned HTTP delivery
-  configuration and its own delivery/DLQ scope.
+  delivers them through one Destination. It owns the HTTP operation, effective success rule, and
+  its own delivery/DLQ scope.
 - **Event** is the accepted durable work item from one Source on one Topic.
 - **EventDelivery** is the per-(Event, Subscription) state and execution snapshot created by
   fanout.
 - **DeliveryAttempt** records one concrete outbound execution.
 
-The same Connector can back Connections for many Tenants. For example, one deployment-wide
-`klaviyo` Connector can constrain separate Premier Group and Contoso Connections without sharing
+The same Connector can back Sources and Destinations for many Tenants. For example, one deployment-wide
+`klaviyo` Connector can constrain separate Premier Group and Contoso Destinations without sharing
 their base URIs, credentials, or runtime data.
 
 ## Source model
 
-A Source is created through Admin (`POST /admin/tenants/{id}/sources`) with a `connection_id`, a
-`topic_id`, a `type`, and a `configuration` object whose allowed keys depend on `type`. Every
-`configuration` names a `source_contract` — one of the Connector's declared source contracts — that
-governs how the raw input is validated and, optionally, mapped to the Event's `event_type`,
-`payload`, `source_event_id`, and `metadata`. With no mapping declared, the caller's raw input is
-the Event output directly, strictly bounded to those four fields.
+A Source is created through Admin (`POST /admin/tenants/{id}/sources`) with a `connector_id`, a
+`topic_id`, a `type`, and a type-specific `configuration` object. Webhook and queue Sources own
+JSON input requirements, an optional JSONata mapping to the Event's `event_type`, `payload`, and
+allowed metadata, plus an optional immutable Event-identity selector. Event API uses the fixed
+Integrios Event JSON contract instead of Source-owned validation or mapping.
 
 **`event_api`** is the universal, generic path. An external **Event producer** — an
 Operator-controlled application or automation such as a source-system plugin, Power Automate flow,
 or small service — owns source-system credentials and provider-specific adaptation, authenticates to
 Ingestion with a TenantApiKey, and posts to `POST /events?source_id={id}`.
 
-**`webhook`** lets an Operator-authored Connector manifest opt a provider's HTTP intake into the same
-durable Event-acceptance boundary without adding or rebuilding Integrios code. The manifest supplies
-signature header, encoding, delivery-identity header, and Event-type-derivation header as data; the
-platform verifies HMAC-SHA256 over the exact raw request body before parsing, derives a
-provider-qualified Event type (for example `github.issues.opened`) from that data, and retains the
-JSON payload unchanged. Creating a `webhook` Source generates a `callback_id`; the public intake
-path is `POST {IngestionBaseUri}/webhooks/{callback_id}`. The `github.json` example under
-[`examples/connectors/`](../examples/connectors/) is a real, machine-validated instance of this, not
-a hypothetical. Providers that do not fit this closed shape use an external Event API client unless
-repeated demand justifies another provider-neutral platform capability.
+**`webhook`** receives a provider HTTP request at `POST {IngestionBaseUri}/webhooks/{callback_id}`.
+The Source selects a bounded Connector-declared verification capability, retains only secret
+reference names, validates the request against its own input requirements, and applies its own
+mapping before the same durable Event-acceptance boundary. Providers that do not fit this bounded
+shape use an external Event API client unless repeated demand justifies another provider-neutral
+platform capability.
 
 **`queue`** receives messages from an existing Azure Service Bus queue or topic subscription instead
 of accepting inbound HTTP requests. Its `configuration` additionally names the transport
@@ -123,21 +117,20 @@ provider set or an in-process plugin system.
 HTTP(S) is the only destination protocol. One generic HTTP module executes every outbound request;
 there are no provider-specific destination execution paths or destination-action domain objects.
 
-- a destination Connection owns the absolute base URI, authentication, Tenant-specific non-secret
+- a Destination owns the absolute base URI, authentication, Tenant-specific non-secret
   configuration, and secret references
 - a Subscription owns a versioned method (`POST`, `PUT`, `PATCH`, or `DELETE`), a literal relative
   path, restricted static headers, and a transformed JSON body or explicit no-body
-- the relative path always appends to the Connection's base path with one normalized boundary
-  slash; it can never replace the Connection's scheme, host, port, or base path
-- fanout snapshots the HTTP request shape, relevant non-secret Connection configuration, secret
-  references, and the Connector's effective HTTP success rule together, so a later edit
+- the relative path always appends to the Destination's base path with one normalized boundary
+  slash; it can never replace the Destination's scheme, host, port, or base path
+- fanout snapshots the HTTP request shape, relevant non-secret Destination configuration, secret
+  references, and the Subscription's effective HTTP success rule together, so a later edit
   cannot change an in-flight delivery's request or success criteria; the Worker resolves current
   secret values for each attempt
-- a Connector may declare an optional HTTP success rule: the default `status_code` evaluator
-  treats any `2xx` response as success, while a `json_boolean` evaluator additionally asserts that a
-  configured top-level response field equals an expected boolean, so a provider that returns `2xx`
-  for an operation it actually rejected (Slack's `chat.postMessage` is the shipped example) is
-  correctly classified as a failure
+- a Subscription may declare an optional HTTP success rule. Without one, any `2xx` response
+  succeeds; a `json_boolean` evaluator additionally asserts that a configured top-level response
+  field equals an expected boolean, so a provider that returns `2xx` for an operation it actually
+  rejected is correctly classified as a failure
 - failure disposition is fixed platform policy: transport errors, timeouts, and HTTP
   408/429/5xx retry with backoff to exhaustion; every other outcome, including a logically-rejected
   `2xx`, dead-letters immediately for Operator replay; a bounded `Retry-After` on 429/503 is honored
@@ -156,8 +149,8 @@ Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
    authenticates with a TenantApiKey, a `webhook` Source verifies and normalizes a provider HTTP
    request at `POST /webhooks/{callback_id}`, or a `queue` Source's background processor receives a
    message from Azure Service Bus — before Ingestion ever sees an Event contract in any case.
-2. Ingestion resolves the Tenant and the addressed Source, which names the active Connection and the
-   Topic it may publish to.
+2. Ingestion resolves the Tenant and the addressed Source, which names its active Connector and
+   the Topic it may publish to.
 3. One database transaction writes the canonical Event and its outbox row before Ingestion
    acknowledges acceptance.
 4. Worker fanout reads matching active Subscriptions and creates one EventDelivery for each.
@@ -179,12 +172,13 @@ availability and avoids a database/message-transport dual write.
 An `event_api` caller addresses a `source_id` and may provide a `source_event_id`. Ingestion accepts
 the Source only when it belongs to the authenticated Tenant, is active, and may publish to its
 Topic. There is no separate idempotency key field: when a `source_event_id` is supplied, the
-idempotency key is `{source_id}:{source_event_id}`, and repeated submissions with the same key
-resolve to the same accepted Event.
+idempotency key combines the Source id with a hash of `source_event_id`, and repeated submissions
+with the same identity resolve to the same accepted Event.
 
-Provider credentials and webhook secrets are not Integrios TenantApiKeys. Connections store logical
-secret references; the Operator materializes their values through the deployment's secret provider,
-and Worker resolves them immediately before an attempt without persisting the values.
+Provider credentials and webhook secrets are not Integrios TenantApiKeys. Sources and Destinations
+store logical secret references; the Operator materializes their values through the deployment's
+secret provider. Ingestion resolves Source references for intake and Worker resolves Destination
+references immediately before an attempt without persisting values.
 
 ### Independent, at-least-once delivery
 
