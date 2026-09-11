@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { SubscriptionsScreen } from "./Subscriptions";
@@ -213,5 +213,79 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
   await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
   expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
     http_success: { evaluator: "json_boolean", field: "ok", expected: true },
+  });
+});
+
+describe("Editing a Subscription", () => {
+  const detailPath = `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`;
+
+  function stubEdit(detail: object, put: { status: number; body?: unknown } = { status: 200, body: detail }) {
+    return stubHttp(({ method, url }) => {
+      if (method === "PUT") return put;
+      if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: detail };
+      if (url.pathname.endsWith("/topics"))
+        return { status: 200, body: page([{ id: topicId, name: "Orders", status: "active" }]) };
+      if (url.pathname.endsWith("/destinations"))
+        return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
+      return { status: 200, body: page([]) };
+    });
+  }
+
+  async function submitUnchanged() {
+    renderScreen(
+      <SubscriptionsScreen tenantId={tenantId} selectedTopicId={topicId} selectedSubscriptionId={subscriptionId} />,
+      detailPath,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const form = await screen.findByRole("form", { name: `Edit ${subscription.name}` });
+    fireEvent.submit(form);
+    return form;
+  }
+
+  it.each([
+    ["no success rule", null],
+    ["a success rule", { evaluator: "json_boolean", field: "ok", expected: true }],
+  ])("sends one with %s back exactly as it was read", async (_case, httpSuccess) => {
+    const calls = stubEdit({ ...subscription, http_success: httpSuccess });
+    await submitUnchanged();
+
+    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+    // An update replaces the whole Subscription: a field the form drops, or an untouched optional
+    // field sent as empty text, changes what the Subscription delivers.
+    expect(calls.find((call) => call.method === "PUT")!.body).toEqual({
+      name: subscription.name,
+      match_rules: subscription.match_rules,
+      destination_id: destinationId,
+      mapping: subscription.mapping_config,
+      http_delivery: subscription.http_delivery,
+      http_success: httpSuccess,
+      order_index: subscription.order_index,
+      description: null,
+    });
+  });
+
+  it("puts a refused match rule on the Event type field", async () => {
+    stubEdit(subscription, { status: 422, body: { errors: { match_rules: ["Event type is not routable."] } } });
+    const form = await submitUnchanged();
+
+    const eventType = within(form).getByLabelText("Event type");
+    await waitFor(() => expect(eventType.getAttribute("aria-invalid")).toBe("true"));
+    const described = (eventType.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ");
+    expect(described).toContain("Event type is not routable.");
+  });
+
+  it("offers no deactivation once it is disabled", async () => {
+    stubEdit({ ...subscription, status: "disabled" });
+    renderScreen(
+      <SubscriptionsScreen tenantId={tenantId} selectedTopicId={topicId} selectedSubscriptionId={subscriptionId} />,
+      detailPath,
+    );
+
+    const panel = await screen.findByRole("complementary", { name: "Subscription detail" });
+    await within(panel).findByRole("heading", { name: subscription.name });
+    expect(within(panel).queryByRole("button", { name: /Deactivate/ })).toBeNull();
   });
 });

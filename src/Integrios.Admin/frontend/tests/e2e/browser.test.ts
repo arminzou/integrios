@@ -94,6 +94,15 @@ beforeAll(async () => {
   if (address === null || typeof address === "string") throw new Error("The dev server exposed no port.");
   origin = `http://127.0.0.1:${address.port}`;
   browser = await chromium.launch();
+
+  // A cold dev server optimises dependencies and transforms modules on the first page it serves.
+  // Paying for that here keeps it out of whichever test happens to run first, which otherwise
+  // intermittently exceeds its own timeout under a loaded machine.
+  const warm = await browser.newPage();
+  await warm.route("**/auth/session", (route) => route.fulfill({ status: 401 }));
+  await warm.goto(origin);
+  await warm.getByRole("heading", { level: 1 }).waitFor();
+  await warm.close();
 }, 60_000);
 
 afterAll(async () => {

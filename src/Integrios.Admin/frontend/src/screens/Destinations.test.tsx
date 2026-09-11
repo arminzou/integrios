@@ -155,3 +155,59 @@ describe("Destination selection", () => {
     expect(within(panel).getByRole("button", { name: /Deactivate/ })).toBeTruthy();
   });
 });
+
+describe("A selected Destination", () => {
+  const authenticated = {
+    ...destination,
+    environment: null,
+    description: null,
+    authentication: { scheme: "bearer_token", config: {}, secret_refs: { token: "erp-token" } },
+  };
+
+  function stubDestination(detail: object) {
+    return stubHttp(({ method, url }) => {
+      if (method === "PUT") return { status: 200, body: detail };
+      if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: detail };
+      if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([detail]) };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
+      return { status: 200, body: page([]) };
+    });
+  }
+
+  it("sends an unchanged edit back as the Destination it read", async () => {
+    const calls = stubDestination(authenticated);
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.submit(await screen.findByRole("form", { name: `Edit ${authenticated.name}` }));
+
+    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+    // An update replaces the whole resource, so whatever the form fails to carry over is erased,
+    // and an optional field left untouched stays absent rather than becoming empty.
+    expect(calls.find((call) => call.method === "PUT")!.body).toEqual({
+      name: authenticated.name,
+      configuration: authenticated.configuration,
+      authentication: authenticated.authentication,
+      environment: null,
+      description: null,
+    });
+  });
+
+  it("names its Connector and the authentication it uses", async () => {
+    stubDestination(authenticated);
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+
+    const panel = await screen.findByRole("complementary", { name: "Destination detail" });
+    const link = await within(panel).findByRole("link", { name: "http v1" });
+    expect(link.getAttribute("href")).toBe(`/connectors/${connectorId}`);
+    expect(within(panel).getByText("bearer_token")).toBeTruthy();
+  });
+
+  it("offers no deactivation once it is disabled", async () => {
+    stubDestination({ ...destination, status: "disabled" });
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+
+    const panel = await screen.findByRole("complementary", { name: "Destination detail" });
+    await within(panel).findByRole("heading", { name: destination.name });
+    expect(within(panel).queryByRole("button", { name: /Deactivate/ })).toBeNull();
+  });
+});

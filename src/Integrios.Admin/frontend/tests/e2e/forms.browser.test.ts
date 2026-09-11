@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { createRequire } from "node:module";
 import { type Browser, chromium, type Locator, type Page, type Request } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -223,6 +224,65 @@ it("applies the list filters through their controls and keeps them usable at 320
     await view.close();
   }
 }, 60_000);
+
+const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+
+/// An authoring sheet is fixed-position, so a form wider than the screen never widens the document
+/// and the page-level overflow check cannot see it. Each sheet is therefore opened at 320 CSS pixels
+/// and its own form must fit the viewport, with every control meeting the target-size rule.
+it.each([
+  ["New Destination", `/tenants/${tenantId}/destinations`, "New Destination"],
+  ["New Connector", "/connectors", "New Connector"],
+  ["Subscription edit", `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`, "Edit"],
+])(
+  "fits the %s sheet into 320px",
+  async (_name, path, trigger) => {
+    const { page: view } = await open(path);
+    try {
+      await view.setViewportSize({ width: 320, height: 900 });
+      await view.getByRole("button", { name: trigger, exact: true }).click();
+      const sheet = view.getByRole("dialog");
+      await sheet.locator("form").first().waitFor();
+
+      const fit = await sheet.evaluate((element) => {
+        const form = element.querySelector("form")!.getBoundingClientRect();
+        return {
+          formRight: form.right,
+          viewport: window.innerWidth,
+          scrolls: element.scrollWidth > element.clientWidth,
+        };
+      });
+      expect(fit.formRight).toBeLessThanOrEqual(fit.viewport);
+      expect(fit.scrolls).toBe(false);
+
+      await view.addScriptTag({ path: axePath });
+      const violations = await sheet.evaluate(async (element) => {
+        const results = await (
+          window as unknown as { axe: { run: (root: Element, options: unknown) => Promise<unknown> } }
+        ).axe.run(element, { runOnly: { type: "rule", values: ["target-size"] } });
+        return (results as { violations: { id: string; nodes: { html: string }[] }[] }).violations.map(
+          (violation) => `${violation.id}: ${violation.nodes.map((node) => node.html).join(" | ")}`,
+        );
+      });
+      expect(violations).toEqual([]);
+
+      // axe excuses an undersized target when enough space surrounds it, so the dashboard's own
+      // 24-by-24 minimum is measured directly on every button and link the sheet renders.
+      const undersized = await sheet.evaluate((element) =>
+        [...element.querySelectorAll("button, a[href]")]
+          .filter((control) => {
+            const box = control.getBoundingClientRect();
+            return box.width > 0 && (box.width < 24 || box.height < 24);
+          })
+          .map((control) => control.outerHTML.slice(0, 120)),
+      );
+      expect(undersized).toEqual([]);
+    } finally {
+      await view.close();
+    }
+  },
+  60_000,
+);
 
 /// The dashboard is light-only, and `color-scheme: light` settles only what the browser paints, not
 /// what Tailwind's `dark:` variant matches — that answers to the operating system unless it is bound

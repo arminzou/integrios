@@ -168,3 +168,123 @@ describe("Accessibility of the Operator workflows", () => {
     await expectNoAccessibilityViolations(container);
   });
 });
+
+describe("Accessibility of detail and edit states", () => {
+  const connector = {
+    id: "22222222-2222-2222-2222-222222222222",
+    key: "http",
+    contract_version: 1,
+    manifest_schema_version: 1,
+    name: "HTTP",
+    direction: "both",
+    status: "active",
+    description: null,
+    manifest: { key: "http" },
+    created_at: "2026-09-01T00:00:00Z",
+    updated_at: "2026-09-01T00:00:00Z",
+  };
+  const destinationId = "44444444-4444-4444-4444-444444444444";
+  const destination = {
+    id: destinationId,
+    tenant_id: tenantId,
+    connector_id: connector.id,
+    name: "northwind-erp",
+    status: "active",
+    environment: null,
+    description: null,
+    configuration: { base_uri: "http://erp.internal/hooks" },
+    authentication: null,
+    created_at: "2026-09-01T00:00:00Z",
+    updated_at: "2026-09-01T00:00:00Z",
+  };
+  const topicId = "33333333-3333-3333-3333-333333333333";
+  const subscriptionId = "66666666-6666-6666-6666-666666666666";
+  const subscription = {
+    id: subscriptionId,
+    tenant_id: tenantId,
+    topic_id: topicId,
+    name: "Send priority orders",
+    match_rules: { event_type: "order.placed" },
+    destination_id: destinationId,
+    mapping_config: null,
+    http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
+    http_success: null,
+    status: "active",
+    order_index: 0,
+    description: null,
+    created_at: "2026-09-01T00:00:00Z",
+    updated_at: "2026-09-01T00:00:00Z",
+  };
+
+  it("passes the automated rules on a selected Destination and its edit sheet", async () => {
+    stubHttp(({ url }) => {
+      if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: destination };
+      if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([destination]) };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
+      return { status: 200, body: page([]) };
+    });
+
+    const container = renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+    await screen.findByRole("link", { name: "http v1" });
+    await expectNoAccessibilityViolations(container);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await screen.findByRole("form", { name: `Edit ${destination.name}` });
+    await expectNoAccessibilityViolations(container);
+  });
+
+  it("passes the automated rules on a selected Subscription and its edit sheet", async () => {
+    stubHttp(({ url }) => {
+      if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: subscription };
+      if (url.pathname.endsWith("/destinations"))
+        return { status: 200, body: page([{ id: destinationId, name: "northwind-erp", status: "active" }]) };
+      return { status: 200, body: page([]) };
+    });
+
+    const container = renderScreen(
+      <SubscriptionsScreen tenantId={tenantId} selectedTopicId={topicId} selectedSubscriptionId={subscriptionId} />,
+      `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`,
+    );
+    await screen.findByRole("heading", { name: subscription.name });
+    await expectNoAccessibilityViolations(container);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await screen.findByRole("form", { name: `Edit ${subscription.name}` });
+    await expectNoAccessibilityViolations(container);
+  });
+
+  it("passes the automated rules on a selected Connector and its new-version sheet", async () => {
+    stubHttp(({ url }) =>
+      url.pathname === `/admin/connectors/${connector.id}`
+        ? { status: 200, body: connector }
+        : { status: 200, body: page([connector]) },
+    );
+
+    const container = renderScreen(
+      <ConnectorsScreen selectedConnectorId={connector.id} />,
+      `/connectors/${connector.id}`,
+    );
+    await screen.findByRole("heading", { name: new RegExp(connector.name) });
+    await expectNoAccessibilityViolations(container);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create new version" }));
+    await screen.findByRole("button", { name: "Create version" });
+    await expectNoAccessibilityViolations(container);
+  });
+
+  it("passes the automated rules on the open Event Builder", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    const container = renderScreen(<SourcesScreen tenantId={tenantId} />);
+    await screen.findByRole("heading", { level: 1, name: "Sources" });
+    fireEvent.click(screen.getByText("New Source"));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Integrios Event Builder" }));
+    await screen.findByRole("button", { name: "Close the Integrios Event Builder" });
+    await expectNoAccessibilityViolations(container);
+
+    // Each header row's controls carry a placeholder, which axe accepts as a name on its own. The
+    // placeholder disappears once a value is typed, so the label is asserted directly.
+    expect(screen.getByLabelText("Header 1 name")).toBeTruthy();
+    expect(screen.getByLabelText("Header 1 representative value")).toBeTruthy();
+  });
+});
