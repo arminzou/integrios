@@ -197,7 +197,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
       {current.description ? <p className="m-0 text-[13px] text-ink-secondary">{current.description}</p> : null}
 
       <section className="flex min-w-0 flex-col gap-2">
-        <h4 className="eyebrow">Manifest</h4>
+        <h3 className="eyebrow">Manifest</h3>
         <pre className="text-xs">{formatJson(current.manifest)}</pre>
         <p className="m-0 text-xs text-ink-secondary">
           Applied by an Operator. A Connector is deployment-wide and shared by every Tenant.

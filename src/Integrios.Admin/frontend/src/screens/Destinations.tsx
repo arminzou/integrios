@@ -444,7 +444,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
       </Details>
 
       <section className="flex min-w-0 flex-col gap-2">
-        <h4 className="eyebrow">Configuration</h4>
+        <h3 className="eyebrow">Configuration</h3>
         <pre className="text-xs">{formatJson(current.configuration)}</pre>
         <p className="m-0 text-xs text-ink-secondary">
           An update replaces this object outright rather than merging fields.
