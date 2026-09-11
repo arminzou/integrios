@@ -174,8 +174,8 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
             transport_config = new { @namespace = "sb-emulator", queue_name = queueName },
         });
         return ExecuteAsync(
-            $"UPDATE sources SET configuration = {Database.Json("@Configuration")} WHERE id = @Id",
-            new { Configuration = configuration, Id = sourceId });
+            $"UPDATE sources SET configuration = {Database.Json("@Configuration")}, revision = @Revision WHERE id = @Id",
+            new { Configuration = configuration, Revision = Guid.NewGuid().ToString("N"), Id = sourceId });
     }
 
     internal async Task PublishAsync(object body)

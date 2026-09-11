@@ -2,6 +2,7 @@ using Integrios.Application.Common.Exceptions;
 using System.Text.Json;
 using Integrios.Application.Authoring.Sources;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -28,7 +29,18 @@ public sealed class SourcesEndpoints : IEndpointGroup
             "queue" => SourceType.Queue,
             _ => throw new SourceValidationException("Source type must be event_api, webhook, or queue.", "type")
         };
-        SourceDto source = await mediator.Send(new CreateSourceCommand(tenantId, request.ConnectionId, request.TopicId, type, request.Configuration), cancellationToken);
+        SourceDto source = await mediator.Send(
+            new CreateSourceCommand(
+                tenantId,
+                request.ConnectorId,
+                request.TopicId,
+                type,
+                request.Configuration,
+                request.Verification?.ToInput(),
+                request.InputRequirements,
+                request.Mapping,
+                request.EventIdentityRule),
+            cancellationToken);
         return Results.Created($"/admin/tenants/{tenantId}/sources/{source.Id}", source);
     }
 
@@ -54,7 +66,10 @@ public sealed class SourcesEndpoints : IEndpointGroup
 
     private static async Task<IResult> UpdateSource(Guid tenantId, Guid id, UpdateSourceRequest request, IMediator mediator, CancellationToken cancellationToken)
     {
-        SourceDto? source = await mediator.Send(new UpdateSourceCommand(tenantId, id, request.Configuration), cancellationToken);
+        SourceDto? source = await mediator.Send(
+            new UpdateSourceCommand(
+                tenantId, id, request.Configuration, request.Verification?.ToInput(), request.InputRequirements, request.Mapping),
+            cancellationToken);
         return source is null ? Results.NotFound() : Results.Ok(source);
     }
 
@@ -62,5 +77,27 @@ public sealed class SourcesEndpoints : IEndpointGroup
         await mediator.Send(new RevokeSourceCommand(tenantId, id), cancellationToken) ? Results.Ok() : Results.NotFound();
 }
 
-internal sealed record CreateSourceRequest(Guid ConnectionId, Guid TopicId, string? Type, JsonElement Configuration);
-internal sealed record UpdateSourceRequest(JsonElement Configuration);
+internal sealed record CreateSourceRequest(
+    Guid ConnectorId,
+    Guid TopicId,
+    string? Type,
+    JsonElement Configuration,
+    SourceVerificationSelectionRequest? Verification,
+    JsonElement? InputRequirements,
+    SourceMapping? Mapping,
+    SourceEventIdentityRule? EventIdentityRule);
+internal sealed record UpdateSourceRequest(
+    JsonElement Configuration,
+    SourceVerificationSelectionRequest? Verification,
+    JsonElement? InputRequirements,
+    SourceMapping? Mapping);
+
+internal sealed record SourceVerificationSelectionRequest(string Scheme, JsonElement Config, JsonElement SecretRefs)
+{
+    public SourceVerificationInput ToInput() => new()
+    {
+        Scheme = Scheme,
+        Config = Config,
+        SecretRefs = SecretRefs,
+    };
+}

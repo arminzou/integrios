@@ -15,7 +15,6 @@ public sealed record IngestEventCommand(
 
 internal sealed class IngestEventCommandHandler(
     IEventApiSourceResolver sourceResolver,
-    ITransformEvaluator evaluator,
     IEventAcceptance eventAcceptance,
     IntegriosMetrics metrics,
     ILogger<IngestEventCommandHandler> logger)
@@ -28,10 +27,13 @@ internal sealed class IngestEventCommandHandler(
             ?? throw new SourceEndpointNotFoundException(
                 "No active event_api Source matches the requested id.");
 
-        SourceContractOutput output = SourceContractEvaluator.Evaluate(
-            evaluator, source.SourceContractSchema, source.SourceMapping, command.RawInput);
+        SourceContractOutput output = EventApiSubmissionValidator.Validate(command.RawInput);
+        if (output.SourceEventId is { } eventApiSourceEventId
+            && await eventAcceptance.FindBySourceEventIdAsync(command.SourceId, eventApiSourceEventId, cancellationToken) is { } existing)
+            return ToResult(existing);
+
         string? idempotencyKey = output.SourceEventId is { } sourceEventId
-            ? $"{command.SourceId}:{sourceEventId}"
+            ? SourceEventIdentityExtractor.IdempotencyKey(command.SourceId, sourceEventId)
             : null;
 
         // The ambient request span is the acceptance span; its id becomes the trace anchor
@@ -72,12 +74,14 @@ internal sealed class IngestEventCommandHandler(
             logger.LogInformation("Accepted event {EventId} on topic {TopicId}.", accepted.EventId, source.TopicId);
         }
 
-        return new IngestEventResult
-        {
-            EventId = accepted.EventId,
-            Status = accepted.Status,
-            AcceptedAt = accepted.AcceptedAt,
-            AlreadyAccepted = accepted.AlreadyAccepted
-        };
+        return ToResult(accepted);
     }
+
+    private static IngestEventResult ToResult(EventAcceptance accepted) => new()
+    {
+        EventId = accepted.EventId,
+        Status = accepted.Status,
+        AcceptedAt = accepted.AcceptedAt,
+        AlreadyAccepted = accepted.AlreadyAccepted
+    };
 }

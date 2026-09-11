@@ -14,6 +14,25 @@ namespace Integrios.Infrastructure.Events;
 internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbContext> contextFactory)
     : IEventAcceptance
 {
+    public async Task<EventAcceptance?> FindBySourceEventIdAsync(
+        Guid sourceId,
+        string sourceEventId,
+        CancellationToken cancellationToken)
+    {
+        await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = context.Database.GetDbConnection();
+        EventAcceptanceRow? existing = await connection.QuerySingleOrDefaultAsync<EventAcceptanceRow>(new CommandDefinition(
+            "SELECT id AS EventId, status AS Status, accepted_at AS AcceptedAt FROM events WHERE source_id=@SourceId AND source_event_id=@SourceEventId COLLATE Latin1_General_100_BIN2",
+            new { SourceId = sourceId, SourceEventId = sourceEventId }, cancellationToken: cancellationToken));
+        return existing is null ? null : new EventAcceptance
+        {
+            EventId = existing.EventId,
+            Status = existing.Status,
+            AcceptedAt = existing.AcceptedAt,
+            AlreadyAccepted = true
+        };
+    }
+
     public async Task<EventAcceptance> AcceptAsync(
         EventSubmission submission,
         string? traceparent,
@@ -99,19 +118,13 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
             if (existing is null)
                 throw;
 
-            return new EventAcceptance
-            {
-                EventId = existing.Id,
-                Status = existing.Status,
-                AcceptedAt = existing.AcceptedAt,
-                AlreadyAccepted = true
-            };
+            return ToAlreadyAccepted(existing);
         }
         catch (SqlException ex) when (ex.Number == 51001)
         {
             await transaction.RollbackAsync(cancellationToken);
             throw new EventAcceptanceException(
-                "The source Connection is not actively associated with the requested Topic.");
+                "The Source is not active for the requested Topic.");
         }
         catch
         {
@@ -122,4 +135,14 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
 
     private static bool IsIdempotencyConflict(SqlException ex, string? idempotencyKey) =>
         !string.IsNullOrWhiteSpace(idempotencyKey) && ex.Number is 2601 or 2627;
+
+    private static EventAcceptance ToAlreadyAccepted(DomainEvent existing) => new()
+    {
+        EventId = existing.Id,
+        Status = existing.Status,
+        AcceptedAt = existing.AcceptedAt,
+        AlreadyAccepted = true
+    };
+
+    private sealed record EventAcceptanceRow(Guid EventId, EventStatus Status, DateTimeOffset AcceptedAt);
 }

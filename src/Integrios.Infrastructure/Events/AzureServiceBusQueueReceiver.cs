@@ -248,7 +248,8 @@ internal sealed class AzureServiceBusQueueReceiver(
             await mediator.Send(
                 new AcceptQueueMessageCommand(
                     source.TenantId, source.TopicId, source.SourceId,
-                    source.SourceContractSchema, source.SourceMapping, rawInput),
+                    source.SourceContractSchema, source.SourceMapping, rawInput,
+                    source.EventIdentityRule, args.Message.MessageId),
                 args.CancellationToken);
             await args.CompleteMessageAsync(args.Message, args.CancellationToken);
             consecutiveErrors.TryRemove(source.SourceId, out _);

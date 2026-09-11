@@ -49,6 +49,7 @@ public sealed class IngestionApiFixture : IDisposable
         };
         SourceEndpointResolver.Result = null;
         EventAcceptance.LastSubmission = null;
+        EventAcceptance.ExistingBySourceEventId = null;
     }
 
     public void Dispose()
@@ -120,6 +121,12 @@ public sealed class StubTenantApiKeyUseRecorder : ITenantApiKeyUseRecorder
 public sealed class StubEventAcceptance : IEventAcceptance
 {
     public EventSubmission? LastSubmission { get; set; }
+    public EventAcceptance? ExistingBySourceEventId { get; set; }
+
+    public Task<EventAcceptance?> FindBySourceEventIdAsync(
+        Guid sourceId,
+        string sourceEventId,
+        CancellationToken cancellationToken) => Task.FromResult(ExistingBySourceEventId);
 
     public Task<EventAcceptance> AcceptAsync(
         EventSubmission submission,

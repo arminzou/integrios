@@ -29,6 +29,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
     // published to topic.1; the others carry correlation filters.
     internal const string TopicEntityName = "topic.1";
     internal const string SubscriptionEntityName = "subscription.3";
+    internal const string SourceMappingJson = """{"engine":"jsonata","version":"1","expression":"{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload }"}""";
 
     [Fact]
     public async Task ValidMessage_CompletesAndCreatesEvent()
@@ -196,7 +197,6 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
 
     internal static string QueueSourceConfigurationJson() => JsonSerializer.Serialize(new
     {
-        source_contract = "event_json",
         transport = "azure_service_bus",
         authentication = new { scheme = "connection_string", secret_ref = SecretReference },
         transport_config = new { @namespace = "sb-emulator", queue_name = QueueName },
@@ -204,7 +204,6 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
 
     internal static string TopicSourceConfigurationJson() => JsonSerializer.Serialize(new
     {
-        source_contract = "event_json",
         transport = "azure_service_bus",
         authentication = new { scheme = "connection_string", secret_ref = SecretReference },
         transport_config = new
@@ -226,17 +225,18 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status)
-            VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'queue',
-                {{{database.Json("@SourceConfiguration")}}}, 'active');
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, mapping, revision, status)
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'queue',
+                {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'active');
             """,
             new
             {
                 SourceId = sourceId,
                 seeded.TenantId,
-                seeded.ConnectionId,
+                seeded.ConnectorId,
                 seeded.TopicId,
                 SourceConfiguration = configurationJson ?? QueueSourceConfigurationJson(),
+                SourceMapping = SourceMappingJson,
             });
     }
 
@@ -250,7 +250,6 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
                 declarativeSourceContract: true,
                 sourceMappingExpression:
                     "{ \"event_type\": event_type, \"source_event_id\": source_event_id, \"payload\": payload }"));
-        Guid connectionId = Guid.NewGuid();
         Guid topicId = Guid.NewGuid();
         Guid sourceId = Guid.NewGuid();
         await using DbConnection connection = database.CreateConnection();
@@ -258,10 +257,6 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         await connection.ExecuteAsync($$$"""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES (@TenantId, @Slug, 'SB Integration', 'active', {{{database.Now}}}, {{{database.Now}}});
-
-            INSERT INTO connections (id, tenant_id, connector_id, name, config, status, created_at, updated_at)
-            VALUES (@ConnectionId, @TenantId, @ConnectorId, 'sb-connection', {{{database.Json("@Config")}}},
-                'active', {{{database.Now}}}, {{{database.Now}}});
 
             INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at)
             VALUES (@TopicId, @TenantId, 'sb-topic', 'active', {{{database.Now}}}, {{{database.Now}}});
@@ -271,12 +266,10 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
                 TenantId = tenantIdValue,
                 Slug = TenantSlug,
                 ConnectorId = connectorId,
-                ConnectionId = connectionId,
-                Config = "{}",
                 TopicId = topicId,
             });
 
-        var seeded = new SeededQueueSource(tenantIdValue, connectorId, connectionId, topicId, sourceId);
+        var seeded = new SeededQueueSource(tenantIdValue, connectorId, topicId, sourceId);
         if (includeSource)
             await InsertQueueSourceAsync(database, seeded, sourceId);
 
@@ -303,7 +296,6 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
 internal sealed record SeededQueueSource(
     Guid TenantId,
     Guid ConnectorId,
-    Guid ConnectionId,
     Guid TopicId,
     Guid SourceId);
 
@@ -374,6 +366,11 @@ internal sealed class FaultInjectingEventAcceptance(IEventAcceptance inner) : IE
 {
     private readonly ConcurrentDictionary<string, int> attempts = new();
     private readonly ConcurrentDictionary<string, byte> failures = new();
+
+    public Task<EventAcceptance?> FindBySourceEventIdAsync(
+        Guid sourceId,
+        string sourceEventId,
+        CancellationToken cancellationToken) => inner.FindBySourceEventIdAsync(sourceId, sourceEventId, cancellationToken);
 
     internal void FailNext(string sourceEventId) => failures[sourceEventId] = 0;
 

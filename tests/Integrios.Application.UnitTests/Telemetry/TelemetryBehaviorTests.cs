@@ -53,7 +53,7 @@ public sealed class TelemetryBehaviorTests
 
         await HandleAcceptanceAsync(new IngestEventCommand(Guid.NewGuid(), Guid.NewGuid(), JsonDocument.Parse("{}").RootElement), accepted);
         await HandleAcceptanceAsync(new AcceptVerifiedWebhookCommand(Guid.NewGuid(), null, new Dictionary<string, string>(), ReadOnlyMemory<byte>.Empty), accepted);
-        await HandleAcceptanceAsync(new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, JsonDocument.Parse("{}").RootElement), accepted);
+        await HandleAcceptanceAsync(new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, JsonDocument.Parse("{}").RootElement, null, null), accepted);
 
         Activity[] spans = collector.Activities.Where(activity => activity.OperationName == "event.accept").ToArray();
         spans.Length.ShouldBe(3);

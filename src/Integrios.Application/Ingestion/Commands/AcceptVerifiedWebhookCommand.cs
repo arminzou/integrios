@@ -3,6 +3,7 @@ using System.Text.Json;
 using Integrios.Application.Secrets;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -48,10 +49,17 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
             throw new WebhookPayloadException("The request body must be a JSON object.");
 
         JsonElement context = BuildContext(command.Headers);
+        string? sourceEventId = endpoint.EventIdentityRule is { } identityRule
+            ? SourceEventIdentityExtractor.ExtractWebhook(identityRule, command.Headers, rawInput)
+            : null;
+        if (sourceEventId is not null && await eventAcceptance.FindBySourceEventIdAsync(endpoint.SourceId, sourceEventId, cancellationToken) is { } existing)
+            return ToResult(existing);
+
         SourceContractOutput output = SourceContractEvaluator.Evaluate(
             evaluator, endpoint.SourceContractSchema, endpoint.SourceMapping, rawInput, context);
-        string? idempotencyKey = output.SourceEventId is { } sourceEventId
-            ? $"{endpoint.SourceId}:{sourceEventId}"
+        sourceEventId ??= output.SourceEventId;
+        string? idempotencyKey = sourceEventId is not null
+            ? SourceEventIdentityExtractor.IdempotencyKey(endpoint.SourceId, sourceEventId)
             : null;
 
         var activity = Activity.Current;
@@ -64,7 +72,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
                 TenantId = endpoint.TenantId,
                 TopicId = endpoint.TopicId,
                 SourceId = endpoint.SourceId,
-                SourceEventId = output.SourceEventId,
+                SourceEventId = sourceEventId,
                 EventType = output.EventType,
                 Payload = output.Payload,
                 Metadata = output.Metadata,
@@ -85,19 +93,13 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
             logger.LogInformation("Accepted webhook event {EventId} on topic {TopicId}.", accepted.EventId, endpoint.TopicId);
         }
 
-        return new IngestEventResult
-        {
-            EventId = accepted.EventId,
-            Status = accepted.Status,
-            AcceptedAt = accepted.AcceptedAt,
-            AlreadyAccepted = accepted.AlreadyAccepted
-        };
+        return ToResult(accepted);
     }
 
     private async Task VerifyAsync(
         ResolvedSourceEndpoint endpoint, AcceptVerifiedWebhookCommand command, CancellationToken cancellationToken)
     {
-        // AllowUnverified connectors permit a Connection with no selected SourceVerification scheme.
+        // Connectors that allow unverified sources permit no selected SourceVerification scheme.
         if (endpoint.SourceVerification is not { } verification)
             return;
 
@@ -127,4 +129,12 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
             lowered[name.ToLowerInvariant()] = value;
         return JsonSerializer.SerializeToElement(new { headers = lowered });
     }
+
+    private static IngestEventResult ToResult(EventAcceptance accepted) => new()
+    {
+        EventId = accepted.EventId,
+        Status = accepted.Status,
+        AcceptedAt = accepted.AcceptedAt,
+        AlreadyAccepted = accepted.AlreadyAccepted
+    };
 }

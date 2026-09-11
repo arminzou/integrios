@@ -93,7 +93,7 @@ public sealed class IngestMetricsTests
         submission.TopicId.ShouldBe(topicId);
         submission.SourceId.ShouldBe(command.SourceId);
         submission.EventType.ShouldBe("payment.created");
-        submission.Payload.GetProperty("amount").GetInt32().ShouldBe(command.RawInput.GetProperty("amount").GetInt32());
+        submission.Payload.GetProperty("amount").GetInt32().ShouldBe(command.RawInput.GetProperty("payload").GetProperty("amount").GetInt32());
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public sealed class IngestMetricsTests
     private static IngestEventCommand MakeCommand() => new(
         Guid.NewGuid(),
         SourceId,
-        JsonDocument.Parse("{\"amount\":42}").RootElement);
+        JsonDocument.Parse("{\"event_type\":\"payment.created\",\"payload\":{\"amount\":42}}").RootElement);
 
     private static IMediator BuildMediator(bool alreadyAccepted) => BuildMediator(new EventAcceptance
     {
@@ -175,6 +175,11 @@ public sealed class IngestMetricsTests
         private readonly EventAcceptance acceptance;
         public EventSubmission? LastSubmission { get; private set; }
         public string? LastTraceparent { get; private set; }
+
+        public Task<EventAcceptance?> FindBySourceEventIdAsync(
+            Guid sourceId,
+            string sourceEventId,
+            CancellationToken cancellationToken) => Task.FromResult<EventAcceptance?>(null);
 
         public FakeEventAcceptance(bool alreadyAccepted)
             : this(new EventAcceptance

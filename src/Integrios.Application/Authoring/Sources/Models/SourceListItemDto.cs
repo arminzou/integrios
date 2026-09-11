@@ -3,11 +3,11 @@ namespace Integrios.Application.Authoring.Sources;
 public sealed record SourceListItemDto(
     Guid Id,
     Guid TenantId,
-    Guid ConnectionId,
+    Guid ConnectorId,
     Guid TopicId,
     string Type,
     string Status,
-    string SourceContract,
+    string InputRequirements,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset? RevokedAt);

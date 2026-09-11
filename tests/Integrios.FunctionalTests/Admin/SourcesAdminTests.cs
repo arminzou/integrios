@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
-using Integrios.Application.Authoring.Connections;
 using Integrios.Admin.Endpoints;
 using Integrios.Application.Authoring.Sources;
 using Integrios.Tests.Shared;
@@ -29,10 +28,10 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     [Fact]
     public async Task SourceLifecycle_CreatesListsUpdatesAndPermanentlyRevokesWebhook()
     {
-        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
-        var configuration = new { source_contract = "event_json" };
-        var request = new { connection_id = connectionId, topic_id = topicId, type = "webhook", configuration };
+        var configuration = new { };
+        var request = new { connector_id = connectorId, topic_id = topicId, type = "webhook", configuration };
 
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", request));
         create.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -53,22 +52,22 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     [Fact]
     public async Task SourceAuthoring_CreatesEventApiAndQueueSources()
     {
-        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
 
         HttpResponseMessage eventApi = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
-            connection_id = connectionId,
+            connector_id = connectorId,
             topic_id = topicId,
             type = "event_api",
-            configuration = new { source_contract = "event_json" }
+            configuration = new { }
         }));
         HttpResponseMessage queue = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
-            connection_id = connectionId,
+            connector_id = connectorId,
             topic_id = topicId,
             type = "queue",
-            configuration = new { source_contract = "event_json", transport = "azure_service_bus", authentication = new { scheme = "azure_identity" }, transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" } }
+            configuration = new { transport = "azure_service_bus", authentication = new { scheme = "azure_identity" }, transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" } }
         }));
 
         eventApi.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -85,17 +84,16 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         string scheme,
         string? secretReference)
     {
-        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
-            connection_id = connectionId,
+            connector_id = connectorId,
             topic_id = topicId,
             type = "queue",
             configuration = new
             {
-                source_contract = "event_json",
                 transport = "azure_service_bus",
                 authentication = new { scheme, secret_ref = secretReference },
                 transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" },
@@ -110,17 +108,16 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     [Fact]
     public async Task QueueSourceAuthoring_RejectsSecretReferenceOnAzureIdentity()
     {
-        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
-            connection_id = connectionId,
+            connector_id = connectorId,
             topic_id = topicId,
             type = "queue",
             configuration = new
             {
-                source_contract = "event_json",
                 transport = "azure_service_bus",
                 authentication = new { scheme = "azure_identity", secret_ref = "sb_connection_string" },
                 transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" },
@@ -140,17 +137,16 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     [InlineData("sb-integrios.servicebus.windows.net/queues")]
     public async Task QueueSourceAuthoring_RejectsNonHostNamespaceForAzureIdentity(string ns)
     {
-        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
-            connection_id = connectionId,
+            connector_id = connectorId,
             topic_id = topicId,
             type = "queue",
             configuration = new
             {
-                source_contract = "event_json",
                 transport = "azure_service_bus",
                 authentication = new { scheme = "azure_identity" },
                 transport_config = new { @namespace = ns, queue_name = "events" },
@@ -166,17 +162,16 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     [Fact]
     public async Task QueueSourceAuthoring_AcceptsTopicSubscriptionForm()
     {
-        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
-            connection_id = connectionId,
+            connector_id = connectorId,
             topic_id = topicId,
             type = "queue",
             configuration = new
             {
-                source_contract = "event_json",
                 transport = "azure_service_bus",
                 authentication = new { scheme = "azure_identity" },
                 transport_config = new
@@ -204,7 +199,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         string? topicName,
         string? subscriptionName)
     {
-        Guid connectionId = await CreateSourceConnectionAsync();
+        Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
 
         var transportConfig = new Dictionary<string, object?>
@@ -220,7 +215,6 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         var configuration = new Dictionary<string, object?>
         {
-            ["source_contract"] = "event_json",
             ["transport"] = "azure_service_bus",
             ["authentication"] = new { scheme = "azure_identity" },
             ["transport_config"] = transportConfig,
@@ -228,7 +222,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
-            connection_id = connectionId,
+            connector_id = connectorId,
             topic_id = topicId,
             type = "queue",
             configuration,
@@ -243,15 +237,11 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!.Id;
     }
 
-    private async Task<Guid> CreateSourceConnectionAsync()
+    private async Task<Guid> CreateSourceConnectorAsync()
     {
         using JsonDocument document = JsonDocument.Parse(TestConnectorManifest.Create("source_test", "Source test", "source", declarativeSourceContract: true));
         HttpResponseMessage connectorResponse = await client.SendAsync(AdminRequest(HttpMethod.Put, "/admin/connectors/source_test/versions/1", document.RootElement));
         ConnectorDto connector = (await connectorResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        HttpResponseMessage connectionResponse = await client.SendAsync(AdminRequest(
-            HttpMethod.Post,
-            $"/admin/tenants/{fixture.TenantId}/connections",
-            new { connector_id = connector.Id, name = "source-test", config = new { }, source_verification = (object?)null, destination_authentication = (object?)null }));
-        return (await connectionResponse.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options))!.Id;
+        return connector.Id;
     }
 }

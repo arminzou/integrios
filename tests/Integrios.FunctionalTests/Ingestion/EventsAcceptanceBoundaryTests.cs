@@ -30,7 +30,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task InitializeAsync()
     {
         await fixture.ResetDataAsync();
-        Guid connectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantAId, "payments-source");
+        Guid connectionId = await fixture.SeedSourceConnectorAsync(fixture.TenantAId, "payments-source");
         defaultTopicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
         defaultSourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
         client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
@@ -195,7 +195,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task PostEvents_WithInactiveConnection_Returns404()
     {
-        var connectionId = await fixture.SeedSourceConnectionAsync(
+        var connectionId = await fixture.SeedSourceConnectorAsync(
             fixture.TenantAId, "inactive-source", status: "disabled");
         var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
 
@@ -206,7 +206,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task PostEvents_WithDestinationOnlyConnection_Returns404()
     {
-        var connectionId = await fixture.SeedSourceConnectionAsync(
+        var connectionId = await fixture.SeedSourceConnectorAsync(
             fixture.TenantAId, "destination-only", direction: "destination");
         var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
 
@@ -217,7 +217,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task PostEvents_WithOtherTenantSourceId_Returns404()
     {
-        var connectionId = await fixture.SeedSourceConnectionAsync(fixture.TenantBId, "other-tenant-source");
+        var connectionId = await fixture.SeedSourceConnectorAsync(fixture.TenantBId, "other-tenant-source");
         var topicId = await fixture.SeedTopicAsync(fixture.TenantBId, "other-tenant-topic");
         var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantBId, connectionId, topicId);
 
@@ -288,14 +288,14 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task PostEvents_MappingEvaluationFailure_Returns422()
+    public async Task PostEvents_IgnoresRetiredConnectorMapping()
     {
         Guid sourceId = await SeedContractSourceAsync(
             "mapping_failure_test", sourceMappingExpression: "$error(\"boom\")");
 
         var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-mapping-failure"));
 
-        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -320,7 +320,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
             sourceContractHasMapping: sourceContractHasMapping,
             sourceMappingExpression: sourceMappingExpression,
             sourceContractSchema: sourceContractSchema);
-        Guid connectionId = await fixture.SeedConnectorConnectionAsync(fixture.TenantAId, connectorKey, manifest);
+        Guid connectionId = await fixture.SeedConnectorAsync(fixture.TenantAId, connectorKey, manifest);
 
         return await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectionId, defaultTopicId);
     }

@@ -6,6 +6,11 @@ namespace Integrios.Application.Ingestion;
 
 public interface IEventAcceptance
 {
+    Task<EventAcceptance?> FindBySourceEventIdAsync(
+        Guid sourceId,
+        string sourceEventId,
+        CancellationToken cancellationToken);
+
     Task<EventAcceptance> AcceptAsync(
         EventSubmission submission,
         string? traceparent,

@@ -3,6 +3,7 @@ using Integrios.Application.Ingestion;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,7 +39,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
             """{"event_type":"order.created","source_event_id":"op-1","payload":{"amount":42}}""").RootElement;
 
         IngestEventResult result = await mediator.Send(
-            new AcceptQueueMessageCommand(tenantId, topicId, sourceId, null, IdentityMapping, input));
+            new AcceptQueueMessageCommand(tenantId, topicId, sourceId, null, IdentityMapping, input, null, null));
 
         result.Status.ShouldBe(EventStatus.Accepted);
         eventAcceptance.LastSubmission.ShouldNotBeNull();
@@ -48,7 +49,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         submission.SourceId.ShouldBe(sourceId);
         submission.EventType.ShouldBe("order.created");
         submission.SourceEventId.ShouldBe("op-1");
-        submission.IdempotencyKey.ShouldBe($"service_bus:{sourceId}:op-1");
+        submission.IdempotencyKey.ShouldBe(SourceEventIdentityExtractor.IdempotencyKey(sourceId, "op-1"));
     }
 
     [Fact]
@@ -59,9 +60,22 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
             """{"event_type":"order.created","source_event_id":"op-1","payload":{}}""").RootElement;
 
         IngestEventResult result = await mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, IdentityMapping, input));
+            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, IdentityMapping, input, null, null));
 
         result.AlreadyAccepted.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_MessageIdIdentity_OverridesTheMutableMappingIdentity()
+    {
+        JsonElement input = JsonDocument.Parse(
+            """{"event_type":"order.created","source_event_id":"mapped-id","payload":{}}""").RootElement;
+
+        await mediator.Send(new AcceptQueueMessageCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, IdentityMapping, input,
+            new SourceEventIdentityRule { Kind = "message_id", Value = "ignored" }, "broker-id"));
+
+        eventAcceptance.LastSubmission!.SourceEventId.ShouldBe("broker-id");
     }
 
     [Fact]
@@ -72,7 +86,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         JsonElement input = JsonDocument.Parse("""{"event_type":42,"payload":{}}""").RootElement;
 
         await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), schema, IdentityMapping, input)));
+            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), schema, IdentityMapping, input, null, null)));
         eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
@@ -83,7 +97,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         JsonElement input = JsonDocument.Parse("""{"a":1}""").RootElement;
 
         await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, failingMapping, input)));
+            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, failingMapping, input, null, null)));
         eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
@@ -93,7 +107,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         JsonElement input = JsonDocument.Parse("""{"payload":{}}""").RootElement;
 
         await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, input)));
+            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, input, null, null)));
         eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
@@ -101,6 +115,11 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
     {
         public bool AlreadyAccepted { get; set; }
         public EventSubmission? LastSubmission { get; private set; }
+
+        public Task<EventAcceptance?> FindBySourceEventIdAsync(
+            Guid sourceId,
+            string sourceEventId,
+            CancellationToken cancellationToken) => Task.FromResult<EventAcceptance?>(null);
 
         public Task<EventAcceptance> AcceptAsync(EventSubmission submission, string? traceparent, CancellationToken cancellationToken)
         {

@@ -62,10 +62,11 @@ public sealed class TenantApiKeyAuthHandler(
     {
         rawKey = "";
         var header = context.Request.Headers.Authorization.ToString();
-        if (!header.StartsWith(SchemeName + " ", StringComparison.OrdinalIgnoreCase))
+        const string bearer = "Bearer ";
+        if (!header.StartsWith(bearer, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        rawKey = header[(SchemeName.Length + 1)..];
+        rawKey = header[bearer.Length..];
         return rawKey.StartsWith("intg_", StringComparison.Ordinal) && rawKey.Length > "intg_".Length;
     }
 }

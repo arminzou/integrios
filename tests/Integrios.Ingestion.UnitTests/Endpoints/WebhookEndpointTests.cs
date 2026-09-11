@@ -5,6 +5,7 @@ using System.Text.Json;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -53,7 +54,8 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
         EventSubmission submission = fixture.EventAcceptance.LastSubmission;
         submission.EventType.ShouldBe("test.issue.opened");
         submission.SourceEventId.ShouldBe("delivery-1");
-        submission.IdempotencyKey.ShouldBe($"{fixture.SourceEndpointResolver.Result!.SourceId}:delivery-1");
+        submission.IdempotencyKey!.Length.ShouldBe(97);
+        submission.IdempotencyKey.ShouldNotContain("delivery-1", Case.Sensitive);
         submission.Payload.ValueKind.ShouldBe(JsonValueKind.Object);
         submission.Payload.GetProperty("number").GetInt32().ShouldBe(1);
     }
@@ -106,6 +108,48 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
 
         HttpResponseMessage response = await client.SendAsync(request);
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task PostWebhook_JsonPointerIdentity_AcceptsTheBoundedBodyValue()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
+        {
+            EventIdentityRule = new SourceEventIdentityRule { Kind = "json_path", Value = "/delivery/id" }
+        };
+
+        HttpResponseMessage response = await SendAsync(
+            callbackId, """{"delivery":{"id":"body-delivery-1"},"action":"opened"}""", "issue.opened", "ignored");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        fixture.EventAcceptance.LastSubmission!.SourceEventId.ShouldBe("body-delivery-1");
+    }
+
+    [Fact]
+    public async Task PostWebhook_KnownIdentity_ReturnsBeforeCurrentMapping()
+    {
+        Guid callbackId = Guid.NewGuid();
+        Guid eventId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
+        {
+            EventIdentityRule = new SourceEventIdentityRule { Kind = "header", Value = DeliveryIdHeaderName },
+            SourceMapping = new TransformSpec("jsonata", "1", "$error(\"must not run\")")
+        };
+        fixture.EventAcceptance.ExistingBySourceEventId = new EventAcceptance
+        {
+            EventId = eventId,
+            Status = EventStatus.Accepted,
+            AcceptedAt = DateTimeOffset.UtcNow,
+            AlreadyAccepted = true
+        };
+
+        HttpResponseMessage response = await SendAsync(callbackId, """{"action":"opened"}""", "issue.opened", "known-delivery");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        using JsonDocument result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        result.RootElement.GetProperty("event_id").GetGuid().ShouldBe(eventId);
+        fixture.EventAcceptance.LastSubmission.ShouldBeNull();
     }
 
     [Fact]
@@ -200,7 +244,6 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
         TenantSlug = IngestionApiFixture.WebhookTenantSlug,
         TopicId = Guid.NewGuid(),
         SourceId = Guid.NewGuid(),
-        ConnectionId = Guid.NewGuid(),
         ConnectorKey = "test_webhook",
         SourceVerification = new SourceVerification
         {

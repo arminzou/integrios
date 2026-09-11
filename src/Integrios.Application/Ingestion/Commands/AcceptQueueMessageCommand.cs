@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -16,7 +17,9 @@ public sealed record AcceptQueueMessageCommand(
     Guid SourceId,
     JsonElement? SourceContractSchema,
     TransformSpec? SourceMapping,
-    JsonElement RawInput)
+    JsonElement RawInput,
+    SourceEventIdentityRule? EventIdentityRule,
+    string? BrokerMessageId)
     : IRequest<IngestEventResult>;
 
 internal sealed class AcceptQueueMessageCommandHandler(
@@ -28,10 +31,18 @@ internal sealed class AcceptQueueMessageCommandHandler(
 {
     public async Task<IngestEventResult> Handle(AcceptQueueMessageCommand command, CancellationToken cancellationToken)
     {
+        string? sourceEventId = command.EventIdentityRule is { } identityRule
+            ? SourceEventIdentityExtractor.ExtractQueue(identityRule, command.BrokerMessageId, command.RawInput)
+            : null;
+        if (sourceEventId is not null
+            && await eventAcceptance.FindBySourceEventIdAsync(command.SourceId, sourceEventId, cancellationToken) is { } existing)
+            return ToResult(existing);
+
         SourceContractOutput output = SourceContractEvaluator.Evaluate(
             evaluator, command.SourceContractSchema, command.SourceMapping, command.RawInput);
-        string? idempotencyKey = output.SourceEventId is { } sourceEventId
-            ? $"service_bus:{command.SourceId}:{sourceEventId}"
+        sourceEventId ??= output.SourceEventId;
+        string? idempotencyKey = sourceEventId is not null
+            ? SourceEventIdentityExtractor.IdempotencyKey(command.SourceId, sourceEventId)
             : null;
 
         var activity = Activity.Current;
@@ -44,7 +55,7 @@ internal sealed class AcceptQueueMessageCommandHandler(
                 TenantId = command.TenantId,
                 TopicId = command.TopicId,
                 SourceId = command.SourceId,
-                SourceEventId = output.SourceEventId,
+                SourceEventId = sourceEventId,
                 EventType = output.EventType,
                 Payload = output.Payload,
                 Metadata = output.Metadata,
@@ -65,12 +76,14 @@ internal sealed class AcceptQueueMessageCommandHandler(
             logger.LogInformation("Accepted queue event {EventId} on topic {TopicId}.", accepted.EventId, command.TopicId);
         }
 
-        return new IngestEventResult
-        {
-            EventId = accepted.EventId,
-            Status = accepted.Status,
-            AcceptedAt = accepted.AcceptedAt,
-            AlreadyAccepted = accepted.AlreadyAccepted
-        };
+        return ToResult(accepted);
     }
+
+    private static IngestEventResult ToResult(EventAcceptance accepted) => new()
+    {
+        EventId = accepted.EventId,
+        Status = accepted.Status,
+        AcceptedAt = accepted.AcceptedAt,
+        AlreadyAccepted = accepted.AlreadyAccepted
+    };
 }

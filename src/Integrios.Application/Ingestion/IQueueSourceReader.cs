@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Transforms;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Ingestion;
 
@@ -29,6 +30,7 @@ public sealed record ResolvedQueueSource
     public required string? ServiceBusTopicName { get; init; }
     public required string? ServiceBusSubscriptionName { get; init; }
     public required QueueAuthentication Authentication { get; init; }
+    public SourceEventIdentityRule? EventIdentityRule { get; init; }
     public required JsonElement? SourceContractSchema { get; init; }
     public required TransformSpec? SourceMapping { get; init; }
 }

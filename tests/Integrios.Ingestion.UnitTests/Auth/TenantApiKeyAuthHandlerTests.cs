@@ -41,10 +41,10 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
 
     [Theory]
     [InlineData(null)]                              // no header
-    [InlineData("Bearer intg_abc123")]              // wrong scheme
-    [InlineData("TenantApiKey ")]                         // empty value
-    [InlineData("TenantApiKey wrong_prefix_secret")]      // doesn't start with intg_
-    [InlineData("TenantApiKey intg_")]                    // nothing after intg_
+    [InlineData("TenantApiKey intg_abc123")] // wrong scheme
+    [InlineData("Bearer ")] // empty value
+    [InlineData("Bearer wrong_prefix_secret")] // doesn't start with intg_
+    [InlineData("Bearer intg_")] // nothing after intg_
     public async Task BadHeader_Returns401(string? authHeader)
     {
         HttpResponseMessage response = await PostEventsAsync(authHeader);
@@ -56,7 +56,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
     [Fact]
     public async Task UnknownKeyId_Returns401()
     {
-        HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {TestToken}");
+        HttpResponseMessage response = await PostEventsAsync($"Bearer {TestToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
@@ -68,7 +68,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
         (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
-        HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {WrongToken}");
+        HttpResponseMessage response = await PostEventsAsync($"Bearer {WrongToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
@@ -80,7 +80,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
         (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
-        HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {TestToken}");
+        HttpResponseMessage response = await PostEventsAsync($"Bearer {TestToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
@@ -95,7 +95,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
         (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
-        await PostEventsAsync($"TenantApiKey {TestToken}");
+        await PostEventsAsync($"Bearer {TestToken}");
 
         fixture.TenantApiKeyUse.Recorded.ShouldHaveSingleItem().TenantApiKeyId.ShouldBe(tenantApiKey.Id);
     }
@@ -106,7 +106,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
         (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
-        await PostEventsAsync($"TenantApiKey {WrongToken}");
+        await PostEventsAsync($"Bearer {WrongToken}");
 
         fixture.TenantApiKeyUse.Recorded.ShouldBeEmpty();
     }
@@ -122,7 +122,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
             tenantApiKey with { LastUsedAt = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(1) },
             tenant);
 
-        await PostEventsAsync($"TenantApiKey {TestToken}");
+        await PostEventsAsync($"Bearer {TestToken}");
 
         fixture.TenantApiKeyUse.Recorded.ShouldBeEmpty();
     }
@@ -135,7 +135,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
             tenantApiKey with { LastUsedAt = DateTimeOffset.UtcNow - TenantApiKeyUse.Resolution - TimeSpan.FromMinutes(1) },
             tenant);
 
-        await PostEventsAsync($"TenantApiKey {TestToken}");
+        await PostEventsAsync($"Bearer {TestToken}");
 
         fixture.TenantApiKeyUse.Recorded.ShouldHaveSingleItem().TenantApiKeyId.ShouldBe(tenantApiKey.Id);
     }

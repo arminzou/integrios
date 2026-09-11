@@ -14,6 +14,18 @@ namespace Integrios.Infrastructure.Events;
 internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbContext> contextFactory)
     : IEventAcceptance
 {
+    public async Task<EventAcceptance?> FindBySourceEventIdAsync(
+        Guid sourceId,
+        string sourceEventId,
+        CancellationToken cancellationToken)
+    {
+        await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        DomainEvent? existing = await context.Events.AsNoTracking().SingleOrDefaultAsync(
+            candidate => candidate.SourceId == sourceId && candidate.SourceEventId == sourceEventId,
+            cancellationToken);
+        return existing is null ? null : ToAlreadyAccepted(existing);
+    }
+
     public async Task<EventAcceptance> AcceptAsync(
         EventSubmission submission,
         string? traceparent,
@@ -106,13 +118,7 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
             if (existing is null)
                 throw;
 
-            return new EventAcceptance
-            {
-                EventId = existing.Id,
-                Status = existing.Status,
-                AcceptedAt = existing.AcceptedAt,
-                AlreadyAccepted = true
-            };
+            return ToAlreadyAccepted(existing);
         }
         catch
         {
@@ -127,4 +133,12 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
                && ex.SqlState == PostgresErrorCodes.UniqueViolation
                && string.Equals(ex.ConstraintName, "idx_events_idempotency", StringComparison.Ordinal);
     }
+
+    private static EventAcceptance ToAlreadyAccepted(DomainEvent existing) => new()
+    {
+        EventId = existing.Id,
+        Status = existing.Status,
+        AcceptedAt = existing.AcceptedAt,
+        AlreadyAccepted = true
+    };
 }
