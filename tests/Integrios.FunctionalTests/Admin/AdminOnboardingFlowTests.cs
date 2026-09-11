@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.Authoring.TenantApiKeys;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Admin.Endpoints;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -68,13 +68,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
         string.IsNullOrWhiteSpace(tenantApiKey.Token).ShouldBeFalse();
         tenantApiKey.TenantApiKey.Name.ShouldBe("acme-ingestion");
 
-        var sourceConnection = await CreateConnectionAsync(
-            tenant.Id,
-            "acme-source",
-            "http://localhost:5054/sink/acme-source",
-            "production");
-
-        var destinationConnection = await CreateConnectionAsync(
+        var destination = await CreateDestinationAsync(
             tenant.Id,
             "acme-erp",
             "http://localhost:5054/sink/acme-erp",
@@ -86,13 +80,18 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
             new
             {
                 name = "payments",
-                description = "Payment events",
-                source_connection_ids = new[] { sourceConnection.Id }
+                description = "Payment events"
             }));
         topicResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var topic = await topicResponse.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
         topic.ShouldNotBeNull();
+
+        var sourceResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{tenant.Id}/sources",
+            new { connector_id = fixture.HttpConnectorId, topic_id = topic.Id, type = "event_api", configuration = new { } }));
+        sourceResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var subscriptionResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -101,7 +100,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
             {
                 name = "acme-erp-subscription",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = destinationConnection.Id,
+                destination_id = destination.Id,
                 order_index = 10,
                 description = "ERP sink"
             }));
@@ -109,7 +108,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
 
         var subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
         subscription.ShouldNotBeNull();
-        subscription.DestinationConnectionId.ShouldBe(destinationConnection.Id);
+        subscription.DestinationId.ShouldBe(destination.Id);
 
         var listTopics = await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{tenant.Id}/topics"));
         listTopics.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -146,23 +145,24 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
-    private async Task<ConnectionDto> CreateConnectionAsync(Guid tenantId, string name, string url, string environment)
+    private async Task<DestinationDto> CreateDestinationAsync(Guid tenantId, string name, string url, string environment)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
-            $"/admin/tenants/{tenantId}/connections",
+            $"/admin/tenants/{tenantId}/destinations",
             new
             {
                 connector_id = fixture.HttpConnectorId,
                 name,
-                config = new { base_uri = url },
+                configuration = new { base_uri = url },
+                authentication = (object?)null,
                 environment,
-                description = $"Connection {name}"
+                description = $"Destination {name}"
             }));
 
         response.EnsureSuccessStatusCode();
-        var connection = await response.Content.ReadFromJsonAsync<ConnectionDto>(HostJson.Options);
-        return connection!;
+        var destination = await response.Content.ReadFromJsonAsync<DestinationDto>(HostJson.Options);
+        return destination!;
     }
 
     private sealed record SubscriptionDto(
@@ -171,7 +171,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
         Guid TenantId,
         string Name,
         JsonElement MatchRules,
-        Guid DestinationConnectionId,
+        Guid DestinationId,
         string Status,
         int OrderIndex,
         string? Description);

@@ -33,9 +33,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 topicId,
                 request.Name,
                 request.MatchRules,
-                request.DestinationConnectionId,
+                request.DestinationId,
                 request.Mapping,
                 request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
+                request.HttpSuccess,
                 request.OrderIndex,
                 request.Description),
             cancellationToken);
@@ -85,9 +86,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 id,
                 request.Name,
                 request.MatchRules,
-                request.DestinationConnectionId,
+                request.DestinationId,
                 request.Mapping,
                 request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
+                request.HttpSuccess,
                 request.OrderIndex,
                 request.Description),
             cancellationToken);
@@ -111,17 +113,19 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
 internal sealed record CreateSubscriptionRequest(
     string? Name,
     JsonElement MatchRules,
-    Guid DestinationConnectionId,
+    Guid DestinationId,
     JsonElement? Mapping,
     HttpDeliveryConfiguration? HttpDelivery,
+    HttpSuccessRule? HttpSuccess,
     int OrderIndex,
     string? Description);
 
 internal sealed record UpdateSubscriptionRequest(
     string? Name,
     JsonElement MatchRules,
-    Guid DestinationConnectionId,
+    Guid DestinationId,
     JsonElement? Mapping,
     HttpDeliveryConfiguration? HttpDelivery,
+    HttpSuccessRule? HttpSuccess,
     int OrderIndex,
     string? Description);

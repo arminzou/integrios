@@ -3,10 +3,10 @@ using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Outbox;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Authoring.Connectors;
-using Integrios.Infrastructure.Connections;
+using Integrios.Infrastructure.Destinations;
 using Integrios.Infrastructure.Events;
 using Integrios.Infrastructure.Connectors;
 using Microsoft.EntityFrameworkCore;
@@ -73,7 +73,7 @@ public sealed class DatabaseProviderRegistrationTests
         context.Database.ProviderName.ShouldBe("Microsoft.EntityFrameworkCore.SqlServer");
         context.Model.FindEntityType(typeof(Event))!
             .FindProperty(nameof(Event.Payload))!.GetColumnType().ShouldBe("nvarchar(max)");
-        provider.GetRequiredService<IConnectionAuthoringLock>().ShouldBeOfType<SqlServerConnectionAuthoringLock>();
+        provider.GetRequiredService<IDestinationAuthoringLock>().ShouldBeOfType<SqlServerDestinationAuthoringLock>();
         provider.GetRequiredService<IEventAcceptance>().ShouldBeOfType<SqlServerEventAcceptance>();
         scope.ServiceProvider.GetRequiredService<IConnectorManifestStore>().ShouldBeOfType<SqlServerConnectorManifestStore>();
     }

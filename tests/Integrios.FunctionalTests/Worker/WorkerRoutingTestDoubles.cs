@@ -1,5 +1,6 @@
 using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.FunctionalTests.Worker;
 

@@ -36,8 +36,8 @@ public sealed class AdminRequiredTextValidationTests
     [InlineData("tenant-update")]
     [InlineData("topic-create")]
     [InlineData("tenant-api-key-create")]
-    [InlineData("connection-create")]
-    [InlineData("connection-update")]
+    [InlineData("destination-create")]
+    [InlineData("destination-update")]
     [InlineData("subscription-create")]
     [InlineData("subscription-update")]
     public async Task RequiredName_Null_ReturnsFieldValidation(string operation)
@@ -77,14 +77,14 @@ public sealed class AdminRequiredTextValidationTests
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys",
             new { name }),
-        "connection-create" => AdminRequest(
+        "destination-create" => AdminRequest(
             HttpMethod.Post,
-            $"/admin/tenants/{fixture.TenantId}/connections",
-            new { connector_id = fixture.HttpConnectorId, name, config = new { } }),
-        "connection-update" => AdminRequest(
+            $"/admin/tenants/{fixture.TenantId}/destinations",
+            new { connector_id = fixture.HttpConnectorId, name, configuration = new { } }),
+        "destination-update" => AdminRequest(
             HttpMethod.Patch,
-            $"/admin/tenants/{fixture.TenantId}/connections/{fixture.SourceConnectionId}",
-            new { name, config = new { } }),
+            $"/admin/tenants/{fixture.TenantId}/destinations/{fixture.DestinationId}",
+            new { name, configuration = new { } }),
         "subscription-create" => SubscriptionRequest(HttpMethod.Post, Guid.NewGuid(), Guid.Empty, name),
         "subscription-update" => SubscriptionRequest(HttpMethod.Patch, Guid.NewGuid(), Guid.NewGuid(), name),
         _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
@@ -100,7 +100,7 @@ public sealed class AdminRequiredTextValidationTests
         {
             name,
             match_rules = new { event_type = "validation.test" },
-            destination_connection_id = fixture.SourceConnectionId,
+            destination_id = fixture.DestinationId,
             order_index = 0
         });
     }

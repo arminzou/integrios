@@ -2,7 +2,7 @@ using Integrios.Application;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Delivery;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Authoring.Connectors;
@@ -15,7 +15,7 @@ using Integrios.Application.Transforms;
 using Integrios.Infrastructure.OperatorKeys;
 using Integrios.Infrastructure.TenantApiKeys;
 using Integrios.Infrastructure.Delivery;
-using Integrios.Infrastructure.Connections;
+using Integrios.Infrastructure.Destinations;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Events;
 using Integrios.Infrastructure.Identity;
@@ -74,11 +74,11 @@ public static class DependencyInjection
             services.AddScoped<IConnectorManifestStore, SqlServerConnectorManifestStore>();
         else
             services.AddScoped<IConnectorManifestStore, PostgresConnectorManifestStore>();
-        services.AddScoped<IConnectionRepository, ConnectionRepository>();
+        services.AddScoped<IDestinationRepository, DestinationRepository>();
         if (databaseProvider == DatabaseProvider.SqlServer)
-            services.AddSingleton<IConnectionAuthoringLock, SqlServerConnectionAuthoringLock>();
+            services.AddSingleton<IDestinationAuthoringLock, SqlServerDestinationAuthoringLock>();
         else
-            services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
+            services.AddSingleton<IDestinationAuthoringLock, PostgresDestinationAuthoringLock>();
         services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<ISourceRepository, SourceRepository>();
         services.AddScoped<ISourceQueries, SourceQueries>();

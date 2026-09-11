@@ -44,7 +44,7 @@ internal sealed class EventDeliveryConfiguration : IEntityTypeConfiguration<Even
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.DeliverAfter).HasColumnName("deliver_after");
-        entity.Property(e => e.DestinationConnectionId).HasColumnName("destination_connection_id");
+        entity.Property(e => e.DestinationId).HasColumnName("destination_id");
         entity.Property(e => e.EventId).HasColumnName("event_id");
         entity.Property(e => e.FailedAt).HasColumnName("failed_at");
         entity.Property(e => e.HttpExecutionSnapshot)
@@ -71,10 +71,10 @@ internal sealed class EventDeliveryConfiguration : IEntityTypeConfiguration<Even
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");
 
-        entity.HasOne<Connection>().WithMany()
-            .HasForeignKey(d => d.DestinationConnectionId)
+        entity.HasOne<Destination>().WithMany()
+            .HasForeignKey(d => d.DestinationId)
             .OnDelete(DeleteBehavior.ClientSetNull)
-            .HasConstraintName("event_deliveries_destination_connection_id_fkey");
+            .HasConstraintName("event_deliveries_destination_id_fkey");
 
         entity.HasOne<DomainEvent>().WithMany()
             .HasForeignKey(d => d.EventId)

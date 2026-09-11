@@ -50,7 +50,7 @@ internal sealed class EventDeliveryQueue(
             ? $"""
                 SELECT TOP (1)
                     sd.id AS Id, sd.event_id AS EventId, sd.subscription_id AS SubscriptionId,
-                    sd.destination_connection_id AS DestinationConnectionId, sd.status AS Status,
+                    sd.destination_id AS DestinationId, sd.status AS Status,
                     sd.lifetime_attempt_count AS LifetimeAttemptCount,
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
                     sd.active_attempt_id AS ActiveAttemptId, sd.connector_key AS ConnectorKey,
@@ -74,7 +74,7 @@ internal sealed class EventDeliveryQueue(
                     sd.id AS Id,
                     sd.event_id AS EventId,
                     sd.subscription_id AS SubscriptionId,
-                    sd.destination_connection_id AS DestinationConnectionId,
+                    sd.destination_id AS DestinationId,
                     sd.status AS Status,
                     sd.lifetime_attempt_count AS LifetimeAttemptCount,
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
@@ -234,7 +234,7 @@ internal sealed class EventDeliveryQueue(
             attemptNumber,
             row.EventId,
             row.SubscriptionId,
-            row.DestinationConnectionId,
+            row.DestinationId,
             row.TenantId,
             row.TenantSlug,
             row.PayloadJson ?? string.Empty,
@@ -446,7 +446,7 @@ internal sealed class EventDeliveryQueue(
         public Guid Id { get; init; }
         public Guid EventId { get; init; }
         public Guid SubscriptionId { get; init; }
-        public Guid DestinationConnectionId { get; init; }
+        public Guid DestinationId { get; init; }
         public Guid TenantId { get; init; }
         public string TenantSlug { get; init; } = string.Empty;
         public string Status { get; init; } = string.Empty;

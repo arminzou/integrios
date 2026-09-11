@@ -34,7 +34,7 @@ public sealed record DeliveryAttemptDiagnosticsDto
     public required Guid AttemptId { get; init; }
     public required Guid EventDeliveryId { get; init; }
     public required Guid SubscriptionId { get; init; }
-    public required Guid DestinationConnectionId { get; init; }
+    public required Guid DestinationId { get; init; }
     public required int AttemptNumber { get; init; }
     public required string Status { get; init; }
     public string? FailurePhase { get; init; }

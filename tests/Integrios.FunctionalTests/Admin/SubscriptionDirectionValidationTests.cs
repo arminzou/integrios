@@ -33,10 +33,10 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     }
 
     [Fact]
-    public async Task CreateSubscription_SourceOnlyDestinationConnection_Returns422()
+    public async Task CreateSubscription_SourceOnlyDestination_Returns422()
     {
         var topic = await CreateTopicAsync("payments");
-        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync("source_only_sink", "source");
+        Guid destinationId = await InsertDestinationWithDirectionAsync("source_only_sink", "source");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -45,7 +45,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = destinationConnectionId,
+                destination_id = destinationId,
                 order_index = 10
             }));
 
@@ -55,10 +55,10 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     [Theory]
     [InlineData("destination")]
     [InlineData("both")]
-    public async Task CreateSubscription_DestinationCapableConnection_ReturnsCreated(string direction)
+    public async Task CreateSubscription_DestinationCapableDestination_ReturnsCreated(string direction)
     {
         var topic = await CreateTopicAsync("payments");
-        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync($"allowed_{direction}_sink", direction);
+        Guid destinationId = await InsertDestinationWithDirectionAsync($"allowed_{direction}_sink", direction);
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -67,7 +67,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = destinationConnectionId,
+                destination_id = destinationId,
                 order_index = 10
             }));
 
@@ -75,10 +75,10 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     }
 
     [Fact]
-    public async Task CreateSubscription_CrossTenantDestinationConnection_Returns422()
+    public async Task CreateSubscription_CrossTenantDestination_Returns422()
     {
         var topic = await CreateTopicAsync("payments");
-        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+        Guid destinationId = await InsertDestinationWithDirectionAsync(
             "cross_tenant_create_sink",
             "destination",
             fixture.OtherTenantId);
@@ -90,7 +90,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             {
                 name = "cross-tenant-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = destinationConnectionId,
+                destination_id = destinationId,
                 order_index = 10
             }));
 
@@ -101,7 +101,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     public async Task CreateSubscription_MissingDestinationAuthentication_Returns422()
     {
         var topic = await CreateTopicAsync("payments");
-        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+        Guid destinationId = await InsertDestinationWithDirectionAsync(
             "authentication_required_sink",
             "destination",
             authenticationSchemes: ["bearer_token"]);
@@ -113,7 +113,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             {
                 name = "missing-authentication",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = destinationConnectionId,
+                destination_id = destinationId,
                 order_index = 10
             }));
 
@@ -121,11 +121,11 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     }
 
     [Fact]
-    public async Task UpdateSubscription_SourceOnlyDestinationConnection_Returns422()
+    public async Task UpdateSubscription_SourceOnlyDestination_Returns422()
     {
         var topic = await CreateTopicAsync("payments");
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
-        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync("source_only_update_sink", "source");
+        Guid destinationId = await InsertDestinationWithDirectionAsync("source_only_update_sink", "source");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Patch,
@@ -134,7 +134,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             {
                 name = "erp-sink-v2",
                 match_rules = new { event_type = "payment.updated" },
-                destination_connection_id = destinationConnectionId,
+                destination_id = destinationId,
                 order_index = 25
             }));
 
@@ -142,11 +142,11 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     }
 
     [Fact]
-    public async Task UpdateSubscription_CrossTenantDestinationConnection_Returns422()
+    public async Task UpdateSubscription_CrossTenantDestination_Returns422()
     {
         var topic = await CreateTopicAsync("payments");
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
-        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+        Guid destinationId = await InsertDestinationWithDirectionAsync(
             "cross_tenant_update_sink",
             "destination",
             fixture.OtherTenantId);
@@ -158,7 +158,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             {
                 name = "cross-tenant-sink",
                 match_rules = new { event_type = "payment.updated" },
-                destination_connection_id = destinationConnectionId,
+                destination_id = destinationId,
                 order_index = 25
             }));
 
@@ -166,10 +166,10 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     }
 
     [Fact]
-    public async Task Database_CrossTenantDestinationConnection_IsRejected()
+    public async Task Database_CrossTenantDestination_IsRejected()
     {
         var topic = await CreateTopicAsync("payments");
-        Guid destinationConnectionId = await InsertConnectionWithDirectionAsync(
+        Guid destinationId = await InsertDestinationWithDirectionAsync(
             "cross_tenant_direct_sink",
             "destination",
             fixture.OtherTenantId);
@@ -179,18 +179,18 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         Task insert = connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (
                 id, tenant_id, topic_id, name, match_rules,
-                destination_connection_id, status, order_index)
+                destination_id, status, order_index)
             VALUES (
                 @Id, @TenantId, @TopicId, 'cross-tenant-direct',
                 {{{fixture.Json("@MatchRules")}}},
-                @DestinationConnectionId, 'active', 0);
+                @DestinationId, 'active', 0);
             """, new
         {
             Id = Guid.NewGuid(),
             fixture.TenantId,
             TopicId = topic.Id,
             MatchRules = "{\"event_type\":\"payment.created\"}",
-            DestinationConnectionId = destinationConnectionId
+            DestinationId = destinationId
         });
 
         await Should.ThrowAsync<DbException>(() => insert);
@@ -216,7 +216,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             {
                 name,
                 match_rules = new { event_type = eventType },
-                destination_connection_id = fixture.SourceConnectionId,
+                destination_id = fixture.DestinationId,
                 order_index = 10
             }));
 
@@ -224,7 +224,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         return (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!;
     }
 
-    private async Task<Guid> InsertConnectionWithDirectionAsync(
+    private async Task<Guid> InsertDestinationWithDirectionAsync(
         string key,
         string direction,
         Guid? tenantId = null,
@@ -232,23 +232,23 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     {
         Guid connectorId = await fixture.ApplyConnectorManifestAsync(
             key, TestConnectorManifest.Create(key, key, direction, authenticationSchemes));
-        Guid connectionId = Guid.NewGuid();
+        Guid destinationId = Guid.NewGuid();
 
         await using var connection = fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, connector_id, name, config, source_verification, destination_authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @ConnectorId, @Name, {{{fixture.Json("@Config")}}}, NULL, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
+            INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, authentication, status, environment, description, created_at, updated_at)
+            VALUES (@Id, @TenantId, @ConnectorId, @Name, {{{fixture.Json("@Config")}}}, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
             """, new
         {
-            Id = connectionId,
+            Id = destinationId,
             TenantId = tenantId ?? fixture.TenantId,
             ConnectorId = connectorId,
             Name = key,
             Config = "{\"base_uri\":\"http://localhost:5054/sink/custom\"}"
         });
 
-        return connectionId;
+        return destinationId;
     }
 
     private sealed record SubscriptionDto(
@@ -257,7 +257,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         Guid TenantId,
         string Name,
         JsonElement MatchRules,
-        Guid DestinationConnectionId,
+        Guid DestinationId,
         JsonElement? MappingConfig,
         string Status,
         int OrderIndex,

@@ -20,7 +20,7 @@ public static class SecretValidationCli
         if (!TryParse(args, out ValidateSecretsCommand? command))
         {
             await error.WriteLineAsync(
-                "Usage: secrets validate (--all | --tenant <slug> [--connection <id>])");
+                "Usage: secrets validate (--all | --tenant <slug> [--destination <id>])");
             return 2;
         }
 
@@ -33,7 +33,7 @@ public static class SecretValidationCli
             foreach (SecretValidationResult result in report.Results)
             {
                 await output.WriteLineAsync(
-                    $"{result.TenantSlug} / connection {result.ConnectionId} / {result.SecretReference}: "
+                    $"{result.TenantSlug} / destination {result.DestinationId} / {result.SecretReference}: "
                     + (result.Resolvable ? "resolvable" : "unresolvable"));
             }
 
@@ -66,7 +66,7 @@ public static class SecretValidationCli
 
         bool all = false;
         string? tenantSlug = null;
-        Guid? connectionId = null;
+        Guid? destinationId = null;
 
         for (int index = 2; index < args.Length; index++)
         {
@@ -78,20 +78,20 @@ public static class SecretValidationCli
                 case "--tenant" when tenantSlug is null && index + 1 < args.Length:
                     tenantSlug = args[++index];
                     break;
-                case "--connection" when connectionId is null && index + 1 < args.Length:
-                    if (!Guid.TryParse(args[++index], out Guid parsedConnectionId))
+                case "--destination" when destinationId is null && index + 1 < args.Length:
+                    if (!Guid.TryParse(args[++index], out Guid parsedDestinationId))
                         return false;
-                    connectionId = parsedConnectionId;
+                    destinationId = parsedDestinationId;
                     break;
                 default:
                     return false;
             }
         }
 
-        if (all == (tenantSlug is not null) || (connectionId is not null && tenantSlug is null))
+        if (all == (tenantSlug is not null) || (destinationId is not null && tenantSlug is null))
             return false;
 
-        command = new ValidateSecretsCommand(tenantSlug, connectionId, all);
+        command = new ValidateSecretsCommand(tenantSlug, destinationId, all);
         return true;
     }
 }

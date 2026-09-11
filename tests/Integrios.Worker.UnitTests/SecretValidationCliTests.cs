@@ -17,10 +17,10 @@ public sealed class SecretValidationCliTests
     public async Task RunAsync_ValidatesSelectedTenantAndReturnsFailureForMissingReference()
     {
         Tenant tenant = MakeTenant("tenant-a");
-        Connection connection = MakeConnection(tenant.Id, "api_key");
+        Destination destination = MakeDestination(tenant.Id, "api_key");
         using ServiceProvider services = BuildServices(
             [tenant],
-            [connection],
+            [destination],
             new Dictionary<string, string>());
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -29,23 +29,23 @@ public sealed class SecretValidationCliTests
             ["secrets", "validate", "--tenant", "tenant-a"], services, output, error);
 
         exitCode.ShouldBe(1);
-        output.ToString().ShouldContain($"connection {connection.Id} / api_key: unresolvable", Case.Sensitive);
+        output.ToString().ShouldContain($"destination {destination.Id} / api_key: unresolvable", Case.Sensitive);
         error.ToString().ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task RunAsync_AllValidReferencesReturnsSuccessAndSkipsInactiveConnectionsAndTenants()
+    public async Task RunAsync_AllValidReferencesReturnsSuccessAndSkipsInactiveDestinationsAndTenants()
     {
         Tenant tenantA = MakeTenant("tenant-a");
         Tenant tenantB = MakeTenant("tenant-b");
         Tenant disabledTenant = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Disabled };
-        Connection activeA = MakeConnection(tenantA.Id, "shared");
-        Connection activeB = MakeConnection(tenantB.Id, "shared");
-        Connection inactive = MakeConnection(tenantA.Id, "missing") with { Status = OperationalStatus.Disabled };
-        Connection disabledTenantConnection = MakeConnection(disabledTenant.Id, "missing");
+        Destination activeA = MakeDestination(tenantA.Id, "shared");
+        Destination activeB = MakeDestination(tenantB.Id, "shared");
+        Destination inactive = MakeDestination(tenantA.Id, "missing") with { Status = OperationalStatus.Disabled };
+        Destination disabledTenantDestination = MakeDestination(disabledTenant.Id, "missing");
         using ServiceProvider services = BuildServices(
             [tenantA, tenantB, disabledTenant],
-            [activeA, activeB, inactive, disabledTenantConnection],
+            [activeA, activeB, inactive, disabledTenantDestination],
             new Dictionary<string, string>
             {
                 ["tenant-a/shared"] = "one",
@@ -78,11 +78,11 @@ public sealed class SecretValidationCliTests
     }
 
     [Fact]
-    public async Task RunAsync_ConnectionSelectionValidatesOnlyThatConnection()
+    public async Task RunAsync_DestinationSelectionValidatesOnlyThatDestination()
     {
         Tenant tenant = MakeTenant("tenant-a");
-        Connection selected = MakeConnection(tenant.Id, "present");
-        Connection other = MakeConnection(tenant.Id, "missing");
+        Destination selected = MakeDestination(tenant.Id, "present");
+        Destination other = MakeDestination(tenant.Id, "missing");
         using ServiceProvider services = BuildServices(
             [tenant],
             [selected, other],
@@ -91,7 +91,7 @@ public sealed class SecretValidationCliTests
         using var error = new StringWriter();
 
         int exitCode = await SecretValidationCli.RunAsync(
-            ["secrets", "validate", "--tenant", "tenant-a", "--connection", selected.Id.ToString()],
+            ["secrets", "validate", "--tenant", "tenant-a", "--destination", selected.Id.ToString()],
             services,
             output,
             error);
@@ -128,7 +128,7 @@ public sealed class SecretValidationCliTests
 
     [Theory]
     [InlineData("secrets", "validate", "--all", "--tenant", "tenant-a")]
-    [InlineData("secrets", "validate", "--connection", "de305d54-75b4-431b-adb2-eb6b9e546014")]
+    [InlineData("secrets", "validate", "--destination", "de305d54-75b4-431b-adb2-eb6b9e546014")]
     [InlineData("secrets", "unknown", "--all")]
     public async Task RunAsync_InvalidSelectionReturnsUsage(params string[] args)
     {
@@ -144,12 +144,12 @@ public sealed class SecretValidationCliTests
 
     private static ServiceProvider BuildServices(
         IReadOnlyList<Tenant> tenants,
-        IReadOnlyList<Connection> connections,
+        IReadOnlyList<Destination> destinations,
         IReadOnlyDictionary<string, string> secrets)
     {
         var services = new ServiceCollection();
         services.AddWorkerApplicationServices();
-        services.AddSingleton<ISecretValidationReader>(new FakeSecretValidationReader(tenants, connections));
+        services.AddSingleton<ISecretValidationReader>(new FakeSecretValidationReader(tenants, destinations));
         services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(secrets));
         return services.BuildServiceProvider();
     }
@@ -164,14 +164,14 @@ public sealed class SecretValidationCliTests
         UpdatedAt = DateTimeOffset.UtcNow
     };
 
-    private static Connection MakeConnection(Guid tenantId, string reference) => new()
+    private static Destination MakeDestination(Guid tenantId, string reference) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenantId,
         ConnectorId = Guid.NewGuid(),
         Name = "Destination",
-        Config = JsonSerializer.Deserialize<JsonElement>("{}"),
-        DestinationAuthentication = new DestinationAuthentication
+        Configuration = JsonSerializer.Deserialize<JsonElement>("{}"),
+        Authentication = new DestinationAuthentication
         {
             Scheme = "bearer",
             Config = JsonSerializer.Deserialize<JsonElement>("{}"),
@@ -200,7 +200,7 @@ public sealed class SecretValidationCliTests
 
     private sealed class FakeSecretValidationReader(
         IReadOnlyList<Tenant> tenants,
-        IReadOnlyList<Connection> connections) : ISecretValidationReader
+        IReadOnlyList<Destination> destinations) : ISecretValidationReader
     {
         public Task<Tenant?> FindTenantBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
             Task.FromResult(tenants.SingleOrDefault(item => item.Slug == slug));
@@ -208,11 +208,11 @@ public sealed class SecretValidationCliTests
         public Task<IReadOnlyList<Tenant>> ListActiveTenantsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<Tenant>>(tenants.Where(item => item.Status == OperationalStatus.Active).ToList());
 
-        public Task<Connection?> FindConnectionAsync(Guid tenantId, Guid connectionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(connections.SingleOrDefault(item => item.TenantId == tenantId && item.Id == connectionId));
+        public Task<Destination?> FindDestinationAsync(Guid tenantId, Guid destinationId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(destinations.SingleOrDefault(item => item.TenantId == tenantId && item.Id == destinationId));
 
-        public Task<IReadOnlyList<Connection>> ListActiveConnectionsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<Connection>>(connections
+        public Task<IReadOnlyList<Destination>> ListActiveDestinationsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Destination>>(destinations
                 .Where(item => item.TenantId == tenantId && item.Status == OperationalStatus.Active)
                 .ToList());
     }

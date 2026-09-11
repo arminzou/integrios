@@ -22,11 +22,11 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Baseline_UsesNativeJsonStorageAndKeepsRuntimeTriggers()
+    public async Task Baseline_UsesNativeJsonStorageWithoutHistoricalRuntimeTriggers()
     {
         await using DbConnection connection = await fixture.OpenAsync();
         (await fixture.GetJsonStorageTypesAsync(connection)).ShouldBe(fixture.ExpectedJsonStorageTypes);
-        (await fixture.GetRuntimeTriggerCountAsync(connection)).ShouldBe(1);
+        (await fixture.GetRuntimeTriggerCountAsync(connection)).ShouldBe(0);
     }
 
     [Fact]
@@ -35,8 +35,7 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
         await Should.ThrowAsync<DbException>(() => fixture.InsertInvalidManifestAsync(connection));
-        await Should.ThrowAsync<DbException>(() => fixture.SetInvalidSourceVerificationAsync(connection, seed.ConnectionId));
-        await Should.ThrowAsync<DbException>(() => fixture.SetMalformedConfigAsync(connection, seed.ConnectionId));
+        await Should.ThrowAsync<DbException>(() => fixture.SetMalformedConfigAsync(connection, seed.DestinationId));
     }
 
     [Fact]
@@ -89,14 +88,10 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     }
 
     [Fact]
-    public async Task ConnectorFunctionalUpdate_IsRejected_WhilePresentationStillReconciles()
+    public async Task ConnectorPresentation_ReconcilesThroughTheManifestStore()
     {
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
-        await Should.ThrowAsync<DbException>(() => connection.ExecuteAsync(
-            "UPDATE connectors SET direction='destination' WHERE id=@ConnectorId",
-            new { seed.ConnectorId }));
-
         await using IntegriosDbContext context = fixture.CreateContext();
         ConnectorManifest renamed = ConnectorManifestParser.DeserializeStored(
             DatabaseProviderFixture.Manifest("Renamed Source").GetRawText());
@@ -195,19 +190,19 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
                   SYSUTCDATETIME(), SYSUTCDATETIME(), N'[]')
               """);
 
-    internal Task SetInvalidSourceVerificationAsync(DbConnection connection, Guid connectionId) =>
+    internal Task SetInvalidSourceVerificationAsync(DbConnection connection, Guid sourceId) =>
         connection.ExecuteAsync(
             Database.Provider == "postgres"
-                ? "UPDATE connections SET source_verification='[]'::jsonb WHERE id=@ConnectionId"
-                : "UPDATE connections SET source_verification=N'[]' WHERE id=@ConnectionId",
-            new { ConnectionId = connectionId });
+                ? "UPDATE sources SET verification='[]'::jsonb WHERE id=@SourceId"
+                : "UPDATE sources SET verification=N'[]' WHERE id=@SourceId",
+            new { SourceId = sourceId });
 
-    internal Task SetMalformedConfigAsync(DbConnection connection, Guid connectionId) =>
+    internal Task SetMalformedConfigAsync(DbConnection connection, Guid destinationId) =>
         connection.ExecuteAsync(
             Database.Provider == "postgres"
-                ? "UPDATE connections SET config='not-json'::jsonb WHERE id=@ConnectionId"
-                : "UPDATE connections SET config=N'not-json' WHERE id=@ConnectionId",
-            new { ConnectionId = connectionId });
+                ? "UPDATE destinations SET configuration='not-json'::jsonb WHERE id=@DestinationId"
+                : "UPDATE destinations SET configuration=N'not-json' WHERE id=@DestinationId",
+            new { DestinationId = destinationId });
 
     internal async Task<ProviderContractSeed> SeedAsync(DbConnection connection)
     {
@@ -229,12 +224,12 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             ManifestJson = Manifest("Provider Contract Source").GetRawText()
         });
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, connector_id, name, config, status, created_at, updated_at)
-            VALUES (@ConnectionId, @TenantId, @ConnectorId, 'provider-contract-connection',
+            INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status, created_at, updated_at)
+            VALUES (@DestinationId, @TenantId, @ConnectorId, 'provider-contract-destination',
                 {{{Database.Json("@Config")}}}, 'active', {{{now}}}, {{{now}}})
             """, new
         {
-            seed.ConnectionId,
+            seed.DestinationId,
             seed.TenantId,
             seed.ConnectorId,
             Config = """{"base_uri":"https://example.test"}"""
@@ -248,21 +243,21 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             seed = seed with { TopicId = topic.Id };
         }
         await connection.ExecuteAsync($$$"""
-            INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status)
-            VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'event_api', {{{Database.Json("@SourceConfig")}}}, 'active')
-            """, new { seed.SourceId, seed.TenantId, seed.ConnectionId, seed.TopicId, SourceConfig = "{}" });
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, revision, status)
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'event_api', {{{Database.Json("@SourceConfig")}}}, 'fixture-revision', 'active')
+            """, new { seed.SourceId, seed.TenantId, seed.ConnectorId, seed.TopicId, SourceConfig = "{}" });
 
         await connection.ExecuteAsync($$$"""
-            INSERT INTO subscriptions (id, topic_id, tenant_id, name, match_rules, destination_connection_id,
+            INSERT INTO subscriptions (id, topic_id, tenant_id, name, match_rules, destination_id,
                 http_delivery, status, order_index, created_at, updated_at)
             VALUES (@SubscriptionId, @TopicId, @TenantId, 'payments-http', {{{Database.Json("@MatchRules")}}},
-                @ConnectionId, {{{Database.Json("@HttpDelivery")}}}, 'active', 0, {{{now}}}, {{{now}}})
+                @DestinationId, {{{Database.Json("@HttpDelivery")}}}, 'active', 0, {{{now}}}, {{{now}}})
             """, new
         {
             seed.SubscriptionId,
             seed.TopicId,
             seed.TenantId,
-            seed.ConnectionId,
+            seed.DestinationId,
             MatchRules = """{"event_type":"payment.created"}""",
             HttpDelivery = """{"body":"json","method":"POST","headers":{},"version":1}""",
         });
@@ -288,7 +283,6 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
           "direction":"both",
           "source_verification":{"allow_unverified":true,"schemes":[]},
           "destination_authentication":{"allow_unauthenticated":true,"schemes":[]},
-          "source_contracts":[{"key":"verified_webhook","contract_version":1,"config":{}}],
           "presentation":{"name":"{{{name}}}","event_types":[],"authoring_presets":[]}
         }
         """);
@@ -299,7 +293,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
 internal sealed record ProviderContractSeed(
     Guid TenantId,
     Guid ConnectorId,
-    Guid ConnectionId,
+    Guid DestinationId,
     Guid TopicId,
     Guid SubscriptionId,
     Guid SourceId);

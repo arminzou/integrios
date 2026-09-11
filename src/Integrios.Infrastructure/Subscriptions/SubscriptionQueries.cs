@@ -40,12 +40,12 @@ internal sealed class SubscriptionQueries(
         string sql = $"""
             SELECT {(sqlServer ? "TOP (@Take)" : "")}
                 s.id AS Id, s.topic_id AS TopicId, s.tenant_id AS TenantId, s.name AS Name,
-                s.destination_connection_id AS DestinationConnectionId,
-                c.name AS DestinationConnectionName, s.status AS Status, s.order_index AS OrderIndex,
+                s.destination_id AS DestinationId,
+                d.name AS DestinationName, s.status AS Status, s.order_index AS OrderIndex,
                 s.description AS Description, s.created_at AS CreatedAt, s.updated_at AS UpdatedAt
             FROM subscriptions s
-            INNER JOIN connections c
-                ON c.tenant_id = s.tenant_id AND c.id = s.destination_connection_id
+            INNER JOIN destinations d
+                ON d.tenant_id = s.tenant_id AND d.id = s.destination_id
             WHERE {string.Join(" AND ", where)}
             ORDER BY s.created_at DESC, s.id DESC
             {(sqlServer ? "" : "LIMIT @Take")}
@@ -68,8 +68,8 @@ internal sealed class SubscriptionQueries(
             row.TopicId,
             row.TenantId,
             row.Name,
-            row.DestinationConnectionId,
-            row.DestinationConnectionName,
+            row.DestinationId,
+            row.DestinationName,
             row.Status,
             row.OrderIndex,
             row.Description,
@@ -90,7 +90,7 @@ internal sealed class SubscriptionQueries(
             tenantId,
             filter.Status,
             filter.TopicId,
-            filter.DestinationConnectionId,
+            filter.DestinationId,
             filter.NameContains,
         });
         DateTimeOffset cursorTime = default;
@@ -103,8 +103,8 @@ internal sealed class SubscriptionQueries(
         var where = new List<string> { "s.tenant_id = @TenantId" };
         if (filter.Status is not null) where.Add("s.status = @Status");
         if (filter.TopicId is not null) where.Add("s.topic_id = @TopicId");
-        if (filter.DestinationConnectionId is not null)
-            where.Add("s.destination_connection_id = @DestinationConnectionId");
+        if (filter.DestinationId is not null)
+            where.Add("s.destination_id = @DestinationId");
         if (filter.NameContains is not null)
             where.Add(sqlServer
                 ? "CHARINDEX(@NameContains, LOWER(s.name)) > 0"
@@ -114,13 +114,13 @@ internal sealed class SubscriptionQueries(
         string sql = $"""
             SELECT {(sqlServer ? "TOP (@Take)" : "")}
                 s.id AS Id, s.topic_id AS TopicId, t.name AS TopicName, s.tenant_id AS TenantId,
-                s.name AS Name, s.destination_connection_id AS DestinationConnectionId,
-                c.name AS DestinationConnectionName, s.status AS Status, s.order_index AS OrderIndex,
+                s.name AS Name, s.destination_id AS DestinationId,
+                d.name AS DestinationName, s.status AS Status, s.order_index AS OrderIndex,
                 s.description AS Description, s.created_at AS CreatedAt, s.updated_at AS UpdatedAt
             FROM subscriptions s
             INNER JOIN topics t ON t.tenant_id = s.tenant_id AND t.id = s.topic_id
-            INNER JOIN connections c
-                ON c.tenant_id = s.tenant_id AND c.id = s.destination_connection_id
+            INNER JOIN destinations d
+                ON d.tenant_id = s.tenant_id AND d.id = s.destination_id
             WHERE {string.Join(" AND ", where)}
             ORDER BY s.created_at DESC, s.id DESC
             {(sqlServer ? "" : "LIMIT @Take")}
@@ -131,7 +131,7 @@ internal sealed class SubscriptionQueries(
             TenantId = tenantId,
             Status = filter.Status is { } statusFilter ? StoredEnum(statusFilter) : null,
             TopicId = filter.TopicId,
-            DestinationConnectionId = filter.DestinationConnectionId,
+            DestinationId = filter.DestinationId,
             NameContains = filter.NameContains?.ToLowerInvariant(),
             CursorTime = cursorTime,
             CursorId = cursorId,
@@ -146,8 +146,8 @@ internal sealed class SubscriptionQueries(
             row.TopicName,
             row.TenantId,
             row.Name,
-            row.DestinationConnectionId,
-            row.DestinationConnectionName,
+            row.DestinationId,
+            row.DestinationName,
             row.Status,
             row.OrderIndex,
             row.Description,
@@ -166,8 +166,8 @@ internal sealed class SubscriptionQueries(
         public string TopicName { get; init; } = "";
         public Guid TenantId { get; init; }
         public string Name { get; init; } = "";
-        public Guid DestinationConnectionId { get; init; }
-        public string DestinationConnectionName { get; init; } = "";
+        public Guid DestinationId { get; init; }
+        public string DestinationName { get; init; } = "";
         public string Status { get; init; } = "";
         public int OrderIndex { get; init; }
         public string? Description { get; init; }

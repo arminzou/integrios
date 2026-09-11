@@ -7,6 +7,7 @@ using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;

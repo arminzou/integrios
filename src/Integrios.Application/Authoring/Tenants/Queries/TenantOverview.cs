@@ -13,7 +13,7 @@ namespace Integrios.Application.Authoring.Tenants;
 public sealed record TenantOverviewDto
 {
     public required int Topics { get; init; }
-    public required int Connections { get; init; }
+    public required int Destinations { get; init; }
     public required int Sources { get; init; }
     public required int Subscriptions { get; init; }
 
@@ -43,7 +43,7 @@ public interface ITenantOverview
 
 public sealed record TenantOverviewCounts(
     int Topics,
-    int Connections,
+    int Destinations,
     int Sources,
     int Subscriptions,
     int LiveApiKeys,
@@ -68,7 +68,7 @@ internal sealed class GetTenantOverviewQueryHandler(ITenantRepository repository
         return new TenantOverviewDto
         {
             Topics = counts.Topics,
-            Connections = counts.Connections,
+            Destinations = counts.Destinations,
             Sources = counts.Sources,
             Subscriptions = counts.Subscriptions,
             LiveApiKeys = counts.LiveApiKeys,

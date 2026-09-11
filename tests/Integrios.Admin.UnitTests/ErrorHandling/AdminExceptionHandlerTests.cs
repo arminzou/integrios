@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Admin.ErrorHandling;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
@@ -15,9 +15,9 @@ public sealed class AdminExceptionHandlerTests
     public static TheoryData<Exception, int> ExpectedExceptions => new()
     {
         { new DuplicateResourceException("duplicate"), StatusCodes.Status409Conflict },
-        { new ConnectionAuthoringConflictException(), StatusCodes.Status409Conflict },
+        { new DestinationAuthoringConflictException(), StatusCodes.Status409Conflict },
         { new TenantValidationException("invalid tenant"), StatusCodes.Status422UnprocessableEntity },
-        { new ConnectionValidationException("invalid connection"), StatusCodes.Status422UnprocessableEntity },
+        { new DestinationValidationException("invalid destination"), StatusCodes.Status422UnprocessableEntity },
         { new TopicValidationException("invalid topic"), StatusCodes.Status422UnprocessableEntity },
         { new SubscriptionValidationException("invalid subscription"), StatusCodes.Status422UnprocessableEntity },
         { new BadHttpRequestException("binding details"), StatusCodes.Status400BadRequest }

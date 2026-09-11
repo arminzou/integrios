@@ -1,7 +1,7 @@
 using Integrios.Application.Authoring;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Authoring.Connections;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Authoring.Destinations;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -19,7 +19,7 @@ public sealed class AdminExceptionHandler(IProblemDetailsService problemDetailsS
         {
             AuthoringValidationException validation => ValidationProblem(validation),
             DuplicateResourceException => Problem(StatusCodes.Status409Conflict, exception.Message),
-            ConnectionAuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
+            DestinationAuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             ConnectorVersionConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             InvalidCursorException or InvalidListFilterException => Problem(StatusCodes.Status400BadRequest, exception.Message),
             BadHttpRequestException badRequest => Problem(badRequest.StatusCode, "The request is invalid."),

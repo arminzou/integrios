@@ -2,6 +2,7 @@ using Integrios.Application;
 using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
 using Integrios.Application.Transforms;
+using Integrios.Domain.ValueObjects;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Extensions.Configuration;

@@ -103,19 +103,25 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
     }
 
     [Fact]
-    public async Task Apply_RejectsRouteIdentityMismatchAndAcceptsDeclarativeSourceContract()
+    public async Task Apply_RejectsRouteIdentityMismatchAndRetiredSourceContracts()
     {
         HttpResponseMessage identityMismatch = await ApplyAsync(2, Manifest(contractVersion: 1, name: "Example API"));
         identityMismatch.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
-        JsonElement sourceContract = Json(Manifest(1, "Example API").GetRawText().Replace(
+        JsonElement sourceCapable = Json(Manifest(1, "Example API").GetRawText().Replace(
             "\"direction\":\"destination\"",
             "\"direction\":\"both\","
-            + "\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true},"
-            + "\"source_contracts\":[{\"key\":\"event_json\",\"contract_version\":1,\"config\":{}}]",
+            + "\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true}",
+            StringComparison.Ordinal));
+        HttpResponseMessage sourceCapableResponse = await ApplyAsync(1, sourceCapable);
+        sourceCapableResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        JsonElement sourceContract = Json(sourceCapable.GetRawText().Replace(
+            "\"presentation\":",
+            "\"source_contracts\":[{\"key\":\"event_json\",\"contract_version\":1,\"config\":{}}],\"presentation\":",
             StringComparison.Ordinal));
         HttpResponseMessage sourceContractResponse = await ApplyAsync(1, sourceContract);
-        sourceContractResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        sourceContractResponse.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]

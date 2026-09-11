@@ -23,7 +23,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
                 description = "Primary ERP delivery"
             }));
@@ -39,17 +39,17 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         body.TopicId.ShouldBe(topic.Id);
         body.TenantId.ShouldBe(Fixture.TenantId);
         body.Name.ShouldBe("erp-sink");
-        body.DestinationConnectionId.ShouldBe(Fixture.SourceConnectionId);
+        body.DestinationId.ShouldBe(Fixture.DestinationId);
         body.OrderIndex.ShouldBe(10);
         body.Status.ShouldBe("active");
         body.MatchRules.GetProperty("event_type").GetString().ShouldBe("payment.created");
     }
 
     [Fact]
-    public async Task CreateSubscription_WithDeactivatedConnection_ReturnsUnprocessableEntity()
+    public async Task CreateSubscription_WithDeactivatedDestination_ReturnsUnprocessableEntity()
     {
         var topic = await CreateTopicAsync("deactivated-destination");
-        await SetConnectionStatusAsync(Fixture.SourceConnectionId, "disabled");
+        await SetDestinationStatusAsync(Fixture.DestinationId, "disabled");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -58,7 +58,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "disabled-destination",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 0
             }));
 
@@ -147,7 +147,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = JsonDocument.Parse(matchRulesJson).RootElement,
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
                 description = "Primary ERP delivery"
             });
@@ -175,7 +175,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink-v2",
                 match_rules = JsonDocument.Parse(matchRulesJson).RootElement,
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 25,
                 description = "Updated ERP delivery"
             });
@@ -198,7 +198,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink-v2",
                 match_rules = new { event_type = "payment.updated" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 25,
                 description = "Updated ERP delivery"
             }));
@@ -250,7 +250,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10
             }));
 
@@ -286,7 +286,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1
             }));
 
@@ -306,7 +306,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink-v2",
                 match_rules = new { event_type = "payment.updated" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 2
             }));
 
@@ -325,7 +325,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "missing-subscription",
                 match_rules = new { event_type = "payment.updated" },
-                destination_connection_id = Guid.NewGuid(),
+                destination_id = Guid.NewGuid(),
                 order_index = 2
             }));
 

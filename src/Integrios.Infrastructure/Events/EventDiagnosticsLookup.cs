@@ -59,7 +59,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
                 SELECT
                     id                        AS EventDeliveryId,
                     subscription_id           AS SubscriptionId,
-                    destination_connection_id AS DestinationConnectionId,
+                    destination_id            AS DestinationId,
                     status                    AS Status,
                     lifetime_attempt_count    AS LifetimeAttemptCount,
                     retry_cycle_attempt_count AS RetryCycleAttemptCount,
@@ -81,7 +81,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
                     da.id                        AS AttemptId,
                     sd.id                        AS EventDeliveryId,
                     sd.subscription_id           AS SubscriptionId,
-                    sd.destination_connection_id AS DestinationConnectionId,
+                    sd.destination_id            AS DestinationId,
                     da.attempt_number            AS AttemptNumber,
                     da.status                    AS Status,
                     da.failure_phase             AS FailurePhase,
@@ -117,7 +117,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
             {
                 EventDeliveryId = delivery.EventDeliveryId,
                 SubscriptionId = delivery.SubscriptionId,
-                DestinationConnectionId = delivery.DestinationConnectionId,
+                DestinationId = delivery.DestinationId,
                 Status = delivery.Status,
                 LifetimeAttemptCount = delivery.LifetimeAttemptCount,
                 RetryCycleAttemptCount = delivery.RetryCycleAttemptCount,
@@ -129,7 +129,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
                 AttemptId = attempt.AttemptId,
                 EventDeliveryId = attempt.EventDeliveryId,
                 SubscriptionId = attempt.SubscriptionId,
-                DestinationConnectionId = attempt.DestinationConnectionId,
+                DestinationId = attempt.DestinationId,
                 AttemptNumber = attempt.AttemptNumber,
                 Status = attempt.Status,
                 FailurePhase = attempt.FailurePhase,
@@ -179,7 +179,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
     {
         public Guid EventDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
-        public Guid DestinationConnectionId { get; init; }
+        public Guid DestinationId { get; init; }
         public string Status { get; init; } = "";
         public int LifetimeAttemptCount { get; init; }
         public int RetryCycleAttemptCount { get; init; }
@@ -192,7 +192,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         public Guid AttemptId { get; init; }
         public Guid EventDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
-        public Guid DestinationConnectionId { get; init; }
+        public Guid DestinationId { get; init; }
         public int AttemptNumber { get; init; }
         public string Status { get; init; } = "";
         public string? FailurePhase { get; init; }

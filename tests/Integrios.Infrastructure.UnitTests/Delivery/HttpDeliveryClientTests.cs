@@ -4,6 +4,7 @@ using System.Text;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Delivery;
 
 namespace Integrios.Infrastructure.UnitTests;

@@ -23,11 +23,12 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
-        entity.Property(e => e.DestinationConnectionId).HasColumnName("destination_connection_id");
+        entity.Property(e => e.DestinationId).HasColumnName("destination_id");
         entity.Property(e => e.HttpDelivery)
             .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb")
             .HasColumnType("jsonb")
             .HasColumnName("http_delivery");
+        entity.Property(e => e.HttpSuccess).HasColumnType("jsonb").HasColumnName("http_success");
         entity.Property(e => e.MatchRules)
             .HasDefaultValueSql("'{}'::jsonb")
             .HasColumnType("jsonb")
@@ -48,11 +49,11 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");
 
-        entity.HasOne<Connection>().WithMany()
+        entity.HasOne<Destination>().WithMany()
             .HasPrincipalKey(p => new { p.TenantId, p.Id })
-            .HasForeignKey(d => new { d.TenantId, d.DestinationConnectionId })
+            .HasForeignKey(d => new { d.TenantId, d.DestinationId })
             .OnDelete(DeleteBehavior.ClientSetNull)
-            .HasConstraintName("fk_subscriptions_destination_connection_tenant");
+            .HasConstraintName("fk_subscriptions_destination_tenant");
 
         entity.HasOne<Topic>().WithMany()
             .HasPrincipalKey(p => new { p.TenantId, p.Id })

@@ -1,5 +1,6 @@
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Delivery;
 

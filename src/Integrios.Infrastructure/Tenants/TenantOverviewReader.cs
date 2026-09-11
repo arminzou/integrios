@@ -24,7 +24,7 @@ internal sealed class TenantOverviewReader(IDbConnectionFactory connectionFactor
         const string sql = """
             SELECT
                 (SELECT CAST(COUNT(*) AS INT) FROM topics WHERE tenant_id = @TenantId) AS Topics,
-                (SELECT CAST(COUNT(*) AS INT) FROM connections WHERE tenant_id = @TenantId) AS Connections,
+                (SELECT CAST(COUNT(*) AS INT) FROM destinations WHERE tenant_id = @TenantId) AS Destinations,
                 (SELECT CAST(COUNT(*) AS INT) FROM sources WHERE tenant_id = @TenantId) AS Sources,
                 (SELECT CAST(COUNT(*) AS INT) FROM subscriptions s
                     JOIN topics t ON t.id = s.topic_id

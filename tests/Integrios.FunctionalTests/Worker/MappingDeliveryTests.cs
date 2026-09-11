@@ -134,12 +134,12 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
     }
 
     [Fact]
-    public async Task Worker_DestinationConnectionWithoutUrl_FansOutWithNullSnapshotUrl()
+    public async Task Worker_DestinationWithoutUrl_FansOutWithNullSnapshotUrl()
     {
-        await fixture.ClearLedgerConnectionUrlAsync();
+        await fixture.ClearLedgerDestinationUrlAsync();
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
-        // Regression: a destination connection without a url must not stall fanout. Before the
+        // Regression: a Destination without a url must not stall fanout. Before the
         // snapshot column was made nullable, this raised a NOT NULL violation that rolled back the
         // fanout transaction and head-of-line blocked the outbox.
         (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
@@ -157,15 +157,11 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
     }
 
     [Fact]
-    public async Task Worker_ConnectorWithHttpSuccessRule_FansOutWithSnapshotCarryingIt()
+    public async Task Worker_SubscriptionHttpSuccessRule_FansOutWithSnapshotCarryingIt()
     {
-        await fixture.UpdateLedgerExecutionConfigurationAsync(
-            WorkerRoutingFixture.LedgerSinkUrl,
-            null,
-            "outcome_contract_test",
-            httpSuccessJson: """
+        await fixture.UpdateLedgerHttpSuccessAsync(JsonSerializer.Deserialize<HttpSuccessRule>("""
                 {"evaluator":"json_boolean","field":"ok","expected":true,"diagnostic_field":"error","max_body_bytes":2048}
-                """);
+                """, StoredJson.Options));
 
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
         (await fixture.RunFanoutBatchAsync()).ShouldBe(1);

@@ -71,8 +71,8 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         overview.Topics.ShouldBe(1);
         overview.Sources.ShouldBe(1);
         overview.Subscriptions.ShouldBe(1);
-        // The seed adds one destination Connection beside the Tenant's own source Connection.
-        overview.Connections.ShouldBe(2);
+        // The fixture seeds one Destination and the dead-letter setup adds another.
+        overview.Destinations.ShouldBe(2);
         overview.IngestionEndpoint.ShouldNotBeNullOrWhiteSpace();
     }
 

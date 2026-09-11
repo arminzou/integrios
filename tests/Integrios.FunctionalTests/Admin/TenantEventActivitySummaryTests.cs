@@ -39,9 +39,9 @@ public sealed class TenantEventActivitySummaryTests(AdminApiFixture fixture) : A
         Guid secondDeliveryId = Guid.NewGuid();
         await ExecuteAsync("""
             INSERT INTO event_deliveries
-                (id, event_id, subscription_id, destination_connection_id, http_execution_snapshot, connector_key,
+                (id, event_id, subscription_id, destination_id, http_execution_snapshot, connector_key,
                  status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
-            SELECT @SecondDeliveryId, @RoutedEventId, subscription_id, destination_connection_id, http_execution_snapshot,
+            SELECT @SecondDeliveryId, @RoutedEventId, subscription_id, destination_id, http_execution_snapshot,
                    connector_key, 'dead_lettered', 1, 1, failed_at
             FROM event_deliveries WHERE event_id = @OtherEventId;
             """,

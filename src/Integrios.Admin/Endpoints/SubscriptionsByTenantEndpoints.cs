@@ -19,7 +19,7 @@ public sealed class SubscriptionsByTenantEndpoints : IEndpointGroup
         IMediator mediator,
         string? status,
         [FromQuery(Name = "topic_id")] Guid? topicId,
-        [FromQuery(Name = "connection_id")] Guid? connectionId,
+        [FromQuery(Name = "destination_id")] Guid? destinationId,
         string? name,
         string? after,
         int limit = 0,
@@ -29,7 +29,7 @@ public sealed class SubscriptionsByTenantEndpoints : IEndpointGroup
         var filter = new SubscriptionListFilter(
             ListFilter.ParseEnum<OperationalStatus>(status, "Subscription status must be active or disabled."),
             topicId,
-            connectionId,
+            destinationId,
             ListFilter.Trimmed(name));
         SubscriptionByTenantListDto response = await mediator.Send(
             new ListSubscriptionsByTenantQuery(tenantId, filter, after, limit),

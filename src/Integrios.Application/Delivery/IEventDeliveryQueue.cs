@@ -33,7 +33,7 @@ public sealed record EventDeliveryWorkItem(
     int AttemptNumber,
     Guid EventId,
     Guid SubscriptionId,
-    Guid DestinationConnectionId,
+    Guid DestinationId,
     Guid TenantId,
     string TenantSlug,
     string PayloadJson,

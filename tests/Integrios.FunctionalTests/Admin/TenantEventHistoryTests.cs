@@ -34,9 +34,9 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         await ExecuteAsync($$$"""
             UPDATE events SET accepted_at = {{{fixture.Now}}} WHERE id = @NewerId;
             INSERT INTO event_deliveries
-                (id, event_id, subscription_id, destination_connection_id, http_execution_snapshot, connector_key,
+                (id, event_id, subscription_id, destination_id, http_execution_snapshot, connector_key,
                  status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
-            SELECT @SecondDeliveryId, @NewerId, subscription_id, destination_connection_id, http_execution_snapshot,
+            SELECT @SecondDeliveryId, @NewerId, subscription_id, destination_id, http_execution_snapshot,
                    connector_key, 'dead_lettered', 1, 1, {{{fixture.Now}}}
             FROM event_deliveries WHERE event_id = @OtherEventId;
             """,

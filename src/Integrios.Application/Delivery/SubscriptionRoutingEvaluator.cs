@@ -14,7 +14,7 @@ public static class SubscriptionRoutingEvaluator
             .ThenBy(candidate => candidate.SubscriptionId)
             .Select(candidate => new SubscriptionFanoutTarget(
                 candidate.SubscriptionId,
-                candidate.DestinationConnectionId,
+                candidate.DestinationId,
                 candidate.MappingConfigJson,
                 candidate.ConnectorKey,
                 candidate.HttpExecutionSnapshotJson))
@@ -52,7 +52,7 @@ public static class SubscriptionRoutingEvaluator
 
 public sealed record SubscriptionRoutingCandidate(
     Guid SubscriptionId,
-    Guid DestinationConnectionId,
+    Guid DestinationId,
     int OrderIndex,
     string? MatchRulesJson,
     string? MappingConfigJson,
@@ -61,7 +61,7 @@ public sealed record SubscriptionRoutingCandidate(
 
 public sealed record SubscriptionFanoutTarget(
     Guid SubscriptionId,
-    Guid DestinationConnectionId,
+    Guid DestinationId,
     string? MappingConfigJson,
     string ConnectorKey,
     string HttpExecutionSnapshotJson);

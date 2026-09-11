@@ -21,12 +21,12 @@ public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixtu
     [Fact]
     public async Task Reader_OwnsActiveEnumeration_ButFindsDisabledSelections()
     {
-        Guid activeConnectionId = await fixture.SeedSourceConnectionAsync(
+        Guid activeDestinationId = await fixture.SeedDestinationAsync(
             fixture.TenantAId,
             "active-source");
-        Guid disabledConnectionId = await fixture.SeedSourceConnectionAsync(
+        Guid disabledDestinationId = await fixture.SeedDestinationAsync(
             fixture.TenantAId,
-            "disabled-source");
+            "disabled-destination");
 
         await using (var connection = fixture.CreateConnection())
         {
@@ -34,9 +34,9 @@ public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixtu
             await connection.ExecuteAsync(
                 """
                 UPDATE tenants SET status = 'disabled' WHERE id = @DisabledTenantId;
-                UPDATE connections SET status = 'disabled' WHERE id = @DisabledConnectionId;
+                UPDATE destinations SET status = 'disabled' WHERE id = @DisabledDestinationId;
                 """,
-                new { DisabledTenantId = fixture.TenantBId, DisabledConnectionId = disabledConnectionId });
+                new { DisabledTenantId = fixture.TenantBId, DisabledDestinationId = disabledDestinationId });
         }
 
         await using var context = new IntegriosDbContext(fixture.CreateOptions());
@@ -47,12 +47,12 @@ public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixtu
         selectedTenant.Status.ShouldBe(OperationalStatus.Disabled);
         (await reader.ListActiveTenantsAsync(CancellationToken.None)).ShouldNotContain(tenant => tenant.Id == fixture.TenantBId);
 
-        var selectedConnection = await reader.FindConnectionAsync(fixture.TenantAId, disabledConnectionId, CancellationToken.None);
-        selectedConnection.ShouldNotBeNull();
-        selectedConnection.Status.ShouldBe(OperationalStatus.Disabled);
+        var selectedDestination = await reader.FindDestinationAsync(fixture.TenantAId, disabledDestinationId, CancellationToken.None);
+        selectedDestination.ShouldNotBeNull();
+        selectedDestination.Status.ShouldBe(OperationalStatus.Disabled);
 
-        var activeConnections = await reader.ListActiveConnectionsAsync(fixture.TenantAId, CancellationToken.None);
-        activeConnections.ShouldContain(connection => connection.Id == activeConnectionId);
-        activeConnections.ShouldNotContain(connection => connection.Id == disabledConnectionId);
+        var activeDestinations = await reader.ListActiveDestinationsAsync(fixture.TenantAId, CancellationToken.None);
+        activeDestinations.ShouldContain(destination => destination.Id == activeDestinationId);
+        activeDestinations.ShouldNotContain(destination => destination.Id == disabledDestinationId);
     }
 }

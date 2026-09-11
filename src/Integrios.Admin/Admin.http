@@ -14,11 +14,11 @@
 # Read this file top to bottom. It is a control-plane walkthrough.
 #
 # Data flow refresher:
-# 1. Admin creates tenant-owned config: TenantApiKeys, connections, topics, sources, subscriptions.
+# 1. Admin creates tenant-owned config: TenantApiKeys, destinations, topics, sources, subscriptions.
 # 2. Ingestion accepts events using the tenant API key, addressed by Source id.
-# 3. A Source binds one connection to one topic and authorizes it to publish there.
+# 3. A Source binds one Connector to one Topic and owns its intake contract.
 # 4. Worker reads accepted events, matches subscriptions, applies any transform,
-#    and delivers to each destination connection.
+#    and delivers to each Destination.
 # 5. WireMock is the local downstream system so you can inspect deliveries.
 
 ###
@@ -107,76 +107,45 @@ GET {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys/{{tenantApiKeyId}}
 {{operatorKey}}
 
 ###
-# Step 4 - Create the source connection
-# The http Connector's source side is empty by contract, so this Connection carries no
-# configuration; a Source (Step 5a) is what actually authorizes it to publish into a topic.
-# @name createSourceConnection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{webhookIntId}}",
-  "name": "acme-source",
-  "config": {},
-  "environment": "production",
-  "description": "Inbound source connection"
-}
-
-###
-# Step 4a - Create the destination connection
-# Destination connections represent systems the worker may deliver to. The http Connector's
+# Step 4 - Create the Destination
+# A Destination represents a system the worker may deliver to. The http Connector's
 # destination_configuration_schema requires base_uri and allows no other property.
-# @name createDestinationConnection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections
+# @name createDestination
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
 {{operatorKey}}
 Content-Type: application/json
 
 {
   "connector_id": "{{webhookIntId}}",
   "name": "acme-erp",
-  "config": {
+  "configuration": {
     "base_uri": "{{sinkBase}}/sink/acme-erp"
   },
   "environment": "production",
-  "description": "ERP destination connection"
+  "description": "ERP destination"
 }
 
 ###
-@sourceConnectionId = {{createSourceConnection.response.body.$.id}}
-@destinationConnectionId = {{createDestinationConnection.response.body.$.id}}
+@destinationId = {{createDestination.response.body.$.id}}
 
 ###
-# Step 4b - List connections
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/connections
+# Step 4a - List Destinations
+GET {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
 {{operatorKey}}
 
 ###
-# Step 4c - Update the source connection
-PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "acme-source",
-  "config": {},
-  "environment": "production",
-  "description": "Inbound source connection (updated)"
-}
-
-###
-# Step 4d - Update the destination connection
-PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}
+# Step 4b - Update the Destination
+PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/destinations/{{destinationId}}
 {{operatorKey}}
 Content-Type: application/json
 
 {
   "name": "acme-erp",
-  "config": {
+  "configuration": {
     "base_uri": "{{sinkBase}}/sink/acme-erp"
   },
   "environment": "production",
-  "description": "ERP destination connection (updated)"
+  "description": "ERP destination (updated)"
 }
 
 ###
@@ -201,22 +170,23 @@ GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}
 {{operatorKey}}
 
 ###
-# Step 5b - Create an event_api Source binding the source connection to the topic
-# source_contract selects one of the Connector's declared source_contracts; the http Connector
-# declares event_json, which (with no mapping configured) treats the caller's raw request body
-# as the Source's output directly.
+# Step 5b - Create an Event API Source bound directly to the Connector and Topic.
+# Event API uses the fixed Integrios Event JSON request; it has no Source verification,
+# input-contract, mapping, or event-identity configuration.
 # @name createSource
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "connection_id": "{{sourceConnectionId}}",
+  "connector_id": "{{webhookIntId}}",
   "topic_id": "{{topicId}}",
   "type": "event_api",
-  "configuration": {
-    "source_contract": "event_json"
-  }
+  "configuration": {},
+  "verification": null,
+  "input_requirements": null,
+  "mapping": null,
+  "event_identity_rule": null
 }
 
 ###
@@ -246,7 +216,10 @@ Content-Type: application/json
   "match_rules": {
     "event_type": "payment.created"
   },
-  "destination_connection_id": "{{destinationConnectionId}}",
+  "destination_id": "{{destinationId}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
   "order_index": 10,
   "description": "ERP sink for created payments"
 }
@@ -300,12 +273,14 @@ Content-Type: application/json
   "match_rules": {
     "event_type": "payment.created"
   },
-  "destination_connection_id": "{{destinationConnectionId}}",
-  "transform": {
+  "destination_id": "{{destinationId}}",
+  "mapping": {
     "engine": "jsonata",
     "version": "1",
     "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
   },
+  "http_delivery": null,
+  "http_success": null,
   "order_index": 10,
   "description": "ERP sink for created payments (with transform)"
 }
@@ -323,7 +298,10 @@ Content-Type: application/json
   "match_rules": {
     "event_type": "payment.created"
   },
-  "destination_connection_id": "{{destinationConnectionId}}",
+  "destination_id": "{{destinationId}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
   "order_index": 20,
   "description": "Raw passthrough subscription (no transform)"
 }
@@ -359,22 +337,17 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/deactivate
 {{operatorKey}}
 
 ###
-# Step 8e - Deactivate the standard destination connection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{destinationConnectionId}}/deactivate
+# Step 8e - Deactivate the Destination
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/destinations/{{destinationId}}/deactivate
 {{operatorKey}}
 
 ###
-# Step 8f - Deactivate the source connection
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/connections/{{sourceConnectionId}}/deactivate
-{{operatorKey}}
-
-###
-# Step 8g - Revoke the data-plane API key
+# Step 8f - Revoke the data-plane API key
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys/{{tenantApiKeyId}}/revoke
 {{operatorKey}}
 
 ###
-# Step 8h - Optional: deactivate the tenant if you want the entire runbook state
+# Step 8g - Optional: deactivate the tenant if you want the entire runbook state
 # retired instead of reused on the next pass.
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/deactivate
 {{operatorKey}}

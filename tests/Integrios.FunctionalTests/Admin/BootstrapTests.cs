@@ -119,7 +119,7 @@ public sealed class BootstrapTests : IClassFixture<AdminApiFixture>, IAsyncLifet
     [Fact]
     public async Task BootstrapOperatorKey_LeavesConnectorsEmptyAndCreatesDeterministicKey()
     {
-        await ExecuteAsync("DELETE FROM connections");
+        await ExecuteAsync("DELETE FROM destinations");
         await ExecuteAsync("DELETE FROM connectors");
         await DeleteGlobalOperatorKeysAsync();
 

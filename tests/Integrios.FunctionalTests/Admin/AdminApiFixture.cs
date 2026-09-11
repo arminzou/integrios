@@ -38,7 +38,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public Guid TenantId { get; private set; }
     public Guid OtherTenantId { get; private set; }
     public Guid HttpConnectorId { get; private set; }
-    public Guid SourceConnectionId { get; private set; }
+    public Guid DestinationId { get; private set; }
 
     public async Task InitializeAsync()
     {
@@ -66,7 +66,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public async Task<(Guid EventId, Guid DeliveryId)> SeedDeadLetteredDeliveryAsync()
     {
         Guid topicId = Guid.NewGuid();
-        Guid destinationConnectionId = Guid.NewGuid();
+        Guid destinationId = Guid.NewGuid();
         Guid subscriptionId = Guid.NewGuid();
         Guid eventId = Guid.NewGuid();
         Guid sourceId = Guid.NewGuid();
@@ -76,22 +76,22 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, connector_id, name, config, status)
-            VALUES (@DestinationConnectionId, @TenantId, @ConnectorId, @DestinationName,
+            INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status)
+            VALUES (@DestinationId, @TenantId, @ConnectorId, @DestinationName,
                 {{{database.Json("@DestinationConfig")}}}, 'active');
             INSERT INTO topics (id, tenant_id, name, status) VALUES (@TopicId, @TenantId, @TopicName, 'active');
-            INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status)
-            VALUES (@SourceId, @TenantId, @SourceConnectionId, @TopicId, 'event_api', {{{database.Json("@SourceConfig")}}}, 'active');
-            INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_connection_id, order_index, status)
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, revision, status)
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'event_api', {{{database.Json("@SourceConfig")}}}, 'fixture-revision', 'active');
+            INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_id, order_index, status)
             VALUES (@SubscriptionId, @TenantId, @TopicId, @SubscriptionName,
-                {{{database.Json("@MatchRules")}}}, @DestinationConnectionId, 0, 'active');
+                {{{database.Json("@MatchRules")}}}, @DestinationId, 0, 'active');
             INSERT INTO events (id, tenant_id, topic_id, source_id, event_type, payload, status)
             VALUES (@EventId, @TenantId, @TopicId, @SourceId, 'recovery.test',
                 {{{database.Json("@Payload")}}}, 'routed');
             INSERT INTO event_deliveries
-                (id, event_id, subscription_id, destination_connection_id, http_execution_snapshot, connector_key,
+                (id, event_id, subscription_id, destination_id, http_execution_snapshot, connector_key,
                  status, lifetime_attempt_count, retry_cycle_attempt_count, failed_at)
-            VALUES (@DeliveryId, @EventId, @SubscriptionId, @DestinationConnectionId,
+            VALUES (@DeliveryId, @EventId, @SubscriptionId, @DestinationId,
                 {{{database.Json("@Snapshot")}}}, 'http', 'dead_lettered', 1, 1, {{{database.Now}}});
             INSERT INTO delivery_attempts
                 (id, event_delivery_id, attempt_number, status, failure_phase, started_at, completed_at,
@@ -101,15 +101,14 @@ public sealed class AdminApiFixture : IAsyncLifetime
             """, new
         {
             TenantId,
-            SourceConnectionId,
             SourceId = sourceId,
             ConnectorId = HttpConnectorId,
-            DestinationConnectionId = destinationConnectionId,
+            DestinationId = destinationId,
             TopicId = topicId,
             SubscriptionId = subscriptionId,
             EventId = eventId,
             DeliveryId = deliveryId,
-            DestinationName = $"recovery-destination-{destinationConnectionId:N}",
+            DestinationName = $"recovery-destination-{destinationId:N}",
             TopicName = $"recovery-topic-{topicId:N}",
             SubscriptionName = $"recovery-subscription-{subscriptionId:N}",
             AttemptId = attemptId,
@@ -162,7 +161,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     {
         TenantId = Guid.NewGuid();
         OtherTenantId = Guid.NewGuid();
-        SourceConnectionId = Guid.NewGuid();
+        DestinationId = Guid.NewGuid();
         string now = database.Now;
         await connection.ExecuteAsync($$$"""
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
@@ -182,18 +181,18 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
         HttpConnectorId = await ApplyConnectorManifestAsync(
             "http", TestConnectorManifest.Create("http", "HTTP", "both"));
-
         await connection.ExecuteAsync($$$"""
-            INSERT INTO connections (id, tenant_id, connector_id, name, config, status)
-            VALUES (@SourceConnectionId, @TenantId, @ConnectorId, 'source',
-                {{{database.Json("@Config")}}}, 'active');
+            INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status)
+            VALUES (@DestinationId, @TenantId, @ConnectorId, 'seeded-destination',
+                {{{database.Json("@Configuration")}}}, 'active');
             """, new
-            {
-                SourceConnectionId,
-                TenantId,
-                ConnectorId = HttpConnectorId,
-                Config = "{\"base_uri\":\"http://localhost:5054/sink/source\"}"
-            });
+        {
+            DestinationId,
+            TenantId,
+            ConnectorId = HttpConnectorId,
+            Configuration = "{\"base_uri\":\"http://localhost:5054/sink\"}"
+        });
+
     }
 
     private WebApplicationFactory<Program> BuildWebFactory() =>

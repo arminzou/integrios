@@ -25,7 +25,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -52,7 +52,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = (object?)null
             }));
@@ -80,7 +80,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
                 mapping = transformElement
             }));
@@ -108,7 +108,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
                 mapping = (object?)null
             }));
@@ -134,7 +134,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -156,7 +156,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -178,7 +178,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -201,7 +201,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -220,7 +220,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "oversized-transform",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
                 mapping = new
                 {

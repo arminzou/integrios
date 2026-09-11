@@ -1,0 +1,11 @@
+using System.Text.Json;
+
+namespace Integrios.Application.Authoring.Destinations;
+
+public sealed record DestinationAuthenticationInput
+{
+    public required string Scheme { get; init; }
+    public JsonElement Config { get; init; }
+
+    public JsonElement SecretRefs { get; init; }
+}

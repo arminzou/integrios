@@ -11,9 +11,10 @@ public interface ISubscriptionRepository
         Guid topicId,
         string name,
         JsonElement matchRules,
-        Guid destinationConnectionId,
+        Guid destinationId,
         JsonElement? transformConfig,
         HttpDeliveryConfiguration httpDelivery,
+        HttpSuccessRule? httpSuccess,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken);
@@ -26,19 +27,20 @@ public interface ISubscriptionRepository
         Guid id,
         string name,
         JsonElement matchRules,
-        Guid destinationConnectionId,
+        Guid destinationId,
         JsonElement? transformConfig,
         HttpDeliveryConfiguration httpDelivery,
+        HttpSuccessRule? httpSuccess,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken);
 
     Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken);
 
-    // Connection authoring checks every active destination use before changing authentication, so
-    // header ownership is validated from both directions under the same per-Connection lock.
+    // Destination authoring checks every active use before changing authentication, so header
+    // ownership is validated from both directions under the same per-Destination lock.
     Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(
         Guid tenantId,
-        Guid destinationConnectionId,
+        Guid destinationId,
         CancellationToken cancellationToken);
 }

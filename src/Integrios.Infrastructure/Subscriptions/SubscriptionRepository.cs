@@ -15,9 +15,10 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         Guid topicId,
         string name,
         JsonElement matchRules,
-        Guid destinationConnectionId,
+        Guid destinationId,
         JsonElement? transformConfig,
         HttpDeliveryConfiguration httpDelivery,
+        HttpSuccessRule? httpSuccess,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken)
@@ -26,9 +27,9 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             topic =>
                 topic.Id == topicId
                 && topic.TenantId == tenantId
-                && context.Connections.Any(connection =>
-                    connection.Id == destinationConnectionId
-                    && connection.TenantId == topic.TenantId),
+                && context.Destinations.Any(destination =>
+                    destination.Id == destinationId
+                    && destination.TenantId == topic.TenantId),
             cancellationToken);
         if (!validOwnership)
         {
@@ -43,9 +44,10 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             TopicId = topicId,
             Name = name,
             MatchRules = matchRules,
-            DestinationConnectionId = destinationConnectionId,
+            DestinationId = destinationId,
             MappingConfig = NormalizeNullableJson(transformConfig),
             HttpDelivery = httpDelivery,
+            HttpSuccess = httpSuccess,
             Status = OperationalStatus.Active,
             OrderIndex = orderIndex,
             Description = description,
@@ -76,15 +78,16 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         Guid id,
         string name,
         JsonElement matchRules,
-        Guid destinationConnectionId,
+        Guid destinationId,
         JsonElement? transformConfig,
         HttpDeliveryConfiguration httpDelivery,
+        HttpSuccessRule? httpSuccess,
         int orderIndex,
         string? description,
         CancellationToken cancellationToken)
     {
-        bool destinationBelongsToTenant = await context.Connections.AsNoTracking().AnyAsync(
-            connection => connection.TenantId == tenantId && connection.Id == destinationConnectionId,
+        bool destinationBelongsToTenant = await context.Destinations.AsNoTracking().AnyAsync(
+            destination => destination.TenantId == tenantId && destination.Id == destinationId,
             cancellationToken);
         if (!destinationBelongsToTenant)
         {
@@ -101,9 +104,10 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
                 setters => setters
                     .SetProperty(subscription => subscription.Name, name)
                     .SetProperty(subscription => subscription.MatchRules, matchRules)
-                    .SetProperty(subscription => subscription.DestinationConnectionId, destinationConnectionId)
+                    .SetProperty(subscription => subscription.DestinationId, destinationId)
                     .SetProperty(subscription => subscription.MappingConfig, NormalizeNullableJson(transformConfig))
                     .SetProperty(subscription => subscription.HttpDelivery, httpDelivery)
+                    .SetProperty(subscription => subscription.HttpSuccess, httpSuccess)
                     .SetProperty(subscription => subscription.OrderIndex, orderIndex)
                     .SetProperty(subscription => subscription.Description, description)
                     .SetProperty(subscription => subscription.UpdatedAt, DateTimeOffset.UtcNow),
@@ -131,12 +135,12 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
 
     public async Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(
         Guid tenantId,
-        Guid destinationConnectionId,
+        Guid destinationId,
         CancellationToken cancellationToken) =>
         await context.Subscriptions.AsNoTracking()
             .Where(subscription =>
                 subscription.TenantId == tenantId
-                && subscription.DestinationConnectionId == destinationConnectionId
+                && subscription.DestinationId == destinationId
                 && subscription.Status == OperationalStatus.Active)
             .Select(subscription => subscription.HttpDelivery)
             .ToListAsync(cancellationToken);
