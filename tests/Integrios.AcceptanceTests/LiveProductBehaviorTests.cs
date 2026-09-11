@@ -2,6 +2,8 @@ using Integrios.Tests.Shared;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace Integrios.AcceptanceTests;
@@ -518,14 +520,21 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task Secrets_NeverAppearInDurableEvidence()
     {
-        // The probe secret is resolved through a real authenticated delivery first, so its absence
-        // from durable evidence is falsifiable rather than vacuous.
+        // Both probe secrets are resolved through real traffic first, so their absence from durable
+        // evidence is falsifiable rather than vacuous. Outbound is a delivery the Worker
+        // authenticates; inbound is a webhook Ingestion verifies. They are separate mounts read by
+        // separate processes, so covering only one says nothing about the other.
         TenantContext tenant = await CreateTenantAsync($"secrets-{Suffix()}");
         await fixture.WriteSecretAsync(tenant.Slug, "probe_secret", "probe-secret-value");
         await AssertAuthenticatedTenantDeliveryAsync(tenant, "probe", "probe_secret", "probe-secret-value");
 
+        await fixture.WriteSourceSecretAsync(tenant.Slug, "probe_source_secret", "probe-source-secret-value");
+        await AssertVerifiedWebhookIntakeAsync(tenant, "probe_source_secret", "probe-source-secret-value");
+
         (await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM destinations WHERE configuration::text ~ 'probe-secret-value' OR COALESCE(authentication::text, '') ~ 'probe-secret-value'")).ShouldBe(0L);
+        (await fixture.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM sources WHERE COALESCE(verification::text, '') ~ 'probe-source-secret-value' OR configuration::text ~ 'probe-source-secret-value'")).ShouldBe(0L);
         (await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM delivery_attempts WHERE COALESCE(error_message, '') ~ 'probe-secret-value'")).ShouldBe(0L);
 
@@ -534,6 +543,44 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await fixture.GetServiceLogsAsync("ingestion"),
             await fixture.GetServiceLogsAsync("worker"));
         logs.ShouldNotContain("probe-secret-value", Case.Sensitive);
+        logs.ShouldNotContain("probe-source-secret-value", Case.Sensitive);
+    }
+
+    // Drives one signed webhook end to end so the Source-side secret is genuinely resolved by
+    // Ingestion. Without this the sources.verification assertion above would pass for a deployment
+    // that had never held an inbound secret at all.
+    private async Task AssertVerifiedWebhookIntakeAsync(
+        TenantContext tenant,
+        string secretReference,
+        string secretValue)
+    {
+        Guid topic = await CreateTopicAsync(tenant, $"inbound-{Suffix()}");
+        using HttpResponseMessage created = await PostAdminAsync(
+            $"/admin/tenants/{tenant.Id}/sources",
+            new
+            {
+                connector_id = fixture.VerifiedSourceConnectorId.ToString(),
+                topic_id = topic,
+                type = "webhook",
+                configuration = new { },
+                verification = new { scheme = "hmac_sha256", config = new { }, secret_refs = new { secret = secretReference } },
+                input_requirements = (object?)null,
+                mapping = Jsonata("""{ "event_type": "probe.inbound", "payload": $ }"""),
+                event_identity_rule = (object?)null,
+            });
+        JsonElement source = await AssertJsonAsync(created, HttpStatusCode.Created);
+        string callback = source.GetProperty("configuration").GetProperty("callback_id").GetString()!;
+
+        const string payload = """{"probe":"inbound"}""";
+        string signature = "sha256=" + Convert.ToHexString(
+            HMACSHA256.HashData(Encoding.UTF8.GetBytes(secretValue), Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+
+        using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+        using HttpRequestMessage request = new(HttpMethod.Post, $"/webhooks/{callback}") { Content = content };
+        request.Headers.TryAddWithoutValidation("X-Hub-Signature-256", signature);
+
+        using HttpResponseMessage accepted = await fixture.IngestionClient.SendAsync(request);
+        await AssertJsonAsync(accepted, HttpStatusCode.Accepted);
     }
 
     private async Task<TenantContext> CreateTenantAsync(string slug)

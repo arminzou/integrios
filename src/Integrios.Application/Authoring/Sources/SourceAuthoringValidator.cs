@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Common;
+using Integrios.Application.Secrets;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Transforms;
@@ -124,6 +125,8 @@ internal static class SourceAuthoringValidator
 
         ValidateRequiredFields(verification.Config, declaration.RequiredConfig, "config");
         ValidateRequiredFields(verification.SecretRefs, declaration.RequiredSecretRefs, "secret_refs");
+        if (SecretReferenceMap.Validate(verification.SecretRefs, "Source verification secret_refs") is { } error)
+            throw new SourceValidationException(error, "verification");
     }
 
     private static void ValidateRequiredFields(JsonElement value, IReadOnlyList<string> required, string section)
@@ -164,6 +167,13 @@ internal static class SourceAuthoringValidator
         bool hasSecretReference = ReadNonEmptyString(authentication, "secret_ref") is not null;
         if (scheme == "connection_string" && !hasSecretReference)
             throw new SourceValidationException("Queue Source connection_string authentication requires a secret_ref.");
+        if (hasSecretReference && !SecretReferenceName.IsValid(ReadNonEmptyString(authentication, "secret_ref")))
+        {
+            throw new SourceValidationException(
+                "Queue Source secret_ref must be a lowercase logical name of 1 to 63 characters. "
+                + "It names a secret; it is never the secret itself.",
+                "configuration");
+        }
         if (scheme == "azure_identity" && hasSecretReference)
             throw new SourceValidationException("Queue Source azure_identity authentication takes no secret_ref.");
         if (scheme == "azure_identity" && !IsHostName(@namespace))

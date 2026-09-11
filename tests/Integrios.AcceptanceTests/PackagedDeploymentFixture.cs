@@ -97,6 +97,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public Guid ApiKeyConnectorId { get; private set; }
     public Guid BearerConnectorId { get; private set; }
     public Guid SourceOnlyConnectorId { get; private set; }
+    public Guid VerifiedSourceConnectorId { get; private set; }
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
     {
@@ -137,6 +138,13 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             SourceOnlyConnectorId = await ApplyConnectorManifestAsync(
                 "acceptance_source",
                 TestConnectorManifest.Create("acceptance_source", "Acceptance source", "source"));
+            VerifiedSourceConnectorId = await ApplyConnectorManifestAsync(
+                "acceptance_verified_source",
+                TestConnectorManifest.Create(
+                    "acceptance_verified_source",
+                    "Acceptance verified source",
+                    "source",
+                    sourceVerificationSchemes: ["hmac_sha256"]));
         }
         catch (Exception exception)
         {

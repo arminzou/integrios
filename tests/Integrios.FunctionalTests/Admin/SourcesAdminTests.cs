@@ -312,6 +312,73 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         updated.Verification.SecretRefs.GetProperty("secret").GetString().ShouldBe("probe_signing_secret");
     }
 
+    // A reference names a secret; it is never the secret. Nothing downstream can tell the two apart
+    // once the value is stored, and intake failing closed on an unresolvable reference looks the
+    // same either way, so authoring is the only place this can be caught.
+    [Fact]
+    public async Task WebhookVerification_RejectsAPastedSecretWhereItsReferenceBelongs()
+    {
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            "pasted_secret",
+            TestConnectorManifest.Create(
+                "pasted_secret", "Pasted secret", "source", sourceVerificationSchemes: ["hmac_sha256"]));
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+            verification = new
+            {
+                scheme = "hmac_sha256",
+                config = new { },
+                secret_refs = new { secret = "whsec_9f3cAB/xQ2==" },
+            },
+        }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("never the secret itself");
+        await AssertNothingPersistedAsync("whsec_9f3cAB/xQ2==");
+    }
+
+    [Fact]
+    public async Task QueueAuthentication_RejectsAPastedConnectionStringWhereItsReferenceBelongs()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        const string connectionString = "Endpoint=sb://acme.servicebus.windows.net/;SharedAccessKey=abc123";
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            topic_id = topicId,
+            type = "queue",
+            configuration = new
+            {
+                transport = "azure_service_bus",
+                authentication = new { scheme = "connection_string", secret_ref = connectionString },
+                transport_config = new { @namespace = "acme.servicebus.windows.net", queue_name = "events" },
+            },
+        }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        await AssertNothingPersistedAsync("SharedAccessKey");
+    }
+
+    private async Task AssertNothingPersistedAsync(string fragment)
+    {
+        await using var connection = fixture.CreateConnection();
+        await connection.OpenAsync();
+        long rows = await Dapper.SqlMapper.ExecuteScalarAsync<long>(
+            connection,
+            $"SELECT COUNT(*) FROM sources WHERE {fixture.JsonText("verification")} LIKE @Match "
+            + $"OR {fixture.JsonText("configuration")} LIKE @Match",
+            new { Match = "%" + fragment + "%" });
+        rows.ShouldBe(0, $"a rejected Source must leave no trace of '{fragment}'");
+    }
+
     // An update replaces the whole Source, so every field travels even when only one changes.
     private static object FullSourceUpdate(object configuration) => new
     {

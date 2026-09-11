@@ -120,20 +120,7 @@ internal static class DestinationAuthenticationValidator
 
     private static void EnsureSecretReferencesAreSafe(JsonElement secretRefs)
     {
-        foreach (JsonProperty property in secretRefs.EnumerateObject())
-        {
-            if (property.Value.ValueKind != JsonValueKind.String)
-            {
-                throw new DestinationValidationException(
-                    $"Secret reference '{property.Name}' must be a lowercase snake_case string.");
-            }
-
-            string value = property.Value.GetString() ?? "";
-            if (!SecretReferenceName.IsValid(value))
-            {
-                throw new DestinationValidationException(
-                    $"Secret reference '{property.Name}' must be a lowercase logical name of 1 to 63 characters.");
-            }
-        }
+        if (SecretReferenceMap.Validate(secretRefs, "destination authentication secret_refs") is { } error)
+            throw new DestinationValidationException(error);
     }
 }
