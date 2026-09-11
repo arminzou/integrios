@@ -52,7 +52,7 @@ const connector = {
   ...stamps,
 };
 
-const connection = {
+const destination = {
   id: "44444444-4444-4444-4444-444444444444",
   tenant_id: tenants.items[0].id,
   connector_id: connector.id,
@@ -110,7 +110,7 @@ async function openDashboard(path = "/tenants", options: Parameters<Browser["new
     if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
     if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
     if (pathname.endsWith("/admin/tenants")) return route.fulfill({ json: tenants });
-    if (pathname.endsWith("/connections")) return route.fulfill({ json: { items: [connection], next_cursor: null } });
+    if (pathname.endsWith("/destinations")) return route.fulfill({ json: { items: [destination], next_cursor: null } });
     if (pathname.endsWith("/events")) return route.fulfill({ json: { items: [event], next_cursor: null } });
     return route.fulfill({ json: { items: [], next_cursor: null } });
   });
@@ -248,7 +248,11 @@ describe("The dashboard in a real browser", () => {
   it.each([
     ["the list", "/tenants", null],
     ["a detail screen", `/tenants/${tenants.items[0].id}`, null],
-    ["an authoring screen with its create form open", `/tenants/${tenants.items[0].id}/connections`, "New Connection"],
+    [
+      "an authoring screen with its create form open",
+      `/tenants/${tenants.items[0].id}/destinations`,
+      "New Destination",
+    ],
     // The Event ledger's filters are on screen from the start, so there is nothing to open here.
     ["the Event ledger and its activity summary", `/tenants/${tenants.items[0].id}/events`, undefined],
   ])(
@@ -292,7 +296,7 @@ describe("The dashboard in a real browser", () => {
   it.each([
     ["the list", "/tenants"],
     ["a detail screen", `/tenants/${tenants.items[0].id}`],
-    ["an authoring screen", `/tenants/${tenants.items[0].id}/connections`],
+    ["an authoring screen", `/tenants/${tenants.items[0].id}/destinations`],
     ["the Event ledger", `/tenants/${tenants.items[0].id}/events`],
   ])(
     "has no horizontal document overflow at 320 CSS pixels on %s",
@@ -326,7 +330,7 @@ describe("The dashboard in a real browser", () => {
     const before = await sheet.evaluate((element) => element.scrollTop);
     await page.keyboard.press("Space");
 
-    await sheet.getByRole("group", { name: "Allowed authentication" }).waitFor();
+    await sheet.getByText("Destination and Subscription authoring own the concrete outbound contract.").waitFor();
     expect(await deliver.isChecked()).toBe(true);
     // The section it revealed is rendered into the standing flyout, so neither the scroll position
     // nor the control that opened it moves out from under the Operator.
@@ -339,18 +343,16 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   }, 60_000);
 
-  // The Builder is the one surface that has to hold three columns of authoring at once. Whether they
-  // are readable side by side and stack rather than overflow when narrow is a layout fact, so it is
-  // decided here rather than in jsdom.
+  // The Builder belongs to webhook and queue Sources. Whether its three columns are readable side
+  // by side and stack rather than overflow when narrow is a layout fact, so it is decided here.
   it.each([
     ["side by side on a wide screen", 1512, true],
     ["stacked at 320 CSS pixels", 320, false],
   ])(
     "lays the Integrios Event Builder out %s",
     async (_name, width, beside) => {
-      const page = await openDashboard("/connectors", { viewport: { width, height: 900 } });
-      await page.getByRole("button", { name: "New Connector" }).click();
-      await page.getByRole("radio", { name: /Provider-native JSON/ }).check();
+      const page = await openDashboard(`/tenants/${tenants.items[0].id}/sources`, { viewport: { width, height: 900 } });
+      await page.getByRole("button", { name: "New Source" }).click();
       await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
 
       const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
@@ -378,9 +380,8 @@ describe("The dashboard in a real browser", () => {
   );
 
   it("inserts an Advanced JSONata suggestion from the keyboard alone", async () => {
-    const page = await openDashboard("/connectors");
-    await page.getByRole("button", { name: "New Connector" }).click();
-    await page.getByRole("radio", { name: /Provider-native JSON/ }).check();
+    const page = await openDashboard(`/tenants/${tenants.items[0].id}/sources`);
+    await page.getByRole("button", { name: "New Source" }).click();
     await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
     await page.getByRole("button", { name: "Advanced JSONata" }).click();
 
@@ -402,9 +403,6 @@ describe("The dashboard in a real browser", () => {
   it("reports a rejected field over the form, in its own words, without moving anything", async () => {
     const page = await openDashboard("/connectors");
     await page.getByRole("button", { name: "New Connector" }).click();
-    await page.getByRole("radio", { name: /Provider-native JSON/ }).check();
-    // The Source contract key arrives with a default, so emptying it is what makes it a failure.
-    await page.getByLabel("Source contract key").fill("");
 
     // The distance between two controls, which scrolling cannot change.
     const spacing = () =>
@@ -417,10 +415,8 @@ describe("The dashboard in a real browser", () => {
     const before = await spacing();
     await page.getByRole("button", { name: "Create Connector" }).click();
 
-    // Every empty required control is named by the schema, including the Source contract key,
-    // which is only required because this draft receives provider-native requests.
-    for (const message of ["Enter a name.", "Enter a key.", "Enter a Source contract key."])
-      await page.getByText(message).waitFor();
+    // Every empty required control is named by the schema.
+    for (const message of ["Enter a name.", "Enter a key."]) await page.getByText(message).waitFor();
 
     expect(await spacing()).toBe(before);
     // Floating is only useful if it floats where the field is: a message positioned against some
@@ -450,7 +446,7 @@ describe("The dashboard in a real browser", () => {
 
     // The message carries the field's hint, and the line that usually holds it keeps its box
     // without being drawn or announced.
-    const hint = "Names this Connector in Connections and manifests.";
+    const hint = "Names this Connector in manifests and Source or Destination authoring.";
     const message = page.locator('[role="alert"]', { hasText: "Enter a key." });
     expect(await message.textContent()).toContain(hint);
     const inline = page.locator("[data-slot=form-description]", { hasText: hint });
@@ -523,13 +519,13 @@ describe("The dashboard in a real browser", () => {
       const pathname = new URL(route.request().url()).pathname;
       if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
       if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
-      if (pathname.endsWith("/connections")) {
+      if (pathname.endsWith("/destinations")) {
         await held;
-        return route.fulfill({ json: { items: [connection], next_cursor: null } });
+        return route.fulfill({ json: { items: [destination], next_cursor: null } });
       }
       return route.fulfill({ json: { items: [], next_cursor: null } });
     });
-    await page.goto(`${origin}/tenants/${tenants.items[0].id}/connections`);
+    await page.goto(`${origin}/tenants/${tenants.items[0].id}/destinations`);
 
     const cover = page.locator('[role="status"][aria-busy="true"]');
     await cover.waitFor();

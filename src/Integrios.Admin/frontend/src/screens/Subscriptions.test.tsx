@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
@@ -8,7 +8,7 @@ afterEach(cleanup);
 
 const tenantId = "11111111-1111-1111-1111-111111111111";
 const topicId = "22222222-2222-2222-2222-222222222222";
-const connectionId = "33333333-3333-3333-3333-333333333333";
+const destinationId = "33333333-3333-3333-3333-333333333333";
 const subscriptionId = "44444444-4444-4444-4444-444444444444";
 const sourceId = "55555555-5555-5555-5555-555555555555";
 
@@ -18,9 +18,10 @@ const subscription = {
   topic_id: topicId,
   name: "Send priority orders",
   match_rules: { event_type: "order.placed" },
-  destination_connection_id: connectionId,
+  destination_id: destinationId,
   mapping_config: { engine: "jsonata", version: "1", expression: '{ "customer": customer.id }' },
   http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
+  http_success: null,
   status: "active",
   order_index: 1,
   description: null,
@@ -37,7 +38,7 @@ function stubSubscriptionSources(items: unknown[], detail = subscription, nextIt
         body: url.searchParams.has("after") ? page(nextItems ?? []) : page(items, nextItems ? "next" : null),
       };
     if (url.pathname.endsWith("/topics")) return { status: 200, body: page([]) };
-    if (url.pathname.endsWith("/connections")) return { status: 200, body: page([]) };
+    if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([]) };
     if (url.pathname.endsWith("/subscriptions")) return { status: 200, body: page([]) };
     return { status: 404, body: {} };
   });
@@ -47,8 +48,8 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
   const calls = stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, name: "Orders", status: "active" }]) };
-    if (url.pathname.endsWith("/connections"))
-      return { status: 200, body: page([{ id: connectionId, name: "Primary CRM", status: "active" }]) };
+    if (url.pathname.endsWith("/destinations"))
+      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "active" }]) };
     return {
       status: 200,
       body: page([
@@ -57,8 +58,8 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
           tenant_id: tenantId,
           topic_id: topicId,
           topic_name: "Orders",
-          destination_connection_id: connectionId,
-          destination_connection_name: "Primary CRM",
+          destination_id: destinationId,
+          destination_name: "Primary CRM",
           name: "Send priority orders",
           status: "active",
           order_index: 1,
@@ -72,7 +73,7 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
 
   renderScreen(
     <SubscriptionsScreen tenantId={tenantId} />,
-    `/tenants/${tenantId}/subscriptions?name=priority&topic_id=${topicId}&connection_id=${connectionId}&status=active`,
+    `/tenants/${tenantId}/subscriptions?name=priority&topic_id=${topicId}&destination_id=${destinationId}&status=active`,
   );
 
   expect(await screen.findByRole("link", { name: "Send priority orders" })).toBeTruthy();
@@ -80,15 +81,15 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
     `/tenants/${tenantId}/topics/${topicId}`,
   );
   expect(screen.getByRole("link", { name: "Primary CRM" }).getAttribute("href")).toBe(
-    `/tenants/${tenantId}/connections/${connectionId}`,
+    `/tenants/${tenantId}/destinations/${destinationId}`,
   );
-  expect(screen.getByRole("columnheader", { name: "Destination Connection" })).toBeTruthy();
+  expect(screen.getByRole("columnheader", { name: "Destination" })).toBeTruthy();
   await waitFor(() => {
     const list = calls.find(({ url }) => url.pathname.endsWith("/subscriptions"));
     expect(Object.fromEntries(list!.url.searchParams)).toMatchObject({
       name: "priority",
       topic_id: topicId,
-      connection_id: connectionId,
+      destination_id: destinationId,
       status: "active",
     });
   });
@@ -117,11 +118,11 @@ it("opens the sole Source guide with simple mapping context", async () => {
     {
       id: sourceId,
       tenant_id: tenantId,
-      connection_id: connectionId,
+      connector_id: "66666666-6666-6666-6666-666666666666",
       topic_id: topicId,
       type: "event_api",
       status: "active",
-      source_contract: "event_json",
+      input_requirements: "",
     },
   ]);
   const { router } = renderScreen(
@@ -144,20 +145,20 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
       {
         id: sourceId,
         tenant_id: tenantId,
-        connection_id: connectionId,
+        connector_id: "66666666-6666-6666-6666-666666666666",
         topic_id: topicId,
         type: "event_api",
         status: "active",
-        source_contract: "event_json",
+        input_requirements: "",
       },
       ...Array.from({ length: 99 }, (_, index) => ({
         id: `source-${index}`,
         tenant_id: tenantId,
-        connection_id: connectionId,
+        connector_id: "66666666-6666-6666-6666-666666666666",
         topic_id: topicId,
         type: "event_api",
         status: "active",
-        source_contract: "event_json",
+        input_requirements: "",
       })),
     ],
     { ...subscription, mapping_config: { engine: "jsonata", version: "1", expression: "$merge(payload)" } },
@@ -165,11 +166,11 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
       {
         id: secondSourceId,
         tenant_id: tenantId,
-        connection_id: connectionId,
+        connector_id: "66666666-6666-6666-6666-666666666666",
         topic_id: topicId,
         type: "webhook",
         status: "active",
-        source_contract: "github_push",
+        input_requirements: "",
       },
     ],
   );
@@ -181,10 +182,36 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
   expect(await screen.findByText("Choose an upstream Source:")).toBeTruthy();
   expect(screen.getByRole("link", { name: new RegExp(sourceId) })).toBeTruthy();
   const second = screen.getByRole("link", { name: new RegExp(secondSourceId) });
-  expect(second.textContent).toContain("webhook · github_push");
+  expect(second.textContent).toContain("webhook · no requirements");
   second.click();
   await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/sources/${secondSourceId}`));
   expect(router.state.location.state).toMatchObject({
     sourceGuideContext: { payload: {}, advancedMapping: true },
+  });
+});
+
+it("authors the optional HTTP success rule on the Subscription", async () => {
+  const calls = stubHttp(({ method, url }) => {
+    if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: subscription };
+    if (url.pathname.endsWith("/topics"))
+      return { status: 200, body: page([{ id: topicId, name: "Orders", status: "active" }]) };
+    if (url.pathname.endsWith("/destinations"))
+      return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
+    if (method === "PATCH") return { status: 200, body: subscription };
+    return { status: 200, body: page([]) };
+  });
+  renderScreen(
+    <SubscriptionsScreen tenantId={tenantId} selectedTopicId={topicId} selectedSubscriptionId={subscriptionId} />,
+    `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const form = await screen.findByRole("form", { name: `Edit ${subscription.name}` });
+  fireEvent.change(within(form).getByLabelText("HTTP success rule (JSON, optional)"), {
+    target: { value: '{"evaluator":"json_path_boolean","field":"ok","expected":true}' },
+  });
+  fireEvent.submit(form);
+  await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
+  expect(calls.find((call) => call.method === "PATCH")!.body).toMatchObject({
+    http_success: { evaluator: "json_path_boolean", field: "ok", expected: true },
   });
 });

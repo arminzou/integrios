@@ -8,11 +8,10 @@ afterEach(cleanup);
 
 const tenantId = "11111111-1111-1111-1111-111111111111";
 const topicId = "22222222-2222-2222-2222-222222222222";
-const connectionId = "33333333-3333-3333-3333-333333333333";
 const connectorId = "44444444-4444-4444-4444-444444444444";
 const sourceId = "55555555-5555-5555-5555-555555555555";
 
-it("shows the Source contract and restarts paging when the Topic filter changes", async () => {
+it("shows Source input requirements and restarts paging when the Topic filter changes", async () => {
   const calls = stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, name: "orders", status: "disabled" }], "more-topics") };
@@ -26,10 +25,10 @@ it("shows the Source contract and restarts paging when the Topic filter changes"
             id: second ? "source-2" : "source-1",
             tenant_id: tenantId,
             topic_id: topicId,
-            connection_id: "connection",
+            connector_id: connectorId,
             type: "event_api",
             status: "active",
-            source_contract: second ? "second_contract" : "order_json",
+            input_requirements: second ? "second_requirements" : "order_requirements",
           },
         ],
         "cursor-1",
@@ -37,20 +36,20 @@ it("shows the Source contract and restarts paging when the Topic filter changes"
     };
   });
   const { router } = renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
-  await screen.findByText("order_json");
-  expect(screen.getByRole("columnheader", { name: "Source contract" })).toBeTruthy();
+  await screen.findByText("order_requirements");
+  expect(screen.getByRole("columnheader", { name: "Input requirements" })).toBeTruthy();
   const topicFilter = screen.getByLabelText("Topic");
   expect(topicFilter.getAttribute("aria-describedby")).toBe("source-topic-hint");
   expect(document.getElementById("source-topic-hint")?.textContent).toBe("Showing the first 100 Topics.");
   fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-  await screen.findByText("second_contract");
+  await screen.findByText("second_requirements");
   await act(() => router.navigate(`/tenants/${tenantId}/sources?topic_id=${topicId}`));
   await waitFor(() => {
     const latest = calls.filter(({ url }) => url.pathname.endsWith("/sources")).at(-1)!;
     expect(latest.url.searchParams.get("topic_id")).toBe(topicId);
     expect(latest.url.searchParams.has("after")).toBe(false);
   });
-  expect(screen.queryByText("second_contract")).toBeNull();
+  expect(screen.queryByText("second_requirements")).toBeNull();
   expect(screen.getByLabelText("Topic").textContent).toContain("orders");
   expect(screen.getByRole("link", { name: "Clear filters" })).toBeTruthy();
 });
@@ -59,34 +58,30 @@ describe("Source setup guide", () => {
   const cases = [
     {
       type: "event_api",
-      configuration: { source_contract: "event_json" },
-      contract: "event_json",
+      configuration: {},
       heading: "Construct the Event request",
-      fact: "Authorization: TenantApiKey <tenant-api-key>",
+      fact: "Authorization: Bearer <TenantApiKey>",
     },
     {
       type: "webhook",
-      configuration: { source_contract: "verified_webhook", callback_id: "66666666-6666-6666-6666-666666666666" },
-      contract: "verified_webhook",
+      configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
       heading: "Configure the provider callback",
       fact: "http://localhost:5231/webhooks/66666666-6666-6666-6666-666666666666",
     },
     {
       type: "queue",
       configuration: {
-        source_contract: "remote_execution_context_json",
         transport: "azure_service_bus",
         authentication: { scheme: "azure_identity" },
         transport_config: { namespace: "acme.servicebus.windows.net", queue_name: "orders" },
       },
-      contract: "remote_execution_context_json",
       heading: "Publish to the broker",
       fact: "acme.servicebus.windows.net/orders",
     },
   ] as const;
 
-  it.each(cases)("shows contract-backed $type guidance", async ({ type, configuration, contract, heading, fact }) => {
-    guideHttp({ type, configuration, contract });
+  it.each(cases)("shows Source-specific $type guidance", async ({ type, configuration, heading, fact }) => {
+    guideHttp({ type, configuration });
     renderScreen(
       <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />,
       `/tenants/${tenantId}/sources/${sourceId}`,
@@ -103,7 +98,7 @@ describe("Source setup guide", () => {
   it("copies an active request and removes runnable copy actions for a revoked Source", async () => {
     const clipboard = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
-    guideHttp({ type: "event_api", configuration: { source_contract: "event_json" }, contract: "event_json" });
+    guideHttp({ type: "event_api", configuration: {} });
     const active = renderScreen(
       <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />,
       `/tenants/${tenantId}/sources/${sourceId}`,
@@ -118,8 +113,7 @@ describe("Source setup guide", () => {
 
     guideHttp({
       type: "event_api",
-      configuration: { source_contract: "event_json" },
-      contract: "event_json",
+      configuration: {},
       status: "revoked",
     });
     renderScreen(
@@ -138,8 +132,8 @@ it("opens Source creation from one-shot state with the filtered Topic selected",
   stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, name: "orders", status: "active" }]) };
-    if (url.pathname.endsWith("/connections"))
-      return { status: 200, body: page([{ id: connectionId, name: "input", status: "active" }]) };
+    if (url.pathname.endsWith("/connectors"))
+      return { status: 200, body: page([{ id: connectorId, name: "input", status: "active" }]) };
     return { status: 200, body: page([]) };
   });
 
@@ -156,12 +150,10 @@ it("opens Source creation from one-shot state with the filtered Topic selected",
 function guideHttp({
   type,
   configuration,
-  contract,
   status = "active",
 }: {
   type: string;
   configuration: Record<string, unknown>;
-  contract: string;
   status?: string;
 }) {
   stubHttp(({ url }) => {
@@ -172,28 +164,17 @@ function guideHttp({
         body: {
           id: sourceId,
           tenant_id: tenantId,
-          connection_id: connectionId,
+          connector_id: connectorId,
           topic_id: topicId,
           type,
           configuration,
+          verification: type === "webhook" ? { scheme: "hmac_sha256", config: {} } : null,
+          input_requirements: {},
+          mapping: null,
+          event_identity_rule: null,
+          revision: "revision",
           status,
           revoked_at: status === "revoked" ? "2026-09-09T00:00:00Z" : null,
-          created_at: "2026-09-09T00:00:00Z",
-          updated_at: "2026-09-09T00:00:00Z",
-        },
-      };
-    if (path.endsWith(`/connections/${connectionId}`))
-      return {
-        status: 200,
-        body: {
-          id: connectionId,
-          tenant_id: tenantId,
-          connector_id: connectorId,
-          name: "Acme input",
-          config: {},
-          source_verification: type === "webhook" ? { scheme: "hmac_sha256", config: {} } : null,
-          destination_authentication: null,
-          status: "active",
           created_at: "2026-09-09T00:00:00Z",
           updated_at: "2026-09-09T00:00:00Z",
         },
@@ -209,7 +190,7 @@ function guideHttp({
           name: type === "webhook" ? "GitHub" : type === "queue" ? "Dataverse" : "HTTP",
           direction: "source",
           status: "active",
-          manifest: { source_contracts: [{ key: contract, contract_version: 1, config: {} }] },
+          manifest: {},
           created_at: "2026-09-09T00:00:00Z",
           updated_at: "2026-09-09T00:00:00Z",
         },
@@ -233,7 +214,7 @@ function guideHttp({
         status: 200,
         body: {
           topics: 1,
-          connections: 1,
+          destinations: 1,
           sources: 1,
           subscriptions: 1,
           live_api_keys: 1,

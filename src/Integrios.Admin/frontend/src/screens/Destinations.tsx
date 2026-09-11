@@ -39,11 +39,11 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { useConnectionOptions, useConnectorOptions } from "../ui/options";
+import { useConnectorOptions, useDestinationOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { Day } from "../ui/time";
 
-/// Connections is the authoring pattern every other capability copies. Its parts, in the order they
+/// Destinations is the authoring pattern every other capability copies. Its parts, in the order they
 /// appear below:
 ///
 /// - A list screen is a heading, a create panel behind a disclosure so it never dominates the list,
@@ -65,12 +65,20 @@ import { Day } from "../ui/time";
 /// What is capability-specific — which fields exist, what they mean, which mutations the Admin API
 /// offers — stays here rather than moving into a shared form abstraction.
 
-type ConnectionListItem = components["schemas"]["ConnectionListItemDto"];
-type Connection = components["schemas"]["ConnectionDto"];
+type DestinationListItem = components["schemas"]["DestinationListItemDto"];
+type Destination = components["schemas"]["DestinationDto"];
 
 /// The fields each form renders, so a message the server attributes to one of them lands on that
 /// control and everything else lands at form level.
-const editFields = ["name", "config", "environment", "description"] as const;
+const editFields = [
+  "name",
+  "config",
+  "authentication_scheme",
+  "authentication_config",
+  "authentication_secret_refs",
+  "environment",
+  "description",
+] as const;
 const createFields = ["connector_id", ...editFields] as const;
 
 /// A domain JSON document, authored as text. Well-formedness is all the dashboard checks; the
@@ -83,6 +91,9 @@ const jsonDocument = z.string().superRefine((text, ctx) => {
 const editSchema = z.object({
   name: z.string().trim().min(1, "Enter a name."),
   config: jsonDocument,
+  authentication_scheme: z.string(),
+  authentication_config: jsonDocument,
+  authentication_secret_refs: jsonDocument,
   environment: z.string(),
   description: z.string(),
 });
@@ -96,33 +107,39 @@ type CreateValues = z.infer<typeof createSchema>;
 
 /// An optional field left untouched is absent, not empty.
 const optional = (text: string) => text.trim() || null;
+const authentication = (scheme: string, config: string, secretRefs: string) =>
+  scheme.trim()
+    ? { scheme: scheme.trim(), config: parseJson(config).value, secret_refs: parseJson(secretRefs).value }
+    : null;
 
-export function ConnectionsScreen({
+export function DestinationsScreen({
   tenantId,
-  selectedConnectionId,
+  selectedDestinationId,
 }: {
   tenantId: string;
-  selectedConnectionId?: string;
+  selectedDestinationId?: string;
 }) {
   const [status, setStatus] = useFilterParam("status");
   const [environment, setEnvironment] = useFilterParam("environment");
   const [connector, setConnector] = useFilterParam("connector");
   const [name, setName] = useFilterParam("name");
   const connectors = useConnectorOptions();
-  const connectionOptions = useConnectionOptions(tenantId);
+  const destinationOptions = useDestinationOptions(tenantId);
   const applied = [status, environment, connector, name].filter(Boolean).length;
-  // Environment is free text on a Connection, so there is no vocabulary to enumerate — the options
-  // are the values this Tenant actually uses, read off the Connection list the screen already holds
-  // for naming. ponytail: first hundred Connections, which is what that read carries; a Tenant past
+  // Environment is free text on a Destination, so there is no vocabulary to enumerate — the options
+  // are the values this Tenant actually uses, read off the Destination list the screen already holds
+  // for naming. ponytail: first hundred Destinations, which is what that read carries; a Tenant past
   // that needs the Admin API to answer "which environments" rather than the dashboard inferring it.
   const environments: string[] = [
-    ...new Set((connectionOptions.data?.items ?? []).map((item) => item.environment).filter((value) => value !== null)),
+    ...new Set(
+      (destinationOptions.data?.items ?? []).map((item) => item.environment).filter((value) => value !== null),
+    ),
   ].sort();
   const list = useInfiniteQuery({
-    queryKey: ["connections", tenantId, { status, environment, connector, name }],
+    queryKey: ["destinations", tenantId, { status, environment, connector, name }],
     queryFn: ({ pageParam }) =>
       call(() =>
-        api.GET("/admin/tenants/{tenantId}/connections", {
+        api.GET("/admin/tenants/{tenantId}/destinations", {
           params: {
             path: { tenantId },
             query: {
@@ -137,40 +154,40 @@ export function ConnectionsScreen({
         }),
       ),
     initialPageParam: null as string | null,
-    getNextPageParam: nextCursor<ConnectionListItem>,
+    getNextPageParam: nextCursor<DestinationListItem>,
   });
-  const connections = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const destinations = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <Page>
       <PageHeader
-        title="Connections"
+        title="Destinations"
         action={
-          <CreateSheet label="New Connection" description="Tenant-owned endpoint built from a Connector">
-            {(close) => <CreateConnection tenantId={tenantId} onCreated={close} />}
+          <CreateSheet label="New Destination" description="Tenant-owned endpoint built from a Connector">
+            {(close) => <CreateDestination tenantId={tenantId} onCreated={close} />}
           </CreateSheet>
         }
       >
-        Tenant-owned endpoints built from a Connector. A Subscription delivers to one of these.
+        Tenant-owned endpoints built from a Connector. Subscriptions deliver to one of these.
       </PageHeader>
 
       <FilterBar applied={applied}>
-        <FilterSearch id="connection-name" label="Find by name" value={name} onChange={setName} />
-        <Filter id="connection-status" label="Status" value={status} onChange={setStatus}>
+        <FilterSearch id="destination-name" label="Find by name" value={name} onChange={setName} />
+        <Filter id="destination-status" label="Status" value={status} onChange={setStatus}>
           <SelectItem value="active">Active</SelectItem>
           <SelectItem value="disabled">Disabled</SelectItem>
         </Filter>
         {/* The environments a Tenant actually uses, read off the rows it already has rather than
-            from a fixed list: environment is free text on a Connection, so there is no vocabulary
+            from a fixed list: environment is free text on a Destination, so there is no vocabulary
             to enumerate. */}
-        <Filter id="connection-environment" label="Environment" value={environment} onChange={setEnvironment}>
+        <Filter id="destination-environment" label="Environment" value={environment} onChange={setEnvironment}>
           {environments.map((option) => (
             <SelectItem key={option} value={option}>
               {option}
             </SelectItem>
           ))}
         </Filter>
-        <Filter id="connection-connector" label="Connector" value={connector} onChange={setConnector}>
+        <Filter id="destination-connector" label="Connector" value={connector} onChange={setConnector}>
           {(connectors.data?.items ?? []).map((option) => (
             <SelectItem key={option.id} value={option.key}>
               {option.key}
@@ -185,18 +202,18 @@ export function ConnectionsScreen({
             busy={list.isFetching}
             loaded={list.isSuccess}
             problem={asProblem(list.error)}
-            empty={connections.length === 0}
-            emptyText="This Tenant has no Connections matching this filter."
+            empty={destinations.length === 0}
+            emptyText="This Tenant has no Destinations matching this filter."
           />
-          {connections.length > 0 ? (
+          {destinations.length > 0 ? (
             <TableCard
-              caption={`Connections, newest first${appliedNote(applied)}`}
+              caption={`Destinations, newest first${appliedNote(applied)}`}
               footer={
                 <LoadMore
-                  noun="Connection"
+                  noun="Destination"
                   hasMore={list.hasNextPage}
                   busy={list.isFetching}
-                  loaded={connections.length}
+                  loaded={destinations.length}
                   onLoadMore={() => void list.fetchNextPage()}
                 />
               }
@@ -212,23 +229,23 @@ export function ConnectionsScreen({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {connections.map((connection) => (
-                  <TableRow key={connection.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                {destinations.map((destination) => (
+                  <TableRow key={destination.id} className="has-[a[aria-current=page]]:bg-selected-surface">
                     <RowHeader>
                       {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract the Event ledger already has. */}
-                      <NavLink className="no-underline" to={`/tenants/${tenantId}/connections/${connection.id}`} end>
-                        {connection.name}
+                      <NavLink className="no-underline" to={`/tenants/${tenantId}/destinations/${destination.id}`} end>
+                        {destination.name}
                       </NavLink>
                     </RowHeader>
-                    <TableCell className="font-mono text-[13px]">{connection.connector_key}</TableCell>
-                    <TableCell>{connection.environment ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-[13px]">{destination.connector_key}</TableCell>
+                    <TableCell>{destination.environment ?? "—"}</TableCell>
                     <TableCell>
-                      <StatusBadge status={connection.status} />
+                      <StatusBadge status={destination.status} />
                     </TableCell>
-                    <TableCell className="text-ink-secondary">{connection.description ?? "—"}</TableCell>
+                    <TableCell className="text-ink-secondary">{destination.description ?? "—"}</TableCell>
                     <TableCell className="text-ink-secondary">
-                      <Day value={connection.updated_at} />
+                      <Day value={destination.updated_at} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -237,13 +254,13 @@ export function ConnectionsScreen({
           ) : null}
         </SplitList>
 
-        {/* Keyed by Connection id so switching rows is a distinct panel rather than the same one
+        {/* Keyed by Destination id so switching rows is a distinct panel rather than the same one
               fed a new id, which is what keeps a stale name from being on screen when focus moves. */}
-        {selectedConnectionId ? (
-          <ConnectionInspector key={selectedConnectionId} tenantId={tenantId} connectionId={selectedConnectionId} />
+        {selectedDestinationId ? (
+          <DestinationInspector key={selectedDestinationId} tenantId={tenantId} destinationId={selectedDestinationId} />
         ) : (
-          <InspectorPlaceholder label="Connection detail">
-            Select a Connection to read its configuration and authentication here.
+          <InspectorPlaceholder label="Destination detail">
+            Select a Destination to read its configuration and authentication here.
           </InspectorPlaceholder>
         )}
       </SplitView>
@@ -251,7 +268,7 @@ export function ConnectionsScreen({
   );
 }
 
-function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
+function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const connectors = useQuery({
@@ -262,31 +279,41 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
 
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { connector_id: "", name: "", config: "{}", environment: "", description: "" },
+    defaultValues: {
+      connector_id: "",
+      name: "",
+      config: "{}",
+      authentication_scheme: "",
+      authentication_config: "{}",
+      authentication_secret_refs: "{}",
+      environment: "",
+      description: "",
+    },
   });
 
   const create = useMutation({
     mutationFn: (values: CreateValues) =>
       call(() =>
-        api.POST("/admin/tenants/{tenantId}/connections", {
+        api.POST("/admin/tenants/{tenantId}/destinations", {
           params: { path: { tenantId } },
           body: {
             connector_id: values.connector_id,
             name: values.name,
-            config: parseJson(values.config).value,
-            // Verification and authentication schemes carry secret references, never secret
-            // values, so they are configured on the Connection itself rather than typed here.
-            source_verification: null,
-            destination_authentication: null,
+            configuration: parseJson(values.config).value,
+            authentication: authentication(
+              values.authentication_scheme,
+              values.authentication_config,
+              values.authentication_secret_refs,
+            ),
             environment: optional(values.environment),
             description: optional(values.description),
           },
         }),
       ),
     onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: ["connections", tenantId] });
+      void queryClient.invalidateQueries({ queryKey: ["destinations", tenantId] });
       onCreated();
-      if (created) navigate(`/tenants/${tenantId}/connections/${created.id}`);
+      if (created) navigate(`/tenants/${tenantId}/destinations/${created.id}`);
     },
   });
 
@@ -296,7 +323,7 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
 
   return (
     <Form {...form}>
-      <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Connection">
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Destination">
         <FormError message={formError(asProblem(connectors.error))} />
         <FormError message={formError(asProblem(create.error), createFields)} />
 
@@ -323,18 +350,34 @@ function CreateConnection({ tenantId, onCreated }: { tenantId: string; onCreated
           className="min-h-40 font-mono text-sm"
           required
         />
+        <TextField control={form.control} name="authentication_scheme" label="Authentication scheme (optional)" />
+        <TextAreaField
+          control={form.control}
+          name="authentication_config"
+          label="Authentication configuration (JSON)"
+          className="min-h-24 font-mono text-sm"
+          required
+        />
+        <TextAreaField
+          control={form.control}
+          name="authentication_secret_refs"
+          label="Authentication secret references (JSON)"
+          hint="Reference names only; never enter secret values."
+          className="min-h-24 font-mono text-sm"
+          required
+        />
         <TextField control={form.control} name="environment" label="Environment (optional)" />
         <TextField control={form.control} name="description" label="Description (optional)" />
 
         <Button type="submit" className="self-start" disabled={create.isPending || connectorOptionsUnavailable}>
-          Create Connection
+          Create Destination
         </Button>
       </form>
     </Form>
   );
 }
 
-/// The Connector a Connection was built from, as an Operator names it: the manifest key and the
+/// The Connector a Destination was built from, as an Operator names it: the manifest key and the
 /// contract version it is pinned to. Falls back to the identifier when the list has not resolved it.
 function connectorLabel(
   connectors: { id: string; key: string; contract_version: number | string }[] | undefined,
@@ -344,46 +387,46 @@ function connectorLabel(
   return connector ? `${connector.key} v${connector.contract_version}` : id;
 }
 
-function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; connectionId: string }) {
-  // A Connection is built from a Connector, and which one it was is the first thing an Operator
+function DestinationInspector({ tenantId, destinationId }: { tenantId: string; destinationId: string }) {
+  // A Destination is built from a Connector, and which one it was is the first thing an Operator
   // checks when its configuration looks wrong. The identifier answers a different question.
   const connectors = useConnectorOptions();
   const [notice, setNotice] = useState("");
-  const connection = useQuery({
-    queryKey: ["connection", tenantId, connectionId],
+  const destination = useQuery({
+    queryKey: ["destination", tenantId, destinationId],
     queryFn: () =>
       call(() =>
-        api.GET("/admin/tenants/{tenantId}/connections/{id}", {
-          params: { path: { tenantId, id: connectionId } },
+        api.GET("/admin/tenants/{tenantId}/destinations/{id}", {
+          params: { path: { tenantId, id: destinationId } },
         }),
       ),
   });
 
-  const problem = asProblem(connection.error);
+  const problem = asProblem(destination.error);
   if (problem)
     return (
-      <Inspector label="Connection detail">
-        <h2 className="m-0">Connection</h2>
-        <p role="alert">{problem.detail ?? `This Connection could not be read (${problem.status}).`}</p>
+      <Inspector label="Destination detail">
+        <h2 className="m-0">Destination</h2>
+        <p role="alert">{problem.detail ?? `This Destination could not be read (${problem.status}).`}</p>
       </Inspector>
     );
-  if (!connection.data) return <Inspector label="Connection detail">Loading…</Inspector>;
+  if (!destination.data) return <Inspector label="Destination detail">Loading…</Inspector>;
 
-  const current = connection.data;
+  const current = destination.data;
   return (
-    <Inspector label="Connection detail">
+    <Inspector label="Destination detail">
       {/* The identity on the left, the state that qualifies it on the right: the two things an
           Operator checks before reading anything else in the panel. */}
       <div className="flex items-start justify-between gap-3">
         <div className="group min-w-0">
           <h2 className="font-mono break-all">{current.name}</h2>
           <span className="block text-xs text-ink-secondary">
-            <CopyInline label="Connection id" value={current.id} />
+            <CopyInline label="Destination id" value={current.id} />
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge status={current.status} className="mt-0.5" />
-          <CloseInspector to={`/tenants/${tenantId}/connections`} label="Close the Connection detail" />
+          <CloseInspector to={`/tenants/${tenantId}/destinations`} label="Close the Destination detail" />
         </div>
       </div>
 
@@ -396,69 +439,71 @@ function ConnectionInspector({ tenantId, connectionId }: { tenantId: string; con
         </dd>
         <dt>Environment</dt>
         <dd>{current.environment ?? "—"}</dd>
-        <dt>Source verification</dt>
-        <dd>{current.source_verification ? current.source_verification.scheme : "Not configured"}</dd>
         <dt>Destination authentication</dt>
-        <dd>{current.destination_authentication ? current.destination_authentication.scheme : "Not configured"}</dd>
+        <dd>{current.authentication ? current.authentication.scheme : "Not configured"}</dd>
       </Details>
 
       <section className="flex min-w-0 flex-col gap-2">
         <h4 className="eyebrow">Configuration</h4>
-        <pre className="text-xs">{formatJson(current.config)}</pre>
+        <pre className="text-xs">{formatJson(current.configuration)}</pre>
         <p className="m-0 text-xs text-ink-secondary">
           An update replaces this object outright rather than merging fields.
         </p>
       </section>
 
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-      <EditConnection
+      <EditDestination
         key={current.updated_at}
         tenantId={tenantId}
-        connection={current}
-        onDone={() => setNotice("Connection deactivated.")}
+        destination={current}
+        onDone={() => setNotice("Destination deactivated.")}
       />
     </Inspector>
   );
 }
 
-function EditConnection({
+function EditDestination({
   tenantId,
-  connection,
+  destination,
   onDone,
 }: {
   tenantId: string;
-  connection: Connection;
+  destination: Destination;
   onDone: () => void;
 }) {
   const queryClient = useQueryClient();
-  /// Both reads that can now be wrong: this Connection, and any list it appears in.
+  /// Both reads that can now be wrong: this Destination, and any list it appears in.
   const reread = () => {
-    void queryClient.invalidateQueries({ queryKey: ["connection", tenantId, connection.id] });
-    void queryClient.invalidateQueries({ queryKey: ["connections", tenantId] });
+    void queryClient.invalidateQueries({ queryKey: ["destination", tenantId, destination.id] });
+    void queryClient.invalidateQueries({ queryKey: ["destinations", tenantId] });
   };
 
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
     defaultValues: {
-      name: connection.name,
-      config: formatJson(connection.config),
-      environment: connection.environment ?? "",
-      description: connection.description ?? "",
+      name: destination.name,
+      config: formatJson(destination.configuration),
+      authentication_scheme: destination.authentication?.scheme ?? "",
+      authentication_config: formatJson(destination.authentication?.config ?? {}),
+      authentication_secret_refs: "{}",
+      environment: destination.environment ?? "",
+      description: destination.description ?? "",
     },
   });
 
   const save = useMutation({
     mutationFn: (values: EditValues) =>
       call(() =>
-        api.PATCH("/admin/tenants/{tenantId}/connections/{id}", {
-          params: { path: { tenantId, id: connection.id } },
+        api.PATCH("/admin/tenants/{tenantId}/destinations/{id}", {
+          params: { path: { tenantId, id: destination.id } },
           body: {
             name: values.name,
-            config: parseJson(values.config).value,
-            // Sending null leaves the stored scheme untouched: this form never round-trips a
-            // scheme's secret references, so it must not claim to replace them either.
-            source_verification: null,
-            destination_authentication: null,
+            configuration: parseJson(values.config).value,
+            authentication: authentication(
+              values.authentication_scheme,
+              values.authentication_config,
+              values.authentication_secret_refs,
+            ),
             environment: optional(values.environment),
             description: optional(values.description),
           },
@@ -470,8 +515,8 @@ function EditConnection({
   const deactivate = useMutation({
     mutationFn: () =>
       call(() =>
-        api.POST("/admin/tenants/{tenantId}/connections/{id}/deactivate", {
-          params: { path: { tenantId, id: connection.id } },
+        api.POST("/admin/tenants/{tenantId}/destinations/{id}/deactivate", {
+          params: { path: { tenantId, id: destination.id } },
         }),
       ),
     onSuccess: () => {
@@ -488,7 +533,7 @@ function EditConnection({
             <Form {...form}>
               <form
                 className="flex flex-col gap-4"
-                aria-label={`Edit ${connection.name}`}
+                aria-label={`Edit ${destination.name}`}
                 noValidate
                 onSubmit={form.handleSubmit((values) =>
                   save.mutate(values, {
@@ -507,6 +552,26 @@ function EditConnection({
                   className="min-h-40 font-mono text-sm"
                   required
                 />
+                <TextField
+                  control={form.control}
+                  name="authentication_scheme"
+                  label="Authentication scheme (optional)"
+                />
+                <TextAreaField
+                  control={form.control}
+                  name="authentication_config"
+                  label="Authentication configuration (JSON)"
+                  className="min-h-24 font-mono text-sm"
+                  required
+                />
+                <TextAreaField
+                  control={form.control}
+                  name="authentication_secret_refs"
+                  label="Authentication secret references (JSON)"
+                  hint="Reference names only; never enter secret values."
+                  className="min-h-24 font-mono text-sm"
+                  required
+                />
                 <TextField control={form.control} name="environment" label="Environment (optional)" />
                 <TextField control={form.control} name="description" label="Description (optional)" />
 
@@ -518,12 +583,12 @@ function EditConnection({
             </Form>
           )}
         </EditSheet>
-        {connection.status === "active" ? (
+        {destination.status === "active" ? (
           <ConfirmAction
             label="Deactivate"
-            consequence={`Deactivating ${connection.name} stops every Subscription that delivers to it. Deliveries already queued are not cancelled.`}
-            question={`Deactivate the Connection "${connection.name}"? Sources and Subscriptions that use it stop working.`}
-            confirmLabel={`Deactivate ${connection.name}`}
+            consequence={`Deactivating ${destination.name} is blocked while active Subscriptions deliver to it. Deliveries already queued are not cancelled.`}
+            question={`Deactivate the Destination "${destination.name}"?`}
+            confirmLabel={`Deactivate ${destination.name}`}
             busy={deactivate.isPending}
             onConfirm={() => deactivate.mutate()}
           />

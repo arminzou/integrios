@@ -20,7 +20,7 @@ function matched(pathname: string): string | undefined {
 describe("The route table", () => {
   it("keeps the Tenant from the path rather than inferring one", () => {
     expect(matched(`/tenants/${tenant}/sources`)).toBe("tenants/:tenantId/sources");
-    expect(matched(`/tenants/${tenant}/connections/${topic}`)).toBe("tenants/:tenantId/connections/:connectionId");
+    expect(matched(`/tenants/${tenant}/destinations/${topic}`)).toBe("tenants/:tenantId/destinations/:destinationId");
   });
 
   it("carries every owning route value for a nested Subscription", () => {
@@ -39,7 +39,7 @@ describe("The route table", () => {
     for (const path of [
       `/tenants/${tenant}/deliveries`,
       `/tenants/${tenant}/events/${topic}/attempts`,
-      `/tenants/${tenant}/connections/${topic}/extra`,
+      `/tenants/${tenant}/destinations/${topic}/extra`,
       "/connectors/all/versions",
     ]) {
       expect(matched(path)).toBe("*");
@@ -70,12 +70,12 @@ describe("Route values that are not identifiers", () => {
     }));
   }
 
-  it("renders the Connection panel beside its list, from the route alone", async () => {
+  it("renders the Destination panel beside its list, from the route alone", async () => {
     stubSignedIn();
 
-    renderApp("/tenants/11111111-1111-1111-1111-111111111111/connections/44444444-4444-4444-4444-444444444444");
+    renderApp("/tenants/11111111-1111-1111-1111-111111111111/destinations/44444444-4444-4444-4444-444444444444");
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Connections" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Destinations" })).toBeTruthy();
   });
 
   // A path parameter matches any segment, but these values are handed to the Admin API as

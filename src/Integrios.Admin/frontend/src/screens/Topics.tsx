@@ -253,7 +253,7 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
                 {subscription.name}
               </Link>
               <span className="block truncate font-mono text-xs text-ink-secondary">
-                → {subscription.destination_connection_name}
+                → {subscription.destination_name}
               </span>
             </div>
             <StatusBadge status={subscription.status} className="shrink-0" />

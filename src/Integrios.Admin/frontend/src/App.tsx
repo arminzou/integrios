@@ -191,7 +191,7 @@ const navLink =
 
 /// An icon is a landmark for a destination an Operator returns to daily. It never carries meaning
 /// the label does not already carry, so it is hidden from assistive technology and no label is
-/// dropped in favour of one. Connections and Connectors take deliberately unlike shapes: they are
+/// dropped in favour of one. Destinations and Connectors take deliberately unlike shapes: they are
 /// the two nouns that are already confused, and near-identical glyphs would agree with the
 /// confusion rather than help.
 const navIcon = "size-4 shrink-0 text-ink-secondary group-aria-[current=page]:text-selected-ink";
@@ -199,7 +199,7 @@ const navIcon = "size-4 shrink-0 text-ink-secondary group-aria-[current=page]:te
 const sectionIcons: Record<TenantSection, LucideIcon> = {
   overview: LayoutDashboard,
   events: Activity,
-  connections: Waypoints,
+  destinations: Waypoints,
   sources: ArrowDownToLine,
   topics: Hash,
   subscriptions: GitBranch,

@@ -50,28 +50,30 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { activeOnly, useConnectionOptions, useTopicOptions } from "../ui/options";
+import { activeOnly, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 
 type SubscriptionByTenantListItem = components["schemas"]["SubscriptionByTenantListItemDto"];
 type Subscription = components["schemas"]["SubscriptionDto"];
 type HttpDelivery = components["schemas"]["HttpDeliveryConfiguration"];
+type HttpSuccessRule = components["schemas"]["HttpSuccessRule"];
 type EventListItem = components["schemas"]["EventListItemDto"];
 type EditableFieldMapping = FieldMapping & { id: string };
 
 const writeFields = [
   "name",
   "match_rules",
-  "destination_connection_id",
+  "destination_id",
   "mapping",
   "http_delivery",
+  "http_success",
   "description",
 ] as const;
 
 /// The rows the form itself renders. `http_delivery` is not one of them: the server names the whole
 /// delivery configuration, which is spread across four controls here, so its message stays at form
 /// level rather than being attached to an arbitrary one of them.
-const formFields = ["name", "destination_connection_id", "event_type", "mapping", "description"] as const;
+const formFields = ["name", "destination_id", "event_type", "mapping", "description"] as const;
 
 /// The version the dashboard authors. The server owns the meaning of each version, so an existing
 /// Subscription keeps whatever version it already carries rather than being silently upgraded.
@@ -84,13 +86,18 @@ const jsonDocument = z.string().superRefine((text, ctx) => {
 
 const subscriptionSchema = z.object({
   name: z.string().trim().min(1, "Enter a name."),
-  destination_connection_id: z.string().min(1, "Choose a Connection."),
+  destination_id: z.string().min(1, "Choose a Destination."),
   event_type: z.string().trim().min(1, "Enter an Event type."),
   mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
   method: z.string().min(1),
   path: z.string(),
   body: z.string().min(1, "Enter a body format."),
   headers: jsonDocument,
+  http_success: z.string().superRefine((text, ctx) => {
+    if (!text.trim()) return;
+    const parsed = parseJson(text);
+    if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+  }),
   description: z.string(),
 });
 
@@ -208,13 +215,13 @@ export function SubscriptionsScreen({
 }) {
   const [name, setName] = useFilterParam("name");
   const [topicId, setTopicId] = useFilterParam("topic_id");
-  const [connectionId, setConnectionId] = useFilterParam("connection_id");
+  const [destinationId, setDestinationId] = useFilterParam("destination_id");
   const [status, setStatus] = useFilterParam("status");
   const topics = useTopicOptions(tenantId);
-  const connections = useConnectionOptions(tenantId);
-  const applied = [name, topicId, connectionId, status].filter(Boolean).length;
+  const destinations = useDestinationOptions(tenantId);
+  const applied = [name, topicId, destinationId, status].filter(Boolean).length;
   const list = useInfiniteQuery({
-    queryKey: ["tenant-subscriptions", tenantId, { name, topicId, connectionId, status }],
+    queryKey: ["tenant-subscriptions", tenantId, { name, topicId, destinationId, status }],
     queryFn: ({ pageParam }) =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/subscriptions", {
@@ -223,7 +230,7 @@ export function SubscriptionsScreen({
             query: {
               name: name || undefined,
               topic_id: topicId || undefined,
-              connection_id: connectionId || undefined,
+              destination_id: destinationId || undefined,
               status: status || undefined,
               after: pageParam ?? undefined,
               limit: 20,
@@ -246,7 +253,7 @@ export function SubscriptionsScreen({
           </CreateSheet>
         }
       >
-        Tenant-wide routes from Topics to destination Connections.
+        Tenant-wide routes from Topics to Destinations.
       </PageHeader>
 
       <FilterBar applied={applied}>
@@ -265,15 +272,15 @@ export function SubscriptionsScreen({
           ))}
         </Filter>
         <Filter
-          id="subscription-connection"
-          label="Connection"
-          value={connectionId}
-          onChange={setConnectionId}
-          hint={connections.data?.next_cursor ? "Showing the first 100 Connections." : undefined}
+          id="subscription-destination"
+          label="Destination"
+          value={destinationId}
+          onChange={setDestinationId}
+          hint={destinations.data?.next_cursor ? "Showing the first 100 Destinations." : undefined}
         >
-          {(connections.data?.items ?? []).map((connection) => (
-            <SelectItem key={connection.id} value={connection.id}>
-              {connection.name}
+          {(destinations.data?.items ?? []).map((destination) => (
+            <SelectItem key={destination.id} value={destination.id}>
+              {destination.name}
             </SelectItem>
           ))}
         </Filter>
@@ -309,7 +316,7 @@ export function SubscriptionsScreen({
                 <TableRow>
                   <TableHead scope="col">Name</TableHead>
                   <TableHead scope="col">Topic</TableHead>
-                  <TableHead scope="col">Destination Connection</TableHead>
+                  <TableHead scope="col">Destination</TableHead>
                   <TableHead scope="col">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -333,9 +340,9 @@ export function SubscriptionsScreen({
                     <TableCell>
                       <Link
                         className="no-underline"
-                        to={`/tenants/${tenantId}/connections/${subscription.destination_connection_id}`}
+                        to={`/tenants/${tenantId}/destinations/${subscription.destination_id}`}
                       >
-                        {subscription.destination_connection_name}
+                        {subscription.destination_name}
                       </Link>
                     </TableCell>
                     <TableCell>
@@ -491,9 +498,9 @@ function SubscriptionInspector({
         <dd>
           <Link to={`/tenants/${tenantId}/topics/${topicId}`}>Open Topic</Link>
         </dd>
-        <dt>Destination Connection</dt>
+        <dt>Destination</dt>
         <dd>
-          <Link to={`/tenants/${tenantId}/connections/${current.destination_connection_id}`}>Open Connection</Link>
+          <Link to={`/tenants/${tenantId}/destinations/${current.destination_id}`}>Open Destination</Link>
         </dd>
         <dt>Description</dt>
         <dd>{current.description ?? "—"}</dd>
@@ -644,7 +651,7 @@ function SubscriptionSourcePath({
                 state={{ openSourceGuide: source.id, sourceGuideContext: context }}
               >
                 <span className="min-w-0 break-all text-left">
-                  {source.type} · {source.source_contract} · {source.id}
+                  {source.type} · {source.input_requirements ? "requirements" : "no requirements"} · {source.id}
                 </span>
               </Link>
             </Button>
@@ -1178,8 +1185,8 @@ function SubscriptionForm({
   onSaved?: (saved: Subscription | undefined) => void;
 }) {
   const queryClient = useQueryClient();
-  const connections = useConnectionOptions(tenantId);
-  const connectionOptionsUnavailable = connections.isPending || connections.isError;
+  const destinations = useDestinationOptions(tenantId);
+  const destinationOptionsUnavailable = destinations.isPending || destinations.isError;
   const [playgroundOpen, setPlaygroundOpen] = useState(initialPlaygroundOpen);
   const [reviewedExpression, setReviewedExpression] = useState<string>();
   const originalExpression = mappingExpression(subscription?.mapping_config);
@@ -1188,13 +1195,14 @@ function SubscriptionForm({
     resolver: zodResolver(subscriptionSchema),
     defaultValues: {
       name: subscription?.name ?? "",
-      destination_connection_id: subscription?.destination_connection_id ?? "",
+      destination_id: subscription?.destination_id ?? "",
       event_type: subscriptionEventType(subscription?.match_rules),
       mapping: originalExpression,
       method: subscription?.http_delivery.method ?? "POST",
       path: subscription?.http_delivery.path ?? "",
       body: subscription?.http_delivery.body ?? "json",
       headers: formatJson(subscription?.http_delivery.headers) || "{}",
+      http_success: subscription?.http_success ? formatJson(subscription.http_success) : "",
       description: subscription?.description ?? "",
     },
   });
@@ -1214,9 +1222,10 @@ function SubscriptionForm({
       const requestBody = {
         name: values.name,
         match_rules: { event_type: values.event_type.trim() },
-        destination_connection_id: values.destination_connection_id,
+        destination_id: values.destination_id,
         mapping: mappingEnvelope(values.mapping),
         http_delivery: httpDelivery,
+        http_success: values.http_success.trim() ? (parseJson(values.http_success).value as HttpSuccessRule) : null,
         order_index: subscription?.order_index ?? 0,
         description: values.description.trim() || null,
       };
@@ -1263,21 +1272,21 @@ function SubscriptionForm({
         >
           {/* Both paths open in a sheet that carries the title, so the form states its name rather
               than repeating a heading under one. */}
-          <FormError message={formError(asProblem(connections.error))} />
+          <FormError message={formError(asProblem(destinations.error))} />
           <FormError message={formError(asProblem(save.error), writeFields)} />
 
           <TextField control={form.control} name="name" label="Name" required />
           <SelectField
             control={form.control}
-            name="destination_connection_id"
-            label="Destination Connection"
-            hint={connections.data?.next_cursor ? "Showing the first 100 active Connections." : undefined}
-            disabled={connectionOptionsUnavailable}
+            name="destination_id"
+            label="Destination"
+            hint={destinations.data?.next_cursor ? "Showing the first 100 active Destinations." : undefined}
+            disabled={destinationOptionsUnavailable}
             required
           >
-            {activeOnly(connections.data?.items).map((connection) => (
-              <SelectItem key={connection.id} value={connection.id}>
-                {connection.name}
+            {activeOnly(destinations.data?.items).map((destination) => (
+              <SelectItem key={destination.id} value={destination.id}>
+                {destination.name}
               </SelectItem>
             ))}
           </SelectField>
@@ -1341,6 +1350,13 @@ function SubscriptionForm({
               className="min-h-24 font-mono text-sm"
               required
             />
+            <TextAreaField
+              control={form.control}
+              name="http_success"
+              label="HTTP success rule (JSON, optional)"
+              hint="Leave blank for any HTTP 2xx response to succeed."
+              className="min-h-24 font-mono text-sm"
+            />
           </fieldset>
 
           <TextField control={form.control} name="description" label="Description (optional)" />
@@ -1348,7 +1364,7 @@ function SubscriptionForm({
           <Button
             type="submit"
             className="self-start"
-            disabled={save.isPending || connectionOptionsUnavailable || !mappingReviewed}
+            disabled={save.isPending || destinationOptionsUnavailable || !mappingReviewed}
             aria-describedby={mappingReviewed ? undefined : "mapping-save-requirement"}
           >
             {subscription ? "Save changes" : "Create Subscription"}

@@ -14,7 +14,7 @@ import { appliedNote, ConfirmAction, FilterBar, FormError, ListStatus, LoadMore,
 import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
 import { FilterSelectField, FilterTextField, Form } from "../ui/fields";
 import { CloseInspector, Inspector, InspectorPlaceholder, PageHeader, RowHeader, TableCard } from "../ui/layout";
-import { nameIn, useConnectionOptions, useTopicOptions } from "../ui/options";
+import { nameIn, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge, statusLabel, statusMarker } from "../ui/status";
 import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
 
@@ -499,9 +499,9 @@ function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDelive
 /// rather than the whole ledger.
 function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: string }) {
   // A dead-lettered Delivery is read to find out where it was going. The destination has a name the
-  // Tenant's own Connection list already carries; the Subscription does not, because the Admin API
+  // Tenant's own Destination list already carries; the Subscription does not, because the Admin API
   // lists Subscriptions under their Topic and an Event does not say which Topic matched it.
-  const connectionOptions = useConnectionOptions(tenantId);
+  const destinationOptions = useDestinationOptions(tenantId);
   const queryClient = useQueryClient();
   const eventKey = ["event", tenantId, eventId];
   // Held here rather than on the replay control: a replayed Delivery leaves `dead_lettered`, which
@@ -624,7 +624,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                 <div className="min-w-0 text-[13px]">
                   <span className="block truncate font-mono">{delivery.subscription_id}</span>
                   <span className="block truncate font-mono text-xs text-ink-secondary">
-                    → {nameIn(connectionOptions.data?.items, delivery.destination_connection_id)}
+                    → {nameIn(destinationOptions.data?.items, delivery.destination_id)}
                   </span>
                   <span className="block text-xs text-ink-secondary">
                     <span title="Lifetime attempts / attempts in the current retry cycle">

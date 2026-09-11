@@ -41,7 +41,7 @@ export function Disclosure({ label, children }: { label: string; children: React
 /// The panel is rendered and hidden rather than unmounted, so `aria-controls` always resolves to a
 /// real element and the browser announces the relationship whether or not it is open.
 /// Creating something opens a sheet from the trailing edge rather than a panel above the list. The
-/// list keeps its width and its position - measured on Connections at 1512, the alternatives moved
+/// list keeps its width and its position - measured on Destinations at 1512, the alternatives moved
 /// it 657 pixels down the page or took 73 pixels off it - and the half-filled form is a dialog the
 /// Operator dismisses rather than a region of the page they have to scroll past.
 ///

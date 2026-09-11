@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { afterEach, describe, expect, it } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
-import { ConnectionsScreen } from "./Connections";
+import { DestinationsScreen } from "./Destinations";
 
 afterEach(cleanup);
 
@@ -27,16 +27,16 @@ const writes = (calls: Call[]) => calls.filter((call) => call.method !== "GET");
 /// rejected write, and what it refuses to send at all.
 async function openCreateForm(respond: (call: Call) => { status: number; body?: unknown }) {
   const calls = stubHttp(respond);
-  renderScreen(<ConnectionsScreen tenantId={tenantId} />, `/tenants/${tenantId}/connections`);
+  renderScreen(<DestinationsScreen tenantId={tenantId} />, `/tenants/${tenantId}/destinations`);
 
-  await screen.findByRole("heading", { level: 1, name: "Connections" });
-  fireEvent.click(screen.getByText("New Connection"));
+  await screen.findByRole("heading", { level: 1, name: "Destinations" });
+  fireEvent.click(screen.getByText("New Destination"));
 
   // The list carries a Connector filter and a Connector column of its own, so the create form's own
   // controls are reached through the form rather than through the whole document. The Connector
   // picker is not touched here: it is a menu, and opening one needs a layout engine, so what it
-  // takes to submit a valid Connection is proven in the browser layer instead.
-  const form = within(await screen.findByRole("form", { name: "Create a Connection" }));
+  // takes to submit a valid Destination is proven in the browser layer instead.
+  const form = within(await screen.findByRole("form", { name: "Create a Destination" }));
   fireEvent.change(form.getByLabelText("Name"), { target: { value: "sink" } });
   return calls;
 }
@@ -47,7 +47,7 @@ const describedText = (control: HTMLElement) =>
     .map((id) => document.getElementById(id)?.textContent ?? "")
     .join(" ");
 
-describe("Creating a Connection", () => {
+describe("Creating a Destination", () => {
   it("never sends a configuration that is not well-formed JSON", async () => {
     const calls = await openCreateForm((call) => ({
       status: 200,
@@ -55,7 +55,7 @@ describe("Creating a Connection", () => {
     }));
 
     fireEvent.change(screen.getByLabelText("Configuration (JSON)"), { target: { value: "{not json" } });
-    fireEvent.submit(screen.getByRole("button", { name: "Create Connection" }).closest("form")!);
+    fireEvent.submit(screen.getByRole("button", { name: "Create Destination" }).closest("form")!);
 
     const config = screen.getByLabelText("Configuration (JSON)");
     await waitFor(() => expect(config.getAttribute("aria-invalid")).toBe("true"));
@@ -68,9 +68,9 @@ describe("Creating a Connection", () => {
   it("creates from a sheet that is announced as a dialog and closes on Escape", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
-    renderScreen(<ConnectionsScreen tenantId={tenantId} />);
+    renderScreen(<DestinationsScreen tenantId={tenantId} />);
 
-    const trigger = await screen.findByRole("button", { name: "New Connection" });
+    const trigger = await screen.findByRole("button", { name: "New Destination" });
     // A trigger that opens a dialog says so, and says whether it is open, before it is pressed.
     expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
@@ -78,7 +78,7 @@ describe("Creating a Connection", () => {
 
     fireEvent.click(trigger);
 
-    const sheet = await screen.findByRole("dialog", { name: "New Connection" });
+    const sheet = await screen.findByRole("dialog", { name: "New Destination" });
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     // The form is inside the dialog rather than in the page behind it.
     expect(sheet.querySelector("form")).toBeTruthy();
@@ -88,40 +88,63 @@ describe("Creating a Connection", () => {
   });
 });
 
-const connectionId = "44444444-4444-4444-4444-444444444444";
+const destinationId = "44444444-4444-4444-4444-444444444444";
 
-const connection = {
-  id: connectionId,
+const destination = {
+  id: destinationId,
   tenant_id: tenantId,
   connector_id: connectorId,
   name: "northwind-erp",
   status: "active",
   environment: "production",
   description: "Order and payment records into the ERP.",
-  config: { base_uri: "http://erp.internal/hooks" },
-  source_verification: null,
-  destination_authentication: null,
+  configuration: { base_uri: "http://erp.internal/hooks" },
+  authentication: null,
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
 };
 
-describe("Connection selection", () => {
-  it("reads the selected Connection beside the list it was chosen from", async () => {
+describe("Destination selection", () => {
+  it("sends Destination-owned authentication and secret references", async () => {
+    const calls = stubHttp(({ method, url }) => {
+      if (method === "PATCH") return { status: 200, body: destination };
+      if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: destination };
+      if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([destination]) };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
+      return { status: 200, body: page([]) };
+    });
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const form = await screen.findByRole("form", { name: `Edit ${destination.name}` });
+    fireEvent.change(within(form).getByLabelText("Authentication scheme (optional)"), {
+      target: { value: "bearer_token" },
+    });
+    fireEvent.change(within(form).getByLabelText("Authentication secret references (JSON)"), {
+      target: { value: '{"token":"erp-token"}' },
+    });
+    fireEvent.submit(form);
+    await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
+    expect(calls.find((call) => call.method === "PATCH")!.body).toMatchObject({
+      authentication: { scheme: "bearer_token", config: {}, secret_refs: { token: "erp-token" } },
+    });
+  });
+
+  it("reads the selected Destination beside the list it was chosen from", async () => {
     stubHttp(({ url }) => {
-      if (url.pathname.endsWith("/connections")) return { status: 200, body: page([connection]) };
-      if (url.pathname.endsWith(connectionId)) return { status: 200, body: connection };
+      if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([destination]) };
+      if (url.pathname.endsWith(destinationId)) return { status: 200, body: destination };
       if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
       return { status: 200, body: page([]) };
     });
 
     renderScreen(
-      <ConnectionsScreen tenantId={tenantId} selectedConnectionId={connectionId} />,
-      `/tenants/${tenantId}/connections/${connectionId}`,
+      <DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />,
+      `/tenants/${tenantId}/destinations/${destinationId}`,
     );
 
     // The list is still there to compare against, and the detail is a region of its own.
-    await screen.findByRole("heading", { level: 1, name: "Connections" });
-    const panel = await screen.findByRole("complementary", { name: "Connection detail" });
+    await screen.findByRole("heading", { level: 1, name: "Destinations" });
+    const panel = await screen.findByRole("complementary", { name: "Destination detail" });
     expect(within(panel).getByRole("heading", { name: "northwind-erp" })).toBeTruthy();
 
     // The route is the selection, so the row it came from says so.

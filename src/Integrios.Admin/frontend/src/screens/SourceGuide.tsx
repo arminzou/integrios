@@ -30,12 +30,6 @@ function text(value: unknown, key: string): string | null {
   return typeof found === "string" && found.trim() ? found : null;
 }
 
-function sourceContract(manifest: unknown, key: string | null): JsonObject | null {
-  const contracts = object(manifest).source_contracts;
-  if (!key || !Array.isArray(contracts)) return null;
-  return contracts.map(object).find((candidate) => candidate.key === key) ?? null;
-}
-
 function append(base: string, path: string) {
   return `${base.replace(/\/$/, "")}${path}`;
 }
@@ -58,17 +52,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
     if (routeState?.openSourceGuide !== source.id) return;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
   }, [location.pathname, location.search, navigate, routeState?.openSourceGuide, source.id]);
-  const connection = useQuery({
-    queryKey: ["connection", tenantId, source.connection_id],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/connections/{id}", {
-          params: { path: { tenantId, id: source.connection_id } },
-        }),
-      ),
-    enabled: open,
-  });
-  const connectorId = connection.data?.connector_id ?? "";
+  const connectorId = source.connector_id;
   const connector = useQuery({
     queryKey: ["connector", connectorId],
     queryFn: () => call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: connectorId } } })),
@@ -155,12 +139,11 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
               tenantId={tenantId}
               source={source}
               active={active}
-              connection={connection.data}
               connector={connector.data}
               topicName={topic.data?.name}
               ingestionEndpoint={overview.data?.ingestion_endpoint}
               context={context}
-              problem={asProblem(connection.error ?? connector.error ?? topic.error ?? overview.error)?.detail}
+              problem={asProblem(connector.error ?? topic.error ?? overview.error)?.detail}
             />
 
             <section className="grid gap-4 md:grid-cols-2">
@@ -196,7 +179,6 @@ function GuideBody({
   tenantId,
   source,
   active,
-  connection,
   connector,
   topicName,
   ingestionEndpoint,
@@ -206,7 +188,6 @@ function GuideBody({
   tenantId: string;
   source: Source;
   active: boolean;
-  connection?: components["schemas"]["ConnectionDto"];
   connector?: components["schemas"]["ConnectorDto"];
   topicName?: string;
   ingestionEndpoint?: string | null;
@@ -214,12 +195,9 @@ function GuideBody({
   problem?: string;
 }) {
   if (problem) return <p role="alert">{problem}</p>;
-  if (!connection || !connector || !topicName || (source.type !== "queue" && !ingestionEndpoint))
-    return <p>Loading guide…</p>;
+  if (!connector || !topicName || (source.type !== "queue" && !ingestionEndpoint)) return <p>Loading guide…</p>;
 
-  const configuration = object(source.configuration);
-  const contractKey = text(configuration, "source_contract");
-  const contract = sourceContract(connector.manifest, contractKey);
+  const contract = source.input_requirements ? object(source.input_requirements) : null;
   const baseUri = ingestionEndpoint ?? "";
 
   return (
@@ -229,18 +207,16 @@ function GuideBody({
           Resolved configuration
         </h3>
         <Details>
-          <dt>Connection</dt>
-          <dd>{connection.name}</dd>
           <dt>Connector</dt>
           <dd>
             {connector.name} ({connector.key} v{connector.contract_version})
           </dd>
-          <dt>Source contract</dt>
-          <dd className="font-mono">{contractKey ?? "—"}</dd>
+          <dt>Input requirements</dt>
+          <dd>{contract ? "Configured" : "Not configured"}</dd>
           <dt>Topic</dt>
           <dd>{topicName}</dd>
           <dt>Trust</dt>
-          <dd>{trust(source, connection)}</dd>
+          <dd>{trust(source)}</dd>
         </Details>
       </section>
 
@@ -255,7 +231,7 @@ function GuideBody({
       ) : source.type === "webhook" ? (
         <WebhookGuide source={source} active={active} baseUri={baseUri} contract={contract} />
       ) : (
-        <QueueGuide source={source} active={active} contract={contract} context={context} />
+        <QueueGuide source={source} active={active} contract={contract} />
       )}
       {context?.advancedMapping ? (
         <p className="m-0 text-sm text-ink-secondary">
@@ -290,9 +266,9 @@ function EventApiGuide({
     payload: context?.payload ?? {},
   };
   const json = JSON.stringify(envelope, null, 2);
-  const http = `POST ${endpoint}\nAuthorization: TenantApiKey <tenant-api-key>\nContent-Type: application/json\n\n${json}`;
-  const curl = `curl --request POST ${shellQuote(endpoint)} \\\n  --header 'Authorization: TenantApiKey <tenant-api-key>' \\\n  --header 'Content-Type: application/json' \\\n  --data ${shellQuote(JSON.stringify(envelope))}`;
-  const csharp = `using System.Net.Http.Headers;\nusing System.Net.Http.Json;\nusing System.Text.Json.Nodes;\n\nusing var client = new HttpClient();\nclient.DefaultRequestHeaders.Authorization =\n    new AuthenticationHeaderValue("TenantApiKey", "<tenant-api-key>");\n\nusing var response = await client.PostAsync(\n    "${endpoint}",\n    JsonContent.Create(JsonNode.Parse("""\n${json}\n""")));\nresponse.EnsureSuccessStatusCode();`;
+  const http = `POST ${endpoint}\nAuthorization: Bearer <TenantApiKey>\nContent-Type: application/json\n\n${json}`;
+  const curl = `curl --request POST ${shellQuote(endpoint)} \\\n  --header 'Authorization: Bearer <TenantApiKey>' \\\n  --header 'Content-Type: application/json' \\\n  --data ${shellQuote(JSON.stringify(envelope))}`;
+  const csharp = `using System.Net.Http.Headers;\nusing System.Net.Http.Json;\nusing System.Text.Json.Nodes;\n\nusing var client = new HttpClient();\nclient.DefaultRequestHeaders.Authorization =\n    new AuthenticationHeaderValue("Bearer", "<TenantApiKey>");\n\nusing var response = await client.PostAsync(\n    "${endpoint}",\n    JsonContent.Create(JsonNode.Parse("""\n${json}\n""")));\nresponse.EnsureSuccessStatusCode();`;
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="event-api-guide">
@@ -358,17 +334,7 @@ function WebhookGuide({
   );
 }
 
-function QueueGuide({
-  source,
-  active,
-  contract,
-  context,
-}: {
-  source: Source;
-  active: boolean;
-  contract: JsonObject | null;
-  context?: SourceGuideContext;
-}) {
+function QueueGuide({ source, active, contract }: { source: Source; active: boolean; contract: JsonObject | null }) {
   const configuration = object(source.configuration);
   const transport = object(configuration.transport_config);
   const namespace = text(transport, "namespace") ?? "—";
@@ -376,12 +342,6 @@ function QueueGuide({
   const topic = text(transport, "topic_name");
   const subscription = text(transport, "subscription_name");
   const address = queue ? `${namespace}/${queue}` : `${namespace}/${topic ?? "—"}/subscriptions/${subscription ?? "—"}`;
-  const contractKey = text(configuration, "source_contract");
-  const eventEnvelope = {
-    event_type: context?.eventType || "<event-type>",
-    source_event_id: "<stable-source-event-id>",
-    payload: context?.payload ?? {},
-  };
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="queue-guide">
@@ -396,9 +356,7 @@ function QueueGuide({
         </p>
       </div>
       <BodyPanel label="Broker entity" value={address} copyable={active} />
-      {contractKey === "event_json" ? (
-        <BodyPanel label="Message body" value={eventEnvelope} copyable={active} />
-      ) : contract?.schema !== undefined ? (
+      {contract?.schema !== undefined ? (
         <BodyPanel label="Declared native input schema" value={contract.schema} copyable={active} />
       ) : (
         <p className="m-0 text-sm text-ink-secondary">
@@ -418,8 +376,8 @@ function intro(type: string) {
   return "An external Publisher sends to the configured broker entity; Integrios consumes and normalizes the message.";
 }
 
-function trust(source: Source, connection: components["schemas"]["ConnectionDto"]) {
+function trust(source: Source) {
   if (source.type === "event_api") return "TenantApiKey";
-  if (source.type === "webhook") return connection.source_verification?.scheme ?? "Unverified";
+  if (source.type === "webhook") return source.verification?.scheme ?? "Unverified";
   return text(object(source.configuration).authentication, "scheme") ?? "—";
 }

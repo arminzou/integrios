@@ -63,7 +63,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
           </CreateSheet>
         }
       >
-        Deployment-wide capability definitions. Connections are built from these, per Tenant.
+        Deployment-wide capability definitions. Sources and Destinations are built from these, per Tenant.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
@@ -103,7 +103,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
               >
                 <TableHeader>
                   <TableRow>
-                    {/* The key is what an Operator writes in a manifest and what a Connection is built
+                    {/* The key is what an Operator writes in a manifest and what a Source or Destination is built
                     from, so it names the row; the presentation name follows it. */}
                     <TableHead scope="col">Key</TableHead>
                     <TableHead scope="col">Name</TableHead>
@@ -147,7 +147,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
 }
 
 /// The selected Connector beside the list. A Connector is deployment-wide and read far more often
-/// than it is applied — a Connection's configuration is validated against this manifest — so the
+/// than it is applied — a Source or Destination configuration is validated against this manifest — so the
 /// manifest is what the panel is mostly for.
 function ConnectorInspector({ connectorId }: { connectorId: string }) {
   const navigate = useNavigate();

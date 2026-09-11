@@ -1,4 +1,4 @@
-/// Connector manifests, Connection configuration, Source configuration, and Subscription match
+/// Connector manifests, Destination configuration, Source configuration, and Subscription match
 /// rules and mapping are domain JSON documents whose shape the Connector contract owns, not the
 /// dashboard. They are authored as JSON text and only checked for well-formedness here; the server
 /// remains the authority on whether the document is valid.

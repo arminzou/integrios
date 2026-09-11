@@ -167,7 +167,7 @@ const stubOverview = (overview: Record<string, number>) =>
         status: 200,
         body: {
           topics: 1,
-          connections: 1,
+          destinations: 1,
           sources: 1,
           subscriptions: 1,
           live_api_keys: 1,
@@ -208,7 +208,7 @@ describe("The Tenant overview's attention banner", () => {
 
 describe("Tenant Overview navigation", () => {
   it("keeps Tenant actions in the header and links each configuration summary", async () => {
-    stubOverview({ connections: 2, sources: 3, subscriptions: 4, live_api_keys: 5 });
+    stubOverview({ destinations: 2, sources: 3, subscriptions: 4, live_api_keys: 5 });
 
     renderScreen(<TenantScreen tenantId={tenantId} />, `/tenants/${tenantId}`);
 
@@ -219,7 +219,7 @@ describe("Tenant Overview navigation", () => {
     const summary = screen.getByRole("region", { name: "Configured in this Tenant" });
     const destinations = [
       ["Topics", `/tenants/${tenantId}/topics`],
-      ["Connections", `/tenants/${tenantId}/connections`],
+      ["Destinations", `/tenants/${tenantId}/destinations`],
       ["Sources", `/tenants/${tenantId}/sources`],
       ["Subscriptions", `/tenants/${tenantId}/subscriptions`],
       ["Live API keys", `/tenants/${tenantId}/tenant-api-keys`],

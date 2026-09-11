@@ -104,7 +104,7 @@ function Stale() {
 /// The Integrios Event Builder: representative input on the left, the Event fields it is mapped
 /// into in the middle, and what Integrios would accept on the right. Everything it holds is
 /// ephemeral — the sample, the headers and the guided choices never leave the browser. Only the
-/// generated expression and the input-requirements schema are handed back to the Connector draft.
+/// generated expression and the input-requirements schema are handed back to the Source draft.
 export function EventBuilder({
   draft,
   onUse,
@@ -258,9 +258,8 @@ export function EventBuilder({
             <div className="min-w-0">
               <DialogPrimitive.Title className="m-0">Integrios Event Builder</DialogPrimitive.Title>
               <DialogPrimitive.Description className="m-0 mt-1 text-sm text-ink-secondary">
-                Define how a request the <span className="font-mono">{contractKey || "Source"}</span> contract accepts
-                becomes an Integrios Event. Nothing here is saved with the Connector except the mapping and the input
-                requirements.
+                Define how a request the <span className="font-mono">{contractKey || "Source"}</span> accepts becomes an
+                Integrios Event. Only the mapping and input requirements join the Source draft.
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close
@@ -512,7 +511,7 @@ export function EventBuilder({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <DialogPrimitive.Close asChild>
               <Button type="button" variant="outline">
-                Back to Connector
+                Back to Source
               </Button>
             </DialogPrimitive.Close>
             <div className="flex flex-wrap items-center gap-2">

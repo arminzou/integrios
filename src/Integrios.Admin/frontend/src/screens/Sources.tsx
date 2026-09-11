@@ -39,8 +39,9 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { activeOnly, nameIn, useConnectionOptions, useTopicOptions } from "../ui/options";
+import { activeOnly, nameIn, useConnectorOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
+import { EventBuilder } from "./EventBuilder";
 import { SourceGuide } from "./SourceGuide";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
@@ -52,8 +53,20 @@ const sourceTypes = [
   { value: "queue", label: "Queue" },
 ];
 
-const createFields = ["connection_id", "topic_id", "type", "configuration"] as const;
-const editFields = ["configuration"] as const;
+const createFields = [
+  "connector_id",
+  "topic_id",
+  "type",
+  "configuration",
+  "verification_scheme",
+  "verification_config",
+  "verification_secret_refs",
+  "input_requirements",
+  "mapping",
+  "identity_kind",
+  "identity_value",
+] as const;
+const editFields = ["configuration", "input_requirements", "mapping"] as const;
 
 /// A domain JSON document, authored as text: well-formedness is all the dashboard checks, and the
 /// server stays the authority on whether the document is valid for this Source type.
@@ -62,17 +75,38 @@ const jsonDocument = z.string().superRefine((text, ctx) => {
   if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
 });
 
+const optionalJsonDocument = z.string().superRefine((text, ctx) => {
+  if (!text.trim()) return;
+  const parsed = parseJson(text);
+  if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+});
+
 const createSchema = z.object({
-  connection_id: z.string().min(1, "Choose a Connection."),
+  connector_id: z.string().min(1, "Choose a Connector."),
   topic_id: z.string().min(1, "Choose a Topic."),
   type: z.string().min(1, "Choose a type."),
   configuration: jsonDocument,
+  verification_scheme: z.string(),
+  verification_config: optionalJsonDocument,
+  verification_secret_refs: optionalJsonDocument,
+  input_requirements: optionalJsonDocument,
+  mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+  identity_kind: z.string(),
+  identity_value: z.string(),
 });
 
-const editSchema = z.object({ configuration: jsonDocument });
+const editSchema = z.object({
+  configuration: jsonDocument,
+  input_requirements: optionalJsonDocument,
+  mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+});
 
 type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
+
+const optionalJson = (value: string) => (value.trim() ? parseJson(value).value : null);
+const mapping = (expression: string) =>
+  expression.trim() ? { engine: "jsonata", version: "1", expression: expression.trim() } : null;
 
 export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string; selectedSourceId?: string }) {
   const location = useLocation();
@@ -82,7 +116,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
     if (!openCreate) return;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
   }, [location.pathname, location.search, navigate, openCreate]);
-  const connectionOptions = useConnectionOptions(tenantId);
+  const connectorOptions = useConnectorOptions();
   const topicOptions = useTopicOptions(tenantId);
   const [status, setStatus] = useFilterParam("status");
   const [type, setType] = useFilterParam("type");
@@ -117,14 +151,14 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
         action={
           <CreateSheet
             label="New Source"
-            description="A Source binds one Connection to one Topic"
+            description="A Source binds one Connector to one Topic"
             initialOpen={openCreate}
           >
             {(close) => <CreateSource tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
           </CreateSheet>
         }
       >
-        A Source binds one Connection to one Topic and selects the contract its input is read as.
+        A Source binds one Connector to one Topic and owns how its input is read.
       </PageHeader>
 
       <FilterBar applied={applied}>
@@ -178,10 +212,10 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             >
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">Connection</TableHead>
+                  <TableHead scope="col">Connector</TableHead>
                   <TableHead scope="col">Topic</TableHead>
                   <TableHead scope="col">Type</TableHead>
-                  <TableHead scope="col">Source contract</TableHead>
+                  <TableHead scope="col">Input requirements</TableHead>
                   <TableHead scope="col">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -190,7 +224,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                   <TableRow key={source.id} className="has-[a[aria-current=page]]:bg-selected-surface">
                     <RowHeader>
                       <NavLink className="no-underline" to={`/tenants/${tenantId}/sources/${source.id}`} end>
-                        {nameIn(connectionOptions.data?.items, source.connection_id)}
+                        {nameIn(connectorOptions.data?.items, source.connector_id)}
                       </NavLink>
                     </RowHeader>
                     <TableCell>
@@ -199,7 +233,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                       </Link>
                     </TableCell>
                     <TableCell>{source.type}</TableCell>
-                    <TableCell className="font-mono text-[13px]">{source.source_contract}</TableCell>
+                    <TableCell className="font-mono text-[13px]">{source.input_requirements || "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={source.status} />
                     </TableCell>
@@ -214,7 +248,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
           <SourceInspector key={selectedSourceId} tenantId={tenantId} sourceId={selectedSourceId} />
         ) : (
           <InspectorPlaceholder label="Source detail">
-            Select a Source to read the Connection and Topic it binds together.
+            Select a Source to read the Connector and Topic it binds together.
           </InspectorPlaceholder>
         )}
       </SplitView>
@@ -233,14 +267,36 @@ function CreateSource({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const connections = useConnectionOptions(tenantId);
+  const connectors = useConnectorOptions();
   const topics = useTopicOptions(tenantId);
-  const optionsUnavailable = connections.isPending || topics.isPending || connections.isError || topics.isError;
+  const optionsUnavailable = connectors.isPending || topics.isPending || connectors.isError || topics.isError;
 
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { connection_id: "", topic_id: defaultTopicId, type: "webhook", configuration: "{}" },
+    defaultValues: {
+      connector_id: "",
+      topic_id: defaultTopicId,
+      type: "webhook",
+      configuration: "{}",
+      verification_scheme: "",
+      verification_config: "{}",
+      verification_secret_refs: "{}",
+      input_requirements: "",
+      mapping: "",
+      identity_kind: "",
+      identity_value: "",
+    },
   });
+  const sourceType = form.watch("type");
+  const overview = useQuery({
+    queryKey: ["tenant-overview", tenantId],
+    queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
+    enabled: sourceType === "event_api",
+  });
+  const sourceContractDraft = {
+    expression: form.watch("mapping"),
+    schema: optionalJson(form.watch("input_requirements")) as Record<string, unknown> | undefined,
+  };
 
   const create = useMutation({
     mutationFn: (values: CreateValues) =>
@@ -248,10 +304,24 @@ function CreateSource({
         api.POST("/admin/tenants/{tenantId}/sources", {
           params: { path: { tenantId } },
           body: {
-            connection_id: values.connection_id,
+            connector_id: values.connector_id,
             topic_id: values.topic_id,
             type: values.type,
             configuration: parseJson(values.configuration).value,
+            verification:
+              values.type === "webhook" && values.verification_scheme.trim()
+                ? {
+                    scheme: values.verification_scheme.trim(),
+                    config: optionalJson(values.verification_config) ?? {},
+                    secret_refs: optionalJson(values.verification_secret_refs) ?? {},
+                  }
+                : null,
+            input_requirements: values.type === "event_api" ? null : optionalJson(values.input_requirements),
+            mapping: values.type === "event_api" ? null : mapping(values.mapping),
+            event_identity_rule:
+              values.type !== "event_api" && values.identity_kind.trim() && values.identity_value.trim()
+                ? { kind: values.identity_kind.trim(), value: values.identity_value.trim() }
+                : null,
           },
         }),
       ),
@@ -269,20 +339,20 @@ function CreateSource({
   return (
     <Form {...form}>
       <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Source">
-        <FormError message={formError(asProblem(connections.error ?? topics.error))} />
+        <FormError message={formError(asProblem(connectors.error ?? topics.error))} />
         <FormError message={formError(asProblem(create.error), createFields)} />
 
         <SelectField
           control={form.control}
-          name="connection_id"
-          label="Connection"
-          hint={connections.data?.next_cursor ? "Showing the first 100 active Connections." : undefined}
-          disabled={connections.isPending || connections.isError}
+          name="connector_id"
+          label="Connector"
+          hint={connectors.data?.next_cursor ? "Showing the first 100 active Connectors." : undefined}
+          disabled={connectors.isPending || connectors.isError}
           required
         >
-          {activeOnly(connections.data?.items).map((connection) => (
-            <SelectItem key={connection.id} value={connection.id}>
-              {connection.name}
+          {activeOnly(connectors.data?.items).map((connector) => (
+            <SelectItem key={connector.id} value={connector.id}>
+              {connector.name}
             </SelectItem>
           ))}
         </SelectField>
@@ -310,10 +380,80 @@ function CreateSource({
         <TextAreaField
           control={form.control}
           name="configuration"
-          label="Configuration (JSON)"
+          label={sourceType === "queue" ? "Queue transport configuration (JSON)" : "Configuration (JSON)"}
           className="min-h-40 font-mono text-sm"
           required
         />
+        {sourceType === "event_api" ? (
+          <EventApiRequest tenantId={tenantId} ingestionEndpoint={overview.data?.ingestion_endpoint} />
+        ) : null}
+        {sourceType === "webhook" ? (
+          <>
+            <TextAreaField
+              control={form.control}
+              name="verification_scheme"
+              label="Verification scheme (optional)"
+              className="min-h-16 font-mono text-sm"
+            />
+            <TextAreaField
+              control={form.control}
+              name="verification_config"
+              label="Verification configuration (JSON)"
+              className="min-h-24 font-mono text-sm"
+            />
+            <TextAreaField
+              control={form.control}
+              name="verification_secret_refs"
+              label="Verification secret references (JSON)"
+              hint="Reference names only; never enter secret values."
+              className="min-h-24 font-mono text-sm"
+            />
+          </>
+        ) : null}
+        {sourceType !== "event_api" ? (
+          <>
+            <EventBuilder
+              key={sourceType}
+              contractKey={`${sourceType} Source`}
+              draft={sourceContractDraft}
+              onUse={(draft) => {
+                form.setValue("mapping", draft.expression, { shouldDirty: true });
+                form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                  shouldDirty: true,
+                });
+              }}
+            />
+            <TextAreaField
+              control={form.control}
+              name="input_requirements"
+              label="Input requirements (JSON, optional)"
+              className="min-h-32 font-mono text-sm"
+            />
+            <TextAreaField
+              control={form.control}
+              name="mapping"
+              label="Event mapping (JSONata, optional)"
+              className="min-h-32 font-mono text-sm"
+            />
+            <TextAreaField
+              control={form.control}
+              name="identity_kind"
+              label={
+                sourceType === "queue"
+                  ? "Event identity kind (message_id or json_pointer)"
+                  : "Event identity kind (header or json_pointer)"
+              }
+              className="min-h-16 font-mono text-sm"
+            />
+            <TextAreaField
+              control={form.control}
+              name="identity_value"
+              label="Event identity selector"
+              hint="A selected identity is fixed when this Source is created."
+              className="min-h-16 font-mono text-sm"
+            />
+          </>
+        ) : null}
 
         <Button type="submit" className="self-start" disabled={create.isPending || optionsUnavailable}>
           Create Source
@@ -323,8 +463,43 @@ function CreateSource({
   );
 }
 
+function EventApiRequest({ tenantId, ingestionEndpoint }: { tenantId: string; ingestionEndpoint?: string | null }) {
+  const endpoint = ingestionEndpoint
+    ? `${ingestionEndpoint.replace(/\/$/, "")}/events?source_id=<Source id after create>`
+    : "Loading the ingestion URL…";
+  const request = JSON.stringify(
+    {
+      event_type: "<event-type>",
+      payload: {},
+      source_event_id: "<stable-source-event-id>",
+      metadata: {},
+    },
+    null,
+    2,
+  );
+
+  return (
+    <section className="flex flex-col gap-2 rounded-md border bg-surface-quiet p-4" aria-labelledby="event-api-request">
+      <h3 id="event-api-request" className="m-0 text-sm font-medium">
+        Event API request
+      </h3>
+      <p className="m-0 text-sm text-ink-secondary">
+        This Source accepts the fixed Integrios Event JSON. It has no Source verification, input requirements, or
+        mapping; authenticate with a <Link to={`/tenants/${tenantId}/tenant-api-keys`}>Tenant API key</Link>.
+      </p>
+      <dl className="grid gap-1 text-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3">
+        <dt className="font-medium">Ingestion URL</dt>
+        <dd className="m-0 min-w-0 break-all font-mono">{endpoint}</dd>
+        <dt className="font-medium">Authorization</dt>
+        <dd className="m-0 font-mono">Bearer &lt;TenantApiKey&gt;</dd>
+      </dl>
+      <pre className="m-0 overflow-x-auto rounded-md border bg-surface p-3 text-sm">{request}</pre>
+    </section>
+  );
+}
+
 function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: string }) {
-  const connectionOptions = useConnectionOptions(tenantId);
+  const connectorOptions = useConnectorOptions();
   const topicOptions = useTopicOptions(tenantId);
   const [notice, setNotice] = useState("");
   const source = useQuery({
@@ -362,10 +537,10 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
       <Details className="border-b pb-3.5">
         <dt>Type</dt>
         <dd>{current.type}</dd>
-        <dt>Connection</dt>
+        <dt>Connector</dt>
         <dd>
-          <Link className="font-mono" to={`/tenants/${tenantId}/connections/${current.connection_id}`}>
-            {nameIn(connectionOptions.data?.items, current.connection_id)}
+          <Link className="font-mono" to={`/connectors/${current.connector_id}`}>
+            {nameIn(connectorOptions.data?.items, current.connector_id)}
           </Link>
         </dd>
         <dt>Topic</dt>
@@ -390,7 +565,7 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
   );
 }
 
-/// The Admin API owns exactly one Source update — its configuration. Type, Connection, and Topic are
+/// The Admin API owns the mutable Source contract. Type, Connector, Topic, and identity rule are
 /// fixed at creation, so they are shown rather than offered as editable fields.
 function EditSource({ tenantId, source, onDone }: { tenantId: string; source: Source; onDone: () => void }) {
   const queryClient = useQueryClient();
@@ -400,7 +575,11 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
   };
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
-    defaultValues: { configuration: formatJson(source.configuration) },
+    defaultValues: {
+      configuration: formatJson(source.configuration),
+      input_requirements: source.input_requirements ? formatJson(source.input_requirements) : "",
+      mapping: source.mapping?.expression ?? "",
+    },
   });
 
   const save = useMutation({
@@ -408,7 +587,12 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
       call(() =>
         api.PATCH("/admin/tenants/{tenantId}/sources/{id}", {
           params: { path: { tenantId, id: source.id } },
-          body: { configuration: parseJson(values.configuration).value },
+          body: {
+            configuration: parseJson(values.configuration).value,
+            verification: null,
+            input_requirements: optionalJson(values.input_requirements),
+            mapping: mapping(values.mapping),
+          },
         }),
       ),
     onSuccess: reread,
@@ -453,6 +637,22 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                   className="min-h-56 font-mono text-sm"
                   required
                 />
+                {source.type !== "event_api" ? (
+                  <>
+                    <TextAreaField
+                      control={form.control}
+                      name="input_requirements"
+                      label="Input requirements (JSON, optional)"
+                      className="min-h-40 font-mono text-sm"
+                    />
+                    <TextAreaField
+                      control={form.control}
+                      name="mapping"
+                      label="Event mapping (JSONata, optional)"
+                      className="min-h-40 font-mono text-sm"
+                    />
+                  </>
+                ) : null}
 
                 <Button type="submit" className="self-start" disabled={save.isPending}>
                   Save configuration

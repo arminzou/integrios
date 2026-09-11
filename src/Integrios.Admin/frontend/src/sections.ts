@@ -1,12 +1,12 @@
 /// The Tenant-scoped sections of the dashboard, named in one place so the contextual navigation row
 /// and the breadcrumb cannot drift apart. Kept out of the route table itself because the shell
 /// imports it and the route table imports the shell.
-export type TenantSection = "overview" | "events" | "connections" | "sources" | "topics" | "subscriptions" | "apiKeys";
+export type TenantSection = "overview" | "events" | "destinations" | "sources" | "topics" | "subscriptions" | "apiKeys";
 
 export const sectionLabels: Record<TenantSection, string> = {
   overview: "Overview",
   events: "Events",
-  connections: "Connections",
+  destinations: "Destinations",
   sources: "Sources",
   topics: "Topics",
   subscriptions: "Subscriptions",
@@ -16,7 +16,7 @@ export const sectionLabels: Record<TenantSection, string> = {
 export const sectionHrefs: Record<TenantSection, (tenantId: string) => string> = {
   overview: (id) => `/tenants/${id}`,
   events: (id) => `/tenants/${id}/events`,
-  connections: (id) => `/tenants/${id}/connections`,
+  destinations: (id) => `/tenants/${id}/destinations`,
   sources: (id) => `/tenants/${id}/sources`,
   topics: (id) => `/tenants/${id}/topics`,
   subscriptions: (id) => `/tenants/${id}/subscriptions`,
@@ -26,7 +26,7 @@ export const sectionHrefs: Record<TenantSection, (tenantId: string) => string> =
 export const sectionOrder: TenantSection[] = [
   "overview",
   "events",
-  "connections",
+  "destinations",
   "sources",
   "topics",
   "subscriptions",

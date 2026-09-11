@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { isRouteErrorResponse, Link, type RouteObject, useLocation, useParams, useRouteError } from "react-router";
 import { App } from "./App";
 import { isIdentifier } from "./identifiers";
-import { ConnectionsScreen } from "./screens/Connections";
 import { ConnectorsScreen } from "./screens/Connectors";
+import { DestinationsScreen } from "./screens/Destinations";
 import { EventsScreen } from "./screens/Events";
 import { SourcesScreen } from "./screens/Sources";
 import { SubscriptionsScreen } from "./screens/Subscriptions";
@@ -81,17 +81,17 @@ export const routeConfig: RouteObject[] = [
         element: <Ids>{({ tenantId }) => <TenantScreen tenantId={tenantId} />}</Ids>,
       },
       {
-        path: "tenants/:tenantId/connections",
-        handle: { section: "connections" satisfies TenantSection },
-        element: <Ids>{({ tenantId }) => <ConnectionsScreen tenantId={tenantId} />}</Ids>,
+        path: "tenants/:tenantId/destinations",
+        handle: { section: "destinations" satisfies TenantSection },
+        element: <Ids>{({ tenantId }) => <DestinationsScreen tenantId={tenantId} />}</Ids>,
       },
       {
-        path: "tenants/:tenantId/connections/:connectionId",
-        handle: { section: "connections" satisfies TenantSection },
+        path: "tenants/:tenantId/destinations/:destinationId",
+        handle: { section: "destinations" satisfies TenantSection },
         element: (
           <Ids>
-            {({ tenantId, connectionId }) => (
-              <ConnectionsScreen tenantId={tenantId} selectedConnectionId={connectionId} />
+            {({ tenantId, destinationId }) => (
+              <DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />
             )}
           </Ids>
         ),

@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 /// only strings, and a JSON body with numbers, objects, and meaningful nulls.
 const tenantId = "11111111-1111-1111-1111-111111111111";
 const topicId = "22222222-2222-2222-2222-222222222222";
-const connectionId = "33333333-3333-3333-3333-333333333333";
+const destinationId = "33333333-3333-3333-3333-333333333333";
 const connectorId = "44444444-4444-4444-4444-444444444444";
 
 const session = {
@@ -39,8 +39,8 @@ const tenant = {
   ...stamps,
 };
 const topic = { id: topicId, tenant_id: tenantId, name: "orders", status: "active", description: null, ...stamps };
-const connection = {
-  id: connectionId,
+const destination = {
+  id: destinationId,
   tenant_id: tenantId,
   connector_id: connectorId,
   name: "sink",
@@ -62,9 +62,7 @@ const connector = {
 const connectorDetail = {
   ...connector,
   manifest_schema_version: 1,
-  manifest: {
-    source_contracts: [{ key: "event_json", contract_version: 1, config: {} }],
-  },
+  manifest: {},
 };
 
 const page = (items: unknown[], nextCursor: string | null = null) => ({ items, next_cursor: nextCursor });
@@ -73,11 +71,10 @@ const subscriptionId = "77777777-7777-7777-7777-777777777777";
 const sourceId = "88888888-8888-8888-8888-888888888888";
 const eventId = "99999999-9999-9999-9999-999999999999";
 
-const connectionDetail = {
-  ...connection,
+const destinationDetail = {
+  ...destination,
   config: { base_uri: "http://sink.invalid" },
-  source_verification: null,
-  destination_authentication: null,
+  authentication: null,
 };
 const subscriptionDetail = {
   id: subscriptionId,
@@ -85,7 +82,7 @@ const subscriptionDetail = {
   tenant_id: tenantId,
   name: "to-sink",
   match_rules: { event_type: "order.created" },
-  destination_connection_id: connectionId,
+  destination_id: destinationId,
   mapping_config: {
     engine: "jsonata",
     version: "1",
@@ -100,10 +97,10 @@ const subscriptionDetail = {
 const sourceDetail = {
   id: sourceId,
   tenant_id: tenantId,
-  connection_id: connectionId,
+  connector_id: connectorId,
   topic_id: topicId,
   type: "event_api",
-  configuration: { source_contract: "event_json" },
+  configuration: {},
   status: "active",
   revoked_at: null,
   ...stamps,
@@ -119,7 +116,7 @@ function readFor(pathname: string): unknown {
   if (/\/overview$/.test(pathname))
     return {
       topics: 1,
-      connections: 1,
+      destinations: 1,
       sources: 1,
       subscriptions: 1,
       live_api_keys: 1,
@@ -127,7 +124,7 @@ function readFor(pathname: string): unknown {
       ingestion_endpoint: "http://localhost:5231/",
     };
   if (/^\/admin\/tenants\/[^/]+$/.test(pathname)) return tenant;
-  if (/\/connections\/[^/]+$/.test(pathname)) return connectionDetail;
+  if (/\/destinations\/[^/]+$/.test(pathname)) return destinationDetail;
   if (/\/subscriptions\/[^/]+$/.test(pathname)) return subscriptionDetail;
   if (/\/events\/[^/]+\/deliveries$/.test(pathname))
     return {
@@ -143,11 +140,11 @@ function readFor(pathname: string): unknown {
     };
   if (/\/sources\/[^/]+$/.test(pathname)) return { ...sourceDetail, id: pathname.split("/").at(-1) };
   if (/\/topics\/[^/]+$/.test(pathname)) return topic;
-  if (/\/connections$/.test(pathname)) return page([connection]);
+  if (/\/destinations$/.test(pathname)) return page([destination]);
   // A next_cursor here is what makes the option reads' own hundred-row cap observable.
   if (/\/topics$/.test(pathname)) return page([topic], "more-topics");
   if (/\/subscriptions$/.test(pathname))
-    return page([{ ...subscriptionDetail, topic_name: topic.name, destination_connection_name: connection.name }]);
+    return page([{ ...subscriptionDetail, topic_name: topic.name, destination_name: destination.name }]);
   if (/\/events$/.test(pathname))
     return page([
       {
@@ -159,7 +156,7 @@ function readFor(pathname: string): unknown {
         deliveries: { pending: 0, in_flight: 0, succeeded: 1, dead_lettered: 0 },
       },
     ]);
-  if (/\/sources$/.test(pathname)) return page([{ ...sourceDetail, source_contract: "event_json" }]);
+  if (/\/sources$/.test(pathname)) return page([sourceDetail]);
   return page([]);
 }
 
@@ -212,7 +209,7 @@ it("applies the list filters through their controls and keeps them usable at 320
     await view.setViewportSize({ width: 320, height: 900 });
     expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await view.goto(`${origin}/tenants/${tenantId}/sources`);
-    await view.getByText("event_json", { exact: true }).waitFor();
+    await view.getByText("event_api", { exact: true }).waitFor();
     const request = view.waitForRequest((request) => new URL(request.url()).searchParams.get("topic_id") === topicId);
     await view.getByLabel("Topic", { exact: true }).click();
     // The real browser owns this positioned popup; this assertion proves the same limit described
@@ -279,9 +276,9 @@ async function submitted(
 
 describe("Create forms, filled through a real browser", () => {
   /// Moved down from jsdom when the Connector picker became a menu: reaching a rejected write means
-  /// submitting a valid Connection first, and choosing a Connector needs a layout engine.
+  /// submitting a valid Destination first, and choosing a Connector needs a layout engine.
   it("puts each rejected field beside its own control and everything else at form level", async () => {
-    const { page: view } = await open(`/tenants/${tenantId}/connections`);
+    const { page: view } = await open(`/tenants/${tenantId}/destinations`);
     // Registered after the helper's own handler, so this is the one that answers the write.
     await view.route("**/admin/**", (route) => {
       const request = route.request();
@@ -290,18 +287,18 @@ describe("Create forms, filled through a real browser", () => {
         status: 400,
         contentType: "application/problem+json",
         json: {
-          title: "The Connection was rejected.",
+          title: "The Destination was rejected.",
           errors: { Name: ["That name is already taken."], "": ["The deployment refused the write."] },
         },
       });
     });
 
-    await view.click("text=New Connection");
-    const form = formNamed(view, "Create a Connection");
+    await view.click("text=New Destination");
+    const form = formNamed(view, "Create a Destination");
     await choose(form.getByLabel("Connector"), /HTTP/);
     await form.getByLabel("Name").fill("sink");
-    await form.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://sink.invalid"}');
-    await view.click("text=Create Connection");
+    await form.getByLabel("Configuration (JSON)", { exact: true }).fill('{"base_uri":"http://sink.invalid"}');
+    await view.click("text=Create Destination");
 
     // The field-keyed message lands on the control it names, whatever casing the server used.
     const name = form.getByLabel("Name");
@@ -312,29 +309,27 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends a Connection with its config parsed out of the textarea", async () => {
-    const { page: view, writes } = await open(`/tenants/${tenantId}/connections`);
+  it("sends a Destination with its config parsed out of the textarea", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/destinations`);
 
-    // The create form sits behind a "New Connection" disclosure so it does not permanently
+    // The create form sits behind a "New Destination" disclosure so it does not permanently
     // dominate the list above it.
-    await view.click("text=New Connection");
-    const form = formNamed(view, "Create a Connection");
+    await view.click("text=New Destination");
+    const form = formNamed(view, "Create a Destination");
     await choose(form.getByLabel("Connector"), /HTTP/);
     await form.getByLabel("Name").fill("sink");
-    await form.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://sink.invalid"}');
-    await view.click("text=Create Connection");
+    await form.getByLabel("Configuration (JSON)", { exact: true }).fill('{"base_uri":"http://sink.invalid"}');
+    await view.click("text=Create Destination");
     await view.waitForFunction(() => true);
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
-    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/connections`);
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/destinations`);
     expect(writes[0].headers()[session.antiforgery_header_name.toLowerCase()]).toBe(session.antiforgery_token);
     expect(sent.body.connector_id).toBe(connectorId);
     // The textarea holds text; the API takes a document.
-    expect(sent.body.config).toEqual({ base_uri: "http://sink.invalid" });
-    // Never claims to replace a scheme it did not round-trip.
-    expect(sent.body.source_verification).toBeNull();
-    expect(sent.body.destination_authentication).toBeNull();
+    expect(sent.body.configuration).toEqual({ base_uri: "http://sink.invalid" });
+    expect(sent.body.authentication).toBeNull();
     await view.close();
   }, 60_000);
 
@@ -364,7 +359,7 @@ describe("Create forms, filled through a real browser", () => {
     );
     const form = formNamed(view, "Create a Subscription");
     await form.getByLabel("Name").fill("to-sink");
-    await choose(form.getByLabel("Destination Connection"), /sink/);
+    await choose(form.getByLabel("Destination"), /sink/);
     await form.getByLabel("Event type").fill("order.created");
     expect(await form.getByLabel("Order").count()).toBe(0);
     expect(await form.getByLabel("Match rules (JSON)").count()).toBe(0);
@@ -401,10 +396,10 @@ describe("Create forms, filled through a real browser", () => {
 
     await view.click("text=New Source");
     const form = formNamed(view, "Create a Source");
-    await choose(form.getByLabel("Connection"), /sink/);
+    await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic"), /orders/);
     await choose(form.getByLabel("Type"), "Event API");
-    await form.getByLabel("Configuration (JSON)").fill('{"source_contract":"event_json"}');
+    await form.getByLabel("Configuration (JSON)").fill("{}");
     await view.click("text=Create Source");
 
     const guide = view.getByRole("dialog", { name: "Publish through this Source" });
@@ -418,10 +413,10 @@ describe("Create forms, filled through a real browser", () => {
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources`);
-    expect(sent.body.connection_id).toBe(connectionId);
+    expect(sent.body.connector_id).toBe(connectorId);
     expect(sent.body.topic_id).toBe(topicId);
     expect(sent.body.type).toBe("event_api");
-    expect(sent.body.configuration).toEqual({ source_contract: "event_json" });
+    expect(sent.body.configuration).toEqual({});
     await view.close();
   }, 60_000);
 });
@@ -432,22 +427,22 @@ describe("Update and deactivate, driven through a real browser", () => {
   // documents, plus the two shapes with no other coverage at all — a confirmed deactivate and the
   // one DELETE the dashboard issues.
 
-  it("sends an updated Connection with its config reparsed and its schemes untouched", async () => {
-    const { page: view, writes } = await open(`/tenants/${tenantId}/connections/${connectionId}`);
+  it("sends an updated Destination with its config reparsed and authentication untouched", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/destinations/${destinationId}`);
 
     // Editing is a deliberate act now rather than the panel's resting state, and the form names
     // itself instead of repeating on screen the heading its disclosure already carries.
     await view.getByRole("button", { name: "Edit", exact: true }).click();
-    await formNamed(view, "Edit sink").getByLabel("Configuration (JSON)").fill('{"base_uri":"http://moved.invalid"}');
+    await formNamed(view, "Edit sink")
+      .getByLabel("Configuration (JSON)", { exact: true })
+      .fill('{"base_uri":"http://moved.invalid"}');
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("PATCH");
-    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/connections/${connectionId}`);
-    expect(sent.body.config).toEqual({ base_uri: "http://moved.invalid" });
-    // The form never round-trips a scheme's secret references, so it must not claim to replace them.
-    expect(sent.body.source_verification).toBeNull();
-    expect(sent.body.destination_authentication).toBeNull();
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/destinations/${destinationId}`);
+    expect(sent.body.configuration).toEqual({ base_uri: "http://moved.invalid" });
+    expect(sent.body.authentication).toBeNull();
     await view.close();
   }, 60_000);
 

@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAccessibilityViolations } from "../test/axe";
 import { page, stubHttp } from "../test/http";
 import { renderScreen as renderInRouter } from "../test/router";
-import { ConnectionsScreen } from "./Connections";
 import { ConnectorsScreen } from "./Connectors";
+import { DestinationsScreen } from "./Destinations";
 import { EventsScreen } from "./Events";
 import { SourcesScreen } from "./Sources";
 import { SubscriptionsScreen } from "./Subscriptions";
@@ -38,7 +38,7 @@ const eventDetail = {
     {
       event_delivery_id: "66666666-6666-6666-6666-666666666666",
       subscription_id: "77777777-7777-7777-7777-777777777777",
-      destination_connection_id: "88888888-8888-8888-8888-888888888888",
+      destination_id: "88888888-8888-8888-8888-888888888888",
       status: "dead_lettered",
       lifetime_attempt_count: 5,
       retry_cycle_attempt_count: 2,
@@ -51,7 +51,7 @@ const eventDetail = {
       attempt_id: "99999999-9999-9999-9999-999999999999",
       event_delivery_id: "66666666-6666-6666-6666-666666666666",
       subscription_id: "77777777-7777-7777-7777-777777777777",
-      destination_connection_id: "88888888-8888-8888-8888-888888888888",
+      destination_id: "88888888-8888-8888-8888-888888888888",
       attempt_number: 1,
       status: "failed",
       failure_phase: "response",
@@ -85,7 +85,7 @@ describe("Accessibility of the Operator workflows", () => {
     for (const [name, element] of [
       ["Tenants", <TenantsScreen />],
       ["Connectors", <ConnectorsScreen />],
-      ["Connections", <ConnectionsScreen tenantId={tenantId} />],
+      ["Destinations", <DestinationsScreen tenantId={tenantId} />],
       ["Sources", <SourcesScreen tenantId={tenantId} />],
       ["Tenant API keys", <TenantApiKeysScreen tenantId={tenantId} />],
     ] as const) {
@@ -98,14 +98,24 @@ describe("Accessibility of the Operator workflows", () => {
     // biome-ignore-end lint/correctness/useJsxKeyInIterable: end of the fixture array
   });
 
-  it("passes the automated rules on the Connections authoring pattern with its create panel open", async () => {
+  it("passes the automated rules on the Destinations authoring pattern with its create panel open", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
-    const container = renderScreen(<ConnectionsScreen tenantId={tenantId} />);
-    await screen.findByRole("heading", { level: 1, name: "Connections" });
+    const container = renderScreen(<DestinationsScreen tenantId={tenantId} />);
+    await screen.findByRole("heading", { level: 1, name: "Destinations" });
     // The create form is only exercised for accessibility once its disclosure is open — closed, it
     // carries no violations to find.
-    fireEvent.click(screen.getByText("New Connection"));
+    fireEvent.click(screen.getByText("New Destination"));
+    await expectNoAccessibilityViolations(container);
+  });
+
+  it("passes the automated rules on the Source authoring form and its Event Builder entry point", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    const container = renderScreen(<SourcesScreen tenantId={tenantId} />);
+    await screen.findByRole("heading", { level: 1, name: "Sources" });
+    fireEvent.click(screen.getByText("New Source"));
+    await screen.findByRole("button", { name: "Create Source" });
     await expectNoAccessibilityViolations(container);
   });
 
@@ -119,21 +129,6 @@ describe("Accessibility of the Operator workflows", () => {
     fireEvent.click(screen.getByRole("button", { name: "New Connector" }));
     await screen.findByRole("button", { name: "Create Connector" });
     await expectNoAccessibilityViolations(container);
-  });
-
-  it("passes the automated rules on the Integrios Event Builder", async () => {
-    stubHttp(() => ({ status: 200, body: page([]) }));
-
-    renderScreen(<ConnectorsScreen />);
-    await screen.findByRole("heading", { level: 1, name: "Connectors" });
-    fireEvent.click(screen.getByRole("button", { name: "New Connector" }));
-    fireEvent.click(await screen.findByRole("radio", { name: /Provider-native JSON/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
-    await screen.findByRole("dialog", { name: "Integrios Event Builder" });
-
-    // The Builder is portalled out of the screen it opens from, so the whole document is what has
-    // to be checked rather than the rendered container.
-    await expectNoAccessibilityViolations(document.body);
   });
 
   it("passes the automated rules on a populated table and its confirmation", async () => {

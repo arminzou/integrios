@@ -9,7 +9,7 @@ import { call } from "../api/query";
 ///
 /// They are read unfiltered on purpose. A picker offers only what can still be chosen and narrows
 /// these to `active` itself, but a name has to resolve for every row a list can show — including the
-/// deactivated Connection a Source is still bound to, which is exactly the row an Operator is most
+/// deactivated Destination a Subscription is still bound to, which is exactly the row an Operator is most
 /// likely to be looking up. Reading them filtered under a key that did not say so is what let the
 /// Event ledger and the Sources create panel share `topic-options` while asking for different rows:
 /// whichever mounted first decided what the other saw.
@@ -18,12 +18,12 @@ import { call } from "../api/query";
 /// not resolve and the identifier is shown instead, which is the same thing the screens did before.
 const limit = 100;
 
-export function useConnectionOptions(tenantId: string) {
+export function useDestinationOptions(tenantId: string) {
   return useQuery({
-    queryKey: ["connection-options", tenantId],
+    queryKey: ["destination-options", tenantId],
     queryFn: () =>
       call(() =>
-        api.GET("/admin/tenants/{tenantId}/connections", { params: { path: { tenantId }, query: { limit } } }),
+        api.GET("/admin/tenants/{tenantId}/destinations", { params: { path: { tenantId }, query: { limit } } }),
       ),
   });
 }

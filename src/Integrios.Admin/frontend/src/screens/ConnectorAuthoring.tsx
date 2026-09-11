@@ -16,7 +16,6 @@ import { Callout, ConfirmAction, Disclosure, FormError } from "../ui/controls";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
-import { EventBuilder } from "./EventBuilder";
 
 type Connector = components["schemas"]["ConnectorDto"];
 
@@ -30,23 +29,10 @@ const authoringSchema = z
     contract_version: z.string().regex(/^[1-9]\d*$/, "Enter a version of 1 or more."),
     receive: z.boolean(),
     deliver: z.boolean(),
-    input_mode: z.enum(["normalized", "native"]),
-    contract_key: z.string(),
-    mapping: z.string(),
-    allow_unverified: z.boolean(),
-    hmac: z.boolean(),
-    allow_unauthenticated: z.boolean(),
-    bearer: z.boolean(),
-    api_key: z.boolean(),
   })
   .superRefine((values, ctx) => {
     if (!values.receive && !values.deliver)
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["receive"], message: "Choose at least one capability." });
-    if (!values.receive || values.input_mode !== "native") return;
-    if (values.contract_key.trim() === "")
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contract_key"], message: "Enter a Source contract key." });
-    if (values.mapping.trim() === "")
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["mapping"], message: "Enter a mapping expression." });
   });
 
 type AuthoringValues = z.infer<typeof authoringSchema>;
@@ -58,14 +44,6 @@ const blank: AuthoringValues = {
   contract_version: "1",
   receive: true,
   deliver: false,
-  input_mode: "normalized",
-  contract_key: "verified_webhook",
-  mapping: "",
-  allow_unverified: false,
-  hmac: false,
-  allow_unauthenticated: true,
-  bearer: false,
-  api_key: false,
 };
 
 /// Everything an imported manifest carries that this form has no control for. It is held beside the
@@ -74,62 +52,28 @@ const blank: AuthoringValues = {
 type Advanced = {
   rest: Record<string, unknown>;
   presentation: Record<string, unknown>;
-  verification_schemes: unknown[];
-  authentication_schemes: unknown[];
-  extra_source_contracts: unknown[];
-  contract_config?: unknown;
-  contract_schema?: unknown;
 };
 
 const noAdvanced: Advanced = {
   rest: {},
   presentation: {},
-  verification_schemes: [],
-  authentication_schemes: [],
-  extra_source_contracts: [],
 };
-
-const hmacScheme = { scheme: "hmac_sha256", required_config: [], required_secret_refs: ["secret"] };
-const bearerScheme = { scheme: "bearer_token", required_config: [], required_secret_refs: ["token"] };
-const apiKeyScheme = { scheme: "api_key_header", required_config: ["header_name"], required_secret_refs: ["api_key"] };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const schemeName = (value: unknown) => (isObject(value) ? value.scheme : undefined);
-
 export function buildManifest(values: AuthoringValues, advanced: Advanced): Record<string, unknown> {
-  const native = values.receive && values.input_mode === "native";
   const manifest: Record<string, unknown> = {
     ...advanced.rest,
     manifest_schema_version: 1,
     key: values.key.trim(),
     contract_version: Number(values.contract_version) || 1,
     direction: values.receive && values.deliver ? "both" : values.receive ? "source" : "destination",
-    source_verification: {
-      allow_unverified: values.receive ? values.allow_unverified : true,
-      schemes: [...(values.receive && values.hmac ? [hmacScheme] : []), ...advanced.verification_schemes],
+    source_verification: advanced.rest.source_verification ?? { allow_unverified: true, schemes: [] },
+    destination_authentication: advanced.rest.destination_authentication ?? {
+      allow_unauthenticated: true,
+      schemes: [],
     },
-    destination_authentication: {
-      allow_unauthenticated: values.deliver ? values.allow_unauthenticated : true,
-      schemes: [
-        ...(values.deliver && values.bearer ? [bearerScheme] : []),
-        ...(values.deliver && values.api_key ? [apiKeyScheme] : []),
-        ...advanced.authentication_schemes,
-      ],
-    },
-    source_contracts: values.receive
-      ? [
-          {
-            key: native ? values.contract_key.trim() : "event_json",
-            contract_version: 1,
-            config: advanced.contract_config ?? {},
-            ...(native && advanced.contract_schema !== undefined ? { schema: advanced.contract_schema } : {}),
-            ...(native ? { mapping: { engine: "jsonata", version: "1", expression: values.mapping.trim() } } : {}),
-          },
-          ...advanced.extra_source_contracts,
-        ]
-      : [],
     presentation: {
       event_types: [],
       authoring_presets: [],
@@ -165,19 +109,12 @@ export function fromManifest(document: Record<string, unknown>): {
     "key",
     "contract_version",
     "direction",
-    "source_verification",
-    "destination_authentication",
-    "source_contracts",
     "presentation",
+    "source_contracts",
+    "http_success",
   ])
     delete rest[field];
 
-  const verification = isObject(document.source_verification) ? document.source_verification : {};
-  const authentication = isObject(document.destination_authentication) ? document.destination_authentication : {};
-  const verificationSchemes = Array.isArray(verification.schemes) ? verification.schemes : [];
-  const authenticationSchemes = Array.isArray(authentication.schemes) ? authentication.schemes : [];
-  const contracts = Array.isArray(document.source_contracts) ? document.source_contracts : [];
-  const contract = isObject(contracts[0]) ? contracts[0] : undefined;
   const presentation = isObject(document.presentation) ? { ...document.presentation } : {};
   const name = typeof presentation.name === "string" ? presentation.name : "";
   const description = typeof presentation.description === "string" ? presentation.description : "";
@@ -185,31 +122,15 @@ export function fromManifest(document: Record<string, unknown>): {
   delete presentation.description;
 
   const direction = document.direction;
-  const receive = direction === "source" || direction === "both" || contracts.length > 0;
+  const receive = direction === "source" || direction === "both";
   const deliver = direction === "destination" || direction === "both";
-  const mapping = isObject(contract?.mapping) ? contract.mapping : undefined;
-  const expression = typeof mapping?.expression === "string" ? mapping.expression : "";
 
   const advanced: Advanced = {
     rest,
     presentation,
-    verification_schemes: verificationSchemes.filter((scheme) => schemeName(scheme) !== "hmac_sha256"),
-    authentication_schemes: authenticationSchemes.filter(
-      (scheme) => schemeName(scheme) !== "bearer_token" && schemeName(scheme) !== "api_key_header",
-    ),
-    extra_source_contracts: contracts.slice(1),
-    contract_config: contract?.config,
-    contract_schema: contract?.schema,
   };
 
-  const kept = [
-    ...Object.keys(rest),
-    ...Object.keys(presentation).map((field) => `presentation.${field}`),
-    ...(advanced.verification_schemes.length > 0 ? ["source_verification.schemes"] : []),
-    ...(advanced.authentication_schemes.length > 0 ? ["destination_authentication.schemes"] : []),
-    ...(advanced.extra_source_contracts.length > 0 ? ["source_contracts"] : []),
-    ...(contract?.schema === undefined ? [] : ["source_contracts[0].schema"]),
-  ];
+  const kept = [...Object.keys(rest), ...Object.keys(presentation).map((field) => `presentation.${field}`)];
 
   return {
     advanced,
@@ -221,14 +142,6 @@ export function fromManifest(document: Record<string, unknown>): {
       contract_version: String(document.contract_version ?? 1),
       receive,
       deliver,
-      input_mode: expression === "" ? "normalized" : "native",
-      contract_key: typeof contract?.key === "string" ? contract.key : blank.contract_key,
-      mapping: expression,
-      allow_unverified: verification.allow_unverified !== false,
-      hmac: verificationSchemes.some((scheme) => schemeName(scheme) === "hmac_sha256"),
-      allow_unauthenticated: authentication.allow_unauthenticated !== false,
-      bearer: authenticationSchemes.some((scheme) => schemeName(scheme) === "bearer_token"),
-      api_key: authenticationSchemes.some((scheme) => schemeName(scheme) === "api_key_header"),
     },
   };
 }
@@ -303,9 +216,6 @@ export function ConnectorAuthoring({
   const [advanced, setAdvanced] = useState<Advanced>(copied?.advanced ?? noAdvanced);
   const [kept, setKept] = useState<string[]>(copied?.kept ?? []);
   const [imported, setImported] = useState("");
-  /// An import replaces the mapping under the Builder, whose sample and guided choices belong to the
-  /// draft that is being discarded; remounting it is what discards them with it.
-  const [generation, setGeneration] = useState(0);
   const form = useForm<AuthoringValues>({
     resolver: zodResolver(authoringSchema),
     defaultValues:
@@ -373,7 +283,6 @@ export function ConnectorAuthoring({
     setAdvanced(read.advanced);
     setKept(read.kept);
     setImported("");
-    setGeneration(generation + 1);
     // An imported key is the manifest author's own, so the name stops deciding it.
     setKeyAuthored(true);
   };
@@ -391,7 +300,7 @@ export function ConnectorAuthoring({
             control={form.control}
             name="key"
             label="Key"
-            hint={from ? undefined : "Names this Connector in Connections and manifests."}
+            hint={from ? undefined : "Names this Connector in manifests and Source or Destination authoring."}
             onChange={() => setKeyAuthored(true)}
             className="font-mono text-sm"
             readOnly={from !== undefined}
@@ -417,7 +326,7 @@ export function ConnectorAuthoring({
         <Section
           className="relative"
           title="Capabilities"
-          hint="Choose what Connections built from this Connector may do."
+          hint="Choose what Sources and Destinations built from this Connector may do."
         >
           <FormField
             control={form.control}
@@ -427,7 +336,7 @@ export function ConnectorAuthoring({
                 checked={field.value}
                 onChange={field.onChange}
                 label="Receive Events"
-                hint="Connections may be used by Sources."
+                hint="Sources may use this Connector."
               />
             )}
           />
@@ -439,7 +348,7 @@ export function ConnectorAuthoring({
                 checked={field.value}
                 onChange={field.onChange}
                 label="Deliver Events over HTTP"
-                hint="Connections may be used by Subscriptions."
+                hint="Destinations built from this Connector may be selected by Subscriptions."
               />
             )}
           />
@@ -449,147 +358,24 @@ export function ConnectorAuthoring({
         {values.receive ? (
           <Section
             title="Receive Events"
-            hint="Define what an external Publisher sends before Integrios creates an Event."
+            hint="Source-specific verification, input requirements, mapping, and identity are chosen when authoring a Source."
           >
-            <FormField
-              control={form.control}
-              name="input_mode"
-              render={({ field }) => (
-                <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
-                  <legend className="mb-1 text-sm font-medium">Incoming request shape</legend>
-                  {[
-                    {
-                      value: "normalized" as const,
-                      label: "Integrios Event JSON",
-                      hint: "The Publisher already sends event_type and payload.",
-                    },
-                    {
-                      value: "native" as const,
-                      label: "Provider-native JSON",
-                      hint: "Validate and map the provider's own request into an Event.",
-                    },
-                  ].map((choice) => (
-                    <label key={choice.value} className="flex items-start gap-2.5 py-1 text-sm">
-                      <input
-                        type="radio"
-                        name={field.name}
-                        value={choice.value}
-                        checked={field.value === choice.value}
-                        onChange={() => field.onChange(choice.value)}
-                        className="mt-0.5 size-4 shrink-0"
-                      />
-                      <span className="min-w-0">
-                        <span className="font-medium">{choice.label}</span>
-                        <span className="mt-0.5 block text-xs text-ink-secondary">{choice.hint}</span>
-                      </span>
-                    </label>
-                  ))}
-                </fieldset>
-              )}
-            />
-
-            {values.input_mode === "native" ? (
-              <>
-                <TextField
-                  control={form.control}
-                  name="contract_key"
-                  label="Source contract key"
-                  hint="Chosen later, when a Source is created from this Connector."
-                  className="font-mono text-sm"
-                  required
-                />
-                <div className="relative flex flex-col gap-2">
-                  <h4 className="m-0 text-sm font-medium">Integrios Event</h4>
-                  <p className="m-0 text-xs text-ink-secondary">
-                    How a request this contract accepts becomes an Event. event_type and payload are required.
-                  </p>
-                  <pre className="m-0 max-h-40 overflow-auto rounded-md border bg-surface p-2 text-xs">
-                    {values.mapping.trim() === "" ? "No mapping configured yet." : values.mapping}
-                  </pre>
-                  {advanced.contract_schema === undefined ? null : (
-                    <p className="m-0 text-xs text-ink-secondary">
-                      Input requirements are configured on this contract.
-                    </p>
-                  )}
-                  <Callout message={form.formState.errors.mapping?.message} />
-                  <EventBuilder
-                    key={generation}
-                    contractKey={values.contract_key}
-                    draft={{
-                      expression: values.mapping,
-                      schema: isObject(advanced.contract_schema) ? advanced.contract_schema : undefined,
-                    }}
-                    onUse={(built) => {
-                      form.setValue("mapping", built.expression, { shouldValidate: true });
-                      setAdvanced({ ...advanced, contract_schema: built.schema });
-                    }}
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="m-0 text-xs text-ink-secondary">
-                The Source contract is generated. event_type and payload are required; source_event_id and metadata are
-                optional.
-              </p>
-            )}
-
-            <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
-              <legend className="mb-1 text-sm font-medium">Webhook verification</legend>
-              <FormField
-                control={form.control}
-                name="allow_unverified"
-                render={({ field }) => (
-                  <CheckRow checked={field.value} onChange={field.onChange} label="Allow unverified requests" />
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="hmac"
-                render={({ field }) => (
-                  <CheckRow
-                    checked={field.value}
-                    onChange={field.onChange}
-                    label="HMAC SHA-256"
-                    hint="Connections provide the shared-secret reference."
-                  />
-                )}
-              />
-            </fieldset>
+            <p className="m-0 text-xs text-ink-secondary">
+              The Connector only declares its reusable capability. It stores no callback, request shape, secret
+              reference, or Event mapping.
+            </p>
           </Section>
         ) : null}
 
         {values.deliver ? (
           <Section
             title="Deliver Events"
-            hint="Define what each destination Connection must provide. This stores no Tenant endpoint."
+            hint="Destination and Subscription authoring own the concrete outbound contract."
           >
             <p className="m-0 text-xs text-ink-secondary">
-              Destination Connections provide <code className="font-mono">base_uri</code>.
+              A Destination supplies reachability and authentication. A Subscription supplies its HTTP operation,
+              non-authentication headers, mapping, and optional success rule.
             </p>
-            <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
-              <legend className="mb-1 text-sm font-medium">Allowed authentication</legend>
-              <FormField
-                control={form.control}
-                name="allow_unauthenticated"
-                render={({ field }) => (
-                  <CheckRow checked={field.value} onChange={field.onChange} label="Unauthenticated" />
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="bearer"
-                render={({ field }) => (
-                  <CheckRow checked={field.value} onChange={field.onChange} label="Bearer token" />
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="api_key"
-                render={({ field }) => (
-                  <CheckRow checked={field.value} onChange={field.onChange} label="API key header" />
-                )}
-              />
-            </fieldset>
           </Section>
         ) : null}
 

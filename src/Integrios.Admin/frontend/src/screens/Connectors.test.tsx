@@ -59,7 +59,7 @@ describe("Authoring the first Connector", () => {
       key: "github",
       contract_version: 2,
       direction: "source",
-      source_contracts: [{ key: "event_json", contract_version: 1 }],
+      source_verification: { allow_unverified: true, schemes: [] },
       presentation: { name: "GitHub", description: null },
     });
     await waitFor(() => expect(router.state.location.pathname).toBe(`/connectors/${installed.id}`));
@@ -113,7 +113,7 @@ describe("Authoring the first Connector", () => {
     expect(body).toHaveProperty("destination_configuration_schema");
   });
 
-  it("drops what only the unchosen capability's Connections could have used", async () => {
+  it("emits only the selected capability and never Source-owned contracts", async () => {
     const calls = stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
@@ -126,8 +126,9 @@ describe("Authoring the first Connector", () => {
     await waitFor(() => expect(applied(calls)).toBeDefined());
     const body = applied(calls)!.body as Record<string, unknown>;
     expect(body.direction).toBe("destination");
-    expect(body.source_contracts).toEqual([]);
     expect(body).not.toHaveProperty("source_configuration_schema");
+    expect(body).not.toHaveProperty("source_contracts");
+    expect(body).not.toHaveProperty("http_success");
   });
 
   it("refuses a draft with no capability rather than applying one the API would reject", async () => {
@@ -181,14 +182,8 @@ describe("Importing a Connector manifest", () => {
       allow_unauthenticated: false,
       schemes: [{ scheme: "bearer_token", required_config: [], required_secret_refs: ["token"] }],
     },
-    source_contracts: [
-      {
-        key: "events_api",
-        contract_version: 1,
-        config: { verify: true },
-        mapping: { engine: "jsonata", version: "1", expression: '{ "event_type": type, "payload": $ }' },
-      },
-    ],
+    source_contracts: [{ key: "events_api", contract_version: 1 }],
+    http_success: { kind: "status_code", expected: 201 },
     presentation: { name: "Slack", description: "Slack Events API.", event_types: ["slack.message"] },
   };
 
@@ -212,7 +207,6 @@ describe("Importing a Connector manifest", () => {
 
     await waitFor(() => expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("slack"));
     expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Slack");
-    expect((screen.getByRole("checkbox", { name: /Bearer token/ }) as HTMLInputElement).checked).toBe(true);
     // What the form has no control for is named rather than quietly dropped.
     expect(screen.getByText(/Kept from the imported manifest/).textContent).toContain("presentation.event_types");
 
@@ -223,7 +217,9 @@ describe("Importing a Connector manifest", () => {
     expect(applied(calls)!.url.pathname).toBe("/admin/connectors/slack/versions/3");
     expect(body.destination_configuration_schema).toEqual(imported.destination_configuration_schema);
     expect(body.source_verification).toEqual(imported.source_verification);
-    expect(body.source_contracts).toEqual(imported.source_contracts);
+    expect(body.destination_authentication).toEqual(imported.destination_authentication);
+    expect(body).not.toHaveProperty("source_contracts");
+    expect(body).not.toHaveProperty("http_success");
     expect(body.presentation).toMatchObject(imported.presentation);
   });
 
@@ -253,14 +249,6 @@ describe("An applied Connector version", () => {
       source_configuration_schema: { type: "object", properties: {}, additionalProperties: true },
       source_verification: { allow_unverified: false, schemes: [{ scheme: "acme_signature", required_config: [] }] },
       destination_authentication: { allow_unauthenticated: true, schemes: [] },
-      source_contracts: [
-        {
-          key: "verified_webhook",
-          contract_version: 1,
-          config: { strict: true },
-          mapping: { engine: "jsonata", version: "1", expression: '{ "event_type": "github", "payload": $ }' },
-        },
-      ],
       presentation: { name: "GitHub", description: "Webhooks.", event_types: ["github.push"] },
     },
   };
@@ -292,7 +280,7 @@ describe("An applied Connector version", () => {
     expect(manifest.contract_version).toBe(3);
     // Everything the form has no control for survives the copy rather than being rewritten out.
     expect(manifest.source_verification).toEqual(github.manifest.source_verification);
-    expect(manifest.source_contracts).toEqual(github.manifest.source_contracts);
+    expect(manifest.destination_authentication).toEqual(github.manifest.destination_authentication);
     expect(manifest.presentation).toMatchObject({ event_types: ["github.push"] });
   });
 
@@ -308,15 +296,16 @@ describe("An applied Connector version", () => {
     expect(calls.some((call) => call.method === "PUT")).toBe(false);
   });
 
-  it("offers Source-contract preview through authoring rather than a second workflow", async () => {
+  it("keeps Source authoring outside the Connector version flow", async () => {
     stubHttp(detail);
 
     renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
     await screen.findByRole("heading", { level: 1, name: "Connectors" });
 
-    // The detached dry-run panel is gone: preview belongs to the draft that owns the contract.
+    // Source contracts and their builder belong to the concrete Source, not this reusable version.
     expect(screen.queryByText("Preview a Source contract")).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "Create new version" }));
-    expect(await screen.findByRole("button", { name: "Open Integrios Event Builder" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Open Integrios Event Builder" })).toBeNull();
+    expect(screen.getByText(/Source-specific verification, input requirements, mapping, and identity/)).toBeDefined();
   });
 });

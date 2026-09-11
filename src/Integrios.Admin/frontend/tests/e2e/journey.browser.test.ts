@@ -4,7 +4,7 @@ import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-/// One golden journey against a real deployment: author a Tenant, a Connection, a Topic, a
+/// One golden journey against a real deployment: author a Tenant, a Destination, a Topic, a
 /// Subscription and a Source, each through its own screen, and let the real Admin API judge every
 /// body the dashboard builds.
 ///
@@ -108,6 +108,12 @@ function formNamed(page: Page, heading: string) {
   return page.locator("form").filter({ hasText: heading });
 }
 
+async function choose(page: Page, label: string, option: string) {
+  const control = page.getByLabel(label, { exact: true });
+  await control.click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
 /// Reads the deployment directly, to confirm what the journey wrote actually landed.
 async function readAdmin(path: string): Promise<Record<string, unknown>> {
   const response = await fetch(`${adminOrigin}${path}`, { headers: { authorization: operatorKey! } });
@@ -116,9 +122,19 @@ async function readAdmin(path: string): Promise<Record<string, unknown>> {
 }
 
 describe.skipIf(!configured)("A golden authoring journey against a real deployment", () => {
-  it("authors a Tenant, Connection, Topic, Subscription and Source through their own screens", async () => {
-    const connectors = (await readAdmin("/admin/connectors?limit=1")).items as { id: string }[];
-    expect(connectors.length, "The deployment has no Connector to build a Connection on.").toBeGreaterThan(0);
+  it("authors a Tenant, Destination, Topic, Subscription and Source through their own screens", async () => {
+    const connectors = (await readAdmin("/admin/connectors?limit=100")).items as {
+      id: string;
+      name: string;
+      direction: "source" | "destination" | "both";
+    }[];
+    const sourceConnector = connectors.find(({ direction }) => direction === "source" || direction === "both");
+    const destinationConnector = connectors.find(
+      ({ direction }) => direction === "destination" || direction === "both",
+    );
+    expect(sourceConnector, "The deployment has no source-capable Connector.").toBeDefined();
+    expect(destinationConnector, "The deployment has no destination-capable Connector.").toBeDefined();
+    if (!sourceConnector || !destinationConnector) throw new Error("No compatible Connector is available.");
 
     // Tenant.
     let view = await openDashboard("/tenants");
@@ -130,15 +146,15 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     const tenantId = await created(view, /\/tenants\/[0-9a-f-]{36}$/, "Tenant");
     await closeView(view);
 
-    // Connection.
-    view = await openDashboard(`/tenants/${tenantId}/connections`);
-    await view.click("text=New Connection");
-    const connectionForm = formNamed(view, "Create a Connection");
-    await connectionForm.getByLabel("Connector").selectOption(connectors[0].id);
-    await connectionForm.getByLabel("Name").fill(`${run}-sink`);
-    await connectionForm.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://mocksink:8080"}');
-    await view.click("text=Create Connection");
-    const connectionId = await created(view, /\/connections\/[0-9a-f-]{36}$/, "Connection");
+    // Destination.
+    view = await openDashboard(`/tenants/${tenantId}/destinations`);
+    await view.click("text=New Destination");
+    const destinationForm = formNamed(view, "Create a Destination");
+    await choose(view, "Connector", destinationConnector.name);
+    await destinationForm.getByLabel("Name").fill(`${run}-sink`);
+    await destinationForm.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://mocksink:8080"}');
+    await view.click("text=Create Destination");
+    await created(view, /\/destinations\/[0-9a-f-]{36}$/, "Destination");
     await closeView(view);
 
     // Topic.
@@ -155,7 +171,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await view.click("text=New Subscription");
     const subscriptionForm = formNamed(view, "Create a Subscription");
     await subscriptionForm.getByLabel("Name").fill(`${run}-to-sink`);
-    await subscriptionForm.getByLabel("Destination Connection").selectOption(connectionId);
+    await choose(view, "Destination", `${run}-sink`);
     await subscriptionForm.getByLabel("Event type").fill(`${run}.created`);
     await view.click("text=Create Subscription");
     await created(view, /\/subscriptions\/[0-9a-f-]{36}$/, "Subscription");
@@ -165,24 +181,24 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     view = await openDashboard(`/tenants/${tenantId}/sources`);
     await view.click("text=New Source");
     const sourceForm = formNamed(view, "Create a Source");
-    await sourceForm.getByLabel("Connection").selectOption(connectionId);
-    await sourceForm.getByLabel("Topic").selectOption(topicId);
-    await sourceForm.getByLabel("Type").selectOption("event_api");
-    await sourceForm.getByLabel("Configuration (JSON)").fill('{"source_contract":"event_json"}');
+    await choose(view, "Connector", sourceConnector.name);
+    await choose(view, "Topic", `${run}-orders`);
+    await choose(view, "Type", "Event API");
+    await sourceForm.getByLabel("Configuration (JSON)").fill("{}");
     await view.click("text=Create Source");
     await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
     await view.getByRole("dialog", { name: "Publish through this Source" }).waitFor();
     await closeView(view);
 
     // Everything the journey authored is readable from the deployment, not merely echoed by a form.
-    const [connections, topics, sources, subscriptions] = await Promise.all([
-      readAdmin(`/admin/tenants/${tenantId}/connections`),
+    const [destinations, topics, sources, subscriptions] = await Promise.all([
+      readAdmin(`/admin/tenants/${tenantId}/destinations`),
       readAdmin(`/admin/tenants/${tenantId}/topics`),
       readAdmin(`/admin/tenants/${tenantId}/sources`),
       readAdmin(`/admin/tenants/${tenantId}/topics/${topicId}/subscriptions`),
     ]);
 
-    expect((connections.items as unknown[]).length).toBe(1);
+    expect((destinations.items as unknown[]).length).toBe(1);
     expect((topics.items as unknown[]).length).toBe(1);
     expect((sources.items as unknown[]).length).toBe(1);
     expect((subscriptions.items as { name: string }[])[0].name).toBe(`${run}-to-sink`);
