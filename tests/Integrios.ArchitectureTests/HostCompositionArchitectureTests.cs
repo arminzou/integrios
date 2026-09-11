@@ -2,7 +2,7 @@ using Integrios.Application;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Delivery;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Authoring.Connectors;
@@ -29,8 +29,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ITenantApiKeyUseRecorder)] = [Host.Ingestion],
         [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
         [typeof(IDestinationAuthenticatorRegistry)] = [Host.Admin, Host.Worker],
-        [typeof(IConnectionRepository)] = [Host.Admin],
-        [typeof(IConnectionAuthoringLock)] = [Host.Admin],
+        [typeof(IDestinationRepository)] = [Host.Admin],
+        [typeof(IDestinationAuthoringLock)] = [Host.Admin],
         [typeof(IDeadLetterReplay)] = [Host.Admin],
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingestion],
@@ -255,8 +255,8 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ITenantRepository>(scope.ServiceProvider);
         AssertResolves<IConnectorReader>(scope.ServiceProvider);
         AssertResolves<IConnectorManifestStore>(scope.ServiceProvider);
-        AssertResolves<IConnectionRepository>(scope.ServiceProvider);
-        AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
+        AssertResolves<IDestinationRepository>(scope.ServiceProvider);
+        AssertResolves<IDestinationAuthoringLock>(scope.ServiceProvider);
         AssertResolves<ITopicRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionQueries>(scope.ServiceProvider);
@@ -303,7 +303,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IConnectorReader>(provider);
         AssertOmits<IConnectorManifestStore>(provider);
-        AssertOmits<IConnectionRepository>(provider);
+        AssertOmits<IDestinationRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
         AssertOmits<ISubscriptionQueries>(provider);
@@ -346,7 +346,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITenantApiKeyRepository>(scope.ServiceProvider);
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<ITenantRepository>(scope.ServiceProvider);
-        AssertOmits<IConnectionRepository>(scope.ServiceProvider);
+        AssertOmits<IDestinationRepository>(scope.ServiceProvider);
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<ITenantEventLookup>(scope.ServiceProvider);
         AssertOmits<ITopicRepository>(scope.ServiceProvider);

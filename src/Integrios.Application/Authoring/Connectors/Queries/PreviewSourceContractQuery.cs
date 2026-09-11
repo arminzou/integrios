@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Common;
 using Integrios.Application.Transforms;
 using MediatR;
 
@@ -47,10 +47,10 @@ internal sealed class PreviewSourceContractQueryHandler(ITransformEvaluator eval
         {
             try
             {
-                ConnectionConfigurationSchemaEvaluator.Validate(
+                ConfigurationSchemaEvaluator.Validate(
                     query.SampleInput, schemaForInstance, "sample_input");
             }
-            catch (ConnectionConfigurationValidationException exception)
+            catch (ConfigurationValidationException exception)
             {
                 return Task.FromResult(new PreviewSourceContractResult(exception.Message, null));
             }

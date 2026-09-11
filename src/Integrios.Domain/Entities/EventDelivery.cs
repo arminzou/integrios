@@ -8,7 +8,7 @@ public sealed record EventDelivery
     public required Guid Id { get; init; }
     public required Guid EventId { get; init; }
     public required Guid SubscriptionId { get; init; }
-    public required Guid DestinationConnectionId { get; init; }
+    public required Guid DestinationId { get; init; }
     public EventDeliveryStatus Status { get; init; } = EventDeliveryStatus.Pending;
     public int LifetimeAttemptCount { get; init; }
     public int RetryCycleAttemptCount { get; init; }

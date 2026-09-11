@@ -25,13 +25,6 @@
       }
     ]
   },
-  "http_success": {
-    "evaluator": "json_boolean",
-    "field": "ok",
-    "expected": true,
-    "diagnostic_field": "error",
-    "max_body_bytes": 65536
-  },
   "presentation": {
     "name": "Slack",
     "description": "Slack chat.postMessage delivery through generic HTTP with bearer-token authentication. Slack can return HTTP 2xx for an operation it rejects, so the response body must contain a top-level ok value of true.",

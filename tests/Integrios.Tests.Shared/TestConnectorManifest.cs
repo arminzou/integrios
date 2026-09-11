@@ -52,49 +52,6 @@ public static class TestConnectorManifest
                     .Select(AuthenticationScheme)
                     .ToArray(),
             },
-            SourceContracts = verifiedWebhookSourceContract
-                ?
-                [
-                    new ConnectorSourceContractManifest
-                    {
-                        Key = "verified_webhook",
-                        ContractVersion = 1,
-                        Config = JsonSerializer.Deserialize<JsonElement>(
-                            """
-                            {
-                              "signature_header": "X-Hub-Signature-256",
-                              "signature_encoding": "hex",
-                              "signature_prefix": "sha256=",
-                              "delivery_id_header": "X-GitHub-Delivery",
-                              "event_type_header": "X-GitHub-Event",
-                              "event_type_action_field": "action"
-                            }
-                            """),
-                    },
-                ]
-                : declarativeSourceContract
-                ?
-                [
-                    new ConnectorSourceContractManifest
-                    {
-                        Key = "event_json",
-                        ContractVersion = 1,
-                        Config = JsonSerializer.Deserialize<JsonElement>("{}"),
-                        Schema = sourceContractSchema,
-                        Mapping = sourceContractHasMapping
-                            ? new ConnectorSourceMappingManifest
-                            {
-                                Engine = "jsonata",
-                                Version = "1",
-                                Expression = sourceMappingExpression,
-                            }
-                            : null,
-                    },
-                ]
-                : [],
-            HttpSuccess = httpSuccessJson is null
-                ? null
-                : JsonSerializer.Deserialize<JsonElement>(httpSuccessJson),
             Presentation = new ConnectorPresentationManifest
             {
                 Name = name,
