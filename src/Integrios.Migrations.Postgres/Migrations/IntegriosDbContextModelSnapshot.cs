@@ -320,6 +320,9 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .IsUnique()
                         .HasFilter("(idempotency_key IS NOT NULL)");
 
+                    b.HasIndex(new[] { "SourceId", "SourceEventId" }, "idx_events_source_event_id")
+                        .HasFilter("(source_event_id IS NOT NULL)");
+
                     b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
                         .IsDescending(false, true, true);
 

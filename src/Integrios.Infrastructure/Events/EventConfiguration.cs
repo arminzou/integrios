@@ -19,6 +19,12 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
             .IsUnique()
             .HasFilter("(idempotency_key IS NOT NULL)");
 
+        // ADR-0084 resolves an already-accepted duplicate by stable Source identity before applying
+        // the current normalization revision, and that lookup runs on the acceptance boundary of
+        // every transport. Filtered, because only Events carrying an identity are ever looked up.
+        entity.HasIndex(e => new { e.SourceId, e.SourceEventId }, "idx_events_source_event_id")
+            .HasFilter("(source_event_id IS NOT NULL)");
+
         // Newest-first Tenant Event history keyset: (accepted_at, id) is the cursor tuple.
         entity.HasIndex(e => new { e.TenantId, e.AcceptedAt, e.Id }, "idx_events_tenant_accepted")
             .IsDescending(false, true, true);

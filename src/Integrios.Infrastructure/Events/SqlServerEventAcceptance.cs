@@ -22,7 +22,7 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
         await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var connection = context.Database.GetDbConnection();
         EventAcceptanceRow? existing = await connection.QuerySingleOrDefaultAsync<EventAcceptanceRow>(new CommandDefinition(
-            "SELECT id AS EventId, status AS Status, accepted_at AS AcceptedAt FROM events WHERE source_id=@SourceId AND source_event_id=@SourceEventId COLLATE Latin1_General_100_BIN2",
+            "SELECT id AS EventId, status AS Status, accepted_at AS AcceptedAt FROM events WHERE source_id=@SourceId AND source_event_id=@SourceEventId",
             new { SourceId = sourceId, SourceEventId = sourceEventId }, cancellationToken: cancellationToken));
         return existing is null ? null : new EventAcceptance
         {

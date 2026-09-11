@@ -48,9 +48,7 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
         if (filter.SourceId is not null) where.Add("e.source_id = @SourceId");
         if (filter.TopicId is not null) where.Add("e.topic_id = @TopicId");
         if (filter.SourceEventId is not null)
-            where.Add(sqlServer
-                ? "e.source_event_id = @SourceEventId COLLATE Latin1_General_BIN2"
-                : "e.source_event_id = @SourceEventId");
+            where.Add("e.source_event_id = @SourceEventId");
         if (filter.AcceptedFrom is not null) where.Add("e.accepted_at >= @AcceptedFrom");
         if (filter.AcceptedTo is not null) where.Add("e.accepted_at <= @AcceptedTo");
         if (filter.DeliveryStatus is not null)

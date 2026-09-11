@@ -96,7 +96,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     tenant_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     connector_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    name = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    name = table.Column<string>(type: "nvarchar(450)", nullable: false, collation: "Latin1_General_100_CS_AS"),
                     configuration = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValueSql: "N'{}'"),
                     authentication = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     status = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValueSql: "N'active'"),
@@ -157,7 +157,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 {
                     id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     tenant_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    name = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    name = table.Column<string>(type: "nvarchar(450)", nullable: false, collation: "Latin1_General_100_CS_AS"),
                     status = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValueSql: "N'active'"),
                     created_at = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
                     updated_at = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
@@ -287,7 +287,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     tenant_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     topic_id = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     source_id = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    source_event_id = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    source_event_id = table.Column<string>(type: "nvarchar(450)", nullable: true, collation: "Latin1_General_100_BIN2"),
                     event_type = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     payload = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     metadata = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -458,6 +458,12 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 columns: new[] { "tenant_id", "idempotency_key" },
                 unique: true,
                 filter: "(idempotency_key IS NOT NULL)");
+
+            migrationBuilder.CreateIndex(
+                name: "idx_events_source_event_id",
+                table: "events",
+                columns: new[] { "source_id", "source_event_id" },
+                filter: "(source_event_id IS NOT NULL)");
 
             migrationBuilder.CreateIndex(
                 name: "idx_events_tenant_accepted",

@@ -64,6 +64,29 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         renamed.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 
+    // ADR-0016's uniqueness rule has to mean the same thing on both backends. PostgreSQL compares
+    // text case-sensitively under its default collation; SQL Server's server default is
+    // case-insensitive, so without an explicit collation this pair is two Destinations on one
+    // provider and a conflict on the other, and a deployment migrating between them carries rows
+    // the target schema refuses. Run under both legs, this is the assertion that catches it.
+    [Fact]
+    public async Task NamesDifferingOnlyByCase_AreDistinctOnEveryProvider()
+    {
+        (await CreateDestinationAsync("Casing-Probe")).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await CreateDestinationAsync("casing-probe")).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        (await ListNamesAsync()).ShouldContain("Casing-Probe");
+        (await ListNamesAsync()).ShouldContain("casing-probe");
+    }
+
+    private async Task<IReadOnlyList<string>> ListNamesAsync()
+    {
+        JsonElement body = await (await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{Fixture.TenantId}/destinations?limit=100")))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        return [.. body.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("name").GetString()!)];
+    }
+
     // An update replaces the whole resource, so an omitted field is a malformed body rather than an
     // instruction to keep what is stored. Answering anything but a refusal here means the field was
     // written as null and whatever it held is gone.

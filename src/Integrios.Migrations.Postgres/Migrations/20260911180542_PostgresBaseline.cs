@@ -450,6 +450,12 @@ namespace Integrios.Migrations.Postgres.Migrations
                 filter: "(idempotency_key IS NOT NULL)");
 
             migrationBuilder.CreateIndex(
+                name: "idx_events_source_event_id",
+                table: "events",
+                columns: new[] { "source_id", "source_event_id" },
+                filter: "(source_event_id IS NOT NULL)");
+
+            migrationBuilder.CreateIndex(
                 name: "idx_events_tenant_accepted",
                 table: "events",
                 columns: new[] { "tenant_id", "accepted_at", "id" },

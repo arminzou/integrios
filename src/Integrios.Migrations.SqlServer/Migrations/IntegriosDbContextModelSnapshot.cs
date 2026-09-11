@@ -219,7 +219,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")
-                        .HasColumnName("name");
+                        .HasColumnName("name")
+                        .UseCollation("Latin1_General_100_CS_AS");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -296,8 +297,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("processed_at");
 
                     b.Property<string>("SourceEventId")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("source_event_id");
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("source_event_id")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<Guid?>("SourceId")
                         .HasColumnType("uniqueidentifier")
@@ -324,6 +326,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.HasIndex(new[] { "TenantId", "IdempotencyKey" }, "idx_events_idempotency")
                         .IsUnique()
                         .HasFilter("(idempotency_key IS NOT NULL)");
+
+                    b.HasIndex(new[] { "SourceId", "SourceEventId" }, "idx_events_source_event_id")
+                        .HasFilter("(source_event_id IS NOT NULL)");
 
                     b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
                         .IsDescending(false, true, true);
@@ -865,7 +870,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")
-                        .HasColumnName("name");
+                        .HasColumnName("name")
+                        .UseCollation("Latin1_General_100_CS_AS");
 
                     b.Property<string>("Status")
                         .IsRequired()

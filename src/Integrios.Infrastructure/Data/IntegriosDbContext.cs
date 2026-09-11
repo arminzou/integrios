@@ -89,6 +89,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
 
         modelBuilder.Entity<Destination>(entity =>
         {
+            // ADR-0016 makes this name unique per Tenant. PostgreSQL compares it case-sensitively
+            // under its default collation, so SQL Server says so explicitly rather than inheriting a
+            // case-insensitive server default and refusing a pair PostgreSQL accepts.
+            entity.Property(e => e.Name).UseCollation("Latin1_General_100_CS_AS");
             entity.ToTable("destinations", table =>
             {
                 table.HasCheckConstraint("ck_destinations_configuration_json", "ISJSON(configuration, VALUE) = 1");
@@ -128,6 +132,11 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.Metadata).HasColumnType(jsonType);
             entity.Property(e => e.Payload).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("accepted"));
+            // A Source Event id is an opaque identifier from the origin system, so it compares
+            // byte for byte the way PostgreSQL already does. Declaring that on the column rather
+            // than on each query is what lets idx_events_source_event_id actually serve the
+            // duplicate lookup; a query-level COLLATE would leave it unusable.
+            entity.Property(e => e.SourceEventId).UseCollation("Latin1_General_100_BIN2");
         });
 
         modelBuilder.Entity<Connector>(entity =>
@@ -235,6 +244,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
 
         modelBuilder.Entity<Topic>(entity =>
         {
+            // ADR-0016 makes this name unique per Tenant. PostgreSQL compares it case-sensitively
+            // under its default collation, so SQL Server says so explicitly rather than inheriting a
+            // case-insensitive server default and refusing a pair PostgreSQL accepts.
+            entity.Property(e => e.Name).UseCollation("Latin1_General_100_CS_AS");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
