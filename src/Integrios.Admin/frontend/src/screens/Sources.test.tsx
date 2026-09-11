@@ -147,6 +147,53 @@ it("opens Source creation from one-shot state with the filtered Topic selected",
   await waitFor(() => expect(within(dialog).getByLabelText("Topic").textContent).toContain("orders"));
 });
 
+/// An update replaces the whole Source, and the edit form offers no verification fields, so the
+/// verification it sends is the one the Source already has. Dropping it would silently unverify
+/// the webhook.
+it("keeps a webhook Source's verification when its mapping is edited", async () => {
+  const verification = { scheme: "hmac_sha256", config: { header: "X-Signature" }, secret_refs: { secret: "gh-hook" } };
+  const calls = stubHttp(({ method, url }) => {
+    if (method === "PUT") return { status: 200, body: {} };
+    if (url.pathname.endsWith(`/sources/${sourceId}`))
+      return {
+        status: 200,
+        body: {
+          id: sourceId,
+          tenant_id: tenantId,
+          connector_id: connectorId,
+          topic_id: topicId,
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification,
+          input_requirements: null,
+          mapping: null,
+          event_identity_rule: null,
+          revision: "revision",
+          status: "active",
+          revoked_at: null,
+          created_at: "2026-09-09T00:00:00Z",
+          updated_at: "2026-09-09T00:00:00Z",
+        },
+      };
+    return { status: 200, body: page([]) };
+  });
+  renderScreen(
+    <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />,
+    `/tenants/${tenantId}/sources/${sourceId}`,
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const form = await screen.findByRole("form", { name: "Edit webhook Source" });
+  fireEvent.change(within(form).getByLabelText("Event mapping (JSONata, optional)"), { target: { value: "payload" } });
+  fireEvent.submit(form);
+
+  await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+  expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
+    verification,
+    mapping: { engine: "jsonata", version: "1", expression: "payload" },
+  });
+});
+
 function guideHttp({
   type,
   configuration,
