@@ -11,7 +11,9 @@ namespace Integrios.AcceptanceTests;
 [Collection(PackagedDeploymentCollection.Name)]
 public sealed class DashboardJourneyTests(PackagedDeploymentFixture fixture)
 {
-    private static readonly TimeSpan JourneyTimeout = TimeSpan.FromMinutes(5);
+    // Above the journey's own budget (two minutes to start plus three to run), so Vitest reports
+    // its own timeout with context before this one fires.
+    private static readonly TimeSpan JourneyTimeout = TimeSpan.FromMinutes(8);
 
     [Fact]
     public async Task GoldenAuthoringJourney_IsAcceptedByThePackagedAdminApi()
@@ -54,30 +56,36 @@ public sealed class DashboardJourneyTests(PackagedDeploymentFixture fixture)
 
         using (process)
         {
-            Task<string> stdout = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderr = process.StandardError.ReadToEndAsync();
-            using var cancellation = new CancellationTokenSource(JourneyTimeout);
             try
             {
-                await process.WaitForExitAsync(cancellation.Token);
+                Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+                Task<string> stderr = process.StandardError.ReadToEndAsync();
+                using var cancellation = new CancellationTokenSource(JourneyTimeout);
+                try
+                {
+                    await process.WaitForExitAsync(cancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                    throw new TimeoutException(
+                        $"The golden journey did not finish within {JourneyTimeout}:\n{await stdout}\n{await stderr}");
+                }
+
+                string output = $"{await stdout}\n{await stderr}";
+                process.ExitCode.ShouldBe(0, $"The golden journey failed:\n{output}");
+
+                // A zero exit also covers a suite that skipped itself, so what ran is read off the report.
+                using JsonDocument results = JsonDocument.Parse(await File.ReadAllTextAsync(report));
+                JsonElement root = results.RootElement;
+                root.GetProperty("numPendingTests").GetInt32().ShouldBe(0, $"The golden journey was skipped:\n{output}");
+                root.GetProperty("numPassedTests").GetInt32().ShouldBeGreaterThan(0, $"The golden journey ran no tests:\n{output}");
             }
-            catch (OperationCanceledException)
+            finally
             {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync();
-                throw new TimeoutException($"The golden journey did not finish within {JourneyTimeout}.");
+                File.Delete(report);
             }
-
-            string output = $"{await stdout}\n{await stderr}";
-            process.ExitCode.ShouldBe(0, $"The golden journey failed:\n{output}");
-
-            // A zero exit also covers a suite that skipped itself, so what ran is read off the report.
-            using JsonDocument results = JsonDocument.Parse(await File.ReadAllTextAsync(report));
-            JsonElement root = results.RootElement;
-            root.GetProperty("numPendingTests").GetInt32().ShouldBe(0, $"The golden journey was skipped:\n{output}");
-            root.GetProperty("numPassedTests").GetInt32().ShouldBeGreaterThan(0, $"The golden journey ran no tests:\n{output}");
         }
-
-        File.Delete(report);
     }
 }
