@@ -129,8 +129,10 @@ Style:
 
 A test project's name states what it needs to run. `Integrios.<Layer>.UnitTests` needs nothing;
 `Integrios.FunctionalTests` starts databases and a message-broker emulator through
-Testcontainers; `Integrios.AcceptanceTests` builds every service image and composes the packaged
-deployment. Cost follows that ordering, and acceptance dominates a run of everything.
+Testcontainers; `Integrios.AcceptanceTests` builds every service image, composes the packaged
+deployment, and drives the dashboard's golden journey against it in Chromium, so it also needs Node
+and `npm ci` plus `npx playwright install chromium` in `src/Integrios.Admin/frontend`. Cost follows
+that ordering, and acceptance dominates a run of everything.
 
 Choose tests by what the change can actually break, not by default:
 

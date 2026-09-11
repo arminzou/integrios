@@ -156,6 +156,33 @@ jobs:
       - name: Restore
         run: dotnet restore Integrios.slnx --locked-mode
 
+      # The Acceptance project drives the dashboard's golden journey in a real browser against the
+      # packaged deployment, so this job needs the same pinned Node and test browser as `frontend`.
+      - name: Resolve the pinned Node version
+        id: node_version
+        shell: bash
+        run: |
+          version=$(grep -oP '^FROM node:\K[0-9]+\.[0-9]+\.[0-9]+' Dockerfile | sort -u)
+          if [[ "$(wc -l <<<"$version")" -ne 1 ]]; then
+            echo "Dockerfile pins these Node versions; expected exactly one:" >&2
+            echo "$version" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ steps.node_version.outputs.version }}
+          cache: npm
+          cache-dependency-path: src/Integrios.Admin/frontend/package-lock.json
+
+      - name: Install the dashboard journey's dependencies
+        working-directory: src/Integrios.Admin/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
       - name: Select acceptance run
         id: select_run
         shell: bash

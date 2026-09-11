@@ -84,6 +84,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public string BootstrapImage => environment["INTEGRIOS_BOOTSTRAP_IMAGE"];
     public string IngestionImage => environment["INTEGRIOS_INGESTION_IMAGE"];
     public string WorkerImage => environment["INTEGRIOS_WORKER_IMAGE"];
+    public string RepoRoot => repoRoot;
 
     public HttpClient AdminClient { get; private set; } = null!;
     public HttpClient AdminOperationalClient { get; private set; } = null!;

@@ -126,14 +126,17 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
   it("authors a Tenant, Destination, Topic, Subscription and Source through their own screens", async () => {
     const connectors = (await readAdmin("/admin/connectors?limit=100")).items as {
       id: string;
+      key: string;
       name: string;
       contract_version: number;
       direction: "source" | "destination" | "both";
     }[];
-    const sourceConnector = connectors.find(({ direction }) => direction === "source" || direction === "both");
-    const destinationConnector = connectors.find(
-      ({ direction }) => direction === "destination" || direction === "both",
-    );
+    // The journey authors an unverified Source and an unauthenticated Destination, which the generic
+    // `http` example permits and a Connector declaring required schemes refuses. The list is newest
+    // first, so without this preference the choice would follow whatever was applied last.
+    const preferred = [...connectors].sort((a, b) => Number(b.key === "http") - Number(a.key === "http"));
+    const sourceConnector = preferred.find(({ direction }) => direction === "source" || direction === "both");
+    const destinationConnector = preferred.find(({ direction }) => direction === "destination" || direction === "both");
     expect(sourceConnector, "The deployment has no source-capable Connector.").toBeDefined();
     expect(destinationConnector, "The deployment has no destination-capable Connector.").toBeDefined();
     if (!sourceConnector || !destinationConnector) throw new Error("No compatible Connector is available.");
