@@ -419,6 +419,63 @@ describe("Create forms, filled through a real browser", () => {
     expect(sent.body.configuration).toEqual({});
     await view.close();
   }, 60_000);
+
+  /// Webhook and queue Sources carry the parts an Event API Source refuses: verification (webhook
+  /// only), input requirements, a mapping envelope, and an Event identity rule. Each kind is typed
+  /// as its label tells the Operator to type it, so a label naming a kind the API does not accept
+  /// fails here rather than at the first real create.
+  it("sends a webhook Source with verification, contract, mapping, and identity rule", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
+
+    await view.click("text=New Source");
+    const form = formNamed(view, "Create a Source");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await choose(form.getByLabel("Topic"), /orders/);
+    await choose(form.getByLabel("Type"), "Webhook");
+    await form.getByLabel("Configuration (JSON)", { exact: true }).fill("{}");
+    await form.getByLabel("Verification scheme (optional)").fill("hmac_sha256");
+    await form.getByLabel("Verification configuration (JSON)").fill('{"header":"X-Signature"}');
+    await form.getByLabel("Verification secret references (JSON)").fill('{"secret":"gh-hook"}');
+    await form.getByLabel("Input requirements (JSON, optional)").fill('{"type":"object"}');
+    await form.getByLabel("Event mapping (JSONata, optional)").fill("payload");
+    await form.getByLabel(/^Event identity kind \(header or json_path\)$/).fill("json_path");
+    await form.getByLabel("Event identity selector").fill("/delivery/id");
+    await view.click("text=Create Source");
+
+    const sent = await submitted(writes);
+    expect(sent.body.type).toBe("webhook");
+    expect(sent.body.verification).toEqual({
+      scheme: "hmac_sha256",
+      config: { header: "X-Signature" },
+      secret_refs: { secret: "gh-hook" },
+    });
+    expect(sent.body.input_requirements).toEqual({ type: "object" });
+    expect(sent.body.mapping).toEqual({ engine: "jsonata", version: "1", expression: "payload" });
+    expect(sent.body.event_identity_rule).toEqual({ kind: "json_path", value: "/delivery/id" });
+    await view.close();
+  }, 60_000);
+
+  it("sends a queue Source with its transport configuration and no verification", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
+
+    await view.click("text=New Source");
+    const form = formNamed(view, "Create a Source");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await choose(form.getByLabel("Topic"), /orders/);
+    await choose(form.getByLabel("Type"), "Queue");
+    expect(await form.getByLabel(/^Verification/).count()).toBe(0);
+    await form.getByLabel("Queue transport configuration (JSON)").fill('{"transport":"azure_service_bus"}');
+    await form.getByLabel(/^Event identity kind \(message_id or json_path\)$/).fill("message_id");
+    await form.getByLabel("Event identity selector").fill("message_id");
+    await view.click("text=Create Source");
+
+    const sent = await submitted(writes);
+    expect(sent.body.type).toBe("queue");
+    expect(sent.body.configuration).toEqual({ transport: "azure_service_bus" });
+    expect(sent.body.verification).toBeNull();
+    expect(sent.body.event_identity_rule).toEqual({ kind: "message_id", value: "message_id" });
+    await view.close();
+  }, 60_000);
 });
 
 describe("Update and deactivate, driven through a real browser", () => {

@@ -440,8 +440,8 @@ function CreateSource({
               name="identity_kind"
               label={
                 sourceType === "queue"
-                  ? "Event identity kind (message_id or json_pointer)"
-                  : "Event identity kind (header or json_pointer)"
+                  ? "Event identity kind (message_id or json_path)"
+                  : "Event identity kind (header or json_path)"
               }
               className="min-h-16 font-mono text-sm"
             />
