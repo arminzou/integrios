@@ -439,7 +439,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);
-    expect(sent.method).toBe("PATCH");
+    expect(sent.method).toBe("PUT");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/destinations/${destinationId}`);
     expect(sent.body.configuration).toEqual({ base_uri: "http://moved.invalid" });
     expect(sent.body.authentication).toBeNull();
@@ -479,7 +479,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);
-    expect(sent.method).toBe("PATCH");
+    expect(sent.method).toBe("PUT");
     expect(sent.body.order_index).toBe(1);
     expect(sent.body.mapping).toBeNull();
     expect(sent.body.match_rules).toEqual({ event_type: "order.created" });

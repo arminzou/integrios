@@ -28,8 +28,7 @@ internal sealed class UpdateSourceCommandHandler(
             return null;
         Connector connector = await connectorReader.GetByIdAsync(source.ConnectorId, cancellationToken)
             ?? throw new SourceValidationException("The Source's Connector does not exist.");
-        SourceVerificationInput? verification = command.Verification ?? ToInput(source.Verification);
-        SourceAuthoringValidator.Validate(source.Type, command.Configuration, verification, connector);
+        SourceAuthoringValidator.Validate(source.Type, command.Configuration, command.Verification, connector);
         SourceAuthoringValidator.ValidateRuntimeContract(
             source.Type, command.InputRequirements, command.Mapping, source.EventIdentityRule, evaluator);
         JsonElement configuration = source.Type == Domain.Enums.SourceType.Webhook
@@ -41,17 +40,11 @@ internal sealed class UpdateSourceCommandHandler(
             command.TenantId,
             command.Id,
             configuration,
-            SourceAuthoringValidator.ToVerification(verification),
+            SourceAuthoringValidator.ToVerification(command.Verification),
             command.InputRequirements?.Clone(),
             command.Mapping,
             cancellationToken);
         return updated is null ? null : SourceDto.From(updated);
     }
 
-    private static SourceVerificationInput? ToInput(SourceVerification? verification) => verification is null ? null : new()
-    {
-        Scheme = verification.Scheme,
-        Config = verification.Config,
-        SecretRefs = verification.SecretRefs,
-    };
 }

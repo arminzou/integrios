@@ -71,7 +71,10 @@ public sealed class AdminRequiredTextValidationTests
     private HttpRequestMessage Request(string operation, string? name) => operation switch
     {
         "tenant-create" => AdminRequest(HttpMethod.Post, "/admin/tenants", new { slug = "required-name", name }),
-        "tenant-update" => AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}", new { name }),
+        "tenant-update" => AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}",
+            new { name, description = (string?)null, environment = (string?)null }),
         "topic-create" => AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", new { name }),
         "tenant-api-key-create" => AdminRequest(
             HttpMethod.Post,
@@ -82,11 +85,18 @@ public sealed class AdminRequiredTextValidationTests
             $"/admin/tenants/{fixture.TenantId}/destinations",
             new { connector_id = fixture.HttpConnectorId, name, configuration = new { } }),
         "destination-update" => AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{fixture.TenantId}/destinations/{fixture.DestinationId}",
-            new { name, configuration = new { } }),
+            new
+            {
+                name,
+                configuration = new { },
+                authentication = (object?)null,
+                environment = (string?)null,
+                description = (string?)null,
+            }),
         "subscription-create" => SubscriptionRequest(HttpMethod.Post, Guid.NewGuid(), Guid.Empty, name),
-        "subscription-update" => SubscriptionRequest(HttpMethod.Patch, Guid.NewGuid(), Guid.NewGuid(), name),
+        "subscription-update" => SubscriptionRequest(HttpMethod.Put, Guid.NewGuid(), Guid.NewGuid(), name),
         _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
     };
 
@@ -101,7 +111,11 @@ public sealed class AdminRequiredTextValidationTests
             name,
             match_rules = new { event_type = "validation.test" },
             destination_id = fixture.DestinationId,
-            order_index = 0
+            mapping = (object?)null,
+            http_delivery = (object?)null,
+            http_success = (object?)null,
+            order_index = 0,
+            description = (string?)null,
         });
     }
 

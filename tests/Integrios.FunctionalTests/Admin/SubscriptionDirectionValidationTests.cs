@@ -128,14 +128,18 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         Guid destinationId = await InsertDestinationWithDirectionAsync("source_only_update_sink", "source");
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
                 name = "erp-sink-v2",
                 match_rules = new { event_type = "payment.updated" },
                 destination_id = destinationId,
-                order_index = 25
+                order_index = 25,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -152,14 +156,18 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             fixture.OtherTenantId);
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
                 name = "cross-tenant-sink",
                 match_rules = new { event_type = "payment.updated" },
                 destination_id = destinationId,
-                order_index = 25
+                order_index = 25,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);

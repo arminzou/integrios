@@ -3,6 +3,7 @@ using Integrios.Domain.Enums;
 using MediatR;
 
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -17,7 +18,7 @@ public sealed class TenantsEndpoints : IEndpointGroup
         group.MapPost(CreateTenant).Produces<TenantDto>(StatusCodes.Status201Created);
         group.MapGet(ListTenants).Produces<TenantListDto>();
         group.MapGet(GetTenantById, "/{id:guid}").Produces<TenantDto>();
-        group.MapPatch(UpdateTenant, "/{id:guid}").Produces<TenantDto>();
+        group.MapPut(UpdateTenant, "/{id:guid}").Produces<TenantDto>();
         group.MapPost(DeactivateTenant, "/{id:guid}/deactivate");
         group.MapGet(GetTenantOverview, "/{id:guid}/overview").Produces<TenantOverviewDto>();
     }
@@ -94,4 +95,7 @@ public sealed class TenantsEndpoints : IEndpointGroup
 }
 
 internal sealed record CreateTenantRequest(string? Slug, string? Name, string? Environment, string? Description);
-internal sealed record UpdateTenantRequest(string? Name, string? Description, string? Environment);
+internal sealed record UpdateTenantRequest(
+    [property: JsonRequired] string? Name,
+    [property: JsonRequired] string? Description,
+    [property: JsonRequired] string? Environment);

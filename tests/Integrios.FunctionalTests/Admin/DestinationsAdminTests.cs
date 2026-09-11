@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Integrios.Admin.Endpoints;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Tests.Shared;
@@ -49,11 +50,95 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         DestinationDto destination = (await created.Content.ReadFromJsonAsync<DestinationDto>(HostJson.Options))!;
 
         HttpResponseMessage renamed = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/destinations/{destination.Id}",
-            new { name = "seeded-destination", configuration = new { base_uri = "http://localhost:5054/sink" } }));
+            new
+            {
+                name = "seeded-destination",
+                configuration = new { base_uri = "http://localhost:5054/sink" },
+                authentication = (object?)null,
+                environment = (string?)null,
+                description = (string?)null,
+            }));
 
         renamed.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    // An update replaces the whole resource, so an omitted field is a malformed body rather than an
+    // instruction to keep what is stored. Answering anything but a refusal here means the field was
+    // written as null and whatever it held is gone.
+    [Theory]
+    [InlineData("name")]
+    [InlineData("configuration")]
+    [InlineData("authentication")]
+    [InlineData("environment")]
+    [InlineData("description")]
+    public async Task Update_OmittingAnyField_IsRefusedRatherThanWritingADefault(string omitted)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["name"] = "seeded-destination",
+            ["configuration"] = new { base_uri = "http://localhost:5054/sink" },
+            ["authentication"] = null,
+            ["environment"] = "production",
+            ["description"] = "kept",
+        };
+        body.Remove(omitted);
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(
+            HttpMethod.Put, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}", body));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    // The reference names are the only part of a credential a client is given back, so an edit that
+    // changes nothing has to be expressible. Before they were returned, this was impossible: the
+    // form could only send an empty object and the Destination became uneditable.
+    [Fact]
+    public async Task AnAuthenticatedDestination_CanBeResubmittedUnchanged()
+    {
+        Guid connectorId = await Fixture.ApplyConnectorManifestAsync(
+            "round_trip",
+            TestConnectorManifest.Create("round_trip", "Round trip", "destination", authenticationSchemes: ["bearer_token"]));
+
+        HttpResponseMessage created = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new
+            {
+                connector_id = connectorId,
+                name = "round-trip-destination",
+                configuration = new { base_uri = "http://localhost:5054/sink" },
+                authentication = new { scheme = "bearer_token", config = new { }, secret_refs = new { token = "round_trip_token" } },
+            }));
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        Guid id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        JsonElement read = await (await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{Fixture.TenantId}/destinations/{id}"))).Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement authentication = read.GetProperty("authentication");
+
+        HttpResponseMessage resubmitted = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{Fixture.TenantId}/destinations/{id}",
+            new
+            {
+                name = read.GetProperty("name").GetString(),
+                configuration = read.GetProperty("configuration"),
+                authentication = new
+                {
+                    scheme = authentication.GetProperty("scheme").GetString(),
+                    config = authentication.GetProperty("config"),
+                    secret_refs = authentication.GetProperty("secret_refs"),
+                },
+                environment = (string?)null,
+                description = (string?)null,
+            }));
+
+        resubmitted.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement after = await resubmitted.Content.ReadFromJsonAsync<JsonElement>();
+        after.GetProperty("authentication").GetProperty("secret_refs").GetProperty("token").GetString()
+            .ShouldBe("round_trip_token");
     }
 
     private Task<HttpResponseMessage> CreateDestinationAsync(string name) => client.SendAsync(AdminRequest(

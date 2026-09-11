@@ -74,7 +74,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
         var transformElement = JsonDocument.Parse(transformJson).RootElement;
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
@@ -82,6 +82,9 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
                 match_rules = new { event_type = "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
                 mapping = transformElement
             }));
 
@@ -102,7 +105,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created", mapping: transformElement);
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
@@ -110,6 +113,9 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
                 match_rules = new { event_type = "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
                 mapping = (object?)null
             }));
 

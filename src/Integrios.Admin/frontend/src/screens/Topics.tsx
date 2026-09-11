@@ -334,7 +334,7 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
   const save = useMutation({
     mutationFn: (values: TopicValues) =>
       call(() =>
-        api.PATCH("/admin/tenants/{tenantId}/topics/{id}", {
+        api.PUT("/admin/tenants/{tenantId}/topics/{id}", {
           params: { path: { tenantId, id: topic.id } },
           body: { name: values.name, description: optional(values.description) },
         }),

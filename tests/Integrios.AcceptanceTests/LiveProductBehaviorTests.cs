@@ -265,7 +265,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 tenant, source, "retry", "snapshot.test", new { value = 1 });
             await WaitForAttemptCountAsync(snapshotEvent.Id, snapshotSubscription, 1);
 
-            using HttpResponseMessage update = await PatchAdminAsync(
+            using HttpResponseMessage update = await PutAdminAsync(
                 $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{snapshotSubscription}",
                 SubscriptionBody("snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"second\" }")));
             update.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -686,8 +686,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private async Task<HttpResponseMessage> PostAdminAsync(string path, object body) =>
         await SendAdminAsync(HttpMethod.Post, path, body);
 
-    private async Task<HttpResponseMessage> PatchAdminAsync(string path, object body) =>
-        await SendAdminAsync(HttpMethod.Patch, path, body);
+    private async Task<HttpResponseMessage> PutAdminAsync(string path, object body) =>
+        await SendAdminAsync(HttpMethod.Put, path, body);
 
     private async Task<HttpResponseMessage> SendAdminAsync(HttpMethod method, string path, object? body = null)
     {
@@ -776,7 +776,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         match_rules = new { event_type = eventType },
         destination_id = destinationId,
         mapping = transform,
-        order_index = 10
+        http_delivery = (object?)null,
+        http_success = (object?)null,
+        order_index = 10,
+        description = (string?)null,
     };
 
     private static object ApiKeyAuth(string secretReference) => new

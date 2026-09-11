@@ -1232,7 +1232,7 @@ function SubscriptionForm({
 
       return call(() =>
         subscription
-          ? api.PATCH("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
+          ? api.PUT("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
               params: { path: { tenantId, topicId, id: subscription.id } },
               body: requestBody,
             })

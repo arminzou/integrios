@@ -107,7 +107,7 @@ const destination = {
 describe("Destination selection", () => {
   it("sends Destination-owned authentication and secret references", async () => {
     const calls = stubHttp(({ method, url }) => {
-      if (method === "PATCH") return { status: 200, body: destination };
+      if (method === "PUT") return { status: 200, body: destination };
       if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: destination };
       if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([destination]) };
       if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
@@ -123,8 +123,8 @@ describe("Destination selection", () => {
       target: { value: '{"token":"erp-token"}' },
     });
     fireEvent.submit(form);
-    await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
-    expect(calls.find((call) => call.method === "PATCH")!.body).toMatchObject({
+    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+    expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
       authentication: { scheme: "bearer_token", config: {}, secret_refs: { token: "erp-token" } },
     });
   });

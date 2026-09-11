@@ -169,7 +169,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
 
         using var request = AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
@@ -177,6 +177,9 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
                 match_rules = JsonDocument.Parse(matchRulesJson).RootElement,
                 destination_id = Fixture.DestinationId,
                 order_index = 25,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
                 description = "Updated ERP delivery"
             });
 
@@ -192,7 +195,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
@@ -200,6 +203,9 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
                 match_rules = new { event_type = "payment.updated" },
                 destination_id = Fixture.DestinationId,
                 order_index = 25,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
                 description = "Updated ERP delivery"
             }));
 
@@ -244,14 +250,18 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
                 destination_id = Fixture.DestinationId,
-                order_index = 10
+                order_index = 10,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -300,14 +310,18 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.OtherTenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
                 name = "erp-sink-v2",
                 match_rules = new { event_type = "payment.updated" },
                 destination_id = Fixture.DestinationId,
-                order_index = 2
+                order_index = 2,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -319,14 +333,18 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         var topic = await CreateTopicAsync("payments");
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{Guid.NewGuid()}",
             new
             {
                 name = "missing-subscription",
                 match_rules = new { event_type = "payment.updated" },
                 destination_id = Guid.NewGuid(),
-                order_index = 2
+                order_index = 2,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);

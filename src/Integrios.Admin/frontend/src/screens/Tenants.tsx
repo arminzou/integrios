@@ -370,7 +370,7 @@ function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
   const save = useMutation({
     mutationFn: (values: UpdateValues) =>
       call(() =>
-        api.PATCH("/admin/tenants/{id}", {
+        api.PUT("/admin/tenants/{id}", {
           params: { path: { id: tenant.id } },
           body: {
             name: values.name,

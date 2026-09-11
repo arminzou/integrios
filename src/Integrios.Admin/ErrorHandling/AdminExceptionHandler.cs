@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Integrios.Application.Authoring;
 using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Authoring.Connectors;
@@ -22,6 +23,13 @@ public sealed class AdminExceptionHandler(IProblemDetailsService problemDetailsS
             DestinationAuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             ConnectorVersionConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             InvalidCursorException or InvalidListFilterException => Problem(StatusCodes.Status400BadRequest, exception.Message),
+            // An authoring update replaces the whole resource, so the serializer refusing an absent
+            // member is the guard against an omitted field being read as "clear this". The schema
+            // names which members are required; the message says what the verb means.
+            BadHttpRequestException { InnerException: JsonException } => Problem(
+                StatusCodes.Status400BadRequest,
+                "The request body is malformed or is missing a required field. An update replaces the "
+                + "whole resource, so send every field the schema marks required, using null to clear one."),
             BadHttpRequestException badRequest => Problem(badRequest.StatusCode, "The request is invalid."),
             _ => null
         };

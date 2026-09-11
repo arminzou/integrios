@@ -485,7 +485,7 @@ function EditDestination({
       config: formatJson(destination.configuration),
       authentication_scheme: destination.authentication?.scheme ?? "",
       authentication_config: formatJson(destination.authentication?.config ?? {}),
-      authentication_secret_refs: "{}",
+      authentication_secret_refs: formatJson(destination.authentication?.secret_refs ?? {}),
       environment: destination.environment ?? "",
       description: destination.description ?? "",
     },
@@ -494,7 +494,7 @@ function EditDestination({
   const save = useMutation({
     mutationFn: (values: EditValues) =>
       call(() =>
-        api.PATCH("/admin/tenants/{tenantId}/destinations/{id}", {
+        api.PUT("/admin/tenants/{tenantId}/destinations/{id}", {
           params: { path: { tenantId, id: destination.id } },
           body: {
             name: values.name,

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Domain.Enums;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -14,7 +15,7 @@ public sealed class DestinationsEndpoints : IEndpointGroup
         group.MapPost(CreateDestination).Produces<DestinationDto>(StatusCodes.Status201Created);
         group.MapGet(ListDestinations).Produces<DestinationListDto>();
         group.MapGet(GetDestinationById, "/{id:guid}").Produces<DestinationDto>();
-        group.MapPatch(UpdateDestination, "/{id:guid}").Produces<DestinationDto>();
+        group.MapPut(UpdateDestination, "/{id:guid}").Produces<DestinationDto>();
         group.MapPost(DeactivateDestination, "/{id:guid}/deactivate");
     }
 
@@ -112,11 +113,11 @@ internal sealed record CreateDestinationRequest(
     string? Description);
 
 internal sealed record UpdateDestinationRequest(
-    string? Name,
-    JsonElement Configuration,
-    DestinationAuthenticationSelectionRequest? Authentication,
-    string? Environment,
-    string? Description);
+    [property: JsonRequired] string? Name,
+    [property: JsonRequired] JsonElement Configuration,
+    [property: JsonRequired] DestinationAuthenticationSelectionRequest? Authentication,
+    [property: JsonRequired] string? Environment,
+    [property: JsonRequired] string? Description);
 
 internal sealed record DestinationAuthenticationSelectionRequest(
     string Scheme,

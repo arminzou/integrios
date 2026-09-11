@@ -585,11 +585,17 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
   const save = useMutation({
     mutationFn: (values: EditValues) =>
       call(() =>
-        api.PATCH("/admin/tenants/{tenantId}/sources/{id}", {
+        api.PUT("/admin/tenants/{tenantId}/sources/{id}", {
           params: { path: { tenantId, id: source.id } },
           body: {
             configuration: parseJson(values.configuration).value,
-            verification: null,
+            verification: source.verification
+              ? {
+                  scheme: source.verification.scheme,
+                  config: source.verification.config ?? {},
+                  secret_refs: source.verification.secret_refs ?? {},
+                }
+              : null,
             input_requirements: optionalJson(values.input_requirements),
             mapping: mapping(values.mapping),
           },

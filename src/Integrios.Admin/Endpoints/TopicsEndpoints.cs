@@ -1,6 +1,7 @@
 using Integrios.Application.Authoring.Topics;
 using Integrios.Domain.Enums;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -13,7 +14,7 @@ public sealed class TopicsEndpoints : IEndpointGroup
         group.MapPost(CreateTopic).Produces<AdminTopicResponse>(StatusCodes.Status201Created);
         group.MapGet(ListTopics).Produces<AdminTopicListResponse>();
         group.MapGet(GetTopicById, "/{id:guid}").Produces<AdminTopicResponse>();
-        group.MapPatch(UpdateTopic, "/{id:guid}").Produces<AdminTopicResponse>();
+        group.MapPut(UpdateTopic, "/{id:guid}").Produces<AdminTopicResponse>();
         group.MapPost(DeactivateTopic, "/{id:guid}/deactivate");
     }
 
@@ -86,8 +87,8 @@ internal sealed record CreateTopicRequest(
     string? Description);
 
 internal sealed record UpdateTopicRequest(
-    string? Name,
-    string? Description);
+    [property: JsonRequired] string? Name,
+    [property: JsonRequired] string? Description);
 
 internal sealed record AdminTopicResponse(
     Guid Id,

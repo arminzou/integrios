@@ -197,7 +197,7 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
       return { status: 200, body: page([{ id: topicId, name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
       return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
-    if (method === "PATCH") return { status: 200, body: subscription };
+    if (method === "PUT") return { status: 200, body: subscription };
     return { status: 200, body: page([]) };
   });
   renderScreen(
@@ -210,8 +210,8 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
     target: { value: '{"evaluator":"json_boolean","field":"ok","expected":true}' },
   });
   fireEvent.submit(form);
-  await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
-  expect(calls.find((call) => call.method === "PATCH")!.body).toMatchObject({
+  await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+  expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
     http_success: { evaluator: "json_boolean", field: "ok", expected: true },
   });
 });

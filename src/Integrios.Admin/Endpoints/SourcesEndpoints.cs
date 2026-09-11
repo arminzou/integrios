@@ -4,6 +4,7 @@ using Integrios.Application.Authoring.Sources;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -16,7 +17,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
         group.MapPost(CreateSource).Produces<SourceDto>(StatusCodes.Status201Created);
         group.MapGet(ListSources).Produces<SourceListDto>();
         group.MapGet(GetSourceById, "/{id:guid}").Produces<SourceDto>();
-        group.MapPatch(UpdateSource, "/{id:guid}").Produces<SourceDto>();
+        group.MapPut(UpdateSource, "/{id:guid}").Produces<SourceDto>();
         group.MapDelete(RevokeSource, "/{id:guid}");
     }
 
@@ -87,10 +88,10 @@ internal sealed record CreateSourceRequest(
     SourceMapping? Mapping,
     SourceEventIdentityRule? EventIdentityRule);
 internal sealed record UpdateSourceRequest(
-    JsonElement Configuration,
-    SourceVerificationSelectionRequest? Verification,
-    JsonElement? InputRequirements,
-    SourceMapping? Mapping);
+    [property: JsonRequired] JsonElement Configuration,
+    [property: JsonRequired] SourceVerificationSelectionRequest? Verification,
+    [property: JsonRequired] JsonElement? InputRequirements,
+    [property: JsonRequired] SourceMapping? Mapping);
 
 internal sealed record SourceVerificationSelectionRequest(string Scheme, JsonElement Config, JsonElement SecretRefs)
 {

@@ -135,7 +135,10 @@ GET {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
 
 ###
 # Step 4b - Update the Destination
-PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/destinations/{{destinationId}}
+# An update replaces the whole Destination, so every field travels even when one changes. Omitting
+# one is a malformed body, not an instruction to keep what is stored; send null to clear a value.
+# "authentication" carries the secret reference names a read gives back, never secret values.
+PUT {{baseUrl}}/admin/tenants/{{tenantId}}/destinations/{{destinationId}}
 {{operatorKey}}
 Content-Type: application/json
 
@@ -144,6 +147,7 @@ Content-Type: application/json
   "configuration": {
     "base_uri": "{{sinkBase}}/sink/acme-erp"
   },
+  "authentication": null,
   "environment": "production",
   "description": "ERP destination (updated)"
 }
@@ -264,7 +268,8 @@ Content-Type: application/json
 
 ###
 # Step 7a - Save the transform on the subscription
-PATCH {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
+# Replaces the whole Subscription; every field below is required.
+PUT {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
 {{operatorKey}}
 Content-Type: application/json
 
