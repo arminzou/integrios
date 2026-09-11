@@ -2,6 +2,7 @@ using Integrios.Application;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
+using Integrios.Ingestion;
 using Integrios.Ingestion.Auth;
 using Integrios.Ingestion.Endpoints;
 using Integrios.Ingestion.ErrorHandling;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Authentication;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
 
@@ -19,7 +21,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<IngestionExceptionHandler>();
 builder.Services.AddIngestionApplicationServices();
-builder.Services.AddIngestionInfrastructureServices(builder.Configuration);
+builder.Services.AddIngestionInfrastructureServices(builder.Configuration, enableQueueReceiver: !secretCommand);
 builder.Services.AddSourceVerificationSecretResolutionServices(builder.Configuration);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-ingestion");
 
@@ -28,6 +30,13 @@ builder.Services.AddAuthentication(TenantApiKeyAuthHandler.SchemeName)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (secretCommand)
+{
+    int exitCode = await SourceSecretValidationCli.RunAsync(args, app.Services, Console.Out, Console.Error);
+    await app.DisposeAsync();
+    return exitCode;
+}
 
 app.UseRouting();
 app.UseOperationalEndpointIsolation(operationalPort);
@@ -46,3 +55,4 @@ app.MapEndpoints(typeof(Program).Assembly);
 app.MapOperationalEndpoints();
 
 app.Run();
+return 0;

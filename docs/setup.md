@@ -261,6 +261,20 @@ root is `%ProgramData%\Integrios\secrets\source`; the selected directory must ex
 Ingestion cannot
 resolve the Worker's destination-authentication namespace, and Admin resolves neither namespace.
 
+Because Admin authors a Source but holds no resolver, only Ingestion can answer whether a Source's
+references resolve. Ask it before traffic depends on them:
+
+```bash
+docker compose run --rm ingestion secrets validate --all
+docker compose run --rm ingestion secrets validate --tenant acme
+docker compose run --rm ingestion secrets validate --tenant acme --source <source-id>
+```
+
+This covers both shapes a Source carries: a webhook's verification references and a queue Source's
+`secret_ref`. It reports references and resolution status, never values, and consumes nothing from a
+queue while it runs. Exit codes match the Worker command: `0` all resolvable, `1` one or more
+unresolvable, `2` a usage or selection error.
+
 ## Useful commands
 
 ```bash

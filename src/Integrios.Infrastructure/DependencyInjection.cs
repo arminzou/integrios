@@ -102,7 +102,8 @@ public static class DependencyInjection
 
     public static IServiceCollection AddIngestionInfrastructureServices(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        bool enableQueueReceiver = true)
     {
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
@@ -115,7 +116,10 @@ public static class DependencyInjection
         services.AddSingleton<IQueueSourceReader, QueueSourceReader>();
         services.AddSingleton(new QueueReconcileInterval(TimeSpan.FromSeconds(
             configuration.GetValue<int?>("Integrios:QueueSources:ReconcileSeconds") ?? 30)));
-        services.AddHostedService<AzureServiceBusQueueReceiver>();
+        // A read-only question about secret references must not start consuming from every queue
+        // Source as a side effect of being asked.
+        if (enableQueueReceiver)
+            services.AddHostedService<AzureServiceBusQueueReceiver>();
         services.AddTransformEvaluationServices();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IEventAcceptance, SqlServerEventAcceptance>();
@@ -123,6 +127,7 @@ public static class DependencyInjection
             services.AddSingleton<IEventAcceptance, PostgresEventAcceptance>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
         services.TryAddSingleton<ISourceVerificationSecretResolver, UnavailableSourceVerificationSecretResolver>();
+        services.AddScoped<ISourceSecretValidationReader, SourceSecretValidationReader>();
 
         return services;
     }

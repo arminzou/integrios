@@ -54,6 +54,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
         [typeof(ISecretValidationReader)] = [Host.Worker],
+        [typeof(ISourceSecretValidationReader)] = [Host.Ingestion],
         [typeof(ISourceRepository)] = [Host.Admin],
         [typeof(ISourceQueries)] = [Host.Admin],
         [typeof(IEventDeliveryQueue)] = [Host.Worker],
@@ -270,6 +271,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<IEventApiSourceResolver>(scope.ServiceProvider);
         AssertOmits<ISecretValidationReader>(scope.ServiceProvider);
+        AssertOmits<ISourceSecretValidationReader>(scope.ServiceProvider);
         AssertOmits<IOutboxFanout>(scope.ServiceProvider);
         AssertOmits<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertOmits<IDeliveryClient>(scope.ServiceProvider);
@@ -296,6 +298,9 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IQueueSourceReader>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
+        // Scoped, because it reads through the request DbContext the way every other read side does.
+        using (IServiceScope scope = provider.CreateScope())
+            AssertResolves<ISourceSecretValidationReader>(scope.ServiceProvider);
 
         AssertOmits<IOperatorKeyLookup>(provider);
         AssertOmits<IOperatorKeyLifecycle>(provider);
