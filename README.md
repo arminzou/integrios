@@ -20,13 +20,22 @@ and reliable HTTP delivery with retries, dead-lettering, replay, and auditable d
 
 ## Architecture
 
-Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, connections, topics, sources, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingestion` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destination connections, and handles retries, dead-lettering, and replay.
+Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, sources, destinations, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingestion` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destinations, and handles retries, dead-lettering, and replay.
 
-A **Connector** is a reusable, deployment-wide declarative HTTP contract. A **Connection** is a
-Tenant-owned configured instance of one Connector, so the same Connector can serve many Tenants
-without sharing their endpoints or credentials. Generic external Event producers are the universal
-source path; HTTP(S) is the only destination protocol. Integrios deliberately does not require
-provider-specific destination actions or runtime plugins.
+A **Connector** is a reusable, deployment-wide declarative contract: it declares what an external
+system can do and the bounded choices its instances may configure, and it never holds a concrete
+endpoint or credential. Tenants build two independent resources from one: a **Source**, which owns
+how events arrive — its transport, verification, and normalization — and a **Destination**, which
+owns how to reach an outbound system, its base URI and its authentication. A Source and a
+Destination may describe the same external system and still share no identity, lifecycle, or
+configuration, because their credentials, runtime behavior, and rate of change differ. Each binds
+permanently to the exact Connector version it was created from, so validation and delivery
+semantics cannot shift underneath a stable identity.
+
+A **Subscription** carries one delivery operation from a Topic to a Destination: its match rules,
+body mapping, HTTP method and path, and its success rule. Generic external event producers are the
+universal source path; HTTP(S) is the only destination protocol. Integrios deliberately does not
+require provider-specific destination actions or runtime plugins.
 
 For the full design (processing flow, durability guarantees, and platform concepts), see [docs/architecture.md](docs/architecture.md).
 

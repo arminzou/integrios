@@ -12,8 +12,8 @@ If it is absent, continue from this public context; its absence is not an error.
 Integrios is an open-source, self-hostable multi-tenant integration platform.
 It receives events, applies tenant-aware routing and transformation rules, and delivers work to downstream systems reliably.
 
-It is backend-first today; an Operator-facing admin UI is planned. The engineering team running a
-deployment exclusively owns control-plane configuration; Tenants are ownership and isolation
+The engineering team running a deployment exclusively owns control-plane configuration, through an
+Operator dashboard that Admin serves from its own origin. Tenants are ownership and isolation
 boundaries, not backend users. Observability is a pluggable capability: the platform emits standard
 telemetry (metrics, structured logs, OTLP-capable traces) and bundles no backend, so a self-hosting
 team points it at their own stack. Licensed under MIT.
@@ -23,7 +23,7 @@ team points it at their own stack. Licensed under MIT.
 - `Integrios.slnx` is the solution entrypoint.
 - `src/` contains the main application projects.
 - `src/Integrios.Ingestion` owns intake, tenant auth, and the durable acceptance boundary. Data plane.
-- `src/Integrios.Admin` owns tenant management, connection configuration, topic and subscription management. Control plane.
+- `src/Integrios.Admin` owns tenant management, Connector, Source and Destination authoring, topic and subscription management, and it serves the Operator dashboard. Control plane.
 - `src/Integrios.Worker` owns outbox polling, fanout to subscriptions, delivery, and retry/DLQ behavior.
 - The development Compose stack includes WireMock as a controllable local sink for testing and demos. It is not part of the deployable product.
 - `src/Integrios.Domain` holds core domain types and shared contracts.
@@ -63,11 +63,10 @@ service-to-service configuration calls.
 
 ### Scope constraints
 
-These are current scope boundaries, not permanent non-goals; the Operator Admin UI deliberately relaxes the frontend constraint when it lands. Phase sequencing lives in the private roadmap.
+These are current scope boundaries, not permanent non-goals. Phase sequencing lives in the private roadmap.
 
-- backend-first (the Operator Admin UI is planned, not yet in scope)
-- no frontend, login/session, or RBAC yet
-- no required `User` domain entity
+- Operators sign in through OpenID Connect; Integrios stores no local credential
+- no Role or permission model yet: every signed-in Operator holds the same authority
 - tenant-aware design from the start
 - idempotency, replayability, retries, and DLQ are platform concerns
 - keep domain language generic, not company-specific
