@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { type Browser, chromium, type Page } from "playwright";
+import { type Browser, chromium, type Locator, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -102,16 +102,17 @@ async function closeView(page: Page): Promise<void> {
   await page.close();
 }
 
-/// A screen can carry more than one form, and they share field names, so a control is addressed by
-/// its label within the form that owns it — the same handle the stubbed browser tests use.
-function formNamed(page: Page, heading: string) {
-  return page.locator("form").filter({ hasText: heading });
+/// A screen can carry more than one form, and its filter bar shares labels with them, so a control
+/// is addressed by its label within the form that owns it — the same handle the stubbed browser
+/// tests use. A form is named by its accessible name, not by text it happens to show.
+function formNamed(page: Page, name: string) {
+  return page.getByRole("form", { name });
 }
 
-async function choose(page: Page, label: string, option: string) {
-  const control = page.getByLabel(label, { exact: true });
+/// The pickers are a scripted listbox; its options render outside the form that owns the trigger.
+async function choose(control: Locator, option: string) {
   await control.click();
-  await page.getByRole("option", { name: option, exact: true }).click();
+  await control.page().getByRole("option", { name: option, exact: true }).click();
 }
 
 /// Reads the deployment directly, to confirm what the journey wrote actually landed.
@@ -126,6 +127,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     const connectors = (await readAdmin("/admin/connectors?limit=100")).items as {
       id: string;
       name: string;
+      contract_version: number;
       direction: "source" | "destination" | "both";
     }[];
     const sourceConnector = connectors.find(({ direction }) => direction === "source" || direction === "both");
@@ -140,19 +142,25 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     let view = await openDashboard("/tenants");
     await view.click("text=New Tenant");
     const tenantForm = formNamed(view, "Create a Tenant");
-    await tenantForm.getByLabel("Slug").fill(run);
-    await tenantForm.getByLabel("Name").fill(`Journey ${run}`);
+    await tenantForm.getByLabel("Slug", { exact: true }).fill(run);
+    await tenantForm.getByLabel("Name", { exact: true }).fill(`Journey ${run}`);
     await view.click("text=Create Tenant");
     const tenantId = await created(view, /\/tenants\/[0-9a-f-]{36}$/, "Tenant");
     await closeView(view);
 
-    // Destination.
+    // Destination. Its picker names each Connector with the version and direction it offers.
     view = await openDashboard(`/tenants/${tenantId}/destinations`);
     await view.click("text=New Destination");
     const destinationForm = formNamed(view, "Create a Destination");
-    await choose(view, "Connector", destinationConnector.name);
-    await destinationForm.getByLabel("Name").fill(`${run}-sink`);
-    await destinationForm.getByLabel("Configuration (JSON)").fill('{"base_uri":"http://mocksink:8080"}');
+    const { name, contract_version, direction } = destinationConnector;
+    await choose(
+      destinationForm.getByLabel("Connector", { exact: true }),
+      `${name} (v${contract_version}, ${direction})`,
+    );
+    await destinationForm.getByLabel("Name", { exact: true }).fill(`${run}-sink`);
+    await destinationForm
+      .getByLabel("Configuration (JSON)", { exact: true })
+      .fill('{"base_uri":"http://mocksink:8080"}');
     await view.click("text=Create Destination");
     await created(view, /\/destinations\/[0-9a-f-]{36}$/, "Destination");
     await closeView(view);
@@ -160,31 +168,31 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     // Topic.
     view = await openDashboard(`/tenants/${tenantId}/topics`);
     await view.click("text=New Topic");
-    await formNamed(view, "Create a Topic").getByLabel("Name").fill(`${run}-orders`);
+    await formNamed(view, "Create a Topic").getByLabel("Name", { exact: true }).fill(`${run}-orders`);
     await view.click("text=Create Topic");
     const topicId = await created(view, /\/topics\/[0-9a-f-]{36}$/, "Topic");
 
-    // Subscription, authored on the Topic it belongs to. Creating the Topic lands on the Topic
-    // selected beside the Topics list, which summarises its Subscriptions; authoring them is the
-    // route below it, which that panel links to.
+    // Subscription, authored for the Topic it belongs to. Creating the Topic lands on the Topic
+    // selected beside the Topics list, which summarises its Subscriptions and links to the
+    // Tenant's Subscriptions filtered to it; a created Subscription is addressed under its Topic.
     await view.click("text=Manage Subscriptions");
     await view.click("text=New Subscription");
     const subscriptionForm = formNamed(view, "Create a Subscription");
-    await subscriptionForm.getByLabel("Name").fill(`${run}-to-sink`);
-    await choose(view, "Destination", `${run}-sink`);
-    await subscriptionForm.getByLabel("Event type").fill(`${run}.created`);
+    await subscriptionForm.getByLabel("Name", { exact: true }).fill(`${run}-to-sink`);
+    await choose(subscriptionForm.getByLabel("Destination", { exact: true }), `${run}-sink`);
+    await subscriptionForm.getByLabel("Event type", { exact: true }).fill(`${run}.created`);
     await view.click("text=Create Subscription");
-    await created(view, /\/subscriptions\/[0-9a-f-]{36}$/, "Subscription");
+    await created(view, /\/subscriptions\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, "Subscription");
     await closeView(view);
 
     // Source.
     view = await openDashboard(`/tenants/${tenantId}/sources`);
     await view.click("text=New Source");
     const sourceForm = formNamed(view, "Create a Source");
-    await choose(view, "Connector", sourceConnector.name);
-    await choose(view, "Topic", `${run}-orders`);
-    await choose(view, "Type", "Event API");
-    await sourceForm.getByLabel("Configuration (JSON)").fill("{}");
+    await choose(sourceForm.getByLabel("Connector", { exact: true }), sourceConnector.name);
+    await choose(sourceForm.getByLabel("Topic", { exact: true }), `${run}-orders`);
+    await choose(sourceForm.getByLabel("Type", { exact: true }), "Event API");
+    await sourceForm.getByLabel("Configuration (JSON)", { exact: true }).fill("{}");
     await view.click("text=Create Source");
     await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
     await view.getByRole("dialog", { name: "Publish through this Source" }).waitFor();
