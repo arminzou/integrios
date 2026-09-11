@@ -69,6 +69,13 @@ function renderScreen(element: React.ReactElement, path = "/") {
   return renderInRouter(<main>{element}</main>, path).container;
 }
 
+/// Sheets, confirmations, and the Event Builder render through a portal onto `document.body`, and
+/// Radix hides everything behind them, so scanning a screen's container once one is open re-checks
+/// the background. The topmost open dialog is scanned instead.
+async function openDialog() {
+  return (await screen.findAllByRole("dialog")).at(-1)!;
+}
+
 describe("Accessibility of the Operator workflows", () => {
   it("passes the automated rules on the authoring screens", async () => {
     stubHttp(({ url }) => ({
@@ -101,34 +108,34 @@ describe("Accessibility of the Operator workflows", () => {
   it("passes the automated rules on the Destinations authoring pattern with its create panel open", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
-    const container = renderScreen(<DestinationsScreen tenantId={tenantId} />);
+    renderScreen(<DestinationsScreen tenantId={tenantId} />);
     await screen.findByRole("heading", { level: 1, name: "Destinations" });
     // The create form is only exercised for accessibility once its disclosure is open — closed, it
     // carries no violations to find.
     fireEvent.click(screen.getByText("New Destination"));
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
   });
 
   it("passes the automated rules on the Source authoring form and its Event Builder entry point", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
-    const container = renderScreen(<SourcesScreen tenantId={tenantId} />);
+    renderScreen(<SourcesScreen tenantId={tenantId} />);
     await screen.findByRole("heading", { level: 1, name: "Sources" });
     fireEvent.click(screen.getByText("New Source"));
     await screen.findByRole("button", { name: "Create Source" });
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
   });
 
   it("passes the automated rules on the Connector authoring sheet", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
-    const container = renderScreen(<ConnectorsScreen />);
+    renderScreen(<ConnectorsScreen />);
     await screen.findByRole("heading", { level: 1, name: "Connectors" });
     // The guided draft is a form of native checkboxes, radios and fieldsets, so it is checked in the
     // state that has them rather than only in the screen's resting one.
     fireEvent.click(screen.getByRole("button", { name: "New Connector" }));
     await screen.findByRole("button", { name: "Create Connector" });
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
   });
 
   it("passes the automated rules on a populated table and its confirmation", async () => {
@@ -141,7 +148,7 @@ describe("Accessibility of the Operator workflows", () => {
     // Editing and the confirmation are states the screen only reaches on request, so they are
     // checked in those states rather than only in its resting one.
     fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
   });
 
   it("passes the automated rules on the investigation screens", async () => {
@@ -230,7 +237,7 @@ describe("Accessibility of detail and edit states", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     await screen.findByRole("form", { name: `Edit ${destination.name}` });
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
   });
 
   it("passes the automated rules on a selected Subscription and its edit sheet", async () => {
@@ -250,7 +257,7 @@ describe("Accessibility of detail and edit states", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     await screen.findByRole("form", { name: `Edit ${subscription.name}` });
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
   });
 
   it("passes the automated rules on a selected Connector and its new-version sheet", async () => {
@@ -269,18 +276,18 @@ describe("Accessibility of detail and edit states", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Create new version" }));
     await screen.findByRole("button", { name: "Create version" });
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
   });
 
   it("passes the automated rules on the open Event Builder", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
-    const container = renderScreen(<SourcesScreen tenantId={tenantId} />);
+    renderScreen(<SourcesScreen tenantId={tenantId} />);
     await screen.findByRole("heading", { level: 1, name: "Sources" });
     fireEvent.click(screen.getByText("New Source"));
     fireEvent.click(await screen.findByRole("button", { name: "Open Integrios Event Builder" }));
     await screen.findByRole("button", { name: "Close the Integrios Event Builder" });
-    await expectNoAccessibilityViolations(container);
+    await expectNoAccessibilityViolations(await openDialog());
 
     // Each header row's controls carry a placeholder, which axe accepts as a name on its own. The
     // placeholder disappears once a value is typed, so the label is asserted directly.
