@@ -608,6 +608,7 @@ function SubscriptionSourcePath({
     advancedMapping: fieldMappings === undefined,
   };
   const items = sources.data ?? [];
+  const sourcesProblem = asProblem(sources.error);
 
   return (
     <section className="flex min-w-0 flex-col gap-2 border-y py-3.5" aria-labelledby="subscription-source-path">
@@ -630,7 +631,7 @@ function SubscriptionSourcePath({
         Event type: <code>{eventType || "—"}</code>
       </p>
       {sources.isPending ? <p className="m-0 text-sm">Loading active Sources…</p> : null}
-      {sources.error ? <ReadError problem={asProblem(sources.error)!} what="Active Sources" /> : null}
+      {sourcesProblem ? <ReadError problem={sourcesProblem} what="Active Sources" /> : null}
       {!sources.isPending && !sources.error && items.length === 0 ? (
         <p className="m-0 text-sm">
           No active Source publishes to this Topic.{" "}
