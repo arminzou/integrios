@@ -34,8 +34,10 @@ import {
   Details,
   Inspector,
   InspectorPlaceholder,
+  openRow,
   Page,
   PageHeader,
+  RowChevron,
   RowHeader,
   SplitList,
   SplitView,
@@ -157,12 +159,16 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                 </TableHeader>
                 <TableBody>
                   {topics.map((topic) => (
-                    <TableRow key={topic.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                    <TableRow
+                      key={topic.id}
+                      className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                      onClick={openRow}
+                    >
                       <RowHeader>
                         {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract every other ledger has. */}
                         <NavLink
-                          className="font-mono text-[13px] no-underline"
+                          className="-mx-3 block px-3 py-2 font-mono text-[13px] no-underline"
                           to={`/tenants/${tenantId}/topics/${topic.id}`}
                           end
                         >
@@ -175,7 +181,10 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                           the count is what the list is scanned for rather than a detail. */}
                       <TableCell className="text-right">{topic.subscription_count}</TableCell>
                       <TableCell>
-                        <StatusBadge status={topic.status} />
+                        <div className="flex items-center justify-between gap-3">
+                          <StatusBadge status={topic.status} />
+                          <RowChevron />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

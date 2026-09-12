@@ -23,7 +23,16 @@ import {
 } from "../ui/controls";
 import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
 import { FilterSelectField, FilterTextField, Form } from "../ui/fields";
-import { CloseInspector, Inspector, InspectorPlaceholder, PageHeader, RowHeader, TableCard } from "../ui/layout";
+import {
+  CloseInspector,
+  Inspector,
+  InspectorPlaceholder,
+  openRow,
+  PageHeader,
+  RowChevron,
+  RowHeader,
+  TableCard,
+} from "../ui/layout";
 import { nameIn, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge, statusLabel, statusMarker } from "../ui/status";
 import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
@@ -390,11 +399,18 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                         </th>
                       </TableRow>
                     ) : null}
-                    <TableRow className="group has-[a[aria-current=page]]:bg-selected-surface">
+                    <TableRow
+                      className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                      onClick={openRow}
+                    >
                       <RowHeader>
                         {/* NavLink marks the selected row itself: the route is the selection, so
                             `aria-current` follows the URL rather than a separately tracked flag. */}
-                        <NavLink className="no-underline" to={`/tenants/${tenantId}/events/${item.event_id}`} end>
+                        <NavLink
+                          className="-mx-3 block px-3 py-2 no-underline"
+                          to={`/tenants/${tenantId}/events/${item.event_id}`}
+                          end
+                        >
                           <TimeOfDay value={item.accepted_at} />
                         </NavLink>
                       </RowHeader>
@@ -410,7 +426,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                         <StatusBadge status={item.status} />
                       </TableCell>
                       <TableCell>
-                        <DeliveryCounts counts={item.deliveries} />
+                        <div className="flex items-center justify-between gap-3">
+                          <DeliveryCounts counts={item.deliveries} />
+                          <RowChevron />
+                        </div>
                       </TableCell>
                     </TableRow>
                   </Fragment>

@@ -45,9 +45,11 @@ import {
   Details,
   Inspector,
   InspectorPlaceholder,
+  openRow,
   Page,
   PageHeader,
   Panel,
+  RowChevron,
   RowHeader,
   SplitList,
   SplitView,
@@ -330,10 +332,14 @@ export function SubscriptionsScreen({
               </TableHeader>
               <TableBody>
                 {subscriptions.map((subscription) => (
-                  <TableRow key={subscription.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                  <TableRow
+                    key={subscription.id}
+                    className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                    onClick={openRow}
+                  >
                     <RowHeader>
                       <NavLink
-                        className="no-underline"
+                        className="-mx-3 block px-3 py-2 no-underline"
                         to={`/tenants/${tenantId}/subscriptions/${subscription.topic_id}/${subscription.id}`}
                         end
                       >
@@ -354,7 +360,10 @@ export function SubscriptionsScreen({
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={subscription.status} />
+                      <div className="flex items-center justify-between gap-3">
+                        <StatusBadge status={subscription.status} />
+                        <RowChevron />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

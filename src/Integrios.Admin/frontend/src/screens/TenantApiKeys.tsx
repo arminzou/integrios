@@ -32,9 +32,11 @@ import {
   Details,
   Inspector,
   InspectorPlaceholder,
+  openRow,
   Page,
   PageHeader,
   Panel,
+  RowChevron,
   RowHeader,
   SplitList,
   SplitView,
@@ -142,9 +144,17 @@ export function TenantApiKeysScreen({
                 </TableHeader>
                 <TableBody>
                   {keys.map((key) => (
-                    <TableRow key={key.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                    <TableRow
+                      key={key.id}
+                      className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                      onClick={openRow}
+                    >
                       <RowHeader>
-                        <NavLink className="no-underline" to={`/tenants/${tenantId}/tenant-api-keys/${key.id}`} end>
+                        <NavLink
+                          className="-mx-3 block px-3 py-2 no-underline"
+                          to={`/tenants/${tenantId}/tenant-api-keys/${key.id}`}
+                          end
+                        >
                           {key.name}
                         </NavLink>
                       </RowHeader>
@@ -157,7 +167,10 @@ export function TenantApiKeysScreen({
                         {key.expires_at ? <Day value={key.expires_at} /> : "Never"}
                       </TableCell>
                       <TableCell className="text-ink-secondary">
-                        {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}
+                        <div className="flex items-center justify-between gap-3">
+                          {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}
+                          <RowChevron />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

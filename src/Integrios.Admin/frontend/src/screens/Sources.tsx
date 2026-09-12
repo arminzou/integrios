@@ -35,8 +35,10 @@ import {
   Details,
   Inspector,
   InspectorPlaceholder,
+  openRow,
   Page,
   PageHeader,
+  RowChevron,
   RowHeader,
   SplitList,
   SplitView,
@@ -233,9 +235,17 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
               </TableHeader>
               <TableBody>
                 {sources.map((source) => (
-                  <TableRow key={source.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                  <TableRow
+                    key={source.id}
+                    className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                    onClick={openRow}
+                  >
                     <RowHeader>
-                      <NavLink className="no-underline" to={`/tenants/${tenantId}/sources/${source.id}`} end>
+                      <NavLink
+                        className="-mx-3 block px-3 py-2 no-underline"
+                        to={`/tenants/${tenantId}/sources/${source.id}`}
+                        end
+                      >
                         {source.name}
                       </NavLink>
                     </RowHeader>
@@ -248,7 +258,10 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                     <TableCell>{source.type}</TableCell>
                     <TableCell className="font-mono text-[13px]">{source.input_requirements || "—"}</TableCell>
                     <TableCell>
-                      <StatusBadge status={source.status} />
+                      <div className="flex items-center justify-between gap-3">
+                        <StatusBadge status={source.status} />
+                        <RowChevron />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

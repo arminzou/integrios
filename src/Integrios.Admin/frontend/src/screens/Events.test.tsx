@@ -165,6 +165,28 @@ describe("Event history", () => {
   });
 });
 
+describe("Opening an Event from its row", () => {
+  it("opens from a cell that is not the link", async () => {
+    stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
+    fireEvent.click(await screen.findByText("order.created"));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/events/${eventId}`));
+  });
+
+  it("leaves the copy control in a row to its own job", async () => {
+    stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
+    // The ledger carries an identifier an Operator copies far more often than they open the Event
+    // it belongs to, so the button inside the row must not double as a way into the row.
+    fireEvent.click(await screen.findByRole("button", { name: "Copy source event id" }));
+
+    expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/events`);
+  });
+});
+
 describe("Event activity summary", () => {
   it("names the window and reports the four counts as pressable, unselected buttons", async () => {
     stubHttp(respondFor(page([])));

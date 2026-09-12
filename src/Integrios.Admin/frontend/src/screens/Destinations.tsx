@@ -35,8 +35,10 @@ import {
   Details,
   Inspector,
   InspectorPlaceholder,
+  openRow,
   Page,
   PageHeader,
+  RowChevron,
   RowHeader,
   SplitList,
   SplitView,
@@ -243,11 +245,19 @@ export function DestinationsScreen({
               </TableHeader>
               <TableBody>
                 {destinations.map((destination) => (
-                  <TableRow key={destination.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                  <TableRow
+                    key={destination.id}
+                    className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                    onClick={openRow}
+                  >
                     <RowHeader>
                       {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract the Event ledger already has. */}
-                      <NavLink className="no-underline" to={`/tenants/${tenantId}/destinations/${destination.id}`} end>
+                      <NavLink
+                        className="-mx-3 block px-3 py-2 no-underline"
+                        to={`/tenants/${tenantId}/destinations/${destination.id}`}
+                        end
+                      >
                         {destination.name}
                       </NavLink>
                     </RowHeader>
@@ -258,7 +268,10 @@ export function DestinationsScreen({
                     </TableCell>
                     <TableCell className="text-ink-secondary">{destination.description ?? "—"}</TableCell>
                     <TableCell className="text-ink-secondary">
-                      <Day value={destination.updated_at} />
+                      <div className="flex items-center justify-between gap-3">
+                        <Day value={destination.updated_at} />
+                        <RowChevron />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

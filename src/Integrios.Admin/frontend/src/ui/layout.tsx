@@ -1,6 +1,7 @@
 import { cn } from "cn";
+import { ChevronRight } from "lucide-react";
 import { Slot } from "radix-ui";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -56,6 +57,34 @@ export function TableCard({ caption, footer, children }: { caption: string; foot
         </div>
       ) : null}
     </Card>
+  );
+}
+
+/// A click anywhere in a row opens it, by clicking the row's own link rather than navigating in its
+/// place: the link stays the single thing that knows the destination, so `aria-current`, copy-link
+/// and open-in-new-tab keep working and the row adds no second tab stop.
+///
+/// It stands aside for everything a click can also mean. A modifier is the browser's own gesture for
+/// a new tab or window, and only the real link can answer it. A click that lands on a control — the
+/// link itself, a Topic or Destination link in another column, a copy button in the ledger — belongs
+/// to that control. And a click that ends a drag across text is a selection: this console is read by
+/// copying identifiers out of it, which an eager row would interrupt every time.
+export function openRow(event: MouseEvent<HTMLTableRowElement>) {
+  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if ((event.target as HTMLElement).closest("a,button,input,select,textarea,[role='button']")) return;
+  if (window.getSelection()?.toString()) return;
+  event.currentTarget.querySelector("a")?.click();
+}
+
+/// The row's own promise that a detail panel opens from it, shown on hover and on keyboard focus
+/// because a hint only a pointer can reach is no hint to an Operator working from the keyboard. It
+/// rides the `group` its row carries, so a row that also reveals a copy control shares one gesture.
+export function RowChevron() {
+  return (
+    <ChevronRight
+      aria-hidden="true"
+      className="size-4 shrink-0 text-ink-secondary opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+    />
   );
 }
 

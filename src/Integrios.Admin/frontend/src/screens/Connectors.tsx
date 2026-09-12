@@ -1,6 +1,5 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
-import { type MouseEvent, useState } from "react";
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,8 +25,10 @@ import {
   Details,
   Inspector,
   InspectorPlaceholder,
+  openRow,
   Page,
   PageHeader,
+  RowChevron,
   RowHeader,
   SplitList,
   SplitView,
@@ -37,22 +38,6 @@ import { StatusBadge } from "../ui/status";
 import { ConnectorAuthoring } from "./ConnectorAuthoring";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
-
-/// A click anywhere in a row opens it, by clicking the row's own link rather than navigating in its
-/// place: the link stays the single thing that knows the destination, so `aria-current`, copy-link
-/// and open-in-new-tab keep working and the row adds no second tab stop.
-///
-/// It stands aside for everything a click can also mean. A modifier is the browser's own gesture for
-/// a new tab or window, and only the real link can answer it. A click that lands on a control — the
-/// link itself, or a copy button in another screen's rows — belongs to that control. And a click
-/// that ends a drag across text is a selection: this console is read by copying identifiers out of
-/// it, which an eager row would interrupt every time.
-function openRow(event: MouseEvent<HTMLTableRowElement>) {
-  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  if ((event.target as HTMLElement).closest("a,button,input,select,textarea,[role='button']")) return;
-  if (window.getSelection()?.toString()) return;
-  event.currentTarget.querySelector("a")?.click();
-}
 
 /// Connectors are deployment-wide rather than Tenant-scoped, so this screen carries no Tenant.
 export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?: string } = {}) {
@@ -151,15 +136,9 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                       <TableCell>{connector.direction}</TableCell>
                       <TableCell>v{connector.contract_version}</TableCell>
                       <TableCell>
-                        {/* The row makes its own promise: a detail panel opens from here. It answers
-                            keyboard focus as well as the pointer, because a hint only a mouse can
-                            reach is no hint to an Operator working from the keyboard. */}
                         <div className="flex items-center justify-between gap-3">
                           <StatusBadge status={connector.status} />
-                          <ChevronRight
-                            aria-hidden="true"
-                            className="size-4 text-ink-secondary opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
-                          />
+                          <RowChevron />
                         </div>
                       </TableCell>
                     </TableRow>
