@@ -218,9 +218,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)")
-                        .HasColumnName("name")
-                        .UseCollation("Latin1_General_100_CS_AS");
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("name");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -244,9 +243,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_destinations_tenant_id_id");
-
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_destinations_tenant_name");
 
                     b.HasIndex(new[] { "TenantId" }, "idx_destinations_tenant_id");
 

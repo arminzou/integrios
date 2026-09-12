@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Integrios.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(IntegriosDbContext))]
-    [Migration("20260911180542_PostgresBaseline")]
+    [Migration("20260912002112_PostgresBaseline")]
     partial class PostgresBaseline
     {
         /// <inheritdoc />
@@ -242,9 +242,6 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_destinations_tenant_id_id");
-
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_destinations_tenant_name");
 
                     b.HasIndex(new[] { "TenantId" }, "idx_destinations_tenant_id");
 

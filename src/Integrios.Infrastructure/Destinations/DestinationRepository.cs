@@ -30,12 +30,6 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
         {
             throw new InvalidOperationException("The specified Connector does not exist.", exception);
         }
-        catch (DbUpdateException exception) when (
-            exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
-            || exception.InnerException is SqlException { Number: 2601 or 2627 })
-        {
-            throw Duplicate(destination.Name, exception);
-        }
     }
 
     public Task<Destination?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
@@ -129,27 +123,16 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
         string? description,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            int changed = await context.Destinations
-                .Where(destination => destination.TenantId == tenantId && destination.Id == id)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(destination => destination.Name, name)
-                    .SetProperty(destination => destination.Configuration, configuration)
-                    .SetProperty(destination => destination.Authentication, authentication)
-                    .SetProperty(destination => destination.Environment, environment)
-                    .SetProperty(destination => destination.Description, description)
-                    .SetProperty(destination => destination.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken);
-            return changed == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);
-        }
-        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
-        {
-            throw Duplicate(name, exception);
-        }
-        catch (SqlException exception) when (exception.Number is 2601 or 2627)
-        {
-            throw Duplicate(name, exception);
-        }
+        int changed = await context.Destinations
+            .Where(destination => destination.TenantId == tenantId && destination.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(destination => destination.Name, name)
+                .SetProperty(destination => destination.Configuration, configuration)
+                .SetProperty(destination => destination.Authentication, authentication)
+                .SetProperty(destination => destination.Environment, environment)
+                .SetProperty(destination => destination.Description, description)
+                .SetProperty(destination => destination.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken);
+        return changed == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);
     }
 
     public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
@@ -160,6 +143,4 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
                 .SetProperty(destination => destination.Status, OperationalStatus.Disabled)
                 .SetProperty(destination => destination.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken) > 0;
 
-    private static DuplicateResourceException Duplicate(string name, Exception exception) =>
-        new($"A Destination named '{name}' already exists for this Tenant.", exception);
 }

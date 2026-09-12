@@ -111,7 +111,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                 {
                     table.PrimaryKey("destinations_pkey", x => x.id);
                     table.UniqueConstraint("uq_destinations_tenant_id_id", x => new { x.tenant_id, x.id });
-                    table.UniqueConstraint("uq_destinations_tenant_name", x => new { x.tenant_id, x.name });
                     table.CheckConstraint("ck_destinations_authentication_object", "authentication IS NULL OR jsonb_typeof(authentication) = 'object'");
                     table.CheckConstraint("ck_destinations_configuration_json", "jsonb_typeof(configuration) = 'object'");
                     table.ForeignKey(

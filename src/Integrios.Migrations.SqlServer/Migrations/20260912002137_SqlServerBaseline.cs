@@ -96,7 +96,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     tenant_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     connector_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    name = table.Column<string>(type: "nvarchar(450)", nullable: false, collation: "Latin1_General_100_CS_AS"),
+                    name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     configuration = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValueSql: "N'{}'"),
                     authentication = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     status = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValueSql: "N'active'"),
@@ -109,7 +109,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 {
                     table.PrimaryKey("destinations_pkey", x => x.id);
                     table.UniqueConstraint("uq_destinations_tenant_id_id", x => new { x.tenant_id, x.id });
-                    table.UniqueConstraint("uq_destinations_tenant_name", x => new { x.tenant_id, x.name });
                     table.CheckConstraint("ck_destinations_authentication_object", "authentication IS NULL OR ISJSON(authentication, OBJECT) = 1");
                     table.CheckConstraint("ck_destinations_configuration_json", "ISJSON(configuration, VALUE) = 1");
                     table.ForeignKey(

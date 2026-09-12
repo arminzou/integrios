@@ -37,13 +37,13 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("disabled");
     }
 
-    // A Destination name is how an Operator refers to one in configuration and runbooks, so two
-    // Destinations answering to the same name is ambiguity the database is expected to refuse and
-    // the API is expected to report as a conflict rather than a fault.
+    // ADR-0088 puts uniqueness on keys, and a Destination has none: its name is a label an Operator
+    // can correct, while the identifier is what anything else refers to. Two Destinations may
+    // therefore answer to one name, and a rename onto an existing name is an ordinary update.
     [Fact]
-    public async Task DuplicateName_IsRefusedWithConflictOnCreateAndOnRename()
+    public async Task DuplicateName_IsAcceptedOnCreateAndOnRename()
     {
-        (await CreateDestinationAsync("seeded-destination")).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await CreateDestinationAsync("seeded-destination")).StatusCode.ShouldBe(HttpStatusCode.Created);
 
         HttpResponseMessage created = await CreateDestinationAsync("renameable-destination");
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -61,22 +61,8 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
                 description = (string?)null,
             }));
 
-        renamed.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-    }
-
-    // ADR-0016's uniqueness rule has to mean the same thing on both backends. PostgreSQL compares
-    // text case-sensitively under its default collation; SQL Server's server default is
-    // case-insensitive, so without an explicit collation this pair is two Destinations on one
-    // provider and a conflict on the other, and a deployment migrating between them carries rows
-    // the target schema refuses. Run under both legs, this is the assertion that catches it.
-    [Fact]
-    public async Task NamesDifferingOnlyByCase_AreDistinctOnEveryProvider()
-    {
-        (await CreateDestinationAsync("Casing-Probe")).StatusCode.ShouldBe(HttpStatusCode.Created);
-        (await CreateDestinationAsync("casing-probe")).StatusCode.ShouldBe(HttpStatusCode.Created);
-
-        (await ListNamesAsync()).ShouldContain("Casing-Probe");
-        (await ListNamesAsync()).ShouldContain("casing-probe");
+        renamed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ListNamesAsync()).Count(name => name == "seeded-destination").ShouldBeGreaterThanOrEqualTo(2);
     }
 
     private async Task<IReadOnlyList<string>> ListNamesAsync()

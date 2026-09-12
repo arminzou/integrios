@@ -240,9 +240,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_destinations_tenant_id_id");
 
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_destinations_tenant_name");
-
                     b.HasIndex(new[] { "TenantId" }, "idx_destinations_tenant_id");
 
                     b.ToTable("destinations", null, t =>

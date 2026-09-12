@@ -26,8 +26,6 @@ internal sealed class DestinationConfiguration : IEntityTypeConfiguration<Destin
 
         entity.HasAlternateKey(e => new { e.TenantId, e.Id }).HasName("uq_destinations_tenant_id_id");
 
-        entity.HasAlternateKey(e => new { e.TenantId, e.Name }).HasName("uq_destinations_tenant_name");
-
         entity.Property(e => e.Id)
             .ValueGeneratedNever()
             .HasColumnName("id");
