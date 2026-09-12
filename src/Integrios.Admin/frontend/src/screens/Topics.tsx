@@ -20,6 +20,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  ReadError,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -122,7 +123,9 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
               loaded={list.isSuccess}
               problem={asProblem(list.error)}
               empty={topics.length === 0}
-              emptyText="This Tenant has no Topics matching this filter."
+              applied={applied}
+              noun="Topics"
+              emptyText="This Tenant has no Topics yet. Use New Topic, above, to author the first one."
             />
             {topics.length > 0 ? (
               <TableCard
@@ -221,7 +224,11 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
           <h2 className="m-0">Topic</h2>
           <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
         </div>
-        <p role="alert">{problem.detail ?? `This Topic could not be read (${problem.status}).`}</p>
+        <ReadError
+          problem={problem}
+          what="This Topic"
+          back={{ to: `/tenants/${tenantId}/topics`, label: "Back to Topics" }}
+        />
       </Inspector>
     );
   if (!topic.data) return <Inspector label="Topic detail">Loading…</Inspector>;

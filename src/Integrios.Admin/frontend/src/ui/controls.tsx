@@ -362,21 +362,65 @@ function ClearFilters({ size }: { size?: "sm" }) {
 
 /// What a list shows when it has no rows to show: still loading, failed, or genuinely empty. The
 /// empty text names the scope that was searched so an empty Tenant is not mistaken for a failure.
+/// A filtered empty list is told apart from a genuinely empty one — the former names the filters it
+/// is under, the latter states that there is nothing yet — so a fresh Tenant is not read as a failed
+/// search. The filter-bar Clear action is the way out of a filtered empty list; it is not repeated
+/// here.
 export function ListStatus({
   busy,
   loaded,
   problem,
   empty,
+  applied,
+  noun,
   emptyText,
 }: {
   busy: boolean;
   loaded: boolean;
   problem: Problem | null;
   empty: boolean;
-  emptyText: string;
+  applied: number;
+  noun: string;
+  emptyText: ReactNode;
 }) {
-  if (problem) return <p role="alert">{problem.detail ?? `The list could not be read (${problem.status}).`}</p>;
+  if (problem)
+    return <ReadError problem={problem} what={`The ${noun} list`} back={{ to: "/tenants", label: "Go to Tenants" }} />;
   if (busy && !loaded) return <ListSkeleton />;
-  if (loaded && empty) return <p className="m-0">{emptyText}</p>;
+  if (loaded && empty) {
+    if (applied === 0) return <p className="m-0">{emptyText}</p>;
+    return (
+      <p className="m-0">
+        No {noun} match {applied === 1 ? "this filter" : "these filters"}.
+      </p>
+    );
+  }
   return null;
+}
+
+/// A read that failed. 404 is the one status whose Problem Details title carries no information —
+/// "Not Found" — so it is replaced with a sentence naming what was looked for and, where there is a
+/// list to go back to, a link. Every other status keeps the server's own detail. Guarded here rather
+/// than in `problemFrom`, which also feeds `formError` on write paths where a 404 means something else.
+export function ReadError({
+  problem,
+  what,
+  back,
+}: {
+  problem: Problem;
+  what: string;
+  back?: { to: string; label: string };
+}) {
+  return (
+    <p role="alert" className="m-0">
+      {problem.status === 404
+        ? `${what} does not exist, or has been deleted.`
+        : (problem.detail ?? `${what} could not be read (${problem.status}).`)}
+      {back ? (
+        <>
+          {" "}
+          <Link to={back.to}>{back.label}</Link>
+        </>
+      ) : null}
+    </p>
+  );
 }

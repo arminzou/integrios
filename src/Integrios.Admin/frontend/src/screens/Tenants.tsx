@@ -20,6 +20,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  ReadError,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
@@ -111,7 +112,9 @@ export function TenantsScreen() {
           loaded={list.isSuccess}
           problem={asProblem(list.error)}
           empty={tenants.length === 0}
-          emptyText="No Tenants match this filter."
+          applied={applied}
+          noun="Tenants"
+          emptyText="No Tenants yet. Use New Tenant, above, to author the first one."
         />
         {tenants.length > 0 ? (
           <TableCard
@@ -233,7 +236,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
     return (
       <>
         <h1>Overview</h1>
-        <p role="alert">{problem.detail ?? `This Tenant could not be read (${problem.status}).`}</p>
+        <ReadError problem={problem} what="This Tenant" back={{ to: "/tenants", label: "Go to Tenants" }} />
       </>
     );
   if (!tenant.data) return <p>Loading…</p>;

@@ -19,6 +19,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  ReadError,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
@@ -108,7 +109,9 @@ export function TenantApiKeysScreen({
               loaded={list.isSuccess}
               problem={asProblem(list.error)}
               empty={keys.length === 0}
-              emptyText="This Tenant has no API keys matching this filter."
+              applied={state ? 1 : 0}
+              noun="API keys"
+              emptyText="This Tenant has no API keys yet. Use New API key, above, to author the first one."
             />
             {keys.length > 0 ? (
               <TableCard
@@ -206,7 +209,7 @@ function TenantApiKeyInspector({
           <h2 className="m-0">Tenant API key</h2>
           <CloseInspector to={closed} label="Close the Tenant API key detail" />
         </div>
-        <p role="alert">{problem.detail ?? `This key could not be read (${problem.status}).`}</p>
+        <ReadError problem={problem} what="This key" back={{ to: closed, label: "Back to API keys" }} />
       </Inspector>
     );
   if (!apiKey.data) return <Inspector label="Tenant API key detail">Loading…</Inspector>;

@@ -211,3 +211,28 @@ describe("A selected Destination", () => {
     expect(within(panel).queryByRole("button", { name: /Deactivate/ })).toBeNull();
   });
 });
+
+describe("Empty and missing states", () => {
+  it("reads an unfiltered empty list as nothing yet, not a filtered search", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+    renderScreen(<DestinationsScreen tenantId={tenantId} />);
+
+    const empty = await screen.findByText(/no Destinations yet/i);
+    expect(empty.textContent).not.toMatch(/filter/i);
+    // A Destination is built from a Connector, so the empty state names that prerequisite.
+    expect(screen.getByRole("link", { name: "Connector" })).toBeTruthy();
+  });
+
+  it("names a missing Destination instead of echoing the server's Not Found", async () => {
+    stubHttp(({ url }) => {
+      if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 404, body: { title: "Not Found" } };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
+      return { status: 200, body: page([]) };
+    });
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+
+    expect(await screen.findByText("This Destination does not exist, or has been deleted.")).toBeTruthy();
+    expect(screen.queryByText("Not Found")).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to Destinations" })).toBeTruthy();
+  });
+});

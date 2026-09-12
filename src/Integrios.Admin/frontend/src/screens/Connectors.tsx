@@ -5,7 +5,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { api } from "../api/client";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { appliedNote, CreateSheet, EditSheet, FilterBar, ListStatus, LoadMore } from "../ui/controls";
+import { appliedNote, CreateSheet, EditSheet, FilterBar, ListStatus, LoadMore, ReadError } from "../ui/controls";
 import { Filter } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { formatJson } from "../ui/json";
@@ -82,11 +82,9 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
               loaded={list.isSuccess}
               problem={asProblem(list.error)}
               empty={connectors.length === 0}
-              emptyText={
-                direction
-                  ? "No Connectors match this filter."
-                  : "No Connectors are installed. Use New Connector, above, to author the first one."
-              }
+              applied={direction ? 1 : 0}
+              noun="Connectors"
+              emptyText="No Connectors are installed. Use New Connector, above, to author the first one."
             />
             {connectors.length > 0 ? (
               <TableCard
@@ -164,7 +162,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
           <h2 className="m-0">Connector</h2>
           <CloseInspector to="/connectors" label="Close the Connector detail" />
         </div>
-        <p role="alert">{problem.detail ?? `This Connector could not be read (${problem.status}).`}</p>
+        <ReadError problem={problem} what="This Connector" back={{ to: "/connectors", label: "Back to Connectors" }} />
       </Inspector>
     );
   if (!connector.data) return <Inspector label="Connector detail">Loading…</Inspector>;

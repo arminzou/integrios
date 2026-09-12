@@ -10,7 +10,16 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { appliedNote, ConfirmAction, FilterBar, FormError, ListStatus, LoadMore, WriteStatus } from "../ui/controls";
+import {
+  appliedNote,
+  ConfirmAction,
+  FilterBar,
+  FormError,
+  ListStatus,
+  LoadMore,
+  ReadError,
+  WriteStatus,
+} from "../ui/controls";
 import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
 import { FilterSelectField, FilterTextField, Form } from "../ui/fields";
 import { CloseInspector, Inspector, InspectorPlaceholder, PageHeader, RowHeader, TableCard } from "../ui/layout";
@@ -335,7 +344,9 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             loaded={list.isSuccess}
             problem={asProblem(list.error)}
             empty={events.length === 0}
-            emptyText="No Events in this Tenant match these filters."
+            applied={appliedCount}
+            noun="Events"
+            emptyText="No Events in this Tenant yet."
           />
           {events.length > 0 ? (
             <TableCard
@@ -431,8 +442,7 @@ function ActivitySummary({
   onSelect: (key: SummaryKey) => void;
 }) {
   const problem = asProblem(summary.error);
-  if (problem)
-    return <p role="alert">{problem.detail ?? `The activity summary could not be read (${problem.status}).`}</p>;
+  if (problem) return <ReadError problem={problem} what="The activity summary" />;
   if (!summary.data) return <p>Loading activity summary…</p>;
 
   const data = summary.data;
@@ -547,7 +557,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
           </h2>
           <CloseInspector to={closed} label="Close the Event detail" />
         </div>
-        <p role="alert">{problem.detail ?? `This Event could not be read (${problem.status}).`}</p>
+        <ReadError problem={problem} what="This Event" back={{ to: closed, label: "Back to Events" }} />
       </Inspector>
     );
   if (!event.data)

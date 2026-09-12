@@ -23,6 +23,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  ReadError,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -297,7 +298,9 @@ export function SubscriptionsScreen({
             loaded={list.isSuccess}
             problem={asProblem(list.error)}
             empty={subscriptions.length === 0}
-            emptyText="This Tenant has no Subscriptions matching this filter."
+            applied={applied}
+            noun="Subscriptions"
+            emptyText="This Tenant has no Subscriptions yet. Use New Subscription, above, to author the first one."
           />
           {subscriptions.length > 0 ? (
             <TableCard
@@ -471,7 +474,11 @@ function SubscriptionInspector({
           <h2>Subscription</h2>
           <CloseInspector to={`/tenants/${tenantId}/subscriptions`} label="Close the Subscription detail" />
         </div>
-        <p role="alert">{problem.detail ?? `This Subscription could not be read (${problem.status}).`}</p>
+        <ReadError
+          problem={problem}
+          what="This Subscription"
+          back={{ to: `/tenants/${tenantId}/subscriptions`, label: "Back to Subscriptions" }}
+        />
       </Inspector>
     );
   if (!subscription.data) return <Inspector label="Subscription detail">Loading…</Inspector>;
@@ -623,9 +630,7 @@ function SubscriptionSourcePath({
         Event type: <code>{eventType || "—"}</code>
       </p>
       {sources.isPending ? <p className="m-0 text-sm">Loading active Sources…</p> : null}
-      {sources.error ? (
-        <p role="alert">{asProblem(sources.error)?.detail ?? "Active Sources could not be read."}</p>
-      ) : null}
+      {sources.error ? <ReadError problem={asProblem(sources.error)!} what="Active Sources" /> : null}
       {!sources.isPending && !sources.error && items.length === 0 ? (
         <p className="m-0 text-sm">
           No active Source publishes to this Topic.{" "}

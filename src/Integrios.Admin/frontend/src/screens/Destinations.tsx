@@ -20,6 +20,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  ReadError,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -203,7 +204,14 @@ export function DestinationsScreen({
             loaded={list.isSuccess}
             problem={asProblem(list.error)}
             empty={destinations.length === 0}
-            emptyText="This Tenant has no Destinations matching this filter."
+            applied={applied}
+            noun="Destinations"
+            emptyText={
+              <>
+                This Tenant has no Destinations yet. A Destination is built from a{" "}
+                <Link to="/connectors">Connector</Link>.
+              </>
+            }
           />
           {destinations.length > 0 ? (
             <TableCard
@@ -407,7 +415,11 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
     return (
       <Inspector label="Destination detail">
         <h2 className="m-0">Destination</h2>
-        <p role="alert">{problem.detail ?? `This Destination could not be read (${problem.status}).`}</p>
+        <ReadError
+          problem={problem}
+          what="This Destination"
+          back={{ to: `/tenants/${tenantId}/destinations`, label: "Back to Destinations" }}
+        />
       </Inspector>
     );
   if (!destination.data) return <Inspector label="Destination detail">Loading…</Inspector>;

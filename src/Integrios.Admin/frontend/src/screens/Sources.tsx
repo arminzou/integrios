@@ -20,6 +20,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  ReadError,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -198,7 +199,13 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             loaded={list.isSuccess}
             problem={asProblem(list.error)}
             empty={sources.length === 0}
-            emptyText="This Tenant has no Sources matching these filters."
+            applied={applied}
+            noun="Sources"
+            emptyText={
+              <>
+                This Tenant has no Sources yet. A Source is built from a <Link to="/connectors">Connector</Link>.
+              </>
+            }
           />
           {sources.length > 0 ? (
             <TableCard
@@ -521,7 +528,11 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
     return (
       <Inspector label="Source detail">
         <h2 className="m-0">Source</h2>
-        <p role="alert">{problem.detail ?? `This Source could not be read (${problem.status}).`}</p>
+        <ReadError
+          problem={problem}
+          what="This Source"
+          back={{ to: `/tenants/${tenantId}/sources`, label: "Back to Sources" }}
+        />
       </Inspector>
     );
   if (!source.data) return <Inspector label="Source detail">Loading…</Inspector>;
