@@ -23,7 +23,9 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  nothingYet,
   ReadError,
+  SheetButton,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -243,53 +245,55 @@ export function SubscriptionsScreen({
     getNextPageParam: nextCursor<SubscriptionByTenantListItem>,
   });
   const subscriptions = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
+  // place of the table and carries the create action, the page header drops its own copy of it, and
+  // the filter bar is withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, subscriptions.length, applied);
+
+  const [creating, setCreating] = useState(false);
+  const create = <SheetButton label="New Subscription" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader
-        title="Subscriptions"
-        action={
-          <CreateSheet label="New Subscription" description="Routes matching Events from one Topic">
-            {(close) => <CreateTenantSubscription tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
-          </CreateSheet>
-        }
-      >
+      <PageHeader title="Subscriptions" action={blank ? undefined : create}>
         Tenant-wide routes from Topics to Destinations.
       </PageHeader>
 
-      <FilterBar applied={applied}>
-        <FilterSearch id="subscription-name" label="Find by name" value={name} onChange={setName} />
-        <Filter
-          id="subscription-topic"
-          label="Topic"
-          value={topicId}
-          onChange={setTopicId}
-          hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
-        >
-          {(topics.data?.items ?? []).map((topic) => (
-            <SelectItem key={topic.id} value={topic.id}>
-              {topic.name}
-            </SelectItem>
-          ))}
-        </Filter>
-        <Filter
-          id="subscription-destination"
-          label="Destination"
-          value={destinationId}
-          onChange={setDestinationId}
-          hint={destinations.data?.next_cursor ? "Showing the first 100 Destinations." : undefined}
-        >
-          {(destinations.data?.items ?? []).map((destination) => (
-            <SelectItem key={destination.id} value={destination.id}>
-              {destination.name}
-            </SelectItem>
-          ))}
-        </Filter>
-        <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
-          <SelectItem value="active">Active</SelectItem>
-          <SelectItem value="disabled">Disabled</SelectItem>
-        </Filter>
-      </FilterBar>
+      {blank ? null : (
+        <FilterBar applied={applied}>
+          <FilterSearch id="subscription-name" label="Find by name" value={name} onChange={setName} />
+          <Filter
+            id="subscription-topic"
+            label="Topic"
+            value={topicId}
+            onChange={setTopicId}
+            hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+          >
+            {(topics.data?.items ?? []).map((topic) => (
+              <SelectItem key={topic.id} value={topic.id}>
+                {topic.name}
+              </SelectItem>
+            ))}
+          </Filter>
+          <Filter
+            id="subscription-destination"
+            label="Destination"
+            value={destinationId}
+            onChange={setDestinationId}
+            hint={destinations.data?.next_cursor ? "Showing the first 100 Destinations." : undefined}
+          >
+            {(destinations.data?.items ?? []).map((destination) => (
+              <SelectItem key={destination.id} value={destination.id}>
+                {destination.name}
+              </SelectItem>
+            ))}
+          </Filter>
+          <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="disabled">Disabled</SelectItem>
+          </Filter>
+        </FilterBar>
+      )}
 
       <SplitView>
         <SplitList>
@@ -300,7 +304,8 @@ export function SubscriptionsScreen({
             empty={subscriptions.length === 0}
             applied={applied}
             noun="Subscriptions"
-            emptyText="This Tenant has no Subscriptions yet. Use New Subscription, above, to author the first one."
+            emptyText="A Subscription routes matching Events from one Topic to one Destination. Until one exists, accepted Events are delivered nowhere."
+            action={create}
           />
           {subscriptions.length > 0 ? (
             <TableCard
@@ -371,6 +376,15 @@ export function SubscriptionsScreen({
           </InspectorPlaceholder>
         )}
       </SplitView>
+
+      <CreateSheet
+        label="New Subscription"
+        description="Routes matching Events from one Topic"
+        open={creating}
+        onOpenChange={setCreating}
+      >
+        {(close) => <CreateTenantSubscription tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
+      </CreateSheet>
     </Page>
   );
 }

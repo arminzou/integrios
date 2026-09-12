@@ -17,6 +17,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  nothingYet,
   ReadError,
   WriteStatus,
 } from "../ui/controls";
@@ -196,6 +197,9 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
     getNextPageParam: nextCursor<EventListItem>,
   });
   const events = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the ledger at all, as opposed to nothing matching a filter: the filter form is
+  // withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, events.length, appliedCount);
 
   function selectSummaryItem(key: SummaryKey) {
     if (!summary.data) return;
@@ -236,103 +240,105 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
       <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
 
-      <Form {...form}>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => {
-            setSearchParams(writeFilters(values));
-            setActiveSummary(null);
-          })}
-        >
-          <FormError message={formError(asProblem(sources.error ?? topics.error))} />
-
-          <FilterBar
-            applied={appliedCount}
-            onClear={() => {
-              setSearchParams(new URLSearchParams());
+      {blank ? null : (
+        <Form {...form}>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={form.handleSubmit((values) => {
+              setSearchParams(writeFilters(values));
               setActiveSummary(null);
-            }}
+            })}
           >
-            <FilterTextField
-              control={form.control}
-              name="sourceEventId"
-              label="Source Event id"
-              type="search"
-              hint="The identity the sending system gave the Event. Matched exactly."
-            />
-            <FilterSelectField
-              control={form.control}
-              name="status"
-              label="Event status"
-              hint="How far the Event itself got."
-            >
-              {eventStatuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {statusLabel(status)}
-                </SelectItem>
-              ))}
-            </FilterSelectField>
-            {/* Delivery status is a separate filter over Delivery state. An Event matches when one
-                  of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
-            <FilterSelectField
-              control={form.control}
-              name="deliveryStatus"
-              label="Delivery status"
-              hint="Matches Events with at least one EventDelivery in this state."
-            >
-              {deliveryStatuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {statusLabel(status)}
-                </SelectItem>
-              ))}
-            </FilterSelectField>
-            <FilterSelectField
-              control={form.control}
-              name="sourceId"
-              label="Source"
-              hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
-              disabled={sources.isPending || sources.isError}
-            >
-              {(sources.data?.items ?? []).map((source) => (
-                <SelectItem key={source.id} value={source.id}>
-                  {source.type} · {source.id}
-                </SelectItem>
-              ))}
-            </FilterSelectField>
-            <FilterSelectField
-              control={form.control}
-              name="topicId"
-              label="Topic"
-              hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
-              disabled={topics.isPending || topics.isError}
-            >
-              {(topics.data?.items ?? []).map((topic) => (
-                <SelectItem key={topic.id} value={topic.id}>
-                  {topic.name}
-                </SelectItem>
-              ))}
-            </FilterSelectField>
-            <FilterTextField
-              control={form.control}
-              name="acceptedFrom"
-              label="Accepted from"
-              type="datetime-local"
-              step="1"
-            />
-            <FilterTextField
-              control={form.control}
-              name="acceptedTo"
-              label="Accepted to"
-              type="datetime-local"
-              step="1"
-            />
+            <FormError message={formError(asProblem(sources.error ?? topics.error))} />
 
-            {/* Apply stays explicit. Seven controls that each re-queried on change would issue six
+            <FilterBar
+              applied={appliedCount}
+              onClear={() => {
+                setSearchParams(new URLSearchParams());
+                setActiveSummary(null);
+              }}
+            >
+              <FilterTextField
+                control={form.control}
+                name="sourceEventId"
+                label="Source Event id"
+                type="search"
+                hint="The identity the sending system gave the Event. Matched exactly."
+              />
+              <FilterSelectField
+                control={form.control}
+                name="status"
+                label="Event status"
+                hint="How far the Event itself got."
+              >
+                {eventStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {statusLabel(status)}
+                  </SelectItem>
+                ))}
+              </FilterSelectField>
+              {/* Delivery status is a separate filter over Delivery state. An Event matches when one
+                  of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
+              <FilterSelectField
+                control={form.control}
+                name="deliveryStatus"
+                label="Delivery status"
+                hint="Matches Events with at least one EventDelivery in this state."
+              >
+                {deliveryStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {statusLabel(status)}
+                  </SelectItem>
+                ))}
+              </FilterSelectField>
+              <FilterSelectField
+                control={form.control}
+                name="sourceId"
+                label="Source"
+                hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
+                disabled={sources.isPending || sources.isError}
+              >
+                {(sources.data?.items ?? []).map((source) => (
+                  <SelectItem key={source.id} value={source.id}>
+                    {source.type} · {source.id}
+                  </SelectItem>
+                ))}
+              </FilterSelectField>
+              <FilterSelectField
+                control={form.control}
+                name="topicId"
+                label="Topic"
+                hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+                disabled={topics.isPending || topics.isError}
+              >
+                {(topics.data?.items ?? []).map((topic) => (
+                  <SelectItem key={topic.id} value={topic.id}>
+                    {topic.name}
+                  </SelectItem>
+                ))}
+              </FilterSelectField>
+              <FilterTextField
+                control={form.control}
+                name="acceptedFrom"
+                label="Accepted from"
+                type="datetime-local"
+                step="1"
+              />
+              <FilterTextField
+                control={form.control}
+                name="acceptedTo"
+                label="Accepted to"
+                type="datetime-local"
+                step="1"
+              />
+
+              {/* Apply stays explicit. Seven controls that each re-queried on change would issue six
                   requests on the way to the scope the Operator actually wanted. */}
-            <Button type="submit">Apply filters</Button>
-          </FilterBar>
-        </form>
-      </Form>
+              <Button type="submit">Apply filters</Button>
+            </FilterBar>
+          </form>
+        </Form>
+      )}
 
       <div
         data-layout="events"
@@ -346,7 +352,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             empty={events.length === 0}
             applied={appliedCount}
             noun="Events"
-            emptyText="No Events in this Tenant yet."
+            emptyText="Nothing has been accepted for this Tenant yet. Events arrive through a Source, on the intake endpoint."
           />
           {events.length > 0 ? (
             <TableCard

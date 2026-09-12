@@ -150,10 +150,12 @@ describe("Event history", () => {
   });
 
   it("reports unavailable filter options instead of presenting an empty picker", async () => {
+    // A ledger with a row in it, because the filter form is only offered over a ledger there is
+    // something to narrow.
     stubHttp((call) =>
       call.url.pathname.endsWith("/sources")
         ? { status: 500, body: { title: "Sources are unavailable." } }
-        : respondFor(page([]))(call),
+        : respondFor(page([routedEventWithDeadLetters]))(call),
     );
 
     renderScreen(<EventsScreen tenantId={tenantId} />);

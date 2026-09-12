@@ -20,7 +20,9 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  nothingYet,
   ReadError,
+  SheetButton,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -92,29 +94,30 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
     getNextPageParam: nextCursor<Topic>,
   });
   const topics = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
+  // place of the table and carries the create action, the page header drops its own copy of it, and
+  // the filter bar is withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, topics.length, applied);
+  const [creating, setCreating] = useState(false);
+  const create = <SheetButton label="New Topic" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader
-        title="Topics"
-        action={
-          <CreateSheet label="New Topic" description="The Tenant-scoped stream Subscriptions match against">
-            {(close) => <CreateTopic tenantId={tenantId} onCreated={close} />}
-          </CreateSheet>
-        }
-      >
+      <PageHeader title="Topics" action={blank ? undefined : create}>
         A Topic is the Tenant-scoped stream Subscriptions match against. Its key is immutable and travels with every
         Event delivered from it; its name is a label you can correct.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        <FilterBar applied={applied}>
-          <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
-          <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="disabled">Disabled</SelectItem>
-          </Filter>
-        </FilterBar>
+        {blank ? null : (
+          <FilterBar applied={applied}>
+            <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
+            <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="disabled">Disabled</SelectItem>
+            </Filter>
+          </FilterBar>
+        )}
 
         <SplitView>
           <SplitList>
@@ -125,7 +128,8 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
               empty={topics.length === 0}
               applied={applied}
               noun="Topics"
-              emptyText="This Tenant has no Topics yet. Use New Topic, above, to author the first one."
+              emptyText="The Tenant-scoped stream Subscriptions match against. Events reach a Destination by the Topic they are accepted into."
+              action={create}
             />
             {topics.length > 0 ? (
               <TableCard
@@ -189,6 +193,15 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
           )}
         </SplitView>
       </section>
+
+      <CreateSheet
+        label="New Topic"
+        description="The Tenant-scoped stream Subscriptions match against"
+        open={creating}
+        onOpenChange={setCreating}
+      >
+        {(close) => <CreateTopic tenantId={tenantId} onCreated={close} />}
+      </CreateSheet>
     </Page>
   );
 }

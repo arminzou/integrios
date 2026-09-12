@@ -69,8 +69,11 @@ describe("Creating a Destination", () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
     renderScreen(<DestinationsScreen tenantId={tenantId} />);
+    // Once the empty list has landed, the action is the one inside the card that replaces the table;
+    // the page header has dropped its copy, so there is exactly one trigger to hold on to.
+    await screen.findByRole("heading", { name: "No Destinations yet" });
 
-    const trigger = await screen.findByRole("button", { name: "New Destination" });
+    const trigger = screen.getByRole("button", { name: "New Destination" });
     // A trigger that opens a dialog says so, and says whether it is open, before it is pressed.
     expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
     expect(trigger.getAttribute("aria-expanded")).toBe("false");

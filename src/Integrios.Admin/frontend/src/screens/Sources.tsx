@@ -20,7 +20,9 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  nothingYet,
   ReadError,
+  SheetButton,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -147,50 +149,48 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
     getNextPageParam: nextCursor<SourceListItem>,
   });
   const sources = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
+  // place of the table and carries the create action, the page header drops its own copy of it, and
+  // the filter bar is withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, sources.length, applied);
+
+  const [creating, setCreating] = useState(openCreate);
+  const create = <SheetButton label="New Source" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader
-        title="Sources"
-        action={
-          <CreateSheet
-            label="New Source"
-            description="A Source binds one Connector to one Topic"
-            initialOpen={openCreate}
-          >
-            {(close) => <CreateSource tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
-          </CreateSheet>
-        }
-      >
+      <PageHeader title="Sources" action={blank ? undefined : create}>
         A Source binds one Connector to one Topic and owns how its input is read.
       </PageHeader>
 
-      <FilterBar applied={applied}>
-        <Filter
-          id="source-topic"
-          label="Topic"
-          value={topicId}
-          onChange={setTopicId}
-          hint={topicOptions.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
-        >
-          {(topicOptions.data?.items ?? []).map((topic) => (
-            <SelectItem key={topic.id} value={topic.id}>
-              {topic.name}
-            </SelectItem>
-          ))}
-        </Filter>
-        <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-          <SelectItem value="active">Active</SelectItem>
-          <SelectItem value="revoked">Revoked</SelectItem>
-        </Filter>
-        <Filter id="source-type" label="Type" value={type} onChange={setType}>
-          {sourceTypes.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </Filter>
-      </FilterBar>
+      {blank ? null : (
+        <FilterBar applied={applied}>
+          <Filter
+            id="source-topic"
+            label="Topic"
+            value={topicId}
+            onChange={setTopicId}
+            hint={topicOptions.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+          >
+            {(topicOptions.data?.items ?? []).map((topic) => (
+              <SelectItem key={topic.id} value={topic.id}>
+                {topic.name}
+              </SelectItem>
+            ))}
+          </Filter>
+          <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="revoked">Revoked</SelectItem>
+          </Filter>
+          <Filter id="source-type" label="Type" value={type} onChange={setType}>
+            {sourceTypes.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </Filter>
+        </FilterBar>
+      )}
 
       <SplitView>
         <SplitList>
@@ -203,9 +203,10 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             noun="Sources"
             emptyText={
               <>
-                This Tenant has no Sources yet. A Source is built from a <Link to="/connectors">Connector</Link>.
+                A Source binds one <Link to="/connectors">Connector</Link> to one Topic and owns how its input is read.
               </>
             }
+            action={create}
           />
           {sources.length > 0 ? (
             <TableCard
@@ -264,6 +265,15 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
           </InspectorPlaceholder>
         )}
       </SplitView>
+
+      <CreateSheet
+        label="New Source"
+        description="A Source binds one Connector to one Topic"
+        open={creating}
+        onOpenChange={setCreating}
+      >
+        {(close) => <CreateSource tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
+      </CreateSheet>
     </Page>
   );
 }

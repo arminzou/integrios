@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { type ComponentProps, type ReactNode, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { MessageBubble } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
 import type { Problem } from "../api/problem";
@@ -35,23 +36,22 @@ export function Disclosure({ label, children }: { label: string; children: React
   );
 }
 
-/// The create panel's open state, lifted so the control that opens it can sit in the page header
-/// where a primary action belongs, while the form itself stays below the header in reading order.
-///
-/// The panel is rendered and hidden rather than unmounted, so `aria-controls` always resolves to a
-/// real element and the browser announces the relationship whether or not it is open.
 /// Creating something opens a sheet from the trailing edge rather than a panel above the list. The
 /// list keeps its width and its position - measured on Destinations at 1512, the alternatives moved
 /// it 657 pixels down the page or took 73 pixels off it - and the half-filled form is a dialog the
 /// Operator dismisses rather than a region of the page they have to scroll past.
 ///
-/// The trigger and the sheet are one element so a screen hands the page header a single action, and
-/// the content is portalled out of the layout it would otherwise sit inside.
+/// Two shapes. Where one control opens the sheet, the trigger and the sheet are one element and the
+/// open state lives here, so a screen hands the page header a single action. Where a screen opens
+/// the same sheet from more than one place, it passes `open` and `onOpenChange` and renders its own
+/// `SheetButton`s: the open state cannot belong to a button that a layout decision may remove.
 function FormSheet({
   label,
   title = label,
   description,
   initialOpen = false,
+  open,
+  onOpenChange,
   variant,
   children,
 }: {
@@ -59,24 +59,46 @@ function FormSheet({
   title?: string;
   description?: string;
   initialOpen?: boolean;
+  /// Present when the screen owns the state. The built-in trigger is then not rendered — the screen
+  /// has its own, and two buttons opening one sheet is the situation this shape exists for.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   variant: "default" | "outline";
   /// Handed a way to close, because a write that succeeded should not leave its own form standing.
   children: (close: () => void) => ReactNode;
 }) {
-  const [open, setOpen] = useState(initialOpen);
+  const [ownOpen, setOwnOpen] = useState(initialOpen);
+  const screenOwned = open !== undefined;
+  const isOpen = screenOwned ? open : ownOpen;
+  const setOpen = screenOwned ? (onOpenChange ?? (() => {})) : setOwnOpen;
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button type="button" variant={variant}>
-          {label}
-        </Button>
-      </SheetTrigger>
+    <Sheet open={isOpen} onOpenChange={setOpen}>
+      {screenOwned ? null : (
+        <SheetTrigger asChild>
+          <Button type="button" variant={variant}>
+            {label}
+          </Button>
+        </SheetTrigger>
+      )}
       <SheetContent aria-label={title}>
         <SheetHeader title={title} description={description} />
         {children(() => setOpen(false))}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/// Opens a sheet whose state the screen owns. It holds nothing itself, so a screen may render it in
+/// the page header, inside the card that replaces an empty table, or neither, and React may unmount
+/// it freely — where the state sat inside the button, dropping the button took a half-filled form
+/// down with it. `aria-controls` is what Radix's own trigger adds and this cannot: the content it
+/// would name exists only while the sheet is open.
+export function SheetButton({ label, expanded, onOpen }: { label: string; expanded: boolean; onOpen: () => void }) {
+  return (
+    <Button type="button" aria-haspopup="dialog" aria-expanded={expanded} onClick={onOpen}>
+      {label}
+    </Button>
   );
 }
 
@@ -337,6 +359,13 @@ export function FilterBar({
   );
 }
 
+/// Whether a list is empty because the scope holds nothing at all, rather than because it is still
+/// loading or because a filter narrowed it away. Screens withhold their filter bar while it holds:
+/// there is nothing to narrow, and the bar returns with the first row.
+export function nothingYet(loaded: boolean, count: number, applied: number): boolean {
+  return loaded && count === 0 && applied === 0;
+}
+
 /// How many filters a list is under, in the words its caption already uses. Empty when the list is
 /// showing everything, so an unfiltered caption says nothing extra.
 export function appliedNote(applied: number): string {
@@ -374,6 +403,7 @@ export function ListStatus({
   applied,
   noun,
   emptyText,
+  action,
 }: {
   busy: boolean;
   loaded: boolean;
@@ -382,12 +412,20 @@ export function ListStatus({
   applied: number;
   noun: string;
   emptyText: ReactNode;
+  /// The screen's own way to author the first one, repeated inside the empty card. A screen whose
+  /// list is not authored here — the Event ledger — passes none, and the card is then a statement.
+  action?: ReactNode;
 }) {
   if (problem)
     return <ReadError problem={problem} what={`The ${noun} list`} back={{ to: "/tenants", label: "Go to Tenants" }} />;
   if (busy && !loaded) return <ListSkeleton />;
   if (loaded && empty) {
-    if (applied === 0) return <p className="m-0">{emptyText}</p>;
+    if (applied === 0)
+      return (
+        <EmptyList noun={noun} action={action}>
+          {emptyText}
+        </EmptyList>
+      );
     return (
       <p className="m-0">
         No {noun} match {applied === 1 ? "this filter" : "these filters"}.
@@ -395,6 +433,22 @@ export function ListStatus({
     );
   }
   return null;
+}
+
+/// A list with nothing in it at all occupies the card its table would have, rather than leaving one
+/// sentence under a filter bar and a screen of canvas. The action comes with it: the sentence that
+/// says to author the first one is no use pointing back up at the page header the eye has left.
+///
+/// Only for the genuinely-empty case. A list emptied by its own filters is a narrower scope, not an
+/// empty Tenant, and a card that size would overstate it.
+function EmptyList({ noun, children, action }: { noun: string; children: ReactNode; action?: ReactNode }) {
+  return (
+    <Card className="items-center gap-2.5 px-6 py-10 text-center">
+      <h2 className="m-0">No {noun} yet</h2>
+      <p className="m-0 max-w-[52ch] text-sm text-ink-secondary">{children}</p>
+      {action ? <div className="mt-2">{action}</div> : null}
+    </Card>
+  );
 }
 
 /// A read that failed. 404 is the one status whose Problem Details title carries no information —

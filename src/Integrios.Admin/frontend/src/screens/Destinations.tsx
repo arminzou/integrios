@@ -20,7 +20,9 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  nothingYet,
   ReadError,
+  SheetButton,
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
@@ -158,44 +160,46 @@ export function DestinationsScreen({
     getNextPageParam: nextCursor<DestinationListItem>,
   });
   const destinations = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
+  // place of the table and carries the create action, the page header drops its own copy of it, and
+  // the filter bar is withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, destinations.length, applied);
+
+  const [creating, setCreating] = useState(false);
+  const create = <SheetButton label="New Destination" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader
-        title="Destinations"
-        action={
-          <CreateSheet label="New Destination" description="Tenant-owned endpoint built from a Connector">
-            {(close) => <CreateDestination tenantId={tenantId} onCreated={close} />}
-          </CreateSheet>
-        }
-      >
+      <PageHeader title="Destinations" action={blank ? undefined : create}>
         Tenant-owned endpoints built from a Connector. Subscriptions deliver to one of these.
       </PageHeader>
 
-      <FilterBar applied={applied}>
-        <FilterSearch id="destination-name" label="Find by name" value={name} onChange={setName} />
-        <Filter id="destination-status" label="Status" value={status} onChange={setStatus}>
-          <SelectItem value="active">Active</SelectItem>
-          <SelectItem value="disabled">Disabled</SelectItem>
-        </Filter>
-        {/* The environments a Tenant actually uses, read off the rows it already has rather than
+      {blank ? null : (
+        <FilterBar applied={applied}>
+          <FilterSearch id="destination-name" label="Find by name" value={name} onChange={setName} />
+          <Filter id="destination-status" label="Status" value={status} onChange={setStatus}>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="disabled">Disabled</SelectItem>
+          </Filter>
+          {/* The environments a Tenant actually uses, read off the rows it already has rather than
             from a fixed list: environment is free text on a Destination, so there is no vocabulary
             to enumerate. */}
-        <Filter id="destination-environment" label="Environment" value={environment} onChange={setEnvironment}>
-          {environments.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </Filter>
-        <Filter id="destination-connector" label="Connector" value={connector} onChange={setConnector}>
-          {(connectors.data?.items ?? []).map((option) => (
-            <SelectItem key={option.id} value={option.key}>
-              {option.key}
-            </SelectItem>
-          ))}
-        </Filter>
-      </FilterBar>
+          <Filter id="destination-environment" label="Environment" value={environment} onChange={setEnvironment}>
+            {environments.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </Filter>
+          <Filter id="destination-connector" label="Connector" value={connector} onChange={setConnector}>
+            {(connectors.data?.items ?? []).map((option) => (
+              <SelectItem key={option.id} value={option.key}>
+                {option.key}
+              </SelectItem>
+            ))}
+          </Filter>
+        </FilterBar>
+      )}
 
       <SplitView>
         <SplitList>
@@ -208,10 +212,11 @@ export function DestinationsScreen({
             noun="Destinations"
             emptyText={
               <>
-                This Tenant has no Destinations yet. A Destination is built from a{" "}
-                <Link to="/connectors">Connector</Link>.
+                A Tenant-owned endpoint built from a <Link to="/connectors">Connector</Link>. Subscriptions deliver to
+                one of these.
               </>
             }
+            action={create}
           />
           {destinations.length > 0 ? (
             <TableCard
@@ -272,6 +277,15 @@ export function DestinationsScreen({
           </InspectorPlaceholder>
         )}
       </SplitView>
+
+      <CreateSheet
+        label="New Destination"
+        description="Tenant-owned endpoint built from a Connector"
+        open={creating}
+        onOpenChange={setCreating}
+      >
+        {(close) => <CreateDestination tenantId={tenantId} onCreated={close} />}
+      </CreateSheet>
     </Page>
   );
 }

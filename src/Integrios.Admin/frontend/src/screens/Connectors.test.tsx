@@ -42,7 +42,7 @@ describe("Authoring the first Connector", () => {
     const calls = stubHttp(listOnly);
 
     const { router } = renderScreen(<ConnectorsScreen />);
-    await screen.findByText(/No Connectors are installed/);
+    await screen.findByRole("heading", { name: "No Connectors yet" });
 
     openAuthoring();
     fillBasics("github", "2");

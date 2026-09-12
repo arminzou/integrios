@@ -1,11 +1,22 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { appliedNote, CreateSheet, EditSheet, FilterBar, ListStatus, LoadMore, ReadError } from "../ui/controls";
+import {
+  appliedNote,
+  CreateSheet,
+  EditSheet,
+  FilterBar,
+  ListStatus,
+  LoadMore,
+  nothingYet,
+  ReadError,
+  SheetButton,
+} from "../ui/controls";
 import { Filter } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { formatJson } from "../ui/json";
@@ -42,38 +53,30 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
     getNextPageParam: nextCursor<ConnectorListItem>,
   });
   const connectors = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
+  // place of the table and carries the create action, the page header drops its own copy of it, and
+  // the filter bar is withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, connectors.length, direction ? 1 : 0);
+
+  const [creating, setCreating] = useState(false);
+  const create = <SheetButton label="New Connector" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader
-        title="Connectors"
-        action={
-          <CreateSheet
-            label="New Connector"
-            description="Build a reusable capability definition without writing its manifest."
-          >
-            {(close) => (
-              <ConnectorAuthoring
-                onApplied={(installed) => {
-                  close();
-                  if (installed) navigate(`/connectors/${installed.id}`);
-                }}
-              />
-            )}
-          </CreateSheet>
-        }
-      >
+      <PageHeader title="Connectors" action={blank ? undefined : create}>
         Deployment-wide capability definitions. Sources and Destinations are built from these, per Tenant.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        <FilterBar applied={(direction ? 1 : 0) as number}>
-          <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
-            <SelectItem value="source">Source</SelectItem>
-            <SelectItem value="destination">Destination</SelectItem>
-            <SelectItem value="both">Both</SelectItem>
-          </Filter>
-        </FilterBar>
+        {blank ? null : (
+          <FilterBar applied={(direction ? 1 : 0) as number}>
+            <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
+              <SelectItem value="source">Source</SelectItem>
+              <SelectItem value="destination">Destination</SelectItem>
+              <SelectItem value="both">Both</SelectItem>
+            </Filter>
+          </FilterBar>
+        )}
 
         <SplitView>
           <SplitList>
@@ -84,7 +87,8 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
               empty={connectors.length === 0}
               applied={direction ? 1 : 0}
               noun="Connectors"
-              emptyText="No Connectors are installed. Use New Connector, above, to author the first one."
+              emptyText="A deployment-wide capability definition. Sources and Destinations are built from these, per Tenant."
+              action={create}
             />
             {connectors.length > 0 ? (
               <TableCard
@@ -140,6 +144,22 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
           )}
         </SplitView>
       </section>
+
+      <CreateSheet
+        label="New Connector"
+        description="Build a reusable capability definition without writing its manifest."
+        open={creating}
+        onOpenChange={setCreating}
+      >
+        {(close) => (
+          <ConnectorAuthoring
+            onApplied={(installed) => {
+              close();
+              if (installed) navigate(`/connectors/${installed.id}`);
+            }}
+          />
+        )}
+      </CreateSheet>
     </Page>
   );
 }

@@ -19,7 +19,9 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  nothingYet,
   ReadError,
+  SheetButton,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, Form, TextField } from "../ui/fields";
@@ -78,28 +80,30 @@ export function TenantApiKeysScreen({
     getNextPageParam: nextCursor<TenantApiKeyListItem>,
   });
   const keys = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
+  // place of the table and carries the create action, the page header drops its own copy of it, and
+  // the filter bar is withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, keys.length, state ? 1 : 0);
+
+  const [creating, setCreating] = useState(false);
+  const create = <SheetButton label="New API key" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader
-        title="API keys"
-        action={
-          <CreateSheet label="New API key" description="The token is shown once, at creation">
-            {(close) => <CreateTenantApiKey tenantId={tenantId} onCreated={close} />}
-          </CreateSheet>
-        }
-      >
+      <PageHeader title="API keys" action={blank ? undefined : create}>
         Tenant credentials for the intake endpoint. The token itself is shown once, at creation.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        <FilterBar applied={state ? 1 : 0}>
-          <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="expired">Expired</SelectItem>
-            <SelectItem value="revoked">Revoked</SelectItem>
-          </Filter>
-        </FilterBar>
+        {blank ? null : (
+          <FilterBar applied={state ? 1 : 0}>
+            <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="expired">Expired</SelectItem>
+              <SelectItem value="revoked">Revoked</SelectItem>
+            </Filter>
+          </FilterBar>
+        )}
 
         <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
         <SplitView>
@@ -111,7 +115,8 @@ export function TenantApiKeysScreen({
               empty={keys.length === 0}
               applied={state ? 1 : 0}
               noun="API keys"
-              emptyText="This Tenant has no API keys yet. Use New API key, above, to author the first one."
+              emptyText="Tenant credentials for the intake endpoint. Without one, nothing can post an Event to this Tenant."
+              action={create}
             />
             {keys.length > 0 ? (
               <TableCard
@@ -175,6 +180,15 @@ export function TenantApiKeysScreen({
           )}
         </SplitView>
       </section>
+
+      <CreateSheet
+        label="New API key"
+        description="The token is shown once, at creation"
+        open={creating}
+        onOpenChange={setCreating}
+      >
+        {(close) => <CreateTenantApiKey tenantId={tenantId} onCreated={close} />}
+      </CreateSheet>
     </Page>
   );
 }

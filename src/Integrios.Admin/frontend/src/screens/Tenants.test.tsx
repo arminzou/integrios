@@ -26,11 +26,12 @@ const listCalls = (calls: Call[]) => calls.filter((call) => call.method === "GET
 
 describe("Tenants list", () => {
   it("places the name search before the compact filters", async () => {
-    stubHttp(() => ({ status: 200, body: page([]) }));
+    stubHttp(() => ({ status: 200, body: page([tenant()]) }));
 
     renderScreen(<TenantsScreen />, "/tenants");
+    await screen.findByRole("link", { name: "Acme" });
 
-    const filters = await screen.findByRole("region", { name: "Filters" });
+    const filters = screen.getByRole("region", { name: "Filters" });
     const name = within(filters).getByRole("searchbox", { name: "Name or slug" });
     expect(within(filters).getByRole("searchbox", { name: "Environment" })).toBeTruthy();
     // The name search leads the row; how it is drawn is measured in the browser, where there is
@@ -60,6 +61,56 @@ describe("Tenants list", () => {
       await waitFor(() => expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe("restored"));
     },
   );
+
+  it("offers the first Tenant from the empty list itself, and withholds filters until there is something to narrow", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<TenantsScreen />, "/tenants");
+
+    // The card that replaces the table carries the action, so the next step is where the sentence
+    // that asks for it is, rather than back up in the page header.
+    const empty = (await screen.findByRole("heading", { name: "No Tenants yet" })).closest("div")!;
+
+    // Nothing to narrow: a filter bar over an empty deployment only offers to make it emptier.
+    // Asserted before the sheet opens — a modal sheet hides the rest of the page from the
+    // accessibility tree, which would make this pass whether the bar is there or not.
+    expect(screen.queryByRole("region", { name: "Filters" })).toBeNull();
+
+    fireEvent.click(within(empty).getByRole("button", { name: "New Tenant" }));
+    await screen.findByRole("dialog");
+  });
+
+  it("keeps a half-filled create form open when the empty list lands underneath it", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<TenantsScreen />, "/tenants");
+
+    // Pressed before the list has answered, so this is the page header's action — the one the empty
+    // response is about to remove. The sheet's open state belongs to the screen for exactly this
+    // reason: an Operator who has started typing does not lose the form to a list arriving behind it.
+    fireEvent.click(screen.getByRole("button", { name: "New Tenant" }));
+    fireEvent.change(within(await screen.findByRole("dialog")).getByLabelText("Slug"), {
+      target: { value: "acme" },
+    });
+
+    // `hidden` because the open sheet is modal: the page behind it is out of the accessibility tree,
+    // which is the point — the card is there, underneath, and the form on top of it survived.
+    await screen.findByRole("heading", { name: "No Tenants yet", hidden: true });
+
+    const sheet = within(screen.getByRole("dialog"));
+    expect((sheet.getByLabelText("Slug") as HTMLInputElement).value).toBe("acme");
+  });
+
+  it("keeps the filtered-empty list as a sentence rather than a card, so a narrowed scope is not read as an empty deployment", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<TenantsScreen />, "/tenants?name=nothing");
+
+    expect(await screen.findByText("No Tenants match this filter.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "No Tenants yet" })).toBeNull();
+    // The way out of a filtered empty list is the bar's own Clear action, so the bar stays.
+    expect(screen.getByRole("region", { name: "Filters" })).toBeTruthy();
+  });
 
   it("reports a request that could not reach Admin instead of loading forever", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));

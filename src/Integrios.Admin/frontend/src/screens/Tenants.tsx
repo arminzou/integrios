@@ -20,7 +20,9 @@ import {
   FormError,
   ListStatus,
   LoadMore,
+  nothingYet,
   ReadError,
+  SheetButton,
   WriteStatus,
 } from "../ui/controls";
 import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
@@ -77,35 +79,36 @@ export function TenantsScreen() {
     getNextPageParam: nextCursor<Tenant>,
   });
   const tenants = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
+  // place of the table and carries the create action, the page header drops its own copy of it, and
+  // the filter bar is withheld until there is something to narrow.
+  const blank = nothingYet(list.isSuccess, tenants.length, applied);
+  const [creating, setCreating] = useState(false);
+  const create = <SheetButton label="New Tenant" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader
-        title="Tenants"
-        action={
-          <CreateSheet label="New Tenant" description="An ownership and isolation boundary, not a user">
-            {(close) => <CreateTenant onCreated={close} />}
-          </CreateSheet>
-        }
-      >
+      <PageHeader title="Tenants" action={blank ? undefined : create}>
         Every Tenant in this deployment. A Tenant is an ownership and isolation boundary, not a user.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        <FilterBar applied={applied}>
-          <FilterSearch id="tenant-name" label="Name or slug" value={name} onChange={setName} />
-          <FilterSearch
-            id="tenant-environment"
-            label="Environment"
-            value={environment}
-            onChange={setEnvironment}
-            fullWidth={false}
-          />
-          <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="disabled">Disabled</SelectItem>
-          </Filter>
-        </FilterBar>
+        {blank ? null : (
+          <FilterBar applied={applied}>
+            <FilterSearch id="tenant-name" label="Name or slug" value={name} onChange={setName} />
+            <FilterSearch
+              id="tenant-environment"
+              label="Environment"
+              value={environment}
+              onChange={setEnvironment}
+              fullWidth={false}
+            />
+            <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="disabled">Disabled</SelectItem>
+            </Filter>
+          </FilterBar>
+        )}
 
         <ListStatus
           busy={list.isFetching}
@@ -114,7 +117,8 @@ export function TenantsScreen() {
           empty={tenants.length === 0}
           applied={applied}
           noun="Tenants"
-          emptyText="No Tenants yet. Use New Tenant, above, to author the first one."
+          emptyText="An ownership and isolation boundary, not a user. Everything else in this deployment is authored inside one."
+          action={create}
         />
         {tenants.length > 0 ? (
           <TableCard
@@ -158,6 +162,15 @@ export function TenantsScreen() {
           </TableCard>
         ) : null}
       </section>
+
+      <CreateSheet
+        label="New Tenant"
+        description="An ownership and isolation boundary, not a user"
+        open={creating}
+        onOpenChange={setCreating}
+      >
+        {(close) => <CreateTenant onCreated={close} />}
+      </CreateSheet>
     </Page>
   );
 }
