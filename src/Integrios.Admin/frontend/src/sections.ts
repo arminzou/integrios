@@ -23,12 +23,12 @@ export const sectionHrefs: Record<TenantSection, (tenantId: string) => string> =
   apiKeys: (id) => `/tenants/${id}/tenant-api-keys`,
 };
 
-export const sectionOrder: TenantSection[] = [
-  "overview",
-  "events",
-  "destinations",
-  "sources",
-  "topics",
-  "subscriptions",
-  "apiKeys",
+/// The Tenant sections in the order an Operator authors them, grouped into what they are for: the
+/// landing (Overview), the authoring run, the observe run, and API keys unlabelled at the end. The
+/// shell reads the groups to put a label above the authoring and observe runs.
+export const sectionGroups: { label?: string; sections: TenantSection[] }[] = [
+  { sections: ["overview"] },
+  { label: "Author", sections: ["sources", "topics", "destinations", "subscriptions"] },
+  { label: "Observe", sections: ["events"] },
+  { sections: ["apiKeys"] },
 ];

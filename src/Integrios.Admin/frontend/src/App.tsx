@@ -15,13 +15,13 @@ import {
   TriangleAlert,
   Waypoints,
 } from "lucide-react";
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
 import { call } from "./api/query";
 import { isIdentifier } from "./identifiers";
-import { sectionHrefs, sectionLabels, sectionOrder, type TenantSection } from "./sections";
+import { sectionGroups, sectionHrefs, sectionLabels, type TenantSection } from "./sections";
 
 /// The session bootstrap is a server read like every other read in the dashboard, so it is read the
 /// same way. The four-state union and the cancellation flag it needed were an inline reimplementation
@@ -180,6 +180,11 @@ const navGroup = "flex flex-row flex-wrap items-center gap-0.5 shell:flex-col sh
 const navLabel =
   "sr-only shell:not-sr-only shell:m-0 shell:mb-1 shell:px-2.5 shell:text-[0.6875rem] " +
   "shell:font-semibold shell:tracking-[0.07em] shell:text-ink-secondary shell:uppercase";
+
+/// A sub-group label inside the Tenant list (Author / Observe): the same treatment as a group label,
+/// plus air above it so the runs read as separate. The unlabelled API-keys list carries the same air
+/// directly, since it has no label to hang it on.
+const navSubLabel = `${navLabel} shell:mt-3`;
 
 const navList = "m-0 flex list-none flex-row flex-wrap items-center gap-0.5 p-0 shell:flex-col shell:items-stretch";
 
@@ -422,23 +427,32 @@ function TenantNav({ tenantId, tenant }: { tenantId: string; tenant: ReturnType<
           <span className="text-xs text-ink-secondary">{tenant.data.environment}</span>
         ) : null}
       </Link>
-      <ul className={navList}>
-        {sectionOrder.map((section) => (
-          <li key={section}>
-            <NavLink to={sectionHrefs[section](tenantId)} end={section === "overview"} className={`group ${navLink}`}>
-              <NavIcon icon={sectionIcons[section]} />
-              {sectionLabels[section]}
-              {/* A count rides the destination it belongs to, so work that has stopped retrying is
-                  visible from anywhere in the Tenant rather than only from the ledger listing it. */}
-              {section === "events" && deadLettered > 0 ? (
-                <span className="ml-auto rounded-full bg-danger-surface px-1.5 py-px text-xs text-danger-ink tabular-nums">
-                  {deadLettered}
-                </span>
-              ) : null}
-            </NavLink>
-          </li>
-        ))}
-      </ul>
+      {sectionGroups.map((group, index) => (
+        <Fragment key={group.label ?? group.sections[0]}>
+          {group.label ? <p className={navSubLabel}>{group.label}</p> : null}
+          <ul className={navList + (index > 0 && !group.label ? " shell:mt-3" : "")}>
+            {group.sections.map((section) => (
+              <li key={section}>
+                <NavLink
+                  to={sectionHrefs[section](tenantId)}
+                  end={section === "overview"}
+                  className={`group ${navLink}`}
+                >
+                  <NavIcon icon={sectionIcons[section]} />
+                  {sectionLabels[section]}
+                  {/* A count rides the destination it belongs to, so work that has stopped retrying is
+                      visible from anywhere in the Tenant rather than only from the ledger listing it. */}
+                  {section === "events" && deadLettered > 0 ? (
+                    <span className="ml-auto rounded-full bg-danger-surface px-1.5 py-px text-xs text-danger-ink tabular-nums">
+                      {deadLettered}
+                    </span>
+                  ) : null}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </Fragment>
+      ))}
     </nav>
   );
 }

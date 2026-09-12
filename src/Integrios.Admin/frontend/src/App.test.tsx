@@ -132,4 +132,38 @@ describe("The signed-in rail", () => {
       "/auth/logout",
     );
   });
+
+  it("orders the Tenant sections in authoring sequence, grouped Author and Observe", async () => {
+    stubSignedIn({
+      id: "22222222-2222-2222-2222-222222222222",
+      slug: "acme",
+      name: "Acme",
+      status: "active",
+      environment: "production",
+      description: null,
+      created_at: "2026-09-01T00:00:00Z",
+      updated_at: "2026-09-01T00:00:00Z",
+    });
+
+    renderApp("/tenants/22222222-2222-2222-2222-222222222222/topics");
+
+    const tenantNav = await screen.findByRole("navigation", { name: "Tenant" });
+    const names = within(tenantNav)
+      .getAllByRole("link")
+      .map((link) => link.textContent);
+    const at = (name: string) => names.indexOf(name);
+
+    // The authoring sequence: a Source publishes through a Topic to a Destination, delivered by a
+    // Subscription; Events is the observe run, and API keys sit last.
+    expect(at("Overview")).toBeLessThan(at("Sources"));
+    expect(at("Sources")).toBeLessThan(at("Topics"));
+    expect(at("Topics")).toBeLessThan(at("Destinations"));
+    expect(at("Destinations")).toBeLessThan(at("Subscriptions"));
+    expect(at("Subscriptions")).toBeLessThan(at("Events"));
+    expect(at("Events")).toBeLessThan(at("API keys"));
+
+    // The two runs carry their own label, so the grouping is not only visual.
+    expect(within(tenantNav).getByText("Author")).toBeTruthy();
+    expect(within(tenantNav).getByText("Observe")).toBeTruthy();
+  });
 });
