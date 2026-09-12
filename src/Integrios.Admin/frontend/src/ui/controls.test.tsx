@@ -1,29 +1,44 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConfirmAction, Field, fieldProps } from "./controls";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { afterEach, describe, expect, it } from "vitest";
+import { CreateSheet, SheetButton } from "./controls";
 
 afterEach(cleanup);
 
-describe("Shared controls", () => {
-  it("associates a field with both its hint and error", () => {
-    render(
-      <Field id="name" label="Name" hint="Use a stable name." error="That name is taken.">
-        <input {...fieldProps("name", "That name is taken.", true)} />
-      </Field>,
-    );
+/// A screen that owns its create sheet and renders the trigger only while `withTrigger` holds — the
+/// shape every list screen has, where the page header's action goes away as soon as the list answers
+/// that it is empty and the card replacing the table takes the action over.
+function Screen({ withTrigger }: { withTrigger: boolean }) {
+  const [creating, setCreating] = useState(false);
+  return (
+    <>
+      {withTrigger ? <SheetButton label="New Thing" expanded={creating} onOpen={() => setCreating(true)} /> : null}
+      <CreateSheet label="New Thing" open={creating} onOpenChange={setCreating}>
+        {() => <input aria-label="Name" />}
+      </CreateSheet>
+    </>
+  );
+}
 
-    expect(screen.getByLabelText("Name").getAttribute("aria-describedby")).toBe("name-hint name-error");
+describe("A sheet whose open state the screen owns", () => {
+  it("keeps a half-filled form when the control that opened it is taken off the page", async () => {
+    const { rerender } = render(<Screen withTrigger={true} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "New Thing" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "half typed" } });
+
+    // What a list answering "empty" does to the page header: the trigger is gone, and the form an
+    // Operator had already started must not go with it.
+    rerender(<Screen withTrigger={false} />);
+
+    expect(screen.queryByRole("button", { name: "New Thing" })).toBeNull();
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("half typed");
   });
 
-  it("returns focus to the trigger when confirmation is cancelled", async () => {
-    render(<ConfirmAction label="Deactivate" question="Deactivate this?" onConfirm={vi.fn()} />);
-    const trigger = screen.getByRole("button", { name: "Deactivate" });
-    fireEvent.click(trigger);
-    const dialog = screen.getByRole("dialog", { name: "Deactivate" });
-    expect(within(dialog).getByText("Deactivate this?")).toBeTruthy();
-    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" }));
+  it("renders no trigger of its own, because the screen supplies them", () => {
+    render(<Screen withTrigger={false} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Deactivate" })));
+    expect(screen.queryByRole("button", { name: "New Thing" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

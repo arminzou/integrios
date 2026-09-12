@@ -13,7 +13,7 @@ import {
   FilterBar,
   ListStatus,
   LoadMore,
-  nothingYet,
+  narrowable,
   ReadError,
   SheetButton,
 } from "../ui/controls";
@@ -53,22 +53,22 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
     getNextPageParam: nextCursor<ConnectorListItem>,
   });
   const connectors = list.data?.pages.flatMap((page) => page.items) ?? [];
-  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
-  // place of the table and carries the create action, the page header drops its own copy of it, and
-  // the filter bar is withheld until there is something to narrow.
-  const blank = nothingYet(list.isSuccess, connectors.length, direction ? 1 : 0);
+  // Whether there is a list to narrow yet. Until the read answers, neither the filter bar nor the
+  // header's create action is rendered: an empty scope answers with the card that replaces the
+  // table, carrying the action itself, and a screen that guessed first would retract them.
+  const narrowing = narrowable(list.isSuccess, connectors.length, direction ? 1 : 0);
 
   const [creating, setCreating] = useState(false);
   const create = <SheetButton label="New Connector" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader title="Connectors" action={blank ? undefined : create}>
+      <PageHeader title="Connectors" action={narrowing ? create : undefined}>
         Deployment-wide capability definitions. Sources and Destinations are built from these, per Tenant.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        {blank ? null : (
+        {narrowing ? (
           <FilterBar applied={(direction ? 1 : 0) as number}>
             <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
               <SelectItem value="source">Source</SelectItem>
@@ -76,7 +76,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
               <SelectItem value="both">Both</SelectItem>
             </Filter>
           </FilterBar>
-        )}
+        ) : null}
 
         <SplitView>
           <SplitList>

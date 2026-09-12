@@ -20,7 +20,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
-  nothingYet,
+  narrowable,
   ReadError,
   SheetButton,
   WriteStatus,
@@ -94,22 +94,22 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
     getNextPageParam: nextCursor<Topic>,
   });
   const topics = list.data?.pages.flatMap((page) => page.items) ?? [];
-  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
-  // place of the table and carries the create action, the page header drops its own copy of it, and
-  // the filter bar is withheld until there is something to narrow.
-  const blank = nothingYet(list.isSuccess, topics.length, applied);
+  // Whether there is a list to narrow yet. Until the read answers, neither the filter bar nor the
+  // header's create action is rendered: an empty scope answers with the card that replaces the
+  // table, carrying the action itself, and a screen that guessed first would retract them.
+  const narrowing = narrowable(list.isSuccess, topics.length, applied);
   const [creating, setCreating] = useState(false);
   const create = <SheetButton label="New Topic" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader title="Topics" action={blank ? undefined : create}>
+      <PageHeader title="Topics" action={narrowing ? create : undefined}>
         A Topic is the Tenant-scoped stream Subscriptions match against. Its key is immutable and travels with every
         Event delivered from it; its name is a label you can correct.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        {blank ? null : (
+        {narrowing ? (
           <FilterBar applied={applied}>
             <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
             <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
@@ -117,7 +117,7 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
               <SelectItem value="disabled">Disabled</SelectItem>
             </Filter>
           </FilterBar>
-        )}
+        ) : null}
 
         <SplitView>
           <SplitList>

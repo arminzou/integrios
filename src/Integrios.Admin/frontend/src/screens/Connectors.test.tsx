@@ -23,8 +23,10 @@ const installed = {
 const listOnly = ({ method }: { method: string }) =>
   method === "PUT" ? { status: 201, body: installed } : { status: 200, body: page([]) };
 
-function openAuthoring() {
-  fireEvent.click(screen.getByRole("button", { name: "New Connector" }));
+/// The action appears with the list it belongs to, so this waits for it rather than assuming the
+/// page header has one before the read has answered.
+async function openAuthoring() {
+  fireEvent.click(await screen.findByRole("button", { name: "New Connector" }));
 }
 
 function fillBasics(key = "github", version?: string) {
@@ -44,7 +46,7 @@ describe("Authoring the first Connector", () => {
     const { router } = renderScreen(<ConnectorsScreen />);
     await screen.findByRole("heading", { name: "No Connectors yet" });
 
-    openAuthoring();
+    await openAuthoring();
     fillBasics("github", "2");
     fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
 
@@ -69,7 +71,7 @@ describe("Authoring the first Connector", () => {
     const calls = stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
-    openAuthoring();
+    await openAuthoring();
     const key = screen.getByLabelText("Key") as HTMLInputElement;
 
     // Lower snake_case starting with a letter is what the Admin API accepts, so that is what a name
@@ -101,7 +103,7 @@ describe("Authoring the first Connector", () => {
     const calls = stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
-    openAuthoring();
+    await openAuthoring();
     fillBasics("http");
     fireEvent.click(screen.getByRole("checkbox", { name: /Deliver Events over HTTP/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
@@ -117,7 +119,7 @@ describe("Authoring the first Connector", () => {
     const calls = stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
-    openAuthoring();
+    await openAuthoring();
     fillBasics("http");
     fireEvent.click(screen.getByRole("checkbox", { name: /Deliver Events over HTTP/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Receive Events/ }));
@@ -135,7 +137,7 @@ describe("Authoring the first Connector", () => {
     const calls = stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
-    openAuthoring();
+    await openAuthoring();
     fillBasics();
     fireEvent.click(screen.getByRole("checkbox", { name: /Receive Events/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
@@ -152,7 +154,7 @@ describe("Authoring the first Connector", () => {
     );
 
     renderScreen(<ConnectorsScreen />);
-    openAuthoring();
+    await openAuthoring();
     fillBasics("GITHUB");
     fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
 
@@ -195,7 +197,7 @@ describe("Importing a Connector manifest", () => {
     const calls = stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
-    openAuthoring();
+    await openAuthoring();
     fillBasics("github");
     importDraft(imported);
 
@@ -227,7 +229,7 @@ describe("Importing a Connector manifest", () => {
     stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
-    openAuthoring();
+    await openAuthoring();
     fillBasics("github");
     fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: "{not json" } });
 

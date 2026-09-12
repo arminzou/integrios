@@ -112,7 +112,7 @@ describe("Accessibility of the Operator workflows", () => {
     await screen.findByRole("heading", { level: 1, name: "Destinations" });
     // The create form is only exercised for accessibility once its disclosure is open — closed, it
     // carries no violations to find.
-    fireEvent.click(screen.getByText("New Destination"));
+    fireEvent.click(await screen.findByText("New Destination"));
     await expectNoAccessibilityViolations(await openDialog());
   });
 
@@ -121,7 +121,7 @@ describe("Accessibility of the Operator workflows", () => {
 
     renderScreen(<SourcesScreen tenantId={tenantId} />);
     await screen.findByRole("heading", { level: 1, name: "Sources" });
-    fireEvent.click(screen.getByText("New Source"));
+    fireEvent.click(await screen.findByText("New Source"));
     await screen.findByRole("button", { name: "Create Source" });
     await expectNoAccessibilityViolations(await openDialog());
   });
@@ -133,7 +133,7 @@ describe("Accessibility of the Operator workflows", () => {
     await screen.findByRole("heading", { level: 1, name: "Connectors" });
     // The guided draft is a form of native checkboxes, radios and fieldsets, so it is checked in the
     // state that has them rather than only in the screen's resting one.
-    fireEvent.click(screen.getByRole("button", { name: "New Connector" }));
+    fireEvent.click(await screen.findByRole("button", { name: "New Connector" }));
     await screen.findByRole("button", { name: "Create Connector" });
     await expectNoAccessibilityViolations(await openDialog());
   });
@@ -284,7 +284,7 @@ describe("Accessibility of detail and edit states", () => {
 
     renderScreen(<SourcesScreen tenantId={tenantId} />);
     await screen.findByRole("heading", { level: 1, name: "Sources" });
-    fireEvent.click(screen.getByText("New Source"));
+    fireEvent.click(await screen.findByText("New Source"));
     fireEvent.click(await screen.findByRole("button", { name: "Open Integrios Event Builder" }));
     await screen.findByRole("button", { name: "Close the Integrios Event Builder" });
     await expectNoAccessibilityViolations(await openDialog());

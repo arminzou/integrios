@@ -23,7 +23,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
-  nothingYet,
+  narrowable,
   ReadError,
   SheetButton,
   WriteStatus,
@@ -245,21 +245,21 @@ export function SubscriptionsScreen({
     getNextPageParam: nextCursor<SubscriptionByTenantListItem>,
   });
   const subscriptions = list.data?.pages.flatMap((page) => page.items) ?? [];
-  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
-  // place of the table and carries the create action, the page header drops its own copy of it, and
-  // the filter bar is withheld until there is something to narrow.
-  const blank = nothingYet(list.isSuccess, subscriptions.length, applied);
+  // Whether there is a list to narrow yet. Until the read answers, neither the filter bar nor the
+  // header's create action is rendered: an empty scope answers with the card that replaces the
+  // table, carrying the action itself, and a screen that guessed first would retract them.
+  const narrowing = narrowable(list.isSuccess, subscriptions.length, applied);
 
   const [creating, setCreating] = useState(false);
   const create = <SheetButton label="New Subscription" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader title="Subscriptions" action={blank ? undefined : create}>
+      <PageHeader title="Subscriptions" action={narrowing ? create : undefined}>
         Tenant-wide routes from Topics to Destinations.
       </PageHeader>
 
-      {blank ? null : (
+      {narrowing ? (
         <FilterBar applied={applied}>
           <FilterSearch id="subscription-name" label="Find by name" value={name} onChange={setName} />
           <Filter
@@ -293,7 +293,7 @@ export function SubscriptionsScreen({
             <SelectItem value="disabled">Disabled</SelectItem>
           </Filter>
         </FilterBar>
-      )}
+      ) : null}
 
       <SplitView>
         <SplitList>

@@ -359,11 +359,16 @@ export function FilterBar({
   );
 }
 
-/// Whether a list is empty because the scope holds nothing at all, rather than because it is still
-/// loading or because a filter narrowed it away. Screens withhold their filter bar while it holds:
-/// there is nothing to narrow, and the bar returns with the first row.
-export function nothingYet(loaded: boolean, count: number, applied: number): boolean {
-  return loaded && count === 0 && applied === 0;
+/// Whether there is a list to narrow: it has answered, and it holds rows or is already under a
+/// filter. The filter bar and the page header's create action wait for it, because both only make
+/// sense over a list that exists — an empty scope offers its own action, in the card that replaces
+/// the table.
+///
+/// It waits for the read rather than assuming rows, so a screen settles into its shape once. The
+/// other way round, a cold screen renders the populated shape and retracts it a moment later, and
+/// chrome that disappears is what an Operator reads as the page changing its mind.
+export function narrowable(loaded: boolean, count: number, applied: number): boolean {
+  return loaded && (count > 0 || applied > 0);
 }
 
 /// How many filters a list is under, in the words its caption already uses. Empty when the list is

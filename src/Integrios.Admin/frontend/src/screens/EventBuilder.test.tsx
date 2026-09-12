@@ -23,7 +23,7 @@ function stubOptions() {
 async function openSource(type: "event_api" | "webhook" | "queue" = "webhook") {
   stubOptions();
   renderScreen(<SourcesScreen tenantId={tenantId} />);
-  fireEvent.click(screen.getByRole("button", { name: "New Source" }));
+  fireEvent.click(await screen.findByRole("button", { name: "New Source" }));
   const dialog = await screen.findByRole("dialog", { name: "New Source" });
   fireEvent.change(within(dialog).getByLabelText("Connector"), { target: { value: connectorId } });
   fireEvent.change(within(dialog).getByLabelText("Topic"), { target: { value: topicId } });

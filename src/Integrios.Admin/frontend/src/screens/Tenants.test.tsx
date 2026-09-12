@@ -80,27 +80,6 @@ describe("Tenants list", () => {
     await screen.findByRole("dialog");
   });
 
-  it("keeps a half-filled create form open when the empty list lands underneath it", async () => {
-    stubHttp(() => ({ status: 200, body: page([]) }));
-
-    renderScreen(<TenantsScreen />, "/tenants");
-
-    // Pressed before the list has answered, so this is the page header's action — the one the empty
-    // response is about to remove. The sheet's open state belongs to the screen for exactly this
-    // reason: an Operator who has started typing does not lose the form to a list arriving behind it.
-    fireEvent.click(screen.getByRole("button", { name: "New Tenant" }));
-    fireEvent.change(within(await screen.findByRole("dialog")).getByLabelText("Slug"), {
-      target: { value: "acme" },
-    });
-
-    // `hidden` because the open sheet is modal: the page behind it is out of the accessibility tree,
-    // which is the point — the card is there, underneath, and the form on top of it survived.
-    await screen.findByRole("heading", { name: "No Tenants yet", hidden: true });
-
-    const sheet = within(screen.getByRole("dialog"));
-    expect((sheet.getByLabelText("Slug") as HTMLInputElement).value).toBe("acme");
-  });
-
   it("keeps the filtered-empty list as a sentence rather than a card, so a narrowed scope is not read as an empty deployment", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
 
@@ -170,7 +149,9 @@ describe("Tenants list", () => {
     );
 
     const { router } = renderScreen(<TenantsScreen />, "/tenants");
-    await screen.findByLabelText("Status");
+    // The unfiltered read is still held, so the screen has no filters yet; the page's own title is
+    // what says it is mounted and the first read is in flight.
+    await screen.findByRole("heading", { level: 1, name: "Tenants" });
     await act(() => router.navigate("/tenants?status=disabled"));
     await screen.findByRole("link", { name: "Beta" });
 
@@ -299,7 +280,7 @@ describe("Tenant authoring", () => {
     );
 
     renderScreen(<TenantsScreen />);
-    fireEvent.click(screen.getByText("New Tenant"));
+    fireEvent.click(await screen.findByText("New Tenant"));
     const slug = await screen.findByLabelText("Slug");
     fireEvent.change(slug, { target: { value: "acme" } });
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme" } });

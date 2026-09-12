@@ -30,7 +30,7 @@ async function openCreateForm(respond: (call: Call) => { status: number; body?: 
   renderScreen(<DestinationsScreen tenantId={tenantId} />, `/tenants/${tenantId}/destinations`);
 
   await screen.findByRole("heading", { level: 1, name: "Destinations" });
-  fireEvent.click(screen.getByText("New Destination"));
+  fireEvent.click(await screen.findByText("New Destination"));
 
   // The list carries a Connector filter and a Connector column of its own, so the create form's own
   // controls are reached through the form rather than through the whole document. The Connector

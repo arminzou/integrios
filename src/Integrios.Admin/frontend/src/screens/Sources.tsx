@@ -20,7 +20,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
-  nothingYet,
+  narrowable,
   ReadError,
   SheetButton,
   WriteStatus,
@@ -149,21 +149,21 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
     getNextPageParam: nextCursor<SourceListItem>,
   });
   const sources = list.data?.pages.flatMap((page) => page.items) ?? [];
-  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
-  // place of the table and carries the create action, the page header drops its own copy of it, and
-  // the filter bar is withheld until there is something to narrow.
-  const blank = nothingYet(list.isSuccess, sources.length, applied);
+  // Whether there is a list to narrow yet. Until the read answers, neither the filter bar nor the
+  // header's create action is rendered: an empty scope answers with the card that replaces the
+  // table, carrying the action itself, and a screen that guessed first would retract them.
+  const narrowing = narrowable(list.isSuccess, sources.length, applied);
 
   const [creating, setCreating] = useState(openCreate);
   const create = <SheetButton label="New Source" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader title="Sources" action={blank ? undefined : create}>
+      <PageHeader title="Sources" action={narrowing ? create : undefined}>
         A Source binds one Connector to one Topic and owns how its input is read.
       </PageHeader>
 
-      {blank ? null : (
+      {narrowing ? (
         <FilterBar applied={applied}>
           <Filter
             id="source-topic"
@@ -190,7 +190,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             ))}
           </Filter>
         </FilterBar>
-      )}
+      ) : null}
 
       <SplitView>
         <SplitList>

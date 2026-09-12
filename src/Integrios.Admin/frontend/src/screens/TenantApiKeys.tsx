@@ -19,7 +19,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
-  nothingYet,
+  narrowable,
   ReadError,
   SheetButton,
   WriteStatus,
@@ -80,22 +80,22 @@ export function TenantApiKeysScreen({
     getNextPageParam: nextCursor<TenantApiKeyListItem>,
   });
   const keys = list.data?.pages.flatMap((page) => page.items) ?? [];
-  // Nothing in the list at all, as opposed to nothing matching a filter: the empty card takes the
-  // place of the table and carries the create action, the page header drops its own copy of it, and
-  // the filter bar is withheld until there is something to narrow.
-  const blank = nothingYet(list.isSuccess, keys.length, state ? 1 : 0);
+  // Whether there is a list to narrow yet. Until the read answers, neither the filter bar nor the
+  // header's create action is rendered: an empty scope answers with the card that replaces the
+  // table, carrying the action itself, and a screen that guessed first would retract them.
+  const narrowing = narrowable(list.isSuccess, keys.length, state ? 1 : 0);
 
   const [creating, setCreating] = useState(false);
   const create = <SheetButton label="New API key" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
     <Page>
-      <PageHeader title="API keys" action={blank ? undefined : create}>
+      <PageHeader title="API keys" action={narrowing ? create : undefined}>
         Tenant credentials for the intake endpoint. The token itself is shown once, at creation.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
-        {blank ? null : (
+        {narrowing ? (
           <FilterBar applied={state ? 1 : 0}>
             <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
               <SelectItem value="active">Active</SelectItem>
@@ -103,7 +103,7 @@ export function TenantApiKeysScreen({
               <SelectItem value="revoked">Revoked</SelectItem>
             </Filter>
           </FilterBar>
-        )}
+        ) : null}
 
         <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
         <SplitView>

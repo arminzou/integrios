@@ -17,7 +17,7 @@ import {
   FormError,
   ListStatus,
   LoadMore,
-  nothingYet,
+  narrowable,
   ReadError,
   WriteStatus,
 } from "../ui/controls";
@@ -197,9 +197,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
     getNextPageParam: nextCursor<EventListItem>,
   });
   const events = list.data?.pages.flatMap((page) => page.items) ?? [];
-  // Nothing in the ledger at all, as opposed to nothing matching a filter: the filter form is
-  // withheld until there is something to narrow.
-  const blank = nothingYet(list.isSuccess, events.length, appliedCount);
+  // Whether there is a ledger to narrow yet. Until the read answers, the filter form is not
+  // rendered: a Tenant that has accepted nothing has nothing to filter, and a screen that guessed
+  // first would retract the form a moment later.
+  const narrowing = narrowable(list.isSuccess, events.length, appliedCount);
 
   function selectSummaryItem(key: SummaryKey) {
     if (!summary.data) return;
@@ -240,7 +241,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
       <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
 
-      {blank ? null : (
+      {narrowing ? (
         <Form {...form}>
           <form
             className="flex flex-col gap-4"
@@ -338,7 +339,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             </FilterBar>
           </form>
         </Form>
-      )}
+      ) : null}
 
       <div
         data-layout="events"
