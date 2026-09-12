@@ -95,6 +95,25 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
   });
 });
 
+it("loads eligible Destinations for the selected Topic in a new Subscription", async () => {
+  const calls = stubHttp(({ url }) => {
+    if (url.pathname.endsWith("/topics"))
+      return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
+    if (url.pathname.endsWith("/destinations"))
+      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "active" }]) };
+    return { status: 200, body: page([]) };
+  });
+
+  renderScreen(<SubscriptionsScreen tenantId={tenantId} />, `/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
+
+  fireEvent.click(await screen.findByRole("button", { name: "New Subscription" }));
+  const sheet = await screen.findByRole("dialog", { name: "New Subscription" });
+  const destination = await within(sheet).findByRole("combobox", { name: "Destination" });
+  await waitFor(() => expect(destination.hasAttribute("disabled")).toBe(false));
+  expect(screen.queryByText("Not Found")).toBeNull();
+  expect(calls.some(({ url }) => url.pathname.endsWith("/destinations"))).toBe(true);
+});
+
 it("explains when no active Source reaches the Subscription", async () => {
   stubSubscriptionSources([]);
 

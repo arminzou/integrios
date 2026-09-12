@@ -278,6 +278,7 @@ describe("Event inspector", () => {
     renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
 
     expect(await screen.findByRole("heading", { name: "Accepted payload" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Event deliveries" })).toBeTruthy();
     expect(screen.getByText(/"orderId": "SO-4014"/)).toBeTruthy();
 
     // What was sent is the mapped body, not the accepted one, and is labelled as such.

@@ -617,7 +617,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
       )}
 
       <section className="flex flex-col gap-2">
-        <h3 className="eyebrow">EventDeliveries</h3>
+        <h3 className="eyebrow">Event deliveries</h3>
         <WriteStatus done={replayed}>Queued for delivery again.</WriteStatus>
         {current.event_deliveries?.length ? (
           // One entry per matched Subscription, stacked rather than tabulated. The inspector is a

@@ -133,6 +133,22 @@ describe("The signed-in rail", () => {
     );
   });
 
+  it("stops nested screens when the route Tenant does not exist", async () => {
+    const calls = stubHttp(({ url }) => {
+      if (url.pathname === "/auth/session") return { status: 200, body: session };
+      if (/^\/admin\/tenants\/[^/]+$/.test(url.pathname)) return { status: 404, body: { title: "Not Found" } };
+      return { status: 200, body: page([]) };
+    });
+
+    renderApp("/tenants/22222222-2222-2222-2222-222222222222/sources");
+
+    expect(await screen.findByRole("heading", { name: "Tenant not found" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("This Tenant does not exist");
+    expect(screen.getByRole("link", { name: "Go to Tenants" }).getAttribute("href")).toBe("/tenants");
+    expect(screen.queryByRole("button", { name: "New Source" })).toBeNull();
+    expect(calls.some(({ url }) => url.pathname.endsWith("/sources"))).toBe(false);
+  });
+
   it("orders the Tenant sections in authoring sequence, grouped Author and Observe", async () => {
     stubSignedIn({
       id: "22222222-2222-2222-2222-222222222222",

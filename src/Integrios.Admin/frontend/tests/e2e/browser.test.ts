@@ -298,6 +298,7 @@ describe("The dashboard in a real browser", () => {
     const narrowMain = await narrow.locator("#main").boundingBox();
     // Above: the document starts below the band, and the band spans the full width.
     expect(narrowMain!.y).toBeGreaterThanOrEqual(narrowRail!.y + narrowRail!.height);
+    expect(narrowMain!.y - (narrowRail!.y + narrowRail!.height)).toBeLessThanOrEqual(1);
     expect(narrowRail!.width).toBeGreaterThan(300);
     await narrow.close();
   });

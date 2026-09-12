@@ -19,9 +19,10 @@ import { Fragment, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
-import { call } from "./api/query";
+import { asProblem, call } from "./api/query";
 import { isIdentifier } from "./identifiers";
 import { sectionGroups, sectionHrefs, sectionLabels, type TenantSection } from "./sections";
+import { ReadError } from "./ui/controls";
 
 /// The session bootstrap is a server read like every other read in the dashboard, so it is read the
 /// same way. The four-state union and the cancellation flag it needed were an inline reimplementation
@@ -154,7 +155,7 @@ function SessionGate({
 /// document above the `shell` breakpoint, and the wrapping band below it that the previous top
 /// navigation was verified with at 320 — so the narrow layout is the base and the column is the
 /// variant, rather than a media query undoing a desktop default.
-const shell = "grid min-h-screen grid-cols-1 items-start bg-canvas shell:grid-cols-[16rem_minmax(0,1fr)]";
+const shell = "grid min-h-screen content-start grid-cols-1 items-start bg-canvas shell:grid-cols-[16rem_minmax(0,1fr)]";
 
 /// No page-level measure: the only thing one would bound here is the ledger, and a ledger wants
 /// width. What genuinely needs a measure states its own, where the reason for it is visible.
@@ -246,6 +247,7 @@ function SignedIn({ session }: { session: OperatorSession }) {
   const params = useParams();
   const tenantId = Object.values(params).every(isIdentifier) ? (params.tenantId ?? null) : null;
   const tenant = useTenant(tenantId);
+  const tenantProblem = asProblem(tenant.error) ?? { status: 500, errors: {} };
   const { section, title } = useRouteHandle();
 
   // Names where the Operator is, so history and a restored window say more than the product name.
@@ -262,8 +264,24 @@ function SignedIn({ session }: { session: OperatorSession }) {
       <SkipLink />
       <Rail session={session} tenantId={tenantId} tenant={tenant} />
       <main id="main" tabIndex={-1} className={document_}>
-        <Breadcrumb section={section} title={title} tenantId={tenantId} tenant={tenant} />
-        <Outlet />
+        {!tenantId || tenant.data ? (
+          <>
+            <Breadcrumb section={section} title={title} tenantId={tenantId} tenant={tenant} />
+            <Outlet />
+          </>
+        ) : tenant.isPending ? (
+          <p role="status">Loading Tenant…</p>
+        ) : (
+          <>
+            <h1>{tenantProblem.status === 404 ? "Tenant not found" : "Tenant unavailable"}</h1>
+            <ReadError problem={tenantProblem} what="This Tenant" back={{ to: "/tenants", label: "Go to Tenants" }} />
+            {tenantProblem.status !== 404 ? (
+              <Button type="button" variant="outline" onClick={() => tenant.refetch()}>
+                Retry
+              </Button>
+            ) : null}
+          </>
+        )}
       </main>
     </div>
   );
@@ -323,7 +341,7 @@ function Rail({
     <div className={rail} data-shell="rail">
       <BrandMark />
 
-      {tenantId ? <TenantNav tenantId={tenantId} tenant={tenant} /> : null}
+      {tenantId && tenant.data ? <TenantNav tenantId={tenantId} tenant={tenant} /> : null}
 
       <nav className={navGroup} aria-label="Deployment">
         <p className={navLabel}>Deployment</p>
