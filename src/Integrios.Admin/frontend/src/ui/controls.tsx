@@ -8,9 +8,9 @@ import { MessageBubble } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
 import type { Problem } from "../api/problem";
 
-/// A collapsed "Find an X" filter panel or "New X" create panel, shared across every capability's
-/// list screen so neither a filter form nor a create form permanently dominates the page above the
-/// list it belongs to.
+/// A collapsed section inside a form, for material that is generated or pasted rather than authored
+/// field by field — the manifest a Connector draft produces, and the JSON an Operator pastes back.
+/// It is closed at rest because neither is part of filling the form in.
 export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
   return (
     <details className="group">
