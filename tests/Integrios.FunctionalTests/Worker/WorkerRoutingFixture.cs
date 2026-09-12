@@ -340,12 +340,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status) VALUES
                 (@LedgerDestinationId,@TenantId,@ConnectorId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'active'),
                 (@RiskDestinationId,@TenantId,@ConnectorId,'risk-sink',{{{database.Json("@RiskConfig")}}},'active');
-            INSERT INTO topics (id,tenant_id,name,status) VALUES
-                (@TopicId,@TenantId,'test-topic','active'),
-                (@OrphanTopicId,@OrphanTenantId,'orphan-topic','active');
-            INSERT INTO sources (id,tenant_id,connector_id,topic_id,type,configuration,revision,status) VALUES
-                (@SourceId,@TenantId,@ConnectorId,@TopicId,'event_api',{{{database.Json("@EmptyConfig")}}},@SourceRevision,'active'),
-                (@OrphanSourceId,@OrphanTenantId,@ConnectorId,@OrphanTopicId,'event_api',{{{database.Json("@EmptyConfig")}}},@OrphanSourceRevision,'active');
+            INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name,status) VALUES
+                (@TopicId,@TenantId,'test-topic','test-topic','active'),
+                (@OrphanTopicId,@OrphanTenantId,'orphan-topic','orphan-topic','active');
+            INSERT INTO sources (id,tenant_id,connector_id,topic_id,name,type,configuration,revision,status) VALUES
+                (@SourceId,@TenantId,@ConnectorId,@TopicId,'routing-intake','event_api',{{{database.Json("@EmptyConfig")}}},@SourceRevision,'active'),
+                (@OrphanSourceId,@OrphanTenantId,@ConnectorId,@OrphanTopicId,'orphan-intake','event_api',{{{database.Json("@EmptyConfig")}}},@OrphanSourceRevision,'active');
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_id,order_index,status) VALUES
                 (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerDestinationId,0,'active'),
                 (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskDestinationId,1,'active');

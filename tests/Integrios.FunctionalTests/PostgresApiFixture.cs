@@ -100,7 +100,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public async Task<Guid> SeedTopicAsync(Guid tenantId, string name)
     {
         Guid topicId = Guid.NewGuid();
-        await ExecuteAsync($"INSERT INTO topics (id,tenant_id,name,status,created_at,updated_at) VALUES (@Id,@TenantId,@Name,'active',{database.Now},{database.Now})",
+        await ExecuteAsync(
+            $"INSERT INTO topics (id,tenant_id,{database.KeyColumn},name,status,created_at,updated_at) VALUES (@Id,@TenantId,@Name,@Name,'active',{database.Now},{database.Now})",
             new { Id = topicId, TenantId = tenantId, Name = name });
         return topicId;
     }
@@ -157,7 +158,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         Guid sourceId = Guid.NewGuid();
         await ExecuteAsync(
-            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'event_api', {database.Json("@Configuration")}, @Revision, 'active', {database.Now}, {database.Now})",
+            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-intake', 'event_api', {database.Json("@Configuration")}, @Revision, 'active', {database.Now}, {database.Now})",
             new { SourceId = sourceId, TenantId = tenantId, ConnectorId = connectorId, TopicId = topicId, Configuration = configuration, Revision = Guid.NewGuid().ToString("N") });
         return sourceId;
     }
@@ -179,7 +180,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         await ExecuteAsync($$$"""
             INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status)
             VALUES (@DestinationId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
-            INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','active');
+            INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','replay-test-topic','active');
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_id,order_index,status)
             VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@MatchRules")}}},@DestinationId,0,'active');
             INSERT INTO event_deliveries

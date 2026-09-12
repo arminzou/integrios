@@ -243,8 +243,8 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             seed = seed with { TopicId = topic.Id };
         }
         await connection.ExecuteAsync($$$"""
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, revision, status)
-            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'event_api', {{{Database.Json("@SourceConfig")}}}, 'fixture-revision', 'active')
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status)
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'contract-intake', 'event_api', {{{Database.Json("@SourceConfig")}}}, 'fixture-revision', 'active')
             """, new { seed.SourceId, seed.TenantId, seed.ConnectorId, seed.TopicId, SourceConfig = "{}" });
 
         await connection.ExecuteAsync($$$"""

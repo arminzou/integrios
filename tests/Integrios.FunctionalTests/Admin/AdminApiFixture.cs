@@ -81,8 +81,8 @@ public sealed class AdminApiFixture : IAsyncLifetime
                 {{{database.Json("@DestinationConfig")}}}, 'active');
             INSERT INTO topics (id, tenant_id, {{{database.KeyColumn}}}, name, status)
             VALUES (@TopicId, @TenantId, @TopicName, @TopicName, 'active');
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, revision, status)
-            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'event_api', {{{database.Json("@SourceConfig")}}}, 'fixture-revision', 'active');
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status)
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'fixture-intake', 'event_api', {{{database.Json("@SourceConfig")}}}, 'fixture-revision', 'active');
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_id, order_index, status)
             VALUES (@SubscriptionId, @TenantId, @TopicId, @SubscriptionName,
                 {{{database.Json("@MatchRules")}}}, @DestinationId, 0, 'active');

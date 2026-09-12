@@ -225,8 +225,8 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, mapping, revision, status)
-            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'queue',
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, mapping, revision, status)
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'sb-intake', 'queue',
                 {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'active');
             """,
             new
@@ -258,8 +258,8 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES (@TenantId, @Slug, 'SB Integration', 'active', {{{database.Now}}}, {{{database.Now}}});
 
-            INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at)
-            VALUES (@TopicId, @TenantId, 'sb-topic', 'active', {{{database.Now}}}, {{{database.Now}}});
+            INSERT INTO topics (id, tenant_id, {{{database.KeyColumn}}}, name, status, created_at, updated_at)
+            VALUES (@TopicId, @TenantId, 'sb-topic', 'sb-topic', 'active', {{{database.Now}}}, {{{database.Now}}});
             """,
             new
             {

@@ -195,6 +195,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await choose(sourceForm.getByLabel("Connector", { exact: true }), sourceConnector.name);
     await choose(sourceForm.getByLabel("Topic", { exact: true }), `${run}-orders`);
     await choose(sourceForm.getByLabel("Type", { exact: true }), "Event API");
+    await sourceForm.getByLabel("Name", { exact: true }).fill(`${run}-intake`);
     await sourceForm.getByLabel("Configuration (JSON)", { exact: true }).fill("{}");
     await view.click("text=Create Source");
     await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
