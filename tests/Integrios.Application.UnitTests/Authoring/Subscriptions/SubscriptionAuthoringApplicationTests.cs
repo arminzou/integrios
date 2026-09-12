@@ -109,6 +109,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         {
             Id = topicId,
             TenantId = tenantId,
+            Key = "payments",
             Name = "payments",
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -196,7 +197,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
             Task.FromResult<Topic?>(topic);
 
-        public Task<Topic> CreateAsync(Guid tenantId, string name, string? description, CancellationToken ct = default) =>
+        public Task<Topic> CreateAsync(Guid tenantId, string key, string name, string? description, CancellationToken ct = default) =>
             Task.FromResult(topic);
 
         public Task<int> CountSubscriptionsAsync(Guid tenantId, Guid topicId, CancellationToken ct = default) =>

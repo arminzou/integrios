@@ -15,7 +15,7 @@ function stubOptions() {
     if (url.pathname.endsWith("/connectors"))
       return { status: 200, body: page([{ id: connectorId, name: "GitHub", status: "active" }]) };
     if (url.pathname.endsWith("/topics"))
-      return { status: 200, body: page([{ id: topicId, name: "orders", status: "active" }]) };
+      return { status: 200, body: page([{ id: topicId, key: "orders", name: "orders", status: "active" }]) };
     return { status: 200, body: page([]) };
   });
 }

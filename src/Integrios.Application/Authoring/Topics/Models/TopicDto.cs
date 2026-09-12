@@ -6,6 +6,7 @@ namespace Integrios.Application.Authoring.Topics;
 public sealed record TopicDto(
     Guid Id,
     Guid TenantId,
+    string Key,
     string Name,
     string Status,
     string? Description,
@@ -19,6 +20,7 @@ public sealed record TopicDto(
     public static TopicDto From(Topic t, int subscriptionCount) => new(
         t.Id,
         t.TenantId,
+        t.Key,
         t.Name,
         t.Status.ToString().ToLowerInvariant(),
         t.Description,

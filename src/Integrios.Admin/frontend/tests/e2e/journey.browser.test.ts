@@ -171,7 +171,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     // Topic.
     view = await openDashboard(`/tenants/${tenantId}/topics`);
     await view.click("text=New Topic");
-    await formNamed(view, "Create a Topic").getByLabel("Name", { exact: true }).fill(`${run}-orders`);
+    await formNamed(view, "Create a Topic").getByLabel("Key", { exact: true }).fill(`${run}-orders`);
     await view.click("text=Create Topic");
     const topicId = await created(view, /\/topics\/[0-9a-f-]{36}$/, "Topic");
 

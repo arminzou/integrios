@@ -95,7 +95,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
         using HttpResponseMessage duplicateTopic = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/topics",
-            new { name = "payments" });
+            new { key = "payments" });
         duplicateTopic.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         Guid isolatedTopic = await CreateTopicAsync(isolated, "isolated-topic");
@@ -616,11 +616,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateTopicAsync(TenantContext tenant, string name)
+    private async Task<Guid> CreateTopicAsync(TenantContext tenant, string key)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics",
-            new { name });
+            new { key });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 

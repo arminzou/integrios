@@ -42,14 +42,28 @@ import { StatusBadge } from "../ui/status";
 
 type Topic = components["schemas"]["AdminTopicResponse"];
 
+const createFields = ["key", "name", "description"] as const;
 const writeFields = ["name", "description"] as const;
 
-const topicSchema = z.object({
+/// The grammar is syntax, which the dashboard may check; whether a Topic is otherwise valid stays
+/// with the Admin API.
+const createSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1, "Enter a key.")
+    .regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, "Use lowercase letters, digits, and hyphens."),
+  name: z.string(),
+  description: z.string(),
+});
+
+const editSchema = z.object({
   name: z.string().trim().min(1, "Enter a name."),
   description: z.string(),
 });
 
-type TopicValues = z.infer<typeof topicSchema>;
+type CreateValues = z.infer<typeof createSchema>;
+type EditValues = z.infer<typeof editSchema>;
 
 const optional = (text: string) => text.trim() || null;
 
@@ -88,7 +102,8 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
           </CreateSheet>
         }
       >
-        A Topic is the Tenant-scoped stream Subscriptions match against. Its name is immutable.
+        A Topic is the Tenant-scoped stream Subscriptions match against. Its key is immutable and travels with every
+        Event delivered from it; its name is a label you can correct.
       </PageHeader>
 
       <section className="flex flex-col gap-4">
@@ -124,6 +139,7 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
               >
                 <TableHeader>
                   <TableRow>
+                    <TableHead scope="col">Key</TableHead>
                     <TableHead scope="col">Name</TableHead>
                     <TableHead scope="col">Description</TableHead>
                     <TableHead scope="col" className="text-right">
@@ -138,10 +154,15 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                       <RowHeader>
                         {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract every other ledger has. */}
-                        <NavLink className="no-underline" to={`/tenants/${tenantId}/topics/${topic.id}`} end>
-                          {topic.name}
+                        <NavLink
+                          className="font-mono text-[13px] no-underline"
+                          to={`/tenants/${tenantId}/topics/${topic.id}`}
+                          end
+                        >
+                          {topic.key}
                         </NavLink>
                       </RowHeader>
+                      <TableCell>{topic.name}</TableCell>
                       <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
                       {/* A Topic nothing subscribes to accepts Events and routes none of them, so
                           the count is what the list is scanned for rather than a detail. */}
@@ -212,7 +233,8 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
     <Inspector label="Topic detail">
       <div className="flex items-start justify-between gap-3">
         <div className="group min-w-0">
-          <h2 className="font-mono break-all">{current.name}</h2>
+          <h2 className="break-all">{current.name}</h2>
+          <span className="block font-mono text-xs break-all text-ink-secondary">{current.key}</span>
           <span className="block text-xs text-ink-secondary">
             <CopyInline label="Topic id" value={current.id} />
           </span>
@@ -280,17 +302,21 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
 function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const form = useForm<TopicValues>({
-    resolver: zodResolver(topicSchema),
-    defaultValues: { name: "", description: "" },
+  const form = useForm<CreateValues>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { key: "", name: "", description: "" },
   });
 
   const create = useMutation({
-    mutationFn: (values: TopicValues) =>
+    mutationFn: (values: CreateValues) =>
       call(() =>
         api.POST("/admin/tenants/{tenantId}/topics", {
           params: { path: { tenantId } },
-          body: { name: values.name, description: optional(values.description) },
+          body: {
+            key: values.key,
+            name: optional(values.name),
+            description: optional(values.description),
+          },
         }),
       ),
     onSuccess: (created) => {
@@ -301,15 +327,23 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
   });
 
   const submit = form.handleSubmit((values) =>
-    create.mutate(values, { onError: (failure) => applyProblem(form, failure, writeFields) }),
+    create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
   );
 
   return (
     <Form {...form}>
       <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Topic">
-        <FormError message={formError(asProblem(create.error), writeFields)} />
+        <FormError message={formError(asProblem(create.error), createFields)} />
 
-        <TextField control={form.control} name="name" label="Name" required />
+        <TextField
+          control={form.control}
+          name="key"
+          label="Key"
+          hint="Immutable, and delivered with every Event from this Topic."
+          className="font-mono text-sm"
+          required
+        />
+        <TextField control={form.control} name="name" label="Name (optional)" hint="Defaults to the key." />
         <TextField control={form.control} name="description" label="Description (optional)" />
 
         <Button type="submit" className="self-start" disabled={create.isPending}>
@@ -326,13 +360,13 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
     void queryClient.invalidateQueries({ queryKey: ["topic", tenantId, topic.id] });
     void queryClient.invalidateQueries({ queryKey: ["topics", tenantId] });
   };
-  const form = useForm<TopicValues>({
-    resolver: zodResolver(topicSchema),
+  const form = useForm<EditValues>({
+    resolver: zodResolver(editSchema),
     defaultValues: { name: topic.name, description: topic.description ?? "" },
   });
 
   const save = useMutation({
-    mutationFn: (values: TopicValues) =>
+    mutationFn: (values: EditValues) =>
       call(() =>
         api.PUT("/admin/tenants/{tenantId}/topics/{id}", {
           params: { path: { tenantId, id: topic.id } },
@@ -374,6 +408,10 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
               >
                 <FormError message={formError(asProblem(save.error), writeFields)} />
 
+                <div>
+                  <p className="m-0 text-sm font-medium">Key</p>
+                  <p className="m-0 font-mono text-sm text-ink-secondary">{topic.key}</p>
+                </div>
                 <TextField control={form.control} name="name" label="Name" required />
                 <TextField control={form.control} name="description" label="Description (optional)" />
 

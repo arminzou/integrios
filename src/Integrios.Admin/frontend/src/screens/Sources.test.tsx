@@ -14,7 +14,10 @@ const sourceId = "55555555-5555-5555-5555-555555555555";
 it("shows Source input requirements and restarts paging when the Topic filter changes", async () => {
   const calls = stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
-      return { status: 200, body: page([{ id: topicId, name: "orders", status: "disabled" }], "more-topics") };
+      return {
+        status: 200,
+        body: page([{ id: topicId, key: "orders", name: "orders", status: "disabled" }], "more-topics"),
+      };
     if (!url.pathname.endsWith("/sources")) return { status: 200, body: page([]) };
     const second = url.searchParams.has("after");
     return {
@@ -131,7 +134,7 @@ describe("Source setup guide", () => {
 it("opens Source creation from one-shot state with the filtered Topic selected", async () => {
   stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
-      return { status: 200, body: page([{ id: topicId, name: "orders", status: "active" }]) };
+      return { status: 200, body: page([{ id: topicId, key: "orders", name: "orders", status: "active" }]) };
     if (url.pathname.endsWith("/connectors"))
       return { status: 200, body: page([{ id: connectorId, name: "input", status: "active" }]) };
     return { status: 200, body: page([]) };

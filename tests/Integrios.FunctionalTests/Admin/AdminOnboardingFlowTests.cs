@@ -79,7 +79,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
             $"/admin/tenants/{tenant.Id}/topics",
             new
             {
-                name = "payments",
+                key = "payments",
                 description = "Payment events"
             }));
         topicResponse.StatusCode.ShouldBe(HttpStatusCode.Created);

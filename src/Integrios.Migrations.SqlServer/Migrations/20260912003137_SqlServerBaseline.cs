@@ -156,7 +156,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 {
                     id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     tenant_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    name = table.Column<string>(type: "nvarchar(450)", nullable: false, collation: "Latin1_General_100_CS_AS"),
+                    key = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     status = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValueSql: "N'active'"),
                     created_at = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
                     updated_at = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false, defaultValueSql: "SYSUTCDATETIME()"),
@@ -166,7 +167,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                 {
                     table.PrimaryKey("pipelines_pkey", x => x.id);
                     table.UniqueConstraint("uq_topics_tenant_id_id", x => new { x.tenant_id, x.id });
-                    table.UniqueConstraint("uq_topics_tenant_name", x => new { x.tenant_id, x.name });
+                    table.UniqueConstraint("uq_topics_tenant_key", x => new { x.tenant_id, x.key });
+                    table.CheckConstraint("chk_topics_key_dns_label", "LEN([key]) BETWEEN 1 AND 63 AND [key] NOT LIKE '%[^a-z0-9-]%' AND LEFT([key], 1) <> '-' AND RIGHT([key], 1) <> '-'");
                     table.ForeignKey(
                         name: "pipelines_tenant_id_fkey",
                         column: x => x.tenant_id,

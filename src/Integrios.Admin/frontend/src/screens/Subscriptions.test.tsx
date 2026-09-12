@@ -47,7 +47,7 @@ function stubSubscriptionSources(items: unknown[], detail = subscription, nextIt
 it("lists Tenant Subscriptions with their Topic and destination names and sends every filter", async () => {
   const calls = stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
-      return { status: 200, body: page([{ id: topicId, name: "Orders", status: "active" }]) };
+      return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
       return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "active" }]) };
     return {
@@ -194,7 +194,7 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
   const calls = stubHttp(({ method, url }) => {
     if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: subscription };
     if (url.pathname.endsWith("/topics"))
-      return { status: 200, body: page([{ id: topicId, name: "Orders", status: "active" }]) };
+      return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
       return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
     if (method === "PUT") return { status: 200, body: subscription };
@@ -224,7 +224,7 @@ describe("Editing a Subscription", () => {
       if (method === "PUT") return put;
       if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: detail };
       if (url.pathname.endsWith("/topics"))
-        return { status: 200, body: page([{ id: topicId, name: "Orders", status: "active" }]) };
+        return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
       if (url.pathname.endsWith("/destinations"))
         return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
       return { status: 200, body: page([]) };

@@ -97,10 +97,10 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateTopicAsync(Guid tenant, string name)
+    private async Task<Guid> CreateTopicAsync(Guid tenant, string key)
     {
         using HttpResponseMessage response = await PostAdminAsync(
-            $"/admin/tenants/{tenant}/topics", new { name });
+            $"/admin/tenants/{tenant}/topics", new { key });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 

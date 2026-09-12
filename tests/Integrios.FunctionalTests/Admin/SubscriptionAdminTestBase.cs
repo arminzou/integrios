@@ -30,12 +30,12 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
         return Task.CompletedTask;
     }
 
-    internal async Task<AdminTopicResponse> CreateTopicAsync(string name)
+    internal async Task<AdminTopicResponse> CreateTopicAsync(string key)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{Fixture.TenantId}/topics",
-            new { name }));
+            new { key }));
 
         response.EnsureSuccessStatusCode();
         var topic = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);

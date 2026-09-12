@@ -828,6 +828,11 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
@@ -856,12 +861,15 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_topics_tenant_id_id");
 
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_topics_tenant_name");
+                    b.HasAlternateKey("TenantId", "Key")
+                        .HasName("uq_topics_tenant_key");
 
                     b.HasIndex(new[] { "TenantId" }, "idx_topics_tenant_id");
 
-                    b.ToTable("topics", (string)null);
+                    b.ToTable("topics", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_topics_key_dns_label", "key ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'");
+                        });
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.User", b =>

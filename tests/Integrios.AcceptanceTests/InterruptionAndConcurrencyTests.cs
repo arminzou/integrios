@@ -364,7 +364,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name });
+            new { key = name });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
             new { connector_id = HttpConnectorId, topic_id = topicId, type = "event_api", configuration = new { } });

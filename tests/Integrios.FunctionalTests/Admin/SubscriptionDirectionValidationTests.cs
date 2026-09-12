@@ -204,12 +204,12 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         await Should.ThrowAsync<DbException>(() => insert);
     }
 
-    private async Task<AdminTopicResponse> CreateTopicAsync(string name)
+    private async Task<AdminTopicResponse> CreateTopicAsync(string key)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/topics",
-            new { name }));
+            new { key }));
 
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;

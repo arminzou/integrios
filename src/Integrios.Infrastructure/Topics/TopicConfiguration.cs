@@ -12,13 +12,15 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
     {
         entity.HasKey(e => e.Id).HasName("pipelines_pkey");
 
-        entity.ToTable("topics");
+        entity.ToTable("topics", table => table.HasCheckConstraint(
+            "chk_topics_key_dns_label",
+            "key ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'"));
 
         entity.HasIndex(e => e.TenantId, "idx_topics_tenant_id");
 
         entity.HasAlternateKey(e => new { e.TenantId, e.Id }).HasName("uq_topics_tenant_id_id");
 
-        entity.HasAlternateKey(e => new { e.TenantId, e.Name }).HasName("uq_topics_tenant_name");
+        entity.HasAlternateKey(e => new { e.TenantId, e.Key }).HasName("uq_topics_tenant_key");
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()
@@ -27,6 +29,7 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
+        entity.Property(e => e.Key).HasColumnName("key");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.Status)
             .HasDefaultValueSql("'active'::text")

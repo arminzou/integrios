@@ -795,7 +795,7 @@ function MappingPlayground({
     form.clearErrors("mapping");
     resetPreview();
 
-    const topicName = topic.data?.name;
+    const topicName = topic.data?.key;
     if (!topicName) return;
 
     let payload: unknown;
@@ -953,7 +953,7 @@ function MappingPlayground({
 
           <div className="flex flex-wrap gap-2 text-xs text-ink-secondary">
             <span className="rounded-full border px-2 py-1">event_type: {contextEventType ?? "—"}</span>
-            <span className="rounded-full border px-2 py-1">topic_name: {topic.data?.name ?? "—"}</span>
+            <span className="rounded-full border px-2 py-1">topic_name: {topic.data?.key ?? "—"}</span>
             <span className="rounded-full border px-2 py-1">accepted_at: {contextAcceptedAt ?? "—"}</span>
           </div>
 

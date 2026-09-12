@@ -57,7 +57,7 @@ internal sealed class EventDeliveryQueue(
                     sd.http_execution_snapshot AS HttpExecutionSnapshotJson,
                     sd.mapping_config_snapshot AS MappingConfigSnapshot, sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId, tenant.slug AS TenantSlug, e.payload AS PayloadJson,
-                    e.event_type AS EventType, e.accepted_at AS AcceptedAt, t.name AS TopicName,
+                    e.event_type AS EventType, e.accepted_at AS AcceptedAt, t.key AS TopicName,
                     SYSUTCDATETIME() AS DatabaseNow
                 FROM event_deliveries sd WITH (UPDLOCK, ROWLOCK, READPAST, READCOMMITTEDLOCK)
                 JOIN events e ON e.id=sd.event_id
@@ -88,7 +88,7 @@ internal sealed class EventDeliveryQueue(
                     e.payload::text AS PayloadJson,
                     e.event_type AS EventType,
                     e.accepted_at AS AcceptedAt,
-                    t.name AS TopicName,
+                    t.key AS TopicName,
                     now() AS DatabaseNow
                 FROM event_deliveries sd
                 JOIN events e ON e.id = sd.event_id

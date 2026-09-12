@@ -25,7 +25,7 @@ public sealed class TopicsEndpoints : IEndpointGroup
         CancellationToken cancellationToken)
     {
         var dto = await mediator.Send(
-            new CreateTopicCommand(tenantId, request.Name, request.Description),
+            new CreateTopicCommand(tenantId, request.Key, request.Name, request.Description),
             cancellationToken);
         var response = AdminTopicResponse.From(dto);
         return Results.Created($"/admin/tenants/{tenantId}/topics/{response.Id}", response);
@@ -83,6 +83,7 @@ public sealed class TopicsEndpoints : IEndpointGroup
 }
 
 internal sealed record CreateTopicRequest(
+    string? Key,
     string? Name,
     string? Description);
 
@@ -93,6 +94,7 @@ internal sealed record UpdateTopicRequest(
 internal sealed record AdminTopicResponse(
     Guid Id,
     Guid TenantId,
+    string Key,
     string Name,
     string Status,
     string? Description,
@@ -103,6 +105,7 @@ internal sealed record AdminTopicResponse(
     public static AdminTopicResponse From(TopicDto dto) => new(
         dto.Id,
         dto.TenantId,
+        dto.Key,
         dto.Name,
         dto.Status,
         dto.Description,

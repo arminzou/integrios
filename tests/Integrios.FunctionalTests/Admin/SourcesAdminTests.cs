@@ -390,7 +390,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
     private async Task<Guid> CreateTopicAsync()
     {
-        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", new { name = "source-topic" }));
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", new { key = "source-topic" }));
         return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!.Id;
     }
 

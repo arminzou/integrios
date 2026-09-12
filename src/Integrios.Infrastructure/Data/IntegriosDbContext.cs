@@ -240,10 +240,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
 
         modelBuilder.Entity<Topic>(entity =>
         {
-            // ADR-0016 makes this name unique per Tenant. PostgreSQL compares it case-sensitively
-            // under its default collation, so SQL Server says so explicitly rather than inheriting a
-            // case-insensitive server default and refusing a pair PostgreSQL accepts.
-            entity.Property(e => e.Name).UseCollation("Latin1_General_100_CS_AS");
+            entity.ToTable("topics", table => table.HasCheckConstraint(
+                "chk_topics_key_dns_label",
+                "LEN([key]) BETWEEN 1 AND 63 AND [key] NOT LIKE '%[^a-z0-9-]%' "
+                + "AND LEFT([key], 1) <> '-' AND RIGHT([key], 1) <> '-'"));
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);

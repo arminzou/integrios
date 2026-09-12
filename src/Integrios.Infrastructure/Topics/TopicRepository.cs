@@ -15,6 +15,7 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
 {
     public async Task<Topic> CreateAsync(
         Guid tenantId,
+        string key,
         string name,
         string? description,
         CancellationToken ct)
@@ -25,6 +26,7 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
         {
             Id = id,
             TenantId = tenantId,
+            Key = key,
             Name = name,
             Status = OperationalStatus.Active,
             Description = description,
@@ -42,7 +44,7 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
             || ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
-            throw new DuplicateResourceException($"A topic named '{name}' already exists for this tenant.", ex);
+            throw new DuplicateResourceException($"A topic keyed '{key}' already exists for this tenant.", ex);
         }
     }
 
@@ -141,11 +143,6 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             return null;
         if (string.IsNullOrWhiteSpace(name))
             throw new TopicValidationException("Topic name is required for update.");
-        if (!string.Equals(existing.Name, name, StringComparison.Ordinal))
-        {
-            throw new TopicValidationException(
-                "Topic names are immutable; create a new topic to change the stream identifier.");
-        }
         if (existing.Status == OperationalStatus.Disabled)
             return null;
 
@@ -154,11 +151,12 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             .Where(topic => topic.TenantId == tenantId && topic.Id == id)
             .ExecuteUpdateAsync(
                 setters => setters
+                    .SetProperty(topic => topic.Name, name)
                     .SetProperty(topic => topic.Description, description)
                     .SetProperty(topic => topic.UpdatedAt, updatedAt),
                 ct);
 
-        return existing with { Description = description, UpdatedAt = updatedAt };
+        return existing with { Name = name, Description = description, UpdatedAt = updatedAt };
     }
 
     public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct)

@@ -158,6 +158,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    key = table.Column<string>(type: "text", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     status = table.Column<string>(type: "text", nullable: false, defaultValueSql: "'active'::text"),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
@@ -168,7 +169,8 @@ namespace Integrios.Migrations.Postgres.Migrations
                 {
                     table.PrimaryKey("pipelines_pkey", x => x.id);
                     table.UniqueConstraint("uq_topics_tenant_id_id", x => new { x.tenant_id, x.id });
-                    table.UniqueConstraint("uq_topics_tenant_name", x => new { x.tenant_id, x.name });
+                    table.UniqueConstraint("uq_topics_tenant_key", x => new { x.tenant_id, x.key });
+                    table.CheckConstraint("chk_topics_key_dns_label", "key ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'");
                     table.ForeignKey(
                         name: "pipelines_tenant_id_fkey",
                         column: x => x.tenant_id,

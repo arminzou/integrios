@@ -39,7 +39,15 @@ const tenant = {
   description: null,
   ...stamps,
 };
-const topic = { id: topicId, tenant_id: tenantId, name: "orders", status: "active", description: null, ...stamps };
+const topic = {
+  id: topicId,
+  tenant_id: tenantId,
+  key: "orders",
+  name: "Orders",
+  status: "active",
+  description: null,
+  ...stamps,
+};
 const destination = {
   id: destinationId,
   tenant_id: tenantId,
@@ -216,7 +224,7 @@ it("applies the list filters through their controls and keeps them usable at 320
     // The real browser owns this positioned popup; this assertion proves the same limit described
     // by the trigger is also visible where a sighted Operator chooses an option.
     await view.getByRole("listbox").getByText("Showing the first 100 Topics.").waitFor();
-    await view.getByRole("option", { name: "orders" }).click();
+    await view.getByRole("option", { name: "Orders" }).click();
     expect(new URL((await request).url()).searchParams.has("after")).toBe(false);
     await view.waitForURL(`**topic_id=${topicId}`);
     expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -397,13 +405,15 @@ describe("Create forms, filled through a real browser", () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics`);
 
     await view.click("text=New Topic");
-    await formNamed(view, "Create a Topic").getByLabel("Name").fill("orders");
+    // A Topic authors its key; the label and description are the optional fields left untouched.
+    await formNamed(view, "Create a Topic").getByLabel("Key", { exact: true }).fill("orders");
     await view.click("text=Create Topic");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/topics`);
-    expect(sent.body.name).toBe("orders");
+    expect(sent.body.key).toBe("orders");
+    expect(sent.body.name).toBeNull();
     expect(sent.body.description).toBeNull();
     await view.close();
   }, 60_000);
@@ -415,7 +425,7 @@ describe("Create forms, filled through a real browser", () => {
 
     await view.click("text=New Subscription");
     expect(await view.getByRole("dialog", { name: "New Subscription" }).getByLabel("Topic").textContent()).toContain(
-      "orders",
+      "Orders",
     );
     const form = formNamed(view, "Create a Subscription");
     await form.getByLabel("Name").fill("to-sink");
@@ -457,7 +467,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.click("text=New Source");
     const form = formNamed(view, "Create a Source");
     await choose(form.getByLabel("Connector"), /HTTP/);
-    await choose(form.getByLabel("Topic"), /orders/);
+    await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Event API");
     await form.getByLabel("Configuration (JSON)").fill("{}");
     await view.click("text=Create Source");
@@ -490,7 +500,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.click("text=New Source");
     const form = formNamed(view, "Create a Source");
     await choose(form.getByLabel("Connector"), /HTTP/);
-    await choose(form.getByLabel("Topic"), /orders/);
+    await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Webhook");
     await form.getByLabel("Configuration (JSON)", { exact: true }).fill("{}");
     await form.getByLabel("Verification scheme (optional)").fill("hmac_sha256");
@@ -521,7 +531,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.click("text=New Source");
     const form = formNamed(view, "Create a Source");
     await choose(form.getByLabel("Connector"), /HTTP/);
-    await choose(form.getByLabel("Topic"), /orders/);
+    await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Queue");
     expect(await form.getByLabel(/^Verification/).count()).toBe(0);
     await form.getByLabel("Queue transport configuration (JSON)").fill('{"transport":"azure_service_bus"}');
@@ -760,7 +770,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}`);
 
     await view.getByRole("button", { name: "Deactivate", exact: true }).click();
-    await view.getByText(/Deactivate the Topic "orders"\?/).waitFor();
+    await view.getByText(/Deactivate the Topic "Orders"\?/).waitFor();
     // Arming the confirmation must not be the action itself.
     expect(writes, "Deactivation ran before it was confirmed.").toHaveLength(0);
 
@@ -769,7 +779,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(await trigger.evaluate((button) => document.activeElement === button)).toBe(true);
 
     await trigger.click();
-    await view.getByRole("button", { name: "Deactivate orders" }).click();
+    await view.getByRole("button", { name: "Deactivate Orders" }).click();
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");

@@ -34,7 +34,6 @@ public sealed class AdminRequiredTextValidationTests
     [Theory]
     [InlineData("tenant-create")]
     [InlineData("tenant-update")]
-    [InlineData("topic-create")]
     [InlineData("tenant-api-key-create")]
     [InlineData("destination-create")]
     [InlineData("destination-update")]
@@ -75,7 +74,6 @@ public sealed class AdminRequiredTextValidationTests
             HttpMethod.Put,
             $"/admin/tenants/{fixture.TenantId}",
             new { name, description = (string?)null, environment = (string?)null }),
-        "topic-create" => AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", new { name }),
         "tenant-api-key-create" => AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys",
