@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { type MouseEvent, useState } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -37,6 +37,22 @@ import { StatusBadge } from "../ui/status";
 import { ConnectorAuthoring } from "./ConnectorAuthoring";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
+
+/// A click anywhere in a row opens it, by clicking the row's own link rather than navigating in its
+/// place: the link stays the single thing that knows the destination, so `aria-current`, copy-link
+/// and open-in-new-tab keep working and the row adds no second tab stop.
+///
+/// It stands aside for everything a click can also mean. A modifier is the browser's own gesture for
+/// a new tab or window, and only the real link can answer it. A click that lands on a control — the
+/// link itself, or a copy button in another screen's rows — belongs to that control. And a click
+/// that ends a drag across text is a selection: this console is read by copying identifiers out of
+/// it, which an eager row would interrupt every time.
+function openRow(event: MouseEvent<HTMLTableRowElement>) {
+  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if ((event.target as HTMLElement).closest("a,button,input,select,textarea,[role='button']")) return;
+  if (window.getSelection()?.toString()) return;
+  event.currentTarget.querySelector("a")?.click();
+}
 
 /// Connectors are deployment-wide rather than Tenant-scoped, so this screen carries no Tenant.
 export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?: string } = {}) {
@@ -117,9 +133,17 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                 </TableHeader>
                 <TableBody>
                   {connectors.map((connector) => (
-                    <TableRow key={connector.id} className="group has-[a[aria-current=page]]:bg-selected-surface">
+                    <TableRow
+                      key={connector.id}
+                      className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                      onClick={openRow}
+                    >
                       <RowHeader>
-                        <NavLink className="font-mono text-[13px] no-underline" to={`/connectors/${connector.id}`} end>
+                        <NavLink
+                          className="-mx-3 block px-3 py-2 font-mono text-[13px] no-underline"
+                          to={`/connectors/${connector.id}`}
+                          end
+                        >
                           {connector.key}
                         </NavLink>
                       </RowHeader>
@@ -175,7 +199,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
 }
 
 /// The selected Connector beside the list. A Connector is deployment-wide and read far more often
-/// than it is applied â€” a Source or Destination configuration is validated against this manifest â€” so the
+/// than it is applied — a Source or Destination configuration is validated against this manifest — so the
 /// manifest is what the panel is mostly for.
 function ConnectorInspector({ connectorId }: { connectorId: string }) {
   const navigate = useNavigate();
@@ -195,7 +219,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         <ReadError problem={problem} what="This Connector" back={{ to: "/connectors", label: "Back to Connectors" }} />
       </Inspector>
     );
-  if (!connector.data) return <Inspector label="Connector detail">Loadingâ€¦</Inspector>;
+  if (!connector.data) return <Inspector label="Connector detail">Loading…</Inspector>;
 
   const current = connector.data;
   return (
@@ -204,7 +228,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         <h2 className="min-w-0">
           {current.name}
           <span className="block font-mono text-xs font-normal break-all text-ink-secondary">
-            {current.key} Â· contract v{current.contract_version}
+            {current.key} · contract v{current.contract_version}
           </span>
         </h2>
         <div className="flex shrink-0 items-center gap-1.5">

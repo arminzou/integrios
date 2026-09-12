@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { ConnectorsScreen } from "./Connectors";
@@ -36,6 +36,46 @@ function fillBasics(key = "github", version?: string) {
 }
 
 const applied = (calls: Call[]) => calls.find((call) => call.method === "PUT");
+
+describe("Opening a Connector from its row", () => {
+  const listed = { status: 200, body: page([installed]) };
+
+  it("opens from a cell that is not the link, because the whole row is the target", async () => {
+    stubHttp(() => listed);
+
+    const { router } = renderScreen(<ConnectorsScreen />);
+    const name = await screen.findByText(installed.name);
+
+    fireEvent.click(name);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/connectors/${installed.id}`));
+  });
+
+  it("leaves a click that ended a text selection alone, because copying an identifier is not opening it", async () => {
+    stubHttp(() => listed);
+    // What the browser reports mid-drag. An Operator lifting the pointer after selecting a key is
+    // finishing a copy, and a row that navigated then would take the page out from under them.
+    vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => installed.key } as Selection);
+
+    const { router } = renderScreen(<ConnectorsScreen />, "/connectors");
+    const name = await screen.findByText(installed.name);
+
+    fireEvent.click(name);
+
+    expect(router.state.location.pathname).toBe("/connectors");
+  });
+
+  it("leaves a modified click to the browser, which is what opens it in a new tab", async () => {
+    stubHttp(() => listed);
+
+    const { router } = renderScreen(<ConnectorsScreen />, "/connectors");
+    const name = await screen.findByText(installed.name);
+
+    fireEvent.click(name, { ctrlKey: true });
+
+    expect(router.state.location.pathname).toBe("/connectors");
+  });
+});
 
 describe("A deployment with no Connectors", () => {
   it("offers no detail column to select into, because there is nothing to select", async () => {
