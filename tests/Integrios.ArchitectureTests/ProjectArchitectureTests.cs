@@ -130,8 +130,8 @@ public sealed class ProjectArchitectureTests
             .ToArray();
 
         (offenders.Length == 0).ShouldBeTrue(
-            ".brain/AGENTS.md:28 bans generic Contracts/, Interfaces/, or Abstractions/ buckets "
-            + $"anywhere in src/; namespaces stay feature-based, not directory-mirrored. Found: {string.Join(", ", offenders)}");
+            "Application namespaces stay feature-based: generic Contracts/, Interfaces/, or Abstractions/ "
+            + $"buckets are banned anywhere in src/. Found: {string.Join(", ", offenders)}");
     }
 
     [Fact]
@@ -170,8 +170,6 @@ public sealed class ProjectArchitectureTests
             + "JSON carry their own serializer options instead. Found: " + string.Join(", ", offenders));
     }
 
-    private const string ThisFileName = nameof(ProjectArchitectureTests) + ".cs";
-
     [Fact]
     public void SourceTree_ReferencesNoPrivateDecisionRecords()
     {
@@ -186,8 +184,6 @@ public sealed class ProjectArchitectureTests
                 .SelectMany(tree => Directory.EnumerateFiles(
                     Path.Combine(repositoryRoot, tree), "*.cs", SearchOption.AllDirectories))
                 .Where(path => !IsGeneratedPath(path))
-                // This file names both patterns to look for them, so it cannot be its own subject.
-                .Where(path => !path.EndsWith(ThisFileName, StringComparison.OrdinalIgnoreCase))
                 .Where(path =>
                 {
                     string text = File.ReadAllText(path);

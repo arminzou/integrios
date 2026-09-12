@@ -26,6 +26,7 @@ it("shows Source input requirements and restarts paging when the Topic filter ch
         [
           {
             id: second ? "source-2" : "source-1",
+            name: second ? "Invoices intake" : "Orders intake",
             tenant_id: tenantId,
             topic_id: topicId,
             connector_id: connectorId,
@@ -40,6 +41,10 @@ it("shows Source input requirements and restarts paging when the Topic filter ch
   });
   const { router } = renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
   await screen.findByText("order_requirements");
+  expect(screen.getByRole("link", { name: "Orders intake" }).getAttribute("href")).toBe(
+    `/tenants/${tenantId}/sources/source-1`,
+  );
+  expect(screen.queryByRole("link", { name: "source-1" })).toBeNull();
   expect(screen.getByRole("columnheader", { name: "Input requirements" })).toBeTruthy();
   const topicFilter = screen.getByLabelText("Topic");
   expect(topicFilter.getAttribute("aria-describedby")).toBe("source-topic-hint");

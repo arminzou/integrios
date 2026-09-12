@@ -783,7 +783,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.ToTable("tenants", null, t =>
                         {
-                            t.HasCheckConstraint("chk_tenants_slug_dns_label", "LEN(slug) BETWEEN 1 AND 63 AND slug NOT LIKE '%[^a-z0-9-]%' AND LEFT(slug, 1) <> '-' AND RIGHT(slug, 1) <> '-'");
+                            t.HasCheckConstraint("chk_tenants_slug_dns_label", "LEN(slug) BETWEEN 1 AND 63 AND slug COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^a-z0-9-]%' AND LEFT(slug, 1) <> '-' AND RIGHT(slug, 1) <> '-'");
                         });
                 });
 
@@ -911,7 +911,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.ToTable("topics", null, t =>
                         {
-                            t.HasCheckConstraint("chk_topics_key_dns_label", "LEN([key]) BETWEEN 1 AND 63 AND [key] NOT LIKE '%[^a-z0-9-]%' AND LEFT([key], 1) <> '-' AND RIGHT([key], 1) <> '-'");
+                            t.HasCheckConstraint("chk_topics_key_dns_label", "LEN([key]) BETWEEN 1 AND 63 AND [key] COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^a-z0-9-]%' AND LEFT([key], 1) <> '-' AND RIGHT([key], 1) <> '-'");
                         });
                 });
 

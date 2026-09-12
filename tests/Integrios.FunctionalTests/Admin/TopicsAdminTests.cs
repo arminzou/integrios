@@ -1,6 +1,8 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Admin.Endpoints;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -71,6 +73,26 @@ public sealed class TopicsAdminTests(AdminApiFixture fixture) : AdminApiTestBase
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         body.RootElement.GetProperty("errors").GetProperty("key")[0].GetString()
             .ShouldBe("Key must be a lowercase DNS label of 1 to 63 characters.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Payments")]
+    [InlineData("payments_v2")]
+    [InlineData("-payments")]
+    [InlineData("payments-")]
+    [InlineData("pay ments")]
+    [InlineData("páyments")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public async Task Database_RejectsAKeyOutsideTheGrammar(string key)
+    {
+        await using DbConnection connection = fixture.CreateConnection();
+        await connection.OpenAsync();
+
+        await Should.ThrowAsync<DbException>(() => connection.ExecuteAsync($$"""
+            INSERT INTO topics (id, tenant_id, {{fixture.KeyColumn}}, name)
+            VALUES (@Id, @TenantId, @Key, 'Invalid key');
+            """, new { Id = Guid.NewGuid(), fixture.TenantId, Key = key }));
     }
 
     // The label is what changes; the key is not a field an update carries at all.
