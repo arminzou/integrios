@@ -73,12 +73,12 @@ DST=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/destinations -H "$AUTH" -H 'C
 
 # 5. Create a topic
 TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Content-Type: application/json' \
-  -d '{"name":"payments"}' | jq -r .id)
+  -d '{"key":"payments","name":"Payments"}' | jq -r .id)
 
 # 6. Create an Event API Source directly from the Connector and Topic. Event API uses the fixed
 # Integrios Event JSON contract and does not configure verification, mapping, or identity extraction.
 SOURCE=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"topic_id\":\"$TOPIC\",\"type\":\"event_api\",\"configuration\":{},\"verification\":null,\"input_requirements\":null,\"mapping\":null,\"event_identity_rule\":null}" | jq -r .id)
+  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"topic_id\":\"$TOPIC\",\"name\":\"Payments Event API\",\"type\":\"event_api\",\"configuration\":{},\"verification\":null,\"input_requirements\":null,\"mapping\":null,\"event_identity_rule\":null}" | jq -r .id)
 
 # 7. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
@@ -107,10 +107,10 @@ Source, and Destination model, including
 Operator-authored Connectors such as the ones in the [GitHub-to-Slack
 walkthrough](github-to-slack-walkthrough.md)).
 
-A Topic's `name` is its immutable, Tenant-scoped stream identifier; changing it requires creating a
-new Topic. Topic updates may change only the `description`. A Source binds one Connector to one
-Topic and carries its own `configuration`; a Webhook Source also carries a generated `callback_id`.
-Update a Source to change its mutable configuration, input requirements, or mapping, not the Topic.
+A Topic's `key` is its immutable, Tenant-scoped stream identifier; its `name` is a mutable label.
+A Source binds one Connector to one Topic, has its own mutable `name`, and carries its own
+`configuration`; a Webhook Source also carries a generated `callback_id`. Update a Source to change
+its label, mutable configuration, input requirements, or mapping, not the Topic binding.
 
 The last command should show the delivery request, including its body and headers.
 

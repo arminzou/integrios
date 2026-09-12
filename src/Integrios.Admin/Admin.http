@@ -154,14 +154,15 @@ Content-Type: application/json
 
 ###
 # Step 5 - Create a topic
-# A topic is the named tenant stream. Its name is immutable; only description can be updated.
+# A Topic key is its immutable tenant-scoped stream identifier. Its name is a mutable label.
 # @name createTopic
 POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "payments",
+  "key": "payments",
+  "name": "Payments",
   "description": "Payment events stream"
 }
 
@@ -185,6 +186,7 @@ Content-Type: application/json
 {
   "connector_id": "{{webhookIntId}}",
   "topic_id": "{{topicId}}",
+  "name": "Payments Event API",
   "type": "event_api",
   "configuration": {},
   "verification": null,

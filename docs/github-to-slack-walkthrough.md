@@ -72,7 +72,8 @@ not carry the secret value itself. A different GitHub signing secret requires a 
 
 ```bash
 TOPIC=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics" -H "$AUTH" \
-  -H 'Content-Type: application/json' -d '{"name":"github-events"}' | jq -r .id)
+  -H 'Content-Type: application/json' \
+  -d '{"key":"github-events","name":"GitHub events"}' | jq -r .id)
 ```
 
 Materialize the shared secret value the default file-based secret provider expects — generate one
@@ -98,7 +99,7 @@ coordinate GitHub's requests carry. Revoking and re-creating the Source later mi
 ```bash
 GITHUB_MAPPING='{"event_type":"github." & $context.headers."x-github-event","payload":$}'
 CALLBACK_ID=$(jq -n --arg connector "$GITHUB_CONNECTOR" --arg topic "$TOPIC" --arg mapping "$GITHUB_MAPPING" \
-  '{connector_id:$connector,topic_id:$topic,type:"webhook",configuration:{},
+  '{connector_id:$connector,topic_id:$topic,name:"GitHub webhook",type:"webhook",configuration:{},
     verification:{scheme:"hmac_sha256",config:{},secret_refs:{secret:"github_webhook_secret"}},
     input_requirements:null,mapping:{engine:"jsonata",version:"1",expression:$mapping},
     event_identity_rule:{kind:"header",value:"X-GitHub-Delivery"}}' \
