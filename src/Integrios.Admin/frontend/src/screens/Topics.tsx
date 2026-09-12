@@ -186,11 +186,11 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
 
           {selectedTopicId ? (
             <TopicInspector key={selectedTopicId} tenantId={tenantId} topicId={selectedTopicId} />
-          ) : (
+          ) : topics.length > 0 ? (
             <InspectorPlaceholder label="Topic detail">
               Select a Topic to read its Subscriptions and what they match.
             </InspectorPlaceholder>
-          )}
+          ) : null}
         </SplitView>
       </section>
 

@@ -173,11 +173,11 @@ export function TenantApiKeysScreen({
               tenantApiKeyId={selectedTenantApiKeyId}
               onRevoked={(name) => setNotice(`${name} revoked.`)}
             />
-          ) : (
+          ) : keys.length > 0 ? (
             <InspectorPlaceholder label="Tenant API key detail">
               Select a key to read when it was last used and to revoke it.
             </InspectorPlaceholder>
-          )}
+          ) : null}
         </SplitView>
       </section>
 

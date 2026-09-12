@@ -137,11 +137,11 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
 
           {selectedConnectorId ? (
             <ConnectorInspector key={selectedConnectorId} connectorId={selectedConnectorId} />
-          ) : (
+          ) : connectors.length > 0 ? (
             <InspectorPlaceholder label="Connector detail">
               Select a Connector to read its manifest and what it permits.
             </InspectorPlaceholder>
-          )}
+          ) : null}
         </SplitView>
       </section>
 

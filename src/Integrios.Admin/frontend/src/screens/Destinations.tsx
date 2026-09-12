@@ -271,11 +271,11 @@ export function DestinationsScreen({
               fed a new id, which is what keeps a stale name from being on screen when focus moves. */}
         {selectedDestinationId ? (
           <DestinationInspector key={selectedDestinationId} tenantId={tenantId} destinationId={selectedDestinationId} />
-        ) : (
+        ) : destinations.length > 0 ? (
           <InspectorPlaceholder label="Destination detail">
             Select a Destination to read its configuration and authentication here.
           </InspectorPlaceholder>
-        )}
+        ) : null}
       </SplitView>
 
       <CreateSheet

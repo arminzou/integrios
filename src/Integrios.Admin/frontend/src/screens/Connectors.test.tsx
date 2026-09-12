@@ -37,6 +37,18 @@ function fillBasics(key = "github", version?: string) {
 
 const applied = (calls: Call[]) => calls.find((call) => call.method === "PUT");
 
+describe("A deployment with no Connectors", () => {
+  it("offers no detail column to select into, because there is nothing to select", async () => {
+    stubHttp(listOnly);
+
+    renderScreen(<ConnectorsScreen />);
+    await screen.findByRole("heading", { name: "No Connectors yet" });
+
+    expect(screen.queryByText(/Select a Connector/)).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "Connector detail" })).toBeNull();
+  });
+});
+
 describe("Authoring the first Connector", () => {
   it("produces a manifest from the guided form, without the Operator writing one", async () => {
     // Bootstrap installs no Connectors, so this is the state of every fresh deployment. Without a

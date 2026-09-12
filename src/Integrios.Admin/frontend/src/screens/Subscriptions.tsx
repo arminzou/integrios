@@ -370,11 +370,11 @@ export function SubscriptionsScreen({
             topicId={selectedTopicId}
             subscriptionId={selectedSubscriptionId}
           />
-        ) : (
+        ) : subscriptions.length > 0 ? (
           <InspectorPlaceholder label="Subscription detail">
             Select a Subscription to inspect its Topic, destination and delivery order.
           </InspectorPlaceholder>
-        )}
+        ) : null}
       </SplitView>
 
       <CreateSheet

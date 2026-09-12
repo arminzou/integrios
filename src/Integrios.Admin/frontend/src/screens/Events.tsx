@@ -427,11 +427,11 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               receive it. */}
         {selectedEventId ? (
           <EventInspector key={selectedEventId} tenantId={tenantId} eventId={selectedEventId} />
-        ) : (
+        ) : events.length > 0 ? (
           <InspectorPlaceholder label="Event detail">
             Select an Event to read its Deliveries, attempts, and trace identity here.
           </InspectorPlaceholder>
-        )}
+        ) : null}
       </div>
     </div>
   );

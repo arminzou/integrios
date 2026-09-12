@@ -259,11 +259,11 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
 
         {selectedSourceId ? (
           <SourceInspector key={selectedSourceId} tenantId={tenantId} sourceId={selectedSourceId} />
-        ) : (
+        ) : sources.length > 0 ? (
           <InspectorPlaceholder label="Source detail">
             Select a Source to read the Connector and Topic it binds together.
           </InspectorPlaceholder>
-        )}
+        ) : null}
       </SplitView>
 
       <CreateSheet
