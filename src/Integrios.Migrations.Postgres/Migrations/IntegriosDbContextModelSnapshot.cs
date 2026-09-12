@@ -547,6 +547,11 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("mapping");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
                     b.Property<string>("Revision")
                         .IsRequired()
                         .HasColumnType("text")

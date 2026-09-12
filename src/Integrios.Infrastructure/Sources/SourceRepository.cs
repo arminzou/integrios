@@ -23,6 +23,7 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
     public async Task<Source?> UpdateAsync(
         Guid tenantId,
         Guid id,
+        string name,
         JsonElement configuration,
         SourceVerification? verification,
         JsonElement? inputRequirements,
@@ -31,6 +32,7 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
     {
         int affected = await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id && source.Status == SourceStatus.Active)
             .ExecuteUpdateAsync(setters => setters
+                .SetProperty(source => source.Name, name)
                 .SetProperty(source => source.Configuration, configuration)
                 .SetProperty(source => source.Verification, verification)
                 .SetProperty(source => source.InputRequirements, inputRequirements)

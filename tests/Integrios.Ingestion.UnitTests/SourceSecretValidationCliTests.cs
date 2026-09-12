@@ -134,6 +134,7 @@ public sealed class SourceSecretValidationCliTests
         TenantId = tenantId,
         ConnectorId = Guid.NewGuid(),
         TopicId = Guid.NewGuid(),
+        Name = "webhook-intake",
         Type = SourceType.Webhook,
         Configuration = Json("{}"),
         Verification = new SourceVerification
@@ -154,6 +155,7 @@ public sealed class SourceSecretValidationCliTests
         TenantId = tenantId,
         ConnectorId = Guid.NewGuid(),
         TopicId = Guid.NewGuid(),
+        Name = "queue-intake",
         Type = SourceType.Queue,
         Configuration = JsonSerializer.SerializeToElement(new
         {

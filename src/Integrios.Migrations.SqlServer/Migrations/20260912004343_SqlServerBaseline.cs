@@ -205,6 +205,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     tenant_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     connector_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     topic_id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     type = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     configuration = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     verification = table.Column<string>(type: "nvarchar(max)", nullable: true),

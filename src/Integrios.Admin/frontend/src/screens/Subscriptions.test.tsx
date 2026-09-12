@@ -120,6 +120,7 @@ it("opens the sole Source guide with simple mapping context", async () => {
       tenant_id: tenantId,
       connector_id: "66666666-6666-6666-6666-666666666666",
       topic_id: topicId,
+      name: "orders-intake",
       type: "event_api",
       status: "active",
       input_requirements: "",
@@ -130,7 +131,7 @@ it("opens the sole Source guide with simple mapping context", async () => {
     `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`,
   );
 
-  (await screen.findByRole("link", { name: new RegExp(sourceId) })).click();
+  (await screen.findByRole("link", { name: /orders-intake/ })).click();
   await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/sources/${sourceId}`));
   expect(router.state.location.state).toMatchObject({
     openSourceGuide: sourceId,
@@ -147,6 +148,7 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
         tenant_id: tenantId,
         connector_id: "66666666-6666-6666-6666-666666666666",
         topic_id: topicId,
+        name: "orders-intake",
         type: "event_api",
         status: "active",
         input_requirements: "",
@@ -156,6 +158,7 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
         tenant_id: tenantId,
         connector_id: "66666666-6666-6666-6666-666666666666",
         topic_id: topicId,
+        name: `bulk-intake-${index}`,
         type: "event_api",
         status: "active",
         input_requirements: "",
@@ -168,6 +171,7 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
         tenant_id: tenantId,
         connector_id: "66666666-6666-6666-6666-666666666666",
         topic_id: topicId,
+        name: "webhook-intake",
         type: "webhook",
         status: "active",
         input_requirements: "",
@@ -180,8 +184,8 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
   );
 
   expect(await screen.findByText("Choose an upstream Source:")).toBeTruthy();
-  expect(screen.getByRole("link", { name: new RegExp(sourceId) })).toBeTruthy();
-  const second = screen.getByRole("link", { name: new RegExp(secondSourceId) });
+  expect(screen.getByRole("link", { name: /orders-intake/ })).toBeTruthy();
+  const second = screen.getByRole("link", { name: /webhook-intake/ });
   expect(second.textContent).toContain("webhook · no requirements");
   second.click();
   await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/sources/${secondSourceId}`));

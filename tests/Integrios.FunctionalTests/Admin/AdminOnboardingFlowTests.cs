@@ -90,7 +90,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
         var sourceResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{tenant.Id}/sources",
-            new { connector_id = fixture.HttpConnectorId, topic_id = topic.Id, type = "event_api", configuration = new { } }));
+            new { connector_id = fixture.HttpConnectorId, topic_id = topic.Id, name = "acme-intake", type = "event_api", configuration = new { } }));
         sourceResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var subscriptionResponse = await client.SendAsync(AdminRequest(

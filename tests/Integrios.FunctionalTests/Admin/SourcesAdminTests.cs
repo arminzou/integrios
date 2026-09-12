@@ -31,7 +31,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
         var configuration = new { };
-        var request = new { connector_id = connectorId, topic_id = topicId, type = "webhook", configuration };
+        var request = new { connector_id = connectorId, topic_id = topicId, name = "webhook-intake", type = "webhook", configuration };
 
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", request));
         create.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -61,6 +61,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "webhook",
             configuration = new { },
@@ -72,6 +73,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
         {
+            name = "webhook-intake",
             configuration = new { },
             verification = (object?)null,
             input_requirements = new { type = "object", properties = new { id = new { type = "string" }, kind = new { type = "string" } }, required = new[] { "id" } },
@@ -92,6 +94,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage eventApi = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "event_api",
             configuration = new { }
@@ -99,6 +102,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage queue = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "queue",
             configuration = new { transport = "azure_service_bus", authentication = new { scheme = "azure_identity" }, transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" } }
@@ -124,6 +128,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "queue",
             configuration = new
@@ -148,6 +153,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "queue",
             configuration = new
@@ -177,6 +183,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "queue",
             configuration = new
@@ -202,6 +209,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "queue",
             configuration = new
@@ -257,6 +265,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "queue",
             configuration,
@@ -280,6 +289,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "webhook",
             configuration = new { },
@@ -295,6 +305,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
         {
+            name = "webhook-intake",
             configuration = read.GetProperty("configuration"),
             verification = new
             {
@@ -327,6 +338,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "webhook",
             configuration = new { },
@@ -353,6 +365,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
             connector_id = connectorId,
+            name = "webhook-intake",
             topic_id = topicId,
             type = "queue",
             configuration = new
@@ -380,8 +393,30 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     // An update replaces the whole Source, so every field travels even when only one changes.
+    // ADR-0088 gives a Source a label rather than a key, and the label is required: an Operator picks
+    // a Source out of a list, and a list of bare identifiers is what this convention set out to end.
+    [Fact]
+    public async Task Create_WithoutAName_ReportsItOnTheNameField()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            topic_id = topicId,
+            type = "event_api",
+            configuration = new { },
+        }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("errors").GetProperty("name")[0].GetString().ShouldBe("Name is required.");
+    }
+
     private static object FullSourceUpdate(object configuration) => new
     {
+        name = "webhook-intake",
         configuration,
         verification = (object?)null,
         input_requirements = (object?)null,

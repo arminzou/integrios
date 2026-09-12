@@ -5,6 +5,7 @@ public sealed record SourceListItemDto(
     Guid TenantId,
     Guid ConnectorId,
     Guid TopicId,
+    string Name,
     string Type,
     string Status,
     string InputRequirements,

@@ -25,6 +25,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         entity.Property(source => source.TenantId).HasColumnName("tenant_id");
         entity.Property(source => source.ConnectorId).HasColumnName("connector_id");
         entity.Property(source => source.TopicId).HasColumnName("topic_id");
+        entity.Property(source => source.Name).HasColumnName("name");
         entity.Property(source => source.Type).HasColumnName("type");
         entity.Property(source => source.Configuration).HasColumnType("jsonb").HasColumnName("configuration");
         entity.Property(source => source.Verification).HasColumnType("jsonb").HasColumnName("verification");

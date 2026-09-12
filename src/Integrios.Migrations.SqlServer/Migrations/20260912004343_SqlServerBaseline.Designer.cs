@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Integrios.Migrations.SqlServer.Migrations
 {
     [DbContext(typeof(IntegriosDbContext))]
-    [Migration("20260912003137_SqlServerBaseline")]
+    [Migration("20260912004343_SqlServerBaseline")]
     partial class SqlServerBaseline
     {
         /// <inheritdoc />
@@ -572,6 +572,11 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.Property<string>("Mapping")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("mapping");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("name");
 
                     b.Property<string>("Revision")
                         .IsRequired()

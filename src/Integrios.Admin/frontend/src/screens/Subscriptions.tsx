@@ -651,7 +651,7 @@ function SubscriptionSourcePath({
                 state={{ openSourceGuide: source.id, sourceGuideContext: context }}
               >
                 <span className="min-w-0 break-all text-left">
-                  {source.type} · {source.input_requirements ? "requirements" : "no requirements"} · {source.id}
+                  {source.name} · {source.type} · {source.input_requirements ? "requirements" : "no requirements"}
                 </span>
               </Link>
             </Button>

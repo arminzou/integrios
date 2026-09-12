@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Integrios.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(IntegriosDbContext))]
-    [Migration("20260912003113_PostgresBaseline")]
+    [Migration("20260912004319_PostgresBaseline")]
     partial class PostgresBaseline
     {
         /// <inheritdoc />
@@ -549,6 +549,11 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.Property<string>("Mapping")
                         .HasColumnType("jsonb")
                         .HasColumnName("mapping");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
 
                     b.Property<string>("Revision")
                         .IsRequired()

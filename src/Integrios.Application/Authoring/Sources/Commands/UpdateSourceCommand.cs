@@ -10,6 +10,7 @@ namespace Integrios.Application.Authoring.Sources;
 public sealed record UpdateSourceCommand(
     Guid TenantId,
     Guid Id,
+    string? Name,
     JsonElement Configuration,
     SourceVerificationInput? Verification,
     JsonElement? InputRequirements,
@@ -23,6 +24,9 @@ internal sealed class UpdateSourceCommandHandler(
 {
     public async Task<SourceDto?> Handle(UpdateSourceCommand command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new SourceValidationException("Name is required.", "name");
+
         Source? source = await sourceRepository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
         if (source is null || source.Status != Domain.Enums.SourceStatus.Active)
             return null;
@@ -39,6 +43,7 @@ internal sealed class UpdateSourceCommandHandler(
         Source? updated = await sourceRepository.UpdateAsync(
             command.TenantId,
             command.Id,
+            command.Name.Trim(),
             configuration,
             SourceAuthoringValidator.ToVerification(command.Verification),
             command.InputRequirements?.Clone(),

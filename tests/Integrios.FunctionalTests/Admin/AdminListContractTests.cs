@@ -75,10 +75,10 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             UPDATE destinations SET status = 'disabled' WHERE id = @DestinationId;
             INSERT INTO tenant_api_keys (id, tenant_id, name, key_prefix, key_hash, status, created_at, revoked_at)
             VALUES (@RevokedKeyId, @TenantId, 'revoked-list-key', 'ik_revoked', 'sha256:test', 'disabled', @Now, @Now);
-            INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at)
-            VALUES (@TopicId, @TenantId, 'disabled-list-topic', 'disabled', @Now, @Now);
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, revision, status, created_at, updated_at, revoked_at)
-            VALUES (@SourceId, @TenantId, @SourceConnectorId, @TopicId, 'event_api', {{{fixture.Json("@Configuration")}}}, 'fixture-revision', 'revoked', @Now, @Now, @Now);
+            INSERT INTO topics (id, tenant_id, {{{fixture.KeyColumn}}}, name, status, created_at, updated_at)
+            VALUES (@TopicId, @TenantId, 'disabled-list-topic', 'disabled-list-topic', 'disabled', @Now, @Now);
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status, created_at, updated_at, revoked_at)
+            VALUES (@SourceId, @TenantId, @SourceConnectorId, @TopicId, 'disabled-list-intake', 'event_api', {{{fixture.Json("@Configuration")}}}, 'fixture-revision', 'revoked', @Now, @Now, @Now);
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_id, order_index, status, created_at, updated_at)
             VALUES (@SubscriptionId, @TenantId, @TopicId, 'disabled-list-subscription', {{{fixture.Json("@MatchRules")}}}, @DestinationId, 0, 'disabled', @Now, @Now);
             """,
@@ -131,9 +131,9 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         Guid excluded = Guid.NewGuid();
         DateTimeOffset now = DateTimeOffset.UtcNow;
         await ExecuteAsync($$$"""
-            INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at) VALUES
-            (@FirstTopic, @TenantId, 'Orders', 'active', @Now, @Now),
-            (@SecondTopic, @TenantId, 'Invoices', 'active', @Now, @Now);
+            INSERT INTO topics (id, tenant_id, {{{fixture.KeyColumn}}}, name, status, created_at, updated_at) VALUES
+            (@FirstTopic, @TenantId, 'orders', 'Orders', 'active', @Now, @Now),
+            (@SecondTopic, @TenantId, 'invoices', 'Invoices', 'active', @Now, @Now);
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status, created_at, updated_at) VALUES
             (@FirstDestination, @TenantId, @ConnectorId, 'Primary CRM', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now),
             (@SecondDestination, @TenantId, @ConnectorId, 'Archive', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now);
@@ -251,13 +251,13 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         Guid excluded = Guid.NewGuid();
         DateTimeOffset now = DateTimeOffset.UtcNow;
         await ExecuteAsync($$"""
-            INSERT INTO topics (id, tenant_id, name, status, created_at, updated_at) VALUES
-            (@Topic, @TenantId, 'source-filter-topic', 'active', @Now, @Now),
-            (@OtherTopic, @TenantId, 'other-source-filter-topic', 'active', @Now, @Now);
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, type, configuration, revision, status, created_at, updated_at, revoked_at) VALUES
-            (@First, @TenantId, @ConnectorId, @Topic, 'event_api', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL),
-            (@Second, @TenantId, @ConnectorId, @Topic, 'webhook', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'revoked', @Now, @Now, @Now),
-            (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'queue', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL)
+            INSERT INTO topics (id, tenant_id, {{fixture.KeyColumn}}, name, status, created_at, updated_at) VALUES
+            (@Topic, @TenantId, 'source-filter-topic', 'source-filter-topic', 'active', @Now, @Now),
+            (@OtherTopic, @TenantId, 'other-source-filter-topic', 'other-source-filter-topic', 'active', @Now, @Now);
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status, created_at, updated_at, revoked_at) VALUES
+            (@First, @TenantId, @ConnectorId, @Topic, 'first-intake', 'event_api', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL),
+            (@Second, @TenantId, @ConnectorId, @Topic, 'second-intake', 'webhook', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'revoked', @Now, @Now, @Now),
+            (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'excluded-intake', 'queue', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL)
             """, new { Topic = topic, OtherTopic = otherTopic, First = first, Second = second, Excluded = excluded,
                 fixture.TenantId, ConnectorId = fixture.HttpConnectorId, Now = now, Configuration = "{\"private_extra\":\"not a list field\"}" });
 

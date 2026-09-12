@@ -108,6 +108,7 @@ const sourceDetail = {
   tenant_id: tenantId,
   connector_id: connectorId,
   topic_id: topicId,
+  name: "orders-intake",
   type: "event_api",
   configuration: {},
   status: "active",
@@ -469,6 +470,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Event API");
+    await form.getByLabel("Name", { exact: true }).fill("orders-intake");
     await form.getByLabel("Configuration (JSON)").fill("{}");
     await view.click("text=Create Source");
 
@@ -502,6 +504,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Webhook");
+    await form.getByLabel("Name", { exact: true }).fill("github-intake");
     await form.getByLabel("Configuration (JSON)", { exact: true }).fill("{}");
     await form.getByLabel("Verification scheme (optional)").fill("hmac_sha256");
     await form.getByLabel("Verification configuration (JSON)").fill('{"header":"X-Signature"}');
@@ -533,6 +536,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Queue");
+    await form.getByLabel("Name", { exact: true }).fill("queue-intake");
     expect(await form.getByLabel(/^Verification/).count()).toBe(0);
     await form.getByLabel("Queue transport configuration (JSON)").fill('{"transport":"azure_service_bus"}');
     await form.getByLabel(/^Event identity kind \(message_id or json_path\)$/).fill("message_id");
@@ -683,7 +687,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     );
     await view.reload();
 
-    await view.getByRole("link", { name: new RegExp(sourceId) }).click();
+    await view.getByRole("link", { name: /orders-intake/ }).click();
     await view.getByRole("heading", { name: "Publish through this Source" }).waitFor();
     await view.getByText('"event_type": "order\'s.placed"').first().waitFor();
     await view.getByText('"orderId": null').first().waitFor();
@@ -705,7 +709,7 @@ describe("Update and deactivate, driven through a real browser", () => {
       }),
     );
     await advanced.page.reload();
-    await advanced.page.getByRole("link", { name: new RegExp(sourceId) }).click();
+    await advanced.page.getByRole("link", { name: /orders-intake/ }).click();
     await advanced.page.getByRole("link", { name: "Open its Mapping Playground" }).click();
     await advanced.page.getByRole("dialog", { name: "Mapping Playground" }).waitFor();
     await advanced.page.close();
@@ -792,7 +796,7 @@ describe("Update and deactivate, driven through a real browser", () => {
 
     await view.getByRole("button", { name: "Revoke", exact: true }).click();
     expect(writes, "Revocation ran before it was confirmed.").toHaveLength(0);
-    await view.click(`text=Revoke ${sourceId}`);
+    await view.click("text=Revoke orders-intake");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("DELETE");

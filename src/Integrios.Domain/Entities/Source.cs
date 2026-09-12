@@ -10,6 +10,9 @@ public sealed record Source
     public required Guid TenantId { get; init; }
     public required Guid ConnectorId { get; init; }
     public required Guid TopicId { get; init; }
+    /// The human label. A Source has no key: nothing outside the product names one, and intake
+    /// addresses it by identifier.
+    public required string Name { get; init; }
     public required SourceType Type { get; init; }
     public required JsonElement Configuration { get; init; }
     public SourceVerification? Verification { get; init; }

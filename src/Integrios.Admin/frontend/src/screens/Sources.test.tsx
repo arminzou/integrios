@@ -165,6 +165,7 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
           tenant_id: tenantId,
           connector_id: connectorId,
           topic_id: topicId,
+          name: "webhook-intake",
           type: "webhook",
           configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
           verification,
@@ -216,6 +217,7 @@ function guideHttp({
           tenant_id: tenantId,
           connector_id: connectorId,
           topic_id: topicId,
+          name: "orders-intake",
           type,
           configuration,
           verification: type === "webhook" ? { scheme: "hmac_sha256", config: {} } : null,
@@ -251,6 +253,7 @@ function guideHttp({
         body: {
           id: topicId,
           tenant_id: tenantId,
+          key: "orders",
           name: "orders",
           status: "active",
           description: null,

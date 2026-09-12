@@ -207,6 +207,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
                     connector_id = table.Column<Guid>(type: "uuid", nullable: false),
                     topic_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "text", nullable: false),
                     type = table.Column<string>(type: "text", nullable: false),
                     configuration = table.Column<JsonElement>(type: "jsonb", nullable: false),
                     verification = table.Column<string>(type: "jsonb", nullable: true),

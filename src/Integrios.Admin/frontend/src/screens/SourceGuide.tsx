@@ -126,7 +126,9 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
             >
               <li className="rounded-full border bg-surface px-3 py-1">External Publisher</li>
               <li aria-hidden="true">→</li>
-              <li className="rounded-full border bg-surface px-3 py-1">{source.type} Source</li>
+              <li className="min-w-0 rounded-full border bg-surface px-3 py-1 break-all">
+                {source.name} ({source.type})
+              </li>
               <li aria-hidden="true">→</li>
               <li className="min-w-0 rounded-full border bg-surface px-3 py-1 break-all">
                 {topic.data?.name ?? source.topic_id}

@@ -23,7 +23,7 @@ import {
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
-import { Filter, Form, SelectField, TextAreaField } from "../ui/fields";
+import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson } from "../ui/json";
@@ -54,6 +54,7 @@ const sourceTypes = [
 ];
 
 const createFields = [
+  "name",
   "connector_id",
   "topic_id",
   "type",
@@ -66,7 +67,7 @@ const createFields = [
   "identity_kind",
   "identity_value",
 ] as const;
-const editFields = ["configuration", "input_requirements", "mapping"] as const;
+const editFields = ["name", "configuration", "input_requirements", "mapping"] as const;
 
 /// A domain JSON document, authored as text: well-formedness is all the dashboard checks, and the
 /// server stays the authority on whether the document is valid for this Source type.
@@ -82,6 +83,7 @@ const optionalJsonDocument = z.string().superRefine((text, ctx) => {
 });
 
 const createSchema = z.object({
+  name: z.string().trim().min(1, "Enter a name."),
   connector_id: z.string().min(1, "Choose a Connector."),
   topic_id: z.string().min(1, "Choose a Topic."),
   type: z.string().min(1, "Choose a type."),
@@ -96,6 +98,7 @@ const createSchema = z.object({
 });
 
 const editSchema = z.object({
+  name: z.string().trim().min(1, "Enter a name."),
   configuration: jsonDocument,
   input_requirements: optionalJsonDocument,
   mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
@@ -212,6 +215,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             >
               <TableHeader>
                 <TableRow>
+                  <TableHead scope="col">Name</TableHead>
                   <TableHead scope="col">Connector</TableHead>
                   <TableHead scope="col">Topic</TableHead>
                   <TableHead scope="col">Type</TableHead>
@@ -224,9 +228,10 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                   <TableRow key={source.id} className="has-[a[aria-current=page]]:bg-selected-surface">
                     <RowHeader>
                       <NavLink className="no-underline" to={`/tenants/${tenantId}/sources/${source.id}`} end>
-                        {nameIn(connectorOptions.data?.items, source.connector_id)}
+                        {source.name}
                       </NavLink>
                     </RowHeader>
+                    <TableCell>{nameIn(connectorOptions.data?.items, source.connector_id)}</TableCell>
                     <TableCell>
                       <Link to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
                         {nameIn(topicOptions.data?.items, source.topic_id)}
@@ -274,6 +279,7 @@ function CreateSource({
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     defaultValues: {
+      name: "",
       connector_id: "",
       topic_id: defaultTopicId,
       type: "webhook",
@@ -304,6 +310,7 @@ function CreateSource({
         api.POST("/admin/tenants/{tenantId}/sources", {
           params: { path: { tenantId } },
           body: {
+            name: values.name,
             connector_id: values.connector_id,
             topic_id: values.topic_id,
             type: values.type,
@@ -342,6 +349,7 @@ function CreateSource({
         <FormError message={formError(asProblem(connectors.error ?? topics.error))} />
         <FormError message={formError(asProblem(create.error), createFields)} />
 
+        <TextField control={form.control} name="name" label="Name" required />
         <SelectField
           control={form.control}
           name="connector_id"
@@ -576,6 +584,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
     defaultValues: {
+      name: source.name,
       configuration: formatJson(source.configuration),
       input_requirements: source.input_requirements ? formatJson(source.input_requirements) : "",
       mapping: source.mapping?.expression ?? "",
@@ -588,6 +597,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
         api.PUT("/admin/tenants/{tenantId}/sources/{id}", {
           params: { path: { tenantId, id: source.id } },
           body: {
+            name: values.name,
             configuration: parseJson(values.configuration).value,
             verification: source.verification
               ? {
@@ -636,6 +646,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
               >
                 <FormError message={formError(asProblem(save.error), editFields)} />
 
+                <TextField control={form.control} name="name" label="Name" required />
                 <TextAreaField
                   control={form.control}
                   name="configuration"
@@ -672,8 +683,8 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
           <ConfirmAction
             label="Revoke"
             consequence="Revoking a Source stops it accepting Events. It cannot be restored, and a replacement is a new Source with a new identifier."
-            question={`Revoke the ${source.type} Source ${source.id}? It stops accepting Events and cannot be restored.`}
-            confirmLabel={`Revoke ${source.id}`}
+            question={`Revoke the ${source.type} Source ${source.name}? It stops accepting Events and cannot be restored.`}
+            confirmLabel={`Revoke ${source.name}`}
             busy={revoke.isPending}
             onConfirm={() => revoke.mutate()}
           />

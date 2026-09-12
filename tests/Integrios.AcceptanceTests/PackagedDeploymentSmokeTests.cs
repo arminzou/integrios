@@ -125,7 +125,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new { key = $"payments-{suffix}" });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, type = "event_api", configuration = new { } });
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", configuration = new { } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
@@ -504,7 +504,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new { key = topicName });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, type = "event_api", configuration = new { } });
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", configuration = new { } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new

@@ -29,7 +29,7 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
         string sql = $"""
             SELECT {(sqlServer ? "TOP (@Take)" : "")}
                 id AS Id, tenant_id AS TenantId, connector_id AS ConnectorId, topic_id AS TopicId,
-                type AS Type, status AS Status,
+                name AS Name, type AS Type, status AS Status,
                 {(sqlServer
                     ? "COALESCE(input_requirements, '')"
                     : "COALESCE(input_requirements::text, '')")} AS InputRequirements,
@@ -53,7 +53,7 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
         bool hasMore = rows.Count > limit;
         if (hasMore) rows.RemoveAt(rows.Count - 1);
         return new SourceListDto(rows.Select(row => new SourceListItemDto(
-            row.Id, row.TenantId, row.ConnectorId, row.TopicId, row.Type, row.Status, row.InputRequirements,
+            row.Id, row.TenantId, row.ConnectorId, row.TopicId, row.Name, row.Type, row.Status, row.InputRequirements,
             row.CreatedAt, row.UpdatedAt, row.RevokedAt)).ToList(),
             hasMore ? PageCursor.Encode(dataProtectionProvider, scope, rows[^1].CreatedAt, rows[^1].Id, DateTimeOffset.UtcNow) : null);
     }
@@ -70,6 +70,7 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
         public Guid TenantId { get; init; }
         public Guid ConnectorId { get; init; }
         public Guid TopicId { get; init; }
+        public string Name { get; init; } = "";
         public string Type { get; init; } = "";
         public string Status { get; init; } = "";
         public string InputRequirements { get; init; } = "";

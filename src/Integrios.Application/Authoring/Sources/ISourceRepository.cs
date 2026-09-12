@@ -12,6 +12,7 @@ public interface ISourceRepository
     Task<Source?> UpdateAsync(
         Guid tenantId,
         Guid id,
+        string name,
         JsonElement configuration,
         SourceVerification? verification,
         JsonElement? inputRequirements,

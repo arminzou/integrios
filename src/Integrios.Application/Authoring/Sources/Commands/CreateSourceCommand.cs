@@ -13,6 +13,7 @@ public sealed record CreateSourceCommand(
     Guid TenantId,
     Guid ConnectorId,
     Guid TopicId,
+    string? Name,
     SourceType Type,
     JsonElement Configuration,
     SourceVerificationInput? Verification,
@@ -29,6 +30,9 @@ internal sealed class CreateSourceCommandHandler(
 {
     public async Task<SourceDto> Handle(CreateSourceCommand command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            throw new SourceValidationException("Name is required.", "name");
+
         Topic topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken)
             ?? throw new SourceValidationException("Source Topic must exist in the same Tenant.");
         if (topic.Status != OperationalStatus.Active)
@@ -46,6 +50,7 @@ internal sealed class CreateSourceCommandHandler(
         var source = new Source
         {
             Id = Guid.NewGuid(), TenantId = command.TenantId, ConnectorId = command.ConnectorId, TopicId = command.TopicId,
+            Name = command.Name.Trim(),
             Type = command.Type, Configuration = configuration,
             Verification = SourceAuthoringValidator.ToVerification(command.Verification),
             InputRequirements = command.InputRequirements?.Clone(),
