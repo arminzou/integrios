@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { SelectItem } from "@/components/ui/select";
@@ -116,7 +117,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                 </TableHeader>
                 <TableBody>
                   {connectors.map((connector) => (
-                    <TableRow key={connector.id} className="has-[a[aria-current=page]]:bg-selected-surface">
+                    <TableRow key={connector.id} className="group has-[a[aria-current=page]]:bg-selected-surface">
                       <RowHeader>
                         <NavLink className="font-mono text-[13px] no-underline" to={`/connectors/${connector.id}`} end>
                           {connector.key}
@@ -126,7 +127,16 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                       <TableCell>{connector.direction}</TableCell>
                       <TableCell>v{connector.contract_version}</TableCell>
                       <TableCell>
-                        <StatusBadge status={connector.status} />
+                        {/* The row makes its own promise: a detail panel opens from here. It answers
+                            keyboard focus as well as the pointer, because a hint only a mouse can
+                            reach is no hint to an Operator working from the keyboard. */}
+                        <div className="flex items-center justify-between gap-3">
+                          <StatusBadge status={connector.status} />
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="size-4 text-ink-secondary opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -165,7 +175,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
 }
 
 /// The selected Connector beside the list. A Connector is deployment-wide and read far more often
-/// than it is applied — a Source or Destination configuration is validated against this manifest — so the
+/// than it is applied â€” a Source or Destination configuration is validated against this manifest â€” so the
 /// manifest is what the panel is mostly for.
 function ConnectorInspector({ connectorId }: { connectorId: string }) {
   const navigate = useNavigate();
@@ -185,7 +195,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         <ReadError problem={problem} what="This Connector" back={{ to: "/connectors", label: "Back to Connectors" }} />
       </Inspector>
     );
-  if (!connector.data) return <Inspector label="Connector detail">Loading…</Inspector>;
+  if (!connector.data) return <Inspector label="Connector detail">Loadingâ€¦</Inspector>;
 
   const current = connector.data;
   return (
@@ -194,7 +204,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         <h2 className="min-w-0">
           {current.name}
           <span className="block font-mono text-xs font-normal break-all text-ink-secondary">
-            {current.key} · contract v{current.contract_version}
+            {current.key} Â· contract v{current.contract_version}
           </span>
         </h2>
         <div className="flex shrink-0 items-center gap-1.5">
