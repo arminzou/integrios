@@ -37,9 +37,9 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("disabled");
     }
 
-    // ADR-0088 puts uniqueness on keys, and a Destination has none: its name is a label an Operator
-    // can correct, while the identifier is what anything else refers to. Two Destinations may
-    // therefore answer to one name, and a rename onto an existing name is an ordinary update.
+    // Uniqueness belongs to keys, and a Destination has none: its name is a label an Operator can
+    // correct, while the identifier is what anything else refers to. Two Destinations may therefore
+    // answer to one name, and a rename onto an existing name is an ordinary update.
     [Fact]
     public async Task DuplicateName_IsAcceptedOnCreateAndOnRename()
     {

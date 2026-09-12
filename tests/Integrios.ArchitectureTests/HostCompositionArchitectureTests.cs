@@ -109,8 +109,8 @@ public sealed class HostCompositionArchitectureTests
     // The responsibility group a handler lives in is its production owner. This is the assertion
     // that makes the grouping load-bearing: EveryApplicationHandler_IsRegisteredByExactlyOneProductionHost
     // is satisfied by any single owner, so on its own it cannot see a handler whose group says one
-    // host while a different host registers it. That gap is the silent-ownership-transfer path
-    // ADR-0038 accepted before the 2026-08-24 amendment.
+    // host while a different host registers it. That gap is the silent-ownership-transfer path this
+    // grouping tolerated before it was tightened.
     private static readonly IReadOnlyDictionary<string, Host> GroupOwners = new Dictionary<string, Host>
     {
         ["Integrios.Application.Authoring"] = Host.Admin,

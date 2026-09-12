@@ -4,7 +4,7 @@ using Integrios.Domain.ValueObjects;
 namespace Integrios.Application.Delivery;
 
 // Generic HTTP success rule evaluation: no provider identity, no Slack-specific behavior, no error taxonomy.
-// A provider manifest supplies field names and an expected value as data (ADR-0035); this evaluates
+// A provider manifest supplies field names and an expected value as data; this evaluates
 // them against whatever bounded body the transport layer already read.
 public static class HttpSuccessEvaluator
 {

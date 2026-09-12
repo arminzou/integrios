@@ -37,7 +37,7 @@ public sealed class TopicsAdminTests(AdminApiFixture fixture) : AdminApiTestBase
         topic.Key.ShouldBe("payments");
     }
 
-    // The key is what a create must carry; ADR-0088 makes the label the part an Operator corrects.
+    // The key is what a create must carry; the label is the part an Operator corrects.
     [Fact]
     public async Task Create_WithoutAKey_ReportsItOnTheKeyField()
     {

@@ -393,8 +393,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     // An update replaces the whole Source, so every field travels even when only one changes.
-    // ADR-0088 gives a Source a label rather than a key, and the label is required: an Operator picks
-    // a Source out of a list, and a list of bare identifiers is what this convention set out to end.
+    // A Source carries a label rather than a key, and the label is required: an Operator picks a
+    // Source out of a list, and a list of bare identifiers is what this convention set out to end.
     [Fact]
     public async Task Create_WithoutAName_ReportsItOnTheNameField()
     {

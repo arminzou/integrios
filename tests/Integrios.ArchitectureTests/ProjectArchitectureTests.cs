@@ -170,6 +170,40 @@ public sealed class ProjectArchitectureTests
             + "JSON carry their own serializer options instead. Found: " + string.Join(", ", offenders));
     }
 
+    private const string ThisFileName = nameof(ProjectArchitectureTests) + ".cs";
+
+    [Fact]
+    public void SourceTree_ReferencesNoPrivateDecisionRecords()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        // Composed rather than written out, so this test does not report itself.
+        string recordPrefix = string.Concat("ADR", "-");
+        string brainPath = string.Concat(".", "brain");
+
+        string[] offenders =
+        [
+            .. new[] { "src", "tests" }
+                .SelectMany(tree => Directory.EnumerateFiles(
+                    Path.Combine(repositoryRoot, tree), "*.cs", SearchOption.AllDirectories))
+                .Where(path => !IsGeneratedPath(path))
+                // This file names both patterns to look for them, so it cannot be its own subject.
+                .Where(path => !path.EndsWith(ThisFileName, StringComparison.OrdinalIgnoreCase))
+                .Where(path =>
+                {
+                    string text = File.ReadAllText(path);
+                    return text.Contains(recordPrefix, StringComparison.OrdinalIgnoreCase)
+                        || text.Contains(brainPath, StringComparison.OrdinalIgnoreCase);
+                })
+                .Select(path => Path.GetRelativePath(repositoryRoot, path))
+                .Order(StringComparer.Ordinal),
+        ];
+
+        (offenders.Length == 0).ShouldBeTrue(
+            "The repository is public and decision records are not: no file may name one, or a path "
+            + "inside the private context directory. State the reason in plain terms instead. Found: "
+            + string.Join(", ", offenders));
+    }
+
     [Fact]
     public void Infrastructure_ExportsOnlyHostCompositionExtensions()
     {
