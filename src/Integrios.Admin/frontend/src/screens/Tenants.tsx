@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { dnsLabel } from "../identifiers";
 import {
   appliedNote,
   ConfirmAction,
@@ -207,13 +208,38 @@ function CreateTenant({ onCreated }: { onCreated: () => void }) {
     create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
   );
 
+  // The slug follows the name until an Operator writes one of their own, so the common case is not a
+  // transliteration done by hand. Authorship is recorded from their own keystroke rather than read
+  // off the form's dirty state, which is recomputed against the defaults whenever a field returns to
+  // one — that would freeze a slug this form wrote the moment the name was cleared.
+  const [slugAuthored, setSlugAuthored] = useState(false);
+  const authoredName = useWatch({ control: form.control, name: "name" });
+  useEffect(() => {
+    if (slugAuthored) return;
+    form.setValue("slug", dnsLabel(authoredName));
+  }, [slugAuthored, authoredName, form]);
+
   return (
     <Form {...form}>
       <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Tenant">
         <FormError message={formError(asProblem(create.error), createFields)} />
 
-        <TextField control={form.control} name="slug" label="Slug" required />
+        {/* The label first, the key second: an Operator knows what they are calling this Tenant
+            before they know what to call it in a secret path, and the list puts the two in the
+            same order. */}
         <TextField control={form.control} name="name" label="Name" required />
+        {/* Chosen once: the Admin API does not accept a changed slug, and it is where this Tenant's
+            secrets are looked up, so a later correction would move them out from under it. */}
+        <TextField
+          control={form.control}
+          name="slug"
+          label="Slug"
+          hint="Chosen once, and never changed. It names this Tenant's secret paths."
+          onChange={() => setSlugAuthored(true)}
+          className="font-mono text-sm"
+          required
+        />
+
         <TextField control={form.control} name="environment" label="Environment (optional)" />
         <TextField control={form.control} name="description" label="Description (optional)" />
 

@@ -266,6 +266,32 @@ describe("Tenant Overview navigation", () => {
 });
 
 describe("Tenant authoring", () => {
+  it("reads a slug off the name until an Operator writes one of their own", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<TenantsScreen />, "/tenants");
+    fireEvent.click(await screen.findByRole("button", { name: "New Tenant" }));
+    const slug = (await screen.findByLabelText("Slug")) as HTMLInputElement;
+    const name = screen.getByLabelText("Name");
+
+    // A slug is a lowercase DNS label, not the snake_case a Connector key uses: words join with
+    // hyphens, and a leading digit is kept because a slug may open with one.
+    fireEvent.change(name, { target: { value: "Acme Ltd" } });
+    await waitFor(() => expect(slug.value).toBe("acme-ltd"));
+    fireEvent.change(name, { target: { value: "3M Field Service!" } });
+    await waitFor(() => expect(slug.value).toBe("3m-field-service"));
+
+    // Emptying the name empties the slug with it: the form wrote it, so the form still owns it.
+    fireEvent.change(name, { target: { value: "" } });
+    await waitFor(() => expect(slug.value).toBe(""));
+
+    // One keystroke in the slug ends the derivation for good, including across later name edits.
+    fireEvent.change(slug, { target: { value: "northwind" } });
+    fireEvent.change(name, { target: { value: "Acme Ltd" } });
+    await waitFor(() => expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Acme Ltd"));
+    expect(slug.value).toBe("northwind");
+  });
+
   it("shows a rejected field's own message beside it and keeps what the Operator typed", async () => {
     stubHttp(({ method }) =>
       method === "POST"

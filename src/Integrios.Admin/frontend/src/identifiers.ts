@@ -20,3 +20,17 @@ export function snakeIdentifier(name: string): string {
     .replace(/^[^a-z]+/, "")
     .replace(/_+$/, "");
 }
+
+/// The other identifier grammar: a lowercase DNS label, which is what a Tenant's slug and a Topic's
+/// key are. Read off a display name the same way, and deliberately not the same function — a slug
+/// joins with hyphens and may open with a digit, so "3M Field Service" is `3m-field-service` here
+/// and `m_field_service` above. A slug also reaches a secret mount path, where 63 characters is the
+/// label limit.
+export function dnsLabel(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+/, "")
+    .slice(0, 63)
+    .replace(/-+$/, "");
+}
