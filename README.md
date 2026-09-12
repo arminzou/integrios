@@ -55,6 +55,8 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 - [Database backends](docs/database-backends.md): PostgreSQL default and SQL Server 2022+ reference configuration
 - [GitHub-to-Slack walkthrough](docs/github-to-slack-walkthrough.md): a verified provider webhook
   source through to a transformed destination delivery, end to end
+- [Connector manifest reference](docs/connector-manifest.md): every property a Connector manifest
+  may carry, and what each one is validated against
 - [Architecture](docs/architecture.md): design, processing flow, and platform concepts
 - [Observability](docs/observability.md): metrics, traces, logs, and OTLP export
 - [CI/CD](docs/ci-cd.md): the pipeline and published images
