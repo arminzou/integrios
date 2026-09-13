@@ -52,6 +52,7 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 ## Documentation
 
 - [Setup & quickstart](docs/setup.md): run locally and deliver your first event
+- [Operator dashboard access](docs/operator-dashboard.md): configure OIDC or email-and-password sign-in and recover access
 - [Database backends](docs/database-backends.md): PostgreSQL default and SQL Server 2022+ reference configuration
 - [GitHub-to-Slack walkthrough](docs/github-to-slack-walkthrough.md): a verified provider webhook
   source through to a transformed destination delivery, end to end

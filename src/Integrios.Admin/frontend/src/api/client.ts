@@ -6,6 +6,7 @@ import type { components, paths } from "./schema";
 /// Generated from the Admin OpenAPI document rather than hand-maintained, so this type can never
 /// drift from the contract `/auth/session` actually serves.
 export type OperatorSession = components["schemas"]["OperatorSessionResponse"];
+export type OperatorAuthenticationOptions = components["schemas"]["OperatorAuthenticationOptionsResponse"];
 
 let session: OperatorSession | null = null;
 
@@ -48,6 +49,27 @@ export async function loadSession(): Promise<OperatorSession | null> {
   return session;
 }
 
-export function signInHref(): string {
-  return `/auth/login?return_to=${encodeURIComponent(location.pathname + location.search)}`;
+export async function loadAuthenticationOptions(): Promise<OperatorAuthenticationOptions> {
+  const { data, response } = await api.GET("/auth/options");
+  if (!response.ok || !data) throw new Error(`Sign-in options could not be read (${response.status}).`);
+  return data;
 }
+
+export async function passwordSignIn(
+  options: OperatorAuthenticationOptions,
+  email: string,
+  password: string,
+): Promise<string> {
+  const { data, error, response } = await api.POST("/auth/password/login", {
+    body: { email, password, return_to: currentReturnPath() },
+    headers: { [options.antiforgery_header_name]: options.antiforgery_token },
+  });
+  if (!response.ok || !data) throw new Error(error?.message ?? `Sign-in could not be completed (${response.status}).`);
+  return data.return_to;
+}
+
+export function signInHref(): string {
+  return `/auth/login?return_to=${encodeURIComponent(currentReturnPath())}`;
+}
+
+const currentReturnPath = () => location.pathname + location.search;

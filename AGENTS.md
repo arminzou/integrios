@@ -65,8 +65,9 @@ service-to-service configuration calls.
 
 These are current scope boundaries, not permanent non-goals. Phase sequencing lives in the private roadmap.
 
-- Operators sign in through OpenID Connect; Integrios stores no local credential
-- no Role or permission model yet: every signed-in Operator holds the same authority
+- OperatorUsers sign in through OpenID Connect or an optional Integrios-managed Password credential;
+  there is no public signup or email recovery
+- no Role or permission model yet: every signed-in OperatorUser holds the same authority
 - tenant-aware design from the start
 - idempotency, replayability, retries, and DLQ are platform concerns
 - keep domain language generic, not company-specific

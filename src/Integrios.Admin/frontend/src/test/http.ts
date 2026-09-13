@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-export type Call = { method: string; url: URL; body: unknown };
+export type Call = { method: string; url: URL; headers: Headers; body: unknown };
 
 /// Stands in for the Admin API so a workflow test exercises the real typed client, the real request
 /// the screen builds, and the real Problem Details handling — everything except the network.
@@ -25,6 +25,7 @@ export function stubHttp(
       const call: Call = {
         method: request.method,
         url: new URL(request.url, "http://localhost"),
+        headers: new Headers(request.headers),
         body: text === "" ? undefined : (JSON.parse(text) as unknown),
       };
       calls.push(call);

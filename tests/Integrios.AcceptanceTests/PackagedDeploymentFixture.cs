@@ -65,12 +65,13 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["POSTGRES_PASSWORD"] = "acceptance_postgres",
             ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "acceptance-admin-secret",
             ["INTEGRIOS_PUBLIC_INGESTION_BASE_URI"] = "https://acceptance.example.test",
-            // Admin maps the dashboard only when an identity provider is configured, so the
-            // packaged run configures one to prove the browser surface is actually served. No
-            // sign-in happens here and this authority is never reached: the real provider round
-            // trip is a Functional gate against a containerized provider.
+            // Exercise the packaged dashboard with both human methods configured. No OIDC sign-in
+            // happens here and this authority is never reached: the real provider round trip and
+            // password lifecycle are Functional gates.
             ["INTEGRIOS_ADMIN_OIDC_AUTHORITY"] = "https://oidc.invalid/",
             ["INTEGRIOS_ADMIN_OIDC_CLIENT_ID"] = "integrios-acceptance",
+            ["INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME"] = "Acceptance SSO",
+            ["INTEGRIOS_ADMIN_PASSWORD_ENABLED"] = "true",
             ["INTEGRIOS_BOOTSTRAP_IMAGE"] = $"{projectName}-bootstrap",
             ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
             ["INTEGRIOS_INGESTION_IMAGE"] = $"{projectName}-ingestion",

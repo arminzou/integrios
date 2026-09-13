@@ -23,6 +23,14 @@ const session = {
   antiforgery_form_field_name: "__antiforgery",
 };
 
+const authOptions = {
+  oidc_enabled: true,
+  password_enabled: true,
+  oidc_display_name: "Example ID",
+  antiforgery_token: "sign-in-token",
+  antiforgery_header_name: "X-Integrios-Antiforgery",
+};
+
 const tenants = {
   items: [
     {
@@ -100,6 +108,7 @@ beforeAll(async () => {
   // intermittently exceeds its own timeout under a loaded machine.
   const warm = await browser.newPage();
   await warm.route("**/auth/session", (route) => route.fulfill({ status: 401 }));
+  await warm.route("**/auth/options", (route) => route.fulfill({ json: authOptions }));
   await warm.goto(origin);
   await warm.getByRole("heading", { level: 1 }).waitFor();
   await warm.close();
@@ -152,6 +161,7 @@ describe("The dashboard in a real browser", () => {
   ])("keeps the signed-out Gate accessible for %s", async (_name, path, status) => {
     const page = await browser.newPage({ viewport: { width: 320, height: 900 } });
     await page.route("**/auth/session", (route) => route.fulfill({ status }));
+    await page.route("**/auth/options", (route) => route.fulfill({ json: authOptions }));
     await page.goto(`${origin}${path}`);
 
     await page.getByRole("heading", { level: 1 }).waitFor();
@@ -172,6 +182,39 @@ describe("The dashboard in a real browser", () => {
     expect(["a", "button"]).toContain(focus.role);
     expect(focus.marked).toBe(true);
 
+    await page.close();
+  });
+
+  it("submits password sign-in with antiforgery and preserves a deep link", async () => {
+    const path = `/tenants/${tenants.items[0].id}/events?status=dead_lettered`;
+    const page = await browser.newPage({ viewport: { width: 320, height: 900 } });
+    await page.route("**/auth/session", (route) => route.fulfill({ status: 401 }));
+    await page.route("**/auth/options", (route) => route.fulfill({ json: authOptions }));
+    await page.route("**/auth/password/login", async (route) => {
+      const request = route.request();
+      const body = request.postDataJSON() as { email: string; password: string; return_to: string };
+      expect(request.headers()["x-integrios-antiforgery"]).toBe("sign-in-token");
+      expect(body).toEqual({
+        email: "operator@example.test",
+        password: "correct horse battery staple",
+        return_to: path,
+      });
+      await route.fulfill({ json: { return_to: body.return_to } });
+    });
+
+    await page.goto(`${origin}${path}`);
+    await page.getByLabel("Email", { exact: true }).fill("operator@example.test");
+    await page.getByLabel("Password", { exact: true }).fill("correct horse battery staple");
+    await Promise.all([
+      page.waitForEvent("framenavigated", (frame) => frame === page.mainFrame()),
+      page.getByRole("button", { name: "Sign in with email" }).click(),
+    ]);
+
+    expect(page.url()).toBe(`${origin}${path}`);
+    expect(await accessibilityViolations(page)).toEqual([]);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
     await page.close();
   });
 

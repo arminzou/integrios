@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ArrowDownToLine,
@@ -15,10 +15,20 @@ import {
   TriangleAlert,
   Waypoints,
 } from "lucide-react";
-import { Fragment, useEffect } from "react";
+import { Fragment, type ReactNode, type SubmitEvent, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
-import { api, loadSession, type OperatorSession, signInHref } from "./api/client";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  api,
+  loadAuthenticationOptions,
+  loadSession,
+  type OperatorAuthenticationOptions,
+  type OperatorSession,
+  passwordSignIn,
+  signInHref,
+} from "./api/client";
 import { asProblem, call } from "./api/query";
 import { isIdentifier } from "./identifiers";
 import { sectionGroups, sectionHrefs, sectionLabels, type TenantSection } from "./sections";
@@ -51,34 +61,128 @@ export function App() {
 
 function SignedOutGate() {
   const query = new URLSearchParams(location.search);
-  if (query.get("error") === "access_denied")
-    return (
-      <SessionGate
-        title="Sign-in did not complete"
-        copy="Nothing was signed in. Trying again is safe."
-        alert="Your identity provider refused this sign-in."
-        detail="If it keeps refusing, ask whoever administers it whether you are assigned to this application."
-        action="Try again"
-      />
-    );
-
-  if (query.get("signed_out") === "1")
-    return (
-      <SessionGate
-        title="You are signed out"
-        copy="This Integrios session has ended. Your identity provider session was left as it was."
-        action="Sign in again"
-      />
-    );
-
+  const options = useQuery({ queryKey: ["auth-options"], queryFn: loadAuthenticationOptions });
+  const refused = query.get("error") === "access_denied";
+  const signedOut = query.get("signed_out") === "1";
   const deepLink = location.pathname !== "/" || location.search !== "";
+
+  if (options.isPending)
+    return <SessionGate title="Sign in to Integrios" copy="Checking the available sign-in methods…" />;
+  if (options.isError)
+    return (
+      <SessionGate
+        title="Sign in to Integrios"
+        copy="The deployment answered, but its sign-in options could not be read."
+        alert={options.error instanceof Error ? options.error.message : String(options.error)}
+        action="Retry"
+        onRetry={() => options.refetch()}
+      />
+    );
+
   return (
     <SessionGate
-      title="Integrios Operator"
-      copy="Sign in to administer this deployment."
-      detail={deepLink ? "You will be returned to the page you were on." : undefined}
-      action="Sign in"
-    />
+      title="Sign in to Integrios"
+      copy={refused ? "Sign-in did not complete." : signedOut ? "You are signed out." : "Choose a sign-in method."}
+      alert={refused ? "Your identity provider refused this sign-in." : undefined}
+      detail={
+        refused
+          ? "If it keeps refusing, ask whoever administers it whether you are assigned to this application."
+          : signedOut
+            ? "Your identity provider session was left as it was."
+            : deepLink
+              ? "You will be returned to the page you were on."
+              : undefined
+      }
+    >
+      <SignInMethods options={options.data} />
+    </SessionGate>
+  );
+}
+
+function SignInMethods({ options }: { options: OperatorAuthenticationOptions }) {
+  if (!options.oidc_enabled && !options.password_enabled)
+    return <p className="mt-6 mb-0 text-sm text-ink-secondary">No human sign-in method is configured.</p>;
+
+  return (
+    <div className="mt-6 flex flex-col gap-4">
+      {options.oidc_enabled ? (
+        <Button asChild className="w-full">
+          <a href={signInHref()}>
+            Continue with {options.oidc_display_name ?? "OpenID Connect"}
+            <ArrowRight aria-hidden="true" />
+          </a>
+        </Button>
+      ) : null}
+      {options.oidc_enabled && options.password_enabled ? (
+        <div className="flex items-center gap-3 text-xs text-ink-secondary">
+          <span className="h-px flex-1 bg-border" />
+          <span>or</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+      ) : null}
+      {options.password_enabled ? <PasswordSignIn options={options} /> : null}
+    </div>
+  );
+}
+
+function PasswordSignIn({ options }: { options: OperatorAuthenticationOptions }) {
+  const signIn = useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) => passwordSignIn(options, email, password),
+    onSuccess: (returnTo) => location.assign(returnTo),
+  });
+  const error = signIn.error instanceof Error ? signIn.error.message : signIn.error ? String(signIn.error) : null;
+
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    signIn.mutate({ email: String(values.get("email") ?? ""), password: String(values.get("password") ?? "") });
+  };
+
+  return (
+    <form className="flex flex-col gap-4" aria-label="Sign in with email and password" onSubmit={submit}>
+      {error ? (
+        <p
+          id="password-sign-in-error"
+          className="m-0 rounded-md bg-danger-surface p-3 text-sm text-danger-ink"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="operator-email">Email</Label>
+        <Input id="operator-email" name="email" type="email" autoComplete="email" maxLength={320} required />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="operator-password">Password</Label>
+        <Input
+          id="operator-password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          aria-describedby="password-sign-in-policy"
+          required
+        />
+        <p id="password-sign-in-policy" className="m-0 text-xs text-ink-secondary">
+          15–128 characters.
+        </p>
+      </div>
+      <Button
+        className="w-full"
+        type="submit"
+        variant={options.oidc_enabled ? "outline" : "default"}
+        disabled={signIn.isPending}
+      >
+        {signIn.isPending ? "Signing in…" : "Sign in with email"}
+      </Button>
+      <p className="m-0 text-xs text-ink-secondary">
+        Need access restored? Ask your deployment administrator or read the{" "}
+        <a href="https://github.com/arminzou/integrios/blob/main/docs/operator-dashboard.md#recover-access">
+          Operator access and recovery guide
+        </a>
+        .
+      </p>
+    </form>
   );
 }
 
@@ -89,6 +193,7 @@ function SessionGate({
   detail,
   action,
   onRetry,
+  children,
 }: {
   title: string;
   copy: string;
@@ -96,6 +201,7 @@ function SessionGate({
   detail?: string;
   action?: string;
   onRetry?: () => void;
+  children?: ReactNode;
 }) {
   const Icon = alert ? TriangleAlert : Info;
   const ActionIcon = onRetry || alert ? RotateCcw : ArrowRight;
@@ -129,6 +235,7 @@ function SessionGate({
                 </div>
               </div>
             ) : null}
+            {children}
             {action ? (
               onRetry ? (
                 <Button className="mt-3 w-full" variant="outline" onClick={onRetry}>

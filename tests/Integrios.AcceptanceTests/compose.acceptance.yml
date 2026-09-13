@@ -33,6 +33,8 @@ services:
   admin:
     image: ${INTEGRIOS_ADMIN_IMAGE}
     environment:
+      # The harness connects directly over local HTTP; real production deployments keep HTTPS required.
+      Integrios__Admin__Oidc__RequireHttpsMetadata: "false"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=acceptance
       OTEL_TRACES_SAMPLER: always_on
