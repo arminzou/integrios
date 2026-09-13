@@ -62,6 +62,31 @@ it("shows Source input requirements and restarts paging when the Topic filter ch
   expect(screen.getByRole("link", { name: "Clear filters" })).toBeTruthy();
 });
 
+describe("Authoring a Source before anything it needs", () => {
+  it("says a Topic has to exist first, instead of offering an empty picker", async () => {
+    // A Tenant authored a moment ago: a Connector is installed deployment-wide, and nothing else.
+    stubHttp(({ url }) =>
+      url.pathname.endsWith("/connectors")
+        ? { status: 200, body: page([{ id: connectorId, key: "http", name: "HTTP", status: "active" }]) }
+        : { status: 200, body: page([]) },
+    );
+
+    renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
+    fireEvent.click(await screen.findByRole("button", { name: "New Source" }));
+
+    const hint = await screen.findByText(/No active Topics yet/);
+    expect(hint.textContent).toContain("a Source needs one");
+    expect(within(hint).getByRole("link", { name: "Create a Topic" }).getAttribute("href")).toBe(
+      `/tenants/${tenantId}/topics`,
+    );
+
+    // Neither the picker nor the write pretends to be available: there is nothing to choose, and
+    // nothing this form could send.
+    expect(screen.getByLabelText("Topic").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Create Source" }).hasAttribute("disabled")).toBe(true);
+  });
+});
+
 describe("Source setup guide", () => {
   const cases = [
     {

@@ -311,6 +311,10 @@ function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreate
     queryFn: () => call(() => api.GET("/admin/connectors", { params: { query: { limit: 100 } } })),
   });
   const connectorOptionsUnavailable = connectors.isPending || connectors.isError;
+  // Connectors are deployment-wide: a Tenant cannot author its way out of this one, so the sentence
+  // sends an Operator to the deployment's own list rather than anywhere in this Tenant.
+  const noConnectors = connectors.isSuccess && (connectors.data?.items ?? []).length === 0;
+  const cannotAuthor = connectorOptionsUnavailable || noConnectors;
 
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
@@ -366,8 +370,17 @@ function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreate
           control={form.control}
           name="connector_id"
           label="Connector"
-          hint={connectors.data?.next_cursor ? "Showing the first 100 Connectors." : undefined}
-          disabled={connectorOptionsUnavailable}
+          hint={
+            noConnectors ? (
+              <>
+                No Connectors are installed, and a Destination is built from one.{" "}
+                <Link to="/connectors">Install a Connector</Link> first.
+              </>
+            ) : connectors.data?.next_cursor ? (
+              "Showing the first 100 Connectors."
+            ) : undefined
+          }
+          disabled={connectorOptionsUnavailable || noConnectors}
           required
         >
           {(connectors.data?.items ?? []).map((connector) => (
@@ -404,7 +417,7 @@ function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreate
         <TextField control={form.control} name="environment" label="Environment (optional)" />
         <TextField control={form.control} name="description" label="Description (optional)" />
 
-        <Button type="submit" className="self-start" disabled={create.isPending || connectorOptionsUnavailable}>
+        <Button type="submit" className="self-start" disabled={create.isPending || cannotAuthor}>
           Create Destination
         </Button>
       </form>

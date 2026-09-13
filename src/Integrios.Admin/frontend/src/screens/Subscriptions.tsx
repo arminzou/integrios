@@ -409,6 +409,9 @@ function CreateTenantSubscription({
 }) {
   const navigate = useNavigate();
   const topics = useTopicOptions(tenantId);
+  // A Subscription routes from a Topic to a Destination, so it is the last thing a Tenant can
+  // author: both have to exist before this form can say anything.
+  const noTopics = topics.isSuccess && activeOnly(topics.data?.items).length === 0;
   const topicForm = useForm<{ topic_id: string }>({ defaultValues: { topic_id: defaultTopicId } });
   const topicId = topicForm.watch("topic_id");
   const topic = topics.data?.items.find((item) => item.id === topicId);
@@ -420,8 +423,17 @@ function CreateTenantSubscription({
           control={topicForm.control}
           name="topic_id"
           label="Topic"
-          hint={topics.data?.next_cursor ? "Showing the first 100 active Topics." : undefined}
-          disabled={topics.isPending || topics.isError}
+          hint={
+            noTopics ? (
+              <>
+                No active Topics yet, and a Subscription routes from one.{" "}
+                <Link to={`/tenants/${tenantId}/topics`}>Create a Topic</Link> first.
+              </>
+            ) : topics.data?.next_cursor ? (
+              "Showing the first 100 active Topics."
+            ) : undefined
+          }
+          disabled={topics.isPending || topics.isError || noTopics}
           required
         >
           {activeOnly(topics.data?.items).map((option) => (
@@ -1216,6 +1228,7 @@ function SubscriptionForm({
   const queryClient = useQueryClient();
   const destinations = useDestinationOptions(tenantId);
   const destinationOptionsUnavailable = destinations.isPending || destinations.isError;
+  const noDestinations = destinations.isSuccess && activeOnly(destinations.data?.items).length === 0;
   const [playgroundOpen, setPlaygroundOpen] = useState(initialPlaygroundOpen);
   const [reviewedExpression, setReviewedExpression] = useState<string>();
   const originalExpression = mappingExpression(subscription?.mapping_config);
@@ -1309,8 +1322,17 @@ function SubscriptionForm({
             control={form.control}
             name="destination_id"
             label="Destination"
-            hint={destinations.data?.next_cursor ? "Showing the first 100 active Destinations." : undefined}
-            disabled={destinationOptionsUnavailable}
+            hint={
+              noDestinations ? (
+                <>
+                  No active Destinations yet, and a Subscription delivers to one.{" "}
+                  <Link to={`/tenants/${tenantId}/destinations`}>Create a Destination</Link> first.
+                </>
+              ) : destinations.data?.next_cursor ? (
+                "Showing the first 100 active Destinations."
+              ) : undefined
+            }
+            disabled={destinationOptionsUnavailable || noDestinations}
             required
           >
             {activeOnly(destinations.data?.items).map((destination) => (
@@ -1393,7 +1415,7 @@ function SubscriptionForm({
           <Button
             type="submit"
             className="self-start"
-            disabled={save.isPending || destinationOptionsUnavailable || !mappingReviewed}
+            disabled={save.isPending || destinationOptionsUnavailable || noDestinations || !mappingReviewed}
             aria-describedby={mappingReviewed ? undefined : "mapping-save-requirement"}
           >
             {subscription ? "Save changes" : "Create Subscription"}

@@ -304,7 +304,21 @@ function CreateSource({
   const queryClient = useQueryClient();
   const connectors = useConnectorOptions();
   const topics = useTopicOptions(tenantId);
-  const optionsUnavailable = connectors.isPending || topics.isPending || connectors.isError || topics.isError;
+  const optionsPending = connectors.isPending || topics.isPending || connectors.isError || topics.isError;
+  // A Source binds one Connector to one Topic, so a Tenant that has authored no Topic yet cannot
+  // have a Source at all. The picker says so where an Operator meets the gap: an empty menu states
+  // that there is nothing to choose without saying that something has to be authored first.
+  //
+  // The control is disabled and the sentence left standing beside it. A disabled control is skipped
+  // by the Tab key, so the reason has to live in the form's reading order rather than only in the
+  // description of a field a keyboard never reaches.
+  const noTopics = topics.isSuccess && activeOnly(topics.data?.items).length === 0;
+  // Connectors are deployment-wide, so an Operator whose deployment has none cannot author here at
+  // all — the way out leaves the Tenant rather than staying inside it.
+  const noConnectors = connectors.isSuccess && activeOnly(connectors.data?.items).length === 0;
+  // A form that cannot be completed does not look completable: no Topic blocks the write exactly as
+  // an option read that has not answered does.
+  const cannotAuthor = optionsPending || noTopics || noConnectors;
 
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
@@ -384,8 +398,17 @@ function CreateSource({
           control={form.control}
           name="connector_id"
           label="Connector"
-          hint={connectors.data?.next_cursor ? "Showing the first 100 active Connectors." : undefined}
-          disabled={connectors.isPending || connectors.isError}
+          hint={
+            noConnectors ? (
+              <>
+                No active Connectors are installed, and a Source is built from one.{" "}
+                <Link to="/connectors">Install a Connector</Link> first.
+              </>
+            ) : connectors.data?.next_cursor ? (
+              "Showing the first 100 active Connectors."
+            ) : undefined
+          }
+          disabled={connectors.isPending || connectors.isError || noConnectors}
           required
         >
           {activeOnly(connectors.data?.items).map((connector) => (
@@ -398,8 +421,17 @@ function CreateSource({
           control={form.control}
           name="topic_id"
           label="Topic"
-          hint={topics.data?.next_cursor ? "Showing the first 100 active Topics." : undefined}
-          disabled={topics.isPending || topics.isError}
+          hint={
+            noTopics ? (
+              <>
+                No active Topics yet, and a Source needs one.{" "}
+                <Link to={`/tenants/${tenantId}/topics`}>Create a Topic</Link> first.
+              </>
+            ) : topics.data?.next_cursor ? (
+              "Showing the first 100 active Topics."
+            ) : undefined
+          }
+          disabled={topics.isPending || topics.isError || noTopics}
           required
         >
           {activeOnly(topics.data?.items).map((topic) => (
@@ -493,7 +525,7 @@ function CreateSource({
           </>
         ) : null}
 
-        <Button type="submit" className="self-start" disabled={create.isPending || optionsUnavailable}>
+        <Button type="submit" className="self-start" disabled={create.isPending || cannotAuthor}>
           Create Source
         </Button>
       </form>

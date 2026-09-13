@@ -47,6 +47,22 @@ const describedText = (control: HTMLElement) =>
     .map((id) => document.getElementById(id)?.textContent ?? "")
     .join(" ");
 
+describe("Authoring a Destination before anything it needs", () => {
+  it("says a Connector has to be installed first, and sends the Operator out of the Tenant to do it", async () => {
+    stubHttp(() => ({ status: 200, body: page([]) }));
+
+    renderScreen(<DestinationsScreen tenantId={tenantId} />, `/tenants/${tenantId}/destinations`);
+    fireEvent.click(await screen.findByText("New Destination"));
+
+    const hint = await screen.findByText(/No Connectors are installed/);
+    // Connectors are deployment-wide, so the way out is the deployment's list rather than anything
+    // inside this Tenant.
+    expect(within(hint).getByRole("link", { name: "Install a Connector" }).getAttribute("href")).toBe("/connectors");
+    expect(screen.getByLabelText("Connector").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Create Destination" }).hasAttribute("disabled")).toBe(true);
+  });
+});
+
 describe("Creating a Destination", () => {
   it("never sends a configuration that is not well-formed JSON", async () => {
     const calls = await openCreateForm((call) => ({

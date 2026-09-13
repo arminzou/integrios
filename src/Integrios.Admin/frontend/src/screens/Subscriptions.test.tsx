@@ -95,6 +95,22 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
   });
 });
 
+it("says what a Subscription is missing when the Tenant has no Topic and no Destination", async () => {
+  stubHttp(() => ({ status: 200, body: page([]) }));
+
+  renderScreen(<SubscriptionsScreen tenantId={tenantId} />, `/tenants/${tenantId}/subscriptions`);
+  fireEvent.click(await screen.findByRole("button", { name: "New Subscription" }));
+  const sheet = await screen.findByRole("dialog", { name: "New Subscription" });
+
+  // A Subscription is the last thing a Tenant authors, so it is the form most able to be blocked:
+  // it routes from a Topic to a Destination and needs both to exist first.
+  const topicHint = await within(sheet).findByText(/No active Topics yet/);
+  expect(within(topicHint).getByRole("link", { name: "Create a Topic" }).getAttribute("href")).toBe(
+    `/tenants/${tenantId}/topics`,
+  );
+  expect(within(sheet).getByLabelText("Topic").hasAttribute("disabled")).toBe(true);
+});
+
 it("loads eligible Destinations for the selected Topic in a new Subscription", async () => {
   const calls = stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
