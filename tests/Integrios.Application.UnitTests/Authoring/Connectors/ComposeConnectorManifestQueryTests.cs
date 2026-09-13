@@ -44,8 +44,10 @@ public sealed class ComposeConnectorManifestQueryTests
         manifest.Presentation.Description.ShouldBe("Description");
         manifest.SourceConfigurationSchema.HasValue.ShouldBe(sourceCapable);
         manifest.DestinationConfigurationSchema.HasValue.ShouldBe(destinationCapable);
-        manifest.SourceVerification.AllowUnverified.ShouldBeTrue();
-        manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBeTrue();
+        // A previous version that required a selection keeps requiring one. Carrying the menu while
+        // resetting the flag loosens a Connector because someone bumped its version.
+        manifest.SourceVerification.AllowUnverified.ShouldBe(!(carryForward && sourceCapable));
+        manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBe(!(carryForward && destinationCapable));
         manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme)
             .ShouldBe(sourceCapable ? ["hmac_sha256"] : []);
         manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)

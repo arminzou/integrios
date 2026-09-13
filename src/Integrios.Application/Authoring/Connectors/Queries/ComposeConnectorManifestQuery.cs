@@ -60,9 +60,13 @@ internal sealed class ComposeConnectorManifestQueryHandler(
             DestinationConfigurationSchema = destinationCapable
                 ? latest?.Manifest.DestinationConfigurationSchema ?? DestinationConfigurationSchema
                 : null,
+            // Whether a selection is required travels with the menu it belongs to. Carrying an
+            // expert's tightened menu forward while resetting the flag would let a version bump
+            // through the guided form loosen the Connector, and a version is immutable once applied.
             SourceVerification = new ConnectorSourceVerificationManifest
             {
-                AllowUnverified = true,
+                AllowUnverified = !(sourceCapable && previousSourceCapable)
+                    || latest!.Manifest.SourceVerification.AllowUnverified,
                 Schemes = sourceCapable
                     ? previousSourceCapable
                         ? latest!.Manifest.SourceVerification.Schemes
@@ -71,7 +75,8 @@ internal sealed class ComposeConnectorManifestQueryHandler(
             },
             DestinationAuthentication = new ConnectorDestinationAuthenticationManifest
             {
-                AllowUnauthenticated = true,
+                AllowUnauthenticated = !(destinationCapable && previousDestinationCapable)
+                    || latest!.Manifest.DestinationAuthentication.AllowUnauthenticated,
                 Schemes = destinationCapable
                     ? previousDestinationCapable
                         ? latest!.Manifest.DestinationAuthentication.Schemes
