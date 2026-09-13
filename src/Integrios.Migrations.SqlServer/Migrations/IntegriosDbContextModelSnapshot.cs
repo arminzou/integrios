@@ -537,6 +537,72 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.ToTable("operator_keys", (string)null);
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.PasswordCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<DateTimeOffset?>("DisabledAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("disabled_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)")
+                        .HasColumnName("normalized_email")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<int>("SessionRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1)
+                        .HasColumnName("session_revision");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("password_credentials_pkey");
+
+                    b.HasIndex(new[] { "NormalizedEmail" }, "uq_password_credentials_normalized_email")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "UserId" }, "uq_password_credentials_user_id")
+                        .IsUnique();
+
+                    b.ToTable("password_credentials", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_password_credentials_session_revision_positive", "session_revision > 0");
+                        });
+                });
+
             modelBuilder.Entity("Integrios.Domain.Entities.Source", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1078,6 +1144,16 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("operator_identities_user_id_fkey");
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.PasswordCredential", b =>
+                {
+                    b.HasOne("Integrios.Domain.Entities.User", null)
+                        .WithOne()
+                        .HasForeignKey("Integrios.Domain.Entities.PasswordCredential", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("password_credentials_user_id_fkey");
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Source", b =>

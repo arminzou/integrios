@@ -24,6 +24,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<User> Users => Set<User>();
     public DbSet<OperatorIdentity> OperatorIdentities => Set<OperatorIdentity>();
+    public DbSet<PasswordCredential> PasswordCredentials => Set<PasswordCredential>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -64,6 +65,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
 
         if (DatabaseProviders.FromContext(Database) == DatabaseProvider.SqlServer)
             ApplySqlServerOverrides(modelBuilder);
+        else
+            modelBuilder.Entity<PasswordCredential>()
+                .Property(e => e.NormalizedEmail)
+                .UseCollation("C");
     }
 
     private static void ApplySqlServerOverrides(ModelBuilder modelBuilder)
@@ -262,6 +267,13 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             // on the unique index and resolve to one another's User.
             entity.Property(e => e.Issuer).UseCollation("Latin1_General_BIN2");
             entity.Property(e => e.Subject).UseCollation("Latin1_General_BIN2");
+        });
+
+        modelBuilder.Entity<PasswordCredential>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
+            entity.Property(e => e.NormalizedEmail).UseCollation("Latin1_General_100_BIN2");
         });
 
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))

@@ -1,6 +1,7 @@
 using Integrios.Admin;
 using Integrios.Admin.Auth;
 using Integrios.Admin.OperatorKeys;
+using Integrios.Admin.OperatorUsers;
 using Integrios.Admin.Bootstrap;
 using Integrios.Admin.Dashboard;
 using Integrios.Admin.Database;
@@ -17,6 +18,8 @@ if (args is ["bootstrap", ..])
     return await BootstrapCli.RunAsync(args);
 if (args is ["operator-key", ..])
     return await OperatorKeyCli.RunAsync(args);
+if (args is ["operator-user", ..])
+    return await OperatorUserCli.RunAsync(args);
 if (args is ["database", ..])
     return await DatabaseMigrationCli.RunAsync(args);
 

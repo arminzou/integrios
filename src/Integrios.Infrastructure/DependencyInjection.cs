@@ -93,6 +93,11 @@ public static class DependencyInjection
         services.AddSingleton<ITenantEventActivitySummary, TenantEventActivitySummary>();
         services.AddSingleton<ITenantOverview, TenantOverviewReader>();
         services.AddScoped<IOperatorIdentityStore, OperatorIdentityStore>();
+        services.AddScoped<PasswordCredentialStore>();
+        services.AddScoped<IPasswordCredentialLifecycle>(provider =>
+            provider.GetRequiredService<PasswordCredentialStore>());
+        services.AddScoped<IOperatorUserQueries>(provider =>
+            provider.GetRequiredService<PasswordCredentialStore>());
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.AddDestinationAuthenticationServices();
         services.AddSourceVerificationServices();
