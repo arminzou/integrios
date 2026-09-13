@@ -335,7 +335,7 @@ describe("The dashboard in a real browser", () => {
     await page.getByLabel("Name", { exact: true }).fill("GitHub");
     await page.getByLabel("Key", { exact: true }).fill("github");
 
-    const deliver = sheet.getByRole("checkbox", { name: /Deliver Events over HTTP/ });
+    const deliver = sheet.getByRole("checkbox", { name: /Permit Destinations/ });
     await deliver.focus();
     const before = await sheet.evaluate((element) => element.scrollTop);
     await page.keyboard.press("Space");

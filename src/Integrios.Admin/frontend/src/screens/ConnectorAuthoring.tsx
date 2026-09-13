@@ -6,6 +6,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -13,9 +14,10 @@ import { asProblem, call } from "../api/query";
 import type { components } from "../api/schema";
 import { snakeIdentifier } from "../identifiers";
 import { Callout, ConfirmAction, Disclosure, FormError } from "../ui/controls";
+import { BodyPanel } from "../ui/copy";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
-import { formatJson, parseJson } from "../ui/json";
+import { parseJson } from "../ui/json";
 
 type Connector = components["schemas"]["ConnectorDto"];
 
@@ -32,7 +34,11 @@ const authoringSchema = z
   })
   .superRefine((values, ctx) => {
     if (!values.receive && !values.deliver)
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["receive"], message: "Choose at least one capability." });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["receive"],
+        message: "Choose at least one. A Connector that permits neither cannot be authored against.",
+      });
   });
 
 type AuthoringValues = z.infer<typeof authoringSchema>;
@@ -62,13 +68,18 @@ const noAdvanced: Advanced = {
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+/// What the capability pair means to the manifest, and the word the installed Connector is read back
+/// under.
+const direction = (values: Pick<AuthoringValues, "receive" | "deliver">) =>
+  values.receive && values.deliver ? "both" : values.receive ? "source" : "destination";
+
 export function buildManifest(values: AuthoringValues, advanced: Advanced): Record<string, unknown> {
   const manifest: Record<string, unknown> = {
     ...advanced.rest,
     manifest_schema_version: 1,
     key: values.key.trim(),
     contract_version: Number(values.contract_version) || 1,
-    direction: values.receive && values.deliver ? "both" : values.receive ? "source" : "destination",
+    direction: direction(values),
     source_verification: advanced.rest.source_verification ?? { allow_unverified: true, schemes: [] },
     destination_authentication: advanced.rest.destination_authentication ?? {
       allow_unauthenticated: true,
@@ -83,15 +94,23 @@ export function buildManifest(values: AuthoringValues, advanced: Advanced): Reco
     },
   };
 
-  if (values.receive && !("source_configuration_schema" in manifest))
-    manifest.source_configuration_schema = { type: "object", properties: {}, additionalProperties: true };
-  if (values.deliver && !("destination_configuration_schema" in manifest))
-    manifest.destination_configuration_schema = {
+  // A capability carries its configuration schema both ways. The document is built over whatever an
+  // imported manifest held, and the server refuses a schema the direction does not permit, so
+  // turning a capability off has to take its schema with it rather than leaving the imported one
+  // standing under a direction that no longer allows it.
+  if (values.receive)
+    manifest.source_configuration_schema ??= { type: "object", properties: {}, additionalProperties: true };
+  else delete manifest.source_configuration_schema;
+
+  if (values.deliver)
+    manifest.destination_configuration_schema ??= {
       type: "object",
       properties: { base_uri: { type: "string", format: "uri" } },
       required: ["base_uri"],
       additionalProperties: false,
     };
+  else delete manifest.destination_configuration_schema;
+
   return manifest;
 }
 
@@ -121,9 +140,9 @@ export function fromManifest(document: Record<string, unknown>): {
   delete presentation.name;
   delete presentation.description;
 
-  const direction = document.direction;
-  const receive = direction === "source" || direction === "both";
-  const deliver = direction === "destination" || direction === "both";
+  const applied = document.direction;
+  const receive = applied === "source" || applied === "both";
+  const deliver = applied === "destination" || applied === "both";
 
   const advanced: Advanced = {
     rest,
@@ -323,11 +342,7 @@ export function ConnectorAuthoring({
           />
         </Section>
 
-        <Section
-          className="relative"
-          title="Capabilities"
-          hint="Choose what Sources and Destinations built from this Connector may do."
-        >
+        <Section className="relative" title="Capabilities" hint="What Tenants may author from this Connector.">
           <FormField
             control={form.control}
             name="receive"
@@ -335,8 +350,8 @@ export function ConnectorAuthoring({
               <CheckRow
                 checked={field.value}
                 onChange={field.onChange}
-                label="Receive Events"
-                hint="Sources may use this Connector."
+                label="Permit Sources"
+                hint="A Tenant can build a Source on it, to receive Events from the external system."
               />
             )}
           />
@@ -347,17 +362,25 @@ export function ConnectorAuthoring({
               <CheckRow
                 checked={field.value}
                 onChange={field.onChange}
-                label="Deliver Events over HTTP"
-                hint="Destinations built from this Connector may be selected by Subscriptions."
+                label="Permit Destinations"
+                hint="A Tenant can build a Destination on it, to deliver Events to the external system over HTTP."
               />
             )}
           />
+          {/* The pair is what the manifest's direction is made of, and direction is the word the
+              Connector is read back under, so the choice is named in the word it becomes. */}
+          {values.receive || values.deliver ? (
+            <p className="m-0 text-xs text-ink-secondary">
+              Applies as direction <span className="font-mono">{direction(values)}</span>. Pick both if one external
+              system does both.
+            </p>
+          ) : null}
           <Callout message={form.formState.errors.receive?.message} />
         </Section>
 
         {values.receive ? (
           <Section
-            title="Receive Events"
+            title="Sources"
             hint="Source-specific verification, input requirements, mapping, and identity are chosen when authoring a Source."
           >
             <p className="m-0 text-xs text-ink-secondary">
@@ -369,7 +392,7 @@ export function ConnectorAuthoring({
 
         {values.deliver ? (
           <Section
-            title="Deliver Events"
+            title="Destinations"
             hint="Destination and Subscription authoring own the concrete outbound contract."
           >
             <p className="m-0 text-xs text-ink-secondary">
@@ -379,38 +402,48 @@ export function ConnectorAuthoring({
           </Section>
         ) : null}
 
-        <Section title="Advanced" hint="The manifest this draft applies, and the way past the guided form.">
+        <Section title="Advanced" hint="The manifest this draft applies, and how to start from one you already have.">
           {kept.length > 0 ? (
             <p className="m-0 text-xs text-ink-secondary">
               Kept from the imported manifest and applied unchanged: {kept.join(", ")}.
             </p>
           ) : null}
-          <Disclosure label="Generated manifest">
-            <pre className="m-0 max-h-80 overflow-auto text-xs">{formatJson(manifest)}</pre>
-          </Disclosure>
-          <Disclosure label="Import JSON">
-            <div className="flex flex-col gap-3">
-              <Textarea
-                aria-label="Manifest (JSON)"
-                value={imported}
-                spellCheck={false}
-                onChange={(event) => setImported(event.target.value)}
-                className="min-h-40 font-mono text-sm"
-              />
-              {importError ? (
-                <p role="alert" className="m-0 text-sm text-destructive">
-                  {importError}
-                </p>
-              ) : null}
-              {importParse && !importError ? (
+          {/* One document, read out and written in, so one disclosure. Two collapsed boxes both
+              labelled JSON left the direction of each to be carried entirely by its label. */}
+          <Disclosure label="Manifest JSON">
+            <div className="flex flex-col gap-4">
+              <BodyPanel label="Manifest" value={manifest} unbounded />
+              <div className="flex flex-col gap-3 border-t pt-4">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="manifest-import">Replace with pasted JSON</Label>
+                  <p className="m-0 text-xs text-ink-secondary">
+                    A manifest from another deployment, or one written by hand.
+                  </p>
+                </div>
+                <Textarea
+                  id="manifest-import"
+                  value={imported}
+                  spellCheck={false}
+                  onChange={(event) => setImported(event.target.value)}
+                  className="min-h-40 font-mono text-sm"
+                />
+                {importError ? (
+                  <p role="alert" className="m-0 text-sm text-destructive">
+                    {importError}
+                  </p>
+                ) : null}
+                {imported.trim() === "" ? (
+                  <p className="m-0 text-xs text-ink-secondary">Paste a manifest to replace this draft.</p>
+                ) : null}
                 <ConfirmAction
                   label="Replace draft"
                   variant="outline"
                   question="Replace this draft with the imported manifest?"
                   consequence="Everything authored in this form is discarded."
+                  disabled={!importParse || importError !== undefined}
                   onConfirm={replaceDraft}
                 />
-              ) : null}
+              </div>
             </div>
           </Disclosure>
         </Section>

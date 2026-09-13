@@ -373,8 +373,8 @@ function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreate
           hint={
             noConnectors ? (
               <>
-                No Connectors are installed, and a Destination is built from one.{" "}
-                <Link to="/connectors">Install a Connector</Link> first.
+                No Connectors exist yet, and a Destination is built from one.{" "}
+                <Link to="/connectors">Create a Connector</Link> first.
               </>
             ) : connectors.data?.next_cursor ? (
               "Showing the first 100 Connectors."

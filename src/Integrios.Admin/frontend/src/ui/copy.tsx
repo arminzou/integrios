@@ -105,12 +105,18 @@ export function BodyPanel({
   truncated,
   note,
   copyable = true,
+  unbounded,
 }: {
   label: string;
   value: unknown;
   truncated?: boolean;
   note?: string;
   copyable?: boolean;
+  /// A stored body is capped because a destination can return 8 KiB of anything, and a panel that
+  /// tall would bury whatever follows it. A document the dashboard generated is bounded by the form
+  /// that produced it, so it is shown whole and the surface it sits in does the scrolling — one
+  /// scroll region rather than a wheel that stops working over the panel.
+  unbounded?: boolean;
 }) {
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   const [copied, setCopied] = useState(false);
@@ -141,7 +147,12 @@ export function BodyPanel({
           ) : null}
         </div>
       </div>
-      <pre className="m-0 max-h-64 overflow-auto rounded-md bg-surface-quiet p-3 font-mono text-xs whitespace-pre-wrap">
+      <pre
+        className={cn(
+          "m-0 rounded-md bg-surface-quiet p-3 font-mono text-xs whitespace-pre-wrap",
+          unbounded ? undefined : "max-h-64 overflow-auto",
+        )}
+      >
         {text}
       </pre>
       {truncated ? (

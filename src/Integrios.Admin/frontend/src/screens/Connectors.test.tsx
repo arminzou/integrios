@@ -157,7 +157,7 @@ describe("Authoring the first Connector", () => {
     renderScreen(<ConnectorsScreen />);
     await openAuthoring();
     fillBasics("http");
-    fireEvent.click(screen.getByRole("checkbox", { name: /Deliver Events over HTTP/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Destinations/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
 
     await waitFor(() => expect(applied(calls)).toBeDefined());
@@ -173,8 +173,8 @@ describe("Authoring the first Connector", () => {
     renderScreen(<ConnectorsScreen />);
     await openAuthoring();
     fillBasics("http");
-    fireEvent.click(screen.getByRole("checkbox", { name: /Deliver Events over HTTP/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Receive Events/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Destinations/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Sources/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
 
     await waitFor(() => expect(applied(calls)).toBeDefined());
@@ -191,10 +191,10 @@ describe("Authoring the first Connector", () => {
     renderScreen(<ConnectorsScreen />);
     await openAuthoring();
     fillBasics();
-    fireEvent.click(screen.getByRole("checkbox", { name: /Receive Events/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Sources/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
 
-    await screen.findByText("Choose at least one capability.");
+    await screen.findByText(/Choose at least one\./);
     expect(calls.some((call) => call.method === "PUT")).toBe(false);
   });
 
@@ -242,7 +242,9 @@ describe("Importing a Connector manifest", () => {
   };
 
   function importDraft(document: unknown) {
-    fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: JSON.stringify(document) } });
+    fireEvent.change(screen.getByLabelText("Replace with pasted JSON"), {
+      target: { value: JSON.stringify(document) },
+    });
   }
 
   it("replaces the draft only after confirmation, and keeps what the guided form cannot show", async () => {
@@ -277,17 +279,59 @@ describe("Importing a Connector manifest", () => {
     expect(body.presentation).toMatchObject(imported.presentation);
   });
 
-  it("reports invalid JSON without offering to replace the draft with it", async () => {
+  it("reports invalid JSON and refuses the replacement rather than hiding the way to ask for it", async () => {
     stubHttp(listOnly);
 
     renderScreen(<ConnectorsScreen />);
     await openAuthoring();
     fillBasics("github");
-    fireEvent.change(screen.getByLabelText("Manifest (JSON)"), { target: { value: "{not json" } });
+    fireEvent.change(screen.getByLabelText("Replace with pasted JSON"), { target: { value: "{not json" } });
 
     await screen.findByRole("alert");
-    expect(screen.queryByRole("button", { name: "Replace draft" })).toBeNull();
+    // The action stands where it will be and says no. An Operator who cannot see it cannot tell
+    // whether pasting is even the way through.
+    expect(screen.getByRole("button", { name: "Replace draft" }).hasAttribute("disabled")).toBe(true);
     expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("github");
+  });
+
+  it("narrows an imported manifest to the capability left standing, schema and all", async () => {
+    const calls = stubHttp(listOnly);
+
+    renderScreen(<ConnectorsScreen />);
+    await openAuthoring();
+    importDraft({ ...imported, direction: "both", source_configuration_schema: { type: "object" } });
+    fireEvent.click(screen.getByRole("button", { name: "Replace draft" }));
+    const confirm = await screen.findByRole("dialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Replace draft" }));
+    await waitFor(() => expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("slack"));
+
+    // The imported Connector permitted both. Narrowing it to delivery has to take the Source's
+    // schema with it: the server refuses a schema the direction does not permit, and a 422 here
+    // would name a field the Operator never authored.
+    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Sources/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
+
+    await waitFor(() => expect(applied(calls)).toBeDefined());
+    const body = applied(calls)!.body as Record<string, unknown>;
+    expect(body.direction).toBe("destination");
+    expect(body).not.toHaveProperty("source_configuration_schema");
+    expect(body).toHaveProperty("destination_configuration_schema");
+  });
+
+  it("hands the generated manifest over rather than leaving it to be selected by hand", async () => {
+    const clipboard = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
+    stubHttp(listOnly);
+
+    renderScreen(<ConnectorsScreen />);
+    await openAuthoring();
+    fillBasics("github");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy manifest" }));
+
+    // What is copied is the document that would be applied, not a fragment of what is displayed.
+    await waitFor(() => expect(clipboard).toHaveBeenCalledWith(expect.stringContaining('"key": "github"')));
+    expect(clipboard.mock.calls[0][0]).toContain('"direction": "source"');
   });
 });
 

@@ -175,6 +175,7 @@ export function ConfirmAction({
   consequence,
   confirmLabel,
   busy,
+  disabled,
   variant = "destructive",
   onConfirm,
 }: {
@@ -192,6 +193,10 @@ export function ConfirmAction({
   consequence?: string;
   confirmLabel?: string;
   busy?: boolean;
+  /// An action whose preconditions are not met yet stands where it will be, rather than appearing
+  /// once they are: a control an Operator cannot see is one they cannot plan around. Say why beside
+  /// it — a disabled control is skipped by the Tab key, so the reason has to be in reading order.
+  disabled?: boolean;
   onConfirm: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -199,7 +204,7 @@ export function ConfirmAction({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Trigger asChild>
-        <Button type="button" variant={variant} className="self-start" disabled={busy}>
+        <Button type="button" variant={variant} className="self-start" disabled={busy || disabled}>
           {label}
         </Button>
       </DialogPrimitive.Trigger>

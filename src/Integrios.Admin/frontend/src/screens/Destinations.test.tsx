@@ -54,10 +54,10 @@ describe("Authoring a Destination before anything it needs", () => {
     renderScreen(<DestinationsScreen tenantId={tenantId} />, `/tenants/${tenantId}/destinations`);
     fireEvent.click(await screen.findByText("New Destination"));
 
-    const hint = await screen.findByText(/No Connectors are installed/);
+    const hint = await screen.findByText(/No Connectors exist yet/);
     // Connectors are deployment-wide, so the way out is the deployment's list rather than anything
     // inside this Tenant.
-    expect(within(hint).getByRole("link", { name: "Install a Connector" }).getAttribute("href")).toBe("/connectors");
+    expect(within(hint).getByRole("link", { name: "Create a Connector" }).getAttribute("href")).toBe("/connectors");
     expect(screen.getByLabelText("Connector").hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "Create Destination" }).hasAttribute("disabled")).toBe(true);
   });

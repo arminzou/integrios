@@ -118,7 +118,7 @@ function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
       id={formDescriptionId}
       // The base stylesheet hands a paragraph the margins prose wants; a hint is a line of a form
       // rather than prose, and the row's own gap is what spaces it from the control.
-      className={cn("m-0 text-sm text-muted-foreground", error && "invisible", className)}
+      className={cn("m-0 text-xs text-muted-foreground", error && "invisible", className)}
       {...props}
     />
   );

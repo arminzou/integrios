@@ -160,7 +160,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
 
       <CreateSheet
         label="New Connector"
-        description="Build a reusable capability definition without writing its manifest."
+        description="Declare one external system's contract."
         open={creating}
         onOpenChange={setCreating}
       >

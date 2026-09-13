@@ -401,8 +401,8 @@ function CreateSource({
           hint={
             noConnectors ? (
               <>
-                No active Connectors are installed, and a Source is built from one.{" "}
-                <Link to="/connectors">Install a Connector</Link> first.
+                No active Connectors exist yet, and a Source is built from one.{" "}
+                <Link to="/connectors">Create a Connector</Link> first.
               </>
             ) : connectors.data?.next_cursor ? (
               "Showing the first 100 active Connectors."
