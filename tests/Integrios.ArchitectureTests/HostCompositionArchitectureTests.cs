@@ -43,6 +43,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ITenantEventActivitySummary)] = [Host.Admin],
         [typeof(ITenantOverview)] = [Host.Admin],
         [typeof(IOperatorIdentityStore)] = [Host.Admin],
+        [typeof(IPasswordCredentialLifecycle)] = [Host.Admin],
+        [typeof(IOperatorUserQueries)] = [Host.Admin],
         [typeof(IConnectorReader)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
@@ -267,6 +269,8 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ITenantEventLookup>(scope.ServiceProvider);
         AssertResolves<IDeadLetterReplay>(scope.ServiceProvider);
         AssertResolves<ITenantEventActivitySummary>(scope.ServiceProvider);
+        AssertResolves<IPasswordCredentialLifecycle>(scope.ServiceProvider);
+        AssertResolves<IOperatorUserQueries>(scope.ServiceProvider);
 
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
@@ -325,6 +329,8 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<RetryPolicy>(provider);
         AssertOmits<DeliveryOutcomePolicy>(provider);
         AssertOmits<ITenantEventActivitySummary>(provider);
+        AssertOmits<IPasswordCredentialLifecycle>(provider);
+        AssertOmits<IOperatorUserQueries>(provider);
     }
 
     [Fact]
@@ -363,6 +369,8 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
         AssertOmits<ISubscriptionQueries>(scope.ServiceProvider);
         AssertOmits<ITenantEventActivitySummary>(scope.ServiceProvider);
+        AssertOmits<IPasswordCredentialLifecycle>(scope.ServiceProvider);
+        AssertOmits<IOperatorUserQueries>(scope.ServiceProvider);
     }
 
     private static ServiceProvider BuildProvider(
