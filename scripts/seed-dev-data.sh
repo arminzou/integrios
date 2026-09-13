@@ -48,13 +48,13 @@ curl -fsS "$SERVICEBUS_HTTP/health" > /dev/null
 # Connectors and OperatorKeys are deployment-level and survive: they are what bootstrap and the
 # manifest apply own, not demo data.
 say "clearing existing tenant data"
-psql_q "truncate table delivery_attempts, event_deliveries, outbox, events, subscriptions, sources, topics, connections, tenant_api_keys, tenants cascade;"
+psql_q "truncate table delivery_attempts, event_deliveries, outbox, events, subscriptions, sources, topics, destinations, tenant_api_keys, tenants cascade;"
 curl -fsS -X DELETE "$MOCKSINK/__admin/requests" > /dev/null
 curl -fsS -X POST "$MOCKSINK/__admin/mappings/reset" > /dev/null
 
 # --- 2. Connector -----------------------------------------------------------------------------
 say "applying the http Connector manifest"
-CONNECTOR=$(admin PUT /admin/connectors/http/versions/1 "$(cat examples/connectors/http.json)" | jq -r .id)
+CONNECTOR=$(admin PUT /admin/connectors/http/versions/1 "$(cat examples/connectors/http.json)" | jq -r .connector.id)
 
 # --- Helpers ----------------------------------------------------------------------------------
 new_tenant() { # slug name environment description
@@ -62,29 +62,28 @@ new_tenant() { # slug name environment description
     '{slug:$s,name:$n,environment:$e,description:$d}')" | jq -r .id
 }
 
-new_connection() { # tenant name base_uri environment description  (empty base_uri = source side)
-  local config='{}'
-  [ -n "$3" ] && config=$(jq -n --arg u "$3" '{base_uri:$u}')
-  admin POST "/admin/tenants/$1/connections" "$(jq -n --arg c "$CONNECTOR" --arg n "$2" \
-    --argjson cfg "$config" --arg e "$4" --arg d "$5" \
-    '{connector_id:$c,name:$n,config:$cfg,environment:$e,description:$d}')" | jq -r .id
+new_destination() { # tenant name base_uri environment description
+  admin POST "/admin/tenants/$1/destinations" "$(jq -n --arg c "$CONNECTOR" --arg n "$2" \
+    --arg u "$3" --arg e "$4" --arg d "$5" \
+    '{connector_id:$c,name:$n,configuration:{base_uri:$u},environment:$e,description:$d}')" | jq -r .id
 }
 
-new_topic() { # tenant name description
-  admin POST "/admin/tenants/$1/topics" "$(jq -n --arg n "$2" --arg d "$3" '{name:$n,description:$d}')" | jq -r .id
+new_topic() { # tenant key name description  (the demo keys double as their display names)
+  admin POST "/admin/tenants/$1/topics" "$(jq -n --arg k "$2" --arg n "$3" --arg d "$4" \
+    '{key:$k,name:$n,description:$d}')" | jq -r .id
 }
 
-new_source() { # tenant connection topic [type] [configuration_json]
+new_source() { # tenant connector topic [type] [configuration_json]
   local type=${4:-event_api} configuration=${5:-'{"source_contract":"event_json"}'}
   admin POST "/admin/tenants/$1/sources" "$(jq -n --arg c "$2" --arg t "$3" \
     --arg type "$type" --argjson cfg "$configuration" \
-    '{connection_id:$c,topic_id:$t,type:$type,configuration:$cfg}')" | jq -r .id
+    '{connector_id:$c,topic_id:$t,type:$type,configuration:$cfg}')" | jq -r .id
 }
 
 new_subscription() { # tenant topic name event_type destination order description [mapping_json]
   admin POST "/admin/tenants/$1/topics/$2/subscriptions" "$(jq -n --arg n "$3" --arg et "$4" \
     --arg dst "$5" --argjson o "$6" --arg d "$7" --argjson m "${8:-null}" \
-    '{name:$n,match_rules:{event_type:$et},destination_connection_id:$dst,order_index:$o,description:$d,mapping:$m}')" | jq -r .id
+    '{name:$n,match_rules:{event_type:$et},destination_id:$dst,order_index:$o,description:$d,mapping:$m}')" | jq -r .id
 }
 
 new_key() { # tenant name description
@@ -110,37 +109,36 @@ NW_TOKEN=$(new_key "$NW" northwind-storefront "Storefront checkout service. Rota
 NW_OLD_KEY=$(admin POST "/admin/tenants/$NW/tenant-api-keys" '{"name":"northwind-legacy-pos","description":"Retired point-of-sale integration."}' | jq -r .tenant_api_key.id)
 admin POST "/admin/tenants/$NW/tenant-api-keys/$NW_OLD_KEY/revoke" > /dev/null
 
-NW_IN=$(new_connection "$NW" storefront-intake "" production "Checkout and fulfilment events from the storefront.")
-NW_ERP=$(new_connection "$NW" northwind-erp http://mocksink:8080/sink/northwind-erp production "Order and payment records into the ERP.")
-NW_WMS=$(new_connection "$NW" northwind-wms http://mocksink:8080/sink/northwind-wms production "Warehouse management system, fulfilment side only.")
-NW_LAKE=$(new_connection "$NW" analytics-lake http://mocksink:8080/sink/northwind-lake production "Flattened order feed for the analytics lake.")
-NW_BILLING=$(new_connection "$NW" legacy-billing http://mocksink:8080/sink/northwind-billing production "Decommissioned billing host. Kept until finance signs off on the cutover.")
-NW_SANDBOX=$(new_connection "$NW" erp-sandbox http://mocksink:8080/sink/northwind-sandbox staging "Vendor sandbox used during the last ERP upgrade.")
-admin POST "/admin/tenants/$NW/connections/$NW_SANDBOX/deactivate" > /dev/null
+NW_ERP=$(new_destination "$NW" northwind-erp http://mocksink:8080/sink/northwind-erp production "Order and payment records into the ERP.")
+NW_WMS=$(new_destination "$NW" northwind-wms http://mocksink:8080/sink/northwind-wms production "Warehouse management system, fulfilment side only.")
+NW_LAKE=$(new_destination "$NW" analytics-lake http://mocksink:8080/sink/northwind-lake production "Flattened order feed for the analytics lake.")
+NW_BILLING=$(new_destination "$NW" legacy-billing http://mocksink:8080/sink/northwind-billing production "Decommissioned billing host. Kept until finance signs off on the cutover.")
+NW_SANDBOX=$(new_destination "$NW" erp-sandbox http://mocksink:8080/sink/northwind-sandbox staging "Vendor sandbox used during the last ERP upgrade.")
+admin POST "/admin/tenants/$NW/destinations/$NW_SANDBOX/deactivate" > /dev/null
 
-NW_ORDERS=$(new_topic "$NW" orders "Order lifecycle from the storefront.")
-NW_PAY=$(new_topic "$NW" payments "Payment authorisation and capture.")
-NW_STOCK=$(new_topic "$NW" inventory "Stock level movements per warehouse.")
-NW_WEBHOOKS=$(new_topic "$NW" storefront-webhooks "Provider callbacks received from the storefront platform.")
-NW_QUEUE=$(new_topic "$NW" warehouse-receipts "Warehouse receipts consumed from the operations queue.")
-NW_OLD=$(new_topic "$NW" pos-terminals "Retired in-store terminal stream.")
+NW_ORDERS=$(new_topic "$NW" orders orders "Order lifecycle from the storefront.")
+NW_PAY=$(new_topic "$NW" payments payments "Payment authorisation and capture.")
+NW_STOCK=$(new_topic "$NW" inventory inventory "Stock level movements per warehouse.")
+NW_WEBHOOKS=$(new_topic "$NW" storefront-webhooks storefront-webhooks "Provider callbacks received from the storefront platform.")
+NW_QUEUE=$(new_topic "$NW" warehouse-receipts warehouse-receipts "Warehouse receipts consumed from the operations queue.")
+NW_OLD=$(new_topic "$NW" pos-terminals pos-terminals "Retired in-store terminal stream.")
 admin POST "/admin/tenants/$NW/topics/$NW_OLD/deactivate" > /dev/null
 
-NW_ORDERS_SRC=$(new_source "$NW" "$NW_IN" "$NW_ORDERS")
-NW_PAY_SRC=$(new_source "$NW" "$NW_IN" "$NW_PAY")
-NW_STOCK_SRC=$(new_source "$NW" "$NW_IN" "$NW_STOCK")
-NW_WEBHOOK_SRC=$(new_source "$NW" "$NW_IN" "$NW_WEBHOOKS" webhook)
+NW_ORDERS_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_ORDERS")
+NW_PAY_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_PAY")
+NW_STOCK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_STOCK")
+NW_WEBHOOK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_WEBHOOKS" webhook)
 NW_WEBHOOK_CALLBACK=$(admin GET "/admin/tenants/$NW/sources/$NW_WEBHOOK_SRC" | jq -r .configuration.callback_id)
 mkdir -p secrets/source/northwind-retail
 printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/source/northwind-retail/$SERVICEBUS_SECRET"
-NW_QUEUE_SRC=$(new_source "$NW" "$NW_IN" "$NW_QUEUE" queue "$(jq -nc \
+NW_QUEUE_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_QUEUE" queue "$(jq -nc \
   --arg secret "$SERVICEBUS_SECRET" --arg queue "$SERVICEBUS_QUEUE" \
   '{source_contract:"event_json",transport:"azure_service_bus",authentication:{scheme:"connection_string",secret_ref:$secret},transport_config:{namespace:"servicebus-emulator",queue_name:$queue}}')")
 
 new_subscription "$NW" "$NW_ORDERS" erp-orders order.placed "$NW_ERP" 0 "Every placed order into the ERP." > /dev/null
 new_subscription "$NW" "$NW_ORDERS" wms-fulfilment order.shipped "$NW_WMS" 1 "Shipment confirmations back to the warehouse." > /dev/null
 new_subscription "$NW" "$NW_ORDERS" lake-orders order.placed "$NW_LAKE" 2 "Flattened order feed for the analytics lake." \
-  '{"engine":"jsonata","version":"1","expression":"{ \"order\": payload.orderId, \"total\": payload.total, \"placed_at\": payload.placedAt }"}' > /dev/null
+  '{"engine":"jsonata","version":"1","expression":"{ \"order\": orderId, \"total\": total, \"placed_at\": placedAt }"}' > /dev/null
 new_subscription "$NW" "$NW_PAY" erp-payments payment.captured "$NW_ERP" 0 "Captured payments into the ERP ledger." > /dev/null
 new_subscription "$NW" "$NW_PAY" legacy-billing-feed payment.captured "$NW_BILLING" 1 "Mirror of captured payments into the decommissioned billing host." > /dev/null
 new_subscription "$NW" "$NW_STOCK" wms-stock stock.adjusted "$NW_WMS" 0 "Stock adjustments back to the warehouse." > /dev/null
@@ -153,32 +151,29 @@ admin POST "/admin/tenants/$NW/topics/$NW_STOCK/subscriptions/$NW_PAUSED/deactiv
 say "Helios Energy"
 HE=$(new_tenant helios-energy "Helios Energy" staging "Metering pilot. Half-hourly readings and device alarms from the field trial.")
 HE_TOKEN=$(new_key "$HE" helios-field-gateway "Field gateway in the pilot region.")
-HE_IN=$(new_connection "$HE" field-gateway "" staging "Meter and device telemetry from the field gateway.")
-HE_OPS=$(new_connection "$HE" ops-console http://mocksink:8080/sink/helios-ops staging "Operations console alarm feed.")
-HE_METERS=$(new_topic "$HE" metering "Half-hourly meter readings.")
-HE_DEVICES=$(new_topic "$HE" devices "Device health and alarms.")
-HE_METERS_SRC=$(new_source "$HE" "$HE_IN" "$HE_METERS")
-HE_DEVICES_SRC=$(new_source "$HE" "$HE_IN" "$HE_DEVICES")
+HE_OPS=$(new_destination "$HE" ops-console http://mocksink:8080/sink/helios-ops staging "Operations console alarm feed.")
+HE_METERS=$(new_topic "$HE" metering metering "Half-hourly meter readings.")
+HE_DEVICES=$(new_topic "$HE" devices devices "Device health and alarms.")
+HE_METERS_SRC=$(new_source "$HE" "$CONNECTOR" "$HE_METERS")
+HE_DEVICES_SRC=$(new_source "$HE" "$CONNECTOR" "$HE_DEVICES")
 new_subscription "$HE" "$HE_DEVICES" ops-alarms device.alarm.raised "$HE_OPS" 0 "Raised alarms to the operations console." > /dev/null
 
 # --- 5. Atlas Logistics: production, one unstable partner ---------------------------------------
 say "Atlas Logistics"
 AT=$(new_tenant atlas-logistics "Atlas Logistics" production "Freight tracking. Consignment scans out to the customer portal and the partner carrier API.")
 AT_TOKEN=$(new_key "$AT" atlas-scanners "Depot handheld scanners.")
-AT_IN=$(new_connection "$AT" depot-scanners "" production "Consignment scan events from the depots.")
-AT_PORTAL=$(new_connection "$AT" customer-portal http://mocksink:8080/sink/atlas-portal production "Tracking updates shown to customers.")
-AT_CARRIER=$(new_connection "$AT" partner-carrier http://mocksink:8080/sink/atlas-carrier production "Partner carrier handover API. Their sandbox is unstable.")
-AT_FREIGHT=$(new_topic "$AT" consignments "Consignment scan and status events.")
-AT_SRC=$(new_source "$AT" "$AT_IN" "$AT_FREIGHT")
+AT_PORTAL=$(new_destination "$AT" customer-portal http://mocksink:8080/sink/atlas-portal production "Tracking updates shown to customers.")
+AT_CARRIER=$(new_destination "$AT" partner-carrier http://mocksink:8080/sink/atlas-carrier production "Partner carrier handover API. Their sandbox is unstable.")
+AT_FREIGHT=$(new_topic "$AT" consignments consignments "Consignment scan and status events.")
+AT_SRC=$(new_source "$AT" "$CONNECTOR" "$AT_FREIGHT")
 new_subscription "$AT" "$AT_FREIGHT" portal-tracking consignment.scanned "$AT_PORTAL" 0 "Scan events to the customer tracking page." > /dev/null
 new_subscription "$AT" "$AT_FREIGHT" carrier-handover consignment.handover "$AT_CARRIER" 1 "Handover notifications to the partner carrier." > /dev/null
 
 # --- 6. Pilotworks: deactivated Tenant ---------------------------------------------------------
 say "Pilotworks"
 PW=$(new_tenant pilotworks "Pilotworks" development "Evaluation Tenant from the Q1 proof of concept. Kept for its configuration; no longer sending.")
-PW_IN=$(new_connection "$PW" poc-intake "" development "Proof-of-concept intake.")
-PW_TOPIC=$(new_topic "$PW" trials "Proof-of-concept event stream.")
-new_source "$PW" "$PW_IN" "$PW_TOPIC" > /dev/null
+PW_TOPIC=$(new_topic "$PW" trials trials "Proof-of-concept event stream.")
+new_source "$PW" "$CONNECTOR" "$PW_TOPIC" > /dev/null
 admin POST "/admin/tenants/$PW/deactivate" > /dev/null
 
 # --- 7. Make one destination fail so a Delivery dead-letters ------------------------------------
