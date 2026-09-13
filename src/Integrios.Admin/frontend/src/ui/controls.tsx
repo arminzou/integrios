@@ -94,9 +94,19 @@ function FormSheet({
 /// it freely — where the state sat inside the button, dropping the button took a half-filled form
 /// down with it. `aria-controls` is what Radix's own trigger adds and this cannot: the content it
 /// would name exists only while the sheet is open.
-export function SheetButton({ label, expanded, onOpen }: { label: string; expanded: boolean; onOpen: () => void }) {
+export function SheetButton({
+  label,
+  expanded,
+  onOpen,
+  variant,
+}: {
+  label: string;
+  expanded: boolean;
+  onOpen: () => void;
+  variant?: ComponentProps<typeof Button>["variant"];
+}) {
   return (
-    <Button type="button" aria-haspopup="dialog" aria-expanded={expanded} onClick={onOpen}>
+    <Button type="button" variant={variant} aria-haspopup="dialog" aria-expanded={expanded} onClick={onOpen}>
       {label}
     </Button>
   );

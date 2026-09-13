@@ -3,6 +3,7 @@ using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Delivery;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Delivery;
+using Integrios.Infrastructure.Events;
 
 namespace Integrios.Infrastructure.UnitTests;
 
@@ -55,6 +56,7 @@ public sealed class ExampleConnectorManifestTests
         JsonElement document = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(path));
         return ConnectorManifestParser.Parse(
             document,
+            new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
             new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
     }
 

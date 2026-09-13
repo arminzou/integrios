@@ -7,6 +7,8 @@ internal sealed class SourceVerifierRegistry(IEnumerable<ISourceVerifier> verifi
     private readonly Dictionary<string, ISourceVerifier> verifiersByScheme =
         verifiers.ToDictionary(verifier => verifier.Scheme, StringComparer.OrdinalIgnoreCase);
 
+    public IReadOnlyCollection<ISourceVerifier> Registered => verifiersByScheme.Values;
+
     public ISourceVerifier GetRequired(string scheme)
     {
         if (TryGet(scheme, out ISourceVerifier verifier))

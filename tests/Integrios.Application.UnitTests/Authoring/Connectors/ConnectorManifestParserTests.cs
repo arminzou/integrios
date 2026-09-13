@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
-using Integrios.Application.Delivery;
+using Integrios.Tests.Shared;
 
 namespace Integrios.Application.UnitTests;
 
@@ -72,7 +72,10 @@ public sealed class ConnectorManifestParserTests
     private static JsonElement Json(string value) => JsonSerializer.Deserialize<JsonElement>(value);
 
     private static Integrios.Domain.ValueObjects.ConnectorManifest Parse(JsonElement document) =>
-        ConnectorManifestParser.Parse(document, new FakeAuthSchemeRegistry());
+        ConnectorManifestParser.Parse(
+            document,
+            new FakeSourceVerifierRegistry(),
+            new FakeDestinationAuthenticatorRegistry());
 
     private static string ValidManifest() => """
         {
@@ -87,15 +90,4 @@ public sealed class ConnectorManifestParserTests
           "presentation":{"name":"Example API","event_types":[],"authoring_presets":[]}
         }
         """;
-
-    private sealed class FakeAuthSchemeRegistry : IDestinationAuthenticatorRegistry
-    {
-        public IDestinationAuthenticator GetRequired(string scheme) => throw new InvalidOperationException();
-
-        public bool TryGet(string scheme, out IDestinationAuthenticator handler)
-        {
-            handler = null!;
-            return false;
-        }
-    }
 }

@@ -95,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IOperatorIdentityStore, OperatorIdentityStore>();
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.AddDestinationAuthenticationServices();
+        services.AddSourceVerificationServices();
         services.AddTransformEvaluationServices();
 
         return services;
@@ -111,8 +112,7 @@ public static class DependencyInjection
         services.AddSingleton<ITenantApiKeyUseRecorder, TenantApiKeyUseRecorder>();
         services.AddSingleton<IEventApiSourceResolver, EventApiSourceResolver>();
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
-        services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
-        services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
+        services.AddSourceVerificationServices();
         services.AddSingleton<IQueueSourceReader, QueueSourceReader>();
         services.AddSingleton(new QueueReconcileInterval(TimeSpan.FromSeconds(
             configuration.GetValue<int?>("Integrios:QueueSources:ReconcileSeconds") ?? 30)));
@@ -218,6 +218,14 @@ public static class DependencyInjection
         services.AddSingleton<IDestinationAuthenticator, ApiKeyHeaderAuthenticator>();
         services.AddSingleton<IDestinationAuthenticator, BearerTokenAuthenticator>();
         services.AddSingleton<IDestinationAuthenticatorRegistry, DestinationAuthenticatorRegistry>();
+
+        return services;
+    }
+
+    private static IServiceCollection AddSourceVerificationServices(this IServiceCollection services)
+    {
+        services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
+        services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
 
         return services;
     }

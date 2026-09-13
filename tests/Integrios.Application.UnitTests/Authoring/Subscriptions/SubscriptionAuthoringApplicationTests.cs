@@ -169,6 +169,8 @@ public sealed class SubscriptionAuthoringApplicationTests
 
     private sealed class EmptyAuthSchemeRegistry : IDestinationAuthenticatorRegistry
     {
+        public IReadOnlyCollection<IDestinationAuthenticator> Registered => [];
+
         public IDestinationAuthenticator GetRequired(string scheme) =>
             throw new InvalidOperationException($"Unexpected scheme '{scheme}'.");
 

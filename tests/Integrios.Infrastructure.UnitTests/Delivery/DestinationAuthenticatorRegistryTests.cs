@@ -19,6 +19,14 @@ public sealed class DestinationAuthenticatorRegistryTests
     }
 
     [Fact]
+    public void Registry_EnumeratesRegisteredHandlers()
+    {
+        IDestinationAuthenticatorRegistry registry = CreateRegistry();
+
+        registry.Registered.Select(handler => handler.Name).Order().ShouldBe(["api_key_header", "bearer_token"]);
+    }
+
+    [Fact]
     public void Registry_GetRequired_ThrowsForUnknownScheme()
     {
         IDestinationAuthenticatorRegistry registry = CreateRegistry();

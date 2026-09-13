@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Integrios.Application.Delivery;
+using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
@@ -28,6 +29,7 @@ public static partial class ConnectorManifestParser
 
     public static ConnectorManifest Parse(
         JsonElement document,
+        ISourceVerifierRegistry sourceVerificationSchemes,
         IDestinationAuthenticatorRegistry authenticationSchemes)
     {
         if (document.ValueKind != JsonValueKind.Object)
@@ -46,7 +48,7 @@ public static partial class ConnectorManifestParser
             throw Invalid($"The Connector manifest is invalid: {exception.Message}");
         }
 
-        Validate(manifest, document, authenticationSchemes);
+        Validate(manifest, document, sourceVerificationSchemes, authenticationSchemes);
         return Canonicalize(manifest);
     }
 
@@ -82,6 +84,7 @@ public static partial class ConnectorManifestParser
     private static void Validate(
         ConnectorManifest manifest,
         JsonElement document,
+        ISourceVerifierRegistry sourceVerificationSchemes,
         IDestinationAuthenticatorRegistry authenticationSchemes)
     {
         if (manifest.ManifestSchemaVersion != 1)
@@ -118,7 +121,7 @@ public static partial class ConnectorManifestParser
 
         ValidateSchemes(manifest.SourceVerification.Schemes, "source_verification.schemes");
         ValidateSchemes(manifest.DestinationAuthentication.Schemes, "destination_authentication.schemes");
-        ValidatePlatformSchemes(manifest, authenticationSchemes);
+        ValidatePlatformSchemes(manifest, sourceVerificationSchemes, authenticationSchemes);
         if (!sourceCapable && manifest.SourceVerification.Schemes.Count > 0)
             throw Invalid("source_verification.schemes requires a source-capable direction.");
         if (!destinationCapable && manifest.DestinationAuthentication.Schemes.Count > 0)
@@ -147,13 +150,14 @@ public static partial class ConnectorManifestParser
 
     private static void ValidatePlatformSchemes(
         ConnectorManifest manifest,
+        ISourceVerifierRegistry sourceVerificationSchemes,
         IDestinationAuthenticatorRegistry authenticationSchemes)
     {
         foreach (ConnectorSchemeManifest scheme in manifest.SourceVerification.Schemes)
         {
-            if (scheme.Scheme != "hmac_sha256"
-                || scheme.RequiredConfig.Count != 0
-                || !SetEquals(scheme.RequiredSecretRefs, ["secret"]))
+            if (!sourceVerificationSchemes.TryGet(scheme.Scheme, out ISourceVerifier verifier)
+                || !SetEquals(scheme.RequiredConfig, verifier.RequiredConfigFields)
+                || !SetEquals(scheme.RequiredSecretRefs, verifier.RequiredSecretFields))
             {
                 throw Invalid($"Source verification scheme '{scheme.Scheme}' is not a supported platform contract.");
             }

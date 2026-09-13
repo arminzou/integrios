@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
@@ -20,13 +20,22 @@ const installed = {
   updated_at: "2026-09-01T00:00:00Z",
 };
 
-const listOnly = ({ method }: { method: string }) =>
-  method === "PUT" ? { status: 201, body: installed } : { status: 200, body: page([]) };
+const composedManifest = { composed_by: "admin" };
+
+const listOnly = ({ method, url }: Call) => {
+  if (method === "POST" && url.pathname.endsWith("/compose"))
+    return { status: 200, body: { manifest: composedManifest } };
+  return method === "PUT" ? { status: 201, body: installed } : { status: 200, body: page([]) };
+};
 
 /// The action appears with the list it belongs to, so this waits for it rather than assuming the
 /// page header has one before the read has answered.
 async function openAuthoring() {
   fireEvent.click(await screen.findByRole("button", { name: "New Connector" }));
+}
+
+async function openImport() {
+  fireEvent.click(await screen.findByRole("button", { name: "Import manifest" }));
 }
 
 function fillBasics(key = "github", version?: string) {
@@ -36,6 +45,12 @@ function fillBasics(key = "github", version?: string) {
 }
 
 const applied = (calls: Call[]) => calls.find((call) => call.method === "PUT");
+
+async function applyDraft(label = "Create Connector") {
+  const button = screen.getByRole("button", { name: label });
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  fireEvent.click(button);
+}
 
 describe("Opening a Connector from its row", () => {
   const listed = { status: 200, body: page([installed]) };
@@ -90,7 +105,7 @@ describe("A deployment with no Connectors", () => {
 });
 
 describe("Authoring the first Connector", () => {
-  it("produces a manifest from the guided form, without the Operator writing one", async () => {
+  it("applies the exact manifest Admin composed from the guided fields", async () => {
     // Bootstrap installs no Connectors, so this is the state of every fresh deployment. Without a
     // form here there is no Connector detail page to reach, and no way in from the browser at all.
     const calls = stubHttp(listOnly);
@@ -100,22 +115,19 @@ describe("Authoring the first Connector", () => {
 
     await openAuthoring();
     fillBasics("github", "2");
-    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
+    await applyDraft();
 
     await waitFor(() => expect(applied(calls)).toBeDefined());
 
-    // The key and the version select which immutable Connector contract is being installed, and the
-    // body is the manifest the guided draft generated.
+    const compose = calls.find((call) => call.method === "POST" && call.url.pathname.endsWith("/compose"))!;
+    expect(compose.url.pathname).toBe("/admin/connectors/github/versions/2/compose");
+    expect(compose.body).toEqual({ name: "GitHub", description: null, direction: "source" });
+
+    // The route identity stays in the guided fields. The PUT body is opaque to the dashboard and
+    // is exactly the document returned by composition.
     const install = applied(calls)!;
     expect(install.url.pathname).toBe("/admin/connectors/github/versions/2");
-    expect(install.body).toMatchObject({
-      manifest_schema_version: 1,
-      key: "github",
-      contract_version: 2,
-      direction: "source",
-      source_verification: { allow_unverified: true, schemes: [] },
-      presentation: { name: "GitHub", description: null },
-    });
+    expect(install.body).toEqual(composedManifest);
     await waitFor(() => expect(router.state.location.pathname).toBe(`/connectors/${installed.id}`));
   });
 
@@ -146,43 +158,9 @@ describe("Authoring the first Connector", () => {
     await waitFor(() => expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Something Else"));
     expect(key.value).toBe("field_service");
 
-    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
+    await applyDraft();
     await waitFor(() => expect(applied(calls)).toBeDefined());
     expect(applied(calls)!.url.pathname).toBe("/admin/connectors/field_service/versions/1");
-  });
-
-  it("follows the chosen capabilities into the manifest's direction and its configuration schemas", async () => {
-    const calls = stubHttp(listOnly);
-
-    renderScreen(<ConnectorsScreen />);
-    await openAuthoring();
-    fillBasics("http");
-    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Destinations/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
-
-    await waitFor(() => expect(applied(calls)).toBeDefined());
-    const body = applied(calls)!.body as Record<string, unknown>;
-    expect(body.direction).toBe("both");
-    expect(body).toHaveProperty("source_configuration_schema");
-    expect(body).toHaveProperty("destination_configuration_schema");
-  });
-
-  it("emits only the selected capability and never Source-owned contracts", async () => {
-    const calls = stubHttp(listOnly);
-
-    renderScreen(<ConnectorsScreen />);
-    await openAuthoring();
-    fillBasics("http");
-    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Destinations/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Sources/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
-
-    await waitFor(() => expect(applied(calls)).toBeDefined());
-    const body = applied(calls)!.body as Record<string, unknown>;
-    expect(body.direction).toBe("destination");
-    expect(body).not.toHaveProperty("source_configuration_schema");
-    expect(body).not.toHaveProperty("source_contracts");
-    expect(body).not.toHaveProperty("http_success");
   });
 
   it("refuses a draft with no capability rather than applying one the API would reject", async () => {
@@ -199,16 +177,18 @@ describe("Authoring the first Connector", () => {
   });
 
   it("reports a rejected manifest on the field the server named instead of appearing to install one", async () => {
-    stubHttp(({ method }) =>
-      method === "PUT"
+    stubHttp(({ method, url }) => {
+      if (method === "POST" && url.pathname.endsWith("/compose"))
+        return { status: 200, body: { manifest: composedManifest } };
+      return method === "PUT"
         ? { status: 422, body: { errors: { key: ["A Connector key must be lowercase."] } } }
-        : { status: 200, body: page([]) },
-    );
+        : { status: 200, body: page([]) };
+    });
 
     renderScreen(<ConnectorsScreen />);
     await openAuthoring();
     fillBasics("GITHUB");
-    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
+    await applyDraft();
 
     const message = await screen.findByText("A Connector key must be lowercase.");
     const key = screen.getByLabelText("Key");
@@ -225,113 +205,169 @@ describe("Authoring the first Connector", () => {
 });
 
 describe("Importing a Connector manifest", () => {
-  const imported = {
+  const importedManifest = {
     manifest_schema_version: 1,
     key: "slack",
     contract_version: 3,
     direction: "both",
-    destination_configuration_schema: { type: "object", properties: { webhook_uri: { type: "string" } } },
-    source_verification: { allow_unverified: false, schemes: [{ scheme: "slack_signature", required_config: [] }] },
-    destination_authentication: {
-      allow_unauthenticated: false,
-      schemes: [{ scheme: "bearer_token", required_config: [], required_secret_refs: ["token"] }],
-    },
-    source_contracts: [{ key: "events_api", contract_version: 1 }],
-    http_success: { kind: "status_code", expected: 201 },
-    presentation: { name: "Slack", description: "Slack Events API.", event_types: ["slack.message"] },
+    authored_extension: { preserved: true },
   };
 
-  function importDraft(document: unknown) {
-    fireEvent.change(screen.getByLabelText("Replace with pasted JSON"), {
-      target: { value: JSON.stringify(document) },
+  it("is a separate action that never seeds the guided form", async () => {
+    stubHttp(listOnly);
+    renderScreen(<ConnectorsScreen />);
+    await screen.findByRole("heading", { name: "No Connectors yet" });
+
+    await openImport();
+    fireEvent.change(screen.getByLabelText("Connector manifest"), {
+      target: { value: JSON.stringify(importedManifest) },
     });
-  }
+    expect(screen.queryByLabelText("Name")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Close Import manifest" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Import manifest" })).toBeNull());
 
-  it("replaces the draft only after confirmation, and keeps what the guided form cannot show", async () => {
-    const calls = stubHttp(listOnly);
-
-    renderScreen(<ConnectorsScreen />);
     await openAuthoring();
-    fillBasics("github");
-    importDraft(imported);
-
-    // Confirmation first: an import discards whatever is already authored.
-    fireEvent.click(screen.getByRole("button", { name: "Replace draft" }));
-    const confirm = await screen.findByRole("dialog");
-    expect(confirm.textContent).toContain("Everything authored in this form is discarded.");
-    fireEvent.click(within(confirm).getByRole("button", { name: "Replace draft" }));
-
-    await waitFor(() => expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("slack"));
-    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Slack");
-    // What the form has no control for is named rather than quietly dropped.
-    expect(screen.getByText(/Kept from the imported manifest/).textContent).toContain("presentation.event_types");
-
-    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
-    await waitFor(() => expect(applied(calls)).toBeDefined());
-
-    const body = applied(calls)!.body as Record<string, unknown>;
-    expect(applied(calls)!.url.pathname).toBe("/admin/connectors/slack/versions/3");
-    expect(body.destination_configuration_schema).toEqual(imported.destination_configuration_schema);
-    expect(body.source_verification).toEqual(imported.source_verification);
-    expect(body.destination_authentication).toEqual(imported.destination_authentication);
-    expect(body).not.toHaveProperty("source_contracts");
-    expect(body).not.toHaveProperty("http_success");
-    expect(body.presentation).toMatchObject(imported.presentation);
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("");
   });
 
-  it("reports invalid JSON and refuses the replacement rather than hiding the way to ask for it", async () => {
+  it("keeps Apply disabled with a visible reason until key and version are present", async () => {
     stubHttp(listOnly);
-
     renderScreen(<ConnectorsScreen />);
-    await openAuthoring();
-    fillBasics("github");
-    fireEvent.change(screen.getByLabelText("Replace with pasted JSON"), { target: { value: "{not json" } });
+    await openImport();
+    const apply = screen.getByRole("button", { name: "Apply manifest" });
 
-    await screen.findByRole("alert");
-    // The action stands where it will be and says no. An Operator who cannot see it cannot tell
-    // whether pasting is even the way through.
-    expect(screen.getByRole("button", { name: "Replace draft" }).hasAttribute("disabled")).toBe(true);
-    expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("github");
+    expect(apply.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/Paste a manifest to identify/)).toBeDefined();
+    fireEvent.change(screen.getByLabelText("Connector manifest"), { target: { value: "{" } });
+    expect(screen.getByText(/Expected property name|JSON/)).toBeDefined();
+    expect(apply.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Connector manifest"), { target: { value: "{}" } });
+    expect(screen.getByText("The manifest must carry a non-empty string key.")).toBeDefined();
+    expect(screen.getByText("Manifest schema version: not detected.")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Connector manifest reference" }).getAttribute("href")).toContain(
+      "docs/connector-manifest.md",
+    );
   });
 
-  it("narrows an imported manifest to the capability left standing, schema and all", async () => {
-    const calls = stubHttp(listOnly);
+  it.each(["Created", "Unchanged", "PresentationReconciled"])(
+    "applies the pasted document unchanged and reports %s",
+    async (outcome) => {
+      const calls = stubHttp(({ method }) =>
+        method === "PUT"
+          ? {
+              status: outcome === "Created" ? 201 : 200,
+              body: { ...installed, key: "slack", contract_version: 3 },
+              headers: { "X-Integrios-Connector-Manifest-Outcome": outcome },
+            }
+          : { status: 200, body: page([]) },
+      );
+      renderScreen(<ConnectorsScreen />);
+      await openImport();
+      fireEvent.change(screen.getByLabelText("Connector manifest"), {
+        target: { value: JSON.stringify(importedManifest) },
+      });
 
+      expect(screen.getByText("Ready to apply slack contract v3.")).toBeDefined();
+      expect(screen.getByText("Manifest schema version: 1.")).toBeDefined();
+      fireEvent.click(screen.getByRole("button", { name: "Apply manifest" }));
+
+      await screen.findByText(`${outcome} — slack contract v3.`);
+      const request = applied(calls)!;
+      expect(request.url.pathname).toBe("/admin/connectors/slack/versions/3");
+      expect(request.body).toEqual(importedManifest);
+    },
+  );
+
+  it("keeps one submitted manifest standing until its apply finishes", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls = stubHttp(async ({ method }) => {
+      if (method !== "PUT") return { status: 200, body: page([]) };
+      await held;
+      return {
+        status: 201,
+        body: { ...installed, key: "slack", contract_version: 3 },
+        headers: { "X-Integrios-Connector-Manifest-Outcome": "Created" },
+      };
+    });
     renderScreen(<ConnectorsScreen />);
-    await openAuthoring();
-    importDraft({ ...imported, direction: "both", source_configuration_schema: { type: "object" } });
-    fireEvent.click(screen.getByRole("button", { name: "Replace draft" }));
-    const confirm = await screen.findByRole("dialog");
-    fireEvent.click(within(confirm).getByRole("button", { name: "Replace draft" }));
-    await waitFor(() => expect((screen.getByLabelText("Key") as HTMLInputElement).value).toBe("slack"));
+    await openImport();
+    const textarea = screen.getByLabelText("Connector manifest") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: JSON.stringify(importedManifest) } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply manifest" }));
 
-    // The imported Connector permitted both. Narrowing it to delivery has to take the Source's
-    // schema with it: the server refuses a schema the direction does not permit, and a 422 here
-    // would name a field the Operator never authored.
-    fireEvent.click(screen.getByRole("checkbox", { name: /Permit Sources/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Create Connector" }));
+    const pending = await screen.findByRole("button", { name: "Applying manifest…" });
+    expect(textarea.disabled).toBe(true);
+    fireEvent.change(textarea, { target: { value: JSON.stringify({ ...importedManifest, contract_version: 4 }) } });
+    fireEvent.click(pending);
+    expect(textarea.value).toBe(JSON.stringify(importedManifest));
+    expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
 
-    await waitFor(() => expect(applied(calls)).toBeDefined());
-    const body = applied(calls)!.body as Record<string, unknown>;
-    expect(body.direction).toBe("destination");
-    expect(body).not.toHaveProperty("source_configuration_schema");
-    expect(body).toHaveProperty("destination_configuration_schema");
+    release();
+    expect(await screen.findByText("Created — slack contract v3.")).toBeDefined();
   });
 
-  it("hands the generated manifest over rather than leaving it to be selected by hand", async () => {
-    const clipboard = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
-    stubHttp(listOnly);
+  it("refreshes a selected Connector after presentation reconciliation", async () => {
+    const reconciled = {
+      ...installed,
+      name: "GitHub webhooks",
+      description: "Updated presentation.",
+      manifest: { ...importedManifest, key: installed.key, contract_version: installed.contract_version },
+    };
+    let applied = false;
+    stubHttp(({ method, url }) => {
+      if (method === "PUT") {
+        applied = true;
+        return {
+          status: 200,
+          body: reconciled,
+          headers: { "X-Integrios-Connector-Manifest-Outcome": "PresentationReconciled" },
+        };
+      }
+      if (url.pathname === `/admin/connectors/${installed.id}`)
+        return { status: 200, body: applied ? reconciled : installed };
+      return { status: 200, body: page([applied ? reconciled : installed]) };
+    });
+    renderScreen(<ConnectorsScreen selectedConnectorId={installed.id} />, `/connectors/${installed.id}`);
+    expect(await screen.findByText(installed.name, { selector: "h2" })).toBeDefined();
+    await openImport();
+    fireEvent.change(screen.getByLabelText("Connector manifest"), {
+      target: {
+        value: JSON.stringify({
+          ...importedManifest,
+          key: installed.key,
+          contract_version: installed.contract_version,
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply manifest" }));
 
+    expect(await screen.findByText(reconciled.name, { selector: "h2" })).toBeDefined();
+    expect(screen.getByText(reconciled.description)).toBeDefined();
+  });
+
+  it("renders a manifest-path rejection as an unassigned form error", async () => {
+    stubHttp(({ method }) =>
+      method === "PUT"
+        ? {
+            status: 422,
+            body: { errors: { "source_verification.schemes": ["The scheme is not registered."] } },
+          }
+        : { status: 200, body: page([]) },
+    );
     renderScreen(<ConnectorsScreen />);
-    await openAuthoring();
-    fillBasics("github");
+    await openImport();
+    fireEvent.change(screen.getByLabelText("Connector manifest"), {
+      target: { value: JSON.stringify(importedManifest) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply manifest" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy manifest" }));
-
-    // What is copied is the document that would be applied, not a fragment of what is displayed.
-    await waitFor(() => expect(clipboard).toHaveBeenCalledWith(expect.stringContaining('"key": "github"')));
-    expect(clipboard.mock.calls[0][0]).toContain('"direction": "source"');
+    expect(await screen.findByText("The scheme is not registered.")).toBeDefined();
+    expect((screen.getByLabelText("Connector manifest") as HTMLTextAreaElement).value).toContain('"key":"slack"');
   });
 });
 
@@ -344,20 +380,83 @@ describe("An applied Connector version", () => {
       key: "github",
       contract_version: 2,
       direction: "source",
-      source_configuration_schema: { type: "object", properties: {}, additionalProperties: true },
-      source_verification: { allow_unverified: false, schemes: [{ scheme: "acme_signature", required_config: [] }] },
+      source_configuration_schema: {
+        type: "object",
+        properties: { organization: { type: "string" }, region: { type: "string" } },
+        required: ["organization", "region"],
+        additionalProperties: false,
+      },
+      source_verification: {
+        allow_unverified: false,
+        schemes: [{ scheme: "acme_signature", required_config: [], required_secret_refs: ["secret"] }],
+      },
       destination_authentication: { allow_unauthenticated: true, schemes: [] },
       presentation: { name: "GitHub", description: "Webhooks.", event_types: ["github.push"] },
     },
   };
 
   const detail = ({ method, url }: Call) => {
+    if (method === "POST" && url.pathname.endsWith("/compose"))
+      return { status: 200, body: { manifest: composedManifest } };
     if (method === "PUT") return { status: 201, body: { ...github, id: "44444444-4444-4444-4444-444444444444" } };
     if (url.pathname === `/admin/connectors/${github.id}`) return { status: 200, body: github };
     return { status: 200, body: page([github]) };
   };
 
-  it("is copied into a later version, carrying values the guided form cannot show", async () => {
+  it("explains capability menus and required configuration without showing JSON", async () => {
+    stubHttp(detail);
+
+    renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
+
+    expect(await screen.findByText("acme_signature")).toBeDefined();
+    expect(screen.getByText("Selection required.")).toBeDefined();
+    expect(screen.getByText("organization, region")).toBeDefined();
+    expect(screen.getByText("Destinations on this Connector cannot authenticate Deliveries.")).toBeDefined();
+    expect(screen.queryByText(/"source_verification"/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show raw JSON" }));
+    expect(screen.getByText(/"source_verification"/)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Hide raw JSON" }).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("explains what an empty Source verification menu forecloses", async () => {
+    const noVerification = {
+      ...github,
+      manifest: {
+        ...github.manifest,
+        source_verification: { allow_unverified: true, schemes: [] },
+      },
+    };
+    stubHttp(({ url }) =>
+      url.pathname === `/admin/connectors/${github.id}`
+        ? { status: 200, body: noVerification }
+        : { status: 200, body: page([noVerification]) },
+    );
+
+    renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
+
+    expect(await screen.findByText("Sources on this Connector cannot verify Events.")).toBeDefined();
+    expect(screen.getAllByText("Selection optional.").length).toBe(2);
+  });
+
+  it("falls back to raw JSON for an unknown manifest schema", async () => {
+    const future = { ...github, manifest_schema_version: 2, manifest: { future_contract: true } };
+    stubHttp(({ url }) =>
+      url.pathname === `/admin/connectors/${github.id}`
+        ? { status: 200, body: future }
+        : { status: 200, body: page([future]) },
+    );
+
+    renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
+
+    expect(
+      await screen.findByText("This dashboard does not explain manifest schema version 2. Review the raw JSON."),
+    ).toBeDefined();
+    expect(screen.getByText(/"future_contract"/)).toBeDefined();
+    expect(screen.queryByText("Source verification")).toBeNull();
+  });
+
+  it("seeds the guided fields from the applied Connector and applies Admin's next-version composition", async () => {
     const calls = stubHttp(detail);
 
     renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
@@ -368,18 +467,17 @@ describe("An applied Connector version", () => {
     expect(key.value).toBe("github");
     expect(key.readOnly).toBe(true);
     expect((screen.getByLabelText("Contract version") as HTMLInputElement).value).toBe("3");
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe(github.name);
+    expect((screen.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(github.description ?? "");
 
-    fireEvent.click(screen.getByRole("button", { name: "Create version" }));
+    await applyDraft("Create version");
     await waitFor(() => expect(applied(calls)).toBeDefined());
 
+    const compose = calls.find((call) => call.method === "POST" && call.url.pathname.endsWith("/compose"))!;
+    expect(compose.url.pathname).toBe("/admin/connectors/github/versions/3/compose");
     const install = applied(calls)!;
     expect(install.url.pathname).toBe("/admin/connectors/github/versions/3");
-    const manifest = install.body as Record<string, unknown>;
-    expect(manifest.contract_version).toBe(3);
-    // Everything the form has no control for survives the copy rather than being rewritten out.
-    expect(manifest.source_verification).toEqual(github.manifest.source_verification);
-    expect(manifest.destination_authentication).toEqual(github.manifest.destination_authentication);
-    expect(manifest.presentation).toMatchObject({ event_types: ["github.push"] });
+    expect(install.body).toEqual(composedManifest);
   });
 
   it("cannot be edited in place by applying the version it already has", async () => {
@@ -388,7 +486,7 @@ describe("An applied Connector version", () => {
     renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
     fireEvent.click(await screen.findByRole("button", { name: "Create new version" }));
     fireEvent.change(await screen.findByLabelText("Contract version"), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create version" }));
+    await applyDraft("Create version");
 
     await screen.findByText("Version 2 is applied. Choose a later version.");
     expect(calls.some((call) => call.method === "PUT")).toBe(false);

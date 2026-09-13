@@ -21,6 +21,8 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
         group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}")
             .Produces<ConnectorDto>()
             .Produces<ConnectorDto>(StatusCodes.Status201Created);
+        group.MapPost(ComposeConnectorManifest, "/{key}/versions/{contractVersion:int}/compose")
+            .Produces<ComposeConnectorManifestResult>();
         group.MapPost(PreviewSourceContract, "/source-contracts/preview").Produces<PreviewResponse>();
     }
 
@@ -69,6 +71,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
         ApplyConnectorManifestResult result = await mediator.Send(
             new ApplyConnectorManifestCommand(key, contractVersion, manifest),
             cancellationToken);
+        httpContext.Response.Headers["X-Integrios-Connector-Manifest-Outcome"] = result.Outcome.ToString();
 
         if (result.Outcome != ConnectorManifestApplyOutcome.Created)
             return Results.Ok(result.Connector);
@@ -79,6 +82,33 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
             new { key, contractVersion })
             ?? throw new InvalidOperationException("The Connector version route could not be generated.");
         return Results.Created(location, result.Connector);
+    }
+
+    private static async Task<IResult> ComposeConnectorManifest(
+        string key,
+        int contractVersion,
+        ConnectorComposeRequest request,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ConnectorDirection direction = request.Direction switch
+        {
+            "source" => ConnectorDirection.Source,
+            "destination" => ConnectorDirection.Destination,
+            "both" => ConnectorDirection.Both,
+            _ => throw new ConnectorManifestValidationException(
+                "direction must be source, destination, or both.",
+                "direction"),
+        };
+        ComposeConnectorManifestResult result = await mediator.Send(
+            new ComposeConnectorManifestQuery(
+                key,
+                contractVersion,
+                request.Name,
+                request.Description,
+                direction),
+            cancellationToken);
+        return Results.Ok(result);
     }
 
     // Stateless dry-run: exercises the complete Source-contract pipeline (schema validation, JSONata
@@ -107,3 +137,5 @@ internal sealed record SourceContractPreviewRequest(
     JsonElement Mapping,
     JsonElement SampleInput,
     JsonElement? SampleContext);
+
+internal sealed record ConnectorComposeRequest(string? Name, string? Description, string? Direction);

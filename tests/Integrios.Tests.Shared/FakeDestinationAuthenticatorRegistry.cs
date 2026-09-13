@@ -10,6 +10,8 @@ public sealed class FakeDestinationAuthenticatorRegistry : IDestinationAuthentic
     public FakeDestinationAuthenticatorRegistry(params IDestinationAuthenticator[] handlers)
         => _handlers = handlers.ToDictionary(h => h.Name);
 
+    public IReadOnlyCollection<IDestinationAuthenticator> Registered => _handlers.Values.ToArray();
+
     public IDestinationAuthenticator GetRequired(string scheme)
         => TryGet(scheme, out IDestinationAuthenticator? handler)
             ? handler

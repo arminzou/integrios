@@ -47,8 +47,8 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
         [typeof(IEventApiSourceResolver)] = [Host.Ingestion],
-        [typeof(ISourceVerifier)] = [Host.Ingestion],
-        [typeof(ISourceVerifierRegistry)] = [Host.Ingestion],
+        [typeof(ISourceVerifier)] = [Host.Admin, Host.Ingestion],
+        [typeof(ISourceVerifierRegistry)] = [Host.Admin, Host.Ingestion],
         [typeof(IQueueSourceReader)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
@@ -262,6 +262,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionQueries>(scope.ServiceProvider);
         AssertResolves<IDestinationAuthenticatorRegistry>(scope.ServiceProvider);
+        AssertResolves<ISourceVerifierRegistry>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
         AssertResolves<ITenantEventLookup>(scope.ServiceProvider);
         AssertResolves<IDeadLetterReplay>(scope.ServiceProvider);

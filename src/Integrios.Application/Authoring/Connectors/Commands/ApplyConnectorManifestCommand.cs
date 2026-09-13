@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Delivery;
+using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
@@ -18,6 +19,7 @@ public sealed record ApplyConnectorManifestCommand(
 
 internal sealed class ApplyConnectorManifestCommandHandler(
     IConnectorManifestStore store,
+    ISourceVerifierRegistry sourceVerificationSchemes,
     IDestinationAuthenticatorRegistry authenticationSchemes)
     : IRequestHandler<ApplyConnectorManifestCommand, ApplyConnectorManifestResult>
 {
@@ -27,6 +29,7 @@ internal sealed class ApplyConnectorManifestCommandHandler(
     {
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             command.Document,
+            sourceVerificationSchemes,
             authenticationSchemes);
 
         if (!string.Equals(command.Key, manifest.Key, StringComparison.Ordinal)

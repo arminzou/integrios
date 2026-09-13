@@ -4,7 +4,13 @@ export type Call = { method: string; url: URL; body: unknown };
 
 /// Stands in for the Admin API so a workflow test exercises the real typed client, the real request
 /// the screen builds, and the real Problem Details handling — everything except the network.
-export function stubHttp(respond: (call: Call) => { status: number; body?: unknown }) {
+export function stubHttp(
+  respond: (
+    call: Call,
+  ) =>
+    | { status: number; body?: unknown; headers?: HeadersInit }
+    | Promise<{ status: number; body?: unknown; headers?: HeadersInit }>,
+) {
   const calls: Call[] = [];
 
   vi.stubGlobal(
@@ -23,12 +29,14 @@ export function stubHttp(respond: (call: Call) => { status: number; body?: unkno
       };
       calls.push(call);
 
-      const { status, body } = respond(call);
+      const { status, body, headers } = await respond(call);
+      const responseHeaders = new Headers(headers);
+      responseHeaders.set("content-type", "application/problem+json");
       // An Admin action that answers with no body still answers with JSON here, because the stub
       // has no way to signal an empty body that the client will not try to parse.
       return new Response(JSON.stringify(body ?? {}), {
         status,
-        headers: { "content-type": "application/problem+json" },
+        headers: responseHeaders,
       });
     }),
   );

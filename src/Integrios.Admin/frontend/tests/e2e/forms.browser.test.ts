@@ -242,6 +242,7 @@ const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 it.each([
   ["New Destination", `/tenants/${tenantId}/destinations`, "New Destination"],
   ["New Connector", "/connectors", "New Connector"],
+  ["Import manifest", "/connectors", "Import manifest"],
   ["Subscription edit", `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`, "Edit"],
 ])(
   "fits the %s sheet into 320px",
@@ -292,6 +293,51 @@ it.each([
   },
   60_000,
 );
+
+it("keeps a valid Connector draft visible and unappliable while Admin composes it", async () => {
+  const { page: view } = await open("/connectors");
+  let finish!: () => void;
+  const held = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await view.route("**/admin/connectors/*/versions/*/compose", async (route) => {
+    await held;
+    await route.fulfill({ json: { manifest: { composed_by: "admin" } } });
+  });
+
+  try {
+    await view.getByRole("button", { name: "New Connector" }).click();
+    const form = view.getByRole("dialog", { name: "New Connector" }).locator("form");
+    await form.getByLabel("Name", { exact: true }).fill("GitHub");
+    await form.getByLabel("Key", { exact: true }).fill("github");
+
+    await form.getByRole("status").getByText("Composing manifest…").waitFor();
+    expect(await form.getByRole("button", { name: "Create Connector" }).isDisabled()).toBe(true);
+    expect(await form.getByLabel("Name", { exact: true }).inputValue()).toBe("GitHub");
+  } finally {
+    finish();
+    await view.close();
+  }
+}, 60_000);
+
+it("keeps a Connector draft visible and unappliable when Admin cannot be reached", async () => {
+  const { page: view } = await open("/connectors");
+  await view.route("**/admin/connectors/*/versions/*/compose", (route) => route.abort("connectionrefused"));
+
+  try {
+    await view.getByRole("button", { name: "New Connector" }).click();
+    const form = view.getByRole("dialog", { name: "New Connector" }).locator("form");
+    await form.getByLabel("Name", { exact: true }).fill("GitHub");
+    await form.getByLabel("Key", { exact: true }).fill("github");
+
+    await form.getByText("The Admin API could not be reached.").waitFor();
+    expect(await form.getByRole("button", { name: "Create Connector" }).isDisabled()).toBe(true);
+    expect(await form.getByLabel("Name", { exact: true }).inputValue()).toBe("GitHub");
+    expect(await form.getByLabel("Key", { exact: true }).inputValue()).toBe("github");
+  } finally {
+    await view.close();
+  }
+}, 60_000);
 
 /// The dashboard is light-only, and `color-scheme: light` settles only what the browser paints, not
 /// what Tailwind's `dark:` variant matches — that answers to the operating system unless it is bound
