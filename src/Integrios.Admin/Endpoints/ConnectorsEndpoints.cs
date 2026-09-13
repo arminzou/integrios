@@ -19,8 +19,8 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
             .WithName(GetByVersionRouteName)
             .Produces<ConnectorDto>();
         group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}")
-            .Produces<ConnectorDto>()
-            .Produces<ConnectorDto>(StatusCodes.Status201Created);
+            .Produces<ApplyConnectorManifestResult>()
+            .Produces<ApplyConnectorManifestResult>(StatusCodes.Status201Created);
         group.MapPost(ComposeConnectorManifest, "/{key}/versions/{contractVersion:int}/compose")
             .Produces<ComposeConnectorManifestResult>();
         group.MapPost(PreviewSourceContract, "/source-contracts/preview").Produces<PreviewResponse>();
@@ -71,17 +71,19 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
         ApplyConnectorManifestResult result = await mediator.Send(
             new ApplyConnectorManifestCommand(key, contractVersion, manifest),
             cancellationToken);
-        httpContext.Response.Headers["X-Integrios-Connector-Manifest-Outcome"] = result.Outcome.ToString();
-
+        // Applying is not always a create: an existing version answers Unchanged or
+        // PresentationReconciled, which a status code alone cannot tell apart. The outcome is a fact
+        // about this execution rather than about the stored Connector, so the use case result is
+        // serialized whole rather than split across a body and a header.
         if (result.Outcome != ConnectorManifestApplyOutcome.Created)
-            return Results.Ok(result.Connector);
+            return Results.Ok(result);
 
         string location = links.GetPathByName(
             httpContext,
             GetByVersionRouteName,
             new { key, contractVersion })
             ?? throw new InvalidOperationException("The Connector version route could not be generated.");
-        return Results.Created(location, result.Connector);
+        return Results.Created(location, result);
     }
 
     private static async Task<IResult> ComposeConnectorManifest(

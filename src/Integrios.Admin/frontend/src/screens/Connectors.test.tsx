@@ -25,7 +25,9 @@ const composedManifest = { composed_by: "admin" };
 const listOnly = ({ method, url }: Call) => {
   if (method === "POST" && url.pathname.endsWith("/compose"))
     return { status: 200, body: { manifest: composedManifest } };
-  return method === "PUT" ? { status: 201, body: installed } : { status: 200, body: page([]) };
+  return method === "PUT"
+    ? { status: 201, body: { connector: installed, outcome: "Created" } }
+    : { status: 200, body: page([]) };
 };
 
 /// The action appears with the list it belongs to, so this waits for it rather than assuming the
@@ -258,8 +260,7 @@ describe("Importing a Connector manifest", () => {
         method === "PUT"
           ? {
               status: outcome === "Created" ? 201 : 200,
-              body: { ...installed, key: "slack", contract_version: 3 },
-              headers: { "X-Integrios-Connector-Manifest-Outcome": outcome },
+              body: { connector: { ...installed, key: "slack", contract_version: 3 }, outcome },
             }
           : { status: 200, body: page([]) },
       );
@@ -290,8 +291,7 @@ describe("Importing a Connector manifest", () => {
       await held;
       return {
         status: 201,
-        body: { ...installed, key: "slack", contract_version: 3 },
-        headers: { "X-Integrios-Connector-Manifest-Outcome": "Created" },
+        body: { connector: { ...installed, key: "slack", contract_version: 3 }, outcome: "Created" },
       };
     });
     renderScreen(<ConnectorsScreen />);
@@ -324,8 +324,7 @@ describe("Importing a Connector manifest", () => {
         applied = true;
         return {
           status: 200,
-          body: reconciled,
-          headers: { "X-Integrios-Connector-Manifest-Outcome": "PresentationReconciled" },
+          body: { connector: reconciled, outcome: "PresentationReconciled" },
         };
       }
       if (url.pathname === `/admin/connectors/${installed.id}`)
@@ -398,7 +397,11 @@ describe("An applied Connector version", () => {
   const detail = ({ method, url }: Call) => {
     if (method === "POST" && url.pathname.endsWith("/compose"))
       return { status: 200, body: { manifest: composedManifest } };
-    if (method === "PUT") return { status: 201, body: { ...github, id: "44444444-4444-4444-4444-444444444444" } };
+    if (method === "PUT")
+      return {
+        status: 201,
+        body: { connector: { ...github, id: "44444444-4444-4444-4444-444444444444" }, outcome: "Created" },
+      };
     if (url.pathname === `/admin/connectors/${github.id}`) return { status: 200, body: github };
     return { status: 200, body: page([github]) };
   };

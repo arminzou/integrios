@@ -136,7 +136,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         using HttpResponseMessage response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
         using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return document.RootElement.GetProperty("id").GetGuid();
+        return document.RootElement.GetProperty("connector").GetProperty("id").GetGuid();
     }
 
     public async Task<string?> GetDeliveryStatusAsync(Guid deliveryId)

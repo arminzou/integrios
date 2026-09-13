@@ -202,7 +202,7 @@ export function ConnectorAuthoring({
     onSuccess: (applied) => {
       void queryClient.invalidateQueries({ queryKey: ["connectors"] });
       void queryClient.invalidateQueries({ queryKey: ["connector-options"] });
-      onApplied?.(applied);
+      onApplied?.(applied.connector);
     },
   });
 

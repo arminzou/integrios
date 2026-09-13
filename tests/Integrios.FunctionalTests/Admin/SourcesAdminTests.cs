@@ -433,7 +433,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     {
         using JsonDocument document = JsonDocument.Parse(TestConnectorManifest.Create("source_test", "Source test", "source", declarativeSourceContract: true));
         HttpResponseMessage connectorResponse = await client.SendAsync(AdminRequest(HttpMethod.Put, "/admin/connectors/source_test/versions/1", document.RootElement));
-        ConnectorDto connector = (await connectorResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
-        return connector.Id;
+        ApplyConnectorManifestResult applied =
+            (await connectorResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        return applied.Connector.Id;
     }
 }

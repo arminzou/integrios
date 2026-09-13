@@ -7,7 +7,7 @@ import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
-import { formError, type Problem } from "../api/problem";
+import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import {
@@ -231,19 +231,13 @@ function ConnectorManifestImport() {
   const apply = useMutation({
     mutationFn: async () => {
       if (!identity || !document) throw new Error("No valid manifest is ready to apply.");
-      const response = await api.PUT("/admin/connectors/{key}/versions/{contractVersion}", {
-        params: { path: identity },
-        body: document,
-      });
-      await call(() => Promise.resolve(response));
-      const outcome = response.response.headers.get("X-Integrios-Connector-Manifest-Outcome");
-      if (!outcome || !["Created", "Unchanged", "PresentationReconciled"].includes(outcome))
-        throw {
-          status: 500,
-          detail: "Admin did not report the Connector manifest outcome.",
-          errors: {},
-        } satisfies Problem;
-      return outcome;
+      const applied = await call(() =>
+        api.PUT("/admin/connectors/{key}/versions/{contractVersion}", {
+          params: { path: identity },
+          body: document,
+        }),
+      );
+      return applied.outcome;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["connectors"] });

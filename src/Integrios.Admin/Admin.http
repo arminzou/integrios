@@ -1,7 +1,7 @@
 @baseUrl = {{ADMIN_BASE_URL}}
 @operationalBaseUrl = {{ADMIN_OPERATIONAL_BASE_URL}}
 @operatorKey = Authorization: OperatorKey global_operator_key:operator_bootstrap_secret
-@webhookIntId = {{applyHttpConnector.response.body.$.id}}
+@webhookIntId = {{applyHttpConnector.response.body.$.connector.id}}
 
 # Sink base URL:
 # - use http://mocksink:8080 when calling from one container to another (WireMock)

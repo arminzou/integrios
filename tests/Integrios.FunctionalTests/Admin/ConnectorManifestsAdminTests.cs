@@ -35,11 +35,12 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         JsonElement version1 = Manifest(contractVersion: 1, name: "Example API");
         HttpResponseMessage createdResponse = await ApplyAsync(1, version1);
         createdResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        createdResponse.Headers.GetValues("X-Integrios-Connector-Manifest-Outcome").ShouldHaveSingleItem()
-            .ShouldBe(nameof(ConnectorManifestApplyOutcome.Created));
+
         createdResponse.Headers.Location?.OriginalString.ShouldBe(
             "/admin/connectors/example_api/versions/1");
-        ConnectorDto created = (await createdResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+        ApplyConnectorManifestResult createdApplied = (await createdResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        ConnectorDto created = createdApplied.Connector;
+        createdApplied.Outcome.ShouldBe(ConnectorManifestApplyOutcome.Created);
         created.ContractVersion.ShouldBe(1);
         created.Manifest.GetProperty("key").GetString().ShouldBe("example_api");
         JsonElement storedSchemes = created.Manifest.GetProperty("destination_authentication").GetProperty("schemes");
@@ -51,25 +52,28 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
 
         HttpResponseMessage unchangedResponse = await ApplyAsync(1, Reordered(version1));
         unchangedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        unchangedResponse.Headers.GetValues("X-Integrios-Connector-Manifest-Outcome").ShouldHaveSingleItem()
-            .ShouldBe(nameof(ConnectorManifestApplyOutcome.Unchanged));
-        ConnectorDto unchanged = (await unchangedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+
+        ApplyConnectorManifestResult unchangedApplied = (await unchangedResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        ConnectorDto unchanged = unchangedApplied.Connector;
+        unchangedApplied.Outcome.ShouldBe(ConnectorManifestApplyOutcome.Unchanged);
         unchanged.Id.ShouldBe(created.Id);
         unchanged.UpdatedAt.ShouldBe(created.UpdatedAt);
 
         JsonElement renamedManifest = Manifest(contractVersion: 1, name: "Improved API");
         HttpResponseMessage renamedResponse = await ApplyAsync(1, renamedManifest);
         renamedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        renamedResponse.Headers.GetValues("X-Integrios-Connector-Manifest-Outcome").ShouldHaveSingleItem()
-            .ShouldBe(nameof(ConnectorManifestApplyOutcome.PresentationReconciled));
-        ConnectorDto renamed = (await renamedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+
+        ApplyConnectorManifestResult renamedApplied = (await renamedResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        ConnectorDto renamed = renamedApplied.Connector;
+        renamedApplied.Outcome.ShouldBe(ConnectorManifestApplyOutcome.PresentationReconciled);
         renamed.Id.ShouldBe(created.Id);
         renamed.Name.ShouldBe("Improved API");
 
         await ExecuteAsync("UPDATE connectors SET status = 'disabled' WHERE id = @Id", created.Id);
         JsonElement disabledRenamedManifest = Manifest(contractVersion: 1, name: "Disabled API");
         HttpResponseMessage disabledRenameResponse = await ApplyAsync(1, disabledRenamedManifest);
-        ConnectorDto disabledRename = (await disabledRenameResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+        ApplyConnectorManifestResult disabledRenameApplied = (await disabledRenameResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        ConnectorDto disabledRename = disabledRenameApplied.Connector;
         disabledRename.Name.ShouldBe("Disabled API");
         disabledRename.Status.ShouldBe("disabled");
 
@@ -91,7 +95,8 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         JsonElement version2 = Manifest(contractVersion: 2, name: "Example API v2");
         HttpResponseMessage version2Response = await ApplyAsync(2, version2);
         version2Response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        ConnectorDto createdV2 = (await version2Response.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+        ApplyConnectorManifestResult createdV2Applied = (await version2Response.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        ConnectorDto createdV2 = createdV2Applied.Connector;
         createdV2.Id.ShouldNotBe(created.Id);
 
         (await CountAsync(
@@ -204,8 +209,10 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         manifest.SourceConfigurationSchema!.Value.GetProperty("required")[0].GetString().ShouldBe("region");
         manifest.DestinationConfigurationSchema!.Value.GetProperty("required").GetArrayLength().ShouldBe(2);
         manifest.DestinationAuthentication.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("bearer_token");
-        manifest.SourceVerification.AllowUnverified.ShouldBeTrue();
-        manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBeTrue();
+        // The tightened contract includes whether a selection is required, not only which schemes
+        // are on the menu.
+        manifest.SourceVerification.AllowUnverified.ShouldBeFalse();
+        manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBeFalse();
     }
 
     [Fact]
@@ -223,7 +230,8 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
             "/admin/connectors/guided_both/versions/1",
             composed.GetProperty("manifest"));
         appliedResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        ConnectorDto connector = (await appliedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+        ApplyConnectorManifestResult connectorApplied = (await appliedResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        ConnectorDto connector = connectorApplied.Connector;
 
         using HttpResponseMessage topicResponse = await SendAsync(
             HttpMethod.Post,
