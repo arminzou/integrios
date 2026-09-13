@@ -373,12 +373,10 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
                 <dt>Source verification</dt>
                 <dd>
                   <span className="block">{sourceSchemes.join(", ") || "None"}</span>
-                  {/* Whether a selection is required says nothing when there is nothing to select,
-                      and an applied version is immutable, so a warning would name no way out. */}
-                  {sourceSchemes.length > 0 ? (
-                    <span className="block text-xs text-ink-secondary">
-                      Selection {sourceVerification.allow_unverified === true ? "optional" : "required"}.
-                    </span>
+                  {/* Only the requirement is worth a line. Optional is what a menu already implies,
+                      and an empty menu implies nothing to select at all. */}
+                  {sourceSchemes.length > 0 && sourceVerification.allow_unverified !== true ? (
+                    <span className="block text-xs text-ink-secondary">Selection required.</span>
                   ) : null}
                 </dd>
                 <dt>Source required configuration</dt>
@@ -390,10 +388,8 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
                 <dt>Destination authentication</dt>
                 <dd>
                   <span className="block">{destinationSchemes.join(", ") || "None"}</span>
-                  {destinationSchemes.length > 0 ? (
-                    <span className="block text-xs text-ink-secondary">
-                      Selection {destinationAuthentication.allow_unauthenticated === true ? "optional" : "required"}.
-                    </span>
+                  {destinationSchemes.length > 0 && destinationAuthentication.allow_unauthenticated !== true ? (
+                    <span className="block text-xs text-ink-secondary">Selection required.</span>
                   ) : null}
                 </dd>
                 <dt>Destination required configuration</dt>

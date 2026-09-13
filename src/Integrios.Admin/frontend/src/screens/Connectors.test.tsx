@@ -425,6 +425,27 @@ describe("An applied Connector version", () => {
     expect(screen.getByRole("button", { name: "Hide raw JSON" }).getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("says nothing about selection where a menu exists and choosing from it is optional", async () => {
+    const optional = {
+      ...github,
+      manifest: {
+        ...github.manifest,
+        source_verification: { ...github.manifest.source_verification, allow_unverified: true },
+      },
+    };
+    stubHttp(({ url }) =>
+      url.pathname === `/admin/connectors/${github.id}`
+        ? { status: 200, body: optional }
+        : { status: 200, body: page([optional]) },
+    );
+
+    renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
+
+    // The menu itself says a selection can be made. Only a requirement is worth a line.
+    expect(await screen.findByText("acme_signature")).toBeDefined();
+    expect(screen.queryByText(/Selection/)).toBeNull();
+  });
+
   it("shows an empty Source verification menu as None and says no more", async () => {
     const noVerification = {
       ...github,
