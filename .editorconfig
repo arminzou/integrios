@@ -126,5 +126,9 @@ indent_size = 2
 [*.{json,jsonc,yml,yaml,toml}]
 indent_size = 2
 
+# Operator dashboard SPA is formatted by Biome with 2-space indentation.
+[*.{js,jsx,mjs,cjs,ts,tsx,css,scss,html}]
+indent_size = 2
+
 [*.md]
 trim_trailing_whitespace = false
