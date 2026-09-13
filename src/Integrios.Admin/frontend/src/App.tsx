@@ -48,7 +48,7 @@ export function App() {
       <SessionGate
         title="Integrios Operator"
         copy="This is not a sign-in problem. The deployment answered, but not with a session."
-        alert={session.error instanceof Error ? session.error.message : String(session.error)}
+        alert={session.error.message}
         detail="Signing in again will not help until the Admin API answers."
         action="Retry"
         onRetry={() => session.refetch()}
@@ -73,7 +73,7 @@ function SignedOutGate() {
       <SessionGate
         title="Sign in to Integrios"
         copy="The deployment answered, but its sign-in options could not be read."
-        alert={options.error instanceof Error ? options.error.message : String(options.error)}
+        alert={options.error.message}
         action="Retry"
         onRetry={() => options.refetch()}
       />
@@ -130,7 +130,7 @@ function PasswordSignIn({ options }: { options: OperatorAuthenticationOptions })
     mutationFn: ({ email, password }: { email: string; password: string }) => passwordSignIn(options, email, password),
     onSuccess: (returnTo) => location.assign(returnTo),
   });
-  const error = signIn.error instanceof Error ? signIn.error.message : signIn.error ? String(signIn.error) : null;
+  const error = signIn.error?.message;
 
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -163,9 +163,6 @@ function PasswordSignIn({ options }: { options: OperatorAuthenticationOptions })
           aria-describedby="password-sign-in-policy"
           required
         />
-        <p id="password-sign-in-policy" className="m-0 text-xs text-ink-secondary">
-          15–128 characters.
-        </p>
       </div>
       <Button
         className="w-full"

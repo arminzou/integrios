@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace Integrios.Admin.Auth;
@@ -108,6 +109,7 @@ public static class OperatorAuthentication
 
         if (password.Enabled)
         {
+            services.AddSingleton<IPasswordHasher<string>, PasswordHasher<string>>();
             services.AddScoped<OperatorPasswordAuthenticator>();
             services.AddSingleton<OperatorPasswordRateLimiter>();
         }

@@ -63,13 +63,15 @@ describe("Application session", () => {
   });
 
   it("puts configured OIDC first and keeps the password failure generic", async () => {
+    const path = "/tenants/22222222-2222-2222-2222-222222222222/events?status=dead_lettered";
+    history.replaceState(null, "", path);
     const calls = stubHttp(({ url }) => {
       if (url.pathname === "/auth/session") return { status: 401 };
       if (url.pathname === "/auth/options") return { status: 200, body: authOptions };
       return { status: 401, body: { message: "Email or password is invalid." } };
     });
 
-    const { container } = renderApp("/");
+    const { container } = renderApp(path);
 
     const oidc = await screen.findByRole("link", { name: "Continue with Example ID" });
     const password = screen.getByRole("button", { name: "Sign in with email" });
@@ -87,7 +89,7 @@ describe("Application session", () => {
     expect(request.body).toEqual({
       email: "operator@example.test",
       password: "correct horse battery staple",
-      return_to: "/",
+      return_to: path,
     });
     expect(request.headers.get("X-Integrios-Antiforgery")).toBe("sign-in-token");
   });

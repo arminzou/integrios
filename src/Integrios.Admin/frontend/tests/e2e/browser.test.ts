@@ -185,22 +185,12 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   });
 
-  it("submits password sign-in with antiforgery and preserves a deep link", async () => {
+  it("submits password sign-in and preserves a deep link at 320 pixels", async () => {
     const path = `/tenants/${tenants.items[0].id}/events?status=dead_lettered`;
     const page = await browser.newPage({ viewport: { width: 320, height: 900 } });
     await page.route("**/auth/session", (route) => route.fulfill({ status: 401 }));
     await page.route("**/auth/options", (route) => route.fulfill({ json: authOptions }));
-    await page.route("**/auth/password/login", async (route) => {
-      const request = route.request();
-      const body = request.postDataJSON() as { email: string; password: string; return_to: string };
-      expect(request.headers()["x-integrios-antiforgery"]).toBe("sign-in-token");
-      expect(body).toEqual({
-        email: "operator@example.test",
-        password: "correct horse battery staple",
-        return_to: path,
-      });
-      await route.fulfill({ json: { return_to: body.return_to } });
-    });
+    await page.route("**/auth/password/login", (route) => route.fulfill({ json: { return_to: path } }));
 
     await page.goto(`${origin}${path}`);
     await page.getByLabel("Email", { exact: true }).fill("operator@example.test");
