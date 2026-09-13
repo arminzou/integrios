@@ -6,8 +6,8 @@ using Integrios.Application.Authoring.Connectors;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Events;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.FunctionalTests.Admin;
 

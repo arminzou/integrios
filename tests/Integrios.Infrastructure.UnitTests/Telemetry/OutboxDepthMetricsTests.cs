@@ -3,11 +3,11 @@ using System.Diagnostics.Metrics;
 using Integrios.Application.Telemetry;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Telemetry;
+using Integrios.Tests.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Integrios.Tests.Shared;
 
 namespace Integrios.Infrastructure.UnitTests;
 

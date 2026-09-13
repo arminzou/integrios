@@ -175,10 +175,10 @@ public sealed class AdminApiFixture : IAsyncLifetime
                     'sha256:e98f79daedd50eea3a83ba72c3cd33802bcb5432a6e6273d1fe0bf573dfe8420',
                     'Bootstrap Operator Key', {{{now}}});
             """, new
-            {
-                TenantId,
-                OtherTenantId,
-            });
+        {
+            TenantId,
+            OtherTenantId,
+        });
 
         HttpConnectorId = await ApplyConnectorManifestAsync(
             "http", TestConnectorManifest.Create("http", "HTTP", "both"));

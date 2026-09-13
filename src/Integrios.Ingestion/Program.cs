@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Integrios.Application;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
@@ -7,7 +8,6 @@ using Integrios.Ingestion.Auth;
 using Integrios.Ingestion.Endpoints;
 using Integrios.Ingestion.ErrorHandling;
 using Microsoft.AspNetCore.Authentication;
-using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 bool secretCommand = SourceSecretValidationCli.IsCommand(args);

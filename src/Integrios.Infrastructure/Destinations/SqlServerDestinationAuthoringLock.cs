@@ -32,7 +32,7 @@ internal sealed class SqlServerDestinationAuthoringLock(IDbContextFactory<Integr
                 {
                     int result = await ExecuteLockAsync(connection, resource, acquire: true, cancellationToken);
                     if (result < 0)
-                    throw new DestinationAuthoringConflictException();
+                        throw new DestinationAuthoringConflictException();
                     acquired.Add(resource);
                 }
                 return new Lease(context, connection, acquired);

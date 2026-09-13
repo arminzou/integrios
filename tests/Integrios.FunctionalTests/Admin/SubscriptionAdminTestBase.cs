@@ -3,8 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Dapper;
 using Integrios.Admin.Endpoints;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.FunctionalTests.Admin;
 

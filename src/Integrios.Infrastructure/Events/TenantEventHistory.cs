@@ -44,13 +44,18 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
 
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
         var where = new List<string> { "e.tenant_id = @TenantId" };
-        if (filter.Status is not null) where.Add("e.status = @Status");
-        if (filter.SourceId is not null) where.Add("e.source_id = @SourceId");
-        if (filter.TopicId is not null) where.Add("e.topic_id = @TopicId");
+        if (filter.Status is not null)
+            where.Add("e.status = @Status");
+        if (filter.SourceId is not null)
+            where.Add("e.source_id = @SourceId");
+        if (filter.TopicId is not null)
+            where.Add("e.topic_id = @TopicId");
         if (filter.SourceEventId is not null)
             where.Add("e.source_event_id = @SourceEventId");
-        if (filter.AcceptedFrom is not null) where.Add("e.accepted_at >= @AcceptedFrom");
-        if (filter.AcceptedTo is not null) where.Add("e.accepted_at <= @AcceptedTo");
+        if (filter.AcceptedFrom is not null)
+            where.Add("e.accepted_at >= @AcceptedFrom");
+        if (filter.AcceptedTo is not null)
+            where.Add("e.accepted_at <= @AcceptedTo");
         if (filter.DeliveryStatus is not null)
             where.Add("EXISTS (SELECT 1 FROM event_deliveries d WHERE d.event_id = e.id AND d.status = @DeliveryStatus)");
         if (hasCursor)

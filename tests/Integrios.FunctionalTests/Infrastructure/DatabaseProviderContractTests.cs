@@ -1,14 +1,14 @@
 using System.Data.Common;
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Ingestion;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
+using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Events;
-using Integrios.Infrastructure.Connectors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Respawn;

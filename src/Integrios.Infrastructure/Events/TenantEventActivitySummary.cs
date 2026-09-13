@@ -14,8 +14,10 @@ internal sealed class TenantEventActivitySummary(IDbConnectionFactory connection
         CancellationToken cancellationToken)
     {
         var where = new List<string> { "e.tenant_id = @TenantId", "e.accepted_at >= @WindowStart", "e.accepted_at <= @WindowEnd" };
-        if (filter.SourceId is not null) where.Add("e.source_id = @SourceId");
-        if (filter.TopicId is not null) where.Add("e.topic_id = @TopicId");
+        if (filter.SourceId is not null)
+            where.Add("e.source_id = @SourceId");
+        if (filter.TopicId is not null)
+            where.Add("e.topic_id = @TopicId");
         string eventWhere = string.Join(" AND ", where);
 
         // The dead-lettered count is a correlated subquery per windowed Event, not a JOIN: at

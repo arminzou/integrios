@@ -1,8 +1,8 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Domain.Enums;
 using MediatR;
-using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 

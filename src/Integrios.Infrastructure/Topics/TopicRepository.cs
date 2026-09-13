@@ -1,13 +1,13 @@
 using Integrios.Application.Authoring.Topics;
-using Integrios.Infrastructure.Data;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.SqlClient;
-using Npgsql;
+using Integrios.Infrastructure.Common.Pagination;
+using Integrios.Infrastructure.Data;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Integrios.Infrastructure.Topics;
 

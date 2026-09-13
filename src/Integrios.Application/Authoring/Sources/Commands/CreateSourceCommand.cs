@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Topics;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
-using Integrios.Application.Transforms;
 using MediatR;
 
 namespace Integrios.Application.Authoring.Sources;
@@ -49,15 +49,21 @@ internal sealed class CreateSourceCommandHandler(
             : command.Configuration.Clone();
         var source = new Source
         {
-            Id = Guid.NewGuid(), TenantId = command.TenantId, ConnectorId = command.ConnectorId, TopicId = command.TopicId,
+            Id = Guid.NewGuid(),
+            TenantId = command.TenantId,
+            ConnectorId = command.ConnectorId,
+            TopicId = command.TopicId,
             Name = command.Name.Trim(),
-            Type = command.Type, Configuration = configuration,
+            Type = command.Type,
+            Configuration = configuration,
             Verification = SourceAuthoringValidator.ToVerification(command.Verification),
             InputRequirements = command.InputRequirements?.Clone(),
             Mapping = command.Mapping,
             EventIdentityRule = command.EventIdentityRule,
-            Revision = Guid.NewGuid().ToString("N"), Status = SourceStatus.Active,
-            CreatedAt = now, UpdatedAt = now,
+            Revision = Guid.NewGuid().ToString("N"),
+            Status = SourceStatus.Active,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         return SourceDto.From(await sourceRepository.CreateAsync(source, cancellationToken));
     }

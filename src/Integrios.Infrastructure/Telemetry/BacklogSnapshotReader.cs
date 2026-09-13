@@ -26,8 +26,8 @@ internal sealed class BacklogSnapshotReader(IDbConnectionFactory connectionFacto
         DatabaseProvider provider,
         string claimable,
         string deliveryAnchor) => provider switch
-    {
-        DatabaseProvider.Postgres => $"""
+        {
+            DatabaseProvider.Postgres => $"""
             WITH clock AS (SELECT now() AS database_now),
             outbox_snapshot AS (
                 SELECT COUNT(*) AS PendingOutboxDepth,
@@ -43,7 +43,7 @@ internal sealed class BacklogSnapshotReader(IDbConnectionFactory connectionFacto
                 ReadyDeliveryDepth, OldestReadyDeliveryAgeSeconds
             FROM outbox_snapshot CROSS JOIN delivery_snapshot;
             """,
-        DatabaseProvider.SqlServer => $"""
+            DatabaseProvider.SqlServer => $"""
             DECLARE @DatabaseNow datetime2 = SYSUTCDATETIME();
             SELECT
                 (SELECT COUNT_BIG(*) FROM outbox WHERE processed_at IS NULL) AS PendingOutboxDepth,
@@ -57,8 +57,8 @@ internal sealed class BacklogSnapshotReader(IDbConnectionFactory connectionFacto
                         ELSE DATEDIFF_BIG(millisecond, MIN({deliveryAnchor}), @DatabaseNow) / 1000.0 END
                     FROM event_deliveries delivery WHERE {claimable}), 0) AS float) AS OldestReadyDeliveryAgeSeconds;
             """,
-        _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
-    };
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
+        };
 }
 
 internal sealed record BacklogSnapshot(

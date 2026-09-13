@@ -100,10 +100,18 @@ public sealed class SecretResolverTests : IDisposable
         string path = Path.Combine(TenantDirectory("tenant-a"), "api_key");
         switch (scenario)
         {
-            case "empty": File.WriteAllBytes(path, []); break;
-            case "nul": File.WriteAllText(path, "do-not-leak\0value"); break;
-            case "oversized": File.WriteAllBytes(path, new byte[65_537]); break;
-            case "invalid_utf8": File.WriteAllBytes(path, [0xff, 0xfe]); break;
+            case "empty":
+                File.WriteAllBytes(path, []);
+                break;
+            case "nul":
+                File.WriteAllText(path, "do-not-leak\0value");
+                break;
+            case "oversized":
+                File.WriteAllBytes(path, new byte[65_537]);
+                break;
+            case "invalid_utf8":
+                File.WriteAllBytes(path, [0xff, 0xfe]);
+                break;
         }
 
         var resolver = new DestinationAuthenticationMountedFileSecretResolver(root);

@@ -1,13 +1,12 @@
 extern alias IngestionHost;
-
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.FunctionalTests.Ingestion;
 

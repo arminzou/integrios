@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Application.Authoring.TenantApiKeys;
-using Integrios.Application.Authoring.Destinations;
-using Integrios.Application.Authoring.Tenants;
 using Integrios.Admin.Endpoints;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Integrios.Application.Authoring.Destinations;
+using Integrios.Application.Authoring.TenantApiKeys;
+using Integrios.Application.Authoring.Tenants;
 using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Integrios.FunctionalTests.Admin;
 

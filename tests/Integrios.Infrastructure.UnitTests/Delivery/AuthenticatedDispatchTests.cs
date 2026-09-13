@@ -8,11 +8,11 @@ using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Delivery;
+using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using Integrios.Tests.Shared;
 
 namespace Integrios.Infrastructure.UnitTests;
 

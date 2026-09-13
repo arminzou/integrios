@@ -64,15 +64,15 @@ public static class OperationalEndpointExtensions
     public static WebApplication MapOperationalEndpoints(this WebApplication app)
     {
         app.MapHealthChecks("/health", new HealthCheckOptions
-            {
-                Predicate = _ => false
-            })
+        {
+            Predicate = _ => false
+        })
             .WithMetadata(OperationalEndpointMetadata.Instance);
 
         app.MapHealthChecks("/ready", new HealthCheckOptions
-            {
-                Predicate = check => check.Tags.Contains("ready")
-            })
+        {
+            Predicate = check => check.Tags.Contains("ready")
+        })
             .WithMetadata(OperationalEndpointMetadata.Instance);
 
         app.MapPrometheusScrapingEndpoint()

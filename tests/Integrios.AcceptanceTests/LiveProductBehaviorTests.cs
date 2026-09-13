@@ -1,10 +1,10 @@
-using Integrios.Tests.Shared;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Integrios.Tests.Shared;
 
 namespace Integrios.AcceptanceTests;
 

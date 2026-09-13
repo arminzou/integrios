@@ -84,8 +84,10 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
 
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {
-            ["event_id"] = accepted.EventId, ["tenant_id"] = endpoint.TenantId,
-            ["topic_id"] = endpoint.TopicId, ["source_id"] = endpoint.SourceId
+            ["event_id"] = accepted.EventId,
+            ["tenant_id"] = endpoint.TenantId,
+            ["topic_id"] = endpoint.TopicId,
+            ["source_id"] = endpoint.SourceId
         });
         if (!accepted.AlreadyAccepted)
         {

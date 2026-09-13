@@ -21,9 +21,12 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
 
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
         var where = new List<string> { "tenant_id = @TenantId" };
-        if (status is not null) where.Add("status = @Status");
-        if (type is not null) where.Add("type = @Type");
-        if (topicId is not null) where.Add("topic_id = @TopicId");
+        if (status is not null)
+            where.Add("status = @Status");
+        if (type is not null)
+            where.Add("type = @Type");
+        if (topicId is not null)
+            where.Add("topic_id = @TopicId");
         if (afterCursor is not null)
             where.Add("(created_at < @CursorTime OR (created_at = @CursorTime AND id < @CursorId))");
         string sql = $"""
@@ -51,7 +54,8 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
             Take = limit + 1,
         }, cancellationToken: cancellationToken))).AsList();
         bool hasMore = rows.Count > limit;
-        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        if (hasMore)
+            rows.RemoveAt(rows.Count - 1);
         return new SourceListDto(rows.Select(row => new SourceListItemDto(
             row.Id, row.TenantId, row.ConnectorId, row.TopicId, row.Name, row.Type, row.Status, row.InputRequirements,
             row.CreatedAt, row.UpdatedAt, row.RevokedAt)).ToList(),

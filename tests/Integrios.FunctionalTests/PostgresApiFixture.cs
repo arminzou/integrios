@@ -79,16 +79,16 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 (@CredentialBId, @TenantBId, 'test-ingest-key-b', @KeyPrefixB, @KeyHashB, 'active', {{{now}}});
 
             """, new
-            {
-                TenantAId,
-                TenantBId,
-                CredentialAId = credentialAId,
-                CredentialBId = credentialBId,
-                KeyPrefixA = TenantAToken[..12],
-                KeyPrefixB = TenantBToken[..12],
-                KeyHashA = secretHashA,
-                KeyHashB = secretHashB
-            });
+        {
+            TenantAId,
+            TenantBId,
+            CredentialAId = credentialAId,
+            CredentialBId = credentialBId,
+            KeyPrefixA = TenantAToken[..12],
+            KeyPrefixB = TenantBToken[..12],
+            KeyHashA = secretHashA,
+            KeyHashB = secretHashB
+        });
     }
 
     public Task<Guid?> GetEventTenantIdAsync(Guid eventId) =>
@@ -189,14 +189,17 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             VALUES (@EventId,@SubscriptionId,@DestinationId,{{{database.Json("@Snapshot")}}},'http',
                 'dead_lettered',3,3,{{{database.Now}}});
             """, new
-            {
-                ConnectorId = connectorId,
-                DestinationId = destinationId, TenantId = tenantId, Config = "{\"base_uri\":\"http://test/sink\"}",
-                TopicId = topicId, SubscriptionId = subscriptionId,
-                MatchRules = "{\"event_types\":[\"payment.created\"]}",
-                Snapshot = "{\"version\":1,\"base_uri\":\"http://test/sink\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}",
-                EventId = eventId
-            });
+        {
+            ConnectorId = connectorId,
+            DestinationId = destinationId,
+            TenantId = tenantId,
+            Config = "{\"base_uri\":\"http://test/sink\"}",
+            TopicId = topicId,
+            SubscriptionId = subscriptionId,
+            MatchRules = "{\"event_types\":[\"payment.created\"]}",
+            Snapshot = "{\"version\":1,\"base_uri\":\"http://test/sink\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}",
+            EventId = eventId
+        });
     }
 
     public Task<int> GetOutboxRowCountAsync(Guid eventId) =>
