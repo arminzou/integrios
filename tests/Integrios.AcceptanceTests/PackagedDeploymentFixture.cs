@@ -207,7 +207,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             throw new InvalidOperationException($"Applying {key}.json failed with {(int)response.StatusCode}: {responseBody}");
 
         using JsonDocument document = JsonDocument.Parse(responseBody);
-        return document.RootElement.GetProperty("id").GetGuid();
+        return document.RootElement.GetProperty("connector").GetProperty("id").GetGuid();
     }
 
     public async Task<int> ExecuteAsync(string sql)
