@@ -2,8 +2,8 @@ using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Telemetry;
-using MediatR;
 using Integrios.Tests.Shared;
+using MediatR;
 
 namespace Integrios.Application.UnitTests;
 

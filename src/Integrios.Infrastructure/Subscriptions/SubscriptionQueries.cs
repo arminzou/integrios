@@ -34,7 +34,8 @@ internal sealed class SubscriptionQueries(
 
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
         var where = new List<string> { "s.tenant_id = @TenantId", "s.topic_id = @TopicId" };
-        if (status is not null) where.Add("s.status = @Status");
+        if (status is not null)
+            where.Add("s.status = @Status");
         if (afterCursor is not null)
             where.Add("(s.created_at < @CursorTime OR (s.created_at = @CursorTime AND s.id < @CursorId))");
         string sql = $"""
@@ -61,7 +62,8 @@ internal sealed class SubscriptionQueries(
             Take = limit + 1,
         }, cancellationToken: cancellationToken))).AsList();
         bool hasMore = rows.Count > limit;
-        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        if (hasMore)
+            rows.RemoveAt(rows.Count - 1);
 
         return new SubscriptionListDto(rows.Select(row => new SubscriptionListItemDto(
             row.Id,
@@ -101,8 +103,10 @@ internal sealed class SubscriptionQueries(
 
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
         var where = new List<string> { "s.tenant_id = @TenantId" };
-        if (filter.Status is not null) where.Add("s.status = @Status");
-        if (filter.TopicId is not null) where.Add("s.topic_id = @TopicId");
+        if (filter.Status is not null)
+            where.Add("s.status = @Status");
+        if (filter.TopicId is not null)
+            where.Add("s.topic_id = @TopicId");
         if (filter.DestinationId is not null)
             where.Add("s.destination_id = @DestinationId");
         if (filter.NameContains is not null)
@@ -138,7 +142,8 @@ internal sealed class SubscriptionQueries(
             Take = limit + 1,
         }, cancellationToken: cancellationToken))).AsList();
         bool hasMore = rows.Count > limit;
-        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        if (hasMore)
+            rows.RemoveAt(rows.Count - 1);
 
         return new SubscriptionByTenantListDto(rows.Select(row => new SubscriptionByTenantListItemDto(
             row.Id,

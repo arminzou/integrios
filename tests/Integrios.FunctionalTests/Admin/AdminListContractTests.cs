@@ -3,10 +3,10 @@ using System.Net;
 using System.Text.Json;
 using Dapper;
 using Integrios.Infrastructure.Common.Pagination;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.DependencyInjection;
 using Integrios.Tests.Shared;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.FunctionalTests.Admin;
 
@@ -226,8 +226,14 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status, environment) VALUES
             (@First, @TenantId, @ConnectorId, 'Ledger gateway', {{fixture.Json("@Config")}}, 'active', 'Production'),
             (@Second, @TenantId, @ConnectorId, 'Ledger relay', {{fixture.Json("@Config")}}, 'active', 'Production')
-            """, new { First = first, Second = second, fixture.TenantId, ConnectorId = fixture.HttpConnectorId,
-                Config = "{\"base_uri\":\"http://localhost:5054/sink/source\"}" });
+            """, new
+        {
+            First = first,
+            Second = second,
+            fixture.TenantId,
+            ConnectorId = fixture.HttpConnectorId,
+            Config = "{\"base_uri\":\"http://localhost:5054/sink/source\"}"
+        });
 
         string root = $"/admin/tenants/{fixture.TenantId}/destinations";
         (await ListIdsAsync($"{root}?environment=PRODUCTION&name=LEDGER")).Order().ShouldBe(new[] { first, second }.Order());
@@ -258,8 +264,18 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             (@First, @TenantId, @ConnectorId, @Topic, 'first-intake', 'event_api', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL),
             (@Second, @TenantId, @ConnectorId, @Topic, 'second-intake', 'webhook', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'revoked', @Now, @Now, @Now),
             (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'excluded-intake', 'queue', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL)
-            """, new { Topic = topic, OtherTopic = otherTopic, First = first, Second = second, Excluded = excluded,
-                fixture.TenantId, ConnectorId = fixture.HttpConnectorId, Now = now, Configuration = "{\"private_extra\":\"not a list field\"}" });
+            """, new
+        {
+            Topic = topic,
+            OtherTopic = otherTopic,
+            First = first,
+            Second = second,
+            Excluded = excluded,
+            fixture.TenantId,
+            ConnectorId = fixture.HttpConnectorId,
+            Now = now,
+            Configuration = "{\"private_extra\":\"not a list field\"}"
+        });
 
         string root = $"/admin/tenants/{fixture.TenantId}/sources";
         (await ListIdsAsync($"{root}?topic_id={topic}")).Order().ShouldBe(new[] { first, second }.Order());

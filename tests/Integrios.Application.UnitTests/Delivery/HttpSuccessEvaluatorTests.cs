@@ -42,7 +42,10 @@ public sealed class HttpSuccessEvaluatorTests
     {
         var contract = new HttpSuccessRule
         {
-            Evaluator = "json_boolean", Field = "ok", Expected = true, DiagnosticField = "error"
+            Evaluator = "json_boolean",
+            Field = "ok",
+            Expected = true,
+            DiagnosticField = "error"
         };
 
         bool accepted = HttpSuccessEvaluator.Evaluate(
@@ -57,7 +60,10 @@ public sealed class HttpSuccessEvaluatorTests
     {
         var contract = new HttpSuccessRule
         {
-            Evaluator = "json_boolean", Field = "ok", Expected = true, DiagnosticField = "error"
+            Evaluator = "json_boolean",
+            Field = "ok",
+            Expected = true,
+            DiagnosticField = "error"
         };
 
         bool accepted = HttpSuccessEvaluator.Evaluate(contract, Body("""{"ok":false}"""), out string? diagnostic);

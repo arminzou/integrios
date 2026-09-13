@@ -5,10 +5,10 @@ using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Integrios.Tests.Shared;
 
 namespace Integrios.Application.UnitTests;
 

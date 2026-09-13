@@ -1,10 +1,10 @@
 using Integrios.Admin.Endpoints;
 using MediatR;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Admin.UnitTests.Endpoints;
 

@@ -64,7 +64,8 @@ public sealed class EventsEndpoints : IEndpointGroup
     {
         if (string.IsNullOrEmpty(status))
             return null;
-        try { return EventStatusMap.FromDbValue(status); }
+        try
+        { return EventStatusMap.FromDbValue(status); }
         catch (ArgumentOutOfRangeException)
         {
             throw new InvalidListFilterException("Event status must be accepted, processing, routed, unrouted, failed, or dead_lettered.");

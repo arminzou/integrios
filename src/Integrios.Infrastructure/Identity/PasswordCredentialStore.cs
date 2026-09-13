@@ -223,10 +223,10 @@ internal sealed class PasswordCredentialStore(IntegriosDbContext context)
         exception is DbUpdateException { InnerException: Exception innerException }
             ? IsUniqueViolation(innerException, constraintName)
             : exception is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: var postgresConstraint,
-        } && postgresConstraint == constraintName
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: var postgresConstraint,
+            } && postgresConstraint == constraintName
         || exception is SqlException { Number: 2601 or 2627 } sqlException
         && sqlException.Message.Contains(constraintName, StringComparison.Ordinal);
 

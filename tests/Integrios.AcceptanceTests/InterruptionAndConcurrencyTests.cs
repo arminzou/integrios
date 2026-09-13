@@ -1,8 +1,8 @@
-using Integrios.Tests.Shared;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Integrios.Tests.Shared;
 using Npgsql;
 
 namespace Integrios.AcceptanceTests;

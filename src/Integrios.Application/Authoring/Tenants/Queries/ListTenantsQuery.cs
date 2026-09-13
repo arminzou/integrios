@@ -1,5 +1,5 @@
-using MediatR;
 using Integrios.Domain.Enums;
+using MediatR;
 
 namespace Integrios.Application.Authoring.Tenants;
 

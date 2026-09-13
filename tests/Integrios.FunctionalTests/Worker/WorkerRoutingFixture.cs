@@ -5,16 +5,16 @@ using System.Text;
 using System.Text.Json;
 using Dapper;
 using Integrios.Application;
+using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Delivery;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
-using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure;
-using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Data;
+using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Events;
 using Integrios.Infrastructure.Subscriptions;
 using Integrios.Infrastructure.Telemetry;
@@ -140,7 +140,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     {
         Guid eventId = await InsertEventAndOutboxAsync(eventType);
         int processed = await RunFanoutBatchAsync();
-        if (processed != 1) throw new InvalidOperationException($"Expected one Event to fan out, but processed {processed}.");
+        if (processed != 1)
+            throw new InvalidOperationException($"Expected one Event to fan out, but processed {processed}.");
         return (await GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Id;
     }
 
@@ -149,7 +150,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         int updated = await ExecuteAsync(
             $"UPDATE event_deliveries SET lease_expires_at={database.OneSecondAgo} WHERE id=@DeliveryId AND status='in_flight'",
             new { DeliveryId = deliveryId });
-        if (updated != 1) throw new InvalidOperationException($"Delivery {deliveryId} did not have an active lease to expire.");
+        if (updated != 1)
+            throw new InvalidOperationException($"Delivery {deliveryId} did not have an active lease to expire.");
     }
 
     public async Task<IReadOnlyList<DeliveryAttemptState>> GetDeliveryAttemptsAsync(Guid deliveryId) =>
@@ -254,12 +256,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 authentication={{{database.Json("@DestinationAuth")}}}, connector_id=@ConnectorId
             WHERE id=@LedgerDestinationId
             """, new
-            {
-                Config = JsonSerializer.Serialize(new { base_uri = destinationUrl }),
-                DestinationAuth = destinationAuthJson,
-                ConnectorId = connectorId.Value,
-                LedgerDestinationId
-            });
+        {
+            Config = JsonSerializer.Serialize(new { base_uri = destinationUrl }),
+            DestinationAuth = destinationAuthJson,
+            ConnectorId = connectorId.Value,
+            LedgerDestinationId
+        });
     }
 
     public Task ClearLedgerDestinationUrlAsync() => ExecuteAsync(
@@ -352,12 +354,24 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             """, new
         {
             ConnectorId = HttpConnectorId,
-            TenantId, OrphanTenantId, TenantApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
-            SourceId, OrphanSourceId, LedgerDestinationId, RiskDestinationId,
-            EmptyConfig = "{}", LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),
-            RiskConfig = JsonSerializer.Serialize(new { base_uri = RiskSinkUrl }), TopicId, OrphanTopicId,
-            SourceRevision = Guid.NewGuid().ToString("N"), OrphanSourceRevision = Guid.NewGuid().ToString("N"),
-            LedgerSubscriptionId = Guid.NewGuid(), RiskSubscriptionId = Guid.NewGuid(),
+            TenantId,
+            OrphanTenantId,
+            TenantApiKeyId = Guid.NewGuid(),
+            KeyPrefix = TenantToken[..12],
+            KeyHash = hash,
+            SourceId,
+            OrphanSourceId,
+            LedgerDestinationId,
+            RiskDestinationId,
+            EmptyConfig = "{}",
+            LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),
+            RiskConfig = JsonSerializer.Serialize(new { base_uri = RiskSinkUrl }),
+            TopicId,
+            OrphanTopicId,
+            SourceRevision = Guid.NewGuid().ToString("N"),
+            OrphanSourceRevision = Guid.NewGuid().ToString("N"),
+            LedgerSubscriptionId = Guid.NewGuid(),
+            RiskSubscriptionId = Guid.NewGuid(),
             LedgerRules = "{\"event_types\":[\"payment.created\",\"payment.settled\",\"payment.multi\"]}",
             RiskRules = "{\"event_types\":[\"payment.authorized\",\"payment.multi\"]}"
         });
@@ -531,7 +545,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         {
             try
             {
-                if (transaction.Connection is not null) await transaction.RollbackAsync();
+                if (transaction.Connection is not null)
+                    await transaction.RollbackAsync();
                 await actionTask;
             }
             catch { }
@@ -636,8 +651,10 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         finally
         {
             await barrier.ExecuteScalarAsync("SELECT pg_advisory_unlock(@LockKey)", new { LockKey = advisoryLockKey });
-            if (finalizationTask is not null) await finalizationTask;
-            if (reclaimTask is not null) await reclaimTask;
+            if (finalizationTask is not null)
+                await finalizationTask;
+            if (reclaimTask is not null)
+                await reclaimTask;
             await ExecuteAsync("""
                 DROP TRIGGER IF EXISTS test_block_delivery_attempt_update ON delivery_attempts;
                 DROP FUNCTION IF EXISTS test_block_delivery_attempt_update();
@@ -715,8 +732,10 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             }
             try
             {
-                if (finalizationTask is not null) await finalizationTask;
-                if (reclaimTask is not null) await reclaimTask;
+                if (finalizationTask is not null)
+                    await finalizationTask;
+                if (reclaimTask is not null)
+                    await reclaimTask;
             }
             catch { }
             await control.ExecuteAsync(
@@ -732,7 +751,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var deadline = Stopwatch.StartNew();
         while (deadline.Elapsed < TimeSpan.FromSeconds(5))
         {
-            if (await condition()) return;
+            if (await condition())
+                return;
             await Task.Delay(10);
         }
 

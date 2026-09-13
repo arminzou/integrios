@@ -1,14 +1,14 @@
 using System.Diagnostics;
 using Integrios.Infrastructure.Telemetry;
 using Microsoft.AspNetCore.Http;
-using OpenTelemetry.Instrumentation.AspNetCore;
-using OpenTelemetry.Instrumentation.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using OpenTelemetry;
+using OpenTelemetry.Instrumentation.AspNetCore;
+using OpenTelemetry.Instrumentation.Http;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 

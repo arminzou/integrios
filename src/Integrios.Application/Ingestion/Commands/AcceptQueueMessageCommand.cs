@@ -67,8 +67,10 @@ internal sealed class AcceptQueueMessageCommandHandler(
 
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {
-            ["event_id"] = accepted.EventId, ["tenant_id"] = command.TenantId,
-            ["topic_id"] = command.TopicId, ["source_id"] = command.SourceId
+            ["event_id"] = accepted.EventId,
+            ["tenant_id"] = command.TenantId,
+            ["topic_id"] = command.TopicId,
+            ["source_id"] = command.SourceId
         });
         if (!accepted.AlreadyAccepted)
         {

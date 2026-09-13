@@ -58,7 +58,10 @@ public sealed class DestinationUseValidatorTests
     {
         var manifest = new ConnectorManifest
         {
-            ManifestSchemaVersion = 1, Key = "provider", ContractVersion = 1, Direction = direction,
+            ManifestSchemaVersion = 1,
+            Key = "provider",
+            ContractVersion = 1,
+            Direction = direction,
             DestinationConfigurationSchema = direction is "destination" or "both"
                 ? Json("""{"type":"object","properties":{"base_uri":{"type":"string"}},"required":["base_uri"],"additionalProperties":true}""") : null,
             SourceVerification = new ConnectorSourceVerificationManifest { AllowUnverified = true },
@@ -68,17 +71,30 @@ public sealed class DestinationUseValidatorTests
         };
         return new Connector
         {
-            Id = Guid.NewGuid(), Key = manifest.Key, ContractVersion = 1, ManifestSchemaVersion = 1,
-            Name = "Provider", Direction = Enum.Parse<ConnectorDirection>(direction, true), Status = OperationalStatus.Active,
-            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, Manifest = manifest,
+            Id = Guid.NewGuid(),
+            Key = manifest.Key,
+            ContractVersion = 1,
+            ManifestSchemaVersion = 1,
+            Name = "Provider",
+            Direction = Enum.Parse<ConnectorDirection>(direction, true),
+            Status = OperationalStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Manifest = manifest,
         };
     }
 
     private static Destination DestinationFor(JsonElement configuration, DestinationAuthentication? authentication = null) => new()
     {
-        Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), ConnectorId = Guid.NewGuid(), Name = "destination",
-        Configuration = configuration, Authentication = authentication, Status = OperationalStatus.Active,
-        CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        Id = Guid.NewGuid(),
+        TenantId = Guid.NewGuid(),
+        ConnectorId = Guid.NewGuid(),
+        Name = "destination",
+        Configuration = configuration,
+        Authentication = authentication,
+        Status = OperationalStatus.Active,
+        CreatedAt = DateTimeOffset.UtcNow,
+        UpdatedAt = DateTimeOffset.UtcNow,
     };
 
     private static ConnectorSchemeManifest Scheme(string scheme, IReadOnlyList<string>? secrets = null) => new()

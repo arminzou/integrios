@@ -1,5 +1,5 @@
-using System.Diagnostics.Metrics;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Integrios.Application.Telemetry;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

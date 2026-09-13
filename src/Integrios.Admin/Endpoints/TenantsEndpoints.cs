@@ -1,9 +1,8 @@
+using System.Text.Json.Serialization;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Domain.Enums;
 using MediatR;
-
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 

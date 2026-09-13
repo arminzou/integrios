@@ -4,11 +4,11 @@ using Integrios.Application;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Data;
+using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MediatR;
 using Npgsql;
 using Respawn;
 using Testcontainers.MsSql;
@@ -68,8 +68,10 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
 
     public async Task StartAsync()
     {
-        if (postgres is not null) await postgres.StartAsync();
-        else await sqlServer!.StartAsync();
+        if (postgres is not null)
+            await postgres.StartAsync();
+        else
+            await sqlServer!.StartAsync();
 
         if (!migrateOnStart)
             return;
@@ -87,8 +89,10 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
     public DbContextOptions<IntegriosDbContext> CreateOptions()
     {
         var builder = new DbContextOptionsBuilder<IntegriosDbContext>();
-        if (postgres is not null) builder.UseNpgsql(ConnectionString);
-        else builder.UseSqlServer(
+        if (postgres is not null)
+            builder.UseNpgsql(ConnectionString);
+        else
+            builder.UseSqlServer(
             ConnectionString, options => options.MigrationsAssembly("Integrios.Migrations.SqlServer"));
         return builder.Options;
     }
@@ -122,7 +126,9 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (postgres is not null) await postgres.DisposeAsync();
-        else await sqlServer!.DisposeAsync();
+        if (postgres is not null)
+            await postgres.DisposeAsync();
+        else
+            await sqlServer!.DisposeAsync();
     }
 }

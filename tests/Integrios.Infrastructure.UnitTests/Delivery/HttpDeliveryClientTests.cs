@@ -142,7 +142,10 @@ public sealed class HttpDeliveryClientTests
         var client = new HttpDeliveryClient(new HttpClient(handler));
         var contract = new HttpSuccessRule
         {
-            Evaluator = "json_boolean", Field = "ok", Expected = true, DiagnosticField = "error"
+            Evaluator = "json_boolean",
+            Field = "ok",
+            Expected = true,
+            DiagnosticField = "error"
         };
 
         var result = await client.DeliverAsync(Request("https://downstream.example"), contract, CancellationToken.None);
