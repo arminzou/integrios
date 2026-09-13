@@ -10,23 +10,17 @@ public sealed class OperatorPasswordAuthenticatorTests
     public async Task UnknownEmail_PerformsDummyVerification_AndMatchesWrongPasswordOutcome()
     {
         var store = new StubPasswordAuthenticationStore();
-        var verifiedHashes = new List<string>();
-        var authenticator = new OperatorPasswordAuthenticator(
-            store,
-            "dummy-hash",
-            (hash, _) =>
-            {
-                verifiedHashes.Add(hash);
-                return PasswordVerificationResult.Failed;
-            },
-            _ => "replacement");
+        var hasher = new RecordingPasswordHasher();
+        var authenticator = new OperatorPasswordAuthenticator(store, hasher);
 
         OperatorPasswordAuthentication? unknown = await authenticator.AuthenticateAsync(
             "unknown@example.com",
             "fifteen-letters!",
             CancellationToken.None);
         unknown.ShouldBeNull();
-        verifiedHashes.ShouldBe(["dummy-hash"]);
+        hasher.VerifiedHashes.Count.ShouldBe(1);
+        string dummyHash = hasher.VerifiedHashes[0];
+        dummyHash.ShouldNotBeNullOrWhiteSpace();
 
         store.Credential = new PasswordAuthenticationCredential(
             Guid.NewGuid(),
@@ -39,8 +33,24 @@ public sealed class OperatorPasswordAuthenticatorTests
             "fifteen-letters!",
             CancellationToken.None);
         wrong.ShouldBeNull();
-        verifiedHashes.ShouldBe(["dummy-hash", "stored-hash"]);
+        hasher.VerifiedHashes.ShouldBe([dummyHash, "stored-hash"]);
         store.RecordedUserIds.ShouldBeEmpty();
+    }
+
+    private sealed class RecordingPasswordHasher : IPasswordHasher<string>
+    {
+        public List<string> VerifiedHashes { get; } = [];
+
+        public string HashPassword(string user, string password) => "replacement";
+
+        public PasswordVerificationResult VerifyHashedPassword(
+            string user,
+            string hashedPassword,
+            string providedPassword)
+        {
+            VerifiedHashes.Add(hashedPassword);
+            return PasswordVerificationResult.Failed;
+        }
     }
 
     private sealed class StubPasswordAuthenticationStore : IPasswordAuthenticationStore

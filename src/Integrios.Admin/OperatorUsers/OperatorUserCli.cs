@@ -177,43 +177,33 @@ public static class OperatorUserCli
             return false;
         }
 
-        string first;
         try
         {
-            first = ReadMasked(console, "Password: ");
+            string first = ReadMasked(console, "Password: ");
+
+            if (!PasswordCredentialRules.IsValidPassword(first))
+            {
+                console.WriteError(
+                    $"operator-user: password must contain {PasswordCredentialRules.MinimumPasswordLength} through {PasswordCredentialRules.MaximumPasswordLength} Unicode characters.");
+                return false;
+            }
+
+            string second = ReadMasked(console, "Confirm password: ");
+
+            if (!first.Equals(second, StringComparison.Ordinal))
+            {
+                console.WriteError("operator-user: password confirmation does not match.");
+                return false;
+            }
+
+            password = first;
+            return true;
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException)
         {
             console.WriteError("operator-user: password entry requires an interactive terminal.");
             return false;
         }
-
-        if (!PasswordCredentialRules.IsValidPassword(first))
-        {
-            console.WriteError(
-                $"operator-user: password must contain {PasswordCredentialRules.MinimumPasswordLength} through {PasswordCredentialRules.MaximumPasswordLength} Unicode characters.");
-            return false;
-        }
-
-        string second;
-        try
-        {
-            second = ReadMasked(console, "Confirm password: ");
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException)
-        {
-            console.WriteError("operator-user: password entry requires an interactive terminal.");
-            return false;
-        }
-
-        if (!first.Equals(second, StringComparison.Ordinal))
-        {
-            console.WriteError("operator-user: password confirmation does not match.");
-            return false;
-        }
-
-        password = first;
-        return true;
     }
 
     private static string ReadMasked(IOperatorUserConsole console, string prompt)
