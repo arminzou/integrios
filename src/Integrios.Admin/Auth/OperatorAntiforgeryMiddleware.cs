@@ -39,5 +39,12 @@ public sealed class OperatorAntiforgeryMiddleware(RequestDelegate next, IAntifor
 
     private static bool RequiresValidation(HttpContext context) =>
         !SafeMethods.Contains(context.Request.Method)
-        && context.User.Identity is { IsAuthenticated: true, AuthenticationType: CookieAuthenticationDefaults.AuthenticationScheme };
+        && (context.Request.Path.Equals(
+                OperatorSessionEndpoints.PasswordLoginPath,
+                StringComparison.OrdinalIgnoreCase)
+            || context.User.Identity is
+            {
+                IsAuthenticated: true,
+                AuthenticationType: CookieAuthenticationDefaults.AuthenticationScheme,
+            });
 }

@@ -59,7 +59,8 @@ public static class DashboardHosting
     /// browser a page that can never bootstrap.
     public static void MapDashboard(this WebApplication app)
     {
-        if (!IsDashboardAvailable(app.Environment) || !OperatorAuthentication.IsOidcConfigured(app.Configuration))
+        if (!IsDashboardAvailable(app.Environment)
+            || !OperatorAuthentication.IsHumanAuthenticationConfigured(app.Configuration))
             return;
 
         // The same options serve both paths so the shell is governed by one rule whether it is

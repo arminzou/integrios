@@ -82,6 +82,8 @@ services:
       Integrios__Admin__Oidc__Authority: ${INTEGRIOS_ADMIN_OIDC_AUTHORITY:-}
       Integrios__Admin__Oidc__ClientId: ${INTEGRIOS_ADMIN_OIDC_CLIENT_ID:-}
       Integrios__Admin__Oidc__ClientSecret: ${INTEGRIOS_ADMIN_OIDC_CLIENT_SECRET:-}
+      Integrios__Admin__Oidc__DisplayName: ${INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME:-OpenID Connect}
+      Integrios__Admin__Password__Enabled: ${INTEGRIOS_ADMIN_PASSWORD_ENABLED:-false}
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
       - "127.0.0.1:${INTEGRIOS_ADMIN_OPERATIONAL_PORT:-5151}:5299"

@@ -20,7 +20,7 @@ function run(command, args, options = {}) {
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} exited with ${result.status ?? "a signal"}`);
 }
 
-run("dotnet", ["build", adminProject, "-p:OpenApiGenerateDocumentsOnBuild=true"], {
+run("dotnet", ["build", adminProject, "--no-incremental", "-p:OpenApiGenerateDocumentsOnBuild=true"], {
   env: {
     ...process.env,
     // Placeholders that satisfy startup validation while the document is produced. They are not a
@@ -32,6 +32,7 @@ run("dotnet", ["build", adminProject, "-p:OpenApiGenerateDocumentsOnBuild=true"]
     // mirror of a contract the API already serves.
     Integrios__Admin__Oidc__Authority: "https://oidc.invalid",
     Integrios__Admin__Oidc__ClientId: "openapi-placeholder",
+    Integrios__Admin__Password__Enabled: "true",
   },
 });
 

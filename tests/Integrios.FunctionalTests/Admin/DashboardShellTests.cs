@@ -57,7 +57,7 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
     }
 
     [Fact]
-    public async Task BrowserRoutes_ServeTheBuiltShellOnlyWhenOidcIsConfigured()
+    public async Task BrowserRoutes_ServeTheBuiltShellWhenEitherHumanMethodIsConfigured()
     {
         string webRoot = Path.Combine(Path.GetTempPath(), "integrios-dashboard-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(webRoot);
@@ -70,6 +70,9 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             using HttpClient unavailable = withoutOidc.CreateClient();
             using HttpResponseMessage unavailableRoot = await unavailable.GetAsync("/");
             unavailableRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            using HttpResponseMessage unavailableOptions = await unavailable.GetAsync(
+                OperatorSessionEndpoints.OptionsPath);
+            unavailableOptions.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
             using WebApplicationFactory<Program> withOidc = fixture.WebFactory.WithWebHostBuilder(builder =>
             {
@@ -84,6 +87,20 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
                 response.StatusCode.ShouldBe(HttpStatusCode.OK);
                 response.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
             }
+
+
+            using WebApplicationFactory<Program> withPassword = fixture.WebFactory.WithWebHostBuilder(builder =>
+            {
+                builder.UseWebRoot(webRoot);
+                builder.UseSetting(OperatorPasswordOptions.EnabledKey, "true");
+            });
+            using HttpClient passwordAvailable = withPassword.CreateClient();
+            using HttpResponseMessage passwordRoot = await passwordAvailable.GetAsync("/");
+            passwordRoot.StatusCode.ShouldBe(HttpStatusCode.OK);
+            passwordRoot.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
+            using HttpResponseMessage passwordOptions = await passwordAvailable.GetAsync(
+                OperatorSessionEndpoints.OptionsPath);
+            passwordOptions.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
         finally
         {
