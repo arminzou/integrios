@@ -1,39 +1,41 @@
 @baseUrl = {{ADMIN_BASE_URL}}
-@operationalBaseUrl = {{ADMIN_OPERATIONAL_BASE_URL}}
+@ingestionBaseUrl = {{INGESTION_BASE_URL}}
+@mocksinkAdmin = {{MOCKSINK_ADMIN_BASE_URL}}
 @operatorKey = Authorization: OperatorKey global_operator_key:operator_bootstrap_secret
-@webhookIntId = {{applyHttpConnector.response.body.$.connector.id}}
 
 # Sink base URL:
-# - use http://mocksink:8080 when calling from one container to another (WireMock)
-# - use http://localhost:5054 when driving the stack from your host machine
+# - use http://mocksink:8080 when the Worker resolves a Destination's base_uri inside the Compose
+#   network; that is the value written into every Destination below
+# - MOCKSINK_ADMIN_BASE_URL is the host-side WireMock admin used to reset mappings and stub a
+#   failing Destination, e.g. http://localhost:5054
 @sinkBase = {{SINK_BASE}}
 
 ###
-# Manual flow
+# Single-tenant seed for exercising the Operator dashboard
 #
-# Read this file top to bottom. It is a control-plane walkthrough.
+# Run top to bottom against a running Compose stack. It creates one fully-configured Tenant with
+# Destinations, Topics, Sources, and Subscriptions in active, disabled, and paused states, then
+# drives Events through Ingestion so the dashboard shows delivered, unrouted, and dead-lettered work.
 #
-# Data flow refresher:
-# 1. Admin creates tenant-owned config: TenantApiKeys, destinations, topics, sources, subscriptions.
-# 2. Ingestion accepts events using the tenant API key, addressed by Source id.
-# 3. A Source binds one Connector to one Topic and owns its intake contract.
-# 4. Worker reads accepted events, matches subscriptions, applies any transform,
-#    and delivers to each Destination.
-# 5. WireMock is the local downstream system so you can inspect deliveries.
+# scripts/seed-dev-data.sh seeds this same Northwind Retail data plus smaller Tenants. Unlike the
+# shell script, this file cannot:
+# - wipe tenant-scoped tables first, so rerunning without a fresh database returns 409 on the Tenant
+#   slug (truncate as the script does, or start clean)
+# - write secrets/source/northwind-retail/dev_service_bus, which the queue Source below needs
+# - publish the warehouse receipt to the Service Bus emulator or wait for the failing Delivery to
+#   dead-letter
 
 ###
-# Step 0 - Confirm the control plane is up
-GET {{operationalBaseUrl}}/health
+# Step 1 - Reset WireMock so this run starts with no recorded deliveries or stubs
+DELETE {{mocksinkAdmin}}/__admin/requests
 
 ###
-# Step 0a - Auth probe
-# Expect 401 because Admin endpoints require the bootstrap operator key.
-GET {{baseUrl}}/admin/tenants
+POST {{mocksinkAdmin}}/__admin/mappings/reset
 
 ###
-# Step 1 - Apply the generic HTTP Connector example
-# Bootstrap creates only the deployment-wide OperatorKey. Connector identity is generated when
-# the Operator applies a manifest through Admin.
+# Step 2 - Apply the generic HTTP Connector
+# Bootstrap creates only the deployment-wide OperatorKey. The Connector identity is generated when
+# the Operator applies its manifest through Admin.
 # @name applyHttpConnector
 PUT {{baseUrl}}/admin/connectors/http/versions/1
 {{operatorKey}}
@@ -42,153 +44,234 @@ Content-Type: application/json
 < ../../examples/connectors/http.json
 
 ###
-# Step 1a - Inspect the applied HTTP Connector
-GET {{baseUrl}}/admin/connectors/{{webhookIntId}}
-{{operatorKey}}
+@connectorId = {{applyHttpConnector.response.body.$.connector.id}}
 
 ###
-# Step 2 - Create a tenant
-# The tenant is the top-level isolation boundary for all config below.
-# @name createTenant
+# Step 3 - Create the Tenant
+# @name createNorthwind
 POST {{baseUrl}}/admin/tenants
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "slug": "acme-corp",
-  "name": "Acme Corp",
+  "slug": "northwind-retail",
+  "name": "Northwind Retail",
   "environment": "production",
-  "description": "Customer tenant created through the control plane"
+  "description": "Retail commerce platform. Orders, payments, and stock levels flow out to the ERP, the warehouse, and the analytics lake."
 }
 
 ###
-@tenantId = dfc60b3b-7234-48d1-a119-96acb4179e02
-
-# If createTenant returned 409, list tenants, find the existing row, and set
-# @tenantId above before continuing.
-# @name findTenant
-GET {{baseUrl}}/admin/tenants
-{{operatorKey}}
+@northwindId = {{createNorthwind.response.body.$.id}}
 
 ###
-# Step 2a - Fetch the tenant you will use for the rest of the walkthrough
-GET {{baseUrl}}/admin/tenants/{{tenantId}}
-{{operatorKey}}
-
-###
-# Step 3 - Create a data-plane API key
-# Ingestion uses this key to authenticate event writes for this tenant.
-# @name createTenantApiKey
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys
+# Step 4 - Create the active data-plane API key
+# @name createNorthwindStorefront
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/tenant-api-keys
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "acme-ingestion",
-  "description": "Ingestion automation key"
+  "name": "northwind-storefront",
+  "description": "Storefront checkout service. Rotated quarterly."
 }
 
 ###
-@tenantApiKeyId = {{createTenantApiKey.response.body.$.tenant_api_key.id}}
-
-# After this request, copy the returned token into:
-# src/Integrios.Ingestion/.env
-#
-# INGESTION_TENANT_API_KEY=<token>
+@northwindToken = {{createNorthwindStorefront.response.body.$.token}}
 
 ###
-# Step 3a - List tenant API keys
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys
-{{operatorKey}}
-
-###
-# Step 3b - Fetch the created API key metadata
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys/{{tenantApiKeyId}}
-{{operatorKey}}
-
-###
-# Step 4 - Create the Destination
-# A Destination represents a system the worker may deliver to. The http Connector's
-# destination_configuration_schema requires base_uri and allows no other property.
-# @name createDestination
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
+# Step 4a - Create a retired key so the dashboard has a revoked credential to show
+# @name createNorthwindLegacy
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/tenant-api-keys
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "connector_id": "{{webhookIntId}}",
-  "name": "acme-erp",
+  "name": "northwind-legacy-pos",
+  "description": "Retired point-of-sale integration."
+}
+
+###
+@northwindLegacyKeyId = {{createNorthwindLegacy.response.body.$.tenant_api_key.id}}
+
+###
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/tenant-api-keys/{{northwindLegacyKeyId}}/revoke
+{{operatorKey}}
+
+###
+# Step 5 - Create the Destinations
+# @name createNwDestinationErp
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "name": "northwind-erp",
   "configuration": {
-    "base_uri": "{{sinkBase}}/sink/acme-erp"
+    "base_uri": "{{sinkBase}}/sink/northwind-erp"
   },
   "environment": "production",
-  "description": "ERP destination"
+  "description": "Order and payment records into the ERP."
 }
 
 ###
-@destinationId = {{createDestination.response.body.$.id}}
-
-###
-# Step 4a - List Destinations
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
-{{operatorKey}}
-
-###
-# Step 4b - Update the Destination
-# An update replaces the whole Destination, so every field travels even when one changes. Omitting
-# one is a malformed body, not an instruction to keep what is stored; send null to clear a value.
-# "authentication" carries the secret reference names a read gives back, never secret values.
-PUT {{baseUrl}}/admin/tenants/{{tenantId}}/destinations/{{destinationId}}
+# @name createNwDestinationWms
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "acme-erp",
+  "connector_id": "{{connectorId}}",
+  "name": "northwind-wms",
   "configuration": {
-    "base_uri": "{{sinkBase}}/sink/acme-erp"
+    "base_uri": "{{sinkBase}}/sink/northwind-wms"
   },
-  "authentication": null,
   "environment": "production",
-  "description": "ERP destination (updated)"
+  "description": "Warehouse management system, fulfilment side only."
 }
 
 ###
-# Step 5 - Create a topic
-# A Topic key is its immutable tenant-scoped stream identifier. Its name is a mutable label.
-# @name createTopic
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
+# @name createNwDestinationLake
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "name": "analytics-lake",
+  "configuration": {
+    "base_uri": "{{sinkBase}}/sink/northwind-lake"
+  },
+  "environment": "production",
+  "description": "Flattened order feed for the analytics lake."
+}
+
+###
+# This is the one made to fail so a Delivery dead-letters.
+# @name createNwDestinationBilling
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "name": "legacy-billing",
+  "configuration": {
+    "base_uri": "{{sinkBase}}/sink/northwind-billing"
+  },
+  "environment": "production",
+  "description": "Decommissioned billing host. Kept until finance signs off on the cutover."
+}
+
+###
+# @name createNwDestinationSandbox
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "name": "erp-sandbox",
+  "configuration": {
+    "base_uri": "{{sinkBase}}/sink/northwind-sandbox"
+  },
+  "environment": "staging",
+  "description": "Vendor sandbox used during the last ERP upgrade."
+}
+
+###
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations/{{createNwDestinationSandbox.response.body.$.id}}/deactivate
+{{operatorKey}}
+
+###
+# Step 6 - Create the Topics
+# @name createNwTopicOrders
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "key": "orders",
+  "name": "orders",
+  "description": "Order lifecycle from the storefront."
+}
+
+###
+# @name createNwTopicPayments
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
 {{operatorKey}}
 Content-Type: application/json
 
 {
   "key": "payments",
-  "name": "Payments",
-  "description": "Payment events stream"
+  "name": "payments",
+  "description": "Payment authorisation and capture."
 }
 
 ###
-@topicId = {{createTopic.response.body.$.id}}
-
-###
-# Step 5a - Fetch the topic
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}
-{{operatorKey}}
-
-###
-# Step 5b - Create an Event API Source bound directly to the Connector and Topic.
-# Event API uses the fixed Integrios Event JSON request; it has no Source verification,
-# input-contract, mapping, or event-identity configuration.
-# @name createSource
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources
+# @name createNwTopicInventory
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "connector_id": "{{webhookIntId}}",
-  "topic_id": "{{topicId}}",
-  "name": "Payments Event API",
+  "key": "inventory",
+  "name": "inventory",
+  "description": "Stock level movements per warehouse."
+}
+
+###
+# @name createNwTopicStorefrontWebhooks
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "key": "storefront-webhooks",
+  "name": "storefront-webhooks",
+  "description": "Provider callbacks received from the storefront platform."
+}
+
+###
+# @name createNwTopicWarehouseReceipts
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "key": "warehouse-receipts",
+  "name": "warehouse-receipts",
+  "description": "Warehouse receipts consumed from the operations queue."
+}
+
+###
+# @name createNwTopicPosTerminals
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "key": "pos-terminals",
+  "name": "pos-terminals",
+  "description": "Retired in-store terminal stream."
+}
+
+###
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicPosTerminals.response.body.$.id}}/deactivate
+{{operatorKey}}
+
+###
+# Step 7 - Create the Sources
+# @name createNwSourceOrders
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "topic_id": "{{createNwTopicOrders.response.body.$.id}}",
   "type": "event_api",
-  "configuration": {},
+  "configuration": { "source_contract": "event_json" },
   "verification": null,
   "input_requirements": null,
   "mapping": null,
@@ -196,165 +279,356 @@ Content-Type: application/json
 }
 
 ###
-@sourceId = {{createSource.response.body.$.id}}
-
-# Copy the returned id into:
-# src/Integrios.Ingestion/.env
-#
-# INGESTION_SOURCE_ID=<id>
-
-###
-# Step 5c - Fetch the source
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/sources/{{sourceId}}
-{{operatorKey}}
-
-###
-# Step 6 - Create the main subscription
-# A subscription is an independent consumer of the topic.
-# The worker will create one delivery path per matching subscription.
-# @name createSubscription
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
+# @name createNwSourcePayments
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "acme-erp-subscription",
-  "match_rules": {
-    "event_type": "payment.created"
-  },
-  "destination_id": "{{destinationId}}",
+  "connector_id": "{{connectorId}}",
+  "topic_id": "{{createNwTopicPayments.response.body.$.id}}",
+  "type": "event_api",
+  "configuration": { "source_contract": "event_json" },
+  "verification": null,
+  "input_requirements": null,
   "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 10,
-  "description": "ERP sink for created payments"
+  "event_identity_rule": null
 }
 
 ###
-@subscriptionId = {{createSubscription.response.body.$.id}}
-
-###
-# Step 6a - List subscriptions
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
-{{operatorKey}}
-
-###
-# Step 6b - Fetch the created subscription
-GET {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
-{{operatorKey}}
-
-###
-# Step 7 - Preview a transform before saving it
-# Binding reminder:
-# - the event payload is the JSONata root, so reference `amount`
-# - platform metadata lives under `$context`
-POST {{baseUrl}}/admin/transform/preview
+# @name createNwSourceInventory
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "transform": {
+  "connector_id": "{{connectorId}}",
+  "topic_id": "{{createNwTopicInventory.response.body.$.id}}",
+  "type": "event_api",
+  "configuration": { "source_contract": "event_json" },
+  "verification": null,
+  "input_requirements": null,
+  "mapping": null,
+  "event_identity_rule": null
+}
+
+###
+# Admin generates the callback_id in the response for a webhook Source.
+# @name createNwSourceWebhook
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "topic_id": "{{createNwTopicStorefrontWebhooks.response.body.$.id}}",
+  "type": "webhook",
+  "configuration": { "source_contract": "event_json" },
+  "verification": null,
+  "input_requirements": null,
+  "mapping": null,
+  "event_identity_rule": null
+}
+
+###
+# Creating the queue Source only needs the secret_ref name. The secret file that makes the Worker
+# consume the queue is written by scripts/seed-dev-data.sh, not by this file.
+# @name createNwSourceQueue
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "topic_id": "{{createNwTopicWarehouseReceipts.response.body.$.id}}",
+  "type": "queue",
+  "configuration": {
+    "source_contract": "event_json",
+    "transport": "azure_service_bus",
+    "authentication": {
+      "scheme": "connection_string",
+      "secret_ref": "dev_service_bus"
+    },
+    "transport_config": {
+      "namespace": "servicebus-emulator",
+      "queue_name": "ui-demo"
+    }
+  },
+  "verification": null,
+  "input_requirements": null,
+  "mapping": null,
+  "event_identity_rule": null
+}
+
+###
+# Step 8 - Create the Subscriptions
+# @name createNwSubscriptionErpOrders
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicOrders.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "erp-orders",
+  "match_rules": { "event_type": "order.placed" },
+  "destination_id": "{{createNwDestinationErp.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 0,
+  "description": "Every placed order into the ERP."
+}
+
+###
+# @name createNwSubscriptionWmsFulfilment
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicOrders.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "wms-fulfilment",
+  "match_rules": { "event_type": "order.shipped" },
+  "destination_id": "{{createNwDestinationWms.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 1,
+  "description": "Shipment confirmations back to the warehouse."
+}
+
+###
+# A JSONata transform the dashboard can show on the Subscription.
+# @name createNwSubscriptionLakeOrders
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicOrders.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "lake-orders",
+  "match_rules": { "event_type": "order.placed" },
+  "destination_id": "{{createNwDestinationLake.response.body.$.id}}",
+  "mapping": {
     "engine": "jsonata",
     "version": "1",
-    "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
+    "expression": "{ \"order\": orderId, \"total\": total, \"placed_at\": placedAt }"
   },
-  "sampleInput": {
-    "amount": 1200,
-    "paymentId": "pay_001"
-  },
-  "sampleContext": {
-    "event_type": "payment.created",
-    "topic_name": "payments"
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 2,
+  "description": "Flattened order feed for the analytics lake."
+}
+
+###
+# @name createNwSubscriptionErpPayments
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicPayments.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "erp-payments",
+  "match_rules": { "event_type": "payment.captured" },
+  "destination_id": "{{createNwDestinationErp.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 0,
+  "description": "Captured payments into the ERP ledger."
+}
+
+###
+# @name createNwSubscriptionLegacyBilling
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicPayments.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "legacy-billing-feed",
+  "match_rules": { "event_type": "payment.captured" },
+  "destination_id": "{{createNwDestinationBilling.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 1,
+  "description": "Mirror of captured payments into the decommissioned billing host."
+}
+
+###
+# @name createNwSubscriptionWmsStock
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicInventory.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "wms-stock",
+  "match_rules": { "event_type": "stock.adjusted" },
+  "destination_id": "{{createNwDestinationWms.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 0,
+  "description": "Stock adjustments back to the warehouse."
+}
+
+###
+# @name createNwSubscriptionLakeStock
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicInventory.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "lake-stock",
+  "match_rules": { "event_type": "stock.adjusted" },
+  "destination_id": "{{createNwDestinationLake.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 1,
+  "description": "Paused while the lake schema migration runs."
+}
+
+###
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicInventory.response.body.$.id}}/subscriptions/{{createNwSubscriptionLakeStock.response.body.$.id}}/deactivate
+{{operatorKey}}
+
+###
+# @name createNwSubscriptionWebhookAudit
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicStorefrontWebhooks.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "webhook-audit",
+  "match_rules": { "event_type": "storefront.webhook.received" },
+  "destination_id": "{{createNwDestinationLake.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 0,
+  "description": "Storefront callbacks retained in the analytics lake."
+}
+
+###
+# @name createNwSubscriptionWarehouseReceipts
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicWarehouseReceipts.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "warehouse-receipts",
+  "match_rules": { "event_type": "warehouse.receipt.recorded" },
+  "destination_id": "{{createNwDestinationWms.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 0,
+  "description": "Warehouse receipts delivered to the warehouse system."
+}
+
+###
+# Step 9 - Stub the failing Destination so a Delivery dead-letters
+POST {{mocksinkAdmin}}/__admin/mappings
+Content-Type: application/json
+
+{
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/sink/northwind-billing" },
+  "response": { "status": 503, "jsonBody": { "error": "upstream unavailable" } }
+}
+
+###
+# Step 10 - Drive real traffic through Ingestion
+# The warehouse receipt goes over the Service Bus emulator and has no HTTP send here; publish it as
+# scripts/seed-dev-data.sh does. No Subscription matches order.cancelled, so it lands unrouted.
+POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
+Authorization: TenantApiKey {{northwindToken}}
+Content-Type: application/json
+
+{
+  "event_type": "order.placed",
+  "source_event_id": "nw-order-1",
+  "payload": {
+    "orderId": "SO-401",
+    "customer": "Contoso Ltd",
+    "lines": 1,
+    "total": 119.5,
+    "currency": "GBP",
+    "placedAt": "2026-09-05T09:12:00Z"
   }
 }
 
 ###
-# Step 7a - Save the transform on the subscription
-# Replaces the whole Subscription; every field below is required.
-PUT {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}
-{{operatorKey}}
+POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
+Authorization: TenantApiKey {{northwindToken}}
 Content-Type: application/json
 
 {
-  "name": "acme-erp-subscription",
-  "match_rules": {
-    "event_type": "payment.created"
-  },
-  "destination_id": "{{destinationId}}",
-  "mapping": {
-    "engine": "jsonata",
-    "version": "1",
-    "expression": "{ \"type\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }"
-  },
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 10,
-  "description": "ERP sink for created payments (with transform)"
+  "event_type": "order.shipped",
+  "source_event_id": "nw-ship-1",
+  "payload": {
+    "orderId": "SO-401",
+    "carrier": "Atlas Logistics",
+    "tracking": "ATL9911772",
+    "warehouse": "LEE-01"
+  }
 }
 
 ###
-# Step 7b - Optional: create a second raw subscription
-# This lets you compare transformed and raw deliveries for the same event.
-# @name createRawSubscription
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions
-{{operatorKey}}
+POST {{ingestionBaseUrl}}/events?source_id={{createNwSourcePayments.response.body.$.id}}
+Authorization: TenantApiKey {{northwindToken}}
 Content-Type: application/json
 
 {
-  "name": "acme-erp-raw",
-  "match_rules": {
-    "event_type": "payment.created"
-  },
-  "destination_id": "{{destinationId}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 20,
-  "description": "Raw passthrough subscription (no transform)"
+  "event_type": "payment.captured",
+  "source_event_id": "nw-pay-1",
+  "payload": {
+    "paymentId": "pay_8f21",
+    "amount": 119.5,
+    "currency": "GBP",
+    "method": "card",
+    "processor": "stripe"
+  }
 }
 
 ###
-# Step 7c - Optional: deactivate the raw subscription
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{createRawSubscription.response.body.$.id}}/deactivate
-{{operatorKey}}
+POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceInventory.response.body.$.id}}
+Authorization: TenantApiKey {{northwindToken}}
+Content-Type: application/json
+
+{
+  "event_type": "stock.adjusted",
+  "source_event_id": "nw-stock-1",
+  "payload": {
+    "sku": "SKU-771",
+    "warehouse": "LEE-01",
+    "delta": -1,
+    "reason": "pick"
+  }
+}
 
 ###
-# Step 8 - Cleanup
-# Walk backward through the control-plane objects so the next manual run starts
-# from a known state. Skip requests for resources you did not create.
+POST {{ingestionBaseUrl}}/webhooks/{{createNwSourceWebhook.response.body.$.configuration.callback_id}}
+Content-Type: application/json
+
+{
+  "event_type": "storefront.webhook.received",
+  "source_event_id": "nw-webhook-1",
+  "payload": {
+    "deliveryId": "hook-1",
+    "provider": "storefront",
+    "result": "accepted"
+  }
+}
 
 ###
-# Step 8a - Optional: deactivate the raw subscription if it is still active
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{createRawSubscription.response.body.$.id}}/deactivate
-{{operatorKey}}
+# No Subscription matches this: it lands as unrouted, the signal for a missing Subscription.
+POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
+Authorization: TenantApiKey {{northwindToken}}
+Content-Type: application/json
 
-###
-# Step 8b - Deactivate the main subscription
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/subscriptions/{{subscriptionId}}/deactivate
-{{operatorKey}}
-
-###
-# Step 8c - Revoke the source
-DELETE {{baseUrl}}/admin/tenants/{{tenantId}}/sources/{{sourceId}}
-{{operatorKey}}
-
-###
-# Step 8d - Deactivate the topic
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{topicId}}/deactivate
-{{operatorKey}}
-
-###
-# Step 8e - Deactivate the Destination
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/destinations/{{destinationId}}/deactivate
-{{operatorKey}}
-
-###
-# Step 8f - Revoke the data-plane API key
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys/{{tenantApiKeyId}}/revoke
-{{operatorKey}}
-
-###
-# Step 8g - Optional: deactivate the tenant if you want the entire runbook state
-# retired instead of reused on the next pass.
-POST {{baseUrl}}/admin/tenants/{{tenantId}}/deactivate
-{{operatorKey}}
+{
+  "event_type": "order.cancelled",
+  "source_event_id": "nw-cancel-1",
+  "payload": {
+    "orderId": "SO-411",
+    "reason": "customer_request"
+  }
+}
