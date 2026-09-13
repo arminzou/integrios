@@ -8,10 +8,11 @@ public sealed class ApplicationArchitectureTests
 {
     // Groups, not capabilities: a new capability inside an approved group no longer needs listing
     // here, because PortOwners in HostCompositionArchitectureTests forces explicit host-ownership
-    // review for every public port regardless of where it lives. See ADR-0038 (2026-08-24).
+    // review for every public port regardless of where it lives.
     private static readonly string[] ApprovedPortGroups =
     [
         "Integrios.Application.Authoring",
+        "Integrios.Application.Identity",
         "Integrios.Application.Ingestion",
         "Integrios.Application.Delivery",
         "Integrios.Application.Secrets",

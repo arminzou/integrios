@@ -19,6 +19,9 @@ internal sealed class OutboxEntryConfiguration : IEntityTypeConfiguration<Outbox
             .HasFilter("(processed_at IS NULL)")
             .HasNullSortOrder(new[] { NullSortOrder.NullsFirst, NullSortOrder.NullsLast });
 
+        // Event history and Event detail both read the accepted Event's traceparent by event_id.
+        entity.HasIndex(e => e.EventId, "idx_outbox_event_id");
+
         entity.Property(e => e.Id)
             .HasDefaultValueSql("gen_random_uuid()")
             .HasColumnName("id");

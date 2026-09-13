@@ -19,7 +19,15 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
             .IsUnique()
             .HasFilter("(idempotency_key IS NOT NULL)");
 
-        entity.HasIndex(e => e.TenantId, "idx_events_tenant_id");
+        // An already-accepted duplicate resolves by stable Source identity before the current
+        // normalization revision is applied, and that lookup runs on the acceptance boundary of
+        // every transport. Filtered, because only Events carrying an identity are ever looked up.
+        entity.HasIndex(e => new { e.SourceId, e.SourceEventId }, "idx_events_source_event_id")
+            .HasFilter("(source_event_id IS NOT NULL)");
+
+        // Newest-first Tenant Event history keyset: (accepted_at, id) is the cursor tuple.
+        entity.HasIndex(e => new { e.TenantId, e.AcceptedAt, e.Id }, "idx_events_tenant_accepted")
+            .IsDescending(false, true, true);
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()

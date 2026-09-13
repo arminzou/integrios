@@ -1,14 +1,16 @@
+using Integrios.Application.Common.Exceptions;
 using Integrios.Application.Authoring.TenantApiKeys;
-using Integrios.Application.Common.Pagination;
+using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.Infrastructure.TenantApiKeys;
 
-internal sealed class TenantApiKeyRepository(IntegriosDbContext context) : ITenantApiKeyRepository
+internal sealed class TenantApiKeyRepository(IntegriosDbContext context, IDataProtectionProvider dataProtectionProvider) : ITenantApiKeyRepository
 {
     public async Task<TenantApiKey> CreateAsync(TenantApiKey tenantApiKey, CancellationToken cancellationToken)
     {
@@ -24,26 +26,37 @@ internal sealed class TenantApiKeyRepository(IntegriosDbContext context) : ITena
 
     public async Task<(IReadOnlyList<TenantApiKey> Items, string? NextCursor)> ListByTenantAsync(
         Guid tenantId,
+        TenantApiKeyListState? state,
+        DateTimeOffset now,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
-        bool hasCursor = afterCursor is not null
-            && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
+        string cursorScope = $"tenant-api-keys:{tenantId:N}:{state?.ToString() ?? "all"}";
+        bool hasCursor = afterCursor is not null;
+        if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
+            throw new InvalidCursorException();
 
         IQueryable<TenantApiKey> query = context.TenantApiKeys.AsNoTracking().Where(tenantApiKey => tenantApiKey.TenantId == tenantId);
+        query = state switch
+        {
+            TenantApiKeyListState.Active => query.Where(tenantApiKey => tenantApiKey.Status == OperationalStatus.Active && (tenantApiKey.ExpiresAt == null || tenantApiKey.ExpiresAt > now)),
+            TenantApiKeyListState.Expired => query.Where(tenantApiKey => tenantApiKey.Status == OperationalStatus.Active && tenantApiKey.ExpiresAt != null && tenantApiKey.ExpiresAt <= now),
+            TenantApiKeyListState.Revoked => query.Where(tenantApiKey => tenantApiKey.RevokedAt != null),
+            _ => query,
+        };
         if (hasCursor)
         {
             query = query.Where(tenantApiKey =>
-                tenantApiKey.CreatedAt > cursorCreatedAt
-                || (tenantApiKey.CreatedAt == cursorCreatedAt && tenantApiKey.Id.CompareTo(cursorId) > 0));
+                tenantApiKey.CreatedAt < cursorCreatedAt
+                || (tenantApiKey.CreatedAt == cursorCreatedAt && tenantApiKey.Id.CompareTo(cursorId) < 0));
         }
 
         List<TenantApiKey> items = await query
-            .OrderBy(tenantApiKey => tenantApiKey.CreatedAt)
-            .ThenBy(tenantApiKey => tenantApiKey.Id)
+            .OrderByDescending(tenantApiKey => tenantApiKey.CreatedAt)
+            .ThenByDescending(tenantApiKey => tenantApiKey.Id)
             .Take(limit + 1)
             .ToListAsync(cancellationToken);
 
@@ -51,7 +64,7 @@ internal sealed class TenantApiKeyRepository(IntegriosDbContext context) : ITena
         if (items.Count > limit)
         {
             items.RemoveAt(items.Count - 1);
-            nextCursor = PageCursor.Encode(items[^1].CreatedAt, items[^1].Id);
+            nextCursor = PageCursor.Encode(dataProtectionProvider, cursorScope, items[^1].CreatedAt, items[^1].Id, DateTimeOffset.UtcNow);
         }
 
         return (items, nextCursor);

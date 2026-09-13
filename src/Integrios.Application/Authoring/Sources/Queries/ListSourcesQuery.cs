@@ -1,14 +1,12 @@
 using MediatR;
+using Integrios.Domain.Enums;
 
 namespace Integrios.Application.Authoring.Sources;
 
-public sealed record ListSourcesQuery(Guid TenantId, string? AfterCursor, int Limit) : IRequest<SourceListDto>;
+public sealed record ListSourcesQuery(Guid TenantId, SourceStatus? Status, SourceType? Type, Guid? TopicId, string? AfterCursor, int Limit) : IRequest<SourceListDto>;
 
-internal sealed class ListSourcesQueryHandler(ISourceRepository sourceRepository) : IRequestHandler<ListSourcesQuery, SourceListDto>
+internal sealed class ListSourcesQueryHandler(ISourceQueries queries) : IRequestHandler<ListSourcesQuery, SourceListDto>
 {
-    public async Task<SourceListDto> Handle(ListSourcesQuery query, CancellationToken cancellationToken)
-    {
-        var (items, nextCursor) = await sourceRepository.ListByTenantAsync(query.TenantId, query.AfterCursor, query.Limit, cancellationToken);
-        return new SourceListDto(items.Select(SourceDto.From).ToList(), nextCursor);
-    }
+    public Task<SourceListDto> Handle(ListSourcesQuery query, CancellationToken cancellationToken) =>
+        queries.ListAsync(query.TenantId, query.Status, query.Type, query.TopicId, query.AfterCursor, query.Limit, cancellationToken);
 }

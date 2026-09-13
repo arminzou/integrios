@@ -2,6 +2,7 @@ using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Tests.Shared;
 
@@ -11,7 +12,7 @@ public static class DeliveryTestDoubles
         Guid? id = null,
         Guid? eventId = null,
         Guid? subscriptionId = null,
-        Guid? destinationConnectionId = null,
+        Guid? destinationId = null,
         Guid? tenantId = null,
         Guid? attemptId = null,
         int attemptNumber = 1,
@@ -26,7 +27,7 @@ public static class DeliveryTestDoubles
             attemptNumber,
             eventId ?? Guid.NewGuid(),
             subscriptionId ?? Guid.NewGuid(),
-            destinationConnectionId ?? Guid.NewGuid(),
+            destinationId ?? Guid.NewGuid(),
             tenantId ?? Guid.NewGuid(),
             "test-tenant",
             payload,

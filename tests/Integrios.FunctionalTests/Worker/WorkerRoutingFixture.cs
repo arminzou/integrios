@@ -38,12 +38,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private Guid HttpConnectorId;
     private static readonly Guid TenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000001");
     private static readonly Guid OrphanTenantId = Guid.Parse("cccccccc-0000-0000-0000-000000000009");
-    private static readonly Guid SourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
-    private static readonly Guid OrphanSourceConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000008");
+    private static readonly Guid SourceConnectorId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
+    private static readonly Guid OrphanSourceConnectorId = Guid.Parse("cccccccc-0000-0000-0000-000000000008");
     private static readonly Guid SourceId = Guid.Parse("cccccccc-0000-0000-0000-00000000000a");
     private static readonly Guid OrphanSourceId = Guid.Parse("cccccccc-0000-0000-0000-00000000000b");
-    private static readonly Guid LedgerConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000003");
-    private static readonly Guid RiskConnectionId = Guid.Parse("cccccccc-0000-0000-0000-000000000004");
+    private static readonly Guid LedgerDestinationId = Guid.Parse("cccccccc-0000-0000-0000-000000000003");
+    private static readonly Guid RiskDestinationId = Guid.Parse("cccccccc-0000-0000-0000-000000000004");
     private static readonly Guid TopicId = Guid.Parse("cccccccc-0000-0000-0000-000000000005");
     private static readonly Guid OrphanTopicId = Guid.Parse("cccccccc-0000-0000-0000-00000000000c");
 
@@ -156,10 +156,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         (await QueryAsync<AttemptRow>(
             """
             SELECT id AS Id, event_delivery_id AS EventDeliveryId, attempt_number AS AttemptNumber,
-                status AS Status, failure_phase AS FailurePhase, completed_at AS CompletedAt
+                status AS Status, failure_phase AS FailurePhase, completed_at AS CompletedAt,
+                response_body AS ResponseBody, response_body_truncated AS ResponseBodyTruncated
             FROM delivery_attempts WHERE event_delivery_id=@DeliveryId ORDER BY attempt_number
             """, new { DeliveryId = deliveryId })).Select(row => new DeliveryAttemptState(
-                row.Id, row.EventDeliveryId, row.AttemptNumber, row.Status, row.FailurePhase, Offset(row.CompletedAt))).ToList();
+                row.Id, row.EventDeliveryId, row.AttemptNumber, row.Status, row.FailurePhase, Offset(row.CompletedAt),
+                row.ResponseBody, row.ResponseBodyTruncated)).ToList();
 
     public async Task<EventDeliveryState> GetEventDeliveryAsync(Guid deliveryId)
     {
@@ -248,21 +250,21 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 TestConnectorManifest.Create(
                     connectorKey, connectorKey, "both", httpSuccessJson: httpSuccessJson));
         await ExecuteAsync($$$"""
-            UPDATE connections SET config={{{database.Json("@Config")}}},
-                destination_authentication={{{database.Json("@DestinationAuth")}}}, connector_id=@ConnectorId
-            WHERE id=@LedgerConnectionId
+            UPDATE destinations SET configuration={{{database.Json("@Config")}}},
+                authentication={{{database.Json("@DestinationAuth")}}}, connector_id=@ConnectorId
+            WHERE id=@LedgerDestinationId
             """, new
             {
                 Config = JsonSerializer.Serialize(new { base_uri = destinationUrl }),
                 DestinationAuth = destinationAuthJson,
                 ConnectorId = connectorId.Value,
-                LedgerConnectionId
+                LedgerDestinationId
             });
     }
 
-    public Task ClearLedgerConnectionUrlAsync() => ExecuteAsync(
-        $"UPDATE connections SET config={database.Json("@Config")} WHERE id=@LedgerConnectionId",
-        new { Config = "{}", LedgerConnectionId });
+    public Task ClearLedgerDestinationUrlAsync() => ExecuteAsync(
+        $"UPDATE destinations SET configuration={database.Json("@Config")} WHERE id=@LedgerDestinationId",
+        new { Config = "{}", LedgerDestinationId });
 
     public async Task<EventDeliverySnapshot> GetEventDeliverySnapshotAsync(Guid eventId)
     {
@@ -285,9 +287,24 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             ?? throw new InvalidOperationException("The ledger Subscription could not be loaded.");
         Subscription? updated = await subscriptionRepository.UpdateAsync(
             TenantId, identity.TopicId, identity.Id, existing.Name, existing.MatchRules,
-            existing.DestinationConnectionId, existing.MappingConfig, httpDelivery,
+            existing.DestinationId, existing.MappingConfig, httpDelivery, existing.HttpSuccess,
             existing.OrderIndex, existing.Description, CancellationToken.None);
         return SubscriptionDto.From(updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated."));
+    }
+
+    public async Task UpdateLedgerHttpSuccessAsync(HttpSuccessRule? httpSuccess)
+    {
+        SubscriptionIdentity identity = (await QueryAsync<SubscriptionIdentity>(
+            "SELECT id AS Id, topic_id AS TopicId FROM subscriptions WHERE name='to-ledger'"))
+            .SingleOrDefault() ?? throw new InvalidOperationException("The ledger Subscription does not exist.");
+        Subscription existing = await subscriptionRepository.GetByIdAsync(
+            TenantId, identity.TopicId, identity.Id, CancellationToken.None)
+            ?? throw new InvalidOperationException("The ledger Subscription could not be loaded.");
+        Subscription? updated = await subscriptionRepository.UpdateAsync(
+            TenantId, identity.TopicId, identity.Id, existing.Name, existing.MatchRules,
+            existing.DestinationId, existing.MappingConfig, existing.HttpDelivery, httpSuccess,
+            existing.OrderIndex, existing.Description, CancellationToken.None);
+        _ = updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated.");
     }
 
     public Task<DeadLetterReplayResult> ReplayAsync(
@@ -320,27 +337,26 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@OrphanTenantId,'test-orphan-tenant','Test Orphan Tenant','active',{{{database.Now}}},{{{database.Now}}});
             INSERT INTO tenant_api_keys (id,tenant_id,name,key_prefix,key_hash,status,created_at)
             VALUES (@TenantApiKeyId,@TenantId,'test-key',@KeyPrefix,@KeyHash,'active',{{{database.Now}}});
-            INSERT INTO connections (id,tenant_id,connector_id,name,config,status) VALUES
-                (@SourceConnectionId,@TenantId,@ConnectorId,'source',{{{database.Json("@EmptyConfig")}}},'active'),
-                (@OrphanSourceConnectionId,@OrphanTenantId,@ConnectorId,'orphan-source',{{{database.Json("@EmptyConfig")}}},'active'),
-                (@LedgerConnectionId,@TenantId,@ConnectorId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'active'),
-                (@RiskConnectionId,@TenantId,@ConnectorId,'risk-sink',{{{database.Json("@RiskConfig")}}},'active');
-            INSERT INTO topics (id,tenant_id,name,status) VALUES
-                (@TopicId,@TenantId,'test-topic','active'),
-                (@OrphanTopicId,@OrphanTenantId,'orphan-topic','active');
-            INSERT INTO sources (id,tenant_id,connection_id,topic_id,type,configuration,status) VALUES
-                (@SourceId,@TenantId,@SourceConnectionId,@TopicId,'event_api',{{{database.Json("@EmptyConfig")}}},'active'),
-                (@OrphanSourceId,@OrphanTenantId,@OrphanSourceConnectionId,@OrphanTopicId,'event_api',{{{database.Json("@EmptyConfig")}}},'active');
-            INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status) VALUES
-                (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerConnectionId,0,'active'),
-                (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskConnectionId,1,'active');
+            INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status) VALUES
+                (@LedgerDestinationId,@TenantId,@ConnectorId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'active'),
+                (@RiskDestinationId,@TenantId,@ConnectorId,'risk-sink',{{{database.Json("@RiskConfig")}}},'active');
+            INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name,status) VALUES
+                (@TopicId,@TenantId,'test-topic','test-topic','active'),
+                (@OrphanTopicId,@OrphanTenantId,'orphan-topic','orphan-topic','active');
+            INSERT INTO sources (id,tenant_id,connector_id,topic_id,name,type,configuration,revision,status) VALUES
+                (@SourceId,@TenantId,@ConnectorId,@TopicId,'routing-intake','event_api',{{{database.Json("@EmptyConfig")}}},@SourceRevision,'active'),
+                (@OrphanSourceId,@OrphanTenantId,@ConnectorId,@OrphanTopicId,'orphan-intake','event_api',{{{database.Json("@EmptyConfig")}}},@OrphanSourceRevision,'active');
+            INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_id,order_index,status) VALUES
+                (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerDestinationId,0,'active'),
+                (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskDestinationId,1,'active');
             """, new
         {
             ConnectorId = HttpConnectorId,
             TenantId, OrphanTenantId, TenantApiKeyId = Guid.NewGuid(), KeyPrefix = TenantToken[..12], KeyHash = hash,
-            SourceConnectionId, OrphanSourceConnectionId, SourceId, OrphanSourceId, LedgerConnectionId, RiskConnectionId,
+            SourceId, OrphanSourceId, LedgerDestinationId, RiskDestinationId,
             EmptyConfig = "{}", LedgerConfig = JsonSerializer.Serialize(new { base_uri = LedgerSinkUrl }),
             RiskConfig = JsonSerializer.Serialize(new { base_uri = RiskSinkUrl }), TopicId, OrphanTopicId,
+            SourceRevision = Guid.NewGuid().ToString("N"), OrphanSourceRevision = Guid.NewGuid().ToString("N"),
             LedgerSubscriptionId = Guid.NewGuid(), RiskSubscriptionId = Guid.NewGuid(),
             LedgerRules = "{\"event_types\":[\"payment.created\",\"payment.settled\",\"payment.multi\"]}",
             RiskRules = "{\"event_types\":[\"payment.authorized\",\"payment.multi\"]}"
@@ -353,8 +369,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         DbTransaction transaction,
         Guid eventId)
     {
+        // SQL Server locks index rows, not rows: without INDEX(0) this seeks the event_id index and
+        // locks only that index row, which fanout never reads, so its READPAST has nothing to skip.
+        // Postgres FOR UPDATE locks the tuple itself and needs no equivalent.
         string sql = database.Provider == "sqlserver"
-            ? "SELECT id FROM outbox WITH (UPDLOCK, ROWLOCK) WHERE event_id = @EventId"
+            ? "SELECT id FROM outbox WITH (UPDLOCK, ROWLOCK, INDEX(0)) WHERE event_id = @EventId"
             : "SELECT id FROM outbox WHERE event_id = @EventId FOR UPDATE";
         return await connection.ExecuteScalarAsync<Guid?>(
             sql, new { EventId = eventId }, transaction) is not null;
@@ -787,6 +806,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         public string Status { get; init; } = string.Empty;
         public string? FailurePhase { get; init; }
         public object? CompletedAt { get; init; }
+        public string? ResponseBody { get; init; }
+        public bool ResponseBodyTruncated { get; init; }
     }
     private sealed record OutboxRetryRow { public int AttemptCount { get; init; } public object? DeliverAfter { get; init; } }
     private sealed record SnapshotRow { public string HttpExecutionSnapshotJson { get; init; } = string.Empty; public string ConnectorKey { get; init; } = string.Empty; public string? MappingConfigJson { get; init; } }
@@ -802,7 +823,8 @@ public sealed record EventDeliveryState(
 
 public sealed record DeliveryAttemptState(
     Guid Id, Guid EventDeliveryId, int AttemptNumber, string Status,
-    string? FailurePhase, DateTimeOffset? CompletedAt);
+    string? FailurePhase, DateTimeOffset? CompletedAt,
+    string? ResponseBody = null, bool ResponseBodyTruncated = false);
 
 public sealed record EventDeliverySnapshot(
     string HttpExecutionSnapshotJson, string ConnectorKey, string? MappingConfigJson);

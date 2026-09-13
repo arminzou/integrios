@@ -19,7 +19,7 @@ public sealed record EventDeliveryDto
 {
     public required Guid EventDeliveryId { get; init; }
     public required Guid SubscriptionId { get; init; }
-    public required Guid DestinationConnectionId { get; init; }
+    public required Guid DestinationId { get; init; }
     public required string Status { get; init; }
     public required int LifetimeAttemptCount { get; init; }
     public required int RetryCycleAttemptCount { get; init; }
@@ -32,7 +32,7 @@ public sealed record DeliveryAttemptDto
     public required Guid AttemptId { get; init; }
     public required Guid EventDeliveryId { get; init; }
     public required Guid SubscriptionId { get; init; }
-    public required Guid DestinationConnectionId { get; init; }
+    public required Guid DestinationId { get; init; }
     public required int AttemptNumber { get; init; }
     public required string Status { get; init; }
     public string? FailurePhase { get; init; }

@@ -70,7 +70,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             foreach (HttpClient client in operationalClients)
             {
                 (await client.GetAsync("/health")).StatusCode.ShouldBe(HttpStatusCode.OK);
-                (await client.GetAsync("/ready")).StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+                (await GetReadinessWhileDatabaseUnavailableAsync(client)).ShouldBe(HttpStatusCode.ServiceUnavailable);
             }
         }
         finally
@@ -78,6 +78,16 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             await fixture.StartPostgresAsync();
             await fixture.RestartProductServicesAsync();
         }
+    }
+
+    // The registered database check gets five seconds to turn an unavailable database into a
+    // 503. The fixture's ordinary client timeout is also five seconds, which races the response
+    // rather than observing it during the deliberate outage.
+    private static async Task<HttpStatusCode> GetReadinessWhileDatabaseUnavailableAsync(HttpClient client)
+    {
+        using var probe = new HttpClient { BaseAddress = client.BaseAddress, Timeout = TimeSpan.FromSeconds(10) };
+        using HttpResponseMessage response = await probe.GetAsync("/ready");
+        return response.StatusCode;
     }
 
     [Fact]
@@ -101,49 +111,40 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new { name = "acceptance-ingestion" },
             "token");
 
-        Guid sourceConnectionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/connections",
-            new
-            {
-                connector_id = fixture.HttpConnectorId,
-                name = "acceptance-source",
-                config = new { base_uri = sourceBaseUri },
-                environment = "production"
-            });
-        Guid destinationConnectionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/connections",
+        Guid destinationId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/destinations",
             new
             {
                 connector_id = fixture.HttpConnectorId,
                 name = "acceptance-destination",
-                config = new { base_uri = destinationBaseUri },
+                configuration = new { base_uri = destinationBaseUri },
                 environment = "production"
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name = $"payments-{suffix}" });
+            new { key = $"payments-{suffix}" });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connection_id = sourceConnectionId, topic_id = topicId, type = "event_api", configuration = new { source_contract = "event_json" } });
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", configuration = new { } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
                 name = "acceptance-retry",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = destinationConnectionId
+                destination_id = destinationId
             });
 
-        // A refused connection is the only exercised path that leaves DeliveryResult.Error non-null
+        // A refused endpoint is the only exercised path that leaves DeliveryResult.Error non-null
         // on the HTTP phase. Without it the exported-status assertion below is vacuous for
         // delivery.http, and a span that copied the transport message would still pass.
-        Guid unreachableConnectionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/connections",
+        Guid unreachableDestinationId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/destinations",
             new
             {
                 connector_id = fixture.HttpConnectorId,
                 name = "acceptance-unreachable",
-                config = new { base_uri = "http://mocksink:9/sink/unreachable" },
+                configuration = new { base_uri = "http://mocksink:9/sink/unreachable" },
                 environment = "production"
             });
         await PostAdminForIdAsync(
@@ -152,7 +153,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             {
                 name = "acceptance-unreachable",
                 match_rules = new { event_type = "payment.unreachable" },
-                destination_connection_id = unreachableConnectionId
+                destination_id = unreachableDestinationId
             });
 
         await fixture.WireMockSink.ConfigureAsync(sinkName, "fail");
@@ -168,7 +169,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 payload = new { paymentId = payloadCanary, amount = 1200 },
             })
         };
-        ingest.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
+        ingest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiToken}");
         ingest.Headers.TryAddWithoutValidation("X-Acceptance-Canary", headerCanary);
         Guid eventId;
         string ingestionRequestTraceId;
@@ -424,7 +425,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                     payload = new { paymentId = $"pay-{suffix}-2", amount = 1300 },
                 })
             };
-            second.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
+            second.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiToken}");
             using HttpResponseMessage secondAccepted = await fixture.IngestionClient.SendAsync(second);
             secondAccepted.StatusCode.ShouldBe(HttpStatusCode.Accepted);
             using JsonDocument secondDocument = JsonDocument.Parse(await secondAccepted.Content.ReadAsStringAsync());
@@ -489,37 +490,28 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             $"/admin/tenants/{tenantId}/tenant-api-keys",
             new { name = "loop-isolation-ingestion" },
             "token");
-        Guid sourceConnectionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/connections",
-            new
-            {
-                connector_id = fixture.HttpConnectorId,
-                name = "loop-isolation-source",
-                config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}-source" },
-                environment = "production"
-            });
-        Guid destinationConnectionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/connections",
+        Guid destinationId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/destinations",
             new
             {
                 connector_id = fixture.HttpConnectorId,
                 name = "loop-isolation-destination",
-                config = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
+                configuration = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
                 environment = "production"
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name = topicName });
+            new { key = topicName });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connection_id = sourceConnectionId, topic_id = topicId, type = "event_api", configuration = new { source_contract = "event_json" } });
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", configuration = new { } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
                 name = "blocked-delivery",
                 match_rules = new { event_type = "delivery.blocked" },
-                destination_connection_id = destinationConnectionId
+                destination_id = destinationId
             });
 
         await fixture.WireMockSink.ConfigureAsync(sinkName, "slow", delayMs: 8000);
@@ -593,7 +585,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 payload = new { sourceEventId },
             })
         };
-        request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {apiToken}");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiToken}");
         using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         string responseBody = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);

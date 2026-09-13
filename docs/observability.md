@@ -41,7 +41,7 @@ instruments, Integrios emits the following application instruments.
 | integrios_delivery_oldest_ready_age_seconds | gauge | — | Age of the oldest claimable Delivery, measured from its eligibility time. |
 | integrios_backlog_snapshot_age_seconds | gauge | — | Time since the Worker last sampled backlog state successfully. |
 
-http_status_class is one of 2xx, 4xx, 5xx, timeout, or error. All labels are platform-owned and bounded: transport, connector_key, http_status_class, and result. Tenant, Event, Subscription, Connection, and Delivery identifiers never appear in metric labels.
+http_status_class is one of 2xx, 4xx, 5xx, timeout, or error. All labels are platform-owned and bounded: transport, connector_key, http_status_class, and result. Tenant, Event, Source, Destination, Subscription, and Delivery identifiers never appear in metric labels.
 
 ### Backlog gauges
 

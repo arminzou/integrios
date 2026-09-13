@@ -14,18 +14,20 @@ public static class DependencyInjection
     // Handlers whose owning host differs from their responsibility group. Cross-group ownership is
     // declared here and nowhere else: a handler listed for one host is excluded from every other
     // host's group match, so a group namespace can never silently claim or lose one. Operator
-    // replay and delivery recovery are Delivery-domain work owned by Admin. See ADR-0038.
+    // replay and delivery recovery are Delivery-domain work owned by Admin.
     private static readonly Dictionary<Type, string> CrossGroupOwners = new()
     {
         [typeof(ReplayEventDeliveryCommandHandler)] = Admin,
-        [typeof(GetEventDeliveryRecoveryQueryHandler)] = Admin
+        [typeof(GetEventDeliveryRecoveryQueryHandler)] = Admin,
+        [typeof(ListTenantEventsQueryHandler)] = Admin,
+        [typeof(GetTenantEventActivitySummaryQueryHandler)] = Admin
     };
 
     internal static IServiceCollection AddApplicationServices(this IServiceCollection services)
         => AddApplicationServices(services, static _ => true);
 
     public static IServiceCollection AddAdminApplicationServices(this IServiceCollection services)
-        => AddApplicationServices(services, OwnedBy(Admin, "Authoring", "Bootstrap"));
+        => AddApplicationServices(services, OwnedBy(Admin, "Authoring", "Bootstrap", "Identity"));
 
     public static IServiceCollection AddIngestionApplicationServices(this IServiceCollection services)
         => AddApplicationServices(services, OwnedBy(Ingestion, "Ingestion"));

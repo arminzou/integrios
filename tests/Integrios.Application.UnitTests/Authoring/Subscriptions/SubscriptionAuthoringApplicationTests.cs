@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Delivery;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Authoring.Topics;
@@ -49,7 +49,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         var exception = await Should.ThrowAsync<SubscriptionValidationException>(() =>
             harness.Mediator.Send(harness.Command()));
 
-        exception.Message.ShouldContain("direction permits destination use", Case.Sensitive);
+        exception.Message.ShouldContain("does not permit Destination authoring", Case.Sensitive);
         harness.SubscriptionRepository.CreateCalls.ShouldBe(0);
     }
 
@@ -63,7 +63,7 @@ public sealed class SubscriptionAuthoringApplicationTests
     {
         private readonly Guid tenantId = Guid.NewGuid();
         private readonly Guid topicId = Guid.NewGuid();
-        private readonly Guid connectionId = Guid.NewGuid();
+        private readonly Guid destinationId = Guid.NewGuid();
         private readonly ServiceProvider provider;
 
         public AuthoringHarness(
@@ -76,8 +76,8 @@ public sealed class SubscriptionAuthoringApplicationTests
             services.AddApplicationServices();
             services.AddSingleton<ISubscriptionRepository>(SubscriptionRepository);
             services.AddSingleton<ITopicRepository>(new FakeTopicRepository(Topic()));
-            services.AddSingleton<IConnectionRepository>(new FakeConnectionRepository(Connection(connectorId)));
-            services.AddSingleton<IConnectionAuthoringLock>(new NoOpConnectionAuthoringLock());
+            services.AddSingleton<IDestinationRepository>(new FakeDestinationRepository(Destination(connectorId)));
+            services.AddSingleton<IDestinationAuthoringLock>(new NoOpDestinationAuthoringLock());
             services.AddSingleton<IConnectorReader>(new FakeConnectorReader(Connector(connectorId, destinationDirection)));
             services.AddSingleton<IDestinationAuthenticatorRegistry>(new EmptyAuthSchemeRegistry());
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator(transformValidationError));
@@ -96,9 +96,10 @@ public sealed class SubscriptionAuthoringApplicationTests
                 topicId,
                 "destination-subscription",
                 matchRules ?? Json("""{"event_type":"payment.created"}"""),
-                connectionId,
+                destinationId,
                 transformConfig,
                 HttpDeliveryConfiguration.Default,
+                null,
                 0,
                 null);
 
@@ -108,19 +109,20 @@ public sealed class SubscriptionAuthoringApplicationTests
         {
             Id = topicId,
             TenantId = tenantId,
+            Key = "payments",
             Name = "payments",
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
-        private Connection Connection(Guid connectorId) => new()
+        private Destination Destination(Guid connectorId) => new()
         {
-            Id = connectionId,
+            Id = destinationId,
             TenantId = tenantId,
             ConnectorId = connectorId,
             Name = "destination",
-            Config = Json("{}"),
+            Configuration = Json("{}"),
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -167,6 +169,8 @@ public sealed class SubscriptionAuthoringApplicationTests
 
     private sealed class EmptyAuthSchemeRegistry : IDestinationAuthenticatorRegistry
     {
+        public IReadOnlyCollection<IDestinationAuthenticator> Registered => [];
+
         public IDestinationAuthenticator GetRequired(string scheme) =>
             throw new InvalidOperationException($"Unexpected scheme '{scheme}'.");
 
@@ -177,10 +181,10 @@ public sealed class SubscriptionAuthoringApplicationTests
         }
     }
 
-    private sealed class NoOpConnectionAuthoringLock : IConnectionAuthoringLock
+    private sealed class NoOpDestinationAuthoringLock : IDestinationAuthoringLock
     {
         public Task<IAsyncDisposable> AcquireAsync(
-            IEnumerable<Guid> connectionIds,
+            IEnumerable<Guid> destinationIds,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IAsyncDisposable>(new NoOpLease());
 
@@ -195,11 +199,14 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
             Task.FromResult<Topic?>(topic);
 
-        public Task<Topic> CreateAsync(Guid tenantId, string name, string? description, CancellationToken ct = default) =>
+        public Task<Topic> CreateAsync(Guid tenantId, string key, string name, string? description, CancellationToken ct = default) =>
             Task.FromResult(topic);
 
-        public Task<(IReadOnlyList<Topic> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken ct = default) =>
-            Task.FromResult<(IReadOnlyList<Topic>, string?)>(([topic], null));
+        public Task<int> CountSubscriptionsAsync(Guid tenantId, Guid topicId, CancellationToken ct = default) =>
+            Task.FromResult(0);
+
+        public Task<(IReadOnlyList<TopicListRow> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, TopicListFilter filter, string? afterCursor, int limit, CancellationToken ct = default) =>
+            Task.FromResult<(IReadOnlyList<TopicListRow>, string?)>(([new TopicListRow(topic, 0)], null));
 
         public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? name, string? description, CancellationToken ct = default) =>
             Task.FromResult<Topic?>(topic);
@@ -209,22 +216,22 @@ public sealed class SubscriptionAuthoringApplicationTests
 
     }
 
-    private sealed class FakeConnectionRepository(Connection connection) : IConnectionRepository
+    private sealed class FakeDestinationRepository(Destination destination) : IDestinationRepository
     {
-        public Task<Connection?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Connection?>(connection);
+        public Task<Destination?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Destination?>(destination);
 
-        public Task<Connection> CreateAsync(Connection value, CancellationToken cancellationToken = default) =>
+        public Task<Destination> CreateAsync(Destination value, CancellationToken cancellationToken = default) =>
             Task.FromResult(value);
 
-        public Task<(IReadOnlyList<Connection> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
-            Task.FromResult<(IReadOnlyList<Connection>, string?)>(([connection], null));
+        public Task<(IReadOnlyList<DestinationListRow> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, DestinationListFilter filter, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
+            Task.FromResult<(IReadOnlyList<DestinationListRow>, string?)>(([new DestinationListRow(destination, "http")], null));
 
-        public Task<ConnectionUsage> GetUsageAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ConnectionUsage(false, false));
+        public Task<bool> HasActiveSubscriptionsAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
 
-        public Task<Connection?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement config, SourceVerification? sourceVerification, DestinationAuthentication? destinationAuthentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Connection?>(connection);
+        public Task<Destination?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement configuration, DestinationAuthentication? authentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Destination?>(destination);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
@@ -235,7 +242,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Connector?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Connector?>(connector);
 
-        public Task<(IReadOnlyList<Connector> Items, string? NextCursor)> ListAsync(string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
+        public Task<(IReadOnlyList<Connector> Items, string? NextCursor)> ListAsync(ConnectorDirection? direction, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
             Task.FromResult<(IReadOnlyList<Connector>, string?)>(([connector], null));
     }
 
@@ -248,9 +255,10 @@ public sealed class SubscriptionAuthoringApplicationTests
             Guid topicId,
             string name,
             JsonElement matchRules,
-            Guid destinationConnectionId,
+            Guid destinationId,
             JsonElement? transformConfig,
             HttpDeliveryConfiguration httpDelivery,
+            HttpSuccessRule? httpSuccess,
             int orderIndex,
             string? description,
             CancellationToken cancellationToken = default)
@@ -262,10 +270,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Subscription?> GetByIdAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
-        public Task<(IReadOnlyList<Subscription> Items, string? NextCursor)> ListByTopicAsync(Guid tenantId, Guid topicId, string? afterCursor, int limit, CancellationToken cancellationToken = default) =>
-            Task.FromResult<(IReadOnlyList<Subscription>, string?)>(([], null));
-
-        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, JsonElement matchRules, Guid destinationConnectionId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
+        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, JsonElement matchRules, Guid destinationId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, HttpSuccessRule? httpSuccess, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
@@ -273,7 +278,7 @@ public sealed class SubscriptionAuthoringApplicationTests
 
         public Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(
             Guid tenantId,
-            Guid destinationConnectionId,
+            Guid destinationId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<HttpDeliveryConfiguration>>([]);
     }

@@ -7,6 +7,8 @@ internal sealed class DestinationAuthenticatorRegistry(IEnumerable<IDestinationA
     private readonly Dictionary<string, IDestinationAuthenticator> handlersByName =
         handlers.ToDictionary(handler => handler.Name, StringComparer.OrdinalIgnoreCase);
 
+    public IReadOnlyCollection<IDestinationAuthenticator> Registered => handlersByName.Values;
+
     public IDestinationAuthenticator GetRequired(string scheme)
     {
         if (TryGet(scheme, out IDestinationAuthenticator handler))

@@ -2,7 +2,8 @@ using Integrios.Application;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Delivery;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
+using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Secrets;
@@ -14,9 +15,10 @@ using Integrios.Application.Transforms;
 using Integrios.Infrastructure.OperatorKeys;
 using Integrios.Infrastructure.TenantApiKeys;
 using Integrios.Infrastructure.Delivery;
-using Integrios.Infrastructure.Connections;
+using Integrios.Infrastructure.Destinations;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Events;
+using Integrios.Infrastructure.Identity;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Outbox;
 using Integrios.Infrastructure.Secrets;
@@ -59,6 +61,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddDataProtection();
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
         services.AddScoped<OperatorKeyRepository>();
@@ -71,17 +74,28 @@ public static class DependencyInjection
             services.AddScoped<IConnectorManifestStore, SqlServerConnectorManifestStore>();
         else
             services.AddScoped<IConnectorManifestStore, PostgresConnectorManifestStore>();
-        services.AddScoped<IConnectionRepository, ConnectionRepository>();
+        services.AddScoped<IDestinationRepository, DestinationRepository>();
         if (databaseProvider == DatabaseProvider.SqlServer)
-            services.AddSingleton<IConnectionAuthoringLock, SqlServerConnectionAuthoringLock>();
+            services.AddSingleton<IDestinationAuthoringLock, SqlServerDestinationAuthoringLock>();
         else
-            services.AddSingleton<IConnectionAuthoringLock, PostgresConnectionAuthoringLock>();
+            services.AddSingleton<IDestinationAuthoringLock, PostgresDestinationAuthoringLock>();
         services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<ISourceRepository, SourceRepository>();
+        services.AddScoped<ISourceQueries, SourceQueries>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+        services.AddScoped<ISubscriptionQueries, SubscriptionQueries>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
+        // Operator-only. Deliberately absent from AddIngestionInfrastructureServices: a destination's
+        // response body is the Operator's downstream system talking, and the data plane must have no
+        // way to reach it.
+        services.AddSingleton<IEventDiagnosticsLookup, EventDiagnosticsLookup>();
+        services.AddSingleton<ITenantEventHistory, TenantEventHistory>();
+        services.AddSingleton<ITenantEventActivitySummary, TenantEventActivitySummary>();
+        services.AddSingleton<ITenantOverview, TenantOverviewReader>();
+        services.AddScoped<IOperatorIdentityStore, OperatorIdentityStore>();
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.AddDestinationAuthenticationServices();
+        services.AddSourceVerificationServices();
         services.AddTransformEvaluationServices();
 
         return services;
@@ -89,19 +103,23 @@ public static class DependencyInjection
 
     public static IServiceCollection AddIngestionInfrastructureServices(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        bool enableQueueReceiver = true)
     {
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
         services.AddSingleton<IActiveTenantApiKeyLookup, ActiveTenantApiKeyLookup>();
+        services.AddSingleton<ITenantApiKeyUseRecorder, TenantApiKeyUseRecorder>();
         services.AddSingleton<IEventApiSourceResolver, EventApiSourceResolver>();
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
-        services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
-        services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
+        services.AddSourceVerificationServices();
         services.AddSingleton<IQueueSourceReader, QueueSourceReader>();
         services.AddSingleton(new QueueReconcileInterval(TimeSpan.FromSeconds(
             configuration.GetValue<int?>("Integrios:QueueSources:ReconcileSeconds") ?? 30)));
-        services.AddHostedService<AzureServiceBusQueueReceiver>();
+        // A read-only question about secret references must not start consuming from every queue
+        // Source as a side effect of being asked.
+        if (enableQueueReceiver)
+            services.AddHostedService<AzureServiceBusQueueReceiver>();
         services.AddTransformEvaluationServices();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IEventAcceptance, SqlServerEventAcceptance>();
@@ -109,6 +127,7 @@ public static class DependencyInjection
             services.AddSingleton<IEventAcceptance, PostgresEventAcceptance>();
         services.AddSingleton<ITenantEventLookup, TenantEventLookup>();
         services.TryAddSingleton<ISourceVerificationSecretResolver, UnavailableSourceVerificationSecretResolver>();
+        services.AddScoped<ISourceSecretValidationReader, SourceSecretValidationReader>();
 
         return services;
     }
@@ -199,6 +218,14 @@ public static class DependencyInjection
         services.AddSingleton<IDestinationAuthenticator, ApiKeyHeaderAuthenticator>();
         services.AddSingleton<IDestinationAuthenticator, BearerTokenAuthenticator>();
         services.AddSingleton<IDestinationAuthenticatorRegistry, DestinationAuthenticatorRegistry>();
+
+        return services;
+    }
+
+    private static IServiceCollection AddSourceVerificationServices(this IServiceCollection services)
+    {
+        services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
+        services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
 
         return services;
     }

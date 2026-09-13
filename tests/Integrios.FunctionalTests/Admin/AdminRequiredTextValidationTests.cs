@@ -34,10 +34,9 @@ public sealed class AdminRequiredTextValidationTests
     [Theory]
     [InlineData("tenant-create")]
     [InlineData("tenant-update")]
-    [InlineData("topic-create")]
     [InlineData("tenant-api-key-create")]
-    [InlineData("connection-create")]
-    [InlineData("connection-update")]
+    [InlineData("destination-create")]
+    [InlineData("destination-update")]
     [InlineData("subscription-create")]
     [InlineData("subscription-update")]
     public async Task RequiredName_Null_ReturnsFieldValidation(string operation)
@@ -71,22 +70,31 @@ public sealed class AdminRequiredTextValidationTests
     private HttpRequestMessage Request(string operation, string? name) => operation switch
     {
         "tenant-create" => AdminRequest(HttpMethod.Post, "/admin/tenants", new { slug = "required-name", name }),
-        "tenant-update" => AdminRequest(HttpMethod.Patch, $"/admin/tenants/{fixture.TenantId}", new { name }),
-        "topic-create" => AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/topics", new { name }),
+        "tenant-update" => AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}",
+            new { name, description = (string?)null, environment = (string?)null }),
         "tenant-api-key-create" => AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys",
             new { name }),
-        "connection-create" => AdminRequest(
+        "destination-create" => AdminRequest(
             HttpMethod.Post,
-            $"/admin/tenants/{fixture.TenantId}/connections",
-            new { connector_id = fixture.HttpConnectorId, name, config = new { } }),
-        "connection-update" => AdminRequest(
-            HttpMethod.Patch,
-            $"/admin/tenants/{fixture.TenantId}/connections/{fixture.SourceConnectionId}",
-            new { name, config = new { } }),
+            $"/admin/tenants/{fixture.TenantId}/destinations",
+            new { connector_id = fixture.HttpConnectorId, name, configuration = new { } }),
+        "destination-update" => AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/destinations/{fixture.DestinationId}",
+            new
+            {
+                name,
+                configuration = new { },
+                authentication = (object?)null,
+                environment = (string?)null,
+                description = (string?)null,
+            }),
         "subscription-create" => SubscriptionRequest(HttpMethod.Post, Guid.NewGuid(), Guid.Empty, name),
-        "subscription-update" => SubscriptionRequest(HttpMethod.Patch, Guid.NewGuid(), Guid.NewGuid(), name),
+        "subscription-update" => SubscriptionRequest(HttpMethod.Put, Guid.NewGuid(), Guid.NewGuid(), name),
         _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
     };
 
@@ -100,8 +108,12 @@ public sealed class AdminRequiredTextValidationTests
         {
             name,
             match_rules = new { event_type = "validation.test" },
-            destination_connection_id = fixture.SourceConnectionId,
-            order_index = 0
+            destination_id = fixture.DestinationId,
+            mapping = (object?)null,
+            http_delivery = (object?)null,
+            http_success = (object?)null,
+            order_index = 0,
+            description = (string?)null,
         });
     }
 

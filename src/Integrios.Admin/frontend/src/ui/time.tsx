@@ -1,0 +1,125 @@
+/// Instants arrive from the Admin API as ISO 8601 strings. An ISO string is exact and close to
+/// unreadable at a glance, and an Operator correlating the dashboard against a log or a graph is
+/// reading a local clock, so the rendered value is local. The exact instant the API sent is never
+/// lost to that formatting: it stays on `dateTime`, where it is machine-readable and copyable, and
+/// the title carries it in full beside how long ago it was.
+///
+/// The visible value is absolute rather than relative on purpose. A ledger is scanned for ordering
+/// and correlated against other systems, and "4 minutes ago" is a value that silently changes under
+/// a screen left open; the elapsed reading is the secondary cue, on the title.
+///
+/// `undefined` as the locale is the Operator's own, resolved by the platform. No locale data is
+/// bundled and no remote asset is loaded.
+/// The year is dropped, not the seconds. Everything an Operator reads here is recent, so the year
+/// is the one part that is never the answer to a question, while seconds are what separates two
+/// delivery attempts in the same retry cycle. The full instant, year included, stays on the title.
+const absolute = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+/// Largest unit first: the first one the elapsed time actually fills is the one worth naming.
+const units: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * 24 * 60 * 60_000],
+  ["month", 30 * 24 * 60 * 60_000],
+  ["day", 24 * 60 * 60_000],
+  ["hour", 60 * 60_000],
+  ["minute", 60_000],
+  ["second", 1000],
+];
+
+export function since(value: string, now = Date.now()): string {
+  const elapsed = new Date(value).getTime() - now;
+  for (const [unit, milliseconds] of units)
+    if (Math.abs(elapsed) >= milliseconds) return relative.format(Math.round(elapsed / milliseconds), unit);
+  return relative.format(0, "second");
+}
+
+/// Formats one instant, or renders the value as sent when it cannot be parsed — an Operator quoting
+/// a malformed value in a bug report needs to see what the API actually returned, not "Invalid Date".
+export function Timestamp({ value }: { value: string }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+
+  return (
+    <time dateTime={value} title={`${value}\n${since(value)}`} className="whitespace-nowrap tabular-nums">
+      {absolute.format(date)}
+    </time>
+  );
+}
+
+/// A calendar day, for a column where the time of day is not the fact being read. An Updated column
+/// answers "how stale is this", which a date answers and seconds only clutter; the exact instant is
+/// still on `dateTime` and in the title, so nothing is lost to the shorter reading. `Timestamp` stays
+/// where the time is the answer — two attempts in one retry cycle are seconds apart.
+const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+
+export function Day({ value }: { value: string }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+
+  return (
+    <time
+      dateTime={value}
+      title={`${value}
+${since(value)}`}
+      className="whitespace-nowrap tabular-nums"
+    >
+      {day.format(date)}
+    </time>
+  );
+}
+
+/// Once rows are grouped by the day they fall on, the day is stated once on the separator and each
+/// row carries only its time. Same reasoning as dropping the year: repeating on every row what the
+/// group already says costs width the ledger needs for what differs.
+const timeOnly = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+const dayHeading = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "short",
+  day: "numeric",
+});
+
+/// The local calendar day an instant falls on, as a value rows can be grouped by.
+export function localDay(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+export function dayLabel(value: string, now = new Date()): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  if (localDay(value) === localDay(now.toISOString())) return "Today";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (localDay(value) === localDay(yesterday.toISOString())) return "Yesterday";
+  return dayHeading.format(date);
+}
+
+/// The same instant as `Timestamp`, with the day left to the group separator above it.
+export function TimeOfDay({ value }: { value: string }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+
+  return (
+    <time
+      dateTime={value}
+      title={`${value}
+${since(value)}`}
+      className="whitespace-nowrap tabular-nums"
+    >
+      {timeOnly.format(date)}
+    </time>
+  );
+}

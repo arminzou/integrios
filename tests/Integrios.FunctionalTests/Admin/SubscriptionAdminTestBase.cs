@@ -30,12 +30,12 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
         return Task.CompletedTask;
     }
 
-    internal async Task<AdminTopicResponse> CreateTopicAsync(string name)
+    internal async Task<AdminTopicResponse> CreateTopicAsync(string key)
     {
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{Fixture.TenantId}/topics",
-            new { name }));
+            new { key }));
 
         response.EnsureSuccessStatusCode();
         var topic = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
@@ -57,7 +57,7 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
             {
                 name,
                 match_rules = new { event_type = eventType },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = orderIndex,
                 description,
                 mapping
@@ -68,13 +68,13 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
         return subscription!;
     }
 
-    protected async Task SetConnectionStatusAsync(Guid connectionId, string status)
+    protected async Task SetDestinationStatusAsync(Guid destinationId, string status)
     {
         await using var connection = Fixture.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync(
-            "UPDATE connections SET status = @Status WHERE id = @Id",
-            new { Status = status, Id = connectionId });
+            "UPDATE destinations SET status = @Status WHERE id = @Id",
+            new { Status = status, Id = destinationId });
     }
 
     protected sealed record SubscriptionDto(
@@ -83,7 +83,7 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
         Guid TenantId,
         string Name,
         JsonElement MatchRules,
-        Guid DestinationConnectionId,
+        Guid DestinationId,
         JsonElement? MappingConfig,
         string Status,
         int OrderIndex,

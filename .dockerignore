@@ -15,3 +15,9 @@ tests/
 .env
 .env.*
 **/*.user
+
+# The dashboard is installed and built inside the image, from the committed lockfile. A host build
+# tree would otherwise be copied in and could silently replace what the image build produces.
+**/node_modules/
+src/Integrios.Admin/wwwroot/
+artifacts/

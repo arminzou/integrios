@@ -23,85 +23,6 @@ namespace Integrios.Migrations.Postgres.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<JsonElement>("Config")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("config")
-                        .HasDefaultValueSql("'{}'::jsonb");
-
-                    b.Property<Guid>("ConnectorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("connector_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<string>("DestinationAuthentication")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("destination_authentication");
-
-                    b.Property<string>("Environment")
-                        .HasColumnType("text")
-                        .HasColumnName("environment");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("name");
-
-                    b.Property<string>("SourceVerification")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("source_verification");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'active'::text");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("connections_pkey");
-
-                    b.HasAlternateKey("TenantId", "Id")
-                        .HasName("uq_connections_tenant_id_id");
-
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_connections_tenant_name");
-
-                    b.HasIndex(new[] { "TenantId" }, "idx_connections_tenant_id");
-
-                    b.ToTable("connections", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_connections_destination_authentication_object", "destination_authentication IS NULL OR jsonb_typeof(destination_authentication) = 'object'");
-
-                            t.HasCheckConstraint("ck_connections_source_verification_object", "source_verification IS NULL OR jsonb_typeof(source_verification) = 'object'");
-                        });
-                });
-
             modelBuilder.Entity("Integrios.Domain.Entities.Connector", b =>
                 {
                     b.Property<Guid>("Id")
@@ -213,6 +134,12 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("response_body");
 
+                    b.Property<bool>("ResponseBodyTruncated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("response_body_truncated");
+
                     b.Property<int?>("ResponseStatusCode")
                         .HasColumnType("integer")
                         .HasColumnName("response_status_code");
@@ -248,6 +175,78 @@ namespace Integrios.Migrations.Postgres.Migrations
                             t.HasCheckConstraint("ck_delivery_attempts_number_positive", "attempt_number > 0");
 
                             t.HasCheckConstraint("ck_delivery_attempts_status", "status IN ('in_progress', 'succeeded', 'failed', 'indeterminate')");
+                        });
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.Destination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Authentication")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("authentication");
+
+                    b.Property<JsonElement>("Configuration")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("configuration")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<Guid>("ConnectorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("connector_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Environment")
+                        .HasColumnType("text")
+                        .HasColumnName("environment");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'active'::text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("destinations_pkey");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("uq_destinations_tenant_id_id");
+
+                    b.HasIndex(new[] { "TenantId" }, "idx_destinations_tenant_id");
+
+                    b.ToTable("destinations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_destinations_authentication_object", "authentication IS NULL OR jsonb_typeof(authentication) = 'object'");
+
+                            t.HasCheckConstraint("ck_destinations_configuration_json", "jsonb_typeof(configuration) = 'object'");
                         });
                 });
 
@@ -318,7 +317,11 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .IsUnique()
                         .HasFilter("(idempotency_key IS NOT NULL)");
 
-                    b.HasIndex(new[] { "TenantId" }, "idx_events_tenant_id");
+                    b.HasIndex(new[] { "SourceId", "SourceEventId" }, "idx_events_source_event_id")
+                        .HasFilter("(source_event_id IS NOT NULL)");
+
+                    b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
+                        .IsDescending(false, true, true);
 
                     b.ToTable("events", (string)null);
                 });
@@ -350,9 +353,9 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deliver_after");
 
-                    b.Property<Guid>("DestinationConnectionId")
+                    b.Property<Guid>("DestinationId")
                         .HasColumnType("uuid")
-                        .HasColumnName("destination_connection_id");
+                        .HasColumnName("destination_id");
 
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid")
@@ -432,6 +435,41 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.OperatorIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("issuer");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("subject");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("operator_identities_pkey");
+
+                    b.HasIndex(new[] { "Issuer", "Subject" }, "uq_operator_identities_issuer_subject")
+                        .IsUnique();
+
+                    b.ToTable("operator_identities", (string)null);
+                });
+
             modelBuilder.Entity("Integrios.Domain.Entities.OperatorKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -487,15 +525,37 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("configuration");
 
-                    b.Property<Guid>("ConnectionId")
+                    b.Property<Guid>("ConnectorId")
                         .HasColumnType("uuid")
-                        .HasColumnName("connection_id");
+                        .HasColumnName("connector_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<string>("EventIdentityRule")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("event_identity_rule");
+
+                    b.Property<JsonElement?>("InputRequirements")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input_requirements");
+
+                    b.Property<string>("Mapping")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("mapping");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Revision")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("revision");
 
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone")
@@ -527,13 +587,17 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("Verification")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("verification");
+
                     b.HasKey("Id")
                         .HasName("sources_pkey");
 
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_sources_tenant_id_id");
 
-                    b.HasIndex(new[] { "ConnectionId" }, "idx_sources_connection_id");
+                    b.HasIndex(new[] { "ConnectorId" }, "idx_sources_connector_id");
 
                     b.HasIndex(new[] { "TenantId", "CreatedAt", "Id" }, "idx_sources_tenant_created");
 
@@ -565,9 +629,9 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<Guid>("DestinationConnectionId")
+                    b.Property<Guid>("DestinationId")
                         .HasColumnType("uuid")
-                        .HasColumnName("destination_connection_id");
+                        .HasColumnName("destination_id");
 
                     b.Property<string>("HttpDelivery")
                         .IsRequired()
@@ -575,6 +639,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("http_delivery")
                         .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb");
+
+                    b.Property<string>("HttpSuccess")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("http_success");
 
                     b.Property<JsonElement?>("MappingConfig")
                         .HasColumnType("jsonb")
@@ -765,6 +833,11 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
@@ -793,12 +866,46 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_topics_tenant_id_id");
 
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_topics_tenant_name");
+                    b.HasAlternateKey("TenantId", "Key")
+                        .HasName("uq_topics_tenant_key");
 
                     b.HasIndex(new[] { "TenantId" }, "idx_topics_tenant_id");
 
-                    b.ToTable("topics", (string)null);
+                    b.ToTable("topics", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_topics_key_dns_label", "key ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'");
+                        });
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text")
+                        .HasColumnName("email");
+
+                    b.Property<DateTimeOffset?>("LastSignedInAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_signed_in_at");
+
+                    b.HasKey("Id")
+                        .HasName("users_pkey");
+
+                    b.ToTable("users", (string)null);
                 });
 
             modelBuilder.Entity("Integrios.Infrastructure.Outbox.OutboxEntry", b =>
@@ -844,27 +951,14 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.HasKey("Id")
                         .HasName("outbox_pkey");
 
+                    b.HasIndex(new[] { "EventId" }, "idx_outbox_event_id");
+
                     b.HasIndex(new[] { "DeliverAfter", "CreatedAt" }, "idx_outbox_pending")
                         .HasFilter("(processed_at IS NULL)");
 
                     NpgsqlIndexBuilderExtensions.HasNullSortOrder(b.HasIndex(new[] { "DeliverAfter", "CreatedAt" }, "idx_outbox_pending"), new[] { NullSortOrder.NullsFirst, NullSortOrder.NullsLast });
 
                     b.ToTable("outbox", (string)null);
-                });
-
-            modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>
-                {
-                    b.HasOne("Integrios.Domain.Entities.Connector", null)
-                        .WithMany()
-                        .HasForeignKey("ConnectorId")
-                        .IsRequired()
-                        .HasConstraintName("connections_connector_id_fkey");
-
-                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .IsRequired()
-                        .HasConstraintName("connections_tenant_id_fkey");
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.DeliveryAttempt", b =>
@@ -874,6 +968,21 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasForeignKey("EventDeliveryId")
                         .IsRequired()
                         .HasConstraintName("delivery_attempts_event_delivery_id_fkey");
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.Destination", b =>
+                {
+                    b.HasOne("Integrios.Domain.Entities.Connector", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectorId")
+                        .IsRequired()
+                        .HasConstraintName("destinations_connector_id_fkey");
+
+                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .IsRequired()
+                        .HasConstraintName("destinations_tenant_id_fkey");
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Event", b =>
@@ -899,11 +1008,11 @@ namespace Integrios.Migrations.Postgres.Migrations
 
             modelBuilder.Entity("Integrios.Domain.Entities.EventDelivery", b =>
                 {
-                    b.HasOne("Integrios.Domain.Entities.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Destination", null)
                         .WithMany()
-                        .HasForeignKey("DestinationConnectionId")
+                        .HasForeignKey("DestinationId")
                         .IsRequired()
-                        .HasConstraintName("event_deliveries_destination_connection_id_fkey");
+                        .HasConstraintName("event_deliveries_destination_id_fkey");
 
                     b.HasOne("Integrios.Domain.Entities.Event", null)
                         .WithMany()
@@ -924,20 +1033,29 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasConstraintName("fk_event_deliveries_active_attempt");
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.OperatorIdentity", b =>
+                {
+                    b.HasOne("Integrios.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("operator_identities_user_id_fkey");
+                });
+
             modelBuilder.Entity("Integrios.Domain.Entities.Source", b =>
                 {
+                    b.HasOne("Integrios.Domain.Entities.Connector", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectorId")
+                        .IsRequired()
+                        .HasConstraintName("fk_sources_connector");
+
                     b.HasOne("Integrios.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .IsRequired()
                         .HasConstraintName("fk_sources_tenant");
-
-                    b.HasOne("Integrios.Domain.Entities.Connection", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId", "ConnectionId")
-                        .HasPrincipalKey("TenantId", "Id")
-                        .IsRequired()
-                        .HasConstraintName("fk_sources_connection_tenant");
 
                     b.HasOne("Integrios.Domain.Entities.Topic", null)
                         .WithMany()
@@ -949,12 +1067,12 @@ namespace Integrios.Migrations.Postgres.Migrations
 
             modelBuilder.Entity("Integrios.Domain.Entities.Subscription", b =>
                 {
-                    b.HasOne("Integrios.Domain.Entities.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Destination", null)
                         .WithMany()
-                        .HasForeignKey("TenantId", "DestinationConnectionId")
+                        .HasForeignKey("TenantId", "DestinationId")
                         .HasPrincipalKey("TenantId", "Id")
                         .IsRequired()
-                        .HasConstraintName("fk_subscriptions_destination_connection_tenant");
+                        .HasConstraintName("fk_subscriptions_destination_tenant");
 
                     b.HasOne("Integrios.Domain.Entities.Topic", null)
                         .WithMany()

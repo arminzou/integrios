@@ -18,6 +18,14 @@ internal sealed class PostgresConnectorManifestStore(IntegriosDbContext context)
             connector => connector.Key == key && connector.ContractVersion == contractVersion,
             cancellationToken);
 
+    public Task<Connector?> GetLatestByKeyAsync(
+        string key,
+        CancellationToken cancellationToken) =>
+        context.Connectors.AsNoTracking()
+            .Where(connector => connector.Key == key)
+            .OrderByDescending(connector => connector.ContractVersion)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task<ConnectorManifestStoreResult> ApplyAsync(
         ConnectorManifest manifest,
         CancellationToken cancellationToken)

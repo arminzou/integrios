@@ -47,7 +47,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                 SELECT
                     id                        AS EventDeliveryId,
                     subscription_id           AS SubscriptionId,
-                    destination_connection_id AS DestinationConnectionId,
+                    destination_id            AS DestinationId,
                     status                    AS Status,
                     lifetime_attempt_count    AS LifetimeAttemptCount,
                     retry_cycle_attempt_count AS RetryCycleAttemptCount,
@@ -67,7 +67,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
                     da.id                        AS AttemptId,
                     sd.id                        AS EventDeliveryId,
                     sd.subscription_id           AS SubscriptionId,
-                    sd.destination_connection_id AS DestinationConnectionId,
+                    sd.destination_id            AS DestinationId,
                     da.attempt_number            AS AttemptNumber,
                     da.status                    AS Status,
                     da.failure_phase             AS FailurePhase,
@@ -88,7 +88,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
             AttemptId = a.AttemptId,
             EventDeliveryId = a.EventDeliveryId,
             SubscriptionId = a.SubscriptionId,
-            DestinationConnectionId = a.DestinationConnectionId,
+            DestinationId = a.DestinationId,
             AttemptNumber = a.AttemptNumber,
             Status = a.Status,
             FailurePhase = a.FailurePhase,
@@ -111,7 +111,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
             {
                 EventDeliveryId = delivery.EventDeliveryId,
                 SubscriptionId = delivery.SubscriptionId,
-                DestinationConnectionId = delivery.DestinationConnectionId,
+                DestinationId = delivery.DestinationId,
                 Status = delivery.Status,
                 LifetimeAttemptCount = delivery.LifetimeAttemptCount,
                 RetryCycleAttemptCount = delivery.RetryCycleAttemptCount,
@@ -137,7 +137,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
         public Guid AttemptId { get; init; }
         public Guid EventDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
-        public Guid DestinationConnectionId { get; init; }
+        public Guid DestinationId { get; init; }
         public int AttemptNumber { get; init; }
         public string Status { get; init; } = "";
         public string? FailurePhase { get; init; }
@@ -151,7 +151,7 @@ internal sealed class TenantEventLookup(IDbConnectionFactory connectionFactory)
     {
         public Guid EventDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
-        public Guid DestinationConnectionId { get; init; }
+        public Guid DestinationId { get; init; }
         public string Status { get; init; } = "";
         public int LifetimeAttemptCount { get; init; }
         public int RetryCycleAttemptCount { get; init; }

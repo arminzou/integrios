@@ -1,5 +1,7 @@
 using Integrios.Application.Authoring.Topics;
+using Integrios.Domain.Enums;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -9,10 +11,10 @@ public sealed class TopicsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateTopic);
-        group.MapGet(ListTopics);
-        group.MapGet(GetTopicById, "/{id:guid}");
-        group.MapPatch(UpdateTopic, "/{id:guid}");
+        group.MapPost(CreateTopic).Produces<AdminTopicResponse>(StatusCodes.Status201Created);
+        group.MapGet(ListTopics).Produces<AdminTopicListResponse>();
+        group.MapGet(GetTopicById, "/{id:guid}").Produces<AdminTopicResponse>();
+        group.MapPut(UpdateTopic, "/{id:guid}").Produces<AdminTopicResponse>();
         group.MapPost(DeactivateTopic, "/{id:guid}/deactivate");
     }
 
@@ -23,7 +25,7 @@ public sealed class TopicsEndpoints : IEndpointGroup
         CancellationToken cancellationToken)
     {
         var dto = await mediator.Send(
-            new CreateTopicCommand(tenantId, request.Name, request.Description),
+            new CreateTopicCommand(tenantId, request.Key, request.Name, request.Description),
             cancellationToken);
         var response = AdminTopicResponse.From(dto);
         return Results.Created($"/admin/tenants/{tenantId}/topics/{response.Id}", response);
@@ -33,11 +35,16 @@ public sealed class TopicsEndpoints : IEndpointGroup
         Guid tenantId,
         IMediator mediator,
         CancellationToken cancellationToken,
+        string? status,
+        string? name = null,
         string? after = null,
         int limit = 20)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var dto = await mediator.Send(new ListTopicsByTenantQuery(tenantId, after, limit), cancellationToken);
+        var filter = new TopicListFilter(
+            ListFilter.ParseEnum<OperationalStatus>(status, "Topic status must be active or disabled."),
+            ListFilter.Trimmed(name));
+        var dto = await mediator.Send(new ListTopicsByTenantQuery(tenantId, filter, after, limit), cancellationToken);
         return Results.Ok(AdminTopicListResponse.From(dto));
     }
 
@@ -76,28 +83,33 @@ public sealed class TopicsEndpoints : IEndpointGroup
 }
 
 internal sealed record CreateTopicRequest(
+    string? Key,
     string? Name,
     string? Description);
 
 internal sealed record UpdateTopicRequest(
-    string? Name,
-    string? Description);
+    [property: JsonRequired] string? Name,
+    [property: JsonRequired] string? Description);
 
 internal sealed record AdminTopicResponse(
     Guid Id,
     Guid TenantId,
+    string Key,
     string Name,
     string Status,
     string? Description,
+    int SubscriptionCount,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
     public static AdminTopicResponse From(TopicDto dto) => new(
         dto.Id,
         dto.TenantId,
+        dto.Key,
         dto.Name,
         dto.Status,
         dto.Description,
+        dto.SubscriptionCount,
         dto.CreatedAt,
         dto.UpdatedAt);
 }

@@ -36,7 +36,7 @@ public sealed class EventEndpointTests(IngestionApiFixture fixture)
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
         fixture.EventLookup.GetEventResult = null;
 
-        HttpResponseMessage response = await GetEventAsync(Guid.NewGuid(), $"TenantApiKey {TenantApiKeyAuthHandlerTests.TestToken}");
+        HttpResponseMessage response = await GetEventAsync(Guid.NewGuid(), $"Bearer {TenantApiKeyAuthHandlerTests.TestToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
@@ -62,7 +62,7 @@ public sealed class EventEndpointTests(IngestionApiFixture fixture)
                     AttemptId = attemptId,
                     EventDeliveryId = Guid.NewGuid(),
                     SubscriptionId = Guid.NewGuid(),
-                    DestinationConnectionId = Guid.NewGuid(),
+                    DestinationId = Guid.NewGuid(),
                     AttemptNumber = 1,
                     Status = "succeeded",
                     ResponseStatusCode = 200,
@@ -73,7 +73,7 @@ public sealed class EventEndpointTests(IngestionApiFixture fixture)
         };
         fixture.EventLookup.GetEventResult = expected;
 
-        HttpResponseMessage response = await GetEventAsync(eventId, $"TenantApiKey {TenantApiKeyAuthHandlerTests.TestToken}");
+        HttpResponseMessage response = await GetEventAsync(eventId, $"Bearer {TenantApiKeyAuthHandlerTests.TestToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         EventDto? body = await response.Content.ReadFromJsonAsync<EventDto>(HostJson.Options);
@@ -87,7 +87,7 @@ public sealed class EventEndpointTests(IngestionApiFixture fixture)
         attempt.AttemptId.ShouldBe(attemptId);
         attempt.EventDeliveryId.ShouldBe(expected.DeliveryAttempts[0].EventDeliveryId);
         attempt.SubscriptionId.ShouldBe(expected.DeliveryAttempts[0].SubscriptionId);
-        attempt.DestinationConnectionId.ShouldBe(expected.DeliveryAttempts[0].DestinationConnectionId);
+        attempt.DestinationId.ShouldBe(expected.DeliveryAttempts[0].DestinationId);
         attempt.AttemptNumber.ShouldBe(1);
         attempt.Status.ShouldBe("succeeded");
         attempt.ResponseStatusCode.ShouldBe(200);
@@ -154,7 +154,7 @@ public sealed class EventEndpointTests(IngestionApiFixture fixture)
             HttpMethod.Post,
             $"/events/{Guid.NewGuid()}/replay")
         {
-            Headers = { { "Authorization", $"TenantApiKey {TenantApiKeyAuthHandlerTests.TestToken}" } }
+            Headers = { { "Authorization", $"Bearer {TenantApiKeyAuthHandlerTests.TestToken}" } }
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -168,7 +168,7 @@ public sealed class EventEndpointTests(IngestionApiFixture fixture)
             Content = JsonContent.Create(body)
         };
         message.Headers.TryAddWithoutValidation(
-            "Authorization", $"TenantApiKey {TenantApiKeyAuthHandlerTests.TestToken}");
+            "Authorization", $"Bearer {TenantApiKeyAuthHandlerTests.TestToken}");
         return message;
     }
 

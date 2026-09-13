@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Ingestion;
@@ -24,13 +22,14 @@ internal sealed class QueueSourceReader(
                 SELECT
                     s.tenant_id AS TenantId, t.slug AS TenantSlug, s.topic_id AS TopicId, s.id AS SourceId,
                     s.configuration AS SourceConfigurationJson,
-                    i.manifest AS ManifestJson
+                    s.event_identity_rule AS EventIdentityRuleJson,
+                    s.input_requirements AS SourceContractSchemaJson,
+                    s.mapping AS SourceMappingJson,
+                    s.revision AS Revision
                 FROM sources s
-                JOIN connections c ON c.tenant_id = s.tenant_id AND c.id = s.connection_id
-                JOIN connectors i ON i.id = c.connector_id
+                JOIN connectors i ON i.id = s.connector_id
                 JOIN tenants t ON t.id = s.tenant_id
                 WHERE s.type = N'queue' AND s.status = N'active'
-                  AND c.status = N'active'
                   AND i.status = N'active' AND i.direction IN (N'source', N'both')
                   AND JSON_VALUE(s.configuration, '$.transport') = N'azure_service_bus'
                 """
@@ -41,13 +40,14 @@ internal sealed class QueueSourceReader(
                     s.topic_id AS TopicId,
                     s.id AS SourceId,
                     s.configuration::text AS SourceConfigurationJson,
-                    i.manifest::text AS ManifestJson
+                    s.event_identity_rule::text AS EventIdentityRuleJson,
+                    s.input_requirements::text AS SourceContractSchemaJson,
+                    s.mapping::text AS SourceMappingJson,
+                    s.revision AS Revision
                 FROM sources s
-                JOIN connections c ON c.tenant_id = s.tenant_id AND c.id = s.connection_id
-                JOIN connectors i ON i.id = c.connector_id
+                JOIN connectors i ON i.id = s.connector_id
                 JOIN tenants t ON t.id = s.tenant_id
                 WHERE s.type = 'queue' AND s.status = 'active'
-                  AND c.status = 'active'
                   AND i.status = 'active' AND i.direction IN ('source', 'both')
                   AND s.configuration ->> 'transport' = 'azure_service_bus'
                 """;
@@ -81,13 +81,10 @@ internal sealed class QueueSourceReader(
         public Guid TopicId { get; init; }
         public Guid SourceId { get; init; }
         public string SourceConfigurationJson { get; init; } = "{}";
-        public string ManifestJson { get; init; } = "";
-
-        // Both JSON documents this row was built from, hashed together: any edit to the Source
-        // configuration or to the Connector manifest it draws its contract from changes the value,
-        // and nothing else does. Cheaper and harder to forget than comparing resolved fields.
-        private string RevisionOf() => Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes($"{SourceConfigurationJson}{ManifestJson}")));
+        public string? EventIdentityRuleJson { get; init; }
+        public string? SourceContractSchemaJson { get; init; }
+        public string? SourceMappingJson { get; init; }
+        public string Revision { get; init; } = "";
 
 
         private static string? ReadString(JsonElement element, string property) =>
@@ -100,8 +97,7 @@ internal sealed class QueueSourceReader(
         public ResolvedQueueSource? ToResolvedQueueSource()
         {
             JsonElement configuration = JsonSerializer.Deserialize<JsonElement>(SourceConfigurationJson);
-            if (!configuration.TryGetProperty("source_contract", out JsonElement contractKeyElement)
-                || !configuration.TryGetProperty("transport_config", out JsonElement transportConfig)
+            if (!configuration.TryGetProperty("transport_config", out JsonElement transportConfig)
                 || transportConfig.ValueKind != JsonValueKind.Object
                 || !configuration.TryGetProperty("authentication", out JsonElement authenticationElement))
             {
@@ -120,13 +116,6 @@ internal sealed class QueueSourceReader(
             if (queueName is null && (serviceBusTopicName is null || serviceBusSubscriptionName is null))
                 return null;
 
-            ConnectorManifest manifest = JsonSerializer.Deserialize<ConnectorManifest>(
-                ManifestJson, StoredJson.Options)!;
-            ConnectorSourceContractManifest? contract = manifest.SourceContracts
-                .FirstOrDefault(candidate => candidate.Key == contractKeyElement.GetString());
-            if (contract is null)
-                return null;
-
             string? scheme = authenticationElement.TryGetProperty("scheme", out JsonElement schemeElement)
                 ? schemeElement.GetString()
                 : null;
@@ -138,7 +127,7 @@ internal sealed class QueueSourceReader(
 
             return new ResolvedQueueSource
             {
-                Revision = RevisionOf(),
+                Revision = Revision,
                 TenantId = TenantId,
                 TenantSlug = TenantSlug,
                 TopicId = TopicId,
@@ -148,10 +137,15 @@ internal sealed class QueueSourceReader(
                 ServiceBusTopicName = serviceBusTopicName,
                 ServiceBusSubscriptionName = serviceBusSubscriptionName,
                 Authentication = new QueueAuthentication { Scheme = scheme, SecretReference = secretReference },
-                SourceContractSchema = contract.Schema,
-                SourceMapping = contract.Mapping is { } mapping
-                    ? new TransformSpec(mapping.Engine, mapping.Version, mapping.Expression)
-                    : null,
+                EventIdentityRule = string.IsNullOrWhiteSpace(EventIdentityRuleJson)
+                    ? null
+                    : JsonSerializer.Deserialize<SourceEventIdentityRule>(EventIdentityRuleJson, StoredJson.Options),
+                SourceContractSchema = string.IsNullOrWhiteSpace(SourceContractSchemaJson)
+                    ? null : JsonSerializer.Deserialize<JsonElement>(SourceContractSchemaJson),
+                SourceMapping = string.IsNullOrWhiteSpace(SourceMappingJson)
+                    ? null : JsonSerializer.Deserialize<SourceMapping>(SourceMappingJson, StoredJson.Options) is { } mapping
+                        ? new TransformSpec(mapping.Engine, mapping.Version, mapping.Expression)
+                        : null,
             };
         }
     }

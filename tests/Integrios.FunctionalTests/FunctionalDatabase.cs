@@ -56,6 +56,9 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
     public string Json(string parameter) => Provider == "postgres" ? $"{parameter}::jsonb" : parameter;
     public string JsonText(string column) => Provider == "postgres" ? $"{column}::text" : column;
 
+    // Postgres has a boolean literal; SQL Server stores the same column as bit.
+    public string False => Provider == "postgres" ? "false" : "0";
+
     public IConfiguration Configuration => new ConfigurationBuilder().AddInMemoryCollection(
         new Dictionary<string, string?>
         {

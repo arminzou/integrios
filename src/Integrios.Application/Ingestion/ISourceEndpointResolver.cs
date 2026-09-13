@@ -17,9 +17,9 @@ public sealed record ResolvedSourceEndpoint
     public required string TenantSlug { get; init; }
     public required Guid TopicId { get; init; }
     public required Guid SourceId { get; init; }
-    public required Guid ConnectionId { get; init; }
     public required string ConnectorKey { get; init; }
     public SourceVerification? SourceVerification { get; init; }
+    public SourceEventIdentityRule? EventIdentityRule { get; init; }
     public required JsonElement? SourceContractSchema { get; init; }
     public required TransformSpec? SourceMapping { get; init; }
 }

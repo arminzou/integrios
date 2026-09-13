@@ -20,6 +20,7 @@ public interface ISourceVerifier
 
 public interface ISourceVerifierRegistry
 {
+    IReadOnlyCollection<ISourceVerifier> Registered { get; }
     ISourceVerifier GetRequired(string scheme);
     bool TryGet(string scheme, out ISourceVerifier verifier);
 }

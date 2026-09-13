@@ -1,5 +1,6 @@
 using System.Text;
 using Integrios.Application.Delivery;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.UnitTests;
 

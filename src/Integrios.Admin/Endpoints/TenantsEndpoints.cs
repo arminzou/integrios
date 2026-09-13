@@ -1,5 +1,9 @@
 using Integrios.Application.Authoring.Tenants;
+using Integrios.Domain.Enums;
 using MediatR;
+
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -9,11 +13,14 @@ public sealed class TenantsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateTenant);
-        group.MapGet(ListTenants);
-        group.MapGet(GetTenantById, "/{id:guid}");
-        group.MapPatch(UpdateTenant, "/{id:guid}");
+        // Every response the dashboard reads declares its schema, so the generated browser client
+        // is typed against the real contract and the frontend check fails when a shape changes.
+        group.MapPost(CreateTenant).Produces<TenantDto>(StatusCodes.Status201Created);
+        group.MapGet(ListTenants).Produces<TenantListDto>();
+        group.MapGet(GetTenantById, "/{id:guid}").Produces<TenantDto>();
+        group.MapPut(UpdateTenant, "/{id:guid}").Produces<TenantDto>();
         group.MapPost(DeactivateTenant, "/{id:guid}/deactivate");
+        group.MapGet(GetTenantOverview, "/{id:guid}/overview").Produces<TenantOverviewDto>();
     }
 
     private static async Task<IResult> CreateTenant(
@@ -29,12 +36,15 @@ public sealed class TenantsEndpoints : IEndpointGroup
 
     private static async Task<IResult> ListTenants(
         IMediator mediator,
+        string? status,
+        string? environment,
+        string? name,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var response = await mediator.Send(new ListTenantsQuery(after, limit), cancellationToken);
+        var response = await mediator.Send(new ListTenantsQuery(ListFilter.ParseEnum<OperationalStatus>(status, "Tenant status must be active or disabled."), ListFilter.Trimmed(environment), ListFilter.Trimmed(name), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 
@@ -59,6 +69,21 @@ public sealed class TenantsEndpoints : IEndpointGroup
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
+    private static async Task<IResult> GetTenantOverview(
+        Guid id,
+        IMediator mediator,
+        // Explicit because the type is a concrete registration rather than an interface: minimal-API
+        // parameter inference only reads it as a service while a container is present, so metadata
+        // built without one infers a body parameter and refuses the GET.
+        [FromServices] PublicIngestionBaseUri ingestion,
+        CancellationToken cancellationToken)
+    {
+        TenantOverviewDto? response = await mediator.Send(
+            new GetTenantOverviewQuery(id, ingestion.Value.ToString()),
+            cancellationToken);
+        return response is null ? Results.NotFound() : Results.Ok(response);
+    }
+
     private static async Task<IResult> DeactivateTenant(
         Guid id,
         IMediator mediator,
@@ -70,4 +95,7 @@ public sealed class TenantsEndpoints : IEndpointGroup
 }
 
 internal sealed record CreateTenantRequest(string? Slug, string? Name, string? Environment, string? Description);
-internal sealed record UpdateTenantRequest(string? Name, string? Description, string? Environment);
+internal sealed record UpdateTenantRequest(
+    [property: JsonRequired] string? Name,
+    [property: JsonRequired] string? Description,
+    [property: JsonRequired] string? Environment);

@@ -2,6 +2,8 @@ using Integrios.Tests.Shared;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace Integrios.AcceptanceTests;
@@ -68,9 +70,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             spareContext, HttpMethod.Get, $"/events/{Guid.NewGuid()}");
         revokedDataPlane.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        Guid sourceConnection = await CreateConnectionAsync(primary, HttpConnectorId, "tenant-read-source", "http://mocksink:8080/sink/read-source");
         Guid topic = await CreateTopicAsync(primary, "tenant-reads");
-        Guid source = await CreateEventApiSourceAsync(primary, sourceConnection, topic);
+        Guid source = await CreateEventApiSourceAsync(primary, HttpConnectorId, topic);
         EventAcceptance accepted = await IngestAsync(primary, source, "tenant-reads", "read.test", new { ok = true });
 
         using HttpResponseMessage ownRead = await SendIngestionAsync(primary, HttpMethod.Get, $"/events/{accepted.Id}");
@@ -89,36 +90,30 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         TenantContext primary = await CreateTenantAsync($"source-contract-{Suffix()}");
         TenantContext isolated = await CreateTenantAsync($"source-contract-{Suffix()}");
 
-        Guid sourceConnection = await CreateConnectionAsync(primary, HttpConnectorId, "source", "http://mocksink:8080/sink/source");
         Guid topic = await CreateTopicAsync(primary, "payments");
-        Guid source = await CreateEventApiSourceAsync(primary, sourceConnection, topic);
+        Guid source = await CreateEventApiSourceAsync(primary, HttpConnectorId, topic);
 
         using HttpResponseMessage duplicateTopic = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/topics",
-            new { name = "payments" });
+            new { key = "payments" });
         duplicateTopic.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
-        Guid isolatedConnection = await CreateConnectionAsync(isolated, HttpConnectorId, "isolated-source", "http://mocksink:8080/sink/isolated-source");
         Guid isolatedTopic = await CreateTopicAsync(isolated, "isolated-topic");
-        Guid isolatedSource = await CreateEventApiSourceAsync(isolated, isolatedConnection, isolatedTopic);
+        Guid isolatedSource = await CreateEventApiSourceAsync(isolated, HttpConnectorId, isolatedTopic);
         await AssertAcceptanceRejectedAsync(primary, isolatedSource, "payments");
 
         Guid unassociated = Guid.NewGuid();
         await AssertAcceptanceRejectedAsync(primary, unassociated, "payments");
 
-        Guid destinationOnly = await CreateConnectionAsync(
-            primary,
-            ApiKeyConnectorId,
-            "destination-only-source",
-            "http://mocksink:8080/sink/destination-only",
-            ApiKeyAuth("shared_secret"));
-        await AssertAcceptanceRejectedAsync(primary, destinationOnly, "payments");
+        using HttpResponseMessage destinationOnly = await PostAdminAsync(
+            $"/admin/tenants/{primary.Id}/sources",
+            new { connector_id = ApiKeyConnectorId, topic_id = topic, name = "intake", type = "event_api", configuration = new { } });
+        destinationOnly.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
-        Guid inactive = await CreateConnectionAsync(primary, HttpConnectorId, "inactive-source", "http://mocksink:8080/sink/inactive");
-        Guid inactiveSource = await CreateEventApiSourceAsync(primary, inactive, topic);
-        using HttpResponseMessage deactivate = await PostAdminAsync(
-            $"/admin/tenants/{primary.Id}/connections/{inactive}/deactivate",
-            new { });
+        Guid inactiveSource = await CreateEventApiSourceAsync(primary, HttpConnectorId, topic);
+        using HttpResponseMessage deactivate = await SendAdminAsync(
+            HttpMethod.Delete,
+            $"/admin/tenants/{primary.Id}/sources/{inactiveSource}");
         deactivate.StatusCode.ShouldBe(HttpStatusCode.OK);
         await AssertAcceptanceRejectedAsync(primary, inactiveSource, "payments");
 
@@ -164,11 +159,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         await fixture.WriteSecretAsync(tenant.Slug, "api_key", "api-key-value");
         await fixture.WriteSecretAsync(tenant.Slug, "bearer_token", "bearer-token-value");
 
-        Guid transformedDestination = await CreateConnectionAsync(
+        Guid transformedDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "transform-destination", "http://mocksink:8080/sink/transform");
-        Guid apiDestination = await CreateConnectionAsync(
+        Guid apiDestination = await CreateDestinationAsync(
             tenant, ApiKeyConnectorId, "api-destination", "http://mocksink:8080/sink/api-auth", ApiKeyAuth("api_key"));
-        Guid bearerDestination = await CreateConnectionAsync(
+        Guid bearerDestination = await CreateDestinationAsync(
             tenant, BearerConnectorId, "bearer-destination", "http://mocksink:8080/sink/bearer-auth", BearerAuth("bearer_token"));
 
         object transform = Jsonata("{ \"kind\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }");
@@ -224,9 +219,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         TenantContext tenant = await CreateTenantAsync($"retry-{Suffix()}");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "retry");
 
-        Guid successDestination = await CreateConnectionAsync(
+        Guid successDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "independent-success", "http://mocksink:8080/sink/independent-success");
-        Guid failureDestination = await CreateConnectionAsync(
+        Guid failureDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "independent-failure", "http://mocksink:8080/sink/independent-failure");
         Guid successSubscription = await CreateSubscriptionAsync(
             tenant, topic, "independent-success", successDestination, "independent.test");
@@ -261,7 +256,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await fixture.WireMockSink.ResetControlAsync("independent-failure");
         }
 
-        Guid snapshotDestination = await CreateConnectionAsync(
+        Guid snapshotDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "snapshot-destination", "http://mocksink:8080/sink/snapshot");
         Guid snapshotSubscription = await CreateSubscriptionAsync(
             tenant, topic, "snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"first\" }"));
@@ -272,7 +267,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 tenant, source, "retry", "snapshot.test", new { value = 1 });
             await WaitForAttemptCountAsync(snapshotEvent.Id, snapshotSubscription, 1);
 
-            using HttpResponseMessage update = await PatchAdminAsync(
+            using HttpResponseMessage update = await PutAdminAsync(
                 $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{snapshotSubscription}",
                 SubscriptionBody("snapshot", snapshotDestination, "snapshot.test", Jsonata("{ \"version\": \"second\" }")));
             update.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -291,7 +286,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await fixture.WireMockSink.ResetControlAsync("snapshot");
         }
 
-        Guid runtimeDestination = await CreateConnectionAsync(
+        Guid runtimeDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "runtime-transform", "http://mocksink:8080/sink/runtime-transform");
         Guid runtimeSubscription = await CreateSubscriptionAsync(
             tenant, topic, "runtime-transform", runtimeDestination, "runtime.transform", Jsonata("$error(\"acceptance runtime failure\")"));
@@ -309,37 +304,27 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "boundary");
 
         using HttpResponseMessage relative = await PostAdminAsync(
-            $"/admin/tenants/{tenant.Id}/connections",
-            ConnectionBody(HttpConnectorId, "relative-url", "/relative"));
-        JsonElement relativeBody = await AssertJsonAsync(relative, HttpStatusCode.Created);
-        using HttpResponseMessage relativeRejected = await PostAdminAsync(
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
-            SubscriptionBody("relative-url", relativeBody.GetProperty("id").GetGuid(), "relative.test"));
-        relativeRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            $"/admin/tenants/{tenant.Id}/destinations",
+            DestinationBody(HttpConnectorId, "relative-url", "/relative"));
+        relative.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         using HttpResponseMessage ftp = await PostAdminAsync(
-            $"/admin/tenants/{tenant.Id}/connections",
-            ConnectionBody(HttpConnectorId, "ftp-url", "ftp://example.test/file"));
-        JsonElement ftpBody = await AssertJsonAsync(ftp, HttpStatusCode.Created);
-        using HttpResponseMessage ftpRejected = await PostAdminAsync(
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
-            SubscriptionBody("ftp-url", ftpBody.GetProperty("id").GetGuid(), "ftp.test"));
-        ftpRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            $"/admin/tenants/{tenant.Id}/destinations",
+            DestinationBody(HttpConnectorId, "ftp-url", "ftp://example.test/file"));
+        ftp.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         using HttpResponseMessage privateDestination = await PostAdminAsync(
-            $"/admin/tenants/{tenant.Id}/connections",
-            ConnectionBody(HttpConnectorId, "operator-loopback", "http://127.0.0.1:1/private"));
+            $"/admin/tenants/{tenant.Id}/destinations",
+            DestinationBody(HttpConnectorId, "operator-loopback", "http://127.0.0.1:1/private"));
         privateDestination.StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        Guid sourceOnlyConnection = await CreateConnectionAsync(
-            tenant, SourceOnlyConnectorId, "source-only-destination", "http://mocksink:8080/sink/source-only");
         using HttpResponseMessage directionRejected = await PostAdminAsync(
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
-            SubscriptionBody("source-only", sourceOnlyConnection, "direction.test"));
+            $"/admin/tenants/{tenant.Id}/destinations",
+            DestinationBody(SourceOnlyConnectorId, "source-only-destination", "http://mocksink:8080/sink/source-only"));
         directionRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         await fixture.WriteSecretAsync(tenant.Slug, "redirect_secret", "redirect-secret-value");
-        Guid redirectDestination = await CreateConnectionAsync(
+        Guid redirectDestination = await CreateDestinationAsync(
             tenant,
             ApiKeyConnectorId,
             "redirect-destination",
@@ -360,7 +345,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             $"SELECT status FROM event_deliveries WHERE event_id = '{redirected.Id}' AND subscription_id = '{redirectSubscription}'")).ShouldNotBe("succeeded");
         (await ReceiptCountAsync("redirect-target")).ShouldBe(0);
 
-        Guid slowDestination = await CreateConnectionAsync(
+        Guid slowDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "slow-destination", "http://mocksink:8080/sink/slow-timeout");
         Guid slowSubscription = await CreateSubscriptionAsync(
             tenant, topic, "slow-timeout", slowDestination, "slow.test");
@@ -390,8 +375,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         TenantContext tenant = await CreateTenantAsync($"drain-{Suffix()}");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "drain");
-        Guid sourceConnection = await fixture.ScalarAsync<Guid>($"SELECT connection_id FROM sources WHERE id = '{source}'");
-        Guid destination = await CreateConnectionAsync(
+        Guid destination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "drain-destination", "http://mocksink:8080/sink/drain");
         Guid subscription = await CreateSubscriptionAsync(
             tenant, topic, "drain-subscription", destination, "drain.test");
@@ -405,14 +389,18 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         foreach (string path in new[]
         {
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{subscription}/deactivate",
-            $"/admin/tenants/{tenant.Id}/connections/{destination}/deactivate",
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/deactivate",
-            $"/admin/tenants/{tenant.Id}/connections/{sourceConnection}/deactivate"
+            $"/admin/tenants/{tenant.Id}/destinations/{destination}/deactivate",
+            $"/admin/tenants/{tenant.Id}/topics/{topic}/deactivate"
         })
         {
             using HttpResponseMessage deactivated = await PostAdminAsync(path, new { });
             deactivated.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
+
+        using HttpResponseMessage revoked = await SendAdminAsync(
+            HttpMethod.Delete,
+            $"/admin/tenants/{tenant.Id}/sources/{source}");
+        revoked.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await fixture.ScalarAsync<string>(
             $"SELECT status FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{subscription}'")).ShouldBe("succeeded");
@@ -433,7 +421,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         TenantContext rotation = await CreateTenantAsync($"rotation-{Suffix()}");
         fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v1", "rotation-v1");
         (Guid rotationSource, Guid rotationTopic) = await CreateSourceTopicAsync(rotation, "rotation");
-        Guid rotationDestination = await CreateConnectionAsync(
+        Guid rotationDestination = await CreateDestinationAsync(
             rotation, ApiKeyConnectorId, "rotation-destination", "http://mocksink:8080/sink/rotation", ApiKeyAuth("shared_secret"));
         Guid rotationSubscription = await CreateSubscriptionAsync(
             rotation, rotationTopic, "rotation", rotationDestination, "rotation.test");
@@ -532,14 +520,21 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     [Fact]
     public async Task Secrets_NeverAppearInDurableEvidence()
     {
-        // The probe secret is resolved through a real authenticated delivery first, so its absence
-        // from durable evidence is falsifiable rather than vacuous.
+        // Both probe secrets are resolved through real traffic first, so their absence from durable
+        // evidence is falsifiable rather than vacuous. Outbound is a delivery the Worker
+        // authenticates; inbound is a webhook Ingestion verifies. They are separate mounts read by
+        // separate processes, so covering only one says nothing about the other.
         TenantContext tenant = await CreateTenantAsync($"secrets-{Suffix()}");
         await fixture.WriteSecretAsync(tenant.Slug, "probe_secret", "probe-secret-value");
         await AssertAuthenticatedTenantDeliveryAsync(tenant, "probe", "probe_secret", "probe-secret-value");
 
+        await fixture.WriteSourceSecretAsync(tenant.Slug, "probe_source_secret", "probe-source-secret-value");
+        await AssertVerifiedWebhookIntakeAsync(tenant, "probe_source_secret", "probe-source-secret-value");
+
         (await fixture.ScalarAsync<long>(
-            "SELECT COUNT(*) FROM connections WHERE config::text ~ 'probe-secret-value' OR COALESCE(source_verification::text, '') ~ 'probe-secret-value' OR COALESCE(destination_authentication::text, '') ~ 'probe-secret-value'")).ShouldBe(0L);
+            "SELECT COUNT(*) FROM destinations WHERE configuration::text ~ 'probe-secret-value' OR COALESCE(authentication::text, '') ~ 'probe-secret-value'")).ShouldBe(0L);
+        (await fixture.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM sources WHERE COALESCE(verification::text, '') ~ 'probe-source-secret-value' OR configuration::text ~ 'probe-source-secret-value'")).ShouldBe(0L);
         (await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM delivery_attempts WHERE COALESCE(error_message, '') ~ 'probe-secret-value'")).ShouldBe(0L);
 
@@ -548,6 +543,45 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await fixture.GetServiceLogsAsync("ingestion"),
             await fixture.GetServiceLogsAsync("worker"));
         logs.ShouldNotContain("probe-secret-value", Case.Sensitive);
+        logs.ShouldNotContain("probe-source-secret-value", Case.Sensitive);
+    }
+
+    // Drives one signed webhook end to end so the Source-side secret is genuinely resolved by
+    // Ingestion. Without this the sources.verification assertion above would pass for a deployment
+    // that had never held an inbound secret at all.
+    private async Task AssertVerifiedWebhookIntakeAsync(
+        TenantContext tenant,
+        string secretReference,
+        string secretValue)
+    {
+        Guid topic = await CreateTopicAsync(tenant, $"inbound-{Suffix()}");
+        using HttpResponseMessage created = await PostAdminAsync(
+            $"/admin/tenants/{tenant.Id}/sources",
+            new
+            {
+                connector_id = fixture.VerifiedSourceConnectorId.ToString(),
+                topic_id = topic,
+                name = "verified-intake",
+                type = "webhook",
+                configuration = new { },
+                verification = new { scheme = "hmac_sha256", config = new { }, secret_refs = new { secret = secretReference } },
+                input_requirements = (object?)null,
+                mapping = Jsonata("""{ "event_type": "probe.inbound", "payload": $ }"""),
+                event_identity_rule = (object?)null,
+            });
+        JsonElement source = await AssertJsonAsync(created, HttpStatusCode.Created);
+        string callback = source.GetProperty("configuration").GetProperty("callback_id").GetString()!;
+
+        const string payload = """{"probe":"inbound"}""";
+        string signature = "sha256=" + Convert.ToHexString(
+            HMACSHA256.HashData(Encoding.UTF8.GetBytes(secretValue), Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+
+        using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+        using HttpRequestMessage request = new(HttpMethod.Post, $"/webhooks/{callback}") { Content = content };
+        request.Headers.TryAddWithoutValidation("X-Hub-Signature-256", signature);
+
+        using HttpResponseMessage accepted = await fixture.IngestionClient.SendAsync(request);
+        await AssertJsonAsync(accepted, HttpStatusCode.Accepted);
     }
 
     private async Task<TenantContext> CreateTenantAsync(string slug)
@@ -570,7 +604,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             tenantApiKeyBody.GetProperty("token").GetString()!);
     }
 
-    private async Task<Guid> CreateConnectionAsync(
+    private async Task<Guid> CreateDestinationAsync(
         TenantContext tenant,
         string connectorId,
         string name,
@@ -578,24 +612,24 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         object? auth = null)
     {
         using HttpResponseMessage response = await PostAdminAsync(
-            $"/admin/tenants/{tenant.Id}/connections",
-            ConnectionBody(connectorId, name, url, auth));
+            $"/admin/tenants/{tenant.Id}/destinations",
+            DestinationBody(connectorId, name, url, auth));
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateTopicAsync(TenantContext tenant, string name)
+    private async Task<Guid> CreateTopicAsync(TenantContext tenant, string key)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics",
-            new { name });
+            new { key });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateEventApiSourceAsync(TenantContext tenant, Guid connection, Guid topic)
+    private async Task<Guid> CreateEventApiSourceAsync(TenantContext tenant, string connectorId, Guid topic)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/sources",
-            new { connection_id = connection, topic_id = topic, type = "event_api", configuration = new { source_contract = "event_json" } });
+            new { connector_id = connectorId, topic_id = topic, name = "intake", type = "event_api", configuration = new { } });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
@@ -615,10 +649,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
     private async Task<(Guid Source, Guid Topic)> CreateSourceTopicAsync(TenantContext tenant, string topicName)
     {
-        Guid sourceConnection = await CreateConnectionAsync(
-            tenant, HttpConnectorId, $"{topicName}-source", $"http://mocksink:8080/sink/{topicName}-source");
         Guid topic = await CreateTopicAsync(tenant, topicName);
-        Guid source = await CreateEventApiSourceAsync(tenant, sourceConnection, topic);
+        Guid source = await CreateEventApiSourceAsync(tenant, HttpConnectorId, topic);
         return (source, topic);
     }
 
@@ -629,7 +661,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         string expectedValue)
     {
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, sink);
-        Guid destination = await CreateConnectionAsync(
+        Guid destination = await CreateDestinationAsync(
             tenant, ApiKeyConnectorId, $"{sink}-destination", $"http://mocksink:8080/sink/{sink}", ApiKeyAuth(secretReference));
         Guid subscription = await CreateSubscriptionAsync(
             tenant, topic, $"{sink}-subscription", destination, $"{sink}.test");
@@ -646,7 +678,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         string expectedPhase = "secret_resolution")
     {
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, sink);
-        Guid destination = await CreateConnectionAsync(
+        Guid destination = await CreateDestinationAsync(
             tenant, ApiKeyConnectorId, $"{sink}-destination", $"http://mocksink:8080/sink/{sink}", ApiKeyAuth(secretReference));
         Guid subscription = await CreateSubscriptionAsync(
             tenant, topic, $"{sink}-subscription", destination, $"{sink}.test");
@@ -702,8 +734,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private async Task<HttpResponseMessage> PostAdminAsync(string path, object body) =>
         await SendAdminAsync(HttpMethod.Post, path, body);
 
-    private async Task<HttpResponseMessage> PatchAdminAsync(string path, object body) =>
-        await SendAdminAsync(HttpMethod.Patch, path, body);
+    private async Task<HttpResponseMessage> PutAdminAsync(string path, object body) =>
+        await SendAdminAsync(HttpMethod.Put, path, body);
 
     private async Task<HttpResponseMessage> SendAdminAsync(HttpMethod method, string path, object? body = null)
     {
@@ -721,7 +753,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         object? body = null)
     {
         var request = new HttpRequestMessage(method, path);
-        request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {tenant.ApiToken}");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {tenant.ApiToken}");
         if (body is not null)
             request.Content = JsonContent.Create(body);
         return await fixture.IngestionClient.SendAsync(request);
@@ -777,22 +809,25 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private async Task<int> ReceiptCountAsync(string sink)
         => await fixture.WireMockSink.ReceiptCountAsync(sink);
 
-    private static object ConnectionBody(string connectorId, string name, string url, object? auth = null) => new
+    private static object DestinationBody(string connectorId, string name, string url, object? auth = null) => new
     {
         connector_id = connectorId,
         name,
-        config = new { base_uri = url },
-        destination_authentication = auth,
+        configuration = new { base_uri = url },
+        authentication = auth,
         environment = "production"
     };
 
-    private static object SubscriptionBody(string name, Guid destinationConnectionId, string eventType, object? transform = null) => new
+    private static object SubscriptionBody(string name, Guid destinationId, string eventType, object? transform = null) => new
     {
         name,
         match_rules = new { event_type = eventType },
-        destination_connection_id = destinationConnectionId,
+        destination_id = destinationId,
         mapping = transform,
-        order_index = 10
+        http_delivery = (object?)null,
+        http_success = (object?)null,
+        order_index = 10,
+        description = (string?)null,
     };
 
     private static object ApiKeyAuth(string secretReference) => new

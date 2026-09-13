@@ -25,22 +25,22 @@ internal sealed class SecretValidationReader(IntegriosDbContext context) : ISecr
             .ThenBy(tenant => tenant.Id)
             .ToListAsync(cancellationToken);
 
-    public Task<Connection?> FindConnectionAsync(
+    public Task<Destination?> FindDestinationAsync(
         Guid tenantId,
-        Guid connectionId,
+        Guid destinationId,
         CancellationToken cancellationToken) =>
-        context.Connections.AsNoTracking().SingleOrDefaultAsync(
-            connection => connection.TenantId == tenantId && connection.Id == connectionId,
+        context.Destinations.AsNoTracking().SingleOrDefaultAsync(
+            destination => destination.TenantId == tenantId && destination.Id == destinationId,
             cancellationToken);
 
-    public async Task<IReadOnlyList<Connection>> ListActiveConnectionsAsync(
+    public async Task<IReadOnlyList<Destination>> ListActiveDestinationsAsync(
         Guid tenantId,
         CancellationToken cancellationToken) =>
-        await context.Connections.AsNoTracking()
-            .Where(connection =>
-                connection.TenantId == tenantId
-                && connection.Status == OperationalStatus.Active)
-            .OrderBy(connection => connection.CreatedAt)
-            .ThenBy(connection => connection.Id)
+        await context.Destinations.AsNoTracking()
+            .Where(destination =>
+                destination.TenantId == tenantId
+                && destination.Status == OperationalStatus.Active)
+            .OrderBy(destination => destination.CreatedAt)
+            .ThenBy(destination => destination.Id)
             .ToListAsync(cancellationToken);
 }

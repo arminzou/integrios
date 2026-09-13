@@ -100,12 +100,13 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public async Task<Guid> SeedTopicAsync(Guid tenantId, string name)
     {
         Guid topicId = Guid.NewGuid();
-        await ExecuteAsync($"INSERT INTO topics (id,tenant_id,name,status,created_at,updated_at) VALUES (@Id,@TenantId,@Name,'active',{database.Now},{database.Now})",
+        await ExecuteAsync(
+            $"INSERT INTO topics (id,tenant_id,{database.KeyColumn},name,status,created_at,updated_at) VALUES (@Id,@TenantId,@Name,@Name,'active',{database.Now},{database.Now})",
             new { Id = topicId, TenantId = tenantId, Name = name });
         return topicId;
     }
 
-    public async Task<Guid> SeedSourceConnectionAsync(
+    public async Task<Guid> SeedSourceConnectorAsync(
         Guid tenantId, string name, string status = "active", string direction = "source")
     {
         Guid connectorId = SourceConnectorId;
@@ -116,44 +117,49 @@ public sealed class PostgresApiFixture : IAsyncLifetime
                 key, TestConnectorManifest.Create(key, key, direction));
         }
 
-        Guid connectionId = Guid.NewGuid();
-        await ExecuteAsync($$$"""
-            INSERT INTO connections (id,tenant_id,connector_id,name,config,status,created_at,updated_at)
-            VALUES (@Id,@TenantId,@ConnectorId,@Name,{{{database.Json("@Config")}}},@Status,{{{database.Now}}},{{{database.Now}}})
-            """, new
-            {
-                Id = connectionId, TenantId = tenantId, ConnectorId = connectorId,
-                Name = name, Config = "{}", Status = status
-            });
-        return connectionId;
+        if (status != "active")
+            await ExecuteAsync("UPDATE connectors SET status=@Status WHERE id=@Id", new { Status = status, Id = connectorId });
+        return connectorId;
     }
 
-    // Seeds a Connection bound to a purpose-built Connector manifest (schema/mapping shape the
-    // caller controls), for scenarios SeedSourceConnectionAsync's fixed test manifest can't cover.
-    public async Task<Guid> SeedConnectorConnectionAsync(Guid tenantId, string connectorKey, string manifestJson)
+    public async Task<Guid> SeedDestinationAsync(Guid tenantId, string name, string status = "active")
+    {
+        string key = $"test_destination_{Guid.NewGuid():N}";
+        Guid connectorId = await database.ApplyConnectorManifestAsync(
+            key, TestConnectorManifest.Create(key, key, "destination"));
+        Guid destinationId = Guid.NewGuid();
+        await ExecuteAsync($$$"""
+            INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status)
+            VALUES (@DestinationId, @TenantId, @ConnectorId, @Name, {{{database.Json("@Configuration")}}}, @Status)
+            """, new
+        {
+            DestinationId = destinationId,
+            TenantId = tenantId,
+            ConnectorId = connectorId,
+            Name = name,
+            Configuration = "{}",
+            Status = status,
+        });
+        return destinationId;
+    }
+
+    // Seeds a Connector with a caller-supplied manifest for scenarios the fixed test manifest cannot cover.
+    // caller controls), for scenarios SeedSourceConnectorAsync's fixed test manifest can't cover.
+    public async Task<Guid> SeedConnectorAsync(Guid tenantId, string connectorKey, string manifestJson)
     {
         Guid connectorId = await database.ApplyConnectorManifestAsync(connectorKey, manifestJson);
 
-        Guid connectionId = Guid.NewGuid();
-        await ExecuteAsync($$$"""
-            INSERT INTO connections (id,tenant_id,connector_id,name,config,status,created_at,updated_at)
-            VALUES (@Id,@TenantId,@ConnectorId,@Name,{{{database.Json("@Config")}}},'active',{{{database.Now}}},{{{database.Now}}})
-            """, new
-            {
-                Id = connectionId, TenantId = tenantId, ConnectorId = connectorId,
-                Name = connectorKey, Config = "{}"
-            });
-        return connectionId;
+        return connectorId;
     }
 
     public async Task<Guid> CreateEventApiSourceAsync(
-        Guid tenantId, Guid connectionId, Guid topicId,
-        string configuration = """{"source_contract":"event_json"}""")
+        Guid tenantId, Guid connectorId, Guid topicId,
+        string configuration = "{}")
     {
         Guid sourceId = Guid.NewGuid();
         await ExecuteAsync(
-            $"INSERT INTO sources (id, tenant_id, connection_id, topic_id, type, configuration, status) VALUES (@SourceId, @TenantId, @ConnectionId, @TopicId, 'event_api', {database.Json("@Configuration")}, 'active')",
-            new { SourceId = sourceId, TenantId = tenantId, ConnectionId = connectionId, TopicId = topicId, Configuration = configuration });
+            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-intake', 'event_api', {database.Json("@Configuration")}, @Revision, 'active', {database.Now}, {database.Now})",
+            new { SourceId = sourceId, TenantId = tenantId, ConnectorId = connectorId, TopicId = topicId, Configuration = configuration, Revision = Guid.NewGuid().ToString("N") });
         return sourceId;
     }
 
@@ -166,26 +172,26 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     public async Task ForceDeadLetteredDeliveryAsync(Guid eventId)
     {
         Guid tenantId = await ScalarAsync<Guid>("SELECT tenant_id FROM events WHERE id=@EventId", new { EventId = eventId });
-        Guid connectionId = Guid.NewGuid();
+        Guid destinationId = Guid.NewGuid();
         Guid topicId = Guid.NewGuid();
         Guid subscriptionId = Guid.NewGuid();
         Guid connectorId = await database.ApplyConnectorManifestAsync(
             "http", TestConnectorManifest.Create("http", "HTTP", "both"));
         await ExecuteAsync($$$"""
-            INSERT INTO connections (id,tenant_id,connector_id,name,config,status)
-            VALUES (@ConnectionId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
-            INSERT INTO topics (id,tenant_id,name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','active');
-            INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_connection_id,order_index,status)
-            VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@MatchRules")}}},@ConnectionId,0,'active');
+            INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status)
+            VALUES (@DestinationId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
+            INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','replay-test-topic','active');
+            INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_id,order_index,status)
+            VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@MatchRules")}}},@DestinationId,0,'active');
             INSERT INTO event_deliveries
-                (event_id,subscription_id,destination_connection_id,http_execution_snapshot,connector_key,
+                (event_id,subscription_id,destination_id,http_execution_snapshot,connector_key,
                  status,lifetime_attempt_count,retry_cycle_attempt_count,failed_at)
-            VALUES (@EventId,@SubscriptionId,@ConnectionId,{{{database.Json("@Snapshot")}}},'http',
+            VALUES (@EventId,@SubscriptionId,@DestinationId,{{{database.Json("@Snapshot")}}},'http',
                 'dead_lettered',3,3,{{{database.Now}}});
             """, new
             {
                 ConnectorId = connectorId,
-                ConnectionId = connectionId, TenantId = tenantId, Config = "{\"base_uri\":\"http://test/sink\"}",
+                DestinationId = destinationId, TenantId = tenantId, Config = "{\"base_uri\":\"http://test/sink\"}",
                 TopicId = topicId, SubscriptionId = subscriptionId,
                 MatchRules = "{\"event_types\":[\"payment.created\"]}",
                 Snapshot = "{\"version\":1,\"base_uri\":\"http://test/sink\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}",

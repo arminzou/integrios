@@ -13,12 +13,12 @@ public interface ISecretValidationReader
     Task<IReadOnlyList<Tenant>> ListActiveTenantsAsync(
         CancellationToken cancellationToken);
 
-    Task<Connection?> FindConnectionAsync(
+    Task<Destination?> FindDestinationAsync(
         Guid tenantId,
-        Guid connectionId,
+        Guid destinationId,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<Connection>> ListActiveConnectionsAsync(
+    Task<IReadOnlyList<Destination>> ListActiveDestinationsAsync(
         Guid tenantId,
         CancellationToken cancellationToken);
 }

@@ -104,18 +104,18 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 """
                 SELECT
                     s.id AS SubscriptionId,
-                    s.destination_connection_id AS DestinationConnectionId,
+                    s.destination_id AS DestinationId,
                     s.order_index AS OrderIndex,
                     s.match_rules::text AS MatchRulesJson,
                     s.mapping_config::text AS MappingConfigJson,
                     s.http_delivery::text AS HttpDeliveryJson,
-                    COALESCE(c.config->>'base_uri', '') AS DestinationUrl,
+                    COALESCE(d.configuration->>'base_uri', '') AS DestinationUrl,
                     i.key AS ConnectorKey,
-                    c.destination_authentication::text AS DestinationAuthJson,
-                    (i.manifest -> 'http_success')::text AS HttpSuccessJson
+                    d.authentication::text AS DestinationAuthJson,
+                    s.http_success::text AS HttpSuccessJson
                 FROM subscriptions s
-                JOIN connections c ON c.id = s.destination_connection_id
-                JOIN connectors i ON i.id = c.connector_id
+                JOIN destinations d ON d.id = s.destination_id
+                JOIN connectors i ON i.id = d.connector_id
                 WHERE s.topic_id = @TopicId
                   AND s.status = 'active'
                 """,
@@ -126,7 +126,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         return rows
             .Select(row => new SubscriptionRoutingCandidate(
                 row.SubscriptionId,
-                row.DestinationConnectionId,
+                row.DestinationId,
                 row.OrderIndex,
                 row.MatchRulesJson,
                 row.MappingConfigJson,
@@ -138,7 +138,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
 
     // Fanout correlates the base_uri, request shape, destination authentication, and effective HTTP
     // success rule a delivery will be dispatched and retried with, so a later Subscription,
-    // Connection, or Connector edit cannot change an in-flight delivery's request or success
+    // Destination or Subscription edit cannot change an in-flight delivery's request or success
     // criteria out from under it.
     private static string BuildHttpExecutionSnapshotJson(
         string destinationUrl, string httpDeliveryJson, string? destinationAuthJson, string? httpSuccessJson)
@@ -176,7 +176,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 INSERT INTO event_deliveries (
                     event_id,
                     subscription_id,
-                    destination_connection_id,
+                    destination_id,
                     connector_key,
                     http_execution_snapshot,
                     mapping_config_snapshot,
@@ -184,7 +184,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 VALUES (
                     @EventId,
                     @SubscriptionId,
-                    @DestinationConnectionId,
+                    @DestinationId,
                     @ConnectorKey,
                     @HttpExecutionSnapshotJson::jsonb,
                     @MappingConfigJson::jsonb,
@@ -195,7 +195,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 {
                     EventId = eventId,
                     target.SubscriptionId,
-                    target.DestinationConnectionId,
+                    target.DestinationId,
                     target.ConnectorKey,
                     target.HttpExecutionSnapshotJson,
                     target.MappingConfigJson,
@@ -217,7 +217,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
     private sealed record SubscriptionCandidateRow
     {
         public Guid SubscriptionId { get; init; }
-        public Guid DestinationConnectionId { get; init; }
+        public Guid DestinationId { get; init; }
         public int OrderIndex { get; init; }
         public string? MatchRulesJson { get; init; }
         public string? MappingConfigJson { get; init; }

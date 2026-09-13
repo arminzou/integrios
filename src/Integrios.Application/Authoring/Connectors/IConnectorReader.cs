@@ -11,6 +11,7 @@ public interface IConnectorReader
         CancellationToken cancellationToken);
 
     Task<(IReadOnlyList<Connector> Items, string? NextCursor)> ListAsync(
+        ConnectorDirection? direction,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken);

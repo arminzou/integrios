@@ -2,6 +2,7 @@ using Integrios.Admin;
 using Integrios.Admin.Auth;
 using Integrios.Admin.OperatorKeys;
 using Integrios.Admin.Bootstrap;
+using Integrios.Admin.Dashboard;
 using Integrios.Admin.Database;
 using Integrios.Admin.Endpoints;
 using Integrios.Admin.ErrorHandling;
@@ -10,7 +11,6 @@ using Integrios.Application;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
-using Microsoft.AspNetCore.Authentication;
 using System.Text.Json;
 
 if (args is ["bootstrap", ..])
@@ -34,6 +34,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<OperatorKeySchemeTransformer>();
+    options.AddSchemaTransformer<EventStatusSchemaTransformer>();
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AdminExceptionHandler>();
@@ -41,9 +42,19 @@ builder.Services.AddAdminApplicationServices();
 builder.Services.AddAdminInfrastructureServices(builder.Configuration);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-admin");
 
-builder.Services.AddAuthentication(OperatorKeyAuthHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, OperatorKeyAuthHandler>(OperatorKeyAuthHandler.SchemeName, _ => { });
-builder.Services.AddAuthorization();
+builder.Services.AddOperatorAuthentication(builder.Configuration);
+// Matches Integrios:Admin:Oidc:RequireHttpsMetadata's own default: secure-only except for a local
+// plaintext-HTTP deployment that explicitly opted out.
+bool requireHttpsCookies = builder.Configuration.GetValue<bool?>(
+    OperatorOidcOptions.SectionKey + ":RequireHttpsMetadata") ?? true;
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-Integrios-Antiforgery";
+    options.Cookie.Name = "integrios_antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = requireHttpsCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+});
 
 var app = builder.Build();
 
@@ -58,12 +69,17 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseMiddleware<OperatorAntiforgeryMiddleware>();
 app.UseAuthorization();
 
-var admin = app.MapGroup("/admin").RequireAuthorization();
+if (OperatorAuthentication.IsOidcConfigured(builder.Configuration))
+    app.MapOperatorSessionEndpoints();
+
+var admin = app.MapGroup("/admin").RequireAuthorization(OperatorAuthentication.PolicyName);
 admin.MapEndpoints(typeof(Program).Assembly);
 
 app.MapOperationalEndpoints();
+app.MapDashboard();
 
 app.Run();
 return 0;

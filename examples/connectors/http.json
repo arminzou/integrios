@@ -35,13 +35,6 @@
       }
     ]
   },
-  "source_contracts": [
-    {
-      "key": "event_json",
-      "contract_version": 1,
-      "config": {}
-    }
-  ],
   "presentation": {
     "name": "HTTP",
     "description": "Generic Event API input and HTTP delivery using the platform's ordinary source and destination capabilities.",

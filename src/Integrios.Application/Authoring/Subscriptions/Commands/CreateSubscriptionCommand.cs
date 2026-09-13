@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Delivery;
-using Integrios.Application.Authoring.Connections;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
@@ -16,17 +16,18 @@ public sealed record CreateSubscriptionCommand(
     Guid TopicId,
     string? Name,
     JsonElement MatchRules,
-    Guid DestinationConnectionId,
+    Guid DestinationId,
     JsonElement? MappingConfig,
     HttpDeliveryConfiguration HttpDelivery,
+    HttpSuccessRule? HttpSuccess,
     int OrderIndex,
     string? Description) : IRequest<SubscriptionDto?>;
 
 internal sealed class CreateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     ITopicRepository topicRepository,
-    IConnectionRepository connectionRepository,
-    IConnectionAuthoringLock authoringLock,
+    IDestinationRepository destinationRepository,
+    IDestinationAuthoringLock authoringLock,
     IConnectorReader connectorReader,
     IDestinationAuthenticatorRegistry authSchemeRegistry,
     ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionDto?>
@@ -36,7 +37,12 @@ internal sealed class CreateSubscriptionCommandHandler(
         if (string.IsNullOrWhiteSpace(command.Name))
             throw new SubscriptionValidationException("Name is required.", "name");
 
-        SubscriptionAuthoringRules.Validate(command.MatchRules, command.MappingConfig, command.HttpDelivery, transformEvaluator);
+        SubscriptionAuthoringRules.Validate(
+            command.MatchRules,
+            command.MappingConfig,
+            command.HttpDelivery,
+            command.HttpSuccess,
+            transformEvaluator);
 
         var topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken);
         if (topic is null)
@@ -45,19 +51,20 @@ internal sealed class CreateSubscriptionCommandHandler(
         }
 
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
-            [command.DestinationConnectionId],
+            [command.DestinationId],
             cancellationToken);
-        await EnsureDestinationConnectionIsAllowed(
-            command.TenantId, command.DestinationConnectionId, command.HttpDelivery, cancellationToken);
+        await EnsureDestinationIsAllowed(
+            command.TenantId, command.DestinationId, command.HttpDelivery, cancellationToken);
 
         var subscription = await subscriptionRepository.CreateAsync(
             command.TenantId,
             command.TopicId,
             command.Name,
             command.MatchRules,
-            command.DestinationConnectionId,
+            command.DestinationId,
             command.MappingConfig,
             command.HttpDelivery,
+            command.HttpSuccess,
             command.OrderIndex,
             command.Description,
             cancellationToken);
@@ -65,35 +72,35 @@ internal sealed class CreateSubscriptionCommandHandler(
         return subscription is null ? null : SubscriptionDto.From(subscription);
     }
 
-    private async Task EnsureDestinationConnectionIsAllowed(
+    private async Task EnsureDestinationIsAllowed(
         Guid tenantId,
-        Guid destinationConnectionId,
+        Guid destinationId,
         HttpDeliveryConfiguration httpDelivery,
         CancellationToken cancellationToken)
     {
-        var connection = await connectionRepository.GetByIdAsync(tenantId, destinationConnectionId, cancellationToken);
-        if (connection is null)
+        var destination = await destinationRepository.GetByIdAsync(tenantId, destinationId, cancellationToken);
+        if (destination is null)
         {
             throw new SubscriptionValidationException(
-                "The specified destination connection does not exist for this tenant.");
+                "The specified Destination does not exist for this tenant.");
         }
 
-        Connector? connector = await connectorReader.GetByIdAsync(connection.ConnectorId, cancellationToken);
+        Connector? connector = await connectorReader.GetByIdAsync(destination.ConnectorId, cancellationToken);
         if (connector is null)
         {
             throw new SubscriptionValidationException(
-                "The destination connection references a connector that does not exist.");
+                "The Destination references a Connector that does not exist.");
         }
 
         try
         {
-            ConnectionUseValidator.ValidateDestinationAuthoring(connection, connector, authSchemeRegistry);
+            DestinationUseValidator.ValidateAuthoring(destination, connector, authSchemeRegistry);
             HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
                 httpDelivery,
-                connection.DestinationAuthentication,
+                destination.Authentication,
                 authSchemeRegistry);
         }
-        catch (ConnectionValidationException exception)
+        catch (DestinationValidationException exception)
         {
             throw new SubscriptionValidationException(exception.Message);
         }

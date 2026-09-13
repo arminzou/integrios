@@ -25,6 +25,10 @@ internal sealed class UpdateTopicCommandHandler(ITopicRepository topicRepository
             command.Description,
             cancellationToken);
 
-        return topic is null ? null : TopicDto.From(topic);
+        if (topic is null)
+            return null;
+        int subscriptions = await topicRepository.CountSubscriptionsAsync(
+            command.TenantId, topic.Id, cancellationToken);
+        return TopicDto.From(topic, subscriptions);
     }
 }

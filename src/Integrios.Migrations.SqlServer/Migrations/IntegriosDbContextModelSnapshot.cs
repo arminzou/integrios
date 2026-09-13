@@ -22,88 +22,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Config")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("config")
-                        .HasDefaultValueSql("N'{}'");
-
-                    b.Property<Guid>("ConnectorId")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("connector_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetimeoffset")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("SYSUTCDATETIME()");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("description");
-
-                    b.Property<string>("DestinationAuthentication")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("destination_authentication");
-
-                    b.Property<string>("Environment")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("environment");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("SourceVerification")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("source_verification");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("N'active'");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("tenant_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetimeoffset")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("SYSUTCDATETIME()");
-
-                    b.HasKey("Id")
-                        .HasName("connections_pkey");
-
-                    b.HasAlternateKey("TenantId", "Id")
-                        .HasName("uq_connections_tenant_id_id");
-
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_connections_tenant_name");
-
-                    b.HasIndex(new[] { "TenantId" }, "idx_connections_tenant_id");
-
-                    b.ToTable("connections", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_connections_config_json", "ISJSON(config, VALUE) = 1");
-
-                            t.HasCheckConstraint("ck_connections_destination_authentication_object", "destination_authentication IS NULL OR ISJSON(destination_authentication, OBJECT) = 1");
-
-                            t.HasCheckConstraint("ck_connections_source_verification_object", "source_verification IS NULL OR ISJSON(source_verification, OBJECT) = 1");
-                        });
-                });
-
             modelBuilder.Entity("Integrios.Domain.Entities.Connector", b =>
                 {
                     b.Property<Guid>("Id")
@@ -217,6 +135,12 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("response_body");
 
+                    b.Property<bool>("ResponseBodyTruncated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("response_body_truncated");
+
                     b.Property<int?>("ResponseStatusCode")
                         .HasColumnType("int")
                         .HasColumnName("response_status_code");
@@ -254,6 +178,79 @@ namespace Integrios.Migrations.SqlServer.Migrations
                             t.HasCheckConstraint("ck_delivery_attempts_request_payload_json", "request_payload IS NULL OR ISJSON(request_payload, VALUE) = 1");
 
                             t.HasCheckConstraint("ck_delivery_attempts_status", "status IN ('in_progress', 'succeeded', 'failed', 'indeterminate')");
+                        });
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.Destination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Authentication")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("authentication");
+
+                    b.Property<string>("Configuration")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("configuration")
+                        .HasDefaultValueSql("N'{}'");
+
+                    b.Property<Guid>("ConnectorId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("connector_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Environment")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("environment");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("N'active'");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.HasKey("Id")
+                        .HasName("destinations_pkey");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("uq_destinations_tenant_id_id");
+
+                    b.HasIndex(new[] { "TenantId" }, "idx_destinations_tenant_id");
+
+                    b.ToTable("destinations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_destinations_authentication_object", "authentication IS NULL OR ISJSON(authentication, OBJECT) = 1");
+
+                            t.HasCheckConstraint("ck_destinations_configuration_json", "ISJSON(configuration, VALUE) = 1");
                         });
                 });
 
@@ -296,8 +293,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("processed_at");
 
                     b.Property<string>("SourceEventId")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("source_event_id");
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("source_event_id")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<Guid?>("SourceId")
                         .HasColumnType("uniqueidentifier")
@@ -325,7 +323,11 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .IsUnique()
                         .HasFilter("(idempotency_key IS NOT NULL)");
 
-                    b.HasIndex(new[] { "TenantId" }, "idx_events_tenant_id");
+                    b.HasIndex(new[] { "SourceId", "SourceEventId" }, "idx_events_source_event_id")
+                        .HasFilter("(source_event_id IS NOT NULL)");
+
+                    b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
+                        .IsDescending(false, true, true);
 
                     b.ToTable("events", null, t =>
                         {
@@ -366,9 +368,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("datetimeoffset")
                         .HasColumnName("deliver_after");
 
-                    b.Property<Guid>("DestinationConnectionId")
+                    b.Property<Guid>("DestinationId")
                         .HasColumnType("uniqueidentifier")
-                        .HasColumnName("destination_connection_id");
+                        .HasColumnName("destination_id");
 
                     b.Property<Guid>("EventId")
                         .HasColumnType("uniqueidentifier")
@@ -453,6 +455,43 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.OperatorIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("issuer")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("subject")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("operator_identities_pkey");
+
+                    b.HasIndex(new[] { "Issuer", "Subject" }, "uq_operator_identities_issuer_subject")
+                        .IsUnique();
+
+                    b.ToTable("operator_identities", (string)null);
+                });
+
             modelBuilder.Entity("Integrios.Domain.Entities.OperatorKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -509,15 +548,37 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("configuration");
 
-                    b.Property<Guid>("ConnectionId")
+                    b.Property<Guid>("ConnectorId")
                         .HasColumnType("uniqueidentifier")
-                        .HasColumnName("connection_id");
+                        .HasColumnName("connector_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetimeoffset")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("EventIdentityRule")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("event_identity_rule");
+
+                    b.Property<string>("InputRequirements")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("input_requirements");
+
+                    b.Property<string>("Mapping")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("mapping");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Revision")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("revision");
 
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("datetimeoffset")
@@ -549,13 +610,17 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<string>("Verification")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("verification");
+
                     b.HasKey("Id")
                         .HasName("sources_pkey");
 
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_sources_tenant_id_id");
 
-                    b.HasIndex(new[] { "ConnectionId" }, "idx_sources_connection_id");
+                    b.HasIndex(new[] { "ConnectorId" }, "idx_sources_connector_id");
 
                     b.HasIndex(new[] { "TenantId", "CreatedAt", "Id" }, "idx_sources_tenant_created");
 
@@ -589,9 +654,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
 
-                    b.Property<Guid>("DestinationConnectionId")
+                    b.Property<Guid>("DestinationId")
                         .HasColumnType("uniqueidentifier")
-                        .HasColumnName("destination_connection_id");
+                        .HasColumnName("destination_id");
 
                     b.Property<string>("HttpDelivery")
                         .IsRequired()
@@ -599,6 +664,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("http_delivery")
                         .HasDefaultValueSql("N'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'");
+
+                    b.Property<string>("HttpSuccess")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("http_success");
 
                     b.Property<string>("MappingConfig")
                         .HasColumnType("nvarchar(max)")
@@ -651,6 +720,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.ToTable("subscriptions", null, t =>
                         {
                             t.HasCheckConstraint("ck_subscriptions_http_delivery_json", "ISJSON(http_delivery, VALUE) = 1");
+
+                            t.HasCheckConstraint("ck_subscriptions_http_success_json", "http_success IS NULL OR ISJSON(http_success, OBJECT) = 1");
 
                             t.HasCheckConstraint("ck_subscriptions_mapping_config_json", "mapping_config IS NULL OR ISJSON(mapping_config, VALUE) = 1");
 
@@ -709,7 +780,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.ToTable("tenants", null, t =>
                         {
-                            t.HasCheckConstraint("chk_tenants_slug_dns_label", "LEN(slug) BETWEEN 1 AND 63 AND slug NOT LIKE '%[^a-z0-9-]%' AND LEFT(slug, 1) <> '-' AND RIGHT(slug, 1) <> '-'");
+                            t.HasCheckConstraint("chk_tenants_slug_dns_label", "LEN(slug) BETWEEN 1 AND 63 AND slug COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^a-z0-9-]%' AND LEFT(slug, 1) <> '-' AND RIGHT(slug, 1) <> '-'");
                         });
                 });
 
@@ -797,9 +868,14 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
 
-                    b.Property<string>("Name")
+                    b.Property<string>("Key")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
                         .HasColumnName("name");
 
                     b.Property<string>("Status")
@@ -825,12 +901,46 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_topics_tenant_id_id");
 
-                    b.HasAlternateKey("TenantId", "Name")
-                        .HasName("uq_topics_tenant_name");
+                    b.HasAlternateKey("TenantId", "Key")
+                        .HasName("uq_topics_tenant_key");
 
                     b.HasIndex(new[] { "TenantId" }, "idx_topics_tenant_id");
 
-                    b.ToTable("topics", (string)null);
+                    b.ToTable("topics", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_topics_key_dns_label", "LEN([key]) BETWEEN 1 AND 63 AND [key] COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^a-z0-9-]%' AND LEFT([key], 1) <> '-' AND RIGHT([key], 1) <> '-'");
+                        });
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("email");
+
+                    b.Property<DateTimeOffset?>("LastSignedInAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("last_signed_in_at");
+
+                    b.HasKey("Id")
+                        .HasName("users_pkey");
+
+                    b.ToTable("users", (string)null);
                 });
 
             modelBuilder.Entity("Integrios.Infrastructure.Outbox.OutboxEntry", b =>
@@ -877,6 +987,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.HasKey("Id")
                         .HasName("outbox_pkey");
 
+                    b.HasIndex(new[] { "EventId" }, "idx_outbox_event_id");
+
                     b.HasIndex(new[] { "DeliverAfter", "CreatedAt" }, "idx_outbox_pending")
                         .HasFilter("(processed_at IS NULL)");
 
@@ -886,21 +998,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Integrios.Domain.Entities.Connection", b =>
-                {
-                    b.HasOne("Integrios.Domain.Entities.Connector", null)
-                        .WithMany()
-                        .HasForeignKey("ConnectorId")
-                        .IsRequired()
-                        .HasConstraintName("connections_connector_id_fkey");
-
-                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .IsRequired()
-                        .HasConstraintName("connections_tenant_id_fkey");
-                });
-
             modelBuilder.Entity("Integrios.Domain.Entities.DeliveryAttempt", b =>
                 {
                     b.HasOne("Integrios.Domain.Entities.EventDelivery", null)
@@ -908,6 +1005,21 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasForeignKey("EventDeliveryId")
                         .IsRequired()
                         .HasConstraintName("delivery_attempts_event_delivery_id_fkey");
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.Destination", b =>
+                {
+                    b.HasOne("Integrios.Domain.Entities.Connector", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectorId")
+                        .IsRequired()
+                        .HasConstraintName("destinations_connector_id_fkey");
+
+                    b.HasOne("Integrios.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .IsRequired()
+                        .HasConstraintName("destinations_tenant_id_fkey");
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Event", b =>
@@ -933,11 +1045,11 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
             modelBuilder.Entity("Integrios.Domain.Entities.EventDelivery", b =>
                 {
-                    b.HasOne("Integrios.Domain.Entities.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Destination", null)
                         .WithMany()
-                        .HasForeignKey("DestinationConnectionId")
+                        .HasForeignKey("DestinationId")
                         .IsRequired()
-                        .HasConstraintName("event_deliveries_destination_connection_id_fkey");
+                        .HasConstraintName("event_deliveries_destination_id_fkey");
 
                     b.HasOne("Integrios.Domain.Entities.Event", null)
                         .WithMany()
@@ -958,20 +1070,29 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasConstraintName("fk_event_deliveries_active_attempt");
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.OperatorIdentity", b =>
+                {
+                    b.HasOne("Integrios.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("operator_identities_user_id_fkey");
+                });
+
             modelBuilder.Entity("Integrios.Domain.Entities.Source", b =>
                 {
+                    b.HasOne("Integrios.Domain.Entities.Connector", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectorId")
+                        .IsRequired()
+                        .HasConstraintName("fk_sources_connector");
+
                     b.HasOne("Integrios.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .IsRequired()
                         .HasConstraintName("fk_sources_tenant");
-
-                    b.HasOne("Integrios.Domain.Entities.Connection", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId", "ConnectionId")
-                        .HasPrincipalKey("TenantId", "Id")
-                        .IsRequired()
-                        .HasConstraintName("fk_sources_connection_tenant");
 
                     b.HasOne("Integrios.Domain.Entities.Topic", null)
                         .WithMany()
@@ -983,12 +1104,12 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
             modelBuilder.Entity("Integrios.Domain.Entities.Subscription", b =>
                 {
-                    b.HasOne("Integrios.Domain.Entities.Connection", null)
+                    b.HasOne("Integrios.Domain.Entities.Destination", null)
                         .WithMany()
-                        .HasForeignKey("TenantId", "DestinationConnectionId")
+                        .HasForeignKey("TenantId", "DestinationId")
                         .HasPrincipalKey("TenantId", "Id")
                         .IsRequired()
-                        .HasConstraintName("fk_subscriptions_destination_connection_tenant");
+                        .HasConstraintName("fk_subscriptions_destination_tenant");
 
                     b.HasOne("Integrios.Domain.Entities.Topic", null)
                         .WithMany()

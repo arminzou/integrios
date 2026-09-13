@@ -10,6 +10,10 @@ internal sealed class GetTopicByIdQueryHandler(ITopicRepository topicRepository)
     public async Task<TopicDto?> Handle(GetTopicByIdQuery query, CancellationToken cancellationToken)
     {
         var topic = await topicRepository.GetByIdAsync(query.TenantId, query.Id, cancellationToken);
-        return topic is null ? null : TopicDto.From(topic);
+        if (topic is null)
+            return null;
+        int subscriptions = await topicRepository.CountSubscriptionsAsync(
+            query.TenantId, topic.Id, cancellationToken);
+        return TopicDto.From(topic, subscriptions);
     }
 }

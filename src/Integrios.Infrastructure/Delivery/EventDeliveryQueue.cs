@@ -50,14 +50,14 @@ internal sealed class EventDeliveryQueue(
             ? $"""
                 SELECT TOP (1)
                     sd.id AS Id, sd.event_id AS EventId, sd.subscription_id AS SubscriptionId,
-                    sd.destination_connection_id AS DestinationConnectionId, sd.status AS Status,
+                    sd.destination_id AS DestinationId, sd.status AS Status,
                     sd.lifetime_attempt_count AS LifetimeAttemptCount,
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
                     sd.active_attempt_id AS ActiveAttemptId, sd.connector_key AS ConnectorKey,
                     sd.http_execution_snapshot AS HttpExecutionSnapshotJson,
                     sd.mapping_config_snapshot AS MappingConfigSnapshot, sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId, tenant.slug AS TenantSlug, e.payload AS PayloadJson,
-                    e.event_type AS EventType, e.accepted_at AS AcceptedAt, t.name AS TopicName,
+                    e.event_type AS EventType, e.accepted_at AS AcceptedAt, t.[key] AS TopicName,
                     SYSUTCDATETIME() AS DatabaseNow
                 FROM event_deliveries sd WITH (UPDLOCK, ROWLOCK, READPAST, READCOMMITTEDLOCK)
                 JOIN events e ON e.id=sd.event_id
@@ -74,7 +74,7 @@ internal sealed class EventDeliveryQueue(
                     sd.id AS Id,
                     sd.event_id AS EventId,
                     sd.subscription_id AS SubscriptionId,
-                    sd.destination_connection_id AS DestinationConnectionId,
+                    sd.destination_id AS DestinationId,
                     sd.status AS Status,
                     sd.lifetime_attempt_count AS LifetimeAttemptCount,
                     sd.retry_cycle_attempt_count AS RetryCycleAttemptCount,
@@ -88,7 +88,7 @@ internal sealed class EventDeliveryQueue(
                     e.payload::text AS PayloadJson,
                     e.event_type AS EventType,
                     e.accepted_at AS AcceptedAt,
-                    t.name AS TopicName,
+                    t.key AS TopicName,
                     now() AS DatabaseNow
                 FROM event_deliveries sd
                 JOIN events e ON e.id = sd.event_id
@@ -234,7 +234,7 @@ internal sealed class EventDeliveryQueue(
             attemptNumber,
             row.EventId,
             row.SubscriptionId,
-            row.DestinationConnectionId,
+            row.DestinationId,
             row.TenantId,
             row.TenantSlug,
             row.PayloadJson ?? string.Empty,
@@ -322,7 +322,8 @@ internal sealed class EventDeliveryQueue(
                 UPDATE delivery_attempts
                 SET status = @AttemptStatus, failure_phase = @FailurePhase,
                     request_payload = @RequestPayloadJson, response_status_code = @ResponseStatusCode,
-                    response_body = @ResponseBody, error_message = @ErrorMessage, completed_at = @DatabaseNow
+                    response_body = @ResponseBody, response_body_truncated = @ResponseBodyTruncated,
+                    error_message = @ErrorMessage, completed_at = @DatabaseNow
                 WHERE id = @AttemptId AND event_delivery_id = @DeliveryId AND status = N'in_progress';
                 SELECT @@ROWCOUNT;
                 """
@@ -333,6 +334,7 @@ internal sealed class EventDeliveryQueue(
                     request_payload = CAST(@RequestPayloadJson AS jsonb),
                     response_status_code = @ResponseStatusCode,
                     response_body = @ResponseBody,
+                    response_body_truncated = @ResponseBodyTruncated,
                     error_message = @ErrorMessage,
                     completed_at = @DatabaseNow
                 WHERE id = @AttemptId
@@ -348,6 +350,7 @@ internal sealed class EventDeliveryQueue(
                     completion.RequestPayloadJson,
                     completion.ResponseStatusCode,
                     completion.ResponseBody,
+                    completion.ResponseBodyTruncated,
                     completion.ErrorMessage,
                     owner.DatabaseNow
                 },
@@ -443,7 +446,7 @@ internal sealed class EventDeliveryQueue(
         public Guid Id { get; init; }
         public Guid EventId { get; init; }
         public Guid SubscriptionId { get; init; }
-        public Guid DestinationConnectionId { get; init; }
+        public Guid DestinationId { get; init; }
         public Guid TenantId { get; init; }
         public string TenantSlug { get; init; } = string.Empty;
         public string Status { get; init; } = string.Empty;

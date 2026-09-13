@@ -29,7 +29,6 @@ public sealed partial class StoredJsonContractTests
                 ]
               },
               "destination_authentication": { "allow_unauthenticated": true, "schemes": [] },
-              "source_contracts": [{ "key": "github_webhook", "contract_version": 1, "config": {} }],
               "presentation": { "name": "GitHub", "event_types": ["issues.opened"], "authoring_presets": [] }
             }
             """;
@@ -38,7 +37,6 @@ public sealed partial class StoredJsonContractTests
         JsonElement written = ConnectorManifestParser.ToJson(manifest);
 
         manifest.ManifestSchemaVersion.ShouldBe(1);
-        manifest.SourceContracts.ShouldHaveSingleItem().Key.ShouldBe("github_webhook");
         manifest.SourceVerification.Schemes[0].RequiredSecretRefs.ShouldBe(new[] { "secret" });
 
         AssertAllPropertyNamesAreSnakeCase(written, path: "$");
@@ -46,7 +44,7 @@ public sealed partial class StoredJsonContractTests
         JsonElement scheme = written.GetProperty("source_verification").GetProperty("schemes")[0];
         scheme.TryGetProperty("required_secret_refs", out _).ShouldBeTrue();
         written.GetProperty("presentation").TryGetProperty("event_types", out _).ShouldBeTrue();
-        written.GetProperty("source_contracts")[0].TryGetProperty("contract_version", out _).ShouldBeTrue();
+        written.TryGetProperty("source_contracts", out _).ShouldBeFalse();
     }
 
     // Stored keys are snake_case and stable; a flat top-level pin misses nested keys and breaks on

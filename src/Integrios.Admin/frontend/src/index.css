@@ -1,0 +1,277 @@
+/* The dashboard's one semantic token set. Tokens are named for the role they play, never for
+   their current color or the product that inspired the palette, so a future value change never
+   touches markup. There is no dark variant and no theme switcher: the production dashboard is
+   light-only by design.
+
+   Tailwind carries presentation from here on: the palette is declared once below and exposed to
+   utilities through `@theme inline`, so `bg-surface` and `var(--surface)` are the same value. The
+   second half of that block is the vocabulary the vendored shadcn/ui primitives are written
+   against, mapped onto these roles rather than given colors of their own. */
+@import "tailwindcss";
+
+/* `color-scheme: light` below settles what the browser paints; it does not settle what Tailwind's
+   `dark:` variant matches, which defaults to the operating system's own preference. A vendored
+   shadcn primitive arrives carrying `dark:` utilities as a matter of course, and under that default
+   they activate on an Operator whose OS is in dark mode - painting a dark theme's field fills onto
+   a page that is still light. Binding the variant to a class this app never sets is what makes
+   light-only true for every such utility, including the ones the next re-vendoring brings in. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@keyframes deferred-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+:root {
+  color-scheme: light;
+
+  --canvas: #fafafa;
+  --surface: #ffffff;
+  --surface-quiet: #fafafa;
+  --ink: #171717;
+  --ink-secondary: #707070;
+  /* Structure is a hairline, not a line: translucent so one value reads correctly on the white
+     surface and on the canvas behind it, and light enough that a screen of stacked rules recedes
+     into the page instead of drawing the eye down it. */
+  --border: rgba(0, 0, 0, 0.06);
+  --accent-border: #d8d8d8;
+  --selected-surface: #ededed;
+  --selected-ink: #333333;
+  --hover-surface: #f1f1f1;
+  --row-hover-surface: #f5f5f5;
+  --warning-ink: #725f3c;
+  --warning-surface: #f3efe7;
+  /* Failure is the loudest thing in the palette on purpose: it is the one state that has to win a
+     row an Operator is scanning, now that a settled success carries colour of its own. */
+  --danger-ink: #c62828;
+  --danger-surface: #fdecea;
+  --success-ink: #1b6e34;
+  --success-surface: #e8f3ec;
+
+  --radius: 6px;
+  /* A bounded content group — an activity-summary metric, the ledger, the inspector panel. */
+  --radius-card: 10px;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-quiet: var(--surface-quiet);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-accent-border: var(--accent-border);
+  --color-selected-surface: var(--selected-surface);
+  --color-selected-ink: var(--selected-ink);
+  --color-hover-surface: var(--hover-surface);
+  --color-row-hover-surface: var(--row-hover-surface);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-surface: var(--danger-surface);
+  --color-success-ink: var(--success-ink);
+  --color-success-surface: var(--success-surface);
+
+  /* A placeholder that is mounted at once but not shown for a moment. Most reads answer faster than
+     this, and a placeholder that appears and vanishes inside 200ms reads as a flicker rather than as
+     loading — so the element takes its space from the first frame while staying invisible, and only
+     a read slow enough to be worth reporting ever becomes visible. `both` is what holds it at zero
+     through the delay; the reduced-motion rule cuts the fade but not the delay, so an Operator who
+     asked for less motion still gets the wait rather than the flicker. */
+  --animate-deferred-reveal: deferred-reveal 150ms ease-out 200ms both;
+
+  /* The names shadcn/ui primitives use, pointed at the roles above so a vendored component carries
+     this palette without being rewritten, and the palette still has exactly one definition. */
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--surface);
+  --color-secondary: var(--selected-surface);
+  --color-secondary-foreground: var(--selected-ink);
+  --color-muted: var(--surface-quiet);
+  --color-muted-foreground: var(--ink-secondary);
+  --color-accent: var(--hover-surface);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--danger-ink);
+  --color-destructive-foreground: var(--danger-surface);
+  --color-border: var(--border);
+  /* A control's outline is not structure: it is what says the control is operable, so fields and
+     the outline button keep the accent border rather than following the structural rule down. */
+  --color-input: var(--accent-border);
+  --color-ring: var(--accent-border);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-card);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", ui-serif, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Where the signed-in shell stops being a column beside the document and becomes a band above it.
+     Named because several utilities depend on the same width and a retyped number drifts. */
+  --breakpoint-shell: 53.75rem;
+}
+
+/* Tailwind's preflight strips the browser's own element defaults, which the screens that have not
+   yet been migrated to utilities still rely on for their headings, paragraphs, lists, and links.
+   `revert` hands those elements back to the browser stylesheet until each screen states its own
+   spacing; this block shrinks with every capability that migrates and goes away with the last one. */
+@layer base {
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  a {
+    color: var(--ink);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-size: revert;
+    font-weight: revert;
+    margin: revert;
+  }
+
+  p,
+  dl,
+  blockquote,
+  figure {
+    margin: revert;
+  }
+
+  ul,
+  ol {
+    list-style: revert;
+    margin: revert;
+    padding: revert;
+  }
+
+  fieldset,
+  legend {
+    border: revert;
+    padding: revert;
+  }
+
+  a {
+    text-decoration: revert;
+  }
+
+  /* Not visual design — an accessibility floor the dashboard has to clear whatever it later looks
+     like. WCAG 2.2 asks a pointer target to be at least 24x24, and a link is otherwise only as tall
+     as its text, which leaves navigation and table links around 17px.
+
+     Only links that stand alone as targets get a box: navigation, list entries, and table cells. A
+     link inside a sentence is exempt from the rule and stays flowing text, because padding it would
+     break the line it sits in for no accessibility gain. It sits in `base` so a component that
+     states its own larger box — the rail's destinations do — simply wins with a utility. */
+  nav a,
+  li a,
+  th a,
+  td a {
+    display: inline-block;
+    padding: 4px 6px;
+  }
+
+  /* The tap-target padding must not indent the text: in a table it would push a linked cell 6px
+     past the column's own edge, so the header label and the value below it stop lining up. Hanging
+     the horizontal padding outside the box keeps the 24x24 target and the column edge both. */
+  th a,
+  td a {
+    margin-inline: -6px;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-size: revert;
+  }
+
+  /* The system's type scale: a serif carries page titles and section headings, scaled up so a page
+     has one clear point of orientation. It sits in `base` so a screen can still state its own size
+     in a utility where a heading is doing a different job. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  /* The three sizes the screens actually use: a page's own title, the heading on a bounded group
+     (an inspector, a panel), and nothing between them. A console is dense — a title scaled past the
+     ledger it introduces takes width from the data and gives back only emphasis. */
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.5;
+    letter-spacing: normal;
+    margin: 0 0 2px;
+  }
+
+  h2,
+  h3 {
+    font-size: 1.0625rem;
+    margin: 0;
+  }
+
+  /* Monospace is limited to identifiers, trace values, and JSON documents. */
+  code {
+    font-family: var(--font-mono);
+  }
+
+  pre {
+    font-family: var(--font-mono);
+    background: var(--surface-quiet);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    overflow-x: auto;
+  }
+
+  /* The primitives fade colour and the focus ring in on interaction. An Operator who has asked the
+     platform for less motion gets none of it: the transitions are cut to an imperceptible duration
+     rather than removed, so a state change still lands in one step instead of never arriving. */
+  @media (prefers-reduced-motion: reduce) {
+    /* biome-ignore-start lint/complexity/noImportantStyles: the preference has to beat every utility that sets a duration */
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    /* biome-ignore-end lint/complexity/noImportantStyles: end of the reduced-motion override */
+  }
+}
+
+/* The quiet label over a group inside a panel — `EventDeliveries`, `Configuration`, `Manifest`. It
+   is a heading, not a title: the panel above it already said what is being read, so this only names
+   the part. Sans-serif and uppercase rather than the serif the titles carry. */
+@layer components {
+  .eyebrow {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+  }
+}

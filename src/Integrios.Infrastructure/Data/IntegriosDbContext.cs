@@ -12,7 +12,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
 {
     public DbSet<OperatorKey> OperatorKeys => Set<OperatorKey>();
     public DbSet<TenantApiKey> TenantApiKeys => Set<TenantApiKey>();
-    public DbSet<Connection> Connections => Set<Connection>();
+    public DbSet<Destination> Destinations => Set<Destination>();
     public DbSet<DeliveryAttempt> DeliveryAttempts => Set<DeliveryAttempt>();
     public DbSet<DomainEvent> Events => Set<DomainEvent>();
     public DbSet<Connector> Connectors => Set<Connector>();
@@ -22,6 +22,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
     public DbSet<EventDelivery> EventDeliveries => Set<EventDelivery>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Topic> Topics => Set<Topic>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<OperatorIdentity> OperatorIdentities => Set<OperatorIdentity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -44,10 +46,16 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<StoredJsonConverter<SourceVerification>>();
         configurationBuilder.Properties<DestinationAuthentication>()
             .HaveConversion<StoredJsonConverter<DestinationAuthentication>>();
+        configurationBuilder.Properties<SourceMapping>()
+            .HaveConversion<StoredJsonConverter<SourceMapping>>();
+        configurationBuilder.Properties<SourceEventIdentityRule>()
+            .HaveConversion<StoredJsonConverter<SourceEventIdentityRule>>();
         configurationBuilder.Properties<ConnectorManifest>()
             .HaveConversion<StoredJsonConverter<ConnectorManifest>>();
         configurationBuilder.Properties<HttpDeliveryConfiguration>()
             .HaveConversion<StoredJsonConverter<HttpDeliveryConfiguration>>();
+        configurationBuilder.Properties<HttpSuccessRule>()
+            .HaveConversion<StoredJsonConverter<HttpSuccessRule>>();
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -79,22 +87,18 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
         });
 
-        modelBuilder.Entity<Connection>(entity =>
+        modelBuilder.Entity<Destination>(entity =>
         {
-            entity.ToTable("connections", table =>
+            entity.ToTable("destinations", table =>
             {
-                table.HasCheckConstraint("ck_connections_config_json", "ISJSON(config, VALUE) = 1");
+                table.HasCheckConstraint("ck_destinations_configuration_json", "ISJSON(configuration, VALUE) = 1");
                 table.HasCheckConstraint(
-                    "ck_connections_source_verification_object",
-                    "source_verification IS NULL OR ISJSON(source_verification, OBJECT) = 1");
-                table.HasCheckConstraint(
-                    "ck_connections_destination_authentication_object",
-                    "destination_authentication IS NULL OR ISJSON(destination_authentication, OBJECT) = 1");
+                    "ck_destinations_authentication_object",
+                    "authentication IS NULL OR ISJSON(authentication, OBJECT) = 1");
             });
-            entity.Property(e => e.Config).HasDefaultValueSql(JsonDefault("{}")).HasColumnType(jsonType);
+            entity.Property(e => e.Configuration).HasDefaultValueSql(JsonDefault("{}")).HasColumnType(jsonType);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
-            entity.Property(e => e.DestinationAuthentication).HasColumnType(jsonType);
-            entity.Property(e => e.SourceVerification).HasColumnType(jsonType);
+            entity.Property(e => e.Authentication).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
@@ -124,6 +128,11 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.Metadata).HasColumnType(jsonType);
             entity.Property(e => e.Payload).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("accepted"));
+            // A Source Event id is an opaque identifier from the origin system, so it compares
+            // byte for byte the way PostgreSQL already does. Declaring that on the column rather
+            // than on each query is what lets idx_events_source_event_id actually serve the
+            // duplicate lookup; a query-level COLLATE would leave it unusable.
+            entity.Property(e => e.SourceEventId).UseCollation("Latin1_General_100_BIN2");
         });
 
         modelBuilder.Entity<Connector>(entity =>
@@ -162,6 +171,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 table.HasCheckConstraint("ck_sources_configuration_json", "ISJSON(configuration, VALUE) = 1");
             });
             entity.Property(e => e.Configuration).HasColumnType(jsonType);
+            entity.Property(e => e.Verification).HasColumnType(jsonType);
+            entity.Property(e => e.InputRequirements).HasColumnType(jsonType);
+            entity.Property(e => e.Mapping).HasColumnType(jsonType);
+            entity.Property(e => e.EventIdentityRule).HasColumnType(jsonType);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
@@ -174,6 +187,9 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 table.HasCheckConstraint("ck_subscriptions_match_rules_json", "ISJSON(match_rules, VALUE) = 1");
                 table.HasCheckConstraint("ck_subscriptions_http_delivery_json", "ISJSON(http_delivery, VALUE) = 1");
                 table.HasCheckConstraint(
+                    "ck_subscriptions_http_success_json",
+                    "http_success IS NULL OR ISJSON(http_success, OBJECT) = 1");
+                table.HasCheckConstraint(
                     "ck_subscriptions_mapping_config_json",
                     "mapping_config IS NULL OR ISJSON(mapping_config, VALUE) = 1");
             });
@@ -182,6 +198,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 .HasDefaultValueSql(JsonDefault("{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}"))
                 .HasColumnType(jsonType);
             entity.Property(e => e.MatchRules).HasDefaultValueSql(JsonDefault("{}")).HasColumnType(jsonType);
+            entity.Property(e => e.HttpSuccess).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.MappingConfig).HasColumnType(jsonType);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
@@ -214,7 +231,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         {
             entity.ToTable("tenants", table => table.HasCheckConstraint(
                 "chk_tenants_slug_dns_label",
-                "LEN(slug) BETWEEN 1 AND 63 AND slug NOT LIKE '%[^a-z0-9-]%' "
+                "LEN(slug) BETWEEN 1 AND 63 AND slug COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^a-z0-9-]%' "
                 + "AND LEFT(slug, 1) <> '-' AND RIGHT(slug, 1) <> '-'"));
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
@@ -223,9 +240,28 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
 
         modelBuilder.Entity<Topic>(entity =>
         {
+            entity.ToTable("topics", table => table.HasCheckConstraint(
+                "chk_topics_key_dns_label",
+                "LEN([key]) BETWEEN 1 AND 63 AND [key] COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^a-z0-9-]%' "
+                + "AND LEFT([key], 1) <> '-' AND RIGHT([key], 1) <> '-'"));
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+        });
+
+        modelBuilder.Entity<OperatorIdentity>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+            // An OpenID Connect issuer and subject are case-sensitive, and this pair is the identity.
+            // Under the server's default collation two subjects differing only in case would collide
+            // on the unique index and resolve to one another's User.
+            entity.Property(e => e.Issuer).UseCollation("Latin1_General_BIN2");
+            entity.Property(e => e.Subject).UseCollation("Latin1_General_BIN2");
         });
 
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))

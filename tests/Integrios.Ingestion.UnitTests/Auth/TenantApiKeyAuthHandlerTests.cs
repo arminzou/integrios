@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
@@ -40,10 +41,10 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
 
     [Theory]
     [InlineData(null)]                              // no header
-    [InlineData("Bearer intg_abc123")]              // wrong scheme
-    [InlineData("TenantApiKey ")]                         // empty value
-    [InlineData("TenantApiKey wrong_prefix_secret")]      // doesn't start with intg_
-    [InlineData("TenantApiKey intg_")]                    // nothing after intg_
+    [InlineData("TenantApiKey intg_abc123")] // wrong scheme
+    [InlineData("Bearer ")] // empty value
+    [InlineData("Bearer wrong_prefix_secret")] // doesn't start with intg_
+    [InlineData("Bearer intg_")] // nothing after intg_
     public async Task BadHeader_Returns401(string? authHeader)
     {
         HttpResponseMessage response = await PostEventsAsync(authHeader);
@@ -55,7 +56,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
     [Fact]
     public async Task UnknownKeyId_Returns401()
     {
-        HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {TestToken}");
+        HttpResponseMessage response = await PostEventsAsync($"Bearer {TestToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
@@ -67,7 +68,7 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
         (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
-        HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {WrongToken}");
+        HttpResponseMessage response = await PostEventsAsync($"Bearer {WrongToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
@@ -79,8 +80,64 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
         (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
         fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
 
-        HttpResponseMessage response = await PostEventsAsync($"TenantApiKey {TestToken}");
+        HttpResponseMessage response = await PostEventsAsync($"Bearer {TestToken}");
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    // Last use: the evidence an Operator revokes a key on
+
+    [Fact]
+    public async Task ValidCredential_RecordsThatTheKeyWasUsed()
+    {
+        // Without this the Admin dashboard reports "Never used" for a key that is carrying traffic,
+        // and an Operator deciding whether a key is safe to revoke is reading a value that is
+        // structurally false rather than merely stale.
+        (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
+        fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
+
+        await PostEventsAsync($"Bearer {TestToken}");
+
+        fixture.TenantApiKeyUse.Recorded.ShouldHaveSingleItem().TenantApiKeyId.ShouldBe(tenantApiKey.Id);
+    }
+
+    [Fact]
+    public async Task RejectedCredential_RecordsNothing()
+    {
+        (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
+        fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
+
+        await PostEventsAsync($"Bearer {WrongToken}");
+
+        fixture.TenantApiKeyUse.Recorded.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task RecentlyUsedCredential_IsNotWrittenAgain()
+    {
+        // The write is throttled to the tracked resolution, so a key under sustained load costs one
+        // UPDATE an hour rather than one per request. This is the assertion that keeps it that way:
+        // dropping the check would make every authenticated request write the busiest row it has.
+        (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
+        fixture.TenantApiKeyRepository.Result = (
+            tenantApiKey with { LastUsedAt = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(1) },
+            tenant);
+
+        await PostEventsAsync($"Bearer {TestToken}");
+
+        fixture.TenantApiKeyUse.Recorded.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task CredentialUsedBeforeTheResolution_IsWrittenAgain()
+    {
+        (TenantApiKey tenantApiKey, Tenant tenant) = BuildValidTenantApiKey(TestToken);
+        fixture.TenantApiKeyRepository.Result = (
+            tenantApiKey with { LastUsedAt = DateTimeOffset.UtcNow - TenantApiKeyUse.Resolution - TimeSpan.FromMinutes(1) },
+            tenant);
+
+        await PostEventsAsync($"Bearer {TestToken}");
+
+        fixture.TenantApiKeyUse.Recorded.ShouldHaveSingleItem().TenantApiKeyId.ShouldBe(tenantApiKey.Id);
     }
 
     // 401 response carries WWW-Authenticate header

@@ -130,8 +130,8 @@ public sealed class ProjectArchitectureTests
             .ToArray();
 
         (offenders.Length == 0).ShouldBeTrue(
-            ".brain/AGENTS.md:28 bans generic Contracts/, Interfaces/, or Abstractions/ buckets "
-            + $"anywhere in src/; namespaces stay feature-based, not directory-mirrored. Found: {string.Join(", ", offenders)}");
+            "Application namespaces stay feature-based: generic Contracts/, Interfaces/, or Abstractions/ "
+            + $"buckets are banned anywhere in src/. Found: {string.Join(", ", offenders)}");
     }
 
     [Fact]
@@ -168,6 +168,36 @@ public sealed class ProjectArchitectureTests
         (offenders.Length == 0).ShouldBeTrue(
             "JSON casing is a policy set once per host, never a per-field decision. Types stored as "
             + "JSON carry their own serializer options instead. Found: " + string.Join(", ", offenders));
+    }
+
+    [Fact]
+    public void SourceTree_ReferencesNoPrivateDecisionRecords()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        // Composed rather than written out, so this test does not report itself.
+        string recordPrefix = string.Concat("ADR", "-");
+        string brainPath = string.Concat(".", "brain");
+
+        string[] offenders =
+        [
+            .. new[] { "src", "tests" }
+                .SelectMany(tree => Directory.EnumerateFiles(
+                    Path.Combine(repositoryRoot, tree), "*.cs", SearchOption.AllDirectories))
+                .Where(path => !IsGeneratedPath(path))
+                .Where(path =>
+                {
+                    string text = File.ReadAllText(path);
+                    return text.Contains(recordPrefix, StringComparison.OrdinalIgnoreCase)
+                        || text.Contains(brainPath, StringComparison.OrdinalIgnoreCase);
+                })
+                .Select(path => Path.GetRelativePath(repositoryRoot, path))
+                .Order(StringComparer.Ordinal),
+        ];
+
+        (offenders.Length == 0).ShouldBeTrue(
+            "The repository is public and decision records are not: no file may name one, or a path "
+            + "inside the private context directory. State the reason in plain terms instead. Found: "
+            + string.Join(", ", offenders));
     }
 
     [Fact]

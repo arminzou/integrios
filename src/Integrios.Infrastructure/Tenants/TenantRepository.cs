@@ -1,6 +1,7 @@
+using System.Text.Json;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Common.Pagination;
 using Integrios.Application.Authoring.Tenants;
+using Integrios.Infrastructure.Common.Pagination;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
@@ -8,10 +9,11 @@ using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Npgsql;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Integrios.Infrastructure.Tenants;
 
-internal sealed class TenantRepository(IntegriosDbContext context) : ITenantRepository
+internal sealed class TenantRepository(IntegriosDbContext context, IDataProtectionProvider dataProtectionProvider) : ITenantRepository
 {
     public async Task<Tenant> CreateAsync(Tenant tenant, CancellationToken cancellationToken)
     {
@@ -33,26 +35,49 @@ internal sealed class TenantRepository(IntegriosDbContext context) : ITenantRepo
         context.Tenants.AsNoTracking().SingleOrDefaultAsync(tenant => tenant.Id == id, cancellationToken);
 
     public async Task<(IReadOnlyList<Tenant> Items, string? NextCursor)> ListAsync(
+        OperationalStatus? status,
+        string? environment,
+        string? name,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)
     {
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
-        bool hasCursor = afterCursor is not null
-            && PageCursor.TryDecode(afterCursor, out cursorCreatedAt, out cursorId);
+        // Serialized rather than colon-joined with an "all" sentinel: environment and name are
+        // Operator free text, so a literal "all" would share a scope with the filter being absent,
+        // and a value carrying the delimiter would shift one filter's text into the next slot.
+        string cursorScope = "tenants:" + JsonSerializer.Serialize(new { status, environment, name });
+        bool hasCursor = afterCursor is not null;
+        if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorCreatedAt, out cursorId))
+            throw new InvalidCursorException();
 
         IQueryable<Tenant> query = context.Tenants.AsNoTracking();
+        if (status is not null)
+            query = query.Where(tenant => tenant.Status == status);
+        // Both lowered on either side: these are free text an Operator types, not values picked
+        // from what was stored, so neither should depend on the casing a Tenant was created with
+        // or on the collation the provider happens to use.
+        if (environment is not null)
+        {
+            string loweredEnvironment = environment.ToLowerInvariant();
+            query = query.Where(tenant => tenant.Environment!.ToLower() == loweredEnvironment);
+        }
+        if (name is not null)
+        {
+            string lowered = name.ToLowerInvariant();
+            query = query.Where(tenant => tenant.Name.ToLower().Contains(lowered) || tenant.Slug.ToLower().Contains(lowered));
+        }
         if (hasCursor)
         {
             query = query.Where(tenant =>
-                tenant.CreatedAt > cursorCreatedAt
-                || (tenant.CreatedAt == cursorCreatedAt && tenant.Id.CompareTo(cursorId) > 0));
+                tenant.CreatedAt < cursorCreatedAt
+                || (tenant.CreatedAt == cursorCreatedAt && tenant.Id.CompareTo(cursorId) < 0));
         }
 
         List<Tenant> items = await query
-            .OrderBy(tenant => tenant.CreatedAt)
-            .ThenBy(tenant => tenant.Id)
+            .OrderByDescending(tenant => tenant.CreatedAt)
+            .ThenByDescending(tenant => tenant.Id)
             .Take(limit + 1)
             .ToListAsync(cancellationToken);
 
@@ -60,7 +85,7 @@ internal sealed class TenantRepository(IntegriosDbContext context) : ITenantRepo
         if (items.Count > limit)
         {
             items.RemoveAt(items.Count - 1);
-            nextCursor = PageCursor.Encode(items[^1].CreatedAt, items[^1].Id);
+            nextCursor = PageCursor.Encode(dataProtectionProvider, cursorScope, items[^1].CreatedAt, items[^1].Id, DateTimeOffset.UtcNow);
         }
 
         return (items, nextCursor);

@@ -47,7 +47,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         body.ShouldNotBeNull();
         body.TenantApiKey.Name.ShouldBe("ingest-key");
         body.TenantApiKey.TenantId.ShouldBe(fixture.TenantId);
-        body.TenantApiKey.Status.ShouldBe("active");
+        body.TenantApiKey.State.ShouldBe("active");
 
         // Token format: intg_<64hex>
         body.Token.ShouldStartWith("intg_", Case.Sensitive);
@@ -176,7 +176,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
     // Revoke
 
     [Fact]
-    public async Task RevokeTenantApiKey_Returns200_AndKeyIsDisabled()
+    public async Task RevokeTenantApiKey_Returns200_AndKeyReadsAsRevoked()
     {
         var created = await CreateTenantApiKeyAsync("revoke-key");
 
@@ -192,7 +192,10 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
 
         var body = await getResponse.Content.ReadFromJsonAsync<TenantApiKeyDto>(HostJson.Options);
         body.ShouldNotBeNull();
-        body.Status.ShouldBe("disabled");
+        // "disabled" is what the raw status column holds; a revoked key is what the Operator revoked.
+        // This read used to report the column while the list reported the derived state, so the same
+        // key described itself two ways and the dashboard could not tell revoked from disabled.
+        body.State.ShouldBe("revoked");
     }
 
     [Fact]

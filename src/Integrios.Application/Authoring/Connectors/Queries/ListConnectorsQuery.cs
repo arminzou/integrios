@@ -5,7 +5,7 @@ using MediatR;
 
 namespace Integrios.Application.Authoring.Connectors;
 
-public sealed record ListConnectorsQuery(string? AfterCursor, int Limit) : IRequest<ConnectorListDto>;
+public sealed record ListConnectorsQuery(ConnectorDirection? Direction, string? AfterCursor, int Limit) : IRequest<ConnectorListDto>;
 
 internal sealed class ListConnectorsQueryHandler(IConnectorReader connectorReader)
     : IRequestHandler<ListConnectorsQuery, ConnectorListDto>
@@ -13,11 +13,11 @@ internal sealed class ListConnectorsQueryHandler(IConnectorReader connectorReade
     public async Task<ConnectorListDto> Handle(ListConnectorsQuery query, CancellationToken cancellationToken)
     {
         (IReadOnlyList<Connector> items, string? nextCursor) = await connectorReader.ListAsync(
-            query.AfterCursor, query.Limit, cancellationToken);
+            query.Direction, query.AfterCursor, query.Limit, cancellationToken);
 
         return new ConnectorListDto
         {
-            Items = items.Select(ConnectorDto.From).ToList(),
+            Items = items.Select(ConnectorListItemDto.From).ToList(),
             NextCursor = nextCursor,
         };
     }

@@ -11,9 +11,10 @@ public sealed record Subscription
     public required Guid TenantId { get; init; }
     public required string Name { get; init; }
     public required JsonElement MatchRules { get; init; }
-    public required Guid DestinationConnectionId { get; init; }
+    public required Guid DestinationId { get; init; }
     public JsonElement? MappingConfig { get; init; }
     public required HttpDeliveryConfiguration HttpDelivery { get; init; }
+    public HttpSuccessRule? HttpSuccess { get; init; }
     public required OperationalStatus Status { get; init; }
     public required int OrderIndex { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }

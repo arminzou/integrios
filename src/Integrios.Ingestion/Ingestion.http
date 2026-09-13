@@ -19,13 +19,12 @@
 ###
 # Step 1 - Ingest an event
 # source_id (query parameter) names the Source created in Admin.http; it resolves to one Topic
-# (payments) and one source_contract (event_json). With no mapping configured on the Source, the
-# request body below is the Source's output directly: event_type and payload are required,
-# source_event_id and metadata are optional. source_event_id becomes part of the idempotency key
-# ("{source_id}:{source_event_id}") -- there is no separate idempotency_key field.
+# (payments). Event API uses this fixed request shape directly: event_type and payload are required,
+# source_event_id and metadata are optional. source_event_id identifies a duplicate for this Source;
+# there is no separate idempotency_key field.
 # @name ingest
 POST {{baseUrl}}/events?source_id={{sourceId}}
-Authorization: TenantApiKey {{tenantApiKeyToken}}
+Authorization: Bearer {{tenantApiKeyToken}}
 Content-Type: application/json
 
 {
@@ -48,7 +47,7 @@ Content-Type: application/json
 # This confirms the durable acceptance boundary: Ingestion committed the event
 # before async delivery begins.
 GET {{baseUrl}}/events/{{eventId}}
-Authorization: TenantApiKey {{tenantApiKeyToken}}
+Authorization: Bearer {{tenantApiKeyToken}}
 
 # Replay is an Admin operation scoped to one dead-lettered EventDelivery, not an Ingestion
 # endpoint -- there is no POST /events/{id}/replay here. It requires the OperatorKey and the

@@ -169,10 +169,11 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
             failurePhase,
             requestPayload,
             result.StatusCode == 0 ? null : result.StatusCode,
-            null,
+            result.ResponseBody,
             result.Error,
             IsTerminalFailure: DeliveryFailureClassifier.IsTerminal(result),
-            RetryAfter: result.RetryAfter);
+            RetryAfter: result.RetryAfter,
+            ResponseBodyTruncated: result.ResponseBodyTruncated);
 
         if (failurePhase is not null)
             attemptActivity?.SetTag("integrios.failure_phase", MapFailurePhase(failurePhase));

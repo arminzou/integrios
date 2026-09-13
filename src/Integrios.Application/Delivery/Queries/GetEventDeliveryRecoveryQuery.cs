@@ -1,16 +1,15 @@
-using Integrios.Application.Ingestion;
 using MediatR;
 
 namespace Integrios.Application.Delivery;
 
 public sealed record GetEventDeliveryRecoveryQuery(Guid TenantId, Guid EventId)
-    : IRequest<EventDto?>;
+    : IRequest<EventDiagnosticsDto?>;
 
-internal sealed class GetEventDeliveryRecoveryQueryHandler(ITenantEventLookup eventLookup)
-    : IRequestHandler<GetEventDeliveryRecoveryQuery, EventDto?>
+internal sealed class GetEventDeliveryRecoveryQueryHandler(IEventDiagnosticsLookup diagnostics)
+    : IRequestHandler<GetEventDeliveryRecoveryQuery, EventDiagnosticsDto?>
 {
-    public Task<EventDto?> Handle(
+    public Task<EventDiagnosticsDto?> Handle(
         GetEventDeliveryRecoveryQuery query,
         CancellationToken cancellationToken) =>
-        eventLookup.GetByIdAsync(query.TenantId, query.EventId, cancellationToken);
+        diagnostics.GetAsync(query.TenantId, query.EventId, cancellationToken);
 }

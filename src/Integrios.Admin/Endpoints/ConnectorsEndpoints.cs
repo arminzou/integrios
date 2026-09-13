@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Domain.Enums;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -12,22 +13,28 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapGet(ListConnectors);
-        group.MapGet(GetConnectorById, "/{id:guid}");
+        group.MapGet(ListConnectors).Produces<ConnectorListDto>();
+        group.MapGet(GetConnectorById, "/{id:guid}").Produces<ConnectorDto>();
         group.MapGet(GetConnectorByVersion, "/{key}/versions/{contractVersion:int}")
-            .WithName(GetByVersionRouteName);
-        group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}");
-        group.MapPost(PreviewSourceContract, "/source-contracts/preview");
+            .WithName(GetByVersionRouteName)
+            .Produces<ConnectorDto>();
+        group.MapPut(ApplyConnectorManifest, "/{key}/versions/{contractVersion:int}")
+            .Produces<ConnectorDto>()
+            .Produces<ConnectorDto>(StatusCodes.Status201Created);
+        group.MapPost(ComposeConnectorManifest, "/{key}/versions/{contractVersion:int}/compose")
+            .Produces<ComposeConnectorManifestResult>();
+        group.MapPost(PreviewSourceContract, "/source-contracts/preview").Produces<PreviewResponse>();
     }
 
     private static async Task<IResult> ListConnectors(
         IMediator mediator,
+        string? direction,
         string? after,
         int limit = 0,
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        ConnectorListDto response = await mediator.Send(new ListConnectorsQuery(after, limit), cancellationToken);
+        ConnectorListDto response = await mediator.Send(new ListConnectorsQuery(ListFilter.ParseEnum<ConnectorDirection>(direction, "Connector direction must be source, destination, or both."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 
@@ -64,6 +71,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
         ApplyConnectorManifestResult result = await mediator.Send(
             new ApplyConnectorManifestCommand(key, contractVersion, manifest),
             cancellationToken);
+        httpContext.Response.Headers["X-Integrios-Connector-Manifest-Outcome"] = result.Outcome.ToString();
 
         if (result.Outcome != ConnectorManifestApplyOutcome.Created)
             return Results.Ok(result.Connector);
@@ -74,6 +82,33 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
             new { key, contractVersion })
             ?? throw new InvalidOperationException("The Connector version route could not be generated.");
         return Results.Created(location, result.Connector);
+    }
+
+    private static async Task<IResult> ComposeConnectorManifest(
+        string key,
+        int contractVersion,
+        ConnectorComposeRequest request,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ConnectorDirection direction = request.Direction switch
+        {
+            "source" => ConnectorDirection.Source,
+            "destination" => ConnectorDirection.Destination,
+            "both" => ConnectorDirection.Both,
+            _ => throw new ConnectorManifestValidationException(
+                "direction must be source, destination, or both.",
+                "direction"),
+        };
+        ComposeConnectorManifestResult result = await mediator.Send(
+            new ComposeConnectorManifestQuery(
+                key,
+                contractVersion,
+                request.Name,
+                request.Description,
+                direction),
+            cancellationToken);
+        return Results.Ok(result);
     }
 
     // Stateless dry-run: exercises the complete Source-contract pipeline (schema validation, JSONata
@@ -93,7 +128,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
                 statusCode: StatusCodes.Status400BadRequest);
 
         using var doc = JsonDocument.Parse(result.OutputJson!);
-        return Results.Ok(new { output = doc.RootElement.Clone() });
+        return Results.Ok(new PreviewResponse(doc.RootElement.Clone()));
     }
 }
 
@@ -102,3 +137,5 @@ internal sealed record SourceContractPreviewRequest(
     JsonElement Mapping,
     JsonElement SampleInput,
     JsonElement? SampleContext);
+
+internal sealed record ConnectorComposeRequest(string? Name, string? Description, string? Direction);

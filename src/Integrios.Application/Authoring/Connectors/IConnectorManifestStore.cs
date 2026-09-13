@@ -21,6 +21,10 @@ public interface IConnectorManifestStore
         int contractVersion,
         CancellationToken cancellationToken);
 
+    Task<Connector?> GetLatestByKeyAsync(
+        string key,
+        CancellationToken cancellationToken);
+
     Task<ConnectorManifestStoreResult> ApplyAsync(
         ConnectorManifest manifest,
         CancellationToken cancellationToken);

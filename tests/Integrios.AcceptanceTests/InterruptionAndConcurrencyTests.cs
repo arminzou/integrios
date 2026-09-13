@@ -344,16 +344,6 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             $"/admin/tenants/{tenantId}/tenant-api-keys",
             new { name = "resilience-ingestion" },
             "token");
-        Guid sourceConnectionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/connections",
-            new
-            {
-                connector_id = HttpConnectorId,
-                name = "resilience-source",
-                config = new { base_uri = $"http://mocksink:8080/sink/{name}-source" },
-                environment = "production"
-            });
-
         object? auth = authReference is null
             ? null
             : new
@@ -362,29 +352,29 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
                 config = new { header_name = "X-Api-Key" },
                 secret_refs = new { api_key = authReference }
             };
-        Guid destinationConnectionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/connections",
+        Guid destinationId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/destinations",
             new
             {
                 connector_id = authReference is null ? HttpConnectorId : ApiKeyConnectorId,
                 name = "resilience-destination",
-                config = new { base_uri = $"http://mocksink:8080/sink/{name}" },
-                destination_authentication = auth,
+                configuration = new { base_uri = $"http://mocksink:8080/sink/{name}" },
+                authentication = auth,
                 environment = "production"
             });
         Guid topicId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics",
-            new { name });
+            new { key = name });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connection_id = sourceConnectionId, topic_id = topicId, type = "event_api", configuration = new { source_contract = "event_json" } });
+            new { connector_id = HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", configuration = new { } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
                 name = "resilience-subscription",
                 match_rules = new { event_type = $"{name}.test" },
-                destination_connection_id = destinationConnectionId
+                destination_id = destinationId
             });
 
         return new Pipeline(
@@ -412,7 +402,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
                 payload,
             })
         };
-        request.Headers.TryAddWithoutValidation("Authorization", $"TenantApiKey {pipeline.ApiToken}");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {pipeline.ApiToken}");
         using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         string body = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);

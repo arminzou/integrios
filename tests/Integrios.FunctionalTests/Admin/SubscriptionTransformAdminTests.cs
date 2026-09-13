@@ -25,7 +25,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -52,7 +52,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = (object?)null
             }));
@@ -74,14 +74,17 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
         var transformElement = JsonDocument.Parse(transformJson).RootElement;
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
                 mapping = transformElement
             }));
 
@@ -102,14 +105,17 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created", mapping: transformElement);
 
         var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Patch,
+            HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
                 mapping = (object?)null
             }));
 
@@ -134,7 +140,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -156,7 +162,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -178,12 +184,14 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
+        body.GetProperty("errors").GetProperty("mapping")[0].GetString()!.ShouldContain("JSONata", Case.Sensitive);
     }
 
     [Fact]
@@ -199,7 +207,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "erp-sink",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
             }));
@@ -218,7 +226,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             {
                 name = "oversized-transform",
                 match_rules = new { event_type = "payment.created" },
-                destination_connection_id = Fixture.SourceConnectionId,
+                destination_id = Fixture.DestinationId,
                 order_index = 10,
                 mapping = new
                 {
@@ -246,7 +254,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
-        body.GetProperty("errors").GetProperty("")[0].GetString()!.ShouldContain("expression", Case.Sensitive);
+        body.GetProperty("errors").GetProperty("transform")[0].GetString()!.ShouldContain("expression", Case.Sensitive);
     }
 
     [Fact]
@@ -257,7 +265,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             "/admin/transform/preview",
             new
             {
-                mapping = new
+                transform = new
                 {
                     engine = "jsonata",
                     version = "1",

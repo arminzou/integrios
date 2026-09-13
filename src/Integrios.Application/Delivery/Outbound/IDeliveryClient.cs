@@ -1,5 +1,6 @@
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Delivery;
 
@@ -17,4 +18,8 @@ public record DeliveryResult(
     string? Error = null,
     bool IsTimeout = false,
     DeliveryFailurePhase? FailurePhase = null,
-    TimeSpan? RetryAfter = null);
+    TimeSpan? RetryAfter = null,
+    // What the destination actually returned, bounded at capture. An Operator diagnosing a failed
+    // Delivery is asking this question, and the status code alone rarely answers it.
+    string? ResponseBody = null,
+    bool ResponseBodyTruncated = false);

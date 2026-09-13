@@ -13,6 +13,16 @@ public class EventStatusTests
             EventStatusMap.FromDbValue(EventStatusMap.ToDbValue(status)).ShouldBe(status);
     }
 
+    [Fact]
+    public void DbValues_CoverEveryStatusExactlyOnce()
+    {
+        // The API document describes the Event status vocabulary from this list, so a status missing
+        // from it would be one the document never mentions and a browser client could never read.
+        EventStatusMap.DbValues.ShouldBe(
+            Enum.GetValues<EventStatus>().Select(EventStatusMap.ToDbValue).ToList(),
+            ignoreOrder: false);
+    }
+
     [Theory]
     [InlineData(EventStatus.Accepted, "accepted")]
     [InlineData(EventStatus.Routed, "routed")]

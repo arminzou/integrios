@@ -2,7 +2,8 @@ using Integrios.Application;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Delivery;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Authoring.Destinations;
+using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Secrets;
@@ -25,28 +26,40 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IOperatorKeyLifecycle)] = [Host.Admin],
         [typeof(ITenantApiKeyRepository)] = [Host.Admin],
         [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
+        [typeof(ITenantApiKeyUseRecorder)] = [Host.Ingestion],
         [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
         [typeof(IDestinationAuthenticatorRegistry)] = [Host.Admin, Host.Worker],
-        [typeof(IConnectionRepository)] = [Host.Admin],
-        [typeof(IConnectionAuthoringLock)] = [Host.Admin],
+        [typeof(IDestinationRepository)] = [Host.Admin],
+        [typeof(IDestinationAuthoringLock)] = [Host.Admin],
         [typeof(IDeadLetterReplay)] = [Host.Admin],
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingestion],
         [typeof(ITenantEventLookup)] = [Host.Admin, Host.Ingestion],
+        // Admin alone. The data plane resolves ITenantEventLookup for the same Event; this port is
+        // what adds the accepted payload and the destination's response body, and neither may be
+        // reachable from a TenantApiKey-authenticated request.
+        [typeof(IEventDiagnosticsLookup)] = [Host.Admin],
+        [typeof(ITenantEventHistory)] = [Host.Admin],
+        [typeof(ITenantEventActivitySummary)] = [Host.Admin],
+        [typeof(ITenantOverview)] = [Host.Admin],
+        [typeof(IOperatorIdentityStore)] = [Host.Admin],
         [typeof(IConnectorReader)] = [Host.Admin],
         [typeof(IConnectorManifestStore)] = [Host.Admin],
         [typeof(ISourceEndpointResolver)] = [Host.Ingestion],
         [typeof(IEventApiSourceResolver)] = [Host.Ingestion],
-        [typeof(ISourceVerifier)] = [Host.Ingestion],
-        [typeof(ISourceVerifierRegistry)] = [Host.Ingestion],
+        [typeof(ISourceVerifier)] = [Host.Admin, Host.Ingestion],
+        [typeof(ISourceVerifierRegistry)] = [Host.Admin, Host.Ingestion],
         [typeof(IQueueSourceReader)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
         [typeof(ISecretValidationReader)] = [Host.Worker],
+        [typeof(ISourceSecretValidationReader)] = [Host.Ingestion],
         [typeof(ISourceRepository)] = [Host.Admin],
+        [typeof(ISourceQueries)] = [Host.Admin],
         [typeof(IEventDeliveryQueue)] = [Host.Worker],
         [typeof(ISubscriptionRepository)] = [Host.Admin],
+        [typeof(ISubscriptionQueries)] = [Host.Admin],
         [typeof(ITenantRepository)] = [Host.Admin],
         [typeof(ITopicRepository)] = [Host.Admin],
         [typeof(ITransformEvaluator)] = [Host.Admin, Host.Worker, Host.Ingestion]
@@ -96,12 +109,13 @@ public sealed class HostCompositionArchitectureTests
     // The responsibility group a handler lives in is its production owner. This is the assertion
     // that makes the grouping load-bearing: EveryApplicationHandler_IsRegisteredByExactlyOneProductionHost
     // is satisfied by any single owner, so on its own it cannot see a handler whose group says one
-    // host while a different host registers it. That gap is the silent-ownership-transfer path
-    // ADR-0038 accepted before the 2026-08-24 amendment.
+    // host while a different host registers it. That gap is the silent-ownership-transfer path this
+    // grouping tolerated before it was tightened.
     private static readonly IReadOnlyDictionary<string, Host> GroupOwners = new Dictionary<string, Host>
     {
         ["Integrios.Application.Authoring"] = Host.Admin,
         ["Integrios.Application.Bootstrap"] = Host.Admin,
+        ["Integrios.Application.Identity"] = Host.Admin,
         ["Integrios.Application.Ingestion"] = Host.Ingestion,
         ["Integrios.Application.Delivery"] = Host.Worker
     };
@@ -112,7 +126,9 @@ public sealed class HostCompositionArchitectureTests
         new Dictionary<string, Host>
         {
             ["ReplayEventDeliveryCommandHandler"] = Host.Admin,
-            ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin
+            ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin,
+            ["ListTenantEventsQueryHandler"] = Host.Admin,
+            ["GetTenantEventActivitySummaryQueryHandler"] = Host.Admin
         };
 
     [Fact]
@@ -240,19 +256,23 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ITenantRepository>(scope.ServiceProvider);
         AssertResolves<IConnectorReader>(scope.ServiceProvider);
         AssertResolves<IConnectorManifestStore>(scope.ServiceProvider);
-        AssertResolves<IConnectionRepository>(scope.ServiceProvider);
-        AssertResolves<IConnectionAuthoringLock>(scope.ServiceProvider);
+        AssertResolves<IDestinationRepository>(scope.ServiceProvider);
+        AssertResolves<IDestinationAuthoringLock>(scope.ServiceProvider);
         AssertResolves<ITopicRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
+        AssertResolves<ISubscriptionQueries>(scope.ServiceProvider);
         AssertResolves<IDestinationAuthenticatorRegistry>(scope.ServiceProvider);
+        AssertResolves<ISourceVerifierRegistry>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
         AssertResolves<ITenantEventLookup>(scope.ServiceProvider);
         AssertResolves<IDeadLetterReplay>(scope.ServiceProvider);
+        AssertResolves<ITenantEventActivitySummary>(scope.ServiceProvider);
 
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<IEventApiSourceResolver>(scope.ServiceProvider);
         AssertOmits<ISecretValidationReader>(scope.ServiceProvider);
+        AssertOmits<ISourceSecretValidationReader>(scope.ServiceProvider);
         AssertOmits<IOutboxFanout>(scope.ServiceProvider);
         AssertOmits<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertOmits<IDeliveryClient>(scope.ServiceProvider);
@@ -271,6 +291,7 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddIngestionInfrastructureServices(BuildConfiguration()));
 
         AssertResolves<IActiveTenantApiKeyLookup>(provider);
+        AssertResolves<ITenantApiKeyUseRecorder>(provider);
         AssertResolves<IEventApiSourceResolver>(provider);
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<ISourceVerifier>(provider);
@@ -278,6 +299,9 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IQueueSourceReader>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
+        // Scoped, because it reads through the request DbContext the way every other read side does.
+        using (IServiceScope scope = provider.CreateScope())
+            AssertResolves<ISourceSecretValidationReader>(scope.ServiceProvider);
 
         AssertOmits<IOperatorKeyLookup>(provider);
         AssertOmits<IOperatorKeyLifecycle>(provider);
@@ -285,9 +309,10 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITenantRepository>(provider);
         AssertOmits<IConnectorReader>(provider);
         AssertOmits<IConnectorManifestStore>(provider);
-        AssertOmits<IConnectionRepository>(provider);
+        AssertOmits<IDestinationRepository>(provider);
         AssertOmits<ITopicRepository>(provider);
         AssertOmits<ISubscriptionRepository>(provider);
+        AssertOmits<ISubscriptionQueries>(provider);
         AssertOmits<IOutboxFanout>(provider);
         AssertOmits<IEventDeliveryQueue>(provider);
         AssertOmits<IDeliveryClient>(provider);
@@ -299,6 +324,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<DeliveryExecutionOptions>(provider);
         AssertOmits<RetryPolicy>(provider);
         AssertOmits<DeliveryOutcomePolicy>(provider);
+        AssertOmits<ITenantEventActivitySummary>(provider);
     }
 
     [Fact]
@@ -326,7 +352,7 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<ITenantApiKeyRepository>(scope.ServiceProvider);
         AssertOmits<IActiveTenantApiKeyLookup>(scope.ServiceProvider);
         AssertOmits<ITenantRepository>(scope.ServiceProvider);
-        AssertOmits<IConnectionRepository>(scope.ServiceProvider);
+        AssertOmits<IDestinationRepository>(scope.ServiceProvider);
         AssertOmits<IEventAcceptance>(scope.ServiceProvider);
         AssertOmits<ITenantEventLookup>(scope.ServiceProvider);
         AssertOmits<ITopicRepository>(scope.ServiceProvider);
@@ -335,6 +361,8 @@ public sealed class HostCompositionArchitectureTests
         AssertOmits<IConnectorReader>(scope.ServiceProvider);
         AssertOmits<IConnectorManifestStore>(scope.ServiceProvider);
         AssertOmits<ISubscriptionRepository>(scope.ServiceProvider);
+        AssertOmits<ISubscriptionQueries>(scope.ServiceProvider);
+        AssertOmits<ITenantEventActivitySummary>(scope.ServiceProvider);
     }
 
     private static ServiceProvider BuildProvider(

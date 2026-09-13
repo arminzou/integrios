@@ -75,20 +75,20 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
         var subscriptions = await context.Subscriptions.AsNoTracking()
             .Where(subscription => subscription.TopicId == topicId && subscription.Status == OperationalStatus.Active)
             .ToListAsync(cancellationToken);
-        Guid[] connectionIds = subscriptions.Select(subscription => subscription.DestinationConnectionId).Distinct().ToArray();
-        var connections = await context.Connections.AsNoTracking()
-            .Where(connection => connectionIds.Contains(connection.Id))
-            .ToDictionaryAsync(connection => connection.Id, cancellationToken);
-        Guid[] connectorIds = connections.Values.Select(connection => connection.ConnectorId).Distinct().ToArray();
+        Guid[] destinationIds = subscriptions.Select(subscription => subscription.DestinationId).Distinct().ToArray();
+        var destinations = await context.Destinations.AsNoTracking()
+            .Where(destination => destinationIds.Contains(destination.Id))
+            .ToDictionaryAsync(destination => destination.Id, cancellationToken);
+        Guid[] connectorIds = destinations.Values.Select(destination => destination.ConnectorId).Distinct().ToArray();
         var connectors = await context.Connectors.AsNoTracking()
             .Where(connector => connectorIds.Contains(connector.Id))
             .ToDictionaryAsync(connector => connector.Id, cancellationToken);
 
         return subscriptions.Select(subscription =>
         {
-            Connection connection = connections[subscription.DestinationConnectionId];
-            var connector = connectors[connection.ConnectorId];
-            string baseUri = connection.Config.TryGetProperty("base_uri", out JsonElement value)
+            Destination destination = destinations[subscription.DestinationId];
+            var connector = connectors[destination.ConnectorId];
+            string baseUri = destination.Configuration.TryGetProperty("base_uri", out JsonElement value)
                 ? value.GetString() ?? string.Empty
                 : string.Empty;
             var snapshot = new HttpExecutionSnapshot
@@ -96,14 +96,12 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 Version = HttpExecutionSnapshot.CurrentVersion,
                 BaseUri = baseUri,
                 Request = subscription.HttpDelivery,
-                DestinationAuthentication = connection.DestinationAuthentication,
-                HttpSuccess = connector.Manifest.HttpSuccess is { } httpSuccess
-                    ? JsonSerializer.Deserialize<HttpSuccessRule>(httpSuccess.GetRawText(), StoredJson.Options)
-                    : null,
+                DestinationAuthentication = destination.Authentication,
+                HttpSuccess = subscription.HttpSuccess,
             };
             return new SubscriptionRoutingCandidate(
                 subscription.Id,
-                subscription.DestinationConnectionId,
+                subscription.DestinationId,
                 subscription.OrderIndex,
                 subscription.MatchRules.GetRawText(),
                 subscription.MappingConfig?.GetRawText(),
@@ -129,9 +127,9 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 USING (VALUES (@EventId, @SubscriptionId)) AS source(event_id, subscription_id)
                    ON target.event_id = source.event_id AND target.subscription_id = source.subscription_id
                 WHEN NOT MATCHED THEN
-                    INSERT (event_id, subscription_id, destination_connection_id, connector_key,
+                    INSERT (event_id, subscription_id, destination_id, connector_key,
                             http_execution_snapshot, mapping_config_snapshot, traceparent)
-                    VALUES (@EventId, @SubscriptionId, @DestinationConnectionId, @ConnectorKey,
+                    VALUES (@EventId, @SubscriptionId, @DestinationId, @ConnectorKey,
                             @HttpExecutionSnapshotJson, @MappingConfigJson, @Traceparent)
                 OUTPUT CASE WHEN $action = 'INSERT' THEN 1 ELSE 0 END;
                 """,
@@ -139,7 +137,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 {
                     EventId = eventId,
                     target.SubscriptionId,
-                    target.DestinationConnectionId,
+                    target.DestinationId,
                     target.ConnectorKey,
                     target.HttpExecutionSnapshotJson,
                     target.MappingConfigJson,

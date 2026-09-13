@@ -9,7 +9,7 @@ public sealed record PreviewMappingQuery(
     JsonElement SampleInput,
     JsonElement? SampleContext) : IRequest<PreviewMappingResult>;
 
-public sealed record PreviewMappingResult(string? Error, string? OutputJson);
+public sealed record PreviewMappingResult(string? Error, string? ErrorField, string? OutputJson);
 
 internal sealed class PreviewMappingQueryHandler(ITransformEvaluator evaluator)
     : IRequestHandler<PreviewMappingQuery, PreviewMappingResult>
@@ -26,7 +26,7 @@ internal sealed class PreviewMappingQueryHandler(ITransformEvaluator evaluator)
             "transform",
             out TransformSpec? transform);
         if (error is not null)
-            return Task.FromResult(new PreviewMappingResult(error, null));
+            return Task.FromResult(new PreviewMappingResult(error, "transform", null));
         if (transform is null)
             throw new InvalidOperationException("Transform validation succeeded without a parsed transform.");
 
@@ -40,11 +40,12 @@ internal sealed class PreviewMappingQueryHandler(ITransformEvaluator evaluator)
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new PreviewMappingResult(
                 null,
+                null,
                 evaluator.Evaluate(transform, inputJson, context)));
         }
         catch (TransformEvaluationException exception)
         {
-            return Task.FromResult(new PreviewMappingResult(exception.Message, null));
+            return Task.FromResult(new PreviewMappingResult(exception.Message, null, null));
         }
     }
 

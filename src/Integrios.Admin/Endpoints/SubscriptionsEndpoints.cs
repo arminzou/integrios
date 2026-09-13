@@ -2,7 +2,9 @@ using System.Text.Json;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
+using Integrios.Domain.Enums;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -12,10 +14,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
 
     public void Map(RouteGroupBuilder group)
     {
-        group.MapPost(CreateSubscription);
-        group.MapGet(ListSubscriptions);
-        group.MapGet(GetSubscriptionById, "/{id:guid}");
-        group.MapPatch(UpdateSubscription, "/{id:guid}");
+        group.MapPost(CreateSubscription).Produces<SubscriptionDto>(StatusCodes.Status201Created);
+        group.MapGet(ListSubscriptions).Produces<SubscriptionListDto>();
+        group.MapGet(GetSubscriptionById, "/{id:guid}").Produces<SubscriptionDto>();
+        group.MapPut(UpdateSubscription, "/{id:guid}").Produces<SubscriptionDto>();
         group.MapPost(DeactivateSubscription, "/{id:guid}/deactivate");
     }
 
@@ -32,9 +34,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 topicId,
                 request.Name,
                 request.MatchRules,
-                request.DestinationConnectionId,
+                request.DestinationId,
                 request.Mapping,
                 request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
+                request.HttpSuccess,
                 request.OrderIndex,
                 request.Description),
             cancellationToken);
@@ -49,11 +52,12 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         Guid topicId,
         IMediator mediator,
         CancellationToken cancellationToken,
+        string? status,
         string? after,
         int limit = 0)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var response = await mediator.Send(new ListSubscriptionsByTopicQuery(tenantId, topicId, after, limit), cancellationToken);
+        var response = await mediator.Send(new ListSubscriptionsByTopicQuery(tenantId, topicId, ListFilter.ParseEnum<OperationalStatus>(status, "Subscription status must be active or disabled."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 
@@ -83,9 +87,10 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 id,
                 request.Name,
                 request.MatchRules,
-                request.DestinationConnectionId,
+                request.DestinationId,
                 request.Mapping,
                 request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
+                request.HttpSuccess,
                 request.OrderIndex,
                 request.Description),
             cancellationToken);
@@ -109,17 +114,19 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
 internal sealed record CreateSubscriptionRequest(
     string? Name,
     JsonElement MatchRules,
-    Guid DestinationConnectionId,
+    Guid DestinationId,
     JsonElement? Mapping,
     HttpDeliveryConfiguration? HttpDelivery,
+    HttpSuccessRule? HttpSuccess,
     int OrderIndex,
     string? Description);
 
 internal sealed record UpdateSubscriptionRequest(
-    string? Name,
-    JsonElement MatchRules,
-    Guid DestinationConnectionId,
-    JsonElement? Mapping,
-    HttpDeliveryConfiguration? HttpDelivery,
-    int OrderIndex,
-    string? Description);
+    [property: JsonRequired] string? Name,
+    [property: JsonRequired] JsonElement MatchRules,
+    [property: JsonRequired] Guid DestinationId,
+    [property: JsonRequired] JsonElement? Mapping,
+    [property: JsonRequired] HttpDeliveryConfiguration? HttpDelivery,
+    [property: JsonRequired] HttpSuccessRule? HttpSuccess,
+    [property: JsonRequired] int OrderIndex,
+    [property: JsonRequired] string? Description);

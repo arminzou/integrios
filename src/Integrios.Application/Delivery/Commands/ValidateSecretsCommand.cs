@@ -9,12 +9,12 @@ namespace Integrios.Application.Delivery;
 
 public sealed record ValidateSecretsCommand(
     string? TenantSlug,
-    Guid? ConnectionId,
+    Guid? DestinationId,
     bool All) : IRequest<SecretValidationReport>;
 
 public sealed record SecretValidationResult(
     string TenantSlug,
-    Guid ConnectionId,
+    Guid DestinationId,
     string SecretReference,
     bool Resolvable);
 
@@ -40,14 +40,14 @@ internal sealed class ValidateSecretsCommandHandler(
 
         foreach (Tenant tenant in tenants)
         {
-            IReadOnlyList<Connection> connections = await SelectConnectionsAsync(
+            IReadOnlyList<Destination> destinations = await SelectDestinationsAsync(
                 tenant,
-                command.ConnectionId,
+                command.DestinationId,
                 cancellationToken);
 
-            foreach (Connection connection in connections)
+            foreach (Destination destination in destinations)
             {
-                foreach (string reference in SecretReferences(connection))
+                foreach (string reference in SecretReferences(destination))
                 {
                     bool resolvable;
                     try
@@ -69,7 +69,7 @@ internal sealed class ValidateSecretsCommandHandler(
 
                     results.Add(new(
                         tenant.Slug,
-                        connection.Id,
+                        destination.Id,
                         reference,
                         resolvable));
                 }
@@ -82,10 +82,10 @@ internal sealed class ValidateSecretsCommandHandler(
     private static void ValidateSelection(ValidateSecretsCommand command)
     {
         if (command.All == (command.TenantSlug is not null)
-            || (command.ConnectionId is not null && command.TenantSlug is null))
+            || (command.DestinationId is not null && command.TenantSlug is null))
         {
             throw new SecretValidationSelectionException(
-                "Select --all or --tenant <slug>; --connection requires --tenant.");
+                "Select --all or --tenant <slug>; --destination requires --tenant.");
         }
 
         if (command.TenantSlug is not null && !TenantSlug.IsValid(command.TenantSlug))
@@ -109,28 +109,28 @@ internal sealed class ValidateSecretsCommandHandler(
         return await reader.ListActiveTenantsAsync(cancellationToken);
     }
 
-    private async Task<IReadOnlyList<Connection>> SelectConnectionsAsync(
+    private async Task<IReadOnlyList<Destination>> SelectDestinationsAsync(
         Tenant tenant,
-        Guid? connectionId,
+        Guid? destinationId,
         CancellationToken cancellationToken)
     {
-        if (connectionId is not null)
+        if (destinationId is not null)
         {
-            Connection? connection = await reader.FindConnectionAsync(
+            Destination? destination = await reader.FindDestinationAsync(
                 tenant.Id,
-                connectionId.Value,
+                destinationId.Value,
                 cancellationToken);
-            return connection is null
-                ? throw new SecretValidationSelectionException("The selected Connection does not exist for this Tenant.")
-                : [connection];
+            return destination is null
+                ? throw new SecretValidationSelectionException("The selected Destination does not exist for this Tenant.")
+                : [destination];
         }
 
-        return await reader.ListActiveConnectionsAsync(tenant.Id, cancellationToken);
+        return await reader.ListActiveDestinationsAsync(tenant.Id, cancellationToken);
     }
 
-    private static IEnumerable<string> SecretReferences(Connection connection)
+    private static IEnumerable<string> SecretReferences(Destination destination)
     {
-        JsonElement references = connection.DestinationAuthentication?.SecretRefs ?? default;
+        JsonElement references = destination.Authentication?.SecretRefs ?? default;
         if (references.ValueKind != JsonValueKind.Object)
             yield break;
 

@@ -7,6 +7,7 @@ using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -339,7 +340,7 @@ public sealed class DispatchEventDeliveriesCommandTests
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));
 
-        string[] forbidden = ["tenant_id", "subscription_id", "connection_id"];
+        string[] forbidden = ["tenant_id", "subscription_id", "destination_id"];
         metrics.AllTagKeys.ShouldNotContain(key => forbidden.Contains(key));
     }
 

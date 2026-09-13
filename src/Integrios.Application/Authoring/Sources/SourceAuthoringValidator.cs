@@ -1,161 +1,192 @@
 using System.Text.Json;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Common;
+using Integrios.Application.Secrets;
+using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Ingestion;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Authoring.Sources;
 
 internal static class SourceAuthoringValidator
 {
-    public static string Validate(SourceType type, JsonElement configuration, Connection connection, Connector connector)
+    public static void Validate(
+        SourceType type,
+        JsonElement configuration,
+        SourceVerificationInput? verification,
+        Connector connector)
     {
+        if (connector.Direction == ConnectorDirection.Destination)
+            throw new SourceValidationException($"The Connector '{connector.Key}' does not permit Source authoring.");
+        if (connector.Status != OperationalStatus.Active)
+            throw new SourceValidationException("The Source's Connector must be active before it can be used.");
+        if (connector.Manifest.SourceConfigurationSchema is not JsonElement schema)
+            throw new SourceValidationException("The Connector does not declare a Source configuration schema.");
+
         try
         {
-            ConnectionUseValidator.ValidateSourceAuthoring(connection, connector);
+            ConfigurationSchemaEvaluator.Validate(configuration, schema, "Source configuration");
         }
-        catch (ConnectionValidationException exception)
+        catch (ConfigurationValidationException exception)
         {
             throw new SourceValidationException(exception.Message);
         }
 
-        if (configuration.ValueKind != JsonValueKind.Object)
-            throw new SourceValidationException("Source configuration must be a JSON object.");
-        if (!configuration.TryGetProperty("source_contract", out JsonElement contract)
-            || contract.ValueKind != JsonValueKind.String
-            || string.IsNullOrWhiteSpace(contract.GetString()))
+        if (type == SourceType.Webhook)
         {
-            throw new SourceValidationException("Source configuration requires a source_contract key.");
+            ValidateVerification(verification, connector.Manifest.SourceVerification);
+            return;
         }
 
-        string sourceContract = contract.GetString()!;
-        if (!connector.Manifest.SourceContracts.Any(candidate => candidate.Key == sourceContract))
-            throw new SourceValidationException("Source configuration selects a contract not declared by its Connector.");
-
-        var allowed = type switch
+        if (type is SourceType.EventApi or SourceType.Queue)
         {
-            SourceType.EventApi => new HashSet<string>(["source_contract"], StringComparer.Ordinal),
-            SourceType.Webhook => new HashSet<string>(["source_contract", "callback_id"], StringComparer.Ordinal),
-            // Fixed regardless of how many transports exist: everything transport-specific lives
-            // inside transport_config, so adding a broker never widens this set.
-            SourceType.Queue => new HashSet<string>(
-                ["source_contract", "transport", "authentication", "transport_config"],
-                StringComparer.Ordinal),
-            _ => throw new SourceValidationException("Source type is not supported."),
+            if (verification is not null)
+                throw new SourceValidationException("Only webhook Sources support Source verification.");
+            if (type == SourceType.Queue)
+                ValidateQueueConfiguration(configuration);
+            return;
+        }
+
+        throw new SourceValidationException("Source type is not supported.");
+    }
+
+    public static SourceVerification? ToVerification(SourceVerificationInput? input) => input is null
+        ? null
+        : new SourceVerification
+        {
+            Scheme = input.Scheme,
+            Config = input.Config.Clone(),
+            SecretRefs = input.SecretRefs.Clone(),
         };
-        foreach (JsonProperty property in configuration.EnumerateObject())
+
+    public static void ValidateRuntimeContract(
+        SourceType type,
+        JsonElement? inputRequirements,
+        SourceMapping? mapping,
+        SourceEventIdentityRule? eventIdentityRule,
+        ITransformEvaluator evaluator)
+    {
+        if (type == SourceType.EventApi)
         {
-            if (!allowed.Contains(property.Name))
-                throw new SourceValidationException($"Source configuration property '{property.Name}' is not valid for {type.ToString().ToLowerInvariant()}.");
+            if (inputRequirements is not null || mapping is not null || eventIdentityRule is not null)
+                throw new SourceValidationException("Event API Sources use the fixed Integrios Event contract.");
+            return;
         }
 
-        if (type == SourceType.Queue)
+        if (inputRequirements is JsonElement schema)
         {
-            if (!configuration.TryGetProperty("transport", out JsonElement transport)
-                || transport.ValueKind != JsonValueKind.String
-                || transport.GetString() != "azure_service_bus")
+            try
             {
-                throw new SourceValidationException("Queue Source configuration requires transport azure_service_bus.");
+                ConstrainedJsonSchemaValidator.Validate(schema, "input_requirements");
             }
-            if (!configuration.TryGetProperty("transport_config", out JsonElement transportConfig)
-                || transportConfig.ValueKind != JsonValueKind.Object
-                || !configuration.TryGetProperty("authentication", out JsonElement authentication)
-                || authentication.ValueKind != JsonValueKind.Object)
+            catch (ConnectorManifestValidationException exception)
             {
-                throw new SourceValidationException(
-                    "Queue Source configuration requires transport_config and authentication objects.");
+                throw new SourceValidationException(exception.Message, "input_requirements");
             }
-
-            string @namespace = ValidateServiceBusTransportConfig(transportConfig);
-            ValidateQueueAuthentication(authentication, @namespace);
         }
 
-        return sourceContract;
+        if (mapping is not null && evaluator.ValidateExpression(new TransformSpec(mapping.Engine, mapping.Version, mapping.Expression)) is { } error)
+            throw new SourceValidationException(error, "mapping");
+
+        if (eventIdentityRule is null)
+            return;
+        if (string.IsNullOrWhiteSpace(eventIdentityRule.Value))
+            throw new SourceValidationException("Source Event identity value is required.", "event_identity_rule");
+
+        bool supported = type switch
+        {
+            SourceType.Webhook => eventIdentityRule.Kind is "header" or "json_path",
+            SourceType.Queue => eventIdentityRule.Kind is "message_id" or "json_path",
+            _ => false,
+        };
+        if (!supported)
+            throw new SourceValidationException("Source Event identity rule is not valid for this Source type.", "event_identity_rule");
+        if (eventIdentityRule.Kind == "json_path" && !SourceEventIdentityExtractor.IsJsonPointer(eventIdentityRule.Value))
+            throw new SourceValidationException("Source Event JSON identity path must be a JSON Pointer such as '/id'.", "event_identity_rule");
     }
 
-    // Everything Service Bus needs to reach one entity. Nested rather than prefixed: transport
-    // already discriminates, and inside this object topic_name and subscription_name cannot be
-    // misread as the Integrios Topic the Source publishes to or the Subscriptions that consume it.
-    private static string ValidateServiceBusTransportConfig(JsonElement transportConfig)
+    private static void ValidateVerification(
+        SourceVerificationInput? verification,
+        ConnectorSourceVerificationManifest capabilities)
     {
-        var allowed = new HashSet<string>(
-            ["namespace", "queue_name", "topic_name", "subscription_name"], StringComparer.Ordinal);
-        foreach (JsonProperty property in transportConfig.EnumerateObject())
+        if (verification is null)
         {
-            if (!allowed.Contains(property.Name))
-            {
-                throw new SourceValidationException(
-                    $"Queue Source transport_config property '{property.Name}' is not valid for azure_service_bus.");
-            }
+            if (!capabilities.AllowUnverified)
+                throw new SourceValidationException("The Source requires a Source verification selection before it can be active.");
+            return;
         }
 
-        if (!IsNonEmptyString(transportConfig, "namespace"))
+        ConnectorSchemeManifest? declaration = capabilities.Schemes.SingleOrDefault(
+            scheme => scheme.Scheme.Equals(verification.Scheme, StringComparison.OrdinalIgnoreCase));
+        if (declaration is null)
+            throw new SourceValidationException($"Source verification scheme '{verification.Scheme}' is not supported by this Connector.");
+
+        ValidateRequiredFields(verification.Config, declaration.RequiredConfig, "config");
+        ValidateRequiredFields(verification.SecretRefs, declaration.RequiredSecretRefs, "secret_refs");
+        if (SecretReferenceMap.Validate(verification.SecretRefs, "Source verification secret_refs") is { } error)
+            throw new SourceValidationException(error, "verification");
+    }
+
+    private static void ValidateRequiredFields(JsonElement value, IReadOnlyList<string> required, string section)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+            throw new SourceValidationException($"Source verification {section} must be a JSON object.");
+        foreach (string field in required)
+        {
+            if (!value.TryGetProperty(field, out JsonElement property) || property.ValueKind == JsonValueKind.Null)
+                throw new SourceValidationException($"Source verification {section} field '{field}' is required.");
+        }
+    }
+
+    private static void ValidateQueueConfiguration(JsonElement configuration)
+    {
+        if (!configuration.TryGetProperty("transport", out JsonElement transport)
+            || transport.ValueKind != JsonValueKind.String
+            || transport.GetString() != "azure_service_bus"
+            || !configuration.TryGetProperty("transport_config", out JsonElement transportConfig)
+            || transportConfig.ValueKind != JsonValueKind.Object
+            || !configuration.TryGetProperty("authentication", out JsonElement authentication)
+            || authentication.ValueKind != JsonValueKind.Object)
+        {
+            throw new SourceValidationException(
+                "Queue Source configuration requires azure_service_bus transport_config and authentication objects.");
+        }
+
+        string? @namespace = ReadNonEmptyString(transportConfig, "namespace");
+        if (@namespace is null)
             throw new SourceValidationException("Queue Source transport_config requires a namespace.");
+        bool hasQueue = ReadNonEmptyString(transportConfig, "queue_name") is not null;
+        bool hasTopic = ReadNonEmptyString(transportConfig, "topic_name") is not null;
+        bool hasSubscription = ReadNonEmptyString(transportConfig, "subscription_name") is not null;
+        if (hasQueue == (hasTopic || hasSubscription) || hasTopic != hasSubscription)
+            throw new SourceValidationException("Queue Source transport_config requires exactly one queue or topic subscription.");
 
-        bool hasQueue = IsNonEmptyString(transportConfig, "queue_name");
-        bool hasTopic = IsNonEmptyString(transportConfig, "topic_name");
-        bool hasSubscription = IsNonEmptyString(transportConfig, "subscription_name");
-
-        if (hasQueue && (hasTopic || hasSubscription))
+        string? scheme = ReadNonEmptyString(authentication, "scheme");
+        bool hasSecretReference = ReadNonEmptyString(authentication, "secret_ref") is not null;
+        if (scheme == "connection_string" && !hasSecretReference)
+            throw new SourceValidationException("Queue Source connection_string authentication requires a secret_ref.");
+        if (hasSecretReference && !SecretReferenceName.IsValid(ReadNonEmptyString(authentication, "secret_ref")))
         {
             throw new SourceValidationException(
-                "Queue Source transport_config names either queue_name or a topic subscription, not both.");
+                "Queue Source secret_ref must be a lowercase logical name of 1 to 63 characters. "
+                + "It names a secret; it is never the secret itself.",
+                "configuration");
         }
-        if (hasTopic != hasSubscription)
-        {
-            throw new SourceValidationException(
-                "Queue Source transport_config requires topic_name and subscription_name together.");
-        }
-        if (!hasQueue && !hasTopic)
-        {
-            throw new SourceValidationException(
-                "Queue Source transport_config requires queue_name, or topic_name with subscription_name.");
-        }
-
-        return transportConfig.GetProperty("namespace").GetString()!;
+        if (scheme == "azure_identity" && hasSecretReference)
+            throw new SourceValidationException("Queue Source azure_identity authentication takes no secret_ref.");
+        if (scheme == "azure_identity" && !IsHostName(@namespace))
+            throw new SourceValidationException("Queue Source azure_identity authentication requires a broker host namespace.");
+        if (scheme is not ("connection_string" or "azure_identity"))
+            throw new SourceValidationException("Queue Source authentication supports connection_string or azure_identity.");
     }
 
-    private static bool IsNonEmptyString(JsonElement configuration, string property) =>
-        configuration.TryGetProperty(property, out JsonElement value)
-        && value.ValueKind == JsonValueKind.String
-        && !string.IsNullOrWhiteSpace(value.GetString());
+    private static string? ReadNonEmptyString(JsonElement value, string property) =>
+        value.TryGetProperty(property, out JsonElement item)
+        && item.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(item.GetString()) ? item.GetString() : null;
 
-    // Authentication the receiver cannot build a client for is rejected here, because nothing
-    // downstream reports it: a broker that refuses the credential leaves a processor that looks
-    // healthy to reconciliation while receiving nothing. These are the schemes
-    // AzureServiceBusQueueReceiver.CreateClientAsync implements; the two lists move together.
-    private static void ValidateQueueAuthentication(JsonElement authentication, string @namespace)
-    {
-        string? scheme = authentication.TryGetProperty("scheme", out JsonElement schemeElement)
-            && schemeElement.ValueKind == JsonValueKind.String
-                ? schemeElement.GetString()
-                : null;
-        bool hasSecretReference = authentication.TryGetProperty("secret_ref", out JsonElement secretRef)
-            && secretRef.ValueKind == JsonValueKind.String
-            && !string.IsNullOrWhiteSpace(secretRef.GetString());
-
-        switch (scheme)
-        {
-            case "connection_string" when !hasSecretReference:
-                throw new SourceValidationException(
-                    "Queue Source connection_string authentication requires a secret_ref.");
-            case "azure_identity" when hasSecretReference:
-                throw new SourceValidationException(
-                    "Queue Source azure_identity authentication draws an ambient credential and takes no secret_ref.");
-            case "azure_identity" when !IsHostName(@namespace):
-                throw new SourceValidationException(
-                    "Queue Source azure_identity authentication requires namespace to be the broker host "
-                    + $"name, such as 'example.servicebus.windows.net'; got '{@namespace}'.");
-            case "connection_string" or "azure_identity":
-                return;
-            default:
-                throw new SourceValidationException(
-                    $"Queue Source authentication scheme '{scheme}' is not supported; use connection_string or azure_identity.");
-        }
-    }
-
-    // azure_identity locates the broker from this value alone, so it must be a bare host: no
-    // scheme, no path, and at least one dot. Deliberately not pinned to servicebus.windows.net,
-    // because sovereign clouds use different suffixes.
     private static bool IsHostName(string value) =>
         !value.Contains("://", StringComparison.Ordinal)
         && !value.Contains('/')

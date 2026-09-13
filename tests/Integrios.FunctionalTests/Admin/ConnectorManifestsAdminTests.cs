@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Domain.ValueObjects;
+using Integrios.Infrastructure.Delivery;
+using Integrios.Infrastructure.Events;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Integrios.Tests.Shared;
 
@@ -32,6 +35,8 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         JsonElement version1 = Manifest(contractVersion: 1, name: "Example API");
         HttpResponseMessage createdResponse = await ApplyAsync(1, version1);
         createdResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        createdResponse.Headers.GetValues("X-Integrios-Connector-Manifest-Outcome").ShouldHaveSingleItem()
+            .ShouldBe(nameof(ConnectorManifestApplyOutcome.Created));
         createdResponse.Headers.Location?.OriginalString.ShouldBe(
             "/admin/connectors/example_api/versions/1");
         ConnectorDto created = (await createdResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
@@ -46,6 +51,8 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
 
         HttpResponseMessage unchangedResponse = await ApplyAsync(1, Reordered(version1));
         unchangedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        unchangedResponse.Headers.GetValues("X-Integrios-Connector-Manifest-Outcome").ShouldHaveSingleItem()
+            .ShouldBe(nameof(ConnectorManifestApplyOutcome.Unchanged));
         ConnectorDto unchanged = (await unchangedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
         unchanged.Id.ShouldBe(created.Id);
         unchanged.UpdatedAt.ShouldBe(created.UpdatedAt);
@@ -53,6 +60,8 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         JsonElement renamedManifest = Manifest(contractVersion: 1, name: "Improved API");
         HttpResponseMessage renamedResponse = await ApplyAsync(1, renamedManifest);
         renamedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        renamedResponse.Headers.GetValues("X-Integrios-Connector-Manifest-Outcome").ShouldHaveSingleItem()
+            .ShouldBe(nameof(ConnectorManifestApplyOutcome.PresentationReconciled));
         ConnectorDto renamed = (await renamedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
         renamed.Id.ShouldBe(created.Id);
         renamed.Name.ShouldBe("Improved API");
@@ -95,27 +104,33 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         list.Items.ShouldContain(item =>
             item.Id == created.Id &&
             item.ContractVersion == 1 &&
-            item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Disabled API");
+            item.Name == "Disabled API");
         list.Items.ShouldContain(item =>
             item.Id == createdV2.Id &&
             item.ContractVersion == 2 &&
-            item.Manifest.GetProperty("presentation").GetProperty("name").GetString() == "Example API v2");
+            item.Name == "Example API v2");
     }
 
     [Fact]
-    public async Task Apply_RejectsRouteIdentityMismatchAndAcceptsDeclarativeSourceContract()
+    public async Task Apply_RejectsRouteIdentityMismatchAndRetiredSourceContracts()
     {
         HttpResponseMessage identityMismatch = await ApplyAsync(2, Manifest(contractVersion: 1, name: "Example API"));
         identityMismatch.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
-        JsonElement sourceContract = Json(Manifest(1, "Example API").GetRawText().Replace(
+        JsonElement sourceCapable = Json(Manifest(1, "Example API").GetRawText().Replace(
             "\"direction\":\"destination\"",
             "\"direction\":\"both\","
-            + "\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true},"
-            + "\"source_contracts\":[{\"key\":\"event_json\",\"contract_version\":1,\"config\":{}}]",
+            + "\"source_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true}",
+            StringComparison.Ordinal));
+        HttpResponseMessage sourceCapableResponse = await ApplyAsync(1, sourceCapable);
+        sourceCapableResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        JsonElement sourceContract = Json(sourceCapable.GetRawText().Replace(
+            "\"presentation\":",
+            "\"source_contracts\":[{\"key\":\"event_json\",\"contract_version\":1,\"config\":{}}],\"presentation\":",
             StringComparison.Ordinal));
         HttpResponseMessage sourceContractResponse = await ApplyAsync(1, sourceContract);
-        sourceContractResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        sourceContractResponse.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
     [Fact]
@@ -127,6 +142,143 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         responses.Count(response => response.StatusCode == HttpStatusCode.Created).ShouldBe(1);
         responses.Count(response => response.StatusCode == HttpStatusCode.OK).ShouldBe(1);
         (await CountAsync("connectors", $"{fixture.KeyColumn} = 'example_api' AND contract_version = 1")).ShouldBe(1L);
+    }
+
+    [Theory]
+    [InlineData("source", true, false)]
+    [InlineData("destination", false, true)]
+    [InlineData("both", true, true)]
+    public async Task Compose_ReturnsAParseableManifestWithEveryPlatformScheme(
+        string direction,
+        bool sourceCapable,
+        bool destinationCapable)
+    {
+        string key = $"guided_{direction}";
+        using HttpResponseMessage response = await SendAsync(
+            HttpMethod.Post,
+            $"/admin/connectors/{key}/versions/1/compose",
+            Json($$$"""{"name":"Guided","description":null,"direction":"{{{direction}}}"}"""));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement result = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
+        JsonElement document = result.GetProperty("manifest");
+        ConnectorManifest manifest = ConnectorManifestParser.Parse(
+            document,
+            new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
+            new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
+
+        manifest.SourceConfigurationSchema.HasValue.ShouldBe(sourceCapable);
+        manifest.DestinationConfigurationSchema.HasValue.ShouldBe(destinationCapable);
+        manifest.SourceVerification.AllowUnverified.ShouldBeTrue();
+        manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBeTrue();
+        manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme)
+            .ShouldBe(sourceCapable ? ["hmac_sha256"] : []);
+        manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)
+            .ShouldBe(destinationCapable ? ["api_key_header", "bearer_token"] : []);
+    }
+
+    [Fact]
+    public async Task Compose_CarriesForwardTheLatestVersionsTightenedContract()
+    {
+        (await SendAsync(HttpMethod.Put, "/admin/connectors/carry_forward/versions/1", CarryForwardManifest(1, "old.event")))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await SendAsync(HttpMethod.Put, "/admin/connectors/carry_forward/versions/2", CarryForwardManifest(2, "latest.event")))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        using HttpResponseMessage response = await SendAsync(
+            HttpMethod.Post,
+            "/admin/connectors/carry_forward/versions/3/compose",
+            Json("""{"name":"Next","description":"New description","direction":"both"}"""));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement result = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
+        ConnectorManifest manifest = ConnectorManifestParser.Parse(
+            result.GetProperty("manifest"),
+            new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
+            new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
+        manifest.ContractVersion.ShouldBe(3);
+        manifest.Presentation.Name.ShouldBe("Next");
+        manifest.Presentation.EventTypes.ShouldBe(["latest.event"]);
+        manifest.Presentation.AuthoringPresets.ShouldHaveSingleItem()
+            .GetProperty("label").GetString().ShouldBe("Latest");
+        manifest.SourceConfigurationSchema!.Value.GetProperty("required")[0].GetString().ShouldBe("region");
+        manifest.DestinationConfigurationSchema!.Value.GetProperty("required").GetArrayLength().ShouldBe(2);
+        manifest.DestinationAuthentication.Schemes.ShouldHaveSingleItem().Scheme.ShouldBe("bearer_token");
+        manifest.SourceVerification.AllowUnverified.ShouldBeTrue();
+        manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task GuidedConnector_AllowsSourcesAndDestinationsToSelectEveryComposedScheme()
+    {
+        using HttpResponseMessage composedResponse = await SendAsync(
+            HttpMethod.Post,
+            "/admin/connectors/guided_both/versions/1/compose",
+            Json("""{"name":"Guided both","description":null,"direction":"both"}"""));
+        composedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement composed = await composedResponse.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
+
+        using HttpResponseMessage appliedResponse = await SendAsync(
+            HttpMethod.Put,
+            "/admin/connectors/guided_both/versions/1",
+            composed.GetProperty("manifest"));
+        appliedResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        ConnectorDto connector = (await appliedResponse.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
+
+        using HttpResponseMessage topicResponse = await SendAsync(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/topics",
+            Json("""{"key":"guided-topic"}"""));
+        topicResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        Guid topicId = (await topicResponse.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options)).GetProperty("id").GetGuid();
+
+        using HttpResponseMessage sourceResponse = await SendAsync(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/sources",
+            JsonSerializer.SerializeToElement(new
+            {
+                connector_id = connector.Id,
+                topic_id = topicId,
+                name = "guided-source",
+                type = "webhook",
+                configuration = new { },
+                verification = new
+                {
+                    scheme = "hmac_sha256",
+                    config = new { },
+                    secret_refs = new { secret = "guided_signing_secret" },
+                },
+            }));
+        sourceResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        foreach ((string name, object authentication) in new (string, object)[]
+        {
+            ("guided-api-key", new
+            {
+                scheme = "api_key_header",
+                config = new { header_name = "X-Api-Key" },
+                secret_refs = new { api_key = "guided_api_key" },
+            }),
+            ("guided-bearer", new
+            {
+                scheme = "bearer_token",
+                config = new { },
+                secret_refs = new { token = "guided_bearer_token" },
+            }),
+        })
+        {
+            using HttpResponseMessage destinationResponse = await SendAsync(
+                HttpMethod.Post,
+                $"/admin/tenants/{fixture.TenantId}/destinations",
+                JsonSerializer.SerializeToElement(new
+                {
+                    connector_id = connector.Id,
+                    name,
+                    configuration = new { base_uri = "https://example.invalid/events" },
+                    authentication,
+                }));
+            destinationResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        }
     }
 
     private async Task<ConnectorDto?> GetVersionAsync(int contractVersion)
@@ -206,6 +358,24 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
           "manifest_schema_version":1
         }
         """);
+
+    private static JsonElement CarryForwardManifest(int contractVersion, string eventType)
+    {
+        string preset = contractVersion == 2 ? "Latest" : "Old";
+        return Json($$$"""
+            {
+              "manifest_schema_version":1,
+              "key":"carry_forward",
+              "contract_version":{{{contractVersion}}},
+              "direction":"both",
+              "source_configuration_schema":{"type":"object","properties":{"region":{"type":"string"}},"required":["region"],"additionalProperties":false},
+              "destination_configuration_schema":{"type":"object","properties":{"base_uri":{"type":"string","format":"uri"},"operation":{"type":"string"}},"required":["base_uri","operation"],"additionalProperties":false},
+              "source_verification":{"allow_unverified":false,"schemes":[{"scheme":"hmac_sha256","required_config":[],"required_secret_refs":["secret"]}]},
+              "destination_authentication":{"allow_unauthenticated":false,"schemes":[{"scheme":"bearer_token","required_config":[],"required_secret_refs":["token"]}]},
+              "presentation":{"name":"Previous","event_types":["{{{eventType}}}"],"authoring_presets":[{"label":"{{{preset}}}"}]}
+            }
+            """);
+    }
 
     private static JsonElement Json(string value) => JsonSerializer.Deserialize<JsonElement>(value);
 }

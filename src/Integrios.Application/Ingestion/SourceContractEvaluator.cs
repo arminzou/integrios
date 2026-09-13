@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Integrios.Application.Authoring.Connections;
+using Integrios.Application.Common;
 using Integrios.Application.Transforms;
 
 namespace Integrios.Application.Ingestion;
@@ -22,9 +22,9 @@ internal static class SourceContractEvaluator
         {
             try
             {
-                ConnectionConfigurationSchemaEvaluator.Validate(rawInput, declaredSchema, "input");
+                ConfigurationSchemaEvaluator.Validate(rawInput, declaredSchema, "input");
             }
-            catch (ConnectionConfigurationValidationException exception)
+            catch (ConfigurationValidationException exception)
             {
                 throw new EventAcceptanceException(exception.Message);
             }
