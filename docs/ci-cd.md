@@ -11,9 +11,29 @@ verification mandatory before publishing a release:
    publishing commit, `main`, and `latest` images.
 3. **Nightly**: repeats the pull-request gate and complete Acceptance project on schedule.
 4. **Release**: repeats the pull-request gate and runs the complete Acceptance project before
-   publishing images. A `v*` tag, or an explicit manual run from `main`, triggers it.
+   publishing images. A `v*` tag, or an explicit manual run from `main`, triggers it. See
+   [Cutting a release](#cutting-a-release) for how that tag comes about.
 5. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
    Kubernetes, etc.) lives in your own infrastructure, not in this repo.
+
+## Cutting a release
+
+Versions are derived from Conventional Commits, not chosen by hand.
+`.github/workflows/release-please.yml` keeps a release pull request open against `main`. Every
+commit that lands updates it: the next version in `VERSION` and `deploy/compose.yml`, and the
+release notes in `CHANGELOG.md`. A `feat` makes it a minor, a `fix` a patch; while the major is
+`0`, a breaking change is a minor too.
+
+To release, merge that pull request and tag the merge commit:
+
+```bash
+git switch main && git pull
+git tag -a "v$(cat VERSION)" -m "Release v$(cat VERSION)"
+git push origin "v$(cat VERSION)"
+```
+
+Merging is the release decision; pushing the tag is what starts the release run above. Nothing
+publishes until the tag exists, so an unmerged release pull request costs nothing.
 
 ## What the default pipeline does
 
@@ -50,8 +70,8 @@ commands, test logs and TRX results, resolved external image digests, and the pu
 Ingestion, Admin, and Worker image digests.
 
 The repository pins its .NET SDK, NuGet dependency graph, container versions, and
-third-party GitHub Actions. Action references use immutable commit SHAs with a readable
-release-version comment; keep that form when adapting the workflow.
+third-party GitHub Actions. Action references in `ci.yml` use immutable commit SHAs with a
+readable release-version comment; keep that form when adapting the workflow.
 
 Publishing exists only in the main and release flows. Pull requests, including those from
 forks, run only the read-only verification job and never need or receive registry

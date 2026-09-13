@@ -201,7 +201,8 @@ jobs:
 
       # The deployment reference defaults to a version so a fresh clone deploys without editing
       # anything. That default is only trustworthy if it cannot fall behind, so a release may not
-      # be cut while it disagrees with the tag being published. Bump it, commit, then tag.
+      # be cut while it disagrees with the tag being published. The release pull request
+      # bumps it; a failure here means the tag was cut outside that flow.
       - name: Check the deployment default matches the release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
