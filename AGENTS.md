@@ -88,6 +88,9 @@ dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.cs
 dotnet run --project src/Integrios.Ingestion
 dotnet run --project src/Integrios.Admin
 dotnet run --project src/Integrios.Worker
+
+# Apply C# formatting (per .editorconfig)
+dotnet format Integrios.slnx
 ```
 
 ## Database Commands
