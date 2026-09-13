@@ -87,6 +87,8 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
       DOTNET_ENVIRONMENT: Development
       Integrios__PublicIngestionBaseUri: ${INTEGRIOS_PUBLIC_INGESTION_BASE_URI:-http://localhost:5231}
+      # Either OIDC or password sign-in serves the dashboard. With both unset/disabled, Admin stays
+      # machine-only. Password values are created interactively and never carried by Compose.
       Integrios__Admin__Oidc__Authority: ${INTEGRIOS_ADMIN_OIDC_AUTHORITY:-}
       Integrios__Admin__Oidc__ClientId: ${INTEGRIOS_ADMIN_OIDC_CLIENT_ID:-}
       Integrios__Admin__Oidc__ClientSecret: ${INTEGRIOS_ADMIN_OIDC_CLIENT_SECRET:-}

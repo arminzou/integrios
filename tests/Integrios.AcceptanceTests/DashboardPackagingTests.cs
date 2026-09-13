@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace Integrios.AcceptanceTests;
@@ -87,6 +88,19 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
         // even though a browser sign-in path is configured in this deployment.
         using HttpResponseMessage api = await fixture.AdminClient.GetAsync("/admin/tenants");
         api.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task AuthenticationOptions_ReportBothPackagedSignInMethods()
+    {
+        using HttpResponseMessage response = await fixture.AdminClient.GetAsync("/auth/options");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        JsonElement options = document.RootElement;
+        options.GetProperty("oidc_enabled").GetBoolean().ShouldBeTrue();
+        options.GetProperty("password_enabled").GetBoolean().ShouldBeTrue();
+        options.GetProperty("oidc_display_name").GetString().ShouldBe("Acceptance SSO");
+        options.GetProperty("antiforgery_token").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
     [Fact]

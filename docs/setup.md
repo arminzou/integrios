@@ -28,6 +28,10 @@ against an existing EF-managed database is safe. A fresh deployment contains zer
 the Operator applies a manifest. The dev credential
 `global_operator_key:operator_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` in `.env`.
 
+To use the browser dashboard, configure either supported human sign-in method and create any needed
+Password credential by following [Operator dashboard access](operator-dashboard.md). The dashboard
+is intentionally absent while both OIDC and password sign-in are disabled.
+
 The EF Core cutover does not upgrade databases created by the former Flyway migration path. Delete
 the old local database volume before starting this version; this permanently removes its data:
 
@@ -198,6 +202,9 @@ a working local value. Create a `.env` at the repo root only to override.
 | `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
 | `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`  | `operator_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the OperatorKey credential |
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
+| `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |
+| `INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME` | `OpenID Connect` | Admin | Provider label shown on the sign-in gate |
+| `INTEGRIOS_ADMIN_PASSWORD_ENABLED` | `false` | Admin | Enables Integrios-managed password sign-in |
 | `INTEGRIOS_DESTINATION_SECRETS_PROVIDER` | `file` | Worker | Selects `file` or `configuration` destination-authentication secret resolution |
 | `INTEGRIOS_DESTINATION_SECRETS_DIR` | `./secrets/destination` | Worker | Host directory mounted read-only for destination-authentication values |
 | `INTEGRIOS_SOURCE_SECRETS_PROVIDER` | `file` | Ingestion | Selects `file` or `configuration` source-verification secret resolution |

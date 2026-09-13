@@ -48,15 +48,10 @@ only the replacement public identifier; it never generates or outputs the replac
 ## Operator dashboard
 
 The Admin service serves a browser dashboard over the same origin as its API, for the same
-capabilities the Admin API already exposes. It is off unless the deployment configures an identity
-provider: with `INTEGRIOS_ADMIN_OIDC_AUTHORITY` empty, Admin serves no browser surface and no
-sign-in path, and stays machine-only on OperatorKey exactly as before.
-
-To turn it on, register a confidential OpenID Connect client for this deployment with
-`<admin origin>/auth/callback` as its redirect URI, then set `INTEGRIOS_ADMIN_OIDC_AUTHORITY`,
-`INTEGRIOS_ADMIN_OIDC_CLIENT_ID`, and `INTEGRIOS_ADMIN_OIDC_CLIENT_SECRET` in `.env`. Anyone the
-provider issues a token for becomes an Operator with deployment-wide authority on first sign-in, so
-restrict who the provider will issue for.
+capabilities the Admin API already exposes. Configure OpenID Connect, Integrios-managed email and
+password, or both. With neither enabled, Admin stays machine-only on OperatorKey and serves no
+browser surface. See [Operator dashboard access](../docs/operator-dashboard.md) for provider
+settings, interactive credential provisioning, and recovery.
 
 Serve Admin over HTTPS when the dashboard is on. The session cookie is secure-only, so a browser
 will not store it over plain HTTP and sign-in cannot complete.
