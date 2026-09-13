@@ -315,6 +315,11 @@ jobs:
         if: always() && steps.select_run.outputs.run_kind == 'release'
         shell: bash
         run: |
+          # `FROM <stage> AS <alias>` names an earlier build stage, not a registry image.
+          # Collect those aliases so they can be subtracted: inspecting one resolves to a Docker
+          # Hub repository that does not exist, and the whole release fails on it.
+          stages=$(awk 'toupper($1) == "FROM" && toupper($3) == "AS" { print $4 }' Dockerfile | sort -u)
+
           mapfile -t images < <(
             {
               awk 'toupper($1) == "FROM" { print $2 }' Dockerfile
@@ -322,8 +327,14 @@ jobs:
                 compose.yml \
                 deploy/compose.yml \
                 tests/Integrios.AcceptanceTests/compose.acceptance.yml
-            } | grep -v '\${' | sort -u
+            } | grep -v '\${' | grep -vxF "$stages" | sort -u
           )
+
+          # An empty list would upload a silently worthless evidence bundle.
+          if [[ "${#images[@]}" -eq 0 ]]; then
+            echo 'No external images resolved; the evidence bundle would be empty.' >&2
+            exit 1
+          fi
 
           : > evidence/external-image-digests.txt
           for image in "${images[@]}"; do
