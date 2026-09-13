@@ -343,6 +343,11 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
     : {};
   const sourceSchemes = schemeNames(sourceVerification.schemes);
   const destinationSchemes = schemeNames(destinationAuthentication.schemes);
+  // Each side is explained only where it can exist. A source-only Connector has no Destination to
+  // authenticate, and the manifest is refused if it declares one, so an empty destination menu there
+  // forecloses nothing an Operator could have had.
+  const sourceCapable = current.direction === "source" || current.direction === "both";
+  const destinationCapable = current.direction === "destination" || current.direction === "both";
   const sourceFields = requiredFields(manifest.source_configuration_schema);
   const destinationFields = requiredFields(manifest.destination_configuration_schema);
   return (
@@ -369,32 +374,38 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         <dd className="tabular-nums">{current.manifest_schema_version}</dd>
         {knownSchema ? (
           <>
-            <dt>Source verification</dt>
-            <dd>
-              <span className="block">{sourceSchemes.join(", ") || "None"}</span>
-              <span className="block text-xs text-ink-secondary">
-                Selection {sourceVerification.allow_unverified === true ? "optional" : "required"}.
-              </span>
-              {sourceSchemes.length === 0 ? (
-                <span className="block text-xs text-danger-ink">Sources on this Connector cannot verify Events.</span>
-              ) : null}
-            </dd>
-            <dt>Destination authentication</dt>
-            <dd>
-              <span className="block">{destinationSchemes.join(", ") || "None"}</span>
-              <span className="block text-xs text-ink-secondary">
-                Selection {destinationAuthentication.allow_unauthenticated === true ? "optional" : "required"}.
-              </span>
-              {destinationSchemes.length === 0 ? (
-                <span className="block text-xs text-danger-ink">
-                  Destinations on this Connector cannot authenticate Deliveries.
-                </span>
-              ) : null}
-            </dd>
-            <dt>Source required configuration</dt>
-            <dd>{sourceFields.join(", ") || "None"}</dd>
-            <dt>Destination required configuration</dt>
-            <dd>{destinationFields.join(", ") || "None"}</dd>
+            {sourceCapable ? (
+              <>
+                <dt>Source verification</dt>
+                <dd>
+                  <span className="block">{sourceSchemes.join(", ") || "None"}</span>
+                  {/* Whether a selection is required says nothing when there is nothing to select,
+                      and an applied version is immutable, so a warning would name no way out. */}
+                  {sourceSchemes.length > 0 ? (
+                    <span className="block text-xs text-ink-secondary">
+                      Selection {sourceVerification.allow_unverified === true ? "optional" : "required"}.
+                    </span>
+                  ) : null}
+                </dd>
+                <dt>Source required configuration</dt>
+                <dd>{sourceFields.join(", ") || "None"}</dd>
+              </>
+            ) : null}
+            {destinationCapable ? (
+              <>
+                <dt>Destination authentication</dt>
+                <dd>
+                  <span className="block">{destinationSchemes.join(", ") || "None"}</span>
+                  {destinationSchemes.length > 0 ? (
+                    <span className="block text-xs text-ink-secondary">
+                      Selection {destinationAuthentication.allow_unauthenticated === true ? "optional" : "required"}.
+                    </span>
+                  ) : null}
+                </dd>
+                <dt>Destination required configuration</dt>
+                <dd>{destinationFields.join(", ") || "None"}</dd>
+              </>
+            ) : null}
           </>
         ) : null}
       </Details>

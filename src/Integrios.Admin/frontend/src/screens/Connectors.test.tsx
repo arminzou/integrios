@@ -411,7 +411,10 @@ describe("An applied Connector version", () => {
     expect(await screen.findByText("acme_signature")).toBeDefined();
     expect(screen.getByText("Selection required.")).toBeDefined();
     expect(screen.getByText("organization, region")).toBeDefined();
-    expect(screen.getByText("Destinations on this Connector cannot authenticate Deliveries.")).toBeDefined();
+    // github receives Events and nothing else, so the Destination side of the manifest describes a
+    // resource no Tenant can author from it. Explaining it invites a fix that does not exist.
+    expect(screen.queryByText("Destination authentication")).toBeNull();
+    expect(screen.queryByText("Destination required configuration")).toBeNull();
     expect(screen.queryByText(/"source_verification"/)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Show raw JSON" }));
@@ -419,7 +422,7 @@ describe("An applied Connector version", () => {
     expect(screen.getByRole("button", { name: "Hide raw JSON" }).getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("explains what an empty Source verification menu forecloses", async () => {
+  it("shows an empty Source verification menu as None and says no more", async () => {
     const noVerification = {
       ...github,
       manifest: {
@@ -435,8 +438,11 @@ describe("An applied Connector version", () => {
 
     renderScreen(<ConnectorsScreen selectedConnectorId={github.id} />, `/connectors/${github.id}`);
 
-    expect(await screen.findByText("Sources on this Connector cannot verify Events.")).toBeDefined();
-    expect(screen.getAllByText("Selection optional.").length).toBe(2);
+    // An empty menu reads as None and says no more: there is nothing to select, and an applied
+    // version cannot be changed to add one.
+    const verification = (await screen.findByText("Source verification")).nextElementSibling!;
+    expect(verification.textContent).toBe("None");
+    expect(screen.queryByText(/Selection (optional|required)\./)).toBeNull();
   });
 
   it("falls back to raw JSON for an unknown manifest schema", async () => {
