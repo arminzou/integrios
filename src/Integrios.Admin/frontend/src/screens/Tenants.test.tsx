@@ -91,6 +91,38 @@ describe("Tenants list", () => {
     expect(screen.getByRole("region", { name: "Filters" })).toBeTruthy();
   });
 
+  it("keeps the filter bar standing while a filtered read is in flight", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = new URL(typeof input === "string" ? input : input.url, "http://localhost");
+        // The filtered read is slow, which is the window an Operator types their second filter in.
+        if (url.searchParams.has("name")) await held;
+        return new Response(JSON.stringify(page([tenant()])), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    const { router } = renderScreen(<TenantsScreen />, "/tenants");
+    await screen.findByRole("region", { name: "Filters" });
+
+    await act(() => router.navigate("/tenants?name=acme"));
+
+    // A filter bar that unmounts here takes the focus and the half-typed value in the next box with
+    // it: the Operator applied one filter and lost the one they were typing.
+    expect(screen.queryByRole("region", { name: "Filters" })).not.toBeNull();
+
+    await act(async () => {
+      release();
+    });
+  });
+
   it("reports a request that could not reach Admin instead of loading forever", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
 

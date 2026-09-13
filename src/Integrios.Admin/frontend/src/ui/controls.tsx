@@ -367,8 +367,13 @@ export function FilterBar({
 /// It waits for the read rather than assuming rows, so a screen settles into its shape once. The
 /// other way round, a cold screen renders the populated shape and retracts it a moment later, and
 /// chrome that disappears is what an Operator reads as the page changing its mind.
+///
+/// A scope already applied does not wait for anything. Changing a filter changes the query key, so
+/// the read is pending again from this screen's point of view — and a bar that waited for it would
+/// vanish at the very moment an Operator is using it, taking the focus and the half-typed value in
+/// the next box with it.
 export function narrowable(loaded: boolean, count: number, applied: number): boolean {
-  return loaded && (count > 0 || applied > 0);
+  return applied > 0 || (loaded && count > 0);
 }
 
 /// How many filters a list is under, in the words its caption already uses. Empty when the list is
