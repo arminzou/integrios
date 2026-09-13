@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json.Serialization;
 using Integrios.Application.Identity;
 using MediatR;
 using Microsoft.AspNetCore.Antiforgery;
@@ -12,12 +14,30 @@ namespace Integrios.Admin.Auth;
 public static class OperatorSessionEndpoints
 {
     public const string BootstrapPath = "/auth/session";
+    public const string OptionsPath = "/auth/options";
     public const string LoginPath = "/auth/login";
+    public const string PasswordLoginPath = "/auth/password/login";
     public const string LogoutPath = "/auth/logout";
+    internal const long MaximumPasswordLoginBodySize = 16 * 1024;
 
     public static void MapOperatorSessionEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet(LoginPath, StartSignIn).WithName(nameof(StartSignIn));
+        IConfiguration configuration = app.ServiceProvider.GetRequiredService<IConfiguration>();
+        if (OperatorAuthentication.IsOidcConfigured(configuration))
+            app.MapGet(LoginPath, StartSignIn).WithName(nameof(StartSignIn));
+        if (OperatorAuthentication.IsPasswordEnabled(configuration))
+        {
+            app.MapPost(PasswordLoginPath, SignInWithPassword)
+                .WithName(nameof(SignInWithPassword))
+                .WithMetadata(new RequestSizeLimitAttribute(MaximumPasswordLoginBodySize))
+                .Produces<OperatorPasswordLoginResponse>()
+                .Produces<OperatorPasswordLoginFailureResponse>(StatusCodes.Status401Unauthorized)
+                .Produces<OperatorPasswordLoginFailureResponse>(StatusCodes.Status429TooManyRequests);
+        }
+
+        app.MapGet(OptionsPath, GetOptions)
+            .WithName(nameof(GetOptions))
+            .Produces<OperatorAuthenticationOptionsResponse>();
         app.MapPost(LogoutPath, SignOutOperator).WithName(nameof(SignOutOperator));
         app.MapGet(BootstrapPath, GetSession).WithName(nameof(GetSession)).Produces<OperatorSessionResponse>();
     }
@@ -33,6 +53,118 @@ public static class OperatorSessionEndpoints
         Results.SignOut(
             new AuthenticationProperties { RedirectUri = "/?signed_out=1" },
             [CookieAuthenticationDefaults.AuthenticationScheme]);
+
+    private static IResult GetOptions(
+        HttpContext context,
+        IConfiguration configuration,
+        IAntiforgery antiforgery)
+    {
+        bool oidcEnabled = OperatorAuthentication.IsOidcConfigured(configuration);
+        AntiforgeryTokenSet tokens = antiforgery.GetAndStoreTokens(context);
+        return Results.Ok(new OperatorAuthenticationOptionsResponse(
+            oidcEnabled,
+            OperatorAuthentication.IsPasswordEnabled(configuration),
+            oidcEnabled ? OperatorOidcOptions.FromConfiguration(configuration).DisplayName : null,
+            tokens.RequestToken!,
+            tokens.HeaderName!));
+    }
+
+    private static async Task<IResult> SignInWithPassword(
+        OperatorPasswordLoginRequest request,
+        HttpContext context,
+        OperatorPasswordAuthenticator authenticator,
+        OperatorPasswordRateLimiter rateLimiter,
+        OperatorSessionOptions session,
+        ILogger<OperatorPasswordAuthenticator> logger,
+        CancellationToken cancellationToken)
+    {
+        const string invalidMessage = "Email or password is invalid.";
+        bool requestWithinBounds = request.Email is { Length: <= 320 }
+            && request.Password is { Length: <= PasswordCredentialRules.MaximumPasswordLength * 2 }
+            && (request.ReturnTo is null or { Length: <= 2048 });
+        string emailPartition = requestWithinBounds
+            && PasswordCredentialRules.TryNormalizeEmail(
+            request.Email,
+            out _,
+            out string normalizedEmail)
+            ? normalizedEmail
+            : "invalid";
+        string peerPartition = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        OperatorPasswordRateLimitResult rateLimit = await rateLimiter.TryAcquireAsync(
+            emailPartition,
+            peerPartition,
+            cancellationToken);
+        if (rateLimit != OperatorPasswordRateLimitResult.Acquired)
+        {
+            LogPasswordSignIn(logger, "rate_limited", rateLimit);
+            context.Response.Headers.RetryAfter = ((int)OperatorPasswordRateLimiter.Window.TotalSeconds).ToString();
+            return Results.Json(
+                new OperatorPasswordLoginFailureResponse("Too many sign-in attempts. Try again later."),
+                statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        if (!requestWithinBounds)
+        {
+            LogPasswordSignIn(logger, "invalid", rateLimit);
+            return Results.Json(
+                new OperatorPasswordLoginFailureResponse(invalidMessage),
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        OperatorPasswordAuthentication? authenticated = await authenticator.AuthenticateAsync(
+            request.Email,
+            request.Password,
+            cancellationToken);
+        if (authenticated is null)
+        {
+            LogPasswordSignIn(logger, "invalid", rateLimit);
+            return Results.Json(
+                new OperatorPasswordLoginFailureResponse(invalidMessage),
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var identity = new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, authenticated.UserId.ToString()),
+                new Claim(OperatorAuthentication.UserIdClaim, authenticated.UserId.ToString()),
+                new Claim(ClaimTypes.Name, authenticated.DisplayName),
+                new Claim(OperatorAuthentication.AuthenticationMethodClaim, OperatorAuthentication.PasswordMethod),
+                new Claim(OperatorAuthentication.PasswordCredentialIdClaim, authenticated.CredentialId.ToString()),
+                new Claim(
+                    OperatorAuthentication.PasswordSessionRevisionClaim,
+                    authenticated.SessionRevision.ToString()),
+            ],
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            ClaimTypes.Name,
+            ClaimTypes.Role);
+        await context.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(identity),
+            new AuthenticationProperties
+            {
+                AllowRefresh = false,
+                ExpiresUtc = DateTimeOffset.UtcNow.Add(session.Lifetime),
+                IsPersistent = true,
+            });
+
+        LogPasswordSignIn(logger, "succeeded", rateLimit);
+        return Results.Ok(new OperatorPasswordLoginResponse(LocalReturnPath(request.ReturnTo)));
+    }
+
+    private static void LogPasswordSignIn(
+        ILogger logger,
+        string outcome,
+        OperatorPasswordRateLimitResult rateLimit) =>
+        logger.LogInformation(
+            "Operator password sign-in finished with outcome {Outcome} and rate limit {RateLimit}.",
+            outcome,
+            rateLimit switch
+            {
+                OperatorPasswordRateLimitResult.Acquired => "none",
+                OperatorPasswordRateLimitResult.EmailExceeded => "email",
+                OperatorPasswordRateLimitResult.PeerExceeded => "peer",
+                _ => "email_and_peer",
+            });
 
     /// The one safe request the SPA makes before any mutation. It reports the signed-in User and
     /// issues the antiforgery token every unsafe cookie-authenticated request must echo.
@@ -63,7 +195,7 @@ public static class OperatorSessionEndpoints
     /// Keeps the browser off a guessable absolute redirect: only a same-origin path is honoured.
     /// A leading "//" or "/\" is rejected because browsers resolve either as network-path (protocol-
     /// relative) references, which would send the redirect off-origin.
-    private static string LocalReturnPath(string? returnTo) =>
+    internal static string LocalReturnPath(string? returnTo) =>
         IsLocalPath(returnTo) ? returnTo! : "/";
 
     private static bool IsLocalPath(string? returnTo)
@@ -85,3 +217,20 @@ public sealed record OperatorSessionResponse(
     string AntiforgeryToken,
     string AntiforgeryHeaderName,
     string AntiforgeryFormFieldName);
+
+public sealed record OperatorAuthenticationOptionsResponse(
+    bool OidcEnabled,
+    bool PasswordEnabled,
+    string? OidcDisplayName,
+    string AntiforgeryToken,
+    string AntiforgeryHeaderName);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record OperatorPasswordLoginRequest(
+    string? Email,
+    string? Password,
+    string? ReturnTo);
+
+public sealed record OperatorPasswordLoginResponse(string ReturnTo);
+
+public sealed record OperatorPasswordLoginFailureResponse(string Message);

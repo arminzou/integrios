@@ -1,6 +1,9 @@
 using System.Data.Common;
 using Integrios.Admin;
 using Integrios.Admin.Auth;
+using Integrios.Application;
+using Integrios.Application.Identity;
+using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.DataProtection;
@@ -9,6 +12,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.Identity;
+using MediatR;
 using Respawn;
 
 namespace Integrios.FunctionalTests.Admin;
@@ -24,6 +29,9 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
     internal MockOidcProvider Provider => provider;
     public WebApplicationFactory<Program> AliceHost { get; private set; } = null!;
     public WebApplicationFactory<Program> BobHost { get; private set; } = null!;
+    public WebApplicationFactory<Program> PasswordHost { get; private set; } = null!;
+    public WebApplicationFactory<Program> PasswordReplica { get; private set; } = null!;
+    public WebApplicationFactory<Program> BothHost { get; private set; } = null!;
 
     /// A second host on the same issuer and the same Data Protection key ring, standing in for a
     /// second Admin replica behind one address.
@@ -40,9 +48,12 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
         string keyRing = Path.Combine(Path.GetTempPath(), "integrios-session-keys-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(keyRing);
 
-        AliceHost = BuildHost(MockOidcProvider.AliceIssuerId, keyRing);
-        AliceReplica = BuildHost(MockOidcProvider.AliceIssuerId, keyRing);
-        BobHost = BuildHost(MockOidcProvider.BobIssuerId, keyRing);
+        AliceHost = BuildHost(MockOidcProvider.AliceIssuerId, keyRing, passwordEnabled: false);
+        AliceReplica = BuildHost(MockOidcProvider.AliceIssuerId, keyRing, passwordEnabled: false);
+        BobHost = BuildHost(MockOidcProvider.BobIssuerId, keyRing, passwordEnabled: false);
+        PasswordHost = BuildHost(issuerId: null, keyRing, passwordEnabled: true);
+        PasswordReplica = BuildHost(issuerId: null, keyRing, passwordEnabled: true);
+        BothHost = BuildHost(MockOidcProvider.AliceIssuerId, keyRing, passwordEnabled: true);
     }
 
     public async Task DisposeAsync()
@@ -50,6 +61,9 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
         AliceHost.Dispose();
         AliceReplica.Dispose();
         BobHost.Dispose();
+        PasswordHost.Dispose();
+        PasswordReplica.Dispose();
+        BothHost.Dispose();
         await provider.DisposeAsync();
         await database.DisposeAsync();
     }
@@ -81,16 +95,44 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private WebApplicationFactory<Program> BuildHost(string issuerId, string keyRingPath) =>
+    public async Task<Guid> CreatePasswordUserAsync(
+        string email = "password@example.com",
+        string password = "correct-password!")
+    {
+        string hash = new PasswordHasher<string>().HashPassword(string.Empty, password);
+        PasswordCredentialMutationResult result = await SendAsync(
+            new CreateOperatorUserCommand("Password Operator", email, hash));
+        result.Status.ShouldBe(PasswordCredentialMutationStatus.Succeeded);
+        return result.UserId;
+    }
+
+    public async Task<T> SendAsync<T>(IRequest<T> request)
+    {
+        await using ServiceProvider services = new ServiceCollection()
+            .AddAdminApplicationServices()
+            .AddAdminInfrastructureServices(database.Configuration)
+            .BuildServiceProvider();
+        return await services.GetRequiredService<ISender>().Send(request);
+    }
+
+    private WebApplicationFactory<Program> BuildHost(
+        string? issuerId,
+        string keyRingPath,
+        bool passwordEnabled) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Database:Provider", database.Provider);
             builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
-            builder.UseSetting(OperatorOidcOptions.AuthorityKey, provider.Authority(issuerId));
-            builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientId", MockOidcProvider.ClientId);
-            builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientSecret", MockOidcProvider.ClientSecret);
+            if (issuerId is not null)
+            {
+                builder.UseSetting(OperatorOidcOptions.AuthorityKey, provider.Authority(issuerId));
+                builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientId", MockOidcProvider.ClientId);
+                builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientSecret", MockOidcProvider.ClientSecret);
+                builder.UseSetting(OperatorOidcOptions.SectionKey + ":DisplayName", "Test SSO");
+            }
             // The containerized provider is reached over plain HTTP inside the test network only.
             builder.UseSetting(OperatorOidcOptions.SectionKey + ":RequireHttpsMetadata", "false");
+            builder.UseSetting(OperatorPasswordOptions.EnabledKey, passwordEnabled.ToString());
             builder.UseSetting(OperatorSessionOptions.LifetimeKey, "08:00:00");
             builder.ConfigureAppConfiguration((_, config) => config.AddConfiguration(database.Configuration));
             builder.ConfigureServices(services =>

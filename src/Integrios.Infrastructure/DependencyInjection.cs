@@ -98,6 +98,8 @@ public static class DependencyInjection
             provider.GetRequiredService<PasswordCredentialStore>());
         services.AddScoped<IOperatorUserQueries>(provider =>
             provider.GetRequiredService<PasswordCredentialStore>());
+        services.AddScoped<IPasswordAuthenticationStore>(provider =>
+            provider.GetRequiredService<PasswordCredentialStore>());
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
         services.AddDestinationAuthenticationServices();
         services.AddSourceVerificationServices();

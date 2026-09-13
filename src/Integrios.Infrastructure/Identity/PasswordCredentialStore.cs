@@ -8,8 +8,57 @@ using Npgsql;
 namespace Integrios.Infrastructure.Identity;
 
 internal sealed class PasswordCredentialStore(IntegriosDbContext context)
-    : IPasswordCredentialLifecycle, IOperatorUserQueries
+    : IPasswordCredentialLifecycle, IOperatorUserQueries, IPasswordAuthenticationStore
 {
+    public Task<PasswordAuthenticationCredential?> FindEnabledAsync(
+        string normalizedEmail,
+        CancellationToken cancellationToken) =>
+        (from credential in context.PasswordCredentials.AsNoTracking()
+         join user in context.Users.AsNoTracking() on credential.UserId equals user.Id
+         where credential.NormalizedEmail == normalizedEmail && credential.DisabledAt == null
+         select new PasswordAuthenticationCredential(
+             credential.Id,
+             user.Id,
+             user.DisplayName,
+             credential.PasswordHash,
+             credential.SessionRevision))
+        .SingleOrDefaultAsync(cancellationToken);
+
+    public Task<bool> IsCurrentSessionAsync(
+        Guid credentialId,
+        Guid userId,
+        int sessionRevision,
+        CancellationToken cancellationToken) =>
+        context.PasswordCredentials.AsNoTracking().AnyAsync(
+            credential => credential.Id == credentialId
+                && credential.UserId == userId
+                && credential.SessionRevision == sessionRevision
+                && credential.DisabledAt == null,
+            cancellationToken);
+
+    public async Task RecordSuccessfulSignInAsync(Guid userId, CancellationToken cancellationToken) =>
+        await context.Users
+            .Where(user => user.Id == userId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(user => user.LastSignedInAt, DateTimeOffset.UtcNow),
+                cancellationToken);
+
+    public async Task ReplaceHashAsync(
+        Guid credentialId,
+        string currentHash,
+        string replacementHash,
+        DateTimeOffset changedAt,
+        CancellationToken cancellationToken) =>
+        await context.PasswordCredentials
+            .Where(credential => credential.Id == credentialId
+                && credential.PasswordHash == currentHash
+                && credential.DisabledAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(credential => credential.PasswordHash, replacementHash)
+                    .SetProperty(credential => credential.UpdatedAt, changedAt),
+                cancellationToken);
+
     public async Task<IReadOnlyList<OperatorUserCredentialDto>> ListAsync(
         CancellationToken cancellationToken) =>
         await (from user in context.Users.AsNoTracking()

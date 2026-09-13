@@ -12,6 +12,7 @@ public sealed record OperatorOidcOptions
     public required string Authority { get; init; }
     public required string ClientId { get; init; }
     public string? ClientSecret { get; init; }
+    public required string DisplayName { get; init; }
     public required string CallbackPath { get; init; }
     public required string SignedOutCallbackPath { get; init; }
     public required bool RequireHttpsMetadata { get; init; }
@@ -28,6 +29,9 @@ public sealed record OperatorOidcOptions
             Authority = authority,
             ClientId = clientId,
             ClientSecret = configuration[SectionKey + ":ClientSecret"],
+            DisplayName = string.IsNullOrWhiteSpace(configuration[SectionKey + ":DisplayName"])
+                ? "OpenID Connect"
+                : configuration[SectionKey + ":DisplayName"]!,
             CallbackPath = configuration[SectionKey + ":CallbackPath"] ?? "/auth/callback",
             SignedOutCallbackPath = configuration[SectionKey + ":SignedOutCallbackPath"] ?? "/auth/signed-out",
             // Only a local development provider may be reached over plain HTTP.
