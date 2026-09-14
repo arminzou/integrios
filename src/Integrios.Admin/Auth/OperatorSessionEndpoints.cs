@@ -11,6 +11,11 @@ namespace Integrios.Admin.Auth;
 
 /// The browser's own surface: start a sign-in, end a session, and read who is signed in. These are
 /// not `/admin` capability endpoints and are excluded from the dashboard's SPA fallback.
+///
+/// Reading the session and the available methods stays mapped even when the deployment configured
+/// no human method at all. Those two answer truthfully without one -- no session, no methods -- and
+/// a browser that reaches this host can then say so. Unmapping them instead made every such
+/// deployment look to the browser like an Admin API that had stopped answering.
 public static class OperatorSessionEndpoints
 {
     public const string BootstrapPath = "/auth/session";
@@ -38,7 +43,10 @@ public static class OperatorSessionEndpoints
         app.MapGet(OptionsPath, GetOptions)
             .WithName(nameof(GetOptions))
             .Produces<OperatorAuthenticationOptionsResponse>();
-        app.MapPost(LogoutPath, SignOutOperator).WithName(nameof(SignOutOperator));
+        // Unlike the two reads below, signing out addresses the cookie scheme, which is only
+        // registered alongside a human method.
+        if (OperatorAuthentication.IsHumanAuthenticationConfigured(configuration))
+            app.MapPost(LogoutPath, SignOutOperator).WithName(nameof(SignOutOperator));
         app.MapGet(BootstrapPath, GetSession).WithName(nameof(GetSession)).Produces<OperatorSessionResponse>();
     }
 

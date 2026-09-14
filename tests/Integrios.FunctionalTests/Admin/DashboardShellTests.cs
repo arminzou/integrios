@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Integrios.Admin.Auth;
 using Integrios.Admin.Dashboard;
 using Integrios.Tests.Shared;
@@ -57,7 +58,7 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
     }
 
     [Fact]
-    public async Task BrowserRoutes_ServeTheBuiltShellWhenEitherHumanMethodIsConfigured()
+    public async Task BrowserRoutes_ServeTheBuiltShellWhetherOrNotAHumanMethodIsConfigured()
     {
         string webRoot = Path.Combine(Path.GetTempPath(), "integrios-dashboard-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(webRoot);
@@ -65,14 +66,26 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
 
         try
         {
+            // A deployment with no human method still serves the shell and answers both browser
+            // reads, so it reports "no sign-in method is configured" rather than a bare 404 or a
+            // dead API.
             using WebApplicationFactory<Program> withoutOidc = fixture.WebFactory.WithWebHostBuilder(
                 builder => builder.UseWebRoot(webRoot));
             using HttpClient unavailable = withoutOidc.CreateClient();
             using HttpResponseMessage unavailableRoot = await unavailable.GetAsync("/");
-            unavailableRoot.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            unavailableRoot.StatusCode.ShouldBe(HttpStatusCode.OK);
+            unavailableRoot.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
+
+            using HttpResponseMessage unavailableSession = await unavailable.GetAsync(
+                OperatorSessionEndpoints.BootstrapPath);
+            unavailableSession.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
             using HttpResponseMessage unavailableOptions = await unavailable.GetAsync(
                 OperatorSessionEndpoints.OptionsPath);
-            unavailableOptions.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            unavailableOptions.StatusCode.ShouldBe(HttpStatusCode.OK);
+            JsonElement options = JsonDocument.Parse(
+                await unavailableOptions.Content.ReadAsStringAsync()).RootElement;
+            options.GetProperty("oidc_enabled").GetBoolean().ShouldBeFalse();
+            options.GetProperty("password_enabled").GetBoolean().ShouldBeFalse();
 
             using WebApplicationFactory<Program> withOidc = fixture.WebFactory.WithWebHostBuilder(builder =>
             {

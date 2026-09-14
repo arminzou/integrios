@@ -79,6 +79,23 @@ function SignedOutGate() {
       />
     );
 
+  // A deployment with neither method configured has nothing to choose between, so it says what is
+  // wrong instead of inviting a choice. Only whoever runs the deployment can fix it.
+  if (!options.data.oidc_enabled && !options.data.password_enabled)
+    return (
+      <SessionGate
+        title="Sign in to Integrios"
+        copy="This deployment has no human sign-in method configured."
+        detail="Signing in is impossible until its administrator enables OpenID Connect, email and password, or both."
+      >
+        <p className="mt-6 mb-0 text-sm text-ink-secondary">
+          <a href="https://github.com/arminzou/integrios/blob/main/docs/operator-dashboard.md#choose-a-method">
+            Operator dashboard access guide
+          </a>
+        </p>
+      </SessionGate>
+    );
+
   return (
     <SessionGate
       title="Sign in to Integrios"
@@ -100,9 +117,6 @@ function SignedOutGate() {
 }
 
 function SignInMethods({ options }: { options: OperatorAuthenticationOptions }) {
-  if (!options.oidc_enabled && !options.password_enabled)
-    return <p className="mt-6 mb-0 text-sm text-ink-secondary">No human sign-in method is configured.</p>;
-
   return (
     <div className="mt-6 flex flex-col gap-4">
       {options.oidc_enabled ? (
