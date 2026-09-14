@@ -2,8 +2,9 @@ name: release-please
 
 # Keeps a release pull request open against `main`, reflecting every conventional commit landed
 # since the last release: the next version in VERSION and deploy/compose.yml, and the notes in
-# CHANGELOG.md. Merging that pull request is the release decision. It does not publish anything;
-# pushing the `v*` tag afterwards is what starts the release run in ci.yml.
+# CHANGELOG.md. Merging that pull request is the release decision, and it now also creates the
+# tag and the GitHub release -- the tag is what starts the release run in ci.yml, and the release
+# is what bounds the next cycle's commit window.
 
 on:
   push:
@@ -20,9 +21,16 @@ jobs:
       pull-requests: write
       issues: write
     steps:
+      # A GitHub App installation token, not GITHUB_TOKEN: GitHub does not start a workflow run
+      # from an event its own token caused, so a tag created under GITHUB_TOKEN would never fire
+      # ci.yml's `push: tags` release run -- publishing nothing, silently. The App is scoped to
+      # this repository and its token expires in an hour, unlike a personal access token.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
+
       - uses: googleapis/release-please-action@v5
         with:
-          # The tag and the GitHub release stay manual for now. A tag created here would carry
-          # the workflow's own GITHUB_TOKEN, and GitHub does not start a workflow run from an
-          # event that token caused, so ci.yml's `push: tags` release run would never fire.
-          skip-github-release: true
+          token: ${{ steps.app-token.outputs.token }}

@@ -16,6 +16,11 @@ permissions:
 jobs:
   verify:
     name: verify
+    # release-please's pull request is a rendering of commits already verified on main, and
+    # publishing is gated behind the tag run, not this one. Skipping keeps the token upgrade in
+    # release-please.yml from adding a full duplicate run on every push to main. `functional`
+    # needs verify, so it skips with it; skipped jobs satisfy required status checks.
+    if: github.head_ref != 'release-please--branches--main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -48,6 +53,11 @@ jobs:
 
   frontend:
     name: frontend
+    # release-please's pull request is a rendering of commits already verified on main, and
+    # publishing is gated behind the tag run, not this one. Skipping keeps the token upgrade in
+    # release-please.yml from adding a full duplicate run on every push to main. `functional`
+    # needs verify, so it skips with it; skipped jobs satisfy required status checks.
+    if: github.head_ref != 'release-please--branches--main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

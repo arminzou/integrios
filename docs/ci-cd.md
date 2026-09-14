@@ -24,16 +24,11 @@ commit that lands updates it: the next version in `VERSION` and `deploy/compose.
 release notes in `CHANGELOG.md`. A `feat` makes it a minor, a `fix` a patch; while the major is
 `0`, a breaking change is a minor too.
 
-To release, merge that pull request and tag the merge commit:
+To release, merge that pull request. Release-please tags the merge commit and creates the GitHub
+release, and that tag starts the release run above.
 
-```bash
-git switch main && git pull
-git tag -a "v$(cat VERSION)" -m "Release v$(cat VERSION)"
-git push origin "v$(cat VERSION)"
-```
-
-Merging is the release decision; pushing the tag is what starts the release run above. Nothing
-publishes until the tag exists, so an unmerged release pull request costs nothing.
+Merging is the release decision. Nothing publishes while the pull request sits open, so leaving it
+open until a body of work is complete costs nothing.
 
 ## What the default pipeline does
 
