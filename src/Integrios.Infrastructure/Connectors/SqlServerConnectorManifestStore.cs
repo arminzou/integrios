@@ -28,7 +28,20 @@ internal sealed class SqlServerConnectorManifestStore(IntegriosDbContext context
             .OrderByDescending(connector => connector.ContractVersion)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public async Task<ConnectorManifestStoreResult> ApplyAsync(
+    public Task<ConnectorManifestStoreResult> ApplyAsync(
+        ConnectorManifest manifest,
+        CancellationToken cancellationToken) =>
+        // The retrying execution strategy refuses a user-initiated transaction unless the whole
+        // transaction is the retried unit; a second attempt starts from a clean change tracker.
+        context.Database.CreateExecutionStrategy().ExecuteAsync(
+            async ct =>
+            {
+                context.ChangeTracker.Clear();
+                return await ApplyInTransactionAsync(manifest, ct);
+            },
+            cancellationToken);
+
+    private async Task<ConnectorManifestStoreResult> ApplyInTransactionAsync(
         ConnectorManifest manifest,
         CancellationToken cancellationToken)
     {

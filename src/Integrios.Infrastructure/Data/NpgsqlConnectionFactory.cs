@@ -7,8 +7,8 @@ internal sealed class NpgsqlConnectionFactory(NpgsqlDataSource dataSource) : IDb
 {
     public DatabaseProvider Provider => DatabaseProvider.Postgres;
 
-    public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken)
-    {
-        return await dataSource.OpenConnectionAsync(cancellationToken);
-    }
+    public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken) =>
+        TransientConnectionRetry.OpenAsync(
+            async token => await dataSource.OpenConnectionAsync(token),
+            cancellationToken);
 }

@@ -86,16 +86,14 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
         ? new NpgsqlConnection(ConnectionString)
         : new SqlConnection(ConnectionString);
 
-    public DbContextOptions<IntegriosDbContext> CreateOptions()
-    {
-        var builder = new DbContextOptionsBuilder<IntegriosDbContext>();
-        if (postgres is not null)
-            builder.UseNpgsql(ConnectionString);
-        else
-            builder.UseSqlServer(
-            ConnectionString, options => options.MigrationsAssembly("Integrios.Migrations.SqlServer"));
-        return builder.Options;
-    }
+    // Shares the composition root's provider configuration so the suite exercises the registration
+    // the hosts actually run, retry policy included.
+    public DbContextOptions<IntegriosDbContext> CreateOptions() =>
+        (DbContextOptions<IntegriosDbContext>)new DbContextOptionsBuilder<IntegriosDbContext>()
+            .UseIntegriosProvider(
+                postgres is not null ? DatabaseProvider.Postgres : DatabaseProvider.SqlServer,
+                ConnectionString)
+            .Options;
 
     public async Task<Guid> ApplyConnectorManifestAsync(string key, string manifestJson)
     {

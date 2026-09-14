@@ -27,7 +27,20 @@ internal sealed class OperatorKeyRepository(IntegriosDbContext context)
         return operatorKey;
     }
 
-    public async Task<OperatorKey> RotateAsync(OperatorKey newKey, CancellationToken cancellationToken)
+    public Task<OperatorKey> RotateAsync(OperatorKey newKey, CancellationToken cancellationToken) =>
+        // The retrying execution strategy refuses a user-initiated transaction unless the whole
+        // transaction is the retried unit; a second attempt starts from a clean change tracker.
+        context.Database.CreateExecutionStrategy().ExecuteAsync(
+            async ct =>
+            {
+                context.ChangeTracker.Clear();
+                return await RotateInTransactionAsync(newKey, ct);
+            },
+            cancellationToken);
+
+    private async Task<OperatorKey> RotateInTransactionAsync(
+        OperatorKey newKey,
+        CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,

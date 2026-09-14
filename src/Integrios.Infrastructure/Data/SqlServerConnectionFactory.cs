@@ -7,10 +7,13 @@ internal sealed class SqlServerConnectionFactory(string connectionString) : IDbC
 {
     public DatabaseProvider Provider => DatabaseProvider.SqlServer;
 
-    public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken)
-    {
-        var connection = new SqlConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
-        return connection;
-    }
+    public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken) =>
+        TransientConnectionRetry.OpenAsync(
+            async token =>
+            {
+                var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync(token);
+                return connection;
+            },
+            cancellationToken);
 }

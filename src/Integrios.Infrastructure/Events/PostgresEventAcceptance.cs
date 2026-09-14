@@ -31,6 +31,20 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
         string? traceparent,
         CancellationToken cancellationToken)
     {
+        await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // The retrying execution strategy refuses a user-initiated transaction unless the whole
+        // transaction is the retried unit. The context stays outside: every read here is untracked.
+        return await context.Database.CreateExecutionStrategy().ExecuteAsync(
+            ct => AcceptInTransactionAsync(context, submission, traceparent, ct),
+            cancellationToken);
+    }
+
+    private static async Task<EventAcceptance> AcceptInTransactionAsync(
+        IntegriosDbContext context,
+        EventSubmission submission,
+        string? traceparent,
+        CancellationToken cancellationToken)
+    {
         var eventId = Guid.NewGuid();
         var acceptedAt = DateTimeOffset.UtcNow;
         var payloadJson = JsonSerializer.Serialize(submission.Payload);
@@ -48,7 +62,6 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
             acceptedAt
         });
 
-        await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var connection = context.Database.GetDbConnection();
         var dbTransaction = transaction.GetDbTransaction();

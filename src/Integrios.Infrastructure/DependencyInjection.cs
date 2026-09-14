@@ -43,7 +43,12 @@ public static class DependencyInjection
     {
         await using AsyncServiceScope scope = services.CreateAsyncScope();
         IntegriosDbContext context = scope.ServiceProvider.GetRequiredService<IntegriosDbContext>();
-        await context.Database.MigrateAsync(cancellationToken);
+        // MigrateAsync retries the migration commands themselves but reads the applied-migration
+        // history outside any execution strategy, so startup still died on the first transient
+        // fault. Making the whole migration the retried unit covers that read too.
+        await context.Database.CreateExecutionStrategy().ExecuteAsync(
+            context.Database.MigrateAsync,
+            cancellationToken);
     }
 
     public static async Task<string> GetDatabaseMigrationInfoAsync(
@@ -187,21 +192,7 @@ public static class DependencyInjection
             throw new InvalidOperationException($"ConnectionStrings:{connectionName} is required.");
 
         services.AddDbContextFactory<IntegriosDbContext>(
-            options =>
-            {
-                if (databaseProvider == DatabaseProvider.SqlServer)
-                {
-                    options.UseSqlServer(
-                        connectionString,
-                        sql => sql.MigrationsAssembly("Integrios.Migrations.SqlServer"));
-                }
-                else
-                {
-                    options.UseNpgsql(
-                        connectionString,
-                        postgres => postgres.MigrationsAssembly("Integrios.Migrations.Postgres"));
-                }
-            });
+            options => options.UseIntegriosProvider(databaseProvider, connectionString));
 
         if (databaseProvider == DatabaseProvider.SqlServer)
         {

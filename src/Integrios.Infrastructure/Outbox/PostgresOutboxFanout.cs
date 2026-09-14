@@ -16,6 +16,17 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
     public async Task<OutboxFanoutResult?> ProcessNextAsync(CancellationToken cancellationToken)
     {
         await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // The retrying execution strategy refuses a user-initiated transaction unless the whole
+        // transaction is the retried unit. The context stays outside: every read here is untracked.
+        return await context.Database.CreateExecutionStrategy().ExecuteAsync(
+            ct => ProcessNextInTransactionAsync(context, ct),
+            cancellationToken);
+    }
+
+    private static async Task<OutboxFanoutResult?> ProcessNextInTransactionAsync(
+        IntegriosDbContext context,
+        CancellationToken cancellationToken)
+    {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var connection = context.Database.GetDbConnection();
         var dbTransaction = transaction.GetDbTransaction();
