@@ -3,10 +3,22 @@
 The Admin service serves the Integrios Operator dashboard from the same origin as the Admin API.
 Every signed-in OperatorUser has deployment-wide control-plane authority. Configure OpenID Connect,
 Integrios-managed email and password, or both; when both are enabled, the dashboard presents OIDC
-first. With neither method enabled, Admin remains machine-only and does not serve the dashboard.
+first. With neither method enabled, Admin is machine-only: the dashboard still loads and says so,
+but nobody can sign in until you configure a method and restart Admin.
 
 Serve Admin over HTTPS outside local development. Its browser session cookie is secure-only, so a
 browser will not retain a production session over plain HTTP.
+
+## Choose a method
+
+| Situation | Enable |
+| --- | --- |
+| No identity provider yet | Email and password |
+| Existing Entra ID, Okta, Auth0, Keycloak, or Google workspace | OpenID Connect |
+| Production | Both |
+
+Enable both in production. Password sign-in is the only way back into the dashboard when the
+provider is unreachable, and it must be provisioned before the outage.
 
 ## OpenID Connect
 
