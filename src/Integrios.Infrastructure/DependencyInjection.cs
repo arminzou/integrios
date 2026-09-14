@@ -196,7 +196,9 @@ public static class DependencyInjection
 
         if (databaseProvider == DatabaseProvider.SqlServer)
         {
-            services.AddSingleton<IDbConnectionFactory>(_ => new SqlServerConnectionFactory(connectionString));
+            services.AddSingleton<IDbConnectionFactory>(provider => new SqlServerConnectionFactory(
+                connectionString,
+                provider.GetRequiredService<IDbContextFactory<IntegriosDbContext>>()));
             return services;
         }
 
