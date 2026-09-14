@@ -142,8 +142,9 @@ Choose tests by what the change can actually break, not by default:
 
 | Change | Run |
 |---|---|
-| anything at all | `UnitTests` projects + `ArchitectureTests` |
-| behavior in `src/` | add `FunctionalTests` on the default provider |
+| frontend-only code under `src/Integrios.Admin/frontend/` | `npm --prefix src/Integrios.Admin/frontend run check` |
+| backend or shared infrastructure code | `UnitTests` projects + `ArchitectureTests` |
+| backend behavior in `src/` | add `FunctionalTests` on the default provider |
 | raw SQL, JSON operators, migrations, or the `DbContext` | add the second provider leg, `INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver` |
 | host composition, dependency registration, Dockerfile, Compose, bootstrap, or an HTTP contract the acceptance tests exercise | add `AcceptanceTests` |
 
