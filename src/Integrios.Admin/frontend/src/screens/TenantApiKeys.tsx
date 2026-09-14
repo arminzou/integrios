@@ -48,12 +48,11 @@ import { Day, Timestamp } from "../ui/time";
 type TenantApiKeyListItem = components["schemas"]["TenantApiKeyListItemDto"];
 type CreatedKey = components["schemas"]["CreateTenantApiKeyResult"];
 
-const createFields = ["name", "description", "expires_at"] as const;
+const createFields = ["name", "description"] as const;
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Enter a name."),
   description: z.string(),
-  expires_at: z.string(),
 });
 
 type CreateValues = z.infer<typeof createSchema>;
@@ -338,7 +337,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
   const queryClient = useQueryClient();
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { name: "", description: "", expires_at: "" },
+    defaultValues: { name: "", description: "" },
   });
 
   const create = useMutation({
@@ -349,9 +348,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
           body: {
             name: values.name,
             description: values.description.trim() || null,
-            // A local datetime-local value carries no offset, so it is sent as an instant the
-            // server can read unambiguously rather than as the browser's own wall clock.
-            expires_at: values.expires_at ? new Date(values.expires_at).toISOString() : null,
+            expires_at: null,
           },
         }),
       ),
@@ -376,14 +373,6 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
 
           <TextField control={form.control} name="name" label="Name" required />
           <TextField control={form.control} name="description" label="Description (optional)" />
-          <TextField
-            control={form.control}
-            name="expires_at"
-            label="Expires (optional)"
-            hint="Leave empty for a key that does not expire."
-            type="datetime-local"
-          />
-
           <Button type="submit" className="self-start" disabled={create.isPending}>
             Create Tenant API key
           </Button>

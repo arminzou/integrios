@@ -23,6 +23,22 @@ const listItem = {
 };
 
 describe("Tenant API keys", () => {
+  it("creates a key without asking for an expiration", async () => {
+    const calls = stubHttp(({ method }) =>
+      method === "POST"
+        ? { status: 201, body: { tenant_api_key: { ...listItem, status: "active" }, token } }
+        : { status: 200, body: page([listItem]) },
+    );
+
+    renderScreen(<TenantApiKeysScreen tenantId={tenantId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
+    expect(screen.queryByLabelText(/Expires|Lifetime/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Create Tenant API key" }));
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+    expect((calls.find((call) => call.method === "POST")!.body as { expires_at: null }).expires_at).toBeNull();
+  });
+
   it("shows a new key once and stops showing it once it is dismissed", async () => {
     stubHttp(({ method }) =>
       method === "POST"
