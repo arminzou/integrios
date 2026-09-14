@@ -54,13 +54,14 @@ public static class DashboardHosting
         !NonBrowserPrefixes.Any(prefix =>
             context.Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase));
 
-    /// The dashboard needs a browser sign-in path to ever reach a signed-in state, so it stays
-    /// unmapped without one: serving the shell while `/auth/session` has no route would hand the
-    /// browser a page that can never bootstrap.
+    /// Served whenever it was built, including by a deployment that configured no human sign-in
+    /// method. The shell bootstraps against `/auth/session` and `/auth/options`, which answer
+    /// without one, so it reaches a page naming the missing configuration. Withholding it instead
+    /// answered a person who opened the deployment in a browser with a bare 404, which reads as a
+    /// broken deployment rather than an unconfigured one.
     public static void MapDashboard(this WebApplication app)
     {
-        if (!IsDashboardAvailable(app.Environment)
-            || !OperatorAuthentication.IsHumanAuthenticationConfigured(app.Configuration))
+        if (!IsDashboardAvailable(app.Environment))
             return;
 
         // The same options serve both paths so the shell is governed by one rule whether it is

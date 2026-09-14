@@ -75,8 +75,7 @@ app.UseAuthentication();
 app.UseMiddleware<OperatorAntiforgeryMiddleware>();
 app.UseAuthorization();
 
-if (OperatorAuthentication.IsHumanAuthenticationConfigured(builder.Configuration))
-    app.MapOperatorSessionEndpoints();
+app.MapOperatorSessionEndpoints();
 
 var admin = app.MapGroup("/admin").RequireAuthorization(OperatorAuthentication.PolicyName);
 admin.MapEndpoints(typeof(Program).Assembly);

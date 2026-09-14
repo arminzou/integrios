@@ -62,6 +62,17 @@ describe("Application session", () => {
     expect(screen.getByText(message, { exact: false })).toBeTruthy();
   });
 
+  it("tells an Operator a deployment configured no sign-in method rather than offering a choice", async () => {
+    history.replaceState(null, "", "/");
+    stubSignedOut({ ...authOptions, oidc_enabled: false, password_enabled: false, oidc_display_name: null });
+
+    renderApp("/");
+
+    expect(await screen.findByText("This deployment has no human sign-in method configured.")).toBeTruthy();
+    expect(screen.queryByText("Choose a sign-in method.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign in with email" })).toBeNull();
+  });
+
   it("puts configured OIDC first and keeps the password failure generic", async () => {
     const path = "/tenants/22222222-2222-2222-2222-222222222222/events?status=dead_lettered";
     history.replaceState(null, "", path);
