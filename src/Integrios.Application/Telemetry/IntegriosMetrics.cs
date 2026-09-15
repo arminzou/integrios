@@ -16,6 +16,7 @@ public sealed class IntegriosMetrics
     private readonly Counter<long> _deliveriesSucceeded;
     private readonly Counter<long> _deliveriesFailed;
     private readonly Counter<long> _deliveriesDeadLettered;
+    private readonly Counter<long> _ingestSecretResolutionFailures;
     private readonly Counter<long> _deliverySecretResolutionFailures;
     private readonly Counter<long> _deliveryRequestConstructionFailures;
     private readonly Counter<long> _deliveryStaleFinalizations;
@@ -32,6 +33,7 @@ public sealed class IntegriosMetrics
         _deliveriesSucceeded = meter.CreateCounter<long>("integrios_deliveries_succeeded");
         _deliveriesFailed = meter.CreateCounter<long>("integrios_deliveries_failed");
         _deliveriesDeadLettered = meter.CreateCounter<long>("integrios_deliveries_dead_lettered");
+        _ingestSecretResolutionFailures = meter.CreateCounter<long>("integrios_ingest_secret_resolution_failures");
         _deliverySecretResolutionFailures = meter.CreateCounter<long>("integrios_delivery_secret_resolution_failures");
         _deliveryRequestConstructionFailures = meter.CreateCounter<long>("integrios_delivery_request_construction_failures");
         _deliveryStaleFinalizations = meter.CreateCounter<long>("integrios_delivery_stale_finalizations");
@@ -61,6 +63,12 @@ public sealed class IntegriosMetrics
 
     public void RecordDeliveryDeadLettered(string connectorKey) =>
         _deliveriesDeadLettered.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
+
+    // Tagged by Connector key, as the delivery counter is, and deliberately not by Source: an
+    // aggregate counter on a bounded label is not the per-Source health surface V1 declined, and a
+    // Source-keyed tag would be unbounded cardinality driven by external requests.
+    public void RecordIngestSecretResolutionFailure(string connectorKey) =>
+        _ingestSecretResolutionFailures.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
 
     public void RecordDeliverySecretResolutionFailure(string connectorKey) =>
         _deliverySecretResolutionFailures.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));

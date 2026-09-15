@@ -113,8 +113,20 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
             string reference = property.Value.GetString()
                 ?? throw new SourceVerificationException(
                     $"Source verification secret reference '{property.Name}' is invalid.");
-            secrets[property.Name] = await secretResolver.ResolveAsync(
-                new TenantSecretScope(endpoint.TenantId, endpoint.TenantSlug), reference, cancellationToken);
+            // A Source may name a secret that was never provisioned, and authoring cannot tell —
+            // the control plane holds names, the data plane holds values. Counted here because the
+            // refusal happens before the acceptance boundary, so there is no row to record it on,
+            // and the exception itself carries the reference only as far as the log.
+            try
+            {
+                secrets[property.Name] = await secretResolver.ResolveAsync(
+                    new TenantSecretScope(endpoint.TenantId, endpoint.TenantSlug), reference, cancellationToken);
+            }
+            catch (SecretResolutionException)
+            {
+                metrics.RecordIngestSecretResolutionFailure(endpoint.ConnectorKey);
+                throw;
+            }
         }
 
         bool verified = verifier.Verify(command.RawBody, command.Headers, verification.Config, secrets);

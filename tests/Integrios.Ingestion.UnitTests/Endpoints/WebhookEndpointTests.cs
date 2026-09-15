@@ -6,6 +6,8 @@ using Integrios.Application.Ingestion;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Application.Telemetry;
+using Integrios.Tests.Shared;
 using Integrios.Domain.ValueObjects;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -113,6 +115,7 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
             },
         };
 
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
         HttpResponseMessage response = await SendAsync(
             callbackId, """{"action":"opened"}""", "issue.opened", "delivery-1");
 
@@ -121,6 +124,8 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
         body.ShouldContain("The Source could not be verified.");
         body.ShouldNotContain(absentReference);
         body.ShouldNotContain("configuration");
+        // Counted, because the refusal happens before the acceptance boundary and leaves no row.
+        metrics.ForInstrument("integrios_ingest_secret_resolution_failures").ShouldNotBeEmpty();
     }
 
     [Fact]

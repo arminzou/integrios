@@ -39,6 +39,7 @@ public sealed class MetricCollectorTests
         metrics.RecordDeliverySucceeded("http");
         metrics.RecordDeliveryFailed("http", "5xx");
         metrics.RecordDeliveryDeadLettered("http");
+        metrics.RecordIngestSecretResolutionFailure("http");
         metrics.RecordDeliverySecretResolutionFailure("http");
         metrics.RecordDeliveryRequestConstructionFailure("http");
         metrics.RecordDeliveryStaleFinalization();
