@@ -593,6 +593,40 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         update.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    // Correcting is one escape from a rule that matches no request; clearing is the other, and the
+    // only one a caller can take without knowing what a valid header name looks like.
+    [Fact]
+    public async Task SourceUpdate_CanClearAStoredInvalidHeaderIdentity()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+        }));
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+        await using (var connection = fixture.CreateConnection())
+        {
+            await connection.OpenAsync();
+            await Dapper.SqlMapper.ExecuteAsync(
+                connection,
+                $"UPDATE sources SET event_identity_rule = {fixture.Json("@Rule")} WHERE id = @Id",
+                new { Rule = "{\"kind\":\"header\",\"value\":\"/id\",\"allow_missing\":false}", source.Id });
+        }
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}",
+            FullSourceUpdate(new { })));
+
+        update.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ((await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!).EventIdentityRule.ShouldBeNull();
+    }
+
     [Fact]
     public async Task EventApiSourceUpdate_RejectsAnIdentityRule()
     {
@@ -616,6 +650,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         update.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
+    // event_identity_rule defaults to null because update replaces the whole Source: omitting it here
+    // CLEARS the rule rather than preserving it. A test whose Source has a rule must pass one.
     private static object FullSourceUpdate(object configuration, object? eventIdentityRule = null) => new
     {
         name = "webhook-intake",
