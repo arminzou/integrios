@@ -28,6 +28,7 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
         SourceVerification? verification,
         JsonElement? inputRequirements,
         SourceMapping? mapping,
+        SourceEventIdentityRule? eventIdentityRule,
         CancellationToken cancellationToken)
     {
         int affected = await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id && source.Status == SourceStatus.Active)
@@ -37,6 +38,7 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
                 .SetProperty(source => source.Verification, verification)
                 .SetProperty(source => source.InputRequirements, inputRequirements)
                 .SetProperty(source => source.Mapping, mapping)
+                .SetProperty(source => source.EventIdentityRule, eventIdentityRule)
                 .SetProperty(source => source.Revision, Guid.NewGuid().ToString("N"))
                 .SetProperty(source => source.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken);
         return affected == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);

@@ -17,6 +17,7 @@ public interface ISourceRepository
         SourceVerification? verification,
         JsonElement? inputRequirements,
         SourceMapping? mapping,
+        SourceEventIdentityRule? eventIdentityRule,
         CancellationToken cancellationToken);
     Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
 }

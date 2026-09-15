@@ -71,7 +71,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
         SourceDto? source = await mediator.Send(
             new UpdateSourceCommand(
                 tenantId, id, request.Name, request.Configuration, request.Verification?.ToInput(), request.InputRequirements,
-                request.Mapping),
+                request.Mapping, request.EventIdentityRule),
             cancellationToken);
         return source is null ? Results.NotFound() : Results.Ok(source);
     }
@@ -95,7 +95,8 @@ internal sealed record UpdateSourceRequest(
     [property: JsonRequired] JsonElement Configuration,
     [property: JsonRequired] SourceVerificationSelectionRequest? Verification,
     [property: JsonRequired] JsonElement? InputRequirements,
-    [property: JsonRequired] SourceMapping? Mapping);
+    [property: JsonRequired] SourceMapping? Mapping,
+    [property: JsonRequired] SourceEventIdentityRule? EventIdentityRule);
 
 internal sealed record SourceVerificationSelectionRequest(string Scheme, JsonElement Config, JsonElement SecretRefs)
 {

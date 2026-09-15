@@ -92,11 +92,8 @@ internal static class SourceAuthoringValidator
 
     }
 
-    // The Event-identity rule is fixed when the Source is created and has no update path,
-    // so its shape is checked on the one write that can set it. Re-checking it on update would catch
-    // nothing new — the stored rule already passed here — and would instead refuse every later edit
-    // to a Source created before a rule was tightened, freezing its name, configuration and mapping
-    // over a field that write cannot change.
+    // Validate the submitted rule on every write that can replace it. A legacy invalid rule can
+    // still be corrected or cleared because the stored value is never revalidated implicitly.
     public static void ValidateEventIdentityRule(SourceType type, SourceEventIdentityRule? eventIdentityRule)
     {
         if (eventIdentityRule is null)

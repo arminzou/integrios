@@ -78,6 +78,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             verification = (object?)null,
             input_requirements = new { type = "object", properties = new { id = new { type = "string" }, kind = new { type = "string" } }, required = new[] { "id" } },
             mapping = new { engine = "jsonata", version = "1", expression = "{ \"event_type\": \"probe.updated\", \"payload\": $ }" },
+            event_identity_rule = (object?)null,
         }));
         update.StatusCode.ShouldBe(HttpStatusCode.OK);
         SourceDto updated = (await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
@@ -316,6 +317,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             },
             input_requirements = (object?)null,
             mapping = (object?)null,
+            event_identity_rule = (object?)null,
         }));
 
         update.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -460,10 +462,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
-    // The rule is immutable, so an update re-sends nothing that could be checked. A Source created
-    // before this guard keeps its edits: the guard runs on the one write that can set the rule.
     [Fact]
-    public async Task SourceUpdate_LeavesAStoredHeaderIdentityUnvalidated()
+    public async Task SourceUpdate_ReplacesClearsAndAddsAnIdentityRule()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -478,19 +478,152 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         }));
         SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
 
-        HttpResponseMessage update = await client.SendAsync(
-            AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", FullSourceUpdate(new { })));
+        HttpResponseMessage replaced = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}",
+            FullSourceUpdate(new { }, new { kind = "json_path", value = "/delivery/id", allow_missing = true })));
+        replaced.StatusCode.ShouldBe(HttpStatusCode.OK);
+        SourceDto replacedSource = (await replaced.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+        replacedSource.EventIdentityRule.ShouldNotBeNull();
+        replacedSource.EventIdentityRule.Kind.ShouldBe("json_path");
+        replacedSource.EventIdentityRule.AllowMissing.ShouldBeTrue();
+
+        HttpResponseMessage cleared = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}",
+            FullSourceUpdate(new { })));
+        cleared.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ((await cleared.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!).EventIdentityRule.ShouldBeNull();
+
+        HttpResponseMessage added = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}",
+            FullSourceUpdate(new { }, new { kind = "header", value = "X-Delivery-Id", allow_missing = false })));
+        added.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ((await added.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!).EventIdentityRule!.Value.ShouldBe("X-Delivery-Id");
+    }
+
+    [Fact]
+    public async Task SourceUpdate_RequiresTheIdentityRuleField()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+            event_identity_rule = new { kind = "header", value = "X-GitHub-Delivery" },
+        }));
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
+        {
+            name = "renamed",
+            configuration = new { },
+            verification = (object?)null,
+            input_requirements = (object?)null,
+            mapping = (object?)null,
+        }));
+
+        update.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        SourceDto unchanged = (await (await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}"))).Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+        unchanged.Name.ShouldBe("webhook-intake");
+        unchanged.EventIdentityRule.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task SourceUpdate_RejectsAnInvalidSubmittedHeaderIdentity()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+        }));
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}",
+            FullSourceUpdate(new { }, new { kind = "header", value = "/id" })));
+
+        update.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using JsonDocument body = JsonDocument.Parse(await update.Content.ReadAsStringAsync());
+        string? error = body.RootElement.GetProperty("errors").GetProperty("event_identity_rule")[0].GetString();
+        error.ShouldNotBeNull();
+        error.ShouldContain("valid HTTP header name");
+    }
+
+    [Fact]
+    public async Task SourceUpdate_CanCorrectAStoredInvalidHeaderIdentity()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+        }));
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+        await using (var connection = fixture.CreateConnection())
+        {
+            await connection.OpenAsync();
+            await Dapper.SqlMapper.ExecuteAsync(
+                connection,
+                $"UPDATE sources SET event_identity_rule = {fixture.Json("@Rule")} WHERE id = @Id",
+                new { Rule = "{\"kind\":\"header\",\"value\":\"/id\",\"allow_missing\":false}", source.Id });
+        }
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}",
+            FullSourceUpdate(new { }, new { kind = "header", value = "X-Delivery-Id" })));
 
         update.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    private static object FullSourceUpdate(object configuration) => new
+    [Fact]
+    public async Task EventApiSourceUpdate_RejectsAnIdentityRule()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "api-intake",
+            topic_id = topicId,
+            type = "event_api",
+            configuration = new { },
+        }));
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}",
+            FullSourceUpdate(new { }, new { kind = "header", value = "X-Delivery-Id" })));
+
+        update.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    private static object FullSourceUpdate(object configuration, object? eventIdentityRule = null) => new
     {
         name = "webhook-intake",
         configuration,
         verification = (object?)null,
         input_requirements = (object?)null,
         mapping = (object?)null,
+        event_identity_rule = eventIdentityRule,
     };
 
     private async Task<Guid> CreateTopicAsync()

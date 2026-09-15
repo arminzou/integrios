@@ -927,6 +927,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
               : null,
             input_requirements: optionalJson(values.input_requirements),
             mapping: mapping(values.mapping),
+            event_identity_rule: source.event_identity_rule,
           },
         }),
       ),
