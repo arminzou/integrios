@@ -10,7 +10,7 @@ import { formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
 import type { components } from "../api/schema";
 import { snakeIdentifier } from "../identifiers";
-import { Callout, Disclosure, FormError, Section } from "../ui/controls";
+import { Callout, CheckRow, Disclosure, FormError, Section } from "../ui/controls";
 import { BodyPanel } from "../ui/copy";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
@@ -54,36 +54,6 @@ const direction = (values: Pick<AuthoringValues, "receive" | "deliver">) =>
   values.receive && values.deliver ? "both" : values.receive ? "source" : "destination";
 
 type ComposeInput = [key: string, contractVersion: number, name: string, description: string | null, direction: string];
-
-/// A checkbox states one capability or one allowed scheme, so it is the platform control rather than
-/// a widget: the label wraps the input, which is what gives it its name and its target area without
-/// an id to keep in step.
-function CheckRow({
-  checked,
-  onChange,
-  label,
-  hint,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  hint?: string;
-}) {
-  return (
-    <label className="flex items-start gap-2.5 py-1 text-sm">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 size-4 shrink-0"
-      />
-      <span className="min-w-0">
-        <span className="font-medium">{label}</span>
-        {hint ? <span className="mt-0.5 block text-xs text-ink-secondary">{hint}</span> : null}
-      </span>
-    </label>
-  );
-}
 
 /// The guided New Connector draft. Admin composes its manifest, and the dashboard applies that
 /// returned document unchanged through the immutable version route.

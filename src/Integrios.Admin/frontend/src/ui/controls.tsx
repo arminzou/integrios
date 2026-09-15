@@ -9,6 +9,46 @@ import { MessageBubble } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
 import type { Problem } from "../api/problem";
 
+/// A checkbox states one capability, one allowed scheme, or one permission, so it is the platform
+/// control rather than a widget: the label wraps the input, which is what gives it its name and its
+/// target area without an id to keep in step. The hint sits inside that label, so it forms part of
+/// the announced name — keep it to a sentence.
+///
+/// `name` and `onBlur` are for a form-bound caller, which composes this inside its own `FormField`
+/// because no field wrapper covers a checkbox.
+export function CheckRow({
+  checked,
+  onChange,
+  label,
+  hint,
+  name,
+  onBlur,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  hint?: string;
+  name?: string;
+  onBlur?: () => void;
+}) {
+  return (
+    <label className="flex items-start gap-2.5 py-1 text-sm">
+      <input
+        type="checkbox"
+        checked={checked}
+        name={name}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-0.5 size-4 shrink-0"
+      />
+      <span className="min-w-0">
+        <span className="font-medium">{label}</span>
+        {hint ? <span className="mt-0.5 block text-xs text-ink-secondary">{hint}</span> : null}
+      </span>
+    </label>
+  );
+}
+
 /// One named group of fields inside an authoring form, with the sentence that says what the group
 /// is for. An authoring sheet long enough to need groups needs them to look alike across
 /// capabilities, so the rule is here rather than per screen: a hairline above each group except the

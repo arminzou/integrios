@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { type Control, type FieldValues, type Path, useForm } from "react-hook-form";
+import { type Control, type FieldValues, type Path, useForm, useWatch } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import {
   appliedNote,
+  CheckRow,
   ConfirmAction,
   CreateSheet,
   Disclosure,
@@ -233,18 +234,17 @@ const eventIdentityRule = (values: IdentityValues) =>
 function SourceIdentityFields<TValues extends FieldValues>({
   control,
   type,
-  kind,
   onKindChange,
 }: {
   control: Control<TValues>;
   type: string;
-  kind: string;
   /// Clears the selector, which the caller owns because only it holds the form. A value left standing
   /// when the kind changes is submitted under the new one: a header name becomes a JSON Pointer the
   /// API refuses, and a JSON Pointer becomes a header name it accepts, leaving a Source that looks
   /// configured and matches no request.
   onKindChange: () => void;
 }) {
+  const kind = String(useWatch({ control, name: "identity_kind" as Path<TValues> }) ?? "");
   const selector = identitySelector(kind);
   return (
     <>
@@ -274,31 +274,21 @@ function SourceIdentityFields<TValues extends FieldValues>({
         />
       ) : null}
       {kind ? (
-        /* Composed from `FormField` because no field wrapper covers a checkbox. Offered for every
-           kind rather than gated on one: a message id is application-defined on Azure Service Bus and
-           on RabbitMQ, so an absent value is a real state for the kind that looks least likely to
-           need the permission. */
+        /* Offered for every kind rather than gated on one: a message id is application-defined on
+           Azure Service Bus and on RabbitMQ, so an absent value is a real state for the kind that
+           looks least likely to need the permission. */
         <FormField
           control={control}
           name={"identity_allow_missing" as Path<TValues>}
           render={({ field }) => (
-            <label className="flex items-start gap-2.5 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 shrink-0"
-                name={field.name}
-                checked={Boolean(field.value)}
-                onBlur={field.onBlur}
-                onChange={(event) => field.onChange(event.target.checked)}
-              />
-              <span className="min-w-0">
-                Accept a request that carries no value here
-                <span className="mt-0.5 block text-xs text-ink-secondary">
-                  Integrios then reads the identity this Source's Event mapping produces, if it produces one, rather
-                  than rejecting the request. An Event with no identity at all is not deduplicated.
-                </span>
-              </span>
-            </label>
+            <CheckRow
+              name={field.name}
+              checked={Boolean(field.value)}
+              onBlur={field.onBlur}
+              onChange={field.onChange}
+              label="Accept a request that carries no value here"
+              hint="Integrios then reads the identity this Source's Event mapping produces, if it produces one, rather than rejecting the request. An Event with no identity at all is not deduplicated."
+            />
           )}
         />
       ) : null}
@@ -311,14 +301,13 @@ function SourceVerificationFields<TValues extends FieldValues>({
   connectorChosen,
   pending,
   capabilities,
-  scheme,
 }: {
   control: Control<TValues>;
   connectorChosen: boolean;
   pending: boolean;
   capabilities: ReturnType<typeof sourceCapabilities>;
-  scheme: string;
 }) {
+  const scheme = String(useWatch({ control, name: "verification_scheme" as Path<TValues> }) ?? "");
   return (
     <Section title="Request verification" hint="How Integrios checks that a request came from the provider.">
       <SelectField
@@ -664,10 +653,6 @@ function CreateSource({
   });
   const sourceType = form.watch("type");
   const connectorId = form.watch("connector_id");
-  const brokerEntity = form.watch("broker_entity");
-  const brokerAuthentication = form.watch("broker_authentication");
-  const verificationScheme = form.watch("verification_scheme");
-  const identityKind = form.watch("identity_kind");
   // What the chosen Connector permits. Read for webhook verification and for whether the Connector
   // demands source configuration this form cannot author; a queue Source composes its own document.
   const connector = useQuery({
@@ -805,12 +790,9 @@ function CreateSource({
             connectorChosen={connectorId !== ""}
             pending={connector.isPending}
             capabilities={capabilities}
-            scheme={verificationScheme}
           />
         ) : null}
-        {sourceType === "queue" ? (
-          <MessageBrokerFields control={form.control} entity={brokerEntity} authentication={brokerAuthentication} />
-        ) : null}
+        {sourceType === "queue" ? <MessageBrokerFields control={form.control} /> : null}
         {sourceType !== "event_api" ? (
           <>
             <Section
@@ -820,7 +802,6 @@ function CreateSource({
               <SourceIdentityFields
                 control={form.control}
                 type={sourceType}
-                kind={identityKind}
                 onKindChange={() => form.setValue("identity_value", "")}
               />
               <EventBuilder
@@ -865,15 +846,9 @@ function CreateSource({
 /// Azure Service Bus is the only transport, so its fields sit directly under the broker choice. A
 /// second transport branches here on `broker_transport` and composes its own `transport_config`;
 /// nothing outside this component, `sourceConfiguration`, and its inverse knows which broker was chosen.
-function MessageBrokerFields<TValues extends FieldValues>({
-  control,
-  entity,
-  authentication,
-}: {
-  control: Control<TValues>;
-  entity: string;
-  authentication: string;
-}) {
+function MessageBrokerFields<TValues extends FieldValues>({ control }: { control: Control<TValues> }) {
+  const entity = String(useWatch({ control, name: "broker_entity" as Path<TValues> }) ?? "");
+  const authentication = String(useWatch({ control, name: "broker_authentication" as Path<TValues> }) ?? "");
   return (
     <Section title="Message broker" hint="The broker Integrios receives messages from.">
       <SelectField control={control} name={"broker_transport" as Path<TValues>} label="Broker type" required>
@@ -1070,9 +1045,6 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
       identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
     },
   });
-  const identityKind = form.watch("identity_kind");
-  const brokerEntity = form.watch("broker_entity");
-  const brokerAuthentication = form.watch("broker_authentication");
   const verificationScheme = form.watch("verification_scheme");
   const sourceContractDraft = {
     expression: form.watch("mapping"),
@@ -1153,13 +1125,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                 <FormError message={formError(asProblem(connector.error ?? save.error), editFields)} />
 
                 <TextField control={form.control} name="name" label="Name" required />
-                {storedBrokerFields ? (
-                  <MessageBrokerFields
-                    control={form.control}
-                    entity={brokerEntity}
-                    authentication={brokerAuthentication}
-                  />
-                ) : null}
+                {storedBrokerFields ? <MessageBrokerFields control={form.control} /> : null}
                 {source.type !== "event_api" ? (
                   <Section
                     title="Event shape"
@@ -1168,7 +1134,6 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                     <SourceIdentityFields
                       control={form.control}
                       type={source.type}
-                      kind={identityKind}
                       onKindChange={() => form.setValue("identity_value", "")}
                     />
                     <EventBuilder
@@ -1189,7 +1154,6 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                     connectorChosen
                     pending={connector.isPending}
                     capabilities={capabilities}
-                    scheme={verificationScheme}
                   />
                 ) : null}
                 {source.type !== "event_api" && !storedBrokerFields ? (
