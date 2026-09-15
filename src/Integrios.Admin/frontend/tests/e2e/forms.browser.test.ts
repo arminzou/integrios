@@ -660,7 +660,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Event identity"), "JSON body field");
     expect(await form.getByLabel("JSON Pointer").inputValue()).toBe("");
 
-    await choose(form.getByLabel("Event identity"), "No duplicate detection");
+    await choose(form.getByRole("combobox", { name: "Event identity" }), "No duplicate detection");
     expect(await form.getByLabel("JSON Pointer").count()).toBe(0);
     await view.close();
   }, 60_000);
@@ -782,6 +782,70 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/destinations/${destinationId}`);
     expect(sent.body.configuration).toEqual({ base_uri: "http://moved.invalid" });
     expect(sent.body.authentication).toBeNull();
+    await view.close();
+  }, 60_000);
+
+  it("corrects, clears, and adds back a Source Event identity", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
+    let identity: Record<string, unknown> | null = {
+      kind: "header",
+      value: "X-Wrong-Delivery",
+      allow_missing: false,
+    };
+    let revision = 0;
+    await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) => {
+      const request = route.request();
+      if (request.method() === "PUT") {
+        writes.push(request);
+        identity = request.postDataJSON().event_identity_rule;
+        revision += 1;
+      }
+      return route.fulfill({
+        status: 200,
+        json: {
+          ...sourceDetail,
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification: null,
+          input_requirements: null,
+          mapping: null,
+          event_identity_rule: identity,
+          updated_at: `2026-09-15T00:00:0${revision}Z`,
+        },
+      });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    let form = formNamed(view, "Edit Webhook Source");
+    expect(await form.getByLabel("Header name").inputValue()).toBe("X-Wrong-Delivery");
+    await form.getByLabel("Header name").fill("X-GitHub-Delivery");
+    await form.getByRole("button", { name: "Save configuration" }).click();
+    expect((await submitted(writes)).body.event_identity_rule).toEqual({
+      kind: "header",
+      value: "X-GitHub-Delivery",
+      allow_missing: false,
+    });
+    writes.length = 0;
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    form = formNamed(view, "Edit Webhook Source");
+    await choose(form.getByRole("combobox", { name: "Event identity" }), "No duplicate detection");
+    await form.getByRole("button", { name: "Save configuration" }).click();
+    expect((await submitted(writes)).body.event_identity_rule).toBeNull();
+    writes.length = 0;
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    form = formNamed(view, "Edit Webhook Source");
+    await choose(form.getByRole("combobox", { name: "Event identity" }), "Request header");
+    await form.getByLabel("Header name").fill("X-Provider-Delivery");
+    await form.getByLabel("Accept a request that carries no value here").check();
+    await form.getByRole("button", { name: "Save configuration" }).click();
+    expect((await submitted(writes)).body.event_identity_rule).toEqual({
+      kind: "header",
+      value: "X-Provider-Delivery",
+      allow_missing: true,
+    });
     await view.close();
   }, 60_000);
 

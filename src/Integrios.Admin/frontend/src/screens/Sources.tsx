@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { type Control, useForm } from "react-hook-form";
+import { type Control, type FieldValues, type Path, useForm } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC 
 /// `queue` names only one of the two broker entity forms, so no Operator-facing surface prints it.
 const typeLabel = (value: string) => sourceTypes.find((option) => option.value === value)?.label ?? value;
 
-/// Where a Source's immutable Event identity is read from. A kind offers a selector only when it
+/// Where a Source's Event identity is read from. A kind offers a selector only when it
 /// needs one — a message carries its own id — and the offered set is per Source type because the
 /// affordances differ: a broker message has no request headers, a webhook request no message id.
 ///
@@ -115,6 +115,23 @@ const optionalJsonDocument = z.string().superRefine((text, ctx) => {
   if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
 });
 
+const identityFieldSchema = {
+  identity_kind: z.string(),
+  identity_value: z.string(),
+  identity_allow_missing: z.boolean(),
+};
+
+type IdentityValues = {
+  identity_kind: string;
+  identity_value: string;
+  identity_allow_missing: boolean;
+};
+
+const requireIdentitySelector = (values: IdentityValues, ctx: z.RefinementCtx) => {
+  if (values.identity_kind && values.identity_kind !== "message_id" && !values.identity_value.trim())
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["identity_value"], message: "Enter an identity selector." });
+};
+
 const createSchema = z
   .object({
     name: z.string().trim().min(1, "Enter a name."),
@@ -133,9 +150,7 @@ const createSchema = z
     verification_secret_ref: z.string(),
     input_requirements: optionalJsonDocument,
     mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
-    identity_kind: z.string(),
-    identity_value: z.string(),
-    identity_allow_missing: z.boolean(),
+    ...identityFieldSchema,
   })
   .superRefine((values, ctx) => {
     // Only the text fields have an empty case worth reporting; the one boolean carries no such state.
@@ -146,8 +161,8 @@ const createSchema = z
     };
     if (values.type === "webhook") {
       if (values.verification_scheme) required("verification_secret_ref", "Enter a secret reference.");
-      if (values.identity_kind) required("identity_value", "Enter an identity selector.");
     }
+    requireIdentitySelector(values, ctx);
     if (values.type !== "queue") return;
     required("broker_namespace", "Enter a broker namespace.");
     required("broker_authentication", "Choose an authentication method.");
@@ -159,16 +174,17 @@ const createSchema = z
     }
     if (values.broker_authentication === "connection_string")
       required("broker_secret_ref", "Enter a connection string reference.");
-    if (values.identity_kind && values.identity_kind !== "message_id")
-      required("identity_value", "Enter an identity selector.");
   });
 
-const editSchema = z.object({
-  name: z.string().trim().min(1, "Enter a name."),
-  configuration: jsonDocument,
-  input_requirements: optionalJsonDocument,
-  mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
-});
+const editSchema = z
+  .object({
+    name: z.string().trim().min(1, "Enter a name."),
+    configuration: jsonDocument,
+    input_requirements: optionalJsonDocument,
+    mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+    ...identityFieldSchema,
+  })
+  .superRefine(requireIdentitySelector);
 
 type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
@@ -176,6 +192,90 @@ type EditValues = z.infer<typeof editSchema>;
 const optionalJson = (value: string) => (value.trim() ? parseJson(value).value : null);
 const mapping = (expression: string) =>
   expression.trim() ? { engine: "jsonata", version: "1", expression: expression.trim() } : null;
+const eventIdentityRule = (values: IdentityValues) =>
+  values.identity_kind.trim() && (values.identity_kind === "message_id" || values.identity_value.trim())
+    ? {
+        kind: values.identity_kind.trim(),
+        value: values.identity_kind === "message_id" ? "message_id" : values.identity_value.trim(),
+        allow_missing: values.identity_allow_missing,
+      }
+    : null;
+
+function SourceIdentityFields<TValues extends FieldValues>({
+  control,
+  type,
+  kind,
+  onKindChange,
+}: {
+  control: Control<TValues>;
+  type: string;
+  kind: string;
+  /// Clears the selector, which the caller owns because only it holds the form. A value left standing
+  /// when the kind changes is submitted under the new one: a header name becomes a JSON Pointer the
+  /// API refuses, and a JSON Pointer becomes a header name it accepts, leaving a Source that looks
+  /// configured and matches no request.
+  onKindChange: () => void;
+}) {
+  const selector = identitySelector(kind);
+  return (
+    <>
+      <SelectField
+        control={control}
+        name={"identity_kind" as Path<TValues>}
+        label="Event identity"
+        hint="A request missing the value is rejected unless you allow it below."
+        emptyLabel="No duplicate detection"
+        onChange={onKindChange}
+      >
+        {identityKinds
+          .filter((option) => (option.types as readonly string[]).includes(type))
+          .map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+      </SelectField>
+      {selector ? (
+        <TextField
+          control={control}
+          name={"identity_value" as Path<TValues>}
+          label={selector.label}
+          placeholder={selector.placeholder}
+          required
+        />
+      ) : null}
+      {kind ? (
+        /* Composed from `FormField` because no field wrapper covers a checkbox. Offered for every
+           kind rather than gated on one: a message id is application-defined on Azure Service Bus and
+           on RabbitMQ, so an absent value is a real state for the kind that looks least likely to
+           need the permission. */
+        <FormField
+          control={control}
+          name={"identity_allow_missing" as Path<TValues>}
+          render={({ field }) => (
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0"
+                name={field.name}
+                checked={Boolean(field.value)}
+                onBlur={field.onBlur}
+                onChange={(event) => field.onChange(event.target.checked)}
+              />
+              <span className="min-w-0">
+                Accept a request that carries no value here
+                <span className="mt-0.5 block text-xs text-ink-secondary">
+                  Integrios then reads the identity this Source's Event mapping produces, if it produces one, rather
+                  than rejecting the request. An Event with no identity at all is not deduplicated.
+                </span>
+              </span>
+            </label>
+          )}
+        />
+      ) : null}
+    </>
+  );
+}
 
 /// What the chosen Connector permits a Source to select. `source_configuration_schema` is read only
 /// to refuse it: this form authors no control from a declared property, so it names them instead.
@@ -446,7 +546,6 @@ function CreateSource({
   const brokerAuthentication = form.watch("broker_authentication");
   const verificationScheme = form.watch("verification_scheme");
   const identityKind = form.watch("identity_kind");
-  const identityValueField = identitySelector(identityKind);
   // What the chosen Connector permits. Read for webhook verification and for whether the Connector
   // demands source configuration this form cannot author; a queue Source composes its own document.
   const connector = useQuery({
@@ -486,16 +585,7 @@ function CreateSource({
                 : null,
             input_requirements: values.type === "event_api" ? null : optionalJson(values.input_requirements),
             mapping: values.type === "event_api" ? null : mapping(values.mapping),
-            event_identity_rule:
-              values.type !== "event_api" &&
-              values.identity_kind.trim() &&
-              (values.identity_kind === "message_id" || values.identity_value.trim())
-                ? {
-                    kind: values.identity_kind.trim(),
-                    value: values.identity_kind === "message_id" ? "message_id" : values.identity_value.trim(),
-                    allow_missing: values.identity_allow_missing,
-                  }
-                : null,
+            event_identity_rule: values.type === "event_api" ? null : eventIdentityRule(values),
           },
         }),
       ),
@@ -632,62 +722,12 @@ function CreateSource({
               title="Event shape"
               hint="What identifies an Event from this Source, and the type, payload, and requirements derived from a representative request."
             >
-              {/* The selector goes with the kind: left alone, a header name stands in a field that
-                  now wants a JSON Pointer, and this rule is fixed at creation, so a value carried
-                  across unnoticed is permanent. */}
-              <SelectField
+              <SourceIdentityFields
                 control={form.control}
-                name="identity_kind"
-                label="Event identity"
-                hint="Permanent once this Source is created. A request missing the value is rejected unless you allow it below."
-                emptyLabel="No duplicate detection"
-                onChange={() => form.setValue("identity_value", "")}
-              >
-                {identityKinds
-                  .filter((option) => (option.types as readonly string[]).includes(sourceType))
-                  .map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-              </SelectField>
-              {identityValueField ? (
-                <TextField
-                  control={form.control}
-                  name="identity_value"
-                  label={identityValueField.label}
-                  placeholder={identityValueField.placeholder}
-                  required
-                />
-              ) : null}
-              {identityKind ? (
-                /* Composed from `FormField` because no field wrapper covers a checkbox, and one
-                   caller does not earn a shared one. Offered for every kind: a message id a
-                   publisher may leave unset is the case that most needs it. */
-                <FormField
-                  control={form.control}
-                  name="identity_allow_missing"
-                  render={({ field }) => (
-                    <label className="flex items-start gap-2.5 text-sm">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 size-4 shrink-0"
-                        name={field.name}
-                        checked={field.value}
-                        onBlur={field.onBlur}
-                        onChange={(event) => field.onChange(event.target.checked)}
-                      />
-                      <span className="min-w-0">
-                        Accept a request that carries no value here
-                        <span className="mt-0.5 block text-xs text-ink-secondary">
-                          Integrios then reads the identity the Event shape below produces, if it produces one, rather
-                          than rejecting the request. An Event with no identity at all is not deduplicated.
-                        </span>
-                      </span>
-                    </label>
-                  )}
-                />
-              ) : null}
+                type={sourceType}
+                kind={identityKind}
+                onKindChange={() => form.setValue("identity_value", "")}
+              />
               <EventBuilder
                 key={sourceType}
                 contractKey={`${sourceType} Source`}
@@ -892,8 +932,7 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
   );
 }
 
-/// The Admin API owns the mutable Source contract. Type, Connector, Topic, and identity rule are
-/// fixed at creation, so they are shown rather than offered as editable fields.
+/// The Admin API owns the mutable Source contract. Type, Connector, and Topic remain fixed.
 function EditSource({ tenantId, source, onDone }: { tenantId: string; source: Source; onDone: () => void }) {
   const queryClient = useQueryClient();
   const reread = () => {
@@ -907,8 +946,12 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
       configuration: formatJson(source.configuration),
       input_requirements: source.input_requirements ? formatJson(source.input_requirements) : "",
       mapping: source.mapping?.expression ?? "",
+      identity_kind: source.event_identity_rule?.kind ?? "",
+      identity_value: source.event_identity_rule?.value ?? "",
+      identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
     },
   });
+  const identityKind = form.watch("identity_kind");
 
   const save = useMutation({
     mutationFn: (values: EditValues) =>
@@ -927,7 +970,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
               : null,
             input_requirements: optionalJson(values.input_requirements),
             mapping: mapping(values.mapping),
-            event_identity_rule: source.event_identity_rule,
+            event_identity_rule: source.type === "event_api" ? null : eventIdentityRule(values),
           },
         }),
       ),
@@ -967,6 +1010,16 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                 <FormError message={formError(asProblem(save.error), editFields)} />
 
                 <TextField control={form.control} name="name" label="Name" required />
+                {source.type !== "event_api" ? (
+                  <Section title="Event identity" hint="How Integrios detects duplicate Events from this Source.">
+                    <SourceIdentityFields
+                      control={form.control}
+                      type={source.type}
+                      kind={identityKind}
+                      onKindChange={() => form.setValue("identity_value", "")}
+                    />
+                  </Section>
+                ) : null}
                 <TextAreaField
                   control={form.control}
                   name="configuration"

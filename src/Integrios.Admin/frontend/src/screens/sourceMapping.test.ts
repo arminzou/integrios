@@ -30,7 +30,7 @@ describe("The generated Source mapping", () => {
     expect(expression).toContain("$error(");
   });
 
-  /// Event identity is the Source's own immutable rule, never a mapped field. A guided mapping that
+  /// Event identity is the Source's own rule, never a mapped field. A guided mapping that
   /// emitted one gave the Source two identities with different permanence.
   it("never emits an Event identity, whatever was chosen", () => {
     expect(guidedExpression(webhook)).not.toContain("source_event_id");
