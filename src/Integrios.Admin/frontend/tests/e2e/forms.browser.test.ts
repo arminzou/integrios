@@ -616,6 +616,32 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
+  it("offers the missing-value permission for a message id, which a publisher may never set", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
+
+    await view.click("text=New Source");
+    const form = formNamed(view, "Create a Source");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await choose(form.getByLabel("Topic", { exact: true }), /Orders/);
+    await choose(form.getByLabel("Type"), "Message broker");
+    await form.getByLabel("Name", { exact: true }).fill("queue-intake");
+    await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
+    await form.getByLabel("Queue name").fill("orders");
+    await choose(form.getByLabel("Event identity"), "Message ID");
+    // No selector for this kind — the message carries its own id — but the permission still applies.
+    expect(await form.getByLabel("JSON Pointer").count()).toBe(0);
+    await form.getByLabel("Accept a request that carries no value here").check();
+    await view.click("text=Create Source");
+
+    const sent = await submitted(writes);
+    expect(sent.body.event_identity_rule).toEqual({
+      kind: "message_id",
+      value: "message_id",
+      allow_missing: true,
+    });
+    await view.close();
+  }, 60_000);
+
   /// The Event-identity rule is fixed when the Source is created, so a selector left over from the
   /// kind before it is permanent. Switching kind must clear it rather than offer a header name in a
   /// field that now wants a JSON Pointer — which the API accepts as a header name in the other
@@ -714,7 +740,7 @@ describe("Create forms, filled through a real browser", () => {
     expect(await form.getByLabel("Broker type").textContent()).toContain("Azure Service Bus");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
     await form.getByLabel("Queue name").fill("orders");
-    await choose(form.getByLabel("Event identity"), "Broker message ID");
+    await choose(form.getByLabel("Event identity"), "Message ID");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);

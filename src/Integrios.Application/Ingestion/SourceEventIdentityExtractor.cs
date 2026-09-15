@@ -31,6 +31,11 @@ internal static class SourceEventIdentityExtractor
         return true;
     }
 
+    // The prefix is the Source's immutable identifier and must stay that. Namespacing by anything
+    // renameable — the Source label, a Connector key — means a rename recomputes every future key and
+    // silently discards the deduplication history, readmitting every Event already seen. Per Source
+    // rather than per Tenant because two Sources are two origins: the same provider event through
+    // both is two Events by construction.
     public static string IdempotencyKey(Guid sourceId, string sourceEventId) =>
         $"{sourceId:N}:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sourceEventId)))}";
 

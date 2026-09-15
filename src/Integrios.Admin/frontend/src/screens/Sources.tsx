@@ -68,6 +68,32 @@ const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC 
 /// `queue` names only one of the two broker entity forms, so no Operator-facing surface prints it.
 const typeLabel = (value: string) => sourceTypes.find((option) => option.value === value)?.label ?? value;
 
+/// Where a Source's immutable Event identity is read from. A kind offers a selector only when it
+/// needs one — a message carries its own id — and the offered set is per Source type because the
+/// affordances differ: a broker message has no request headers, a webhook request no message id.
+///
+/// The label says "Message ID", not whose: Azure Service Bus and RabbitMQ leave it to the publisher
+/// while SQS and Pub/Sub assign it, so naming either one is wrong for the other. Nor does a broker
+/// necessarily have one at all — Kafka identifies a record by its coordinates — which is why the
+/// offered set will key on the transport rather than the Source type once a second transport lands.
+const identityKinds = [
+  { value: "message_id", label: "Message ID", types: ["queue"], selector: undefined },
+  {
+    value: "header",
+    label: "Request header",
+    types: ["webhook"],
+    selector: { label: "Header name", placeholder: "X-GitHub-Delivery" },
+  },
+  {
+    value: "json_path",
+    label: "JSON body field",
+    types: ["webhook", "queue"],
+    selector: { label: "JSON Pointer", placeholder: "/id" },
+  },
+] as const;
+
+const identitySelector = (kind: string) => identityKinds.find((option) => option.value === kind)?.selector;
+
 /// Form paths that are also Admin API field keys, so a rejection lands on the control it is about.
 /// The guided fields are deliberately absent: the API rejects the documents this form composes —
 /// `configuration`, `verification`, `event_identity_rule`, `mapping`, `input_requirements` — and each
@@ -420,6 +446,7 @@ function CreateSource({
   const brokerAuthentication = form.watch("broker_authentication");
   const verificationScheme = form.watch("verification_scheme");
   const identityKind = form.watch("identity_kind");
+  const identityValueField = identitySelector(identityKind);
   // What the chosen Connector permits. Read for webhook verification and for whether the Connector
   // demands source configuration this form cannot author; a queue Source composes its own document.
   const connector = useQuery({
@@ -612,48 +639,54 @@ function CreateSource({
                 control={form.control}
                 name="identity_kind"
                 label="Event identity"
-                hint="Permanent once this Source is created, and a request missing the value is rejected. The Event Builder can supply the same identity changeably instead."
+                hint="Permanent once this Source is created. A request missing the value is rejected unless you allow it below."
                 emptyLabel="No duplicate detection"
                 onChange={() => form.setValue("identity_value", "")}
               >
-                {sourceType === "queue" ? <SelectItem value="message_id">Broker message ID</SelectItem> : null}
-                {sourceType === "webhook" ? <SelectItem value="header">Request header</SelectItem> : null}
-                <SelectItem value="json_path">JSON body field</SelectItem>
+                {identityKinds
+                  .filter((option) => (option.types as readonly string[]).includes(sourceType))
+                  .map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
               </SelectField>
-              {identityKind && identityKind !== "message_id" ? (
-                <>
-                  <TextField
-                    control={form.control}
-                    name="identity_value"
-                    label={identityKind === "header" ? "Header name" : "JSON Pointer"}
-                    placeholder={identityKind === "header" ? "X-GitHub-Delivery" : "/id"}
-                    required
-                  />
-                  {/* Composed from `FormField` because no field wrapper covers a checkbox, and one
-                      caller does not earn a shared one. */}
-                  <FormField
-                    control={form.control}
-                    name="identity_allow_missing"
-                    render={({ field }) => (
-                      <label className="flex items-start gap-2.5 text-sm">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 size-4 shrink-0"
-                          name={field.name}
-                          checked={field.value}
-                          onBlur={field.onBlur}
-                          onChange={(event) => field.onChange(event.target.checked)}
-                        />
-                        <span className="min-w-0">
-                          Accept a request that carries no value here
-                          <span className="mt-0.5 block text-xs text-ink-secondary">
-                            Such a request is accepted without duplicate detection instead of being rejected.
-                          </span>
+              {identityValueField ? (
+                <TextField
+                  control={form.control}
+                  name="identity_value"
+                  label={identityValueField.label}
+                  placeholder={identityValueField.placeholder}
+                  required
+                />
+              ) : null}
+              {identityKind ? (
+                /* Composed from `FormField` because no field wrapper covers a checkbox, and one
+                   caller does not earn a shared one. Offered for every kind: a message id a
+                   publisher may leave unset is the case that most needs it. */
+                <FormField
+                  control={form.control}
+                  name="identity_allow_missing"
+                  render={({ field }) => (
+                    <label className="flex items-start gap-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 size-4 shrink-0"
+                        name={field.name}
+                        checked={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(event) => field.onChange(event.target.checked)}
+                      />
+                      <span className="min-w-0">
+                        Accept a request that carries no value here
+                        <span className="mt-0.5 block text-xs text-ink-secondary">
+                          Integrios then reads the identity the Event shape below produces, if it produces one, rather
+                          than rejecting the request. An Event with no identity at all is not deduplicated.
                         </span>
-                      </label>
-                    )}
-                  />
-                </>
+                      </span>
+                    </label>
+                  )}
+                />
               ) : null}
               <EventBuilder
                 key={sourceType}
