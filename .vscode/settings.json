@@ -19,6 +19,9 @@
     "source.fixAll.biome": "explicit",
     "source.organizeImports.biome": "explicit"
   },
+  "biome.lsp.bin": {
+    "win32-x64": "src/Integrios.Admin/frontend/node_modules/@biomejs/cli-win32-x64/biome.exe"
+  },
   "[javascript]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
