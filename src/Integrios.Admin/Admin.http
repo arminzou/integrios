@@ -323,8 +323,9 @@ Content-Type: application/json
 }
 
 ###
-# Admin generates the callback_id in the response for a webhook Source. The misspelled identity
-# header is intentional: correct it to X-Storefront-Delivery through Edit without opening Advanced.
+# Admin generates the callback_id in the response for a webhook Source. The identity header below is
+# misspelled on purpose, while the webhook request further down carries the correct one: correct the
+# Source to X-Storefront-Delivery through Edit, without opening Advanced.
 # @name createNwSourceWebhook
 POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
 {{operatorKey}}
@@ -352,7 +353,7 @@ Content-Type: application/json
   },
   "event_identity_rule": {
     "kind": "header",
-    "value": "X-Storefront-Delivery",
+    "value": "X-Storefront-Delivary",
     "allow_missing": false
   }
 }
@@ -636,8 +637,12 @@ Content-Type: application/json
 }
 
 ###
+# Refused with 422 on a top-to-bottom run: the Source's identity rule names a header this request
+# does not carry, so no identity can be extracted. That is the exercise. Correct the header through
+# Edit, then re-send this request and it is accepted. Until then the webhook-audit Subscription has
+# no deliveries, which is what a Source refusing everything looks like from the dashboard.
 POST {{ingestionBaseUrl}}/webhooks/{{createNwSourceWebhook.response.body.$.configuration.callback_id}}
-X-Storefront-Delivary: nw-webhook-1
+X-Storefront-Delivery: nw-webhook-1
 Content-Type: application/json
 
 {
