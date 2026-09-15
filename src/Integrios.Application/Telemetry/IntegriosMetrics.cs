@@ -11,7 +11,7 @@ public sealed class IntegriosMetrics
 
     private readonly Counter<long> _eventsIngested;
     private readonly Counter<long> _eventsUnrouted;
-    private readonly Counter<long> _queueSourceErrors;
+    private readonly Counter<long> _brokerSourceErrors;
     private readonly Counter<long> _fanoutRowsCreated;
     private readonly Counter<long> _deliveriesSucceeded;
     private readonly Counter<long> _deliveriesFailed;
@@ -28,7 +28,7 @@ public sealed class IntegriosMetrics
 
         _eventsIngested = meter.CreateCounter<long>("integrios_events_ingested");
         _eventsUnrouted = meter.CreateCounter<long>("integrios_events_unrouted");
-        _queueSourceErrors = meter.CreateCounter<long>("integrios_queue_source_errors");
+        _brokerSourceErrors = meter.CreateCounter<long>("integrios_broker_source_errors");
         _fanoutRowsCreated = meter.CreateCounter<long>("integrios_fanout_rows_created");
         _deliveriesSucceeded = meter.CreateCounter<long>("integrios_deliveries_succeeded");
         _deliveriesFailed = meter.CreateCounter<long>("integrios_deliveries_failed");
@@ -44,11 +44,11 @@ public sealed class IntegriosMetrics
 
     public void RecordEventUnrouted() => _eventsUnrouted.Add(1);
 
-    // A broker-side failure is otherwise indistinguishable from a quiet queue: the Source stays
-    // active, the host stays healthy, and nothing else moves. Labelled by transport rather than
-    // source id to keep cardinality bounded; the log line carries the source id.
-    public void RecordQueueSourceError(string transport) =>
-        _queueSourceErrors.Add(1, new KeyValuePair<string, object?>("transport", transport));
+    // A broker-side failure is otherwise indistinguishable from a quiet broker Source: the Source
+    // stays active, the host stays healthy, and nothing else moves. Labelled by transport rather
+    // than source id to keep cardinality bounded; the log line carries the source id.
+    public void RecordBrokerSourceError(string transport) =>
+        _brokerSourceErrors.Add(1, new KeyValuePair<string, object?>("transport", transport));
 
     public void RecordFanoutRowsCreated(int count) => _fanoutRowsCreated.Add(count);
 

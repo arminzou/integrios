@@ -124,7 +124,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         onlyEventId.ShouldBe(firstEventId);
     }
 
-    // A topic subscription is a queue Source too: same contract, same settlement, only the entity
+    // A topic subscription is a broker Source too: same contract, same settlement, only the entity
     // address differs.
     [Fact]
     public async Task TopicSubscriptionMessage_CompletesAndCreatesEvent()
@@ -195,7 +195,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         throw new TimeoutException($"No Event appeared for source_event_id '{sourceEventId}' within 30s.");
     }
 
-    internal static string QueueSourceConfigurationJson() => JsonSerializer.Serialize(new
+    internal static string BrokerSourceConfigurationJson() => JsonSerializer.Serialize(new
     {
         transport = "azure_service_bus",
         authentication = new { scheme = "connection_string", secret_ref = SecretReference },
@@ -216,9 +216,9 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
 
     // A Source is active or permanently revoked, so a test that needs a Source to appear mid-run
     // inserts its own row rather than flipping a status back and forth.
-    internal static async Task InsertQueueSourceAsync(
+    internal static async Task InsertBrokerSourceAsync(
         FunctionalDatabase database,
-        SeededQueueSource seeded,
+        SeededBrokerSource seeded,
         Guid sourceId,
         string? configurationJson = null)
     {
@@ -226,7 +226,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, mapping, revision, status)
-            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'sb-intake', 'queue',
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'sb-intake', 'broker',
                 {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'active');
             """,
             new
@@ -235,12 +235,12 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
                 seeded.TenantId,
                 seeded.ConnectorId,
                 seeded.TopicId,
-                SourceConfiguration = configurationJson ?? QueueSourceConfigurationJson(),
+                SourceConfiguration = configurationJson ?? BrokerSourceConfigurationJson(),
                 SourceMapping = SourceMappingJson,
             });
     }
 
-    internal static async Task<SeededQueueSource> SeedAsync(FunctionalDatabase database, bool includeSource = true)
+    internal static async Task<SeededBrokerSource> SeedAsync(FunctionalDatabase database, bool includeSource = true)
     {
         Guid tenantIdValue = Guid.NewGuid();
         Guid connectorId = await database.ApplyConnectorManifestAsync(
@@ -269,9 +269,9 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
                 TopicId = topicId,
             });
 
-        var seeded = new SeededQueueSource(tenantIdValue, connectorId, topicId, sourceId);
+        var seeded = new SeededBrokerSource(tenantIdValue, connectorId, topicId, sourceId);
         if (includeSource)
-            await InsertQueueSourceAsync(database, seeded, sourceId);
+            await InsertBrokerSourceAsync(database, seeded, sourceId);
 
         return seeded;
     }
@@ -293,7 +293,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
     private sealed record EventRow(Guid TenantId, string EventType, string Status);
 }
 
-internal sealed record SeededQueueSource(
+internal sealed record SeededBrokerSource(
     Guid TenantId,
     Guid ConnectorId,
     Guid TopicId,
@@ -318,9 +318,9 @@ public sealed class AzureServiceBusSourceFixture : IAsyncLifetime
     {
         await Database.StartAsync();
         await ServiceBus.StartAsync();
-        SeededQueueSource seeded = await AzureServiceBusSourceTests.SeedAsync(Database);
+        SeededBrokerSource seeded = await AzureServiceBusSourceTests.SeedAsync(Database);
         TenantId = seeded.TenantId;
-        await AzureServiceBusSourceTests.InsertQueueSourceAsync(
+        await AzureServiceBusSourceTests.InsertBrokerSourceAsync(
             Database, seeded, TopicSourceId,
             AzureServiceBusSourceTests.TopicSourceConfigurationJson());
 

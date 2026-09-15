@@ -277,9 +277,9 @@ docker compose run --rm ingestion secrets validate --tenant acme
 docker compose run --rm ingestion secrets validate --tenant acme --source <source-id>
 ```
 
-This covers both shapes a Source carries: a webhook's verification references and a queue Source's
+This covers both shapes a Source carries: a webhook's verification references and a broker Source's
 `secret_ref`. It reports references and resolution status, never values, and consumes nothing from a
-queue while it runs. Exit codes match the Worker command: `0` all resolvable, `1` one or more
+broker while it runs. Exit codes match the Worker command: `0` all resolvable, `1` one or more
 unresolvable, `2` a usage or selection error.
 
 ## Useful commands

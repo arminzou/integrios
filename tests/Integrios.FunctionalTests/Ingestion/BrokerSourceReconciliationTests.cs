@@ -11,13 +11,13 @@ using Testcontainers.ServiceBus;
 
 namespace Integrios.FunctionalTests.Ingestion;
 
-// Queue processors follow the control plane while Ingestion keeps running: a Source created after
+// Broker processors follow the control plane while Ingestion keeps running: a Source created after
 // startup begins consuming, a revoked one stops, and a change to the resolved configuration
 // recycles that Source's processor. The emulator image ships exactly one queue, so these prove
 // reconciliation through Source lifecycle and Connector manifest changes rather than by moving a
 // Source between queues.
-public sealed class QueueSourceReconciliationTests(QueueSourceReconciliationFixture fixture)
-    : IClassFixture<QueueSourceReconciliationFixture>, IAsyncLifetime
+public sealed class BrokerSourceReconciliationTests(BrokerSourceReconciliationFixture fixture)
+    : IClassFixture<BrokerSourceReconciliationFixture>, IAsyncLifetime
 {
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(30);
 
@@ -106,7 +106,7 @@ public sealed class QueueSourceReconciliationTests(QueueSourceReconciliationFixt
     }
 }
 
-public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
+public sealed class BrokerSourceReconciliationFixture : IAsyncLifetime
 {
     private const string EmulatorImage =
         "mcr.microsoft.com/azure-messaging/servicebus-emulator@sha256:5a96d893b245031740f7d46e0fe5ff282d24b78c4b7d761dd57590f3f010a9b3";
@@ -116,7 +116,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     internal ServiceBusContainer ServiceBus { get; } = new ServiceBusBuilder(EmulatorImage)
         .WithAcceptLicenseAgreement(true)
         .Build();
-    internal SeededQueueSource Seeded { get; private set; } = null!;
+    internal SeededBrokerSource Seeded { get; private set; } = null!;
 
     private WebApplicationFactory<IngestionHost::Program> factory = null!;
 
@@ -129,7 +129,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
         factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
-            builder.UseSetting("Integrios:QueueSources:ReconcileSeconds", "1");
+            builder.UseSetting("Integrios:BrokerSources:ReconcileSeconds", "1");
             builder.UseSetting("Database:Provider", Database.Provider);
             builder.UseSetting($"ConnectionStrings:{Database.ConnectionName}", Database.ConnectionString);
             builder.ConfigureAppConfiguration((_, config) => config.AddConfiguration(Database.Configuration));
@@ -154,7 +154,7 @@ public sealed class QueueSourceReconciliationFixture : IAsyncLifetime
     }
 
     internal Task CreateSourceAsync(Guid sourceId) =>
-        AzureServiceBusSourceTests.InsertQueueSourceAsync(Database, Seeded, sourceId);
+        AzureServiceBusSourceTests.InsertBrokerSourceAsync(Database, Seeded, sourceId);
 
     internal Task RevokeSourceAsync(Guid sourceId) => ExecuteAsync(
         $"UPDATE sources SET status = 'revoked', revoked_at = {Database.Now} WHERE id = @Id",

@@ -27,8 +27,8 @@ public sealed class SourcesEndpoints : IEndpointGroup
         {
             "event_api" => SourceType.EventApi,
             "webhook" => SourceType.Webhook,
-            "queue" => SourceType.Queue,
-            _ => throw new SourceValidationException("Source type must be event_api, webhook, or queue.", "type")
+            "broker" => SourceType.Broker,
+            _ => throw new SourceValidationException("Source type must be event_api, webhook, or broker.", "type")
         };
         SourceDto source = await mediator.Send(
             new CreateSourceCommand(
@@ -53,8 +53,8 @@ public sealed class SourcesEndpoints : IEndpointGroup
             null or "" => null,
             "event_api" => SourceType.EventApi,
             "webhook" => SourceType.Webhook,
-            "queue" => SourceType.Queue,
-            _ => throw new InvalidListFilterException("Source type must be event_api, webhook, or queue."),
+            "broker" => SourceType.Broker,
+            _ => throw new InvalidListFilterException("Source type must be event_api, webhook, or broker."),
         };
         SourceListDto sources = await mediator.Send(new ListSourcesQuery(tenantId, ListFilter.ParseEnum<SourceStatus>(status, "Source status must be active or revoked."), sourceType, topic_id, after, Math.Clamp(limit == 0 ? 20 : limit, 1, 100)), cancellationToken);
         return Results.Ok(sources);

@@ -625,7 +625,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic", { exact: true }), /Orders/);
     await choose(form.getByLabel("Type"), "Message broker");
-    await form.getByLabel("Name", { exact: true }).fill("queue-intake");
+    await form.getByLabel("Name", { exact: true }).fill("broker-intake");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
     await form.getByLabel("Queue name").fill("orders");
     await choose(form.getByLabel("Event identity"), "Message ID");
@@ -736,7 +736,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Message broker");
-    await form.getByLabel("Name", { exact: true }).fill("queue-intake");
+    await form.getByLabel("Name", { exact: true }).fill("broker-intake");
     expect(await form.getByLabel(/^Verification/).count()).toBe(0);
     expect(await form.getByLabel("Broker type").textContent()).toContain("Azure Service Bus");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
@@ -745,7 +745,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
-    expect(sent.body.type).toBe("queue");
+    expect(sent.body.type).toBe("broker");
     expect(sent.body.configuration).toEqual({
       transport: "azure_service_bus",
       authentication: { scheme: "azure_identity" },
@@ -990,7 +990,7 @@ describe("Update and deactivate, driven through a real browser", () => {
   it.each([
     [
       "an extended broker document",
-      "queue",
+      "broker",
       {
         transport: "azure_service_bus",
         authentication: { scheme: "azure_identity" },
@@ -1001,7 +1001,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     ],
     [
       "an unrecognised broker transport",
-      "queue",
+      "broker",
       {
         transport: "rabbitmq",
         authentication: { scheme: "connection_string", secret_ref: "rabbit" },
@@ -1011,7 +1011,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     ],
     [
       "a represented broker document",
-      "queue",
+      "broker",
       {
         transport: "azure_service_bus",
         authentication: { scheme: "azure_identity" },
@@ -1044,7 +1044,7 @@ describe("Update and deactivate, driven through a real browser", () => {
       await view.reload();
 
       await view.getByRole("button", { name: "Edit", exact: true }).click();
-      const label = type === "queue" ? "Message broker" : type === "event_api" ? "Event API" : "Webhook";
+      const label = type === "broker" ? "Message broker" : type === "event_api" ? "Event API" : "Webhook";
       const form = formNamed(view, `Edit ${label} Source`);
       let expectedConfiguration: Record<string, unknown> = configuration;
       expect(await form.getByLabel("Broker type").count()).toBe(editor === "guided" ? 1 : 0);

@@ -18,7 +18,7 @@
   },
   "presentation": {
     "name": "Dataverse",
-    "description": "Dataverse RemoteExecutionContext messages received through an Operator-configured Queue Source.",
+    "description": "Dataverse RemoteExecutionContext messages received through an Operator-configured broker Source.",
     "event_types": [],
     "authoring_presets": []
   }

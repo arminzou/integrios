@@ -21,7 +21,7 @@
 # shell script, this file cannot:
 # - wipe tenant-scoped tables first, so rerunning without a fresh database returns 409 on the Tenant
 #   slug (truncate as the script does, or start clean)
-# - write secrets/source/northwind-retail/dev_service_bus, which the queue Source below needs
+# - write secrets/source/northwind-retail/dev_service_bus, which the broker Source below needs
 # - publish the warehouse receipt to the Service Bus emulator or wait for the failing Delivery to
 #   dead-letter
 
@@ -359,9 +359,9 @@ Content-Type: application/json
 }
 
 ###
-# Creating the queue Source only needs the secret_ref name. The secret file that makes the Worker
-# consume the queue is written by scripts/seed-dev-data.sh, not by this file.
-# @name createNwSourceQueue
+# Creating the broker Source only needs the secret_ref name. The secret file that makes the Worker
+# consume the broker is written by scripts/seed-dev-data.sh, not by this file.
+# @name createNwSourceBroker
 POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
 {{operatorKey}}
 Content-Type: application/json
@@ -370,7 +370,7 @@ Content-Type: application/json
   "connector_id": "{{connectorId}}",
   "topic_id": "{{createNwTopicWarehouseReceipts.response.body.$.id}}",
   "name": "Northwind warehouse receipts",
-  "type": "queue",
+  "type": "broker",
   "configuration": {
     "transport": "azure_service_bus",
     "authentication": {

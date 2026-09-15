@@ -4,14 +4,14 @@ using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Ingestion;
 
-// The desired set of running queue processors, re-read on a reconcile interval rather than per
+// The desired set of running broker processors, re-read on a reconcile interval rather than per
 // message: a message is processed against the facts its processor resolved when it started.
-public interface IQueueSourceReader
+public interface IBrokerSourceReader
 {
-    Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<ResolvedBrokerSource>> ListActiveAzureServiceBusSourcesAsync(CancellationToken cancellationToken);
 }
 
-public sealed record ResolvedQueueSource
+public sealed record ResolvedBrokerSource
 {
     // Opaque fingerprint of everything this record was resolved from. A processor whose Revision no
     // longer matches the reader is recycled, which is what makes an edited Source or a republished
@@ -29,13 +29,13 @@ public sealed record ResolvedQueueSource
     // Named for the broker, not shortened: TopicId on this same record is the Integrios Topic.
     public required string? ServiceBusTopicName { get; init; }
     public required string? ServiceBusSubscriptionName { get; init; }
-    public required QueueAuthentication Authentication { get; init; }
+    public required BrokerAuthentication Authentication { get; init; }
     public SourceEventIdentityRule? EventIdentityRule { get; init; }
     public required JsonElement? SourceContractSchema { get; init; }
     public required TransformSpec? SourceMapping { get; init; }
 }
 
-public sealed record QueueAuthentication
+public sealed record BrokerAuthentication
 {
     public required string Scheme { get; init; }
     public string? SecretReference { get; init; }

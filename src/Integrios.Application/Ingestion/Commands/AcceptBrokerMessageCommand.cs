@@ -8,10 +8,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Ingestion;
 
-// The queue receiver already resolved its Source once at startup (V1 reader is startup-loaded,
+// The broker receiver already resolved its Source once at startup (V1 reader is startup-loaded,
 // not reconciled per message), so this command carries the resolved Source facts directly rather
 // than a Source id to look up again per message.
-public sealed record AcceptQueueMessageCommand(
+public sealed record AcceptBrokerMessageCommand(
     Guid TenantId,
     Guid TopicId,
     Guid SourceId,
@@ -22,17 +22,17 @@ public sealed record AcceptQueueMessageCommand(
     string? BrokerMessageId)
     : IRequest<IngestEventResult>;
 
-internal sealed class AcceptQueueMessageCommandHandler(
+internal sealed class AcceptBrokerMessageCommandHandler(
     ITransformEvaluator evaluator,
     IEventAcceptance eventAcceptance,
     IntegriosMetrics metrics,
-    ILogger<AcceptQueueMessageCommandHandler> logger)
-    : IRequestHandler<AcceptQueueMessageCommand, IngestEventResult>
+    ILogger<AcceptBrokerMessageCommandHandler> logger)
+    : IRequestHandler<AcceptBrokerMessageCommand, IngestEventResult>
 {
-    public async Task<IngestEventResult> Handle(AcceptQueueMessageCommand command, CancellationToken cancellationToken)
+    public async Task<IngestEventResult> Handle(AcceptBrokerMessageCommand command, CancellationToken cancellationToken)
     {
         string? sourceEventId = command.EventIdentityRule is { } identityRule
-            ? SourceEventIdentityExtractor.ExtractQueue(identityRule, command.BrokerMessageId, command.RawInput)
+            ? SourceEventIdentityExtractor.ExtractBroker(identityRule, command.BrokerMessageId, command.RawInput)
             : null;
         if (sourceEventId is not null
             && await eventAcceptance.FindBySourceEventIdAsync(command.SourceId, sourceEventId, cancellationToken) is { } existing)
@@ -75,7 +75,7 @@ internal sealed class AcceptQueueMessageCommandHandler(
         if (!accepted.AlreadyAccepted)
         {
             metrics.RecordEventIngested();
-            logger.LogInformation("Accepted queue event {EventId} on topic {TopicId}.", accepted.EventId, command.TopicId);
+            logger.LogInformation("Accepted broker event {EventId} on topic {TopicId}.", accepted.EventId, command.TopicId);
         }
 
         return ToResult(accepted);

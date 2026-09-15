@@ -8,11 +8,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Infrastructure.Events;
 
-internal sealed class QueueSourceReader(
+internal sealed class BrokerSourceReader(
     IDbConnectionFactory connectionFactory,
-    ILogger<QueueSourceReader> logger) : IQueueSourceReader
+    ILogger<BrokerSourceReader> logger) : IBrokerSourceReader
 {
-    public async Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(
+    public async Task<IReadOnlyList<ResolvedBrokerSource>> ListActiveAzureServiceBusSourcesAsync(
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -29,7 +29,7 @@ internal sealed class QueueSourceReader(
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
                 JOIN tenants t ON t.id = s.tenant_id
-                WHERE s.type = N'queue' AND s.status = N'active'
+                WHERE s.type = N'broker' AND s.status = N'active'
                   AND i.status = N'active' AND i.direction IN (N'source', N'both')
                   AND JSON_VALUE(s.configuration, '$.transport') = N'azure_service_bus'
                 """
@@ -47,7 +47,7 @@ internal sealed class QueueSourceReader(
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
                 JOIN tenants t ON t.id = s.tenant_id
-                WHERE s.type = 'queue' AND s.status = 'active'
+                WHERE s.type = 'broker' AND s.status = 'active'
                   AND i.status = 'active' AND i.direction IN ('source', 'both')
                   AND s.configuration ->> 'transport' = 'azure_service_bus'
                 """;
@@ -55,19 +55,19 @@ internal sealed class QueueSourceReader(
         IEnumerable<SourceRow> rows = await connection.QueryAsync<SourceRow>(
             new CommandDefinition(sql, cancellationToken: cancellationToken));
 
-        var resolved = new List<ResolvedQueueSource>();
+        var resolved = new List<ResolvedBrokerSource>();
         foreach (SourceRow row in rows)
         {
-            if (row.ToResolvedQueueSource() is { } source)
+            if (row.ToResolvedBrokerSource() is { } source)
             {
                 resolved.Add(source);
                 continue;
             }
 
-            // An active queue Source the receiver cannot address is otherwise invisible: no
+            // An active broker Source the receiver cannot address is otherwise invisible: no
             // processor, no error, no metric, and Admin still reports it active.
             logger.LogWarning(
-                "Skipping queue Source {SourceId}: its configuration does not resolve to a Service Bus entity.",
+                "Skipping broker Source {SourceId}: its configuration does not resolve to a Service Bus entity.",
                 row.SourceId);
         }
 
@@ -94,7 +94,7 @@ internal sealed class QueueSourceReader(
                 ? value.GetString()
                 : null;
 
-        public ResolvedQueueSource? ToResolvedQueueSource()
+        public ResolvedBrokerSource? ToResolvedBrokerSource()
         {
             JsonElement configuration = JsonSerializer.Deserialize<JsonElement>(SourceConfigurationJson);
             if (!configuration.TryGetProperty("transport_config", out JsonElement transportConfig)
@@ -125,7 +125,7 @@ internal sealed class QueueSourceReader(
                 ? secretRefElement.GetString()
                 : null;
 
-            return new ResolvedQueueSource
+            return new ResolvedBrokerSource
             {
                 Revision = Revision,
                 TenantId = TenantId,
@@ -136,7 +136,7 @@ internal sealed class QueueSourceReader(
                 QueueName = queueName,
                 ServiceBusTopicName = serviceBusTopicName,
                 ServiceBusSubscriptionName = serviceBusSubscriptionName,
-                Authentication = new QueueAuthentication { Scheme = scheme, SecretReference = secretReference },
+                Authentication = new BrokerAuthentication { Scheme = scheme, SecretReference = secretReference },
                 EventIdentityRule = string.IsNullOrWhiteSpace(EventIdentityRuleJson)
                     ? null
                     : JsonSerializer.Deserialize<SourceEventIdentityRule>(EventIdentityRuleJson, StoredJson.Options),

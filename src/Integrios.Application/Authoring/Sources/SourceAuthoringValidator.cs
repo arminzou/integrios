@@ -40,12 +40,12 @@ internal static class SourceAuthoringValidator
             return;
         }
 
-        if (type is SourceType.EventApi or SourceType.Queue)
+        if (type is SourceType.EventApi or SourceType.Broker)
         {
             if (verification is not null)
                 throw new SourceValidationException("Only webhook Sources support Source verification.");
-            if (type == SourceType.Queue)
-                ValidateQueueConfiguration(configuration);
+            if (type == SourceType.Broker)
+                ValidateBrokerConfiguration(configuration);
             return;
         }
 
@@ -104,7 +104,7 @@ internal static class SourceAuthoringValidator
         bool supported = type switch
         {
             SourceType.Webhook => eventIdentityRule.Kind is "header" or "json_path",
-            SourceType.Queue => eventIdentityRule.Kind is "message_id" or "json_path",
+            SourceType.Broker => eventIdentityRule.Kind is "message_id" or "json_path",
             _ => false,
         };
         if (!supported)
@@ -155,7 +155,7 @@ internal static class SourceAuthoringValidator
         }
     }
 
-    private static void ValidateQueueConfiguration(JsonElement configuration)
+    private static void ValidateBrokerConfiguration(JsonElement configuration)
     {
         if (!configuration.TryGetProperty("transport", out JsonElement transport)
             || transport.ValueKind != JsonValueKind.String
@@ -166,35 +166,35 @@ internal static class SourceAuthoringValidator
             || authentication.ValueKind != JsonValueKind.Object)
         {
             throw new SourceValidationException(
-                "Queue Source configuration requires azure_service_bus transport_config and authentication objects.");
+                "Broker Source configuration requires azure_service_bus transport_config and authentication objects.");
         }
 
         string? @namespace = ReadNonEmptyString(transportConfig, "namespace");
         if (@namespace is null)
-            throw new SourceValidationException("Queue Source transport_config requires a namespace.");
+            throw new SourceValidationException("Broker Source transport_config requires a namespace.");
         bool hasQueue = ReadNonEmptyString(transportConfig, "queue_name") is not null;
         bool hasTopic = ReadNonEmptyString(transportConfig, "topic_name") is not null;
         bool hasSubscription = ReadNonEmptyString(transportConfig, "subscription_name") is not null;
         if (hasQueue == (hasTopic || hasSubscription) || hasTopic != hasSubscription)
-            throw new SourceValidationException("Queue Source transport_config requires exactly one queue or topic subscription.");
+            throw new SourceValidationException("Broker Source transport_config requires exactly one queue or topic subscription.");
 
         string? scheme = ReadNonEmptyString(authentication, "scheme");
         bool hasSecretReference = ReadNonEmptyString(authentication, "secret_ref") is not null;
         if (scheme == "connection_string" && !hasSecretReference)
-            throw new SourceValidationException("Queue Source connection_string authentication requires a secret_ref.");
+            throw new SourceValidationException("Broker Source connection_string authentication requires a secret_ref.");
         if (hasSecretReference && !SecretReferenceName.IsValid(ReadNonEmptyString(authentication, "secret_ref")))
         {
             throw new SourceValidationException(
-                "Queue Source secret_ref must be a lowercase logical name of 1 to 63 characters. "
+                "Broker Source secret_ref must be a lowercase logical name of 1 to 63 characters. "
                 + "It names a secret; it is never the secret itself.",
                 "configuration");
         }
         if (scheme == "azure_identity" && hasSecretReference)
-            throw new SourceValidationException("Queue Source azure_identity authentication takes no secret_ref.");
+            throw new SourceValidationException("Broker Source azure_identity authentication takes no secret_ref.");
         if (scheme == "azure_identity" && !IsHostName(@namespace))
-            throw new SourceValidationException("Queue Source azure_identity authentication requires a broker host namespace.");
+            throw new SourceValidationException("Broker Source azure_identity authentication requires a broker host namespace.");
         if (scheme is not ("connection_string" or "azure_identity"))
-            throw new SourceValidationException("Queue Source authentication supports connection_string or azure_identity.");
+            throw new SourceValidationException("Broker Source authentication supports connection_string or azure_identity.");
     }
 
     private static string? ReadNonEmptyString(JsonElement value, string property) =>

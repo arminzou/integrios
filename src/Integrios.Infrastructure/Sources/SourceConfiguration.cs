@@ -12,7 +12,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         entity.HasKey(source => source.Id).HasName("sources_pkey");
         entity.ToTable("sources", table =>
         {
-            table.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'queue')");
+            table.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'broker')");
             table.HasCheckConstraint("ck_sources_status", "status IN ('active', 'revoked')");
             table.HasCheckConstraint("ck_sources_revoked_at", "((status = 'active' AND revoked_at IS NULL) OR (status = 'revoked' AND revoked_at IS NOT NULL))");
         });

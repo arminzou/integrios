@@ -25,7 +25,7 @@ public sealed class IngestionApiFixture : IDisposable
     public StubTenantEventLookup EventLookup { get; } = new();
     public StubEventApiSourceResolver EventApiSourceResolver { get; } = new();
     public StubSourceEndpointResolver SourceEndpointResolver { get; } = new();
-    public StubQueueSourceReader QueueSourceReader { get; } = new();
+    public StubBrokerSourceReader BrokerSourceReader { get; } = new();
     public StubTenantApiKeyUseRecorder TenantApiKeyUse { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
 
@@ -33,7 +33,7 @@ public sealed class IngestionApiFixture : IDisposable
     {
         Factory = new CustomApiFactory(
             TenantApiKeyRepository, EventAcceptance, EventLookup, EventApiSourceResolver, SourceEndpointResolver,
-            QueueSourceReader, TenantApiKeyUse);
+            BrokerSourceReader, TenantApiKeyUse);
     }
 
     public void Reset()
@@ -64,7 +64,7 @@ internal sealed class CustomApiFactory(
     StubTenantEventLookup eventLookup,
     StubEventApiSourceResolver eventApiSourceResolver,
     StubSourceEndpointResolver sourceEndpointResolver,
-    StubQueueSourceReader queueSourceReader,
+    StubBrokerSourceReader BrokerSourceReader,
     StubTenantApiKeyUseRecorder tenantApiKeyUseRecorder) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -86,7 +86,7 @@ internal sealed class CustomApiFactory(
             services.AddSingleton<ITenantEventLookup>(eventLookup);
             services.AddSingleton<IEventApiSourceResolver>(eventApiSourceResolver);
             services.AddSingleton<ISourceEndpointResolver>(sourceEndpointResolver);
-            services.AddSingleton<IQueueSourceReader>(queueSourceReader);
+            services.AddSingleton<IBrokerSourceReader>(BrokerSourceReader);
             services.AddSingleton<ITenantApiKeyUseRecorder>(tenantApiKeyUseRecorder);
         });
     }
@@ -176,10 +176,10 @@ public sealed class StubEventApiSourceResolver : IEventApiSourceResolver
 }
 
 // Always empty: these host-composition tests never need a live Azure Service Bus client, and an
-// empty reader is exactly the "no compatible Source exists" HTTP-only path the queue receiver
+// empty reader is exactly the "no compatible Source exists" HTTP-only path the broker receiver
 // hosted service is required to handle without touching Azure at all.
-public sealed class StubQueueSourceReader : IQueueSourceReader
+public sealed class StubBrokerSourceReader : IBrokerSourceReader
 {
-    public Task<IReadOnlyList<ResolvedQueueSource>> ListActiveAzureServiceBusSourcesAsync(CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ResolvedQueueSource>>([]);
+    public Task<IReadOnlyList<ResolvedBrokerSource>> ListActiveAzureServiceBusSourcesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ResolvedBrokerSource>>([]);
 }

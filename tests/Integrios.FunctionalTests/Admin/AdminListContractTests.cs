@@ -263,7 +263,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status, created_at, updated_at, revoked_at) VALUES
             (@First, @TenantId, @ConnectorId, @Topic, 'first-intake', 'event_api', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL),
             (@Second, @TenantId, @ConnectorId, @Topic, 'second-intake', 'webhook', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'revoked', @Now, @Now, @Now),
-            (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'excluded-intake', 'queue', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL)
+            (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'excluded-intake', 'broker', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL)
             """, new
         {
             Topic = topic,
@@ -280,11 +280,11 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         string root = $"/admin/tenants/{fixture.TenantId}/sources";
         (await ListIdsAsync($"{root}?topic_id={topic}")).Order().ShouldBe(new[] { first, second }.Order());
         (await ListIdsAsync($"{root}?topic_id={topic}&type=event_api&status=active")).ShouldBe(new[] { first });
-        (await ListIdsAsync($"{root}?topic_id={topic}&type=queue")).ShouldBeEmpty();
+        (await ListIdsAsync($"{root}?topic_id={topic}&type=broker")).ShouldBeEmpty();
         (await ListIdsAsync($"/admin/tenants/{fixture.OtherTenantId}/sources?topic_id={topic}")).ShouldBeEmpty();
         (await ListIdsAsync($"{root}?topic_id={Guid.NewGuid()}")).ShouldBeEmpty();
         (await client.SendAsync(AdminRequest(HttpMethod.Get, $"{root}?topic_id=invalid"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        foreach (string type in new[] { "event_api", "webhook", "queue" })
+        foreach (string type in new[] { "event_api", "webhook", "broker" })
             (await GetListAsync($"{root}?type={type}")).GetProperty("items")[0]
                 .TryGetProperty("configuration", out _).ShouldBeFalse();
         JsonElement page = await GetListAsync($"{root}?topic_id={topic}&limit=1");

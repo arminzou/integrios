@@ -62,7 +62,7 @@ it("shows Source input requirements and restarts paging when the Topic filter ch
   expect(screen.getByRole("link", { name: "Clear filters" })).toBeTruthy();
 });
 
-/// `queue` is the wire value for the type an Operator authors as "Message broker". The filter and
+/// `broker` is the wire value for the type an Operator authors as "Message broker". The filter and
 /// the authoring control read the label; a row that printed the wire value would name the same type
 /// differently one control apart, and would describe a topic subscription as a queue.
 it("names a broker Source's type as the Operator authored it", async () => {
@@ -77,7 +77,7 @@ it("names a broker Source's type as the Operator authored it", async () => {
           tenant_id: tenantId,
           topic_id: topicId,
           connector_id: connectorId,
-          type: "queue",
+          type: "broker",
           status: "active",
           input_requirements: null,
         },
@@ -87,7 +87,7 @@ it("names a broker Source's type as the Operator authored it", async () => {
   renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
   const row = await screen.findByRole("row", { name: /Orders broker/ });
   expect(within(row).getByText("Message broker")).toBeTruthy();
-  expect(within(row).queryByText("queue")).toBeNull();
+  expect(within(row).queryByText("broker")).toBeNull();
 });
 
 describe("Authoring a Source before anything it needs", () => {
@@ -130,7 +130,7 @@ describe("Source setup guide", () => {
       fact: "http://localhost:5231/webhooks/66666666-6666-6666-6666-666666666666",
     },
     {
-      type: "queue",
+      type: "broker",
       configuration: {
         transport: "azure_service_bus",
         authentication: { scheme: "azure_identity" },
@@ -294,10 +294,10 @@ function guideHttp({
         status: 200,
         body: {
           id: connectorId,
-          key: type === "webhook" ? "github" : type === "queue" ? "dataverse" : "http",
+          key: type === "webhook" ? "github" : type === "broker" ? "dataverse" : "http",
           contract_version: 1,
           manifest_schema_version: 1,
-          name: type === "webhook" ? "GitHub" : type === "queue" ? "Dataverse" : "HTTP",
+          name: type === "webhook" ? "GitHub" : type === "broker" ? "Dataverse" : "HTTP",
           direction: "source",
           status: "active",
           manifest: {},

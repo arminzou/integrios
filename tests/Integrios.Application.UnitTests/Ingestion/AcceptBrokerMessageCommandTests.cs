@@ -9,13 +9,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Application.UnitTests;
 
-public sealed class AcceptQueueMessageCommandTests : IDisposable
+public sealed class AcceptBrokerMessageCommandTests : IDisposable
 {
     private readonly ServiceProvider provider;
     private readonly IMediator mediator;
     private readonly FakeEventAcceptance eventAcceptance = new();
 
-    public AcceptQueueMessageCommandTests()
+    public AcceptBrokerMessageCommandTests()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -39,7 +39,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
             """{"event_type":"order.created","source_event_id":"op-1","payload":{"amount":42}}""").RootElement;
 
         IngestEventResult result = await mediator.Send(
-            new AcceptQueueMessageCommand(tenantId, topicId, sourceId, null, IdentityMapping, input, null, null));
+            new AcceptBrokerMessageCommand(tenantId, topicId, sourceId, null, IdentityMapping, input, null, null));
 
         result.Status.ShouldBe(EventStatus.Accepted);
         eventAcceptance.LastSubmission.ShouldNotBeNull();
@@ -60,7 +60,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
             """{"event_type":"order.created","source_event_id":"op-1","payload":{}}""").RootElement;
 
         IngestEventResult result = await mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, IdentityMapping, input, null, null));
+            new AcceptBrokerMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, IdentityMapping, input, null, null));
 
         result.AlreadyAccepted.ShouldBeTrue();
     }
@@ -71,7 +71,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         JsonElement input = JsonDocument.Parse(
             """{"event_type":"order.created","source_event_id":"mapped-id","payload":{}}""").RootElement;
 
-        await mediator.Send(new AcceptQueueMessageCommand(
+        await mediator.Send(new AcceptBrokerMessageCommand(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, IdentityMapping, input,
             new SourceEventIdentityRule { Kind = "message_id", Value = "ignored" }, "broker-id"));
 
@@ -86,7 +86,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         JsonElement input = JsonDocument.Parse("""{"event_type":42,"payload":{}}""").RootElement;
 
         await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), schema, IdentityMapping, input, null, null)));
+            new AcceptBrokerMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), schema, IdentityMapping, input, null, null)));
         eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
@@ -97,7 +97,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         JsonElement input = JsonDocument.Parse("""{"a":1}""").RootElement;
 
         await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, failingMapping, input, null, null)));
+            new AcceptBrokerMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, failingMapping, input, null, null)));
         eventAcceptance.LastSubmission.ShouldBeNull();
     }
 
@@ -107,7 +107,7 @@ public sealed class AcceptQueueMessageCommandTests : IDisposable
         JsonElement input = JsonDocument.Parse("""{"payload":{}}""").RootElement;
 
         await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
-            new AcceptQueueMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, input, null, null)));
+            new AcceptBrokerMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, input, null, null)));
         eventAcceptance.LastSubmission.ShouldBeNull();
     }
 

@@ -4,7 +4,7 @@ using Integrios.Application.Transforms;
 
 namespace Integrios.Application.Ingestion;
 
-// Shared by every Ingestion path (Event API, webhook, queue): validate the raw input document
+// Shared by every Ingestion path (Event API, webhook, broker): validate the raw input document
 // against the Source contract's optional schema, then run its optional JSONata mapping (or, with
 // no mapping declared, treat the raw input itself as the strictly bounded output) and validate the
 // result. A rejection here is always a Source rejection (EventAcceptanceException -> 422), never an

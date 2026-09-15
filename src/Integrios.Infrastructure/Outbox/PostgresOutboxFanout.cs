@@ -42,7 +42,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     e.topic_id    AS TopicId
                 -- Event acceptance inserts the Event and outbox row atomically, and the outbox
                 -- foreign key prevents a dangling EventId. A missing Event is database corruption,
-                -- not queue work for this receiver to reconcile.
+                -- not broker work for this receiver to reconcile.
                 FROM outbox o
                 JOIN events e ON e.id = o.event_id
                 WHERE o.processed_at IS NULL

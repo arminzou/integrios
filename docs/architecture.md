@@ -17,19 +17,19 @@ platform, API gateway, or multi-protocol runtime.
 
 An Operator configures Admin, the control plane. Three intake paths feed Ingestion, the data plane:
 an external Event producer posts through an `event_api` Source with a TenantApiKey, a provider's
-HTTP request arrives through a `webhook` Source, or a message is received through a `queue` Source
+HTTP request arrives through a `webhook` Source, or a message is received through a `broker` Source
 backed by Azure Service Bus. Admin and Ingestion share one PostgreSQL or SQL Server 2022+ database:
 Admin writes configuration to it, and Ingestion writes each accepted Event and its outbox row to it
 in one transaction. Worker reads fanout work from that same database, delivers over generic HTTP to
 Tenant-owned destinations, and writes attempt state, retries, and dead-letters back to it.
 
-A **Source** (`event_api`, `webhook`, or `queue`) is the Operator-authored resource that binds one
+A **Source** (`event_api`, `webhook`, or `broker`) is the Operator-authored resource that binds one
 Connector version to one Topic and owns its intake contract. Generic Event intake through the
 `event_api` Source type, addressed by Source id and a TenantApiKey, remains the universal path. A
 `webhook` Source selects a Connector-declared verification capability and owns the validation and
 mapping of a provider's HTTP request before it crosses the same durable Event-acceptance boundary;
 see [the GitHub-to-Slack walkthrough](github-to-slack-walkthrough.md) for a concrete,
-currently-shipped example. A `queue`
+currently-shipped example. A `broker`
 Source receives messages from an existing Azure Service Bus queue or topic subscription instead of
 accepting inbound HTTP requests.
 
@@ -58,8 +58,8 @@ at runtime.
   class. It is explicitly applied by the Operator, shared across Tenants, and contains no Tenant
   data or executable code.
 - **Source** is a Tenant-owned resource bound immutably to one Connector version and one Topic.
-  Its `type` (`event_api`, `webhook`, or `queue`) selects the intake mechanism. Webhook and queue
-  Sources own verification or queue authentication, input requirements, Event mapping, and an
+  Its `type` (`event_api`, `webhook`, or `broker`) selects the intake mechanism. Webhook and broker
+  Sources own verification or broker authentication, input requirements, Event mapping, and an
   optional immutable Event-identity rule; a webhook also carries a platform-generated `callback_id`.
 - **Destination** is a Tenant-owned reusable outbound system instance bound immutably to one
   Connector version. It owns base URI, fixed path boundary, destination configuration,
@@ -80,7 +80,7 @@ their base URIs, credentials, or runtime data.
 ## Source model
 
 A Source is created through Admin (`POST /admin/tenants/{id}/sources`) with a `connector_id`, a
-`topic_id`, a `type`, and a type-specific `configuration` object. Webhook and queue Sources own
+`topic_id`, a `type`, and a type-specific `configuration` object. Webhook and broker Sources own
 JSON input requirements, an optional JSONata mapping to the Event's `event_type`, `payload`, and
 allowed metadata, plus an optional immutable Event-identity selector. Event API uses the fixed
 Integrios Event JSON contract instead of Source-owned validation or mapping.
@@ -97,17 +97,17 @@ mapping before the same durable Event-acceptance boundary. Providers that do not
 shape use an external Event API client unless repeated demand justifies another provider-neutral
 platform capability.
 
-**`queue`** receives messages from an existing Azure Service Bus queue or topic subscription instead
+**`broker`** receives messages from an existing Azure Service Bus queue or topic subscription instead
 of accepting inbound HTTP requests. Its `configuration` additionally names the transport
 (`azure_service_bus`), the namespace and entity to read from, and an authentication scheme
 (`connection_string` with a secret reference, or `azure_identity` for an ambient credential).
-Ingestion runs one background processor per active `queue` Source, reconciled on an interval so
-authoring changes take effect without a restart; a deployment with no `queue` Source configured
+Ingestion runs one background processor per active `broker` Source, reconciled on an interval so
+authoring changes take effect without a restart; a deployment with no `broker` Source configured
 creates no Service Bus client and needs no Azure credentials. Integrios never provisions the
 namespace, queue, topic, or subscription itself — the Operator points a Source at an entity that
 already exists.
 
-Operator-authored Connectors cannot load runtime code — `webhook` verification and `queue` receiving
+Operator-authored Connectors cannot load runtime code — `webhook` verification and `broker` receiving
 are entirely platform-owned, and a manifest or Source `configuration` only supplies bounded data for
 them. Polling remains external Event-producer behavior. Integrios does not commit to a broad
 provider set or an in-process plugin system.
@@ -147,7 +147,7 @@ Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
 
 1. An external Event producer sends the Event contract to `POST /events?source_id={id}` and
    authenticates with a TenantApiKey, a `webhook` Source verifies and normalizes a provider HTTP
-   request at `POST /webhooks/{callback_id}`, or a `queue` Source's background processor receives a
+   request at `POST /webhooks/{callback_id}`, or a `broker` Source's background processor receives a
    message from Azure Service Bus — before Ingestion ever sees an Event contract in any case.
 2. Ingestion resolves the Tenant and the addressed Source, which names its active Connector and
    the Topic it may publish to.

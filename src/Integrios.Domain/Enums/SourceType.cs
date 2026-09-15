@@ -4,5 +4,5 @@ public enum SourceType
 {
     EventApi,
     Webhook,
-    Queue,
+    Broker,
 }

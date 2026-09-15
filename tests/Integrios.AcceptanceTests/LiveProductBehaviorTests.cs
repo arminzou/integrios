@@ -727,7 +727,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 payload = new { rejected = true },
             });
         // An inactive/foreign/unassociated Source id no longer resolves at all, so rejection is now
-        // 404 (matches the webhook/queue "no active Source" convention), not 422.
+        // 404 (matches the webhook/broker "no active Source" convention), not 422.
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 

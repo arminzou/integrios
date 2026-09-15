@@ -49,7 +49,7 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       DOTNET_ENVIRONMENT: Production
       Integrios__SourceSecrets__Provider: ${INTEGRIOS_SOURCE_SECRETS_PROVIDER:-file}
-      # Queue Sources using azure_identity draw an ambient credential through
+      # Broker Sources using azure_identity draw an ambient credential through
       # DefaultAzureCredential. Nothing below is set by default, so the working scheme out of the
       # box is connection_string. To use azure_identity, give this container a credential the chain
       # can resolve: attach a managed identity (AKS/Container Apps/VM), or supply an app

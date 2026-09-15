@@ -28,21 +28,21 @@ public sealed class SourceSecretValidationCliTests
         error.ToString().ShouldBeEmpty();
     }
 
-    // The two shapes a Source carries: verification holds a {field: reference} object, a queue holds
+    // The two shapes a Source carries: verification holds a {field: reference} object, a broker holds
     // one bare reference inside its transport configuration. Covering only the first would leave
-    // every queue credential unchecked.
+    // every broker credential unchecked.
     [Fact]
-    public async Task RunAsync_CoversQueueAndWebhookShapesAndSkipsRevokedSourcesAndInactiveTenants()
+    public async Task RunAsync_CoversBrokerAndWebhookShapesAndSkipsRevokedSourcesAndInactiveTenants()
     {
         Tenant tenant = MakeTenant("tenant-a");
         Tenant disabled = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Disabled };
         Source webhook = WebhookSource(tenant.Id, "hook_secret");
-        Source queue = QueueSource(tenant.Id, "bus_connection");
+        Source broker = BrokerSource(tenant.Id, "bus_connection");
         Source revoked = WebhookSource(tenant.Id, "gone_secret") with { Status = SourceStatus.Revoked };
         Source otherTenant = WebhookSource(disabled.Id, "ignored_secret");
         using ServiceProvider services = BuildServices(
             [tenant, disabled],
-            [webhook, queue, revoked, otherTenant],
+            [webhook, broker, revoked, otherTenant],
             new Dictionary<string, string>
             {
                 ["tenant-a/hook_secret"] = "hook-value",
@@ -149,14 +149,14 @@ public sealed class SourceSecretValidationCliTests
         UpdatedAt = DateTimeOffset.UtcNow,
     };
 
-    private static Source QueueSource(Guid tenantId, string reference) => new()
+    private static Source BrokerSource(Guid tenantId, string reference) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenantId,
         ConnectorId = Guid.NewGuid(),
         TopicId = Guid.NewGuid(),
-        Name = "queue-intake",
-        Type = SourceType.Queue,
+        Name = "broker-intake",
+        Type = SourceType.Broker,
         Configuration = JsonSerializer.SerializeToElement(new
         {
             transport = "azure_service_bus",

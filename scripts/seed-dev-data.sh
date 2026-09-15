@@ -131,7 +131,7 @@ NW_WEBHOOK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_WEBHOOKS" "Northwind storefr
 NW_WEBHOOK_CALLBACK=$(admin GET "/admin/tenants/$NW/sources/$NW_WEBHOOK_SRC" | jq -r .configuration.callback_id)
 mkdir -p secrets/source/northwind-retail
 printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/source/northwind-retail/$SERVICEBUS_SECRET"
-NW_QUEUE_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_QUEUE" "Northwind warehouse receipts" queue "$(jq -nc \
+NW_QUEUE_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_QUEUE" "Northwind warehouse receipts" broker "$(jq -nc \
   --arg secret "$SERVICEBUS_SECRET" --arg queue "$SERVICEBUS_QUEUE" \
   '{source_contract:"event_json",transport:"azure_service_bus",authentication:{scheme:"connection_string",secret_ref:$secret},transport_config:{namespace:"servicebus-emulator",queue_name:$queue}}')")
 
@@ -211,16 +211,16 @@ send "$AT_SRC" "$AT_TOKEN" consignment.scanned at-scan-1 \
 send "$AT_SRC" "$AT_TOKEN" consignment.handover at-hand-1 \
   "$(jq -n '{consignment:"CN-55121",partner:"Meridian Freight",manifest:"MF-2209"}')" > /dev/null
 
-# Queue publishing and queue acceptance are separate boundaries; prove the receiver consumed the
+# Broker publishing and broker acceptance are separate boundaries; prove the receiver consumed the
 # one demo message before using the delivery state as the final completion signal.
-say "waiting for the queue Event"
-queue_events=0
+say "waiting for the broker Event"
+broker_events=0
 for _ in $(seq 1 30); do
-  queue_events=$(psql_q "select count(*) from events where source_event_id = 'nw-queue-1';")
-  [ "$queue_events" -ge 1 ] && break
+  broker_events=$(psql_q "select count(*) from events where source_event_id = 'nw-queue-1';")
+  [ "$broker_events" -ge 1 ] && break
   sleep 2
 done
-[ "$queue_events" -ge 1 ] || { printf 'Queue Event was not accepted within one minute.\n' >&2; exit 1; }
+[ "$broker_events" -ge 1 ] || { printf 'Broker Event was not accepted within one minute.\n' >&2; exit 1; }
 
 # --- 9. Wait for the failing Delivery to exhaust its retries ------------------------------------
 # Three attempts on a 30s exponential base, so dead-lettering lands ~90s after the first attempt.

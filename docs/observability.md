@@ -26,7 +26,7 @@ instruments, Integrios emits the following application instruments.
 |---|---|---|---|
 | integrios_events_ingested_total | counter | — | Events accepted at the durable boundary; idempotent duplicates are excluded. |
 | integrios_events_unrouted_total | counter | — | Events that matched no Subscription during fanout. |
-| integrios_queue_source_errors_total | counter | transport | Queue Source processing errors, grouped by transport. |
+| integrios_broker_source_errors_total | counter | transport | Broker Source processing errors, grouped by transport. |
 | integrios_fanout_rows_created_total | counter | — | EventDelivery rows created by fanout. |
 | integrios_deliveries_succeeded_total | counter | connector_key | Successful deliveries by destination Connector class. |
 | integrios_deliveries_failed_total | counter | connector_key, http_status_class | Retryable delivery failures. |

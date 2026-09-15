@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace Integrios.Application.Transforms;
 
-// Shared by Source-contract preview and the runtime Event API/webhook/queue acceptance paths: both
+// Shared by Source-contract preview and the runtime Event API/webhook/broker acceptance paths: both
 // must enforce the same strictly bounded output shape, whether the JSON came from a Source mapping
 // or (with no mapping declared) directly from the caller's input document.
 public static class SourceMappingOutputValidator

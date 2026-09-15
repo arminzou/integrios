@@ -60,13 +60,13 @@ type Source = components["schemas"]["SourceDto"];
 const sourceTypes = [
   { value: "event_api", label: "Event API" },
   { value: "webhook", label: "Webhook" },
-  { value: "queue", label: "Message broker" },
+  { value: "broker", label: "Message broker" },
 ];
 
 /// A scheme the manifest offers but this dashboard has no word for is shown as the Connector named it.
 const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC SHA-256" : scheme);
 
-/// `queue` names only one of the two broker entity forms, so no Operator-facing surface prints it.
+/// `broker` is the wire value; no Operator-facing surface prints it, only the "Message broker" label.
 const typeLabel = (value: string) => sourceTypes.find((option) => option.value === value)?.label ?? value;
 
 /// Where a Source's Event identity is read from. A kind offers a selector only when it
@@ -78,7 +78,7 @@ const typeLabel = (value: string) => sourceTypes.find((option) => option.value =
 /// necessarily have one at all — Kafka identifies a record by its coordinates — which is why the
 /// offered set will key on the transport rather than the Source type once a second transport lands.
 const identityKinds = [
-  { value: "message_id", label: "Message ID", types: ["queue"], selector: undefined },
+  { value: "message_id", label: "Message ID", types: ["broker"], selector: undefined },
   {
     value: "header",
     label: "Request header",
@@ -88,7 +88,7 @@ const identityKinds = [
   {
     value: "json_path",
     label: "JSON body field",
-    types: ["webhook", "queue"],
+    types: ["webhook", "broker"],
     selector: { label: "JSON Pointer", placeholder: "/id" },
   },
 ] as const;
@@ -196,7 +196,7 @@ const createSchema = z
   .superRefine((values, ctx) => {
     if (values.type === "webhook") requireVerificationSecret(values, ctx);
     requireIdentitySelector(values, ctx);
-    if (values.type !== "queue") return;
+    if (values.type !== "broker") return;
     requireBrokerFields(values, ctx);
   });
 
@@ -654,7 +654,7 @@ function CreateSource({
   const sourceType = form.watch("type");
   const connectorId = form.watch("connector_id");
   // What the chosen Connector permits. Read for webhook verification and for whether the Connector
-  // demands source configuration this form cannot author; a queue Source composes its own document.
+  // demands source configuration this form cannot author; a broker Source composes its own document.
   const connector = useQuery({
     queryKey: ["connector", connectorId],
     queryFn: () => call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: connectorId } } })),
@@ -681,7 +681,7 @@ function CreateSource({
             connector_id: values.connector_id,
             topic_id: values.topic_id,
             type: values.type,
-            configuration: values.type === "queue" ? sourceConfiguration(values) : {},
+            configuration: values.type === "broker" ? sourceConfiguration(values) : {},
             verification:
               values.type === "webhook" && values.verification_scheme.trim()
                 ? {
@@ -792,7 +792,7 @@ function CreateSource({
             capabilities={capabilities}
           />
         ) : null}
-        {sourceType === "queue" ? <MessageBrokerFields control={form.control} /> : null}
+        {sourceType === "broker" ? <MessageBrokerFields control={form.control} /> : null}
         {sourceType !== "event_api" ? (
           <>
             <Section
@@ -1016,7 +1016,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
     void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
     void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
   };
-  const storedBrokerFields = source.type === "queue" ? brokerFields(source.configuration) : null;
+  const storedBrokerFields = source.type === "broker" ? brokerFields(source.configuration) : null;
   const connector = useQuery({
     queryKey: ["connector", source.connector_id],
     queryFn: () => call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: source.connector_id } } })),

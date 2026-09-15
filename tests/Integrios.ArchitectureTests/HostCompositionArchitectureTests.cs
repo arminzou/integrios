@@ -52,7 +52,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IEventApiSourceResolver)] = [Host.Ingestion],
         [typeof(ISourceVerifier)] = [Host.Admin, Host.Ingestion],
         [typeof(ISourceVerifierRegistry)] = [Host.Admin, Host.Ingestion],
-        [typeof(IQueueSourceReader)] = [Host.Ingestion],
+        [typeof(IBrokerSourceReader)] = [Host.Ingestion],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
@@ -302,7 +302,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<ISourceEndpointResolver>(provider);
         AssertResolves<ISourceVerifier>(provider);
         AssertResolves<ISourceVerifierRegistry>(provider);
-        AssertResolves<IQueueSourceReader>(provider);
+        AssertResolves<IBrokerSourceReader>(provider);
         AssertResolves<IEventAcceptance>(provider);
         AssertResolves<ITenantEventLookup>(provider);
         // Scoped, because it reads through the request DbContext the way every other read side does.

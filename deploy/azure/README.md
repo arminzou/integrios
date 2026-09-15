@@ -76,7 +76,7 @@ example selects Azure SQL. Set `databaseProvider = 'postgres'` to provision Post
 
 `ingestionExternal` and Service Bus coordinates are independent. Leave both Service Bus values
 empty for no broker dependency, or supply both an existing namespace name and its resource group to
-grant Ingestion `Azure Service Bus Data Receiver`. Configure individual Queue Sources later through
+grant Ingestion `Azure Service Bus Data Receiver`. Configure individual broker Sources later through
 Admin; the namespace role alone does not create or select a broker entity.
 
 ## Deploy or update
@@ -127,7 +127,7 @@ the deployed Admin and Ingestion HTTPS origins and a real controlled destination
 local Compose addresses.
 
 For an Event API canary, submit one uniquely identified Event with the TenantApiKey and confirm its
-Event and Delivery reach successful state. For a Queue Source, configure the existing namespace and
+Event and Delivery reach successful state. For a broker Source, configure the existing namespace and
 entity through Admin, send one uniquely identified broker message, and confirm the same lifecycle.
 Exercise failure and replay only against a destination you control: return a retryable failure until
 the Delivery dead-letters, restore the destination, and replay that Delivery through Admin. Integrios
@@ -153,7 +153,7 @@ Observability failures do not participate in liveness or readiness.
   current.
 - Confirm each image digest exists in the configured ACR and each user-assigned identity has
   `AcrPull`.
-- For Queue Sources, confirm both Service Bus coordinates were supplied, Ingestion has receiver
+- For broker Sources, confirm both Service Bus coordinates were supplied, Ingestion has receiver
   access, and the Admin-authored Source names the intended existing entity.
 
 `/health` is dependency-free liveness. `/ready` checks only the selected database. Service Bus,

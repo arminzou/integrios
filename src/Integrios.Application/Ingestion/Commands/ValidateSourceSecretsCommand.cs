@@ -115,7 +115,7 @@ internal sealed class ValidateSourceSecretsCommandHandler(
     }
 
     /// A Source carries its secrets in two shapes: webhook verification holds a {field: reference}
-    /// object, while a queue holds one bare reference inside its transport configuration.
+    /// object, while a broker Source holds one bare reference inside its transport configuration.
     private static IEnumerable<string> SecretReferences(Source source)
     {
         HashSet<string> seen = new(StringComparer.Ordinal);
@@ -133,16 +133,16 @@ internal sealed class ValidateSourceSecretsCommandHandler(
             }
         }
 
-        if (source.Type == SourceType.Queue
+        if (source.Type == SourceType.Broker
             && source.Configuration.ValueKind == JsonValueKind.Object
             && source.Configuration.TryGetProperty("authentication", out JsonElement authentication)
             && authentication.ValueKind == JsonValueKind.Object
             && authentication.TryGetProperty("secret_ref", out JsonElement secretRef)
             && secretRef.ValueKind == JsonValueKind.String
-            && secretRef.GetString() is { Length: > 0 } queueReference
-            && seen.Add(queueReference))
+            && secretRef.GetString() is { Length: > 0 } brokerReference
+            && seen.Add(brokerReference))
         {
-            yield return queueReference;
+            yield return brokerReference;
         }
     }
 }

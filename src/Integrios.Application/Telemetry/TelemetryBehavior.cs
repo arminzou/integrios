@@ -14,7 +14,7 @@ public sealed class TelemetryBehavior<TRequest, TResponse> : IPipelineBehavior<T
     {
         using Activity? activity = request is IngestEventCommand
             or AcceptVerifiedWebhookCommand
-            or AcceptQueueMessageCommand
+            or AcceptBrokerMessageCommand
             ? ActivitySources.StartRootSpan("event.accept")
             : ActivitySources.Application.StartActivity(typeof(TRequest).Name);
 

@@ -21,7 +21,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<IngestionExceptionHandler>();
 builder.Services.AddIngestionApplicationServices();
-builder.Services.AddIngestionInfrastructureServices(builder.Configuration, enableQueueReceiver: !secretCommand);
+builder.Services.AddIngestionInfrastructureServices(builder.Configuration, enableBrokerReceiver: !secretCommand);
 builder.Services.AddSourceVerificationSecretResolutionServices(builder.Configuration);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-ingestion");
 

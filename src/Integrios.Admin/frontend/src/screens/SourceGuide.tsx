@@ -59,7 +59,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
   const overview = useQuery({
     queryKey: ["tenant-overview", tenantId],
     queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
-    enabled: open && source.type !== "queue",
+    enabled: open && source.type !== "broker",
   });
 
   return (
@@ -68,7 +68,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
         Connect this Source
       </h3>
       <p className="m-0 text-[13px] text-ink-secondary">
-        {source.type === "queue"
+        {source.type === "broker"
           ? "The Publisher sends to the configured broker entity; Integrios consumes and publishes accepted Events to this Source's Topic."
           : "The Publisher sends to this Source; Integrios validates the input and publishes accepted Events to its Topic."}
       </p>
@@ -187,7 +187,7 @@ function GuideBody({
   problem?: string;
 }) {
   if (problem) return <p role="alert">{problem}</p>;
-  if (!connector || !topicName || (source.type !== "queue" && !ingestionEndpoint)) return <p>Loading guide…</p>;
+  if (!connector || !topicName || (source.type !== "broker" && !ingestionEndpoint)) return <p>Loading guide…</p>;
 
   const contract = source.input_requirements ? object(source.input_requirements) : null;
   const baseUri = ingestionEndpoint ?? "";
@@ -223,7 +223,7 @@ function GuideBody({
       ) : source.type === "webhook" ? (
         <WebhookGuide source={source} active={active} baseUri={baseUri} contract={contract} />
       ) : (
-        <QueueGuide source={source} active={active} contract={contract} />
+        <BrokerGuide source={source} active={active} contract={contract} />
       )}
       {context?.advancedMapping ? (
         <p className="m-0 text-sm text-ink-secondary">
@@ -326,7 +326,7 @@ function WebhookGuide({
   );
 }
 
-function QueueGuide({ source, active, contract }: { source: Source; active: boolean; contract: JsonObject | null }) {
+function BrokerGuide({ source, active, contract }: { source: Source; active: boolean; contract: JsonObject | null }) {
   const configuration = object(source.configuration);
   const transport = object(configuration.transport_config);
   const namespace = text(transport, "namespace") ?? "—";
@@ -336,9 +336,9 @@ function QueueGuide({ source, active, contract }: { source: Source; active: bool
   const address = queue ? `${namespace}/${queue}` : `${namespace}/${topic ?? "—"}/subscriptions/${subscription ?? "—"}`;
 
   return (
-    <section className="flex flex-col gap-4" aria-labelledby="queue-guide">
+    <section className="flex flex-col gap-4" aria-labelledby="broker-guide">
       <div>
-        <h3 id="queue-guide" className="mt-0 text-base">
+        <h3 id="broker-guide" className="mt-0 text-base">
           Publish to the broker
         </h3>
         <p className="m-0 text-sm">

@@ -116,7 +116,7 @@ public static class DependencyInjection
     public static IServiceCollection AddIngestionInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration,
-        bool enableQueueReceiver = true)
+        bool enableBrokerReceiver = true)
     {
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);
@@ -125,13 +125,13 @@ public static class DependencyInjection
         services.AddSingleton<IEventApiSourceResolver, EventApiSourceResolver>();
         services.AddSingleton<ISourceEndpointResolver, SourceEndpointResolver>();
         services.AddSourceVerificationServices();
-        services.AddSingleton<IQueueSourceReader, QueueSourceReader>();
-        services.AddSingleton(new QueueReconcileInterval(TimeSpan.FromSeconds(
-            configuration.GetValue<int?>("Integrios:QueueSources:ReconcileSeconds") ?? 30)));
-        // A read-only question about secret references must not start consuming from every queue
+        services.AddSingleton<IBrokerSourceReader, BrokerSourceReader>();
+        services.AddSingleton(new BrokerReconcileInterval(TimeSpan.FromSeconds(
+            configuration.GetValue<int?>("Integrios:BrokerSources:ReconcileSeconds") ?? 30)));
+        // A read-only question about secret references must not start consuming from every broker
         // Source as a side effect of being asked.
-        if (enableQueueReceiver)
-            services.AddHostedService<AzureServiceBusQueueReceiver>();
+        if (enableBrokerReceiver)
+            services.AddHostedService<AzureServiceBusReceiver>();
         services.AddTransformEvaluationServices();
         if (databaseProvider == DatabaseProvider.SqlServer)
             services.AddSingleton<IEventAcceptance, SqlServerEventAcceptance>();

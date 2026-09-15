@@ -34,7 +34,7 @@ public sealed class MetricCollectorTests
 
         metrics.RecordEventIngested();
         metrics.RecordEventUnrouted();
-        metrics.RecordQueueSourceError("azure_service_bus");
+        metrics.RecordBrokerSourceError("azure_service_bus");
         metrics.RecordFanoutRowsCreated(1);
         metrics.RecordDeliverySucceeded("http");
         metrics.RecordDeliveryFailed("http", "5xx");

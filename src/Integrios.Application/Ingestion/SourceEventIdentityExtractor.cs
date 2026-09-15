@@ -12,7 +12,7 @@ internal static class SourceEventIdentityExtractor
             ? headers.FirstOrDefault(pair => pair.Key.Equals(rule.Value, StringComparison.OrdinalIgnoreCase)).Value
             : ReadJsonPointer(input, rule.Value));
 
-    public static string? ExtractQueue(SourceEventIdentityRule rule, string? messageId, JsonElement input) =>
+    public static string? ExtractBroker(SourceEventIdentityRule rule, string? messageId, JsonElement input) =>
         Extracted(rule, rule.Kind == "message_id" ? messageId : ReadJsonPointer(input, rule.Value));
 
     public static bool IsJsonPointer(string value)

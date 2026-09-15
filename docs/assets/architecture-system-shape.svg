@@ -282,7 +282,7 @@ rect.c-bg-rect { fill: var(--bg); }
         <path data-edge-from="operator" data-edge-to="admin" data-edge-label="configures" data-edge-key="0" data-edge-id="operator-admin" data-composition-points="160,70;340,70" d="M 160 70 L 340 70" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="producer" data-edge-to="ingestion" data-edge-key="1" data-edge-id="producer-ingestion" data-composition-points="160,220;250,220;250,266;340,266" d="M 160 220 L 242 220 Q 250 220 250 228 L 250 258 Q 250 266 258 266 L 340 266" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="webhook" data-edge-to="ingestion" data-edge-key="2" data-edge-id="webhook-ingestion" data-composition-points="160,340;250,340;250,280;340,280" d="M 160 340 L 242 340 Q 250 340 250 332 L 250 288 Q 250 280 258 280 L 340 280" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="queue" data-edge-to="ingestion" data-edge-key="3" data-edge-id="queue-ingestion" data-composition-points="160,460;250,460;250,294;340,294" d="M 160 460 L 242 460 Q 250 460 250 452 L 250 302 Q 250 294 258 294 L 340 294" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="broker" data-edge-to="ingestion" data-edge-key="3" data-edge-id="broker-ingestion" data-composition-points="160,460;250,460;250,294;340,294" d="M 160 460 L 242 460 Q 250 460 250 452 L 250 302 Q 250 294 258 294 L 340 294" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="admin" data-edge-to="db" data-edge-label="config writes" data-edge-key="4" data-edge-id="admin-db" data-composition-points="460,70;595,70;595,145;730,145" d="M 460 70 L 587 70 Q 595 70 595 78 L 595 137 Q 595 145 603 145 L 730 145" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="ingestion" data-edge-to="db" data-edge-label="Event + outbox, 1 txn" data-edge-key="5" data-edge-id="ingestion-db" data-composition-points="460,280;550,280;550,175;640,175" d="M 460 280 L 542 280 Q 550 280 550 272 L 550 183 Q 550 175 558 175 L 640 175" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="db" data-edge-to="worker" data-edge-label="fanout work" data-edge-key="6" data-edge-id="db-worker" data-composition-points="820,175;890,175;890,250;960,250" d="M 820 175 L 882 175 Q 890 175 890 183 L 890 242 Q 890 250 898 250 L 960 250" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
@@ -326,8 +326,8 @@ rect.c-bg-rect { fill: var(--bg); }
         <text x="100" y="354" class="t-muted" font-size="9" text-anchor="middle">webhook Source</text>
         </g>
 
-        <g id="node-queue" data-node-id="queue" data-node-label="Azure Service Bus" tabindex="0" role="button" aria-label="Focus Azure Service Bus, queue Source, Source types" aria-pressed="false" data-node-kind="external" data-node-sublabel="queue Source" data-node-context="Source types">
-          <title>Azure Service Bus · queue Source · Source types</title>
+        <g id="node-broker" data-node-id="broker" data-node-label="Azure Service Bus" tabindex="0" role="button" aria-label="Focus Azure Service Bus, broker Source, Source types" aria-pressed="false" data-node-kind="external" data-node-sublabel="broker Source" data-node-context="Source types">
+          <title>Azure Service Bus · broker Source · Source types</title>
           <rect x="40" y="430" width="120" height="60" rx="6" class="c-mask"/>
           <rect x="40" y="430" width="120" height="60" rx="6" class="c-external" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 436) scale(0.6875)">
@@ -335,7 +335,7 @@ rect.c-bg-rect { fill: var(--bg); }
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
           <text x="100" y="458" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Azure Service Bus</text>
-        <text x="100" y="474" class="t-muted" font-size="9" text-anchor="middle">queue Source</text>
+        <text x="100" y="474" class="t-muted" font-size="9" text-anchor="middle">broker Source</text>
         </g>
 
         <g id="node-admin" data-node-id="admin" data-node-label="Admin" tabindex="0" role="button" aria-label="Focus Admin, control plane :5150, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="control plane :5150" data-node-context="Architecture component">

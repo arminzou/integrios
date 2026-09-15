@@ -675,7 +675,7 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                             t.HasCheckConstraint("ck_sources_status", "status IN ('active', 'revoked')");
 
-                            t.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'queue')");
+                            t.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'broker')");
                         });
                 });
 

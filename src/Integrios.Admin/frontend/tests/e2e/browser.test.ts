@@ -386,7 +386,7 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   }, 60_000);
 
-  // The Builder belongs to webhook and queue Sources. Whether its three columns are readable side
+  // The Builder belongs to webhook and broker Sources. Whether its three columns are readable side
   // by side and stack rather than overflow when narrow is a layout fact, so it is decided here.
   it.each([
     ["side by side on a wide screen", 1512, true],

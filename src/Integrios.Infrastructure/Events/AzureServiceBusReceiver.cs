@@ -15,21 +15,21 @@ namespace Integrios.Infrastructure.Events;
 // Read from configuration once, at registration, rather than injected as IConfiguration: the
 // receiver's dependencies stay real ports, so the host-composition tests can build the container
 // without standing up a configuration root.
-internal sealed record QueueReconcileInterval(TimeSpan Value);
+internal sealed record BrokerReconcileInterval(TimeSpan Value);
 
-// One processor per active azure_service_bus queue Source, reconciled against the reader on an
+// One processor per active azure_service_bus broker Source, reconciled against the reader on an
 // interval so control-plane changes take effect without an Ingestion restart. When no compatible
 // Source exists, no ServiceBusClient is created, so an HTTP-only deployment needs no Azure
 // credentials or running Azure client. Azure SDK types stay entirely inside this host-edge class;
 // everything it hands to Application (tenant/topic/source ids, the parsed JSON body) is a plain
 // CLR/JSON type.
-internal sealed class AzureServiceBusQueueReceiver(
-    IQueueSourceReader reader,
+internal sealed class AzureServiceBusReceiver(
+    IBrokerSourceReader reader,
     ISourceVerificationSecretResolver secretResolver,
     IServiceProvider serviceProvider,
-    QueueReconcileInterval reconcileInterval,
+    BrokerReconcileInterval reconcileInterval,
     IntegriosMetrics metrics,
-    ILogger<AzureServiceBusQueueReceiver> logger)
+    ILogger<AzureServiceBusReceiver> logger)
     : BackgroundService
 {
     // A broker that refuses the credential or cannot be reached does not fail StartProcessingAsync:
@@ -56,7 +56,7 @@ internal sealed class AzureServiceBusQueueReceiver(
                 {
                     // A failed pass must not end the loop: the reader query or one broker being
                     // unreachable is transient, and the next tick retries the whole desired state.
-                    logger.LogError(exception, "Azure Service Bus queue Source reconciliation failed; retrying.");
+                    logger.LogError(exception, "Azure Service Bus broker Source reconciliation failed; retrying.");
                 }
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));
@@ -72,9 +72,9 @@ internal sealed class AzureServiceBusQueueReceiver(
     // the gate is the single writer lock over `active`.
     private async Task ReconcileAsync(CancellationToken cancellationToken)
     {
-        IReadOnlyList<ResolvedQueueSource> desired =
+        IReadOnlyList<ResolvedBrokerSource> desired =
             await reader.ListActiveAzureServiceBusSourcesAsync(cancellationToken);
-        Dictionary<Guid, ResolvedQueueSource> desiredById = desired.ToDictionary(source => source.SourceId);
+        Dictionary<Guid, ResolvedBrokerSource> desiredById = desired.ToDictionary(source => source.SourceId);
 
         await lifecycleGate.WaitAsync(cancellationToken);
         try
@@ -82,7 +82,7 @@ internal sealed class AzureServiceBusQueueReceiver(
             foreach (Guid sourceId in active.Keys.ToArray())
             {
                 RunningProcessor running = active[sourceId];
-                bool wanted = desiredById.TryGetValue(sourceId, out ResolvedQueueSource? source)
+                bool wanted = desiredById.TryGetValue(sourceId, out ResolvedBrokerSource? source)
                     && source.Revision == running.Revision;
                 bool unhealthy = consecutiveErrors.GetValueOrDefault(sourceId) >= UnhealthyErrorThreshold;
                 if (wanted && !unhealthy)
@@ -94,16 +94,16 @@ internal sealed class AzureServiceBusQueueReceiver(
                 if (unhealthy && wanted)
                 {
                     logger.LogWarning(
-                        "Rebuilding Azure Service Bus processor for queue Source {SourceId} after {Count} consecutive errors.",
+                        "Rebuilding Azure Service Bus processor for broker Source {SourceId} after {Count} consecutive errors.",
                         sourceId, UnhealthyErrorThreshold);
                 }
                 else
                 {
-                    logger.LogInformation("Stopped Azure Service Bus processor for queue Source {SourceId}.", sourceId);
+                    logger.LogInformation("Stopped Azure Service Bus processor for broker Source {SourceId}.", sourceId);
                 }
             }
 
-            foreach (ResolvedQueueSource source in desired)
+            foreach (ResolvedBrokerSource source in desired)
             {
                 if (active.ContainsKey(source.SourceId))
                     continue;
@@ -112,7 +112,7 @@ internal sealed class AzureServiceBusQueueReceiver(
                 {
                     active[source.SourceId] = await StartProcessorAsync(source, cancellationToken);
                     logger.LogInformation(
-                        "Started Azure Service Bus processor for queue Source {SourceId}.", source.SourceId);
+                        "Started Azure Service Bus processor for broker Source {SourceId}.", source.SourceId);
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
@@ -120,7 +120,7 @@ internal sealed class AzureServiceBusQueueReceiver(
                     // not stop the others or the host; the next pass retries it.
                     logger.LogError(
                         exception,
-                        "Could not start Azure Service Bus processor for queue Source {SourceId}; retrying.",
+                        "Could not start Azure Service Bus processor for broker Source {SourceId}; retrying.",
                         source.SourceId);
                 }
             }
@@ -132,7 +132,7 @@ internal sealed class AzureServiceBusQueueReceiver(
     }
 
     private async Task<RunningProcessor> StartProcessorAsync(
-        ResolvedQueueSource source,
+        ResolvedBrokerSource source,
         CancellationToken cancellationToken)
     {
         ServiceBusClient client = await CreateClientAsync(source, cancellationToken);
@@ -152,10 +152,10 @@ internal sealed class AzureServiceBusQueueReceiver(
         processor.ProcessErrorAsync += args =>
         {
             int errors = consecutiveErrors.AddOrUpdate(source.SourceId, 1, (_, count) => count + 1);
-            metrics.RecordQueueSourceError("azure_service_bus");
+            metrics.RecordBrokerSourceError("azure_service_bus");
             logger.LogError(
                 args.Exception,
-                "Service Bus processor error for queue Source {SourceId} ({ErrorSource}); {Count} consecutive.",
+                "Service Bus processor error for broker Source {SourceId} ({ErrorSource}); {Count} consecutive.",
                 source.SourceId, args.ErrorSource, errors);
             return Task.CompletedTask;
         };
@@ -203,14 +203,14 @@ internal sealed class AzureServiceBusQueueReceiver(
 
     private sealed record RunningProcessor(string Revision, ServiceBusClient Client, ServiceBusProcessor Processor);
 
-    private async Task<ServiceBusClient> CreateClientAsync(ResolvedQueueSource source, CancellationToken cancellationToken)
+    private async Task<ServiceBusClient> CreateClientAsync(ResolvedBrokerSource source, CancellationToken cancellationToken)
     {
         switch (source.Authentication.Scheme)
         {
             case "connection_string":
                 string reference = source.Authentication.SecretReference
                     ?? throw new InvalidOperationException(
-                        $"Queue Source {source.SourceId} connection_string authentication requires a secret reference.");
+                        $"Broker Source {source.SourceId} connection_string authentication requires a secret reference.");
                 string connectionString = await secretResolver.ResolveAsync(
                     new TenantSecretScope(source.TenantId, source.TenantSlug), reference, cancellationToken);
                 return new ServiceBusClient(connectionString);
@@ -218,11 +218,11 @@ internal sealed class AzureServiceBusQueueReceiver(
                 return new ServiceBusClient(source.Namespace, new DefaultAzureCredential());
             default:
                 throw new InvalidOperationException(
-                    $"Unsupported queue authentication scheme '{source.Authentication.Scheme}'.");
+                    $"Unsupported broker authentication scheme '{source.Authentication.Scheme}'.");
         }
     }
 
-    private async Task ProcessMessageAsync(ResolvedQueueSource source, ProcessMessageEventArgs args)
+    private async Task ProcessMessageAsync(ResolvedBrokerSource source, ProcessMessageEventArgs args)
     {
         JsonElement rawInput;
         try
@@ -246,7 +246,7 @@ internal sealed class AzureServiceBusQueueReceiver(
         try
         {
             await mediator.Send(
-                new AcceptQueueMessageCommand(
+                new AcceptBrokerMessageCommand(
                     source.TenantId, source.TopicId, source.SourceId,
                     source.SourceContractSchema, source.SourceMapping, rawInput,
                     source.EventIdentityRule, args.Message.MessageId),
@@ -268,7 +268,7 @@ internal sealed class AzureServiceBusQueueReceiver(
             // idempotency key resolves without another routing pass.
             logger.LogWarning(
                 exception,
-                "Unsettled failure processing Service Bus message for queue Source {SourceId}; abandoning for redelivery.",
+                "Unsettled failure processing Service Bus message for broker Source {SourceId}; abandoning for redelivery.",
                 source.SourceId);
             await args.AbandonMessageAsync(args.Message, cancellationToken: args.CancellationToken);
         }

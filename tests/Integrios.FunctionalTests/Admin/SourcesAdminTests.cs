@@ -87,7 +87,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     [Fact]
-    public async Task SourceAuthoring_CreatesEventApiAndQueueSources()
+    public async Task SourceAuthoring_CreatesEventApiAndBrokerSources()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -105,7 +105,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
-            type = "queue",
+            type = "broker",
             configuration = new { transport = "azure_service_bus", authentication = new { scheme = "azure_identity" }, transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" } }
         }));
 
@@ -113,13 +113,13 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         queue.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
-    // Queue authentication the receiver cannot build a client for must fail the authoring call.
+    // Broker authentication the receiver cannot build a client for must fail the authoring call.
     // Left to Ingestion it surfaces at host startup instead, where a single unusable Source stops
     // the whole data plane from starting.
     [Theory]
     [InlineData("entra_id", null)]
     [InlineData("connection_string", null)]
-    public async Task QueueSourceAuthoring_RejectsAuthenticationTheReceiverCannotUse(
+    public async Task BrokerSourceAuthoring_RejectsAuthenticationTheReceiverCannotUse(
         string scheme,
         string? secretReference)
     {
@@ -131,7 +131,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
-            type = "queue",
+            type = "broker",
             configuration = new
             {
                 transport = "azure_service_bus",
@@ -146,7 +146,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     // azure_identity draws its credential from the ambient chain, so a secret reference alongside it
     // is dead configuration that reads as if a secret were in use.
     [Fact]
-    public async Task QueueSourceAuthoring_RejectsSecretReferenceOnAzureIdentity()
+    public async Task BrokerSourceAuthoring_RejectsSecretReferenceOnAzureIdentity()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -156,7 +156,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
-            type = "queue",
+            type = "broker",
             configuration = new
             {
                 transport = "azure_service_bus",
@@ -176,7 +176,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     [InlineData("sb-integrios")]
     [InlineData("https://sb-integrios.servicebus.windows.net")]
     [InlineData("sb-integrios.servicebus.windows.net/queues")]
-    public async Task QueueSourceAuthoring_RejectsNonHostNamespaceForAzureIdentity(string ns)
+    public async Task BrokerSourceAuthoring_RejectsNonHostNamespaceForAzureIdentity(string ns)
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -186,7 +186,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
-            type = "queue",
+            type = "broker",
             configuration = new
             {
                 transport = "azure_service_bus",
@@ -203,7 +203,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     // qualifies them; at the top level a bare topic_name would read as the Integrios Topic the Source
     // publishes to, which is a different thing entirely.
     [Fact]
-    public async Task QueueSourceAuthoring_AcceptsTopicSubscriptionForm()
+    public async Task BrokerSourceAuthoring_AcceptsTopicSubscriptionForm()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -213,7 +213,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
-            type = "queue",
+            type = "broker",
             configuration = new
             {
                 transport = "azure_service_bus",
@@ -238,7 +238,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     // topic without its subscription, and a subscription without its topic
     [InlineData(null, "orders", null)]
     [InlineData(null, null, "integrios")]
-    public async Task QueueSourceAuthoring_RequiresExactlyOneEntityForm(
+    public async Task BrokerSourceAuthoring_RequiresExactlyOneEntityForm(
         string? queueName,
         string? topicName,
         string? subscriptionName)
@@ -269,7 +269,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
-            type = "queue",
+            type = "broker",
             configuration,
         }));
 
@@ -359,7 +359,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     [Fact]
-    public async Task QueueAuthentication_RejectsAPastedConnectionStringWhereItsReferenceBelongs()
+    public async Task BrokerAuthentication_RejectsAPastedConnectionStringWhereItsReferenceBelongs()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -370,7 +370,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
-            type = "queue",
+            type = "broker",
             configuration = new
             {
                 transport = "azure_service_bus",

@@ -20,7 +20,7 @@ function stubOptions() {
   });
 }
 
-async function openSource(type: "event_api" | "webhook" | "queue" = "webhook") {
+async function openSource(type: "event_api" | "webhook" | "broker" = "webhook") {
   stubOptions();
   renderScreen(<SourcesScreen tenantId={tenantId} />);
   fireEvent.click(await screen.findByRole("button", { name: "New Source" }));
