@@ -121,15 +121,46 @@ const identityFieldSchema = {
   identity_allow_missing: z.boolean(),
 };
 
+const brokerFieldSchema = {
+  broker_transport: z.string(),
+  broker_namespace: z.string(),
+  broker_entity: z.string(),
+  broker_queue_name: z.string(),
+  broker_topic_name: z.string(),
+  broker_subscription_name: z.string(),
+  broker_authentication: z.string(),
+  broker_secret_ref: z.string(),
+};
+
 type IdentityValues = {
   identity_kind: string;
   identity_value: string;
   identity_allow_missing: boolean;
 };
 
+type BrokerValues = {
+  [Field in keyof typeof brokerFieldSchema]: string;
+};
+
 const requireIdentitySelector = (values: IdentityValues, ctx: z.RefinementCtx) => {
   if (values.identity_kind && values.identity_kind !== "message_id" && !values.identity_value.trim())
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["identity_value"], message: "Enter an identity selector." });
+};
+
+const requireBrokerFields = (values: BrokerValues, ctx: z.RefinementCtx) => {
+  const required = (field: keyof BrokerValues, message: string) => {
+    if (!values[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
+  };
+  required("broker_namespace", "Enter a broker namespace.");
+  required("broker_authentication", "Choose an authentication method.");
+  if (values.broker_entity === "topic_subscription") {
+    required("broker_topic_name", "Enter a topic name.");
+    required("broker_subscription_name", "Enter a subscription name.");
+  } else {
+    required("broker_queue_name", "Enter a queue name.");
+  }
+  if (values.broker_authentication === "connection_string")
+    required("broker_secret_ref", "Enter a connection string reference.");
 };
 
 const createSchema = z
@@ -138,14 +169,7 @@ const createSchema = z
     connector_id: z.string().min(1, "Choose a Connector."),
     topic_id: z.string().min(1, "Choose a Topic."),
     type: z.string().min(1, "Choose a type."),
-    broker_transport: z.string(),
-    broker_namespace: z.string(),
-    broker_entity: z.string(),
-    broker_queue_name: z.string(),
-    broker_topic_name: z.string(),
-    broker_subscription_name: z.string(),
-    broker_authentication: z.string(),
-    broker_secret_ref: z.string(),
+    ...brokerFieldSchema,
     verification_scheme: z.string(),
     verification_secret_ref: z.string(),
     input_requirements: optionalJsonDocument,
@@ -164,16 +188,7 @@ const createSchema = z
     }
     requireIdentitySelector(values, ctx);
     if (values.type !== "queue") return;
-    required("broker_namespace", "Enter a broker namespace.");
-    required("broker_authentication", "Choose an authentication method.");
-    if (values.broker_entity === "topic_subscription") {
-      required("broker_topic_name", "Enter a topic name.");
-      required("broker_subscription_name", "Enter a subscription name.");
-    } else {
-      required("broker_queue_name", "Enter a queue name.");
-    }
-    if (values.broker_authentication === "connection_string")
-      required("broker_secret_ref", "Enter a connection string reference.");
+    requireBrokerFields(values, ctx);
   });
 
 const editSchema = z
@@ -182,9 +197,13 @@ const editSchema = z
     configuration: jsonDocument,
     input_requirements: optionalJsonDocument,
     mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+    ...brokerFieldSchema,
     ...identityFieldSchema,
   })
-  .superRefine(requireIdentitySelector);
+  .superRefine((values, ctx) => {
+    requireIdentitySelector(values, ctx);
+    if (values.broker_transport) requireBrokerFields(values, ctx);
+  });
 
 type CreateValues = z.infer<typeof createSchema>;
 type EditValues = z.infer<typeof editSchema>;
@@ -292,8 +311,8 @@ function sourceCapabilities(manifest: unknown) {
   };
 }
 
-function sourceConfiguration(values: CreateValues): Record<string, unknown> {
-  if (values.type !== "queue" || values.broker_transport !== "azure_service_bus") return {};
+function sourceConfiguration(values: BrokerValues): Record<string, unknown> {
+  if (values.broker_transport !== "azure_service_bus") return {};
   const transportConfig =
     values.broker_entity === "topic_subscription"
       ? {
@@ -310,6 +329,48 @@ function sourceConfiguration(values: CreateValues): Record<string, unknown> {
         : { scheme: "azure_identity" },
     transport_config: transportConfig,
   };
+}
+
+const normalizedJson = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(normalizedJson)
+    : value !== null && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([key, item]) => [key, normalizedJson(item)]),
+        )
+      : value;
+
+function brokerFields(configuration: unknown): BrokerValues | null {
+  const document = object(configuration);
+  const authentication = object(document.authentication);
+  const transport = object(document.transport_config);
+  if (document.transport !== "azure_service_bus" || typeof transport.namespace !== "string") return null;
+
+  const brokerAuthentication = authentication.scheme;
+  if (brokerAuthentication !== "azure_identity" && brokerAuthentication !== "connection_string") return null;
+  if (brokerAuthentication === "connection_string" && typeof authentication.secret_ref !== "string") return null;
+
+  const queueName = typeof transport.queue_name === "string" ? transport.queue_name : "";
+  const topicName = typeof transport.topic_name === "string" ? transport.topic_name : "";
+  const subscriptionName = typeof transport.subscription_name === "string" ? transport.subscription_name : "";
+  const brokerEntity = queueName ? "queue" : topicName && subscriptionName ? "topic_subscription" : "";
+  if (!brokerEntity) return null;
+
+  const fields: BrokerValues = {
+    broker_transport: "azure_service_bus",
+    broker_namespace: transport.namespace,
+    broker_entity: brokerEntity,
+    broker_queue_name: queueName,
+    broker_topic_name: topicName,
+    broker_subscription_name: subscriptionName,
+    broker_authentication: brokerAuthentication,
+    broker_secret_ref: brokerAuthentication === "connection_string" ? String(authentication.secret_ref) : "",
+  };
+  return JSON.stringify(normalizedJson(configuration)) === JSON.stringify(normalizedJson(sourceConfiguration(fields)))
+    ? fields
+    : null;
 }
 
 export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string; selectedSourceId?: string }) {
@@ -574,7 +635,7 @@ function CreateSource({
             connector_id: values.connector_id,
             topic_id: values.topic_id,
             type: values.type,
-            configuration: sourceConfiguration(values),
+            configuration: values.type === "queue" ? sourceConfiguration(values) : {},
             verification:
               values.type === "webhook" && values.verification_scheme.trim()
                 ? {
@@ -769,48 +830,53 @@ function CreateSource({
 
 /// Azure Service Bus is the only transport, so its fields sit directly under the broker choice. A
 /// second transport branches here on `broker_transport` and composes its own `transport_config`;
-/// nothing outside this component and `sourceConfiguration` knows which broker was chosen.
-function MessageBrokerFields({
+/// nothing outside this component, `sourceConfiguration`, and its inverse knows which broker was chosen.
+function MessageBrokerFields<TValues extends FieldValues>({
   control,
   entity,
   authentication,
 }: {
-  control: Control<CreateValues>;
+  control: Control<TValues>;
   entity: string;
   authentication: string;
 }) {
   return (
     <Section title="Message broker" hint="The broker Integrios receives messages from.">
-      <SelectField control={control} name="broker_transport" label="Broker type" required>
+      <SelectField control={control} name={"broker_transport" as Path<TValues>} label="Broker type" required>
         <SelectItem value="azure_service_bus">Azure Service Bus</SelectItem>
       </SelectField>
       <TextField
         control={control}
-        name="broker_namespace"
+        name={"broker_namespace" as Path<TValues>}
         label="Namespace"
         placeholder="acme-events.servicebus.windows.net"
         required
       />
-      <SelectField control={control} name="broker_entity" label="Broker entity" required>
+      <SelectField control={control} name={"broker_entity" as Path<TValues>} label="Broker entity" required>
         <SelectItem value="queue">Queue</SelectItem>
         <SelectItem value="topic_subscription">Topic subscription</SelectItem>
       </SelectField>
       {entity === "topic_subscription" ? (
         <>
-          <TextField control={control} name="broker_topic_name" label="Topic name" required />
-          <TextField control={control} name="broker_subscription_name" label="Subscription name" required />
+          <TextField control={control} name={"broker_topic_name" as Path<TValues>} label="Topic name" required />
+          <TextField
+            control={control}
+            name={"broker_subscription_name" as Path<TValues>}
+            label="Subscription name"
+            required
+          />
         </>
       ) : (
-        <TextField control={control} name="broker_queue_name" label="Queue name" required />
+        <TextField control={control} name={"broker_queue_name" as Path<TValues>} label="Queue name" required />
       )}
-      <SelectField control={control} name="broker_authentication" label="Authentication" required>
+      <SelectField control={control} name={"broker_authentication" as Path<TValues>} label="Authentication" required>
         <SelectItem value="azure_identity">Azure identity</SelectItem>
         <SelectItem value="connection_string">Connection string reference</SelectItem>
       </SelectField>
       {authentication === "connection_string" ? (
         <TextField
           control={control}
-          name="broker_secret_ref"
+          name={"broker_secret_ref" as Path<TValues>}
           label="Connection string reference"
           hint="Reference name only; never enter the connection string."
           required
@@ -939,6 +1005,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
     void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
     void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
   };
+  const storedBrokerFields = source.type === "queue" ? brokerFields(source.configuration) : null;
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
     defaultValues: {
@@ -946,12 +1013,22 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
       configuration: formatJson(source.configuration),
       input_requirements: source.input_requirements ? formatJson(source.input_requirements) : "",
       mapping: source.mapping?.expression ?? "",
+      broker_transport: storedBrokerFields?.broker_transport ?? "",
+      broker_namespace: storedBrokerFields?.broker_namespace ?? "",
+      broker_entity: storedBrokerFields?.broker_entity ?? "",
+      broker_queue_name: storedBrokerFields?.broker_queue_name ?? "",
+      broker_topic_name: storedBrokerFields?.broker_topic_name ?? "",
+      broker_subscription_name: storedBrokerFields?.broker_subscription_name ?? "",
+      broker_authentication: storedBrokerFields?.broker_authentication ?? "",
+      broker_secret_ref: storedBrokerFields?.broker_secret_ref ?? "",
       identity_kind: source.event_identity_rule?.kind ?? "",
       identity_value: source.event_identity_rule?.value ?? "",
       identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
     },
   });
   const identityKind = form.watch("identity_kind");
+  const brokerEntity = form.watch("broker_entity");
+  const brokerAuthentication = form.watch("broker_authentication");
 
   const save = useMutation({
     mutationFn: (values: EditValues) =>
@@ -960,7 +1037,12 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
           params: { path: { tenantId, id: source.id } },
           body: {
             name: values.name,
-            configuration: parseJson(values.configuration).value,
+            configuration:
+              source.type === "event_api"
+                ? source.configuration
+                : storedBrokerFields
+                  ? sourceConfiguration(values)
+                  : parseJson(values.configuration).value,
             verification: source.verification
               ? {
                   scheme: source.verification.scheme,
@@ -1010,6 +1092,13 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                 <FormError message={formError(asProblem(save.error), editFields)} />
 
                 <TextField control={form.control} name="name" label="Name" required />
+                {storedBrokerFields ? (
+                  <MessageBrokerFields
+                    control={form.control}
+                    entity={brokerEntity}
+                    authentication={brokerAuthentication}
+                  />
+                ) : null}
                 {source.type !== "event_api" ? (
                   <Section title="Event identity" hint="How Integrios detects duplicate Events from this Source.">
                     <SourceIdentityFields
@@ -1020,13 +1109,17 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                     />
                   </Section>
                 ) : null}
-                <TextAreaField
-                  control={form.control}
-                  name="configuration"
-                  label="Configuration (JSON)"
-                  className="min-h-56 font-mono text-sm"
-                  required
-                />
+                {source.type !== "event_api" && !storedBrokerFields ? (
+                  <Disclosure label="Advanced configuration">
+                    <TextAreaField
+                      control={form.control}
+                      name="configuration"
+                      label="Configuration (JSON)"
+                      className="min-h-56 font-mono text-sm"
+                      required
+                    />
+                  </Disclosure>
+                ) : null}
                 {source.type !== "event_api" ? (
                   <>
                     <TextAreaField

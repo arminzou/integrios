@@ -574,6 +574,7 @@ describe("Create forms, filled through a real browser", () => {
 
     const sent = await submitted(writes);
     expect(sent.body.type).toBe("webhook");
+    expect(sent.body.configuration).toEqual({});
     expect(sent.body.verification).toEqual({
       scheme: "hmac_sha256",
       config: {},
@@ -848,6 +849,82 @@ describe("Update and deactivate, driven through a real browser", () => {
     });
     await view.close();
   }, 60_000);
+
+  it.each([
+    [
+      "an extended broker document",
+      "queue",
+      {
+        transport: "azure_service_bus",
+        authentication: { scheme: "azure_identity" },
+        transport_config: { namespace: "acme.servicebus.windows.net", queue_name: "orders" },
+        consumer_options: { prefetch: 20 },
+      },
+      "raw",
+    ],
+    [
+      "an unrecognised broker transport",
+      "queue",
+      {
+        transport: "rabbitmq",
+        authentication: { scheme: "connection_string", secret_ref: "rabbit" },
+        transport_config: { queue_name: "orders" },
+      },
+      "raw",
+    ],
+    [
+      "a represented broker document",
+      "queue",
+      {
+        transport: "azure_service_bus",
+        authentication: { scheme: "azure_identity" },
+        transport_config: { namespace: "acme.servicebus.windows.net", queue_name: "orders" },
+      },
+      "guided",
+    ],
+    ["a webhook document", "webhook", { callback_id: "66666666-6666-6666-6666-666666666666" }, "raw"],
+    ["an Event API document", "event_api", { region: "eu" }, "none"],
+  ] as const)(
+    "preserves %s with one configuration writer",
+    async (_case, type, configuration, editor) => {
+      const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
+      await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) => {
+        const request = route.request();
+        if (request.method() === "PUT") writes.push(request);
+        return route.fulfill({
+          status: 200,
+          json: {
+            ...sourceDetail,
+            type,
+            configuration,
+            verification: null,
+            input_requirements: null,
+            mapping: null,
+            event_identity_rule: null,
+          },
+        });
+      });
+      await view.reload();
+
+      await view.getByRole("button", { name: "Edit", exact: true }).click();
+      const label = type === "queue" ? "Message broker" : type === "event_api" ? "Event API" : "Webhook";
+      const form = formNamed(view, `Edit ${label} Source`);
+      let expectedConfiguration: Record<string, unknown> = configuration;
+      expect(await form.getByLabel("Broker type").count()).toBe(editor === "guided" ? 1 : 0);
+      expect(await form.getByText("Advanced configuration", { exact: true }).count()).toBe(editor === "raw" ? 1 : 0);
+      if (editor === "raw") {
+        await form.getByText("Advanced configuration", { exact: true }).click();
+        const raw = form.getByLabel("Configuration (JSON)");
+        expect(JSON.parse(await raw.inputValue())).toEqual(configuration);
+        expectedConfiguration = { ...configuration, edited_as_raw: true };
+        await raw.fill(JSON.stringify(expectedConfiguration));
+      }
+      await form.getByRole("button", { name: "Save configuration" }).click();
+      expect((await submitted(writes)).body.configuration).toEqual(expectedConfiguration);
+      await view.close();
+    },
+    60_000,
+  );
 
   it("preserves a Subscription's hidden order while clearing its mapping", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
