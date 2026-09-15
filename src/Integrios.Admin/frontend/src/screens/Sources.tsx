@@ -1022,12 +1022,14 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
 
       <SourceGuide tenantId={tenantId} source={current} />
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-      <EditSource
-        key={current.updated_at}
-        tenantId={tenantId}
-        source={current}
-        onDone={() => setNotice("Source revoked.")}
-      />
+      {current.status === "active" ? (
+        <EditSource
+          key={current.updated_at}
+          tenantId={tenantId}
+          source={current}
+          onDone={() => setNotice("Source revoked.")}
+        />
+      ) : null}
     </Inspector>
   );
 }
@@ -1072,6 +1074,10 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
   const brokerEntity = form.watch("broker_entity");
   const brokerAuthentication = form.watch("broker_authentication");
   const verificationScheme = form.watch("verification_scheme");
+  const sourceContractDraft = {
+    expression: form.watch("mapping"),
+    schema: optionalJson(form.watch("input_requirements")) as Record<string, unknown> | undefined,
+  };
 
   const save = useMutation({
     mutationFn: (values: EditValues) =>
@@ -1155,12 +1161,25 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                   />
                 ) : null}
                 {source.type !== "event_api" ? (
-                  <Section title="Event identity" hint="How Integrios detects duplicate Events from this Source.">
+                  <Section
+                    title="Event shape"
+                    hint="What identifies an Event from this Source, and the type, payload, and requirements derived from a representative request."
+                  >
                     <SourceIdentityFields
                       control={form.control}
                       type={source.type}
                       kind={identityKind}
                       onKindChange={() => form.setValue("identity_value", "")}
+                    />
+                    <EventBuilder
+                      contractKey={`${source.type} Source`}
+                      draft={sourceContractDraft}
+                      onUse={(draft) => {
+                        form.setValue("mapping", draft.expression, { shouldDirty: true });
+                        form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                          shouldDirty: true,
+                        });
+                      }}
                     />
                   </Section>
                 ) : null}
@@ -1185,20 +1204,22 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                   </Disclosure>
                 ) : null}
                 {source.type !== "event_api" ? (
-                  <>
-                    <TextAreaField
-                      control={form.control}
-                      name="input_requirements"
-                      label="Input requirements (JSON, optional)"
-                      className="min-h-40 font-mono text-sm"
-                    />
-                    <TextAreaField
-                      control={form.control}
-                      name="mapping"
-                      label="Event mapping (JSONata, optional)"
-                      className="min-h-40 font-mono text-sm"
-                    />
-                  </>
+                  <Disclosure label="Advanced Event contract">
+                    <div className="flex flex-col gap-4">
+                      <TextAreaField
+                        control={form.control}
+                        name="input_requirements"
+                        label="Input requirements (JSON, optional)"
+                        className="min-h-40 font-mono text-sm"
+                      />
+                      <TextAreaField
+                        control={form.control}
+                        name="mapping"
+                        label="Event mapping (JSONata, optional)"
+                        className="min-h-40 font-mono text-sm"
+                      />
+                    </div>
+                  </Disclosure>
                 ) : null}
 
                 {source.verification && !verificationScheme ? (

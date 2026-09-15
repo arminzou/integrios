@@ -124,7 +124,9 @@ export function EventBuilder({
   const [requirements, setRequirements] = useState<InputRequirement[]>(() => requirementsFrom(draft.schema));
   const [guided, setGuided] = useState<GuidedMapping>(emptyGuided);
   const [expression, setExpression] = useState(draft.expression);
-  const [mode, setMode] = useState<"guided" | "advanced">("guided");
+  const [mode, setMode] = useState<"guided" | "advanced">(() =>
+    draft.expression.trim() !== "" && draft.expression !== guidedExpression(emptyGuided) ? "advanced" : "guided",
+  );
   const [previewed, setPreviewed] = useState<string | null>(null);
   /// What a preview posts, written by the same effects that publish the parsed sample, so a press
   /// landing between a debounce and the next render still sends the sample that is on screen.
@@ -233,15 +235,7 @@ export function EventBuilder({
   };
 
   return (
-    <DialogPrimitive.Root
-      open={open}
-      onOpenChange={(next) => {
-        // Opening onto an expression this form did not generate starts where that expression can be
-        // read: the editor that owns it.
-        if (next && expression.trim() !== "" && expression !== generated) setMode("advanced");
-        setOpen(next);
-      }}
-    >
+    <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Trigger asChild>
         <Button type="button" variant="outline" className="self-start">
           Open Integrios Event Builder

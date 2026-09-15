@@ -323,7 +323,8 @@ Content-Type: application/json
 }
 
 ###
-# Admin generates the callback_id in the response for a webhook Source.
+# Admin generates the callback_id in the response for a webhook Source. The misspelled identity
+# header is intentional: correct it to X-Storefront-Delivery through Edit without opening Advanced.
 # @name createNwSourceWebhook
 POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
 {{operatorKey}}
@@ -334,11 +335,26 @@ Content-Type: application/json
   "topic_id": "{{createNwTopicStorefrontWebhooks.response.body.$.id}}",
   "name": "Northwind storefront webhooks",
   "type": "webhook",
-  "configuration": { "source_contract": "event_json" },
+  "configuration": {},
   "verification": null,
-  "input_requirements": null,
-  "mapping": null,
-  "event_identity_rule": null
+  "input_requirements": {
+    "type": "object",
+    "properties": {
+      "event_type": { "type": "string" }
+    },
+    "required": ["event_type"],
+    "additionalProperties": true
+  },
+  "mapping": {
+    "engine": "jsonata",
+    "version": "1",
+    "expression": "{ \"event_type\": event_type, \"payload\": payload }"
+  },
+  "event_identity_rule": {
+    "kind": "header",
+    "value": "X-Storefront-Delivery",
+    "allow_missing": false
+  }
 }
 
 ###
@@ -355,7 +371,6 @@ Content-Type: application/json
   "name": "Northwind warehouse receipts",
   "type": "queue",
   "configuration": {
-    "source_contract": "event_json",
     "transport": "azure_service_bus",
     "authentication": {
       "scheme": "connection_string",
@@ -369,7 +384,11 @@ Content-Type: application/json
   "verification": null,
   "input_requirements": null,
   "mapping": null,
-  "event_identity_rule": null
+  "event_identity_rule": {
+    "kind": "message_id",
+    "value": "message_id",
+    "allow_missing": false
+  }
 }
 
 ###
@@ -618,6 +637,7 @@ Content-Type: application/json
 
 ###
 POST {{ingestionBaseUrl}}/webhooks/{{createNwSourceWebhook.response.body.$.configuration.callback_id}}
+X-Storefront-Delivary: nw-webhook-1
 Content-Type: application/json
 
 {

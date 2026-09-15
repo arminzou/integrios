@@ -255,8 +255,8 @@ export function ConfirmAction({
         </Button>
       </DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-ink/20" />
-        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg border bg-surface p-5 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none">
+        <DialogPrimitive.Overlay className="fixed inset-0 z-80 bg-ink/20" />
+        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-90 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg border bg-surface p-5 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none">
           <div>
             <DialogPrimitive.Title className="m-0">{label}</DialogPrimitive.Title>
             <DialogPrimitive.Description className="m-0 mt-2 text-sm text-ink-secondary">

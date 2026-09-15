@@ -1063,6 +1063,67 @@ describe("Update and deactivate, driven through a real browser", () => {
     60_000,
   );
 
+  it("preserves an advanced Source mapping until the Operator replaces it in the Builder", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
+    const expression = '$merge([{"event_type": "legacy"}, {"payload": $}])';
+    const inputRequirements = {
+      type: "object",
+      properties: { order_id: { type: "string" } },
+      required: ["order_id"],
+      additionalProperties: true,
+    };
+    await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) => {
+      const request = route.request();
+      if (request.method() === "PUT") writes.push(request);
+      return route.fulfill({
+        status: 200,
+        json: {
+          ...sourceDetail,
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification: null,
+          input_requirements: inputRequirements,
+          mapping: { engine: "jsonata", version: "1", expression },
+          event_identity_rule: null,
+        },
+      });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    const form = formNamed(view, "Edit Webhook Source");
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    let builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByRole("heading", { name: "Advanced JSONata" }).waitFor();
+    expect(await builder.getByLabel("Source mapping expression").inputValue()).toBe(expression);
+    await builder.getByRole("button", { name: "Back to Source" }).click();
+
+    await form.getByText("Advanced Event contract", { exact: true }).click();
+    expect(await form.getByLabel("Event mapping (JSONata, optional)").inputValue()).toBe(expression);
+
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByRole("button", { name: "Reset to guided" }).click();
+    await view
+      .getByRole("dialog", { name: "Reset to guided" })
+      .getByRole("button", { name: "Reset to guided" })
+      .click();
+    await builder.getByLabel("Request body (JSON)").fill('{"order_id":"A-42"}');
+    await builder.getByLabel("Text prefix").fill("orders");
+    await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
+    await builder.getByRole("button", { name: "Use configuration" }).click();
+    await form.getByRole("button", { name: "Save configuration" }).click();
+
+    const sent = await submitted(writes);
+    expect(sent.body.mapping).toEqual({
+      engine: "jsonata",
+      version: "1",
+      expression: expect.stringContaining('"orders"'),
+    });
+    expect(sent.body.input_requirements).toEqual(inputRequirements);
+    await view.close();
+  }, 60_000);
+
   it("preserves a Subscription's hidden order while clearing its mapping", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
 
@@ -1287,6 +1348,21 @@ describe("Update and deactivate, driven through a real browser", () => {
     const sent = await submitted(writes);
     expect(sent.method).toBe("DELETE");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}`);
+    await view.close();
+  }, 60_000);
+
+  it("keeps a revoked Source read-only", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
+    await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) =>
+      route.fulfill({
+        status: 200,
+        json: { ...sourceDetail, status: "revoked", revoked_at: "2026-09-15T16:43:52Z" },
+      }),
+    );
+    await view.reload();
+
+    expect(await view.getByRole("button", { name: "Edit", exact: true }).count()).toBe(0);
+    expect(await view.getByRole("button", { name: "Revoke", exact: true }).count()).toBe(0);
     await view.close();
   }, 60_000);
 });
