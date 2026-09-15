@@ -69,6 +69,12 @@ configuration.
 than authored field by field. 
 _Avoid_: "accordion".
 
+**Representable** — a stored document a guided control may claim, because decomposing it into fields
+and recomposing gives the document back unchanged. Exactly one editor renders for any one document:
+the guided fields when it is representable, the raw document when it is not. 
+_Avoid_: guided fields
+beside a raw editor for the same document, and any precedence rule between them.
+
 ## API boundary
 
 - Treat `src/api/schema.d.ts` as generated output. Change the Admin API and run `generate:api`; never
