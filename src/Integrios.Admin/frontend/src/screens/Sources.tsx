@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Timestamp } from "@/ui/time";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
@@ -623,8 +624,14 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
             {nameIn(topicOptions.data?.items, current.topic_id)}
           </Link>
         </dd>
-        <dt>Revoked</dt>
-        <dd>{current.revoked_at ?? "Not revoked"}</dd>
+        {current.revoked_at ? (
+          <>
+            <dt>Revoked</dt>
+            <dd>
+              <Timestamp value={current.revoked_at} />
+            </dd>
+          </>
+        ) : null}
       </Details>
 
       <SourceGuide tenantId={tenantId} source={current} />
