@@ -90,6 +90,15 @@ internal static class SourceAuthoringValidator
         if (mapping is not null && evaluator.ValidateExpression(new TransformSpec(mapping.Engine, mapping.Version, mapping.Expression)) is { } error)
             throw new SourceValidationException(error, "mapping");
 
+    }
+
+    // The Event-identity rule is fixed when the Source is created and has no update path,
+    // so its shape is checked on the one write that can set it. Re-checking it on update would catch
+    // nothing new — the stored rule already passed here — and would instead refuse every later edit
+    // to a Source created before a rule was tightened, freezing its name, configuration and mapping
+    // over a field that write cannot change.
+    public static void ValidateEventIdentityRule(SourceType type, SourceEventIdentityRule? eventIdentityRule)
+    {
         if (eventIdentityRule is null)
             return;
         if (string.IsNullOrWhiteSpace(eventIdentityRule.Value))
@@ -105,6 +114,15 @@ internal static class SourceAuthoringValidator
             throw new SourceValidationException("Source Event identity rule is not valid for this Source type.", "event_identity_rule");
         if (eventIdentityRule.Kind == "json_path" && !SourceEventIdentityExtractor.IsJsonPointer(eventIdentityRule.Value))
             throw new SourceValidationException("Source Event JSON identity path must be a JSON Pointer such as '/id'.", "event_identity_rule");
+        // A name no request can carry configures a Source that rejects every Event it ever receives,
+        // permanently. Only the field-name grammar is shared with outbound delivery headers: the
+        // names reserved there are reserved against what Integrios sends, not what a provider does.
+        if (eventIdentityRule.Kind == "header" && !HttpHeaderName.IsValid(eventIdentityRule.Value))
+        {
+            throw new SourceValidationException(
+                "Source Event identity header must be a valid HTTP header name, such as 'X-GitHub-Delivery'.",
+                "event_identity_rule");
+        }
     }
 
     private static void ValidateVerification(

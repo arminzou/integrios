@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Integrios.Application.Common;
 using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
 using Integrios.Domain.Entities;
@@ -83,7 +84,7 @@ internal static class DestinationAuthenticationValidator
 
         foreach (string headerName in ownedHeaders)
         {
-            if (!OutboundHttpHeaderRules.IsValidName(headerName))
+            if (!HttpHeaderName.IsValid(headerName))
                 throw new DestinationValidationException(
                     $"Destination authentication header name '{headerName}' is invalid.");
 

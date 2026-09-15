@@ -198,8 +198,9 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     // A Service Bus topic is consumed through one of its subscriptions, which behaves exactly like a
-    // queue. The keys are prefixed because a bare topic_name inside a Source configuration would read
-    // as the Integrios Topic the Source publishes to, which is a different thing entirely.
+    // queue. The keys are unprefixed because they sit inside transport_config, where position already
+    // qualifies them; at the top level a bare topic_name would read as the Integrios Topic the Source
+    // publishes to, which is a different thing entirely.
     [Fact]
     public async Task QueueSourceAuthoring_AcceptsTopicSubscriptionForm()
     {
@@ -412,6 +413,75 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         body.RootElement.GetProperty("errors").GetProperty("name")[0].GetString().ShouldBe("Name is required.");
+    }
+
+    // A header kind names a header a provider request carries. A value that cannot be a header name —
+    // a JSON Pointer left behind by switching the kind is the way this happens — configures a Source
+    // whose identity extraction fails on every request, and the rule has no update path, so the
+    // Source rejects every Event for the rest of its life.
+    [Theory]
+    [InlineData("/id")]
+    [InlineData("X-GitHub Delivery")]
+    [InlineData("")]
+    public async Task WebhookSourceAuthoring_RejectsHeaderIdentityThatCannotBeAHeaderName(string headerName)
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+            event_identity_rule = new { kind = "header", value = headerName },
+        }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task WebhookSourceAuthoring_AcceptsHeaderIdentityNamingARealHeader()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+            event_identity_rule = new { kind = "header", value = "X-GitHub-Delivery" },
+        }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    // The rule is immutable, so an update re-sends nothing that could be checked. A Source created
+    // before this guard keeps its edits: the guard runs on the one write that can set the rule.
+    [Fact]
+    public async Task SourceUpdate_LeavesAStoredHeaderIdentityUnvalidated()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+            event_identity_rule = new { kind = "header", value = "X-GitHub-Delivery" },
+        }));
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+
+        HttpResponseMessage update = await client.SendAsync(
+            AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", FullSourceUpdate(new { })));
+
+        update.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private static object FullSourceUpdate(object configuration) => new

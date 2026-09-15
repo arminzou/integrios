@@ -1,4 +1,5 @@
 using System.Text;
+using Integrios.Application.Common;
 using Integrios.Application.Delivery;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
@@ -41,7 +42,7 @@ internal static class HttpDeliveryConfigurationRules
 
         foreach ((string name, string value) in config.Headers)
         {
-            if (!OutboundHttpHeaderRules.IsValidName(name))
+            if (!HttpHeaderName.IsValid(name))
                 throw Invalid($"http_delivery header name '{name}' is invalid.");
             if (OutboundHttpHeaderRules.IsReservedForStaticConfiguration(name))
                 throw Invalid($"http_delivery header '{name}' is reserved and cannot be configured.");

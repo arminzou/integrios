@@ -42,6 +42,7 @@ internal sealed class CreateSourceCommandHandler(
         SourceAuthoringValidator.Validate(command.Type, command.Configuration, command.Verification, connector);
         SourceAuthoringValidator.ValidateRuntimeContract(
             command.Type, command.InputRequirements, command.Mapping, command.EventIdentityRule, evaluator);
+        SourceAuthoringValidator.ValidateEventIdentityRule(command.Type, command.EventIdentityRule);
 
         var now = DateTimeOffset.UtcNow;
         JsonElement configuration = command.Type == SourceType.Webhook
