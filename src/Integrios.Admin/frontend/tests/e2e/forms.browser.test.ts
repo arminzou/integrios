@@ -850,6 +850,143 @@ describe("Update and deactivate, driven through a real browser", () => {
     await view.close();
   }, 60_000);
 
+  it("changes, removes with confirmation, and adds Source verification", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
+    let verification: Record<string, unknown> | null = {
+      scheme: "hmac_sha256",
+      config: { header: "X-Signature" },
+      secret_refs: { secret: "old-hook", secondary: "preserved" },
+    };
+    let revision = 0;
+    await view.route(`**/admin/connectors/${connectorId}`, (route) =>
+      route.fulfill({
+        json: {
+          ...connectorDetail,
+          manifest: {
+            ...connectorDetail.manifest,
+            source_verification: {
+              allow_unverified: true,
+              schemes: [{ scheme: "hmac_sha256" }, { scheme: "webhook_signature" }],
+            },
+          },
+        },
+      }),
+    );
+    await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) => {
+      const request = route.request();
+      if (request.method() === "PUT") {
+        writes.push(request);
+        verification = request.postDataJSON().verification;
+        revision += 1;
+      }
+      return route.fulfill({
+        status: 200,
+        json: {
+          ...sourceDetail,
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification,
+          input_requirements: null,
+          mapping: null,
+          event_identity_rule: null,
+          updated_at: `2026-09-15T00:01:0${revision}Z`,
+        },
+      });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    let form = formNamed(view, "Edit Webhook Source");
+    expect(await form.getByLabel("Secret reference").inputValue()).toBe("old-hook");
+    await form.getByRole("combobox", { name: "Verification" }).click();
+    expect(await view.getByRole("option").allInnerTexts()).toEqual([
+      "No verification",
+      "HMAC SHA-256",
+      "webhook_signature",
+    ]);
+    await view.getByRole("option", { name: "webhook_signature" }).click();
+    await form.getByLabel("Secret reference").fill("new-hook");
+    await form.getByRole("button", { name: "Save configuration" }).click();
+    expect((await submitted(writes)).body.verification).toEqual({
+      scheme: "webhook_signature",
+      config: {},
+      secret_refs: { secret: "new-hook" },
+    });
+    writes.length = 0;
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    form = formNamed(view, "Edit Webhook Source");
+    await choose(form.getByRole("combobox", { name: "Verification" }), "No verification");
+    expect(await form.getByRole("button", { name: "Save configuration" }).count()).toBe(0);
+    await form.getByLabel("Name", { exact: true }).press("Enter");
+    expect(writes).toHaveLength(0);
+    await form.getByRole("button", { name: "Remove verification and save" }).click();
+    const confirmation = view.getByRole("dialog", { name: "Remove verification and save" });
+    expect(await confirmation.textContent()).toContain("start accepting unsigned requests");
+    await confirmation.getByRole("button", { name: "Remove verification and save" }).click();
+    expect((await submitted(writes)).body.verification).toBeNull();
+    writes.length = 0;
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    form = formNamed(view, "Edit Webhook Source");
+    await choose(form.getByRole("combobox", { name: "Verification" }), "HMAC SHA-256");
+    await form.getByLabel("Secret reference").fill("restored-hook");
+    await form.getByRole("button", { name: "Save configuration" }).click();
+    expect((await submitted(writes)).body.verification).toEqual({
+      scheme: "hmac_sha256",
+      config: {},
+      secret_refs: { secret: "restored-hook" },
+    });
+    await view.close();
+  }, 60_000);
+
+  it("reports a rejected verification write above the form", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
+    await view.route(`**/admin/connectors/${connectorId}`, (route) =>
+      route.fulfill({
+        json: {
+          ...connectorDetail,
+          manifest: {
+            ...connectorDetail.manifest,
+            source_verification: { allow_unverified: false, schemes: [{ scheme: "hmac_sha256" }] },
+          },
+        },
+      }),
+    );
+    await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) => {
+      const request = route.request();
+      if (request.method() === "PUT")
+        return route.fulfill({
+          status: 400,
+          contentType: "application/problem+json",
+          json: { title: "The Source was rejected.", errors: { verification: ["The secret cannot be used."] } },
+        });
+      return route.fulfill({
+        json: {
+          ...sourceDetail,
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification: { scheme: "hmac_sha256", config: {}, secret_refs: { secret: "old-hook" } },
+          input_requirements: null,
+          mapping: null,
+          event_identity_rule: null,
+        },
+      });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    const form = formNamed(view, "Edit Webhook Source");
+    await form.getByRole("combobox", { name: "Verification" }).click();
+    expect(await view.getByRole("option").allInnerTexts()).toEqual(["HMAC SHA-256"]);
+    await view.keyboard.press("Escape");
+    await form.getByLabel("Secret reference").fill("missing-hook");
+    await form.getByRole("button", { name: "Save configuration" }).click();
+    expect(await form.getByRole("alert").textContent()).toContain("The secret cannot be used.");
+    expect(await form.getByLabel("Configuration (JSON)").isVisible()).toBe(false);
+    await view.close();
+  }, 60_000);
+
   it.each([
     [
       "an extended broker document",

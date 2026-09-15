@@ -100,7 +100,7 @@ const identitySelector = (kind: string) => identityKinds.find((option) => option
 /// of those covers several controls at once, so `formError` states them over the form rather than
 /// guessing which box to point at. Two of them are not rendered at all on the normal path.
 const createFields = ["name", "connector_id", "topic_id", "type"] as const;
-const editFields = ["name", "configuration", "input_requirements", "mapping"] as const;
+const editFields = ["name"] as const;
 
 /// A domain JSON document, authored as text: well-formedness is all the dashboard checks, and the
 /// server stays the authority on whether the document is valid for this Source type.
@@ -119,6 +119,11 @@ const identityFieldSchema = {
   identity_kind: z.string(),
   identity_value: z.string(),
   identity_allow_missing: z.boolean(),
+};
+
+const verificationFieldSchema = {
+  verification_scheme: z.string(),
+  verification_secret_ref: z.string(),
 };
 
 const brokerFieldSchema = {
@@ -147,6 +152,18 @@ const requireIdentitySelector = (values: IdentityValues, ctx: z.RefinementCtx) =
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["identity_value"], message: "Enter an identity selector." });
 };
 
+const requireVerificationSecret = (
+  values: { verification_scheme: string; verification_secret_ref: string },
+  ctx: z.RefinementCtx,
+) => {
+  if (values.verification_scheme && !values.verification_secret_ref.trim())
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["verification_secret_ref"],
+      message: "Enter a secret reference.",
+    });
+};
+
 const requireBrokerFields = (values: BrokerValues, ctx: z.RefinementCtx) => {
   const required = (field: keyof BrokerValues, message: string) => {
     if (!values[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
@@ -170,22 +187,13 @@ const createSchema = z
     topic_id: z.string().min(1, "Choose a Topic."),
     type: z.string().min(1, "Choose a type."),
     ...brokerFieldSchema,
-    verification_scheme: z.string(),
-    verification_secret_ref: z.string(),
+    ...verificationFieldSchema,
     input_requirements: optionalJsonDocument,
     mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
     ...identityFieldSchema,
   })
   .superRefine((values, ctx) => {
-    // Only the text fields have an empty case worth reporting; the one boolean carries no such state.
-    const required = (field: keyof typeof values, message: string) => {
-      const value = values[field];
-      if (typeof value === "string" && !value.trim())
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
-    };
-    if (values.type === "webhook") {
-      if (values.verification_scheme) required("verification_secret_ref", "Enter a secret reference.");
-    }
+    if (values.type === "webhook") requireVerificationSecret(values, ctx);
     requireIdentitySelector(values, ctx);
     if (values.type !== "queue") return;
     requireBrokerFields(values, ctx);
@@ -198,9 +206,11 @@ const editSchema = z
     input_requirements: optionalJsonDocument,
     mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
     ...brokerFieldSchema,
+    ...verificationFieldSchema,
     ...identityFieldSchema,
   })
   .superRefine((values, ctx) => {
+    requireVerificationSecret(values, ctx);
     requireIdentitySelector(values, ctx);
     if (values.broker_transport) requireBrokerFields(values, ctx);
   });
@@ -293,6 +303,57 @@ function SourceIdentityFields<TValues extends FieldValues>({
         />
       ) : null}
     </>
+  );
+}
+
+function SourceVerificationFields<TValues extends FieldValues>({
+  control,
+  connectorChosen,
+  pending,
+  capabilities,
+  scheme,
+}: {
+  control: Control<TValues>;
+  connectorChosen: boolean;
+  pending: boolean;
+  capabilities: ReturnType<typeof sourceCapabilities>;
+  scheme: string;
+}) {
+  return (
+    <Section title="Request verification" hint="How Integrios checks that a request came from the provider.">
+      <SelectField
+        control={control}
+        name={"verification_scheme" as Path<TValues>}
+        label="Verification"
+        hint={
+          !connectorChosen
+            ? "Choose a Connector to see what it accepts."
+            : capabilities.schemes.length === 0
+              ? "This Connector declares no verification scheme."
+              : capabilities.allowUnverified
+                ? undefined
+                : "This Connector requires a verified Source."
+        }
+        emptyLabel={capabilities.allowUnverified ? "No verification" : undefined}
+        disabled={pending || capabilities.schemes.length === 0}
+        required={!capabilities.allowUnverified}
+      >
+        {capabilities.schemes.map((value) => (
+          <SelectItem key={value} value={value}>
+            {verificationLabel(value)}
+          </SelectItem>
+        ))}
+      </SelectField>
+      {scheme ? (
+        <TextField
+          control={control}
+          name={"verification_secret_ref" as Path<TValues>}
+          label="Secret reference"
+          hint="Reference name only; never enter the secret value."
+          required
+        />
+      ) : null}
+    </Section>
   );
 }
 
@@ -739,40 +800,13 @@ function CreateSource({
           <EventApiRequest tenantId={tenantId} ingestionEndpoint={overview.data?.ingestion_endpoint} />
         ) : null}
         {sourceType === "webhook" ? (
-          <Section title="Request verification" hint="How Integrios checks that a request came from the provider.">
-            <SelectField
-              control={form.control}
-              name="verification_scheme"
-              label="Verification"
-              hint={
-                connectorId === ""
-                  ? "Choose a Connector to see what it accepts."
-                  : capabilities.schemes.length === 0
-                    ? "This Connector declares no verification scheme."
-                    : capabilities.allowUnverified
-                      ? undefined
-                      : "This Connector requires a verified Source."
-              }
-              emptyLabel={capabilities.allowUnverified ? "No verification" : undefined}
-              disabled={connector.isPending || capabilities.schemes.length === 0}
-              required={!capabilities.allowUnverified}
-            >
-              {capabilities.schemes.map((scheme) => (
-                <SelectItem key={scheme} value={scheme}>
-                  {verificationLabel(scheme)}
-                </SelectItem>
-              ))}
-            </SelectField>
-            {verificationScheme ? (
-              <TextField
-                control={form.control}
-                name="verification_secret_ref"
-                label="Secret reference"
-                hint="Reference name only; never enter the secret value."
-                required
-              />
-            ) : null}
-          </Section>
+          <SourceVerificationFields
+            control={form.control}
+            connectorChosen={connectorId !== ""}
+            pending={connector.isPending}
+            capabilities={capabilities}
+            scheme={verificationScheme}
+          />
         ) : null}
         {sourceType === "queue" ? (
           <MessageBrokerFields control={form.control} entity={brokerEntity} authentication={brokerAuthentication} />
@@ -1006,6 +1040,12 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
     void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
   };
   const storedBrokerFields = source.type === "queue" ? brokerFields(source.configuration) : null;
+  const connector = useQuery({
+    queryKey: ["connector", source.connector_id],
+    queryFn: () => call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: source.connector_id } } })),
+    enabled: source.type === "webhook",
+  });
+  const capabilities = sourceCapabilities(connector.data?.manifest);
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
     defaultValues: {
@@ -1021,6 +1061,8 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
       broker_subscription_name: storedBrokerFields?.broker_subscription_name ?? "",
       broker_authentication: storedBrokerFields?.broker_authentication ?? "",
       broker_secret_ref: storedBrokerFields?.broker_secret_ref ?? "",
+      verification_scheme: source.verification?.scheme ?? "",
+      verification_secret_ref: String(object(source.verification?.secret_refs).secret ?? ""),
       identity_kind: source.event_identity_rule?.kind ?? "",
       identity_value: source.event_identity_rule?.value ?? "",
       identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
@@ -1029,6 +1071,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
   const identityKind = form.watch("identity_kind");
   const brokerEntity = form.watch("broker_entity");
   const brokerAuthentication = form.watch("broker_authentication");
+  const verificationScheme = form.watch("verification_scheme");
 
   const save = useMutation({
     mutationFn: (values: EditValues) =>
@@ -1043,11 +1086,20 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                 : storedBrokerFields
                   ? sourceConfiguration(values)
                   : parseJson(values.configuration).value,
-            verification: source.verification
+            verification: values.verification_scheme.trim()
               ? {
-                  scheme: source.verification.scheme,
-                  config: source.verification.config ?? {},
-                  secret_refs: source.verification.secret_refs ?? {},
+                  scheme: values.verification_scheme.trim(),
+                  config:
+                    source.verification?.scheme === values.verification_scheme
+                      ? (source.verification.config ?? {})
+                      : {},
+                  secret_refs:
+                    source.verification?.scheme === values.verification_scheme
+                      ? {
+                          ...(source.verification.secret_refs ?? {}),
+                          secret: values.verification_secret_ref.trim(),
+                        }
+                      : { secret: values.verification_secret_ref.trim() },
                 }
               : null,
             input_requirements: optionalJson(values.input_requirements),
@@ -1058,6 +1110,11 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
       ),
     onSuccess: reread,
   });
+  const persist = (values: EditValues, onSuccess: () => void) =>
+    save.mutate(values, {
+      onSuccess,
+      onError: (failure) => applyProblem(form, failure, editFields),
+    });
 
   const revoke = useMutation({
     mutationFn: () =>
@@ -1082,14 +1139,12 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                 className="flex flex-col gap-4"
                 aria-label={`Edit ${typeLabel(source.type)} Source`}
                 noValidate
-                onSubmit={form.handleSubmit((values) =>
-                  save.mutate(values, {
-                    onSuccess: close,
-                    onError: (failure) => applyProblem(form, failure, editFields),
-                  }),
-                )}
+                onSubmit={form.handleSubmit((values) => {
+                  if (source.verification && !values.verification_scheme) return;
+                  persist(values, close);
+                })}
               >
-                <FormError message={formError(asProblem(save.error), editFields)} />
+                <FormError message={formError(asProblem(connector.error ?? save.error), editFields)} />
 
                 <TextField control={form.control} name="name" label="Name" required />
                 {storedBrokerFields ? (
@@ -1108,6 +1163,15 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                       onKindChange={() => form.setValue("identity_value", "")}
                     />
                   </Section>
+                ) : null}
+                {source.type === "webhook" ? (
+                  <SourceVerificationFields
+                    control={form.control}
+                    connectorChosen
+                    pending={connector.isPending}
+                    capabilities={capabilities}
+                    scheme={verificationScheme}
+                  />
                 ) : null}
                 {source.type !== "event_api" && !storedBrokerFields ? (
                   <Disclosure label="Advanced configuration">
@@ -1137,9 +1201,22 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                   </>
                 ) : null}
 
-                <Button type="submit" className="self-start" disabled={save.isPending}>
-                  Save configuration
-                </Button>
+                {source.verification && !verificationScheme ? (
+                  <ConfirmAction
+                    label="Remove verification and save"
+                    question={`Remove request verification from ${source.name}?`}
+                    consequence="This Source will start accepting unsigned requests."
+                    confirmLabel="Remove verification and save"
+                    busy={save.isPending}
+                    onConfirm={() => {
+                      void form.handleSubmit((values) => persist(values, close))();
+                    }}
+                  />
+                ) : (
+                  <Button type="submit" className="self-start" disabled={save.isPending}>
+                    Save configuration
+                  </Button>
+                )}
                 <WriteStatus done={save.isSuccess}>Configuration saved.</WriteStatus>
               </form>
             </Form>

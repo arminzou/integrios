@@ -208,9 +208,9 @@ it("opens Source creation from one-shot state with the filtered Topic selected",
   await waitFor(() => expect(within(dialog).getByLabelText("Topic").textContent).toContain("orders"));
 });
 
-/// An update replaces the whole Source, and the edit form offers no verification fields, so the
-/// verification it sends is the one the Source already has. Dropping it would silently unverify
-/// the webhook.
+/// An untouched guided verification selection round-trips its full stored document. Dropping the
+/// config or a second secret reference while editing something else would silently change how the
+/// webhook is verified.
 it("keeps a webhook Source's verification when its mapping is edited", async () => {
   const verification = { scheme: "hmac_sha256", config: { header: "X-Signature" }, secret_refs: { secret: "gh-hook" } };
   const calls = stubHttp(({ method, url }) => {
