@@ -72,7 +72,8 @@ Content-Type: application/json
 
 {
   "name": "northwind-storefront",
-  "description": "Storefront checkout service. Rotated quarterly."
+  "description": "Storefront checkout service. Rotated quarterly.",
+  "expires_at": null
 }
 
 ###
@@ -87,7 +88,8 @@ Content-Type: application/json
 
 {
   "name": "northwind-legacy-pos",
-  "description": "Retired point-of-sale integration."
+  "description": "Retired point-of-sale integration.",
+  "expires_at": null
 }
 
 ###
@@ -110,6 +112,7 @@ Content-Type: application/json
   "configuration": {
     "base_uri": "{{sinkBase}}/sink/northwind-erp"
   },
+  "authentication": null,
   "environment": "production",
   "description": "Order and payment records into the ERP."
 }
@@ -126,6 +129,7 @@ Content-Type: application/json
   "configuration": {
     "base_uri": "{{sinkBase}}/sink/northwind-wms"
   },
+  "authentication": null,
   "environment": "production",
   "description": "Warehouse management system, fulfilment side only."
 }
@@ -142,6 +146,7 @@ Content-Type: application/json
   "configuration": {
     "base_uri": "{{sinkBase}}/sink/northwind-lake"
   },
+  "authentication": null,
   "environment": "production",
   "description": "Flattened order feed for the analytics lake."
 }
@@ -159,6 +164,7 @@ Content-Type: application/json
   "configuration": {
     "base_uri": "{{sinkBase}}/sink/northwind-billing"
   },
+  "authentication": null,
   "environment": "production",
   "description": "Decommissioned billing host. Kept until finance signs off on the cutover."
 }
@@ -175,6 +181,7 @@ Content-Type: application/json
   "configuration": {
     "base_uri": "{{sinkBase}}/sink/northwind-sandbox"
   },
+  "authentication": null,
   "environment": "staging",
   "description": "Vendor sandbox used during the last ERP upgrade."
 }
@@ -270,6 +277,7 @@ Content-Type: application/json
 {
   "connector_id": "{{connectorId}}",
   "topic_id": "{{createNwTopicOrders.response.body.$.id}}",
+  "name": "Northwind orders",
   "type": "event_api",
   "configuration": { "source_contract": "event_json" },
   "verification": null,
@@ -287,6 +295,7 @@ Content-Type: application/json
 {
   "connector_id": "{{connectorId}}",
   "topic_id": "{{createNwTopicPayments.response.body.$.id}}",
+  "name": "Northwind payments",
   "type": "event_api",
   "configuration": { "source_contract": "event_json" },
   "verification": null,
@@ -304,6 +313,7 @@ Content-Type: application/json
 {
   "connector_id": "{{connectorId}}",
   "topic_id": "{{createNwTopicInventory.response.body.$.id}}",
+  "name": "Northwind inventory",
   "type": "event_api",
   "configuration": { "source_contract": "event_json" },
   "verification": null,
@@ -322,6 +332,7 @@ Content-Type: application/json
 {
   "connector_id": "{{connectorId}}",
   "topic_id": "{{createNwTopicStorefrontWebhooks.response.body.$.id}}",
+  "name": "Northwind storefront webhooks",
   "type": "webhook",
   "configuration": { "source_contract": "event_json" },
   "verification": null,
@@ -341,6 +352,7 @@ Content-Type: application/json
 {
   "connector_id": "{{connectorId}}",
   "topic_id": "{{createNwTopicWarehouseReceipts.response.body.$.id}}",
+  "name": "Northwind warehouse receipts",
   "type": "queue",
   "configuration": {
     "source_contract": "event_json",
@@ -539,7 +551,7 @@ Content-Type: application/json
 # The warehouse receipt goes over the Service Bus emulator and has no HTTP send here; publish it as
 # scripts/seed-dev-data.sh does. No Subscription matches order.cancelled, so it lands unrouted.
 POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
-Authorization: TenantApiKey {{northwindToken}}
+Authorization: Bearer {{northwindToken}}
 Content-Type: application/json
 
 {
@@ -557,7 +569,7 @@ Content-Type: application/json
 
 ###
 POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
-Authorization: TenantApiKey {{northwindToken}}
+Authorization: Bearer {{northwindToken}}
 Content-Type: application/json
 
 {
@@ -573,7 +585,7 @@ Content-Type: application/json
 
 ###
 POST {{ingestionBaseUrl}}/events?source_id={{createNwSourcePayments.response.body.$.id}}
-Authorization: TenantApiKey {{northwindToken}}
+Authorization: Bearer {{northwindToken}}
 Content-Type: application/json
 
 {
@@ -590,7 +602,7 @@ Content-Type: application/json
 
 ###
 POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceInventory.response.body.$.id}}
-Authorization: TenantApiKey {{northwindToken}}
+Authorization: Bearer {{northwindToken}}
 Content-Type: application/json
 
 {
@@ -621,7 +633,7 @@ Content-Type: application/json
 ###
 # No Subscription matches this: it lands as unrouted, the signal for a missing Subscription.
 POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
-Authorization: TenantApiKey {{northwindToken}}
+Authorization: Bearer {{northwindToken}}
 Content-Type: application/json
 
 {
