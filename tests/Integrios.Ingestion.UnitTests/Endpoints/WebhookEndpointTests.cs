@@ -126,6 +126,97 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
         fixture.EventAcceptance.LastSubmission!.SourceEventId.ShouldBe("body-delivery-1");
     }
 
+    // A rule is read before the mapping and is fixed for the Source's life, so without this a
+    // provider that omits its delivery header on a replay has every such request refused forever.
+    [Fact]
+    public async Task PostWebhook_MissingIdentity_IsRefusedWhenTheRuleDoesNotAllowIt()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
+        {
+            EventIdentityRule = new SourceEventIdentityRule { Kind = "json_path", Value = "/delivery/id" }
+        };
+
+        HttpResponseMessage refused = await SendAsync(callbackId, """{"action":"opened"}""", "issue.opened", "ignored");
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    // The rule yields nothing and the Source contract's mapping supplies the identity instead. This
+    // is the composition the permission exists for: the immutable rule is the preferred identity, a
+    // mapped one is the fallback, and only the mapped one may be absent.
+    [Fact]
+    public async Task PostWebhook_MissingIdentityTheRuleAllows_FallsBackToTheMappedIdentity()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
+        {
+            EventIdentityRule = new SourceEventIdentityRule
+            {
+                Kind = "json_path",
+                Value = "/delivery/id",
+                AllowMissing = true
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(
+            callbackId, """{"action":"opened"}""", "issue.opened", "mapped-delivery");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        fixture.EventAcceptance.LastSubmission!.SourceEventId.ShouldBe("mapped-delivery");
+    }
+
+    // Neither path produced one, which is a real state: the Event is accepted and carries no
+    // identity, so nothing deduplicates it.
+    [Fact]
+    public async Task PostWebhook_MissingIdentityAndNoMappedIdentity_IsAcceptedWithoutOne()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
+        {
+            EventIdentityRule = new SourceEventIdentityRule
+            {
+                Kind = "json_path",
+                Value = "/delivery/id",
+                AllowMissing = true
+            },
+            SourceMapping = new TransformSpec(
+                "jsonata",
+                "1",
+                """{ "event_type": "test.fixed", "payload": $ }""")
+        };
+
+        HttpResponseMessage response = await SendAsync(
+            callbackId, """{"action":"opened"}""", "issue.opened", "ignored");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        fixture.EventAcceptance.LastSubmission!.SourceEventId.ShouldBeNull();
+        fixture.EventAcceptance.LastSubmission!.IdempotencyKey.ShouldBeNull();
+    }
+
+    // The permission covers an absent value, never a present one: a request that does carry the
+    // identity is still deduplicated by it.
+    [Fact]
+    public async Task PostWebhook_PresentIdentityUnderAllowMissing_StillIdentifiesTheEvent()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
+        {
+            EventIdentityRule = new SourceEventIdentityRule
+            {
+                Kind = "json_path",
+                Value = "/delivery/id",
+                AllowMissing = true
+            }
+        };
+
+        HttpResponseMessage response = await SendAsync(
+            callbackId, """{"delivery":{"id":"body-delivery-2"},"action":"opened"}""", "issue.opened", "ignored");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        fixture.EventAcceptance.LastSubmission!.SourceEventId.ShouldBe("body-delivery-2");
+    }
+
     [Fact]
     public async Task PostWebhook_KnownIdentity_ReturnsBeforeCurrentMapping()
     {

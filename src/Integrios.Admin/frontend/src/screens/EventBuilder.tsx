@@ -176,7 +176,6 @@ export function EventBuilder({
   /// silently cleared, but it cannot be carried into a Connector while it addresses nothing.
   const dangling = [
     ...(guided.eventHeader && !headerNames.includes(guided.eventHeader) ? [guided.eventHeader] : []),
-    ...(guided.identityHeader && !headerNames.includes(guided.identityHeader) ? [guided.identityHeader] : []),
     ...(guided.actionPath && !paths.includes(guided.actionPath) ? [guided.actionPath] : []),
     ...guided.payloadRows.filter((row) => row.source !== "" && !paths.includes(row.source)).map((row) => row.source),
   ];
@@ -660,27 +659,6 @@ function GuidedFields({
           onChange={(actionPath) => onChange({ actionPath })}
         />
         <Note>Preview: {preview === "" ? "—" : preview}</Note>
-      </Target>
-
-      <Target title="source_event_id" requirement="Optional">
-        <Choice
-          label="From header"
-          value={guided.identityHeader}
-          options={headerNames}
-          noneLabel="None"
-          onChange={(identityHeader) => onChange({ identityHeader })}
-        />
-        {guided.identityHeader ? (
-          <label className="flex items-start gap-2.5 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5 size-4 shrink-0"
-              checked={guided.requireIdentity}
-              onChange={(event) => onChange({ requireIdentity: event.target.checked })}
-            />
-            <span>Reject the request when this value is missing</span>
-          </label>
-        ) : null}
       </Target>
 
       <Target title="payload" requirement="Required">

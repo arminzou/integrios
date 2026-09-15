@@ -15,24 +15,26 @@ const webhook = {
   eventPrefix: "github",
   eventHeader: "x-github-event",
   actionPath: "action",
-  identityHeader: "x-github-delivery",
-  requireIdentity: true,
 };
 
 const body = { action: "opened", number: 4, draft: false, repository: { full_name: "northwind/orders" } };
 
 describe("The generated Source mapping", () => {
-  it("reads identity from the bounded webhook context and refuses a request missing it", () => {
+  it("reads the Event type from the bounded webhook context and refuses a request missing it", () => {
     const expression = guidedExpression(webhook);
 
     expect(expression).toContain("$event := $context.headers.`x-github-event`");
-    expect(expression).toContain("$delivery := $context.headers.`x-github-delivery`");
     expect(expression).toContain('"event_type": "github." & $event');
-    expect(expression).toContain('"source_event_id": $delivery');
     expect(expression).toContain('"payload": $');
-    // Both mapped identities were marked required, so neither reaches the Event as an empty string.
-    expect(expression).toContain('$exists($event) and $event != "" and $exists($delivery) and $delivery != ""');
+    expect(expression).toContain('$exists($event) and $event != ""');
     expect(expression).toContain("$error(");
+  });
+
+  /// Event identity is the Source's own immutable rule, never a mapped field. A guided mapping that
+  /// emitted one gave the Source two identities with different permanence.
+  it("never emits an Event identity, whatever was chosen", () => {
+    expect(guidedExpression(webhook)).not.toContain("source_event_id");
+    expect(guidedExpression({ ...webhook, payloadMode: "fields", payloadRows: [] })).not.toContain("$delivery");
   });
 
   it("leaves out the checks and the envelope fields that were not chosen", () => {
@@ -41,10 +43,6 @@ describe("The generated Source mapping", () => {
     expect(expression).toBe('{ "event_type": "queue.order", "payload": $ }');
     expect(expression).not.toContain("$error(");
     expect(expression).not.toContain("source_event_id");
-  });
-
-  it("stops rejecting the request when the identity is no longer required", () => {
-    expect(guidedExpression({ ...webhook, requireIdentity: false })).not.toContain("$exists($delivery)");
   });
 
   it("names payload fields explicitly when the whole body is not the payload", () => {

@@ -581,7 +581,38 @@ describe("Create forms, filled through a real browser", () => {
     });
     expect(sent.body.input_requirements).toBeNull();
     expect(sent.body.mapping).toBeNull();
-    expect(sent.body.event_identity_rule).toEqual({ kind: "header", value: "X-GitHub-Delivery" });
+    // allow_missing defaults to refusing, so a rule authored without touching it keeps today's meaning.
+    expect(sent.body.event_identity_rule).toEqual({
+      kind: "header",
+      value: "X-GitHub-Delivery",
+      allow_missing: false,
+    });
+    await view.close();
+  }, 60_000);
+
+  /// The one asymmetry the Event Builder used to own: an identity that may be absent without the
+  /// request being refused. The rule carries it now, so the Builder no longer offers an identity.
+  it("sends an identity rule that permits a missing value when that is chosen", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
+
+    await view.click("text=New Source");
+    const form = formNamed(view, "Create a Source");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await choose(form.getByLabel("Topic", { exact: true }), /Orders/);
+    await choose(form.getByLabel("Type"), "Webhook");
+    await form.getByLabel("Name", { exact: true }).fill("github-intake");
+    await choose(form.getByLabel("Event identity"), "JSON body field");
+    await form.getByLabel("JSON Pointer").fill("/delivery/id");
+    await form.getByLabel("Accept a request that carries no value here").check();
+    expect(await form.getByRole("button", { name: "Open Integrios Event Builder" }).count()).toBe(1);
+    await view.click("text=Create Source");
+
+    const sent = await submitted(writes);
+    expect(sent.body.event_identity_rule).toEqual({
+      kind: "json_path",
+      value: "/delivery/id",
+      allow_missing: true,
+    });
     await view.close();
   }, 60_000);
 
@@ -694,7 +725,11 @@ describe("Create forms, filled through a real browser", () => {
       transport_config: { namespace: "acme.servicebus.windows.net", queue_name: "orders" },
     });
     expect(sent.body.verification).toBeNull();
-    expect(sent.body.event_identity_rule).toEqual({ kind: "message_id", value: "message_id" });
+    expect(sent.body.event_identity_rule).toEqual({
+      kind: "message_id",
+      value: "message_id",
+      allow_missing: false,
+    });
     await view.close();
   }, 60_000);
 });

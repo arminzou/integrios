@@ -3,13 +3,15 @@ import { type FieldMapping, payloadFieldPaths } from "../ui/fieldMapping";
 /// The guided half of the Integrios Event Builder: the choices an Operator makes about a
 /// provider-native request, from which the one persisted artefact — a JSONata expression in the
 /// existing versioned envelope — is generated. Nothing here is stored: the expression is.
+///
+/// Event identity is not among these choices. The Source's own Event-identity rule owns it, is read
+/// before this mapping runs, and is fixed for the Source's life; a second changeable identity here
+/// meant one concept authored twice, on two surfaces, with different permanence.
 export type GuidedMapping = {
   eventPrefix: string;
   /// "" means the value is not taken from a header.
   eventHeader: string;
   actionPath: string;
-  identityHeader: string;
-  requireIdentity: boolean;
   payloadMode: "entire" | "fields";
   payloadRows: FieldMapping[];
 };
@@ -18,8 +20,6 @@ export const emptyGuided: GuidedMapping = {
   eventPrefix: "",
   eventHeader: "",
   actionPath: "",
-  identityHeader: "",
-  requireIdentity: true,
   payloadMode: "entire",
   payloadRows: [],
 };
@@ -73,7 +73,6 @@ export function duplicatePayloadFields(rows: FieldMapping[]): string[] {
 export function guidedExpression(guided: GuidedMapping): string {
   const assignments: string[] = [];
   if (guided.eventHeader) assignments.push(`$event := ${headerReference(guided.eventHeader)}`);
-  if (guided.identityHeader) assignments.push(`$delivery := ${headerReference(guided.identityHeader)}`);
   if (guided.actionPath) assignments.push(`$action := ${guided.actionPath}`);
 
   const prefix = guided.eventPrefix.trim();
@@ -85,13 +84,11 @@ export function guidedExpression(guided: GuidedMapping): string {
   const eventType = guided.actionPath ? `${base} & ($exists($action) and $action != "" ? "." & $action : "")` : base;
 
   const fields = [`"event_type": ${eventType}`];
-  if (guided.identityHeader) fields.push('"source_event_id": $delivery');
   fields.push(`"payload": ${guided.payloadMode === "entire" ? "$" : payloadObject(guided.payloadRows)}`);
   const output = `{ ${fields.join(", ")} }`;
 
   const required: string[] = [];
   if (guided.eventHeader) required.push('$exists($event) and $event != ""');
-  if (guided.identityHeader && guided.requireIdentity) required.push('$exists($delivery) and $delivery != ""');
 
   if (assignments.length === 0 && required.length === 0) return output;
   const body =

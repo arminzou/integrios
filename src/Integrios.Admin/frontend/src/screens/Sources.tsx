@@ -5,6 +5,7 @@ import { type Control, useForm } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Timestamp } from "@/ui/time";
@@ -108,10 +109,14 @@ const createSchema = z
     mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
     identity_kind: z.string(),
     identity_value: z.string(),
+    identity_allow_missing: z.boolean(),
   })
   .superRefine((values, ctx) => {
+    // Only the text fields have an empty case worth reporting; the one boolean carries no such state.
     const required = (field: keyof typeof values, message: string) => {
-      if (!values[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
+      const value = values[field];
+      if (typeof value === "string" && !value.trim())
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
     };
     if (values.type === "webhook") {
       if (values.verification_scheme) required("verification_secret_ref", "Enter a secret reference.");
@@ -406,6 +411,7 @@ function CreateSource({
       mapping: "",
       identity_kind: "",
       identity_value: "",
+      identity_allow_missing: false,
     },
   });
   const sourceType = form.watch("type");
@@ -460,6 +466,7 @@ function CreateSource({
                 ? {
                     kind: values.identity_kind.trim(),
                     value: values.identity_kind === "message_id" ? "message_id" : values.identity_value.trim(),
+                    allow_missing: values.identity_allow_missing,
                   }
                 : null,
           },
@@ -538,7 +545,10 @@ function CreateSource({
           control={form.control}
           name="type"
           label="Type"
-          onChange={() => form.setValue("identity_kind", "")}
+          onChange={() => {
+            form.setValue("identity_kind", "");
+            form.setValue("identity_allow_missing", false);
+          }}
           required
         >
           {sourceTypes.map((option) => (
@@ -611,13 +621,39 @@ function CreateSource({
                 <SelectItem value="json_path">JSON body field</SelectItem>
               </SelectField>
               {identityKind && identityKind !== "message_id" ? (
-                <TextField
-                  control={form.control}
-                  name="identity_value"
-                  label={identityKind === "header" ? "Header name" : "JSON Pointer"}
-                  placeholder={identityKind === "header" ? "X-GitHub-Delivery" : "/id"}
-                  required
-                />
+                <>
+                  <TextField
+                    control={form.control}
+                    name="identity_value"
+                    label={identityKind === "header" ? "Header name" : "JSON Pointer"}
+                    placeholder={identityKind === "header" ? "X-GitHub-Delivery" : "/id"}
+                    required
+                  />
+                  {/* Composed from `FormField` because no field wrapper covers a checkbox, and one
+                      caller does not earn a shared one. */}
+                  <FormField
+                    control={form.control}
+                    name="identity_allow_missing"
+                    render={({ field }) => (
+                      <label className="flex items-start gap-2.5 text-sm">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 size-4 shrink-0"
+                          name={field.name}
+                          checked={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(event.target.checked)}
+                        />
+                        <span className="min-w-0">
+                          Accept a request that carries no value here
+                          <span className="mt-0.5 block text-xs text-ink-secondary">
+                            Such a request is accepted without duplicate detection instead of being rejected.
+                          </span>
+                        </span>
+                      </label>
+                    )}
+                  />
+                </>
               ) : null}
               <EventBuilder
                 key={sourceType}
