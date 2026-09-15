@@ -14,3 +14,17 @@ export function parseJson(text: string): { value: unknown; error?: undefined } |
 export function formatJson(value: unknown): string {
   return value === undefined || value === null ? "" : JSON.stringify(value, null, 2);
 }
+
+export type JsonObject = Record<string, unknown>;
+
+/// Reading one of those documents back. A value that is not an object reads as an empty one rather
+/// than throwing, because the document's shape belongs to the Connector contract and a screen
+/// showing a fact it cannot find must still render.
+export function object(value: unknown): JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
+}
+
+export function text(value: unknown, key: string): string | null {
+  const found = object(value)[key];
+  return typeof found === "string" && found.trim() ? found : null;
+}

@@ -62,6 +62,34 @@ it("shows Source input requirements and restarts paging when the Topic filter ch
   expect(screen.getByRole("link", { name: "Clear filters" })).toBeTruthy();
 });
 
+/// `queue` is the wire value for the type an Operator authors as "Message broker". The filter and
+/// the authoring control read the label; a row that printed the wire value would name the same type
+/// differently one control apart, and would describe a topic subscription as a queue.
+it("names a broker Source's type as the Operator authored it", async () => {
+  stubHttp(({ url }) => {
+    if (!url.pathname.endsWith("/sources")) return { status: 200, body: page([]) };
+    return {
+      status: 200,
+      body: page([
+        {
+          id: sourceId,
+          name: "Orders broker",
+          tenant_id: tenantId,
+          topic_id: topicId,
+          connector_id: connectorId,
+          type: "queue",
+          status: "active",
+          input_requirements: null,
+        },
+      ]),
+    };
+  });
+  renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
+  const row = await screen.findByRole("row", { name: /Orders broker/ });
+  expect(within(row).getByText("Message broker")).toBeTruthy();
+  expect(within(row).queryByText("queue")).toBeNull();
+});
+
 describe("Authoring a Source before anything it needs", () => {
   it("says a Topic has to exist first, instead of offering an empty picker", async () => {
     // A Tenant authored a moment ago: a Connector is installed deployment-wide, and nothing else.
@@ -217,7 +245,7 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
   );
 
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-  const form = await screen.findByRole("form", { name: "Edit webhook Source" });
+  const form = await screen.findByRole("form", { name: "Edit Webhook Source" });
   fireEvent.change(within(form).getByLabelText("Event mapping (JSONata, optional)"), { target: { value: "payload" } });
   fireEvent.submit(form);
 

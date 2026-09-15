@@ -1,12 +1,48 @@
+import { cn } from "cn";
 import { LoaderCircle } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { type ComponentProps, type ReactNode, useState } from "react";
+import { type ComponentProps, type ReactNode, useId, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MessageBubble } from "@/components/ui/form";
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "@/components/ui/sheet";
 import type { Problem } from "../api/problem";
+
+/// One named group of fields inside an authoring form, with the sentence that says what the group
+/// is for. An authoring sheet long enough to need groups needs them to look alike across
+/// capabilities, so the rule is here rather than per screen: a hairline above each group except the
+/// first, the title at the form's own weight, and the guidance under it in secondary ink.
+export function Section({
+  title,
+  hint,
+  className,
+  children,
+}: {
+  title: string;
+  hint: string;
+  className?: string;
+  /// Labelled by its own heading rather than an `aria-label`, so the words a screen reader announces
+  /// are the words on screen.
+  children: ReactNode;
+}) {
+  const headingId = useId();
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className={cn("flex flex-col gap-3 border-t pt-4 first:border-t-0 first:pt-0", className)}
+    >
+      <div>
+        <h3 id={headingId} className="m-0 text-sm font-semibold">
+          {title}
+        </h3>
+        <p className="m-0 mt-0.5 text-xs text-ink-secondary">{hint}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
 
 /// A collapsed section inside a form, for material that is generated or pasted rather than authored
 /// field by field — the manifest a Connector draft produces, and the JSON an Operator pastes back.

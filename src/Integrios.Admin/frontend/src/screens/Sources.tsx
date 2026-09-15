@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { type Control, useForm } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   appliedNote,
   ConfirmAction,
   CreateSheet,
+  Disclosure,
   EditSheet,
   FilterBar,
   FormError,
@@ -23,6 +24,7 @@ import {
   LoadMore,
   narrowable,
   ReadError,
+  Section,
   SheetButton,
   WriteStatus,
 } from "../ui/controls";
@@ -30,7 +32,7 @@ import { CopyInline } from "../ui/copy";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
-import { formatJson, parseJson } from "../ui/json";
+import { formatJson, object, parseJson } from "../ui/json";
 import {
   CloseInspector,
   Details,
@@ -56,23 +58,21 @@ type Source = components["schemas"]["SourceDto"];
 const sourceTypes = [
   { value: "event_api", label: "Event API" },
   { value: "webhook", label: "Webhook" },
-  { value: "queue", label: "Queue" },
+  { value: "queue", label: "Message broker" },
 ];
 
-const createFields = [
-  "name",
-  "connector_id",
-  "topic_id",
-  "type",
-  "configuration",
-  "verification_scheme",
-  "verification_config",
-  "verification_secret_refs",
-  "input_requirements",
-  "mapping",
-  "identity_kind",
-  "identity_value",
-] as const;
+/// A scheme the manifest offers but this dashboard has no word for is shown as the Connector named it.
+const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC SHA-256" : scheme);
+
+/// `queue` names only one of the two broker entity forms, so no Operator-facing surface prints it.
+const typeLabel = (value: string) => sourceTypes.find((option) => option.value === value)?.label ?? value;
+
+/// Form paths that are also Admin API field keys, so a rejection lands on the control it is about.
+/// The guided fields are deliberately absent: the API rejects the documents this form composes —
+/// `configuration`, `verification`, `event_identity_rule`, `mapping`, `input_requirements` — and each
+/// of those covers several controls at once, so `formError` states them over the form rather than
+/// guessing which box to point at. Two of them are not rendered at all on the normal path.
+const createFields = ["name", "connector_id", "topic_id", "type"] as const;
 const editFields = ["name", "configuration", "input_requirements", "mapping"] as const;
 
 /// A domain JSON document, authored as text: well-formedness is all the dashboard checks, and the
@@ -88,20 +88,49 @@ const optionalJsonDocument = z.string().superRefine((text, ctx) => {
   if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
 });
 
-const createSchema = z.object({
-  name: z.string().trim().min(1, "Enter a name."),
-  connector_id: z.string().min(1, "Choose a Connector."),
-  topic_id: z.string().min(1, "Choose a Topic."),
-  type: z.string().min(1, "Choose a type."),
-  configuration: jsonDocument,
-  verification_scheme: z.string(),
-  verification_config: optionalJsonDocument,
-  verification_secret_refs: optionalJsonDocument,
-  input_requirements: optionalJsonDocument,
-  mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
-  identity_kind: z.string(),
-  identity_value: z.string(),
-});
+const createSchema = z
+  .object({
+    name: z.string().trim().min(1, "Enter a name."),
+    connector_id: z.string().min(1, "Choose a Connector."),
+    topic_id: z.string().min(1, "Choose a Topic."),
+    type: z.string().min(1, "Choose a type."),
+    broker_transport: z.string(),
+    broker_namespace: z.string(),
+    broker_entity: z.string(),
+    broker_queue_name: z.string(),
+    broker_topic_name: z.string(),
+    broker_subscription_name: z.string(),
+    broker_authentication: z.string(),
+    broker_secret_ref: z.string(),
+    verification_scheme: z.string(),
+    verification_secret_ref: z.string(),
+    input_requirements: optionalJsonDocument,
+    mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+    identity_kind: z.string(),
+    identity_value: z.string(),
+  })
+  .superRefine((values, ctx) => {
+    const required = (field: keyof typeof values, message: string) => {
+      if (!values[field].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
+    };
+    if (values.type === "webhook") {
+      if (values.verification_scheme) required("verification_secret_ref", "Enter a secret reference.");
+      if (values.identity_kind) required("identity_value", "Enter an identity selector.");
+    }
+    if (values.type !== "queue") return;
+    required("broker_namespace", "Enter a broker namespace.");
+    required("broker_authentication", "Choose an authentication method.");
+    if (values.broker_entity === "topic_subscription") {
+      required("broker_topic_name", "Enter a topic name.");
+      required("broker_subscription_name", "Enter a subscription name.");
+    } else {
+      required("broker_queue_name", "Enter a queue name.");
+    }
+    if (values.broker_authentication === "connection_string")
+      required("broker_secret_ref", "Enter a connection string reference.");
+    if (values.identity_kind && values.identity_kind !== "message_id")
+      required("identity_value", "Enter an identity selector.");
+  });
 
 const editSchema = z.object({
   name: z.string().trim().min(1, "Enter a name."),
@@ -116,6 +145,41 @@ type EditValues = z.infer<typeof editSchema>;
 const optionalJson = (value: string) => (value.trim() ? parseJson(value).value : null);
 const mapping = (expression: string) =>
   expression.trim() ? { engine: "jsonata", version: "1", expression: expression.trim() } : null;
+
+/// What the chosen Connector permits a Source to select. `source_configuration_schema` is read only
+/// to refuse it: this form authors no control from a declared property, so it names them instead.
+/// A manifest carrying no verification block offers no scheme — a real manifest always carries one,
+/// so an unrecognised document must not appear to accept a verification it never declared.
+function sourceCapabilities(manifest: unknown) {
+  const verification = object(object(manifest).source_verification);
+  const schemes = Array.isArray(verification.schemes) ? verification.schemes : [];
+  const required = object(object(manifest).source_configuration_schema).required;
+  return {
+    schemes: schemes.map((scheme) => String(object(scheme).scheme ?? "")).filter(Boolean),
+    allowUnverified: verification.allow_unverified !== false,
+    requiredConfiguration: Array.isArray(required) ? required.map(String) : [],
+  };
+}
+
+function sourceConfiguration(values: CreateValues): Record<string, unknown> {
+  if (values.type !== "queue" || values.broker_transport !== "azure_service_bus") return {};
+  const transportConfig =
+    values.broker_entity === "topic_subscription"
+      ? {
+          namespace: values.broker_namespace.trim(),
+          topic_name: values.broker_topic_name.trim(),
+          subscription_name: values.broker_subscription_name.trim(),
+        }
+      : { namespace: values.broker_namespace.trim(), queue_name: values.broker_queue_name.trim() };
+  return {
+    transport: values.broker_transport,
+    authentication:
+      values.broker_authentication === "connection_string"
+        ? { scheme: "connection_string", secret_ref: values.broker_secret_ref.trim() }
+        : { scheme: "azure_identity" },
+    transport_config: transportConfig,
+  };
+}
 
 export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string; selectedSourceId?: string }) {
   const location = useLocation();
@@ -256,7 +320,7 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                         {nameIn(topicOptions.data?.items, source.topic_id)}
                       </Link>
                     </TableCell>
-                    <TableCell>{source.type}</TableCell>
+                    <TableCell>{typeLabel(source.type)}</TableCell>
                     <TableCell className="font-mono text-[13px]">{source.input_requirements || "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-between gap-3">
@@ -328,10 +392,16 @@ function CreateSource({
       connector_id: "",
       topic_id: defaultTopicId,
       type: "webhook",
-      configuration: "{}",
+      broker_transport: "azure_service_bus",
+      broker_namespace: "",
+      broker_entity: "queue",
+      broker_queue_name: "",
+      broker_topic_name: "",
+      broker_subscription_name: "",
+      broker_authentication: "azure_identity",
+      broker_secret_ref: "",
       verification_scheme: "",
-      verification_config: "{}",
-      verification_secret_refs: "{}",
+      verification_secret_ref: "",
       input_requirements: "",
       mapping: "",
       identity_kind: "",
@@ -339,6 +409,19 @@ function CreateSource({
     },
   });
   const sourceType = form.watch("type");
+  const connectorId = form.watch("connector_id");
+  const brokerEntity = form.watch("broker_entity");
+  const brokerAuthentication = form.watch("broker_authentication");
+  const verificationScheme = form.watch("verification_scheme");
+  const identityKind = form.watch("identity_kind");
+  // What the chosen Connector permits. Read for webhook verification and for whether the Connector
+  // demands source configuration this form cannot author; a queue Source composes its own document.
+  const connector = useQuery({
+    queryKey: ["connector", connectorId],
+    queryFn: () => call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: connectorId } } })),
+    enabled: connectorId !== "",
+  });
+  const capabilities = sourceCapabilities(connector.data?.manifest);
   const overview = useQuery({
     queryKey: ["tenant-overview", tenantId],
     queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
@@ -359,20 +442,25 @@ function CreateSource({
             connector_id: values.connector_id,
             topic_id: values.topic_id,
             type: values.type,
-            configuration: parseJson(values.configuration).value,
+            configuration: sourceConfiguration(values),
             verification:
               values.type === "webhook" && values.verification_scheme.trim()
                 ? {
                     scheme: values.verification_scheme.trim(),
-                    config: optionalJson(values.verification_config) ?? {},
-                    secret_refs: optionalJson(values.verification_secret_refs) ?? {},
+                    config: {},
+                    secret_refs: { secret: values.verification_secret_ref.trim() },
                   }
                 : null,
             input_requirements: values.type === "event_api" ? null : optionalJson(values.input_requirements),
             mapping: values.type === "event_api" ? null : mapping(values.mapping),
             event_identity_rule:
-              values.type !== "event_api" && values.identity_kind.trim() && values.identity_value.trim()
-                ? { kind: values.identity_kind.trim(), value: values.identity_value.trim() }
+              values.type !== "event_api" &&
+              values.identity_kind.trim() &&
+              (values.identity_kind === "message_id" || values.identity_value.trim())
+                ? {
+                    kind: values.identity_kind.trim(),
+                    value: values.identity_kind === "message_id" ? "message_id" : values.identity_value.trim(),
+                  }
                 : null,
           },
         }),
@@ -405,6 +493,8 @@ function CreateSource({
                 No active Connectors exist yet, and a Source is built from one.{" "}
                 <Link to="/connectors">Create a Connector</Link> first.
               </>
+            ) : capabilities.requiredConfiguration.length > 0 ? (
+              `This Connector requires Source configuration this form cannot author yet: ${capabilities.requiredConfiguration.join(", ")}. Choose another Connector, or author the Source through the Admin API.`
             ) : connectors.data?.next_cursor ? (
               "Showing the first 100 active Connectors."
             ) : undefined
@@ -441,88 +531,122 @@ function CreateSource({
             </SelectItem>
           ))}
         </SelectField>
-        <SelectField control={form.control} name="type" label="Type" required>
+        {/* The offered identity kinds differ by Source type — a broker message id has no webhook
+            meaning, a request header no broker meaning — so a kind chosen under one type cannot
+            survive into another. */}
+        <SelectField
+          control={form.control}
+          name="type"
+          label="Type"
+          onChange={() => form.setValue("identity_kind", "")}
+          required
+        >
           {sourceTypes.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
           ))}
         </SelectField>
-        <TextAreaField
-          control={form.control}
-          name="configuration"
-          label={sourceType === "queue" ? "Queue transport configuration (JSON)" : "Configuration (JSON)"}
-          className="min-h-40 font-mono text-sm"
-          required
-        />
         {sourceType === "event_api" ? (
           <EventApiRequest tenantId={tenantId} ingestionEndpoint={overview.data?.ingestion_endpoint} />
         ) : null}
         {sourceType === "webhook" ? (
-          <>
-            <TextAreaField
+          <Section title="Request verification" hint="How Integrios checks that a request came from the provider.">
+            <SelectField
               control={form.control}
               name="verification_scheme"
-              label="Verification scheme (optional)"
-              className="min-h-16 font-mono text-sm"
-            />
-            <TextAreaField
-              control={form.control}
-              name="verification_config"
-              label="Verification configuration (JSON)"
-              className="min-h-24 font-mono text-sm"
-            />
-            <TextAreaField
-              control={form.control}
-              name="verification_secret_refs"
-              label="Verification secret references (JSON)"
-              hint="Reference names only; never enter secret values."
-              className="min-h-24 font-mono text-sm"
-            />
-          </>
+              label="Verification"
+              hint={
+                connectorId === ""
+                  ? "Choose a Connector to see what it accepts."
+                  : capabilities.schemes.length === 0
+                    ? "This Connector declares no verification scheme."
+                    : capabilities.allowUnverified
+                      ? undefined
+                      : "This Connector requires a verified Source."
+              }
+              emptyLabel={capabilities.allowUnverified ? "No verification" : undefined}
+              disabled={connector.isPending || capabilities.schemes.length === 0}
+              required={!capabilities.allowUnverified}
+            >
+              {capabilities.schemes.map((scheme) => (
+                <SelectItem key={scheme} value={scheme}>
+                  {verificationLabel(scheme)}
+                </SelectItem>
+              ))}
+            </SelectField>
+            {verificationScheme ? (
+              <TextField
+                control={form.control}
+                name="verification_secret_ref"
+                label="Secret reference"
+                hint="Reference name only; never enter the secret value."
+                required
+              />
+            ) : null}
+          </Section>
+        ) : null}
+        {sourceType === "queue" ? (
+          <MessageBrokerFields control={form.control} entity={brokerEntity} authentication={brokerAuthentication} />
         ) : null}
         {sourceType !== "event_api" ? (
           <>
-            <EventBuilder
-              key={sourceType}
-              contractKey={`${sourceType} Source`}
-              draft={sourceContractDraft}
-              onUse={(draft) => {
-                form.setValue("mapping", draft.expression, { shouldDirty: true });
-                form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
-                  shouldDirty: true,
-                });
-              }}
-            />
-            <TextAreaField
-              control={form.control}
-              name="input_requirements"
-              label="Input requirements (JSON, optional)"
-              className="min-h-32 font-mono text-sm"
-            />
-            <TextAreaField
-              control={form.control}
-              name="mapping"
-              label="Event mapping (JSONata, optional)"
-              className="min-h-32 font-mono text-sm"
-            />
-            <TextAreaField
-              control={form.control}
-              name="identity_kind"
-              label={
-                sourceType === "queue"
-                  ? "Event identity kind (message_id or json_path)"
-                  : "Event identity kind (header or json_path)"
-              }
-              className="min-h-16 font-mono text-sm"
-            />
-            <TextAreaField
-              control={form.control}
-              name="identity_value"
-              label="Event identity selector"
-              hint="A selected identity is fixed when this Source is created."
-              className="min-h-16 font-mono text-sm"
-            />
+            <Section
+              title="Event shape"
+              hint="What identifies an Event from this Source, and the type, payload, and requirements derived from a representative request."
+            >
+              {/* The selector goes with the kind: left alone, a header name stands in a field that
+                  now wants a JSON Pointer, and this rule is fixed at creation, so a value carried
+                  across unnoticed is permanent. */}
+              <SelectField
+                control={form.control}
+                name="identity_kind"
+                label="Event identity"
+                hint="Permanent once this Source is created, and a request missing the value is rejected. The Event Builder can supply the same identity changeably instead."
+                emptyLabel="No duplicate detection"
+                onChange={() => form.setValue("identity_value", "")}
+              >
+                {sourceType === "queue" ? <SelectItem value="message_id">Broker message ID</SelectItem> : null}
+                {sourceType === "webhook" ? <SelectItem value="header">Request header</SelectItem> : null}
+                <SelectItem value="json_path">JSON body field</SelectItem>
+              </SelectField>
+              {identityKind && identityKind !== "message_id" ? (
+                <TextField
+                  control={form.control}
+                  name="identity_value"
+                  label={identityKind === "header" ? "Header name" : "JSON Pointer"}
+                  placeholder={identityKind === "header" ? "X-GitHub-Delivery" : "/id"}
+                  required
+                />
+              ) : null}
+              <EventBuilder
+                key={sourceType}
+                contractKey={`${sourceType} Source`}
+                draft={sourceContractDraft}
+                onUse={(draft) => {
+                  form.setValue("mapping", draft.expression, { shouldDirty: true });
+                  form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                    shouldDirty: true,
+                  });
+                }}
+              />
+            </Section>
+            <Disclosure label="Advanced configuration">
+              <div className="flex flex-col gap-4">
+                <TextAreaField
+                  control={form.control}
+                  name="input_requirements"
+                  label="Generated input requirements"
+                  className="min-h-32 font-mono text-sm"
+                />
+                <TextAreaField
+                  control={form.control}
+                  name="mapping"
+                  label="Generated Event mapping (JSONata)"
+                  className="min-h-32 font-mono text-sm"
+                />
+              </div>
+            </Disclosure>
           </>
         ) : null}
 
@@ -531,6 +655,59 @@ function CreateSource({
         </Button>
       </form>
     </Form>
+  );
+}
+
+/// Azure Service Bus is the only transport, so its fields sit directly under the broker choice. A
+/// second transport branches here on `broker_transport` and composes its own `transport_config`;
+/// nothing outside this component and `sourceConfiguration` knows which broker was chosen.
+function MessageBrokerFields({
+  control,
+  entity,
+  authentication,
+}: {
+  control: Control<CreateValues>;
+  entity: string;
+  authentication: string;
+}) {
+  return (
+    <Section title="Message broker" hint="The broker Integrios receives messages from.">
+      <SelectField control={control} name="broker_transport" label="Broker type" required>
+        <SelectItem value="azure_service_bus">Azure Service Bus</SelectItem>
+      </SelectField>
+      <TextField
+        control={control}
+        name="broker_namespace"
+        label="Namespace"
+        placeholder="acme-events.servicebus.windows.net"
+        required
+      />
+      <SelectField control={control} name="broker_entity" label="Broker entity" required>
+        <SelectItem value="queue">Queue</SelectItem>
+        <SelectItem value="topic_subscription">Topic subscription</SelectItem>
+      </SelectField>
+      {entity === "topic_subscription" ? (
+        <>
+          <TextField control={control} name="broker_topic_name" label="Topic name" required />
+          <TextField control={control} name="broker_subscription_name" label="Subscription name" required />
+        </>
+      ) : (
+        <TextField control={control} name="broker_queue_name" label="Queue name" required />
+      )}
+      <SelectField control={control} name="broker_authentication" label="Authentication" required>
+        <SelectItem value="azure_identity">Azure identity</SelectItem>
+        <SelectItem value="connection_string">Connection string reference</SelectItem>
+      </SelectField>
+      {authentication === "connection_string" ? (
+        <TextField
+          control={control}
+          name="broker_secret_ref"
+          label="Connection string reference"
+          hint="Reference name only; never enter the connection string."
+          required
+        />
+      ) : null}
+    </Section>
   );
 }
 
@@ -708,7 +885,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
             <Form {...form}>
               <form
                 className="flex flex-col gap-4"
-                aria-label={`Edit ${source.type} Source`}
+                aria-label={`Edit ${typeLabel(source.type)} Source`}
                 noValidate
                 onSubmit={form.handleSubmit((values) =>
                   save.mutate(values, {
@@ -756,7 +933,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
           <ConfirmAction
             label="Revoke"
             consequence="Revoking a Source stops it accepting Events. It cannot be restored, and a replacement is a new Source with a new identifier."
-            question={`Revoke the ${source.type} Source ${source.name}? It stops accepting Events and cannot be restored.`}
+            question={`Revoke the ${typeLabel(source.type)} Source ${source.name}? It stops accepting Events and cannot be restored.`}
             confirmLabel={`Revoke ${source.name}`}
             busy={revoke.isPending}
             onConfirm={() => revoke.mutate()}

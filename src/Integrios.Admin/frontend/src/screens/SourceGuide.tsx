@@ -8,11 +8,10 @@ import { api } from "../api/client";
 import { asProblem, call } from "../api/query";
 import type { components } from "../api/schema";
 import { BodyPanel } from "../ui/copy";
+import { type JsonObject, object, text } from "../ui/json";
 import { Details } from "../ui/layout";
 
 type Source = components["schemas"]["SourceDto"];
-type JsonObject = Record<string, unknown>;
-
 export type SourceGuideContext = {
   subscriptionId: string;
   subscriptionPath: string;
@@ -20,15 +19,6 @@ export type SourceGuideContext = {
   payload: Record<string, unknown>;
   advancedMapping: boolean;
 };
-
-function object(value: unknown): JsonObject {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
-}
-
-function text(value: unknown, key: string): string | null {
-  const found = object(value)[key];
-  return typeof found === "string" && found.trim() ? found : null;
-}
 
 function append(base: string, path: string) {
   return `${base.replace(/\/$/, "")}${path}`;

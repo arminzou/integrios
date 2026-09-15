@@ -68,10 +68,25 @@ const connector = {
   description: null,
   ...stamps,
 };
+/// A real manifest always carries its capability blocks, and the Source form now authors its
+/// verification menu from them, so an empty document here would prove the form renders nothing.
+const sourceVerification = {
+  allow_unverified: true,
+  schemes: [{ scheme: "hmac_sha256", required_config: [], required_secret_refs: ["secret"] }],
+};
 const connectorDetail = {
   ...connector,
   manifest_schema_version: 1,
-  manifest: {},
+  manifest: {
+    manifest_schema_version: 1,
+    key: connector.key,
+    contract_version: 1,
+    direction: connector.direction,
+    source_configuration_schema: { type: "object", properties: {}, additionalProperties: true },
+    source_verification: sourceVerification,
+    destination_authentication: { allow_unauthenticated: true, schemes: [] },
+    presentation: { name: connector.name, event_types: [], authoring_presets: [] },
+  },
 };
 
 const page = (items: unknown[], nextCursor: string | null = null) => ({ items, next_cursor: nextCursor });
@@ -219,7 +234,7 @@ it("applies the list filters through their controls and keeps them usable at 320
     await view.setViewportSize({ width: 320, height: 900 });
     expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await view.goto(`${origin}/tenants/${tenantId}/sources`);
-    await view.getByText("event_api", { exact: true }).waitFor();
+    await view.getByText("Event API", { exact: true }).waitFor();
     const request = view.waitForRequest((request) => new URL(request.url()).searchParams.get("topic_id") === topicId);
     await view.getByLabel("Topic", { exact: true }).click();
     // The real browser owns this positioned popup; this assertion proves the same limit described
@@ -244,6 +259,7 @@ it.each([
   ["New Connector", "/connectors", "New Connector"],
   ["Import manifest", "/connectors", "Import manifest"],
   ["Subscription edit", `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`, "Edit"],
+  ["New Source", `/tenants/${tenantId}/sources`, "New Source"],
 ])(
   "fits the %s sheet into 320px",
   async (_name, path, trigger) => {
@@ -517,7 +533,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Event API");
     await form.getByLabel("Name", { exact: true }).fill("orders-intake");
-    await form.getByLabel("Configuration (JSON)").fill("{}");
+    expect(await form.getByText("Advanced configuration").count()).toBe(0);
     await view.click("text=Create Source");
 
     const guide = view.getByRole("dialog", { name: "Publish through this Source" });
@@ -538,11 +554,9 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  /// Webhook and queue Sources carry the parts an Event API Source refuses: verification (webhook
-  /// only), input requirements, a mapping envelope, and an Event identity rule. Each kind is typed
-  /// as its label tells the Operator to type it, so a label naming a kind the API does not accept
-  /// fails here rather than at the first real create.
-  it("sends a webhook Source with verification, contract, mapping, and identity rule", async () => {
+  /// Webhook and broker Sources carry the parts an Event API Source refuses. Their authored choices
+  /// are converted to the API's existing documents at the form boundary.
+  it("sends a webhook Source with verification and an identity rule", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
 
     await view.click("text=New Source");
@@ -551,47 +565,134 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Webhook");
     await form.getByLabel("Name", { exact: true }).fill("github-intake");
-    await form.getByLabel("Configuration (JSON)", { exact: true }).fill("{}");
-    await form.getByLabel("Verification scheme (optional)").fill("hmac_sha256");
-    await form.getByLabel("Verification configuration (JSON)").fill('{"header":"X-Signature"}');
-    await form.getByLabel("Verification secret references (JSON)").fill('{"secret":"gh-hook"}');
-    await form.getByLabel("Input requirements (JSON, optional)").fill('{"type":"object"}');
-    await form.getByLabel("Event mapping (JSONata, optional)").fill("payload");
-    await form.getByLabel(/^Event identity kind \(header or json_path\)$/).fill("json_path");
-    await form.getByLabel("Event identity selector").fill("/delivery/id");
+    await choose(form.getByRole("combobox", { name: "Verification" }), "HMAC SHA-256");
+    await form.getByLabel("Secret reference").fill("gh-hook");
+    await choose(form.getByLabel("Event identity"), "Request header");
+    await form.getByLabel("Header name").fill("X-GitHub-Delivery");
+    expect(await form.getByRole("button", { name: "Open Integrios Event Builder" }).count()).toBe(1);
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
     expect(sent.body.type).toBe("webhook");
     expect(sent.body.verification).toEqual({
       scheme: "hmac_sha256",
-      config: { header: "X-Signature" },
+      config: {},
       secret_refs: { secret: "gh-hook" },
     });
-    expect(sent.body.input_requirements).toEqual({ type: "object" });
-    expect(sent.body.mapping).toEqual({ engine: "jsonata", version: "1", expression: "payload" });
-    expect(sent.body.event_identity_rule).toEqual({ kind: "json_path", value: "/delivery/id" });
+    expect(sent.body.input_requirements).toBeNull();
+    expect(sent.body.mapping).toBeNull();
+    expect(sent.body.event_identity_rule).toEqual({ kind: "header", value: "X-GitHub-Delivery" });
     await view.close();
   }, 60_000);
 
-  it("sends a queue Source with its transport configuration and no verification", async () => {
+  /// The Event-identity rule is fixed when the Source is created, so a selector left over from the
+  /// kind before it is permanent. Switching kind must clear it rather than offer a header name in a
+  /// field that now wants a JSON Pointer — which the API accepts as a header name in the other
+  /// direction, producing a Source that rejects every request it ever receives.
+  it("clears the identity selector when the identity kind changes, and can return to none", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/sources`);
+
+    await view.click("text=New Source");
+    const form = formNamed(view, "Create a Source");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await choose(form.getByLabel("Topic", { exact: true }), /Orders/);
+    await choose(form.getByLabel("Type"), "Webhook");
+    await choose(form.getByLabel("Event identity"), "Request header");
+    await form.getByLabel("Header name").fill("X-GitHub-Delivery");
+
+    await choose(form.getByLabel("Event identity"), "JSON body field");
+    expect(await form.getByLabel("JSON Pointer").inputValue()).toBe("");
+
+    await choose(form.getByLabel("Event identity"), "No duplicate detection");
+    expect(await form.getByLabel("JSON Pointer").count()).toBe(0);
+    await view.close();
+  }, 60_000);
+
+  /// The other broker entity form and the other authentication scheme. Both compose a different
+  /// configuration document, and the API accepts exactly one entity, so a form that named a queue
+  /// and a topic subscription together would be refused.
+  it("sends a topic subscription addressed with a connection string reference", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
+
+    await view.click("text=New Source");
+    const form = formNamed(view, "Create a Source");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await choose(form.getByLabel("Topic", { exact: true }), /Orders/);
+    await choose(form.getByLabel("Type"), "Message broker");
+    await form.getByLabel("Name", { exact: true }).fill("orders-topic");
+    await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
+    await choose(form.getByLabel("Broker entity"), "Topic subscription");
+    await form.getByLabel("Topic name").fill("orders");
+    await form.getByLabel("Subscription name").fill("integrios");
+    await choose(form.getByLabel("Authentication"), "Connection string reference");
+    await form.getByLabel("Connection string reference", { exact: true }).fill("orders-bus");
+    await view.click("text=Create Source");
+
+    const sent = await submitted(writes);
+    expect(sent.body.configuration).toEqual({
+      transport: "azure_service_bus",
+      authentication: { scheme: "connection_string", secret_ref: "orders-bus" },
+      transport_config: {
+        namespace: "acme.servicebus.windows.net",
+        topic_name: "orders",
+        subscription_name: "integrios",
+      },
+    });
+    await view.close();
+  }, 60_000);
+
+  /// The verification menu is the Connector's, not the dashboard's. A Connector that refuses an
+  /// unverified Source must not offer the empty choice, and a scheme the Connector does not declare
+  /// must not appear at all.
+  it("offers the verification the Connector declares and no empty choice when it requires one", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/sources`);
+    await view.route("**/admin/connectors/*", (route) =>
+      route.fulfill({
+        json: {
+          ...connectorDetail,
+          manifest: {
+            ...connectorDetail.manifest,
+            source_verification: { ...sourceVerification, allow_unverified: false },
+          },
+        },
+      }),
+    );
+
+    await view.click("text=New Source");
+    const form = formNamed(view, "Create a Source");
+    await choose(form.getByLabel("Connector"), /HTTP/);
+    await choose(form.getByLabel("Type"), "Webhook");
+
+    await form.getByRole("combobox", { name: "Verification" }).click();
+    const options = view.getByRole("listbox");
+    await options.getByRole("option", { name: "HMAC SHA-256" }).waitFor();
+    expect(await options.getByRole("option").allInnerTexts()).toEqual(["HMAC SHA-256"]);
+    await view.close();
+  }, 60_000);
+
+  it("keeps broker authoring neutral while sending Azure Service Bus configuration", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
 
     await view.click("text=New Source");
     const form = formNamed(view, "Create a Source");
     await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic"), /Orders/);
-    await choose(form.getByLabel("Type"), "Queue");
+    await choose(form.getByLabel("Type"), "Message broker");
     await form.getByLabel("Name", { exact: true }).fill("queue-intake");
     expect(await form.getByLabel(/^Verification/).count()).toBe(0);
-    await form.getByLabel("Queue transport configuration (JSON)").fill('{"transport":"azure_service_bus"}');
-    await form.getByLabel(/^Event identity kind \(message_id or json_path\)$/).fill("message_id");
-    await form.getByLabel("Event identity selector").fill("message_id");
+    expect(await form.getByLabel("Broker type").textContent()).toContain("Azure Service Bus");
+    await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
+    await form.getByLabel("Queue name").fill("orders");
+    await choose(form.getByLabel("Event identity"), "Broker message ID");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
     expect(sent.body.type).toBe("queue");
-    expect(sent.body.configuration).toEqual({ transport: "azure_service_bus" });
+    expect(sent.body.configuration).toEqual({
+      transport: "azure_service_bus",
+      authentication: { scheme: "azure_identity" },
+      transport_config: { namespace: "acme.servicebus.windows.net", queue_name: "orders" },
+    });
     expect(sent.body.verification).toBeNull();
     expect(sent.body.event_identity_rule).toEqual({ kind: "message_id", value: "message_id" });
     await view.close();

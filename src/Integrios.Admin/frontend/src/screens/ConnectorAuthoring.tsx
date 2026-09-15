@@ -1,7 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { cn } from "cn";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,7 @@ import { formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
 import type { components } from "../api/schema";
 import { snakeIdentifier } from "../identifiers";
-import { Callout, Disclosure, FormError } from "../ui/controls";
+import { Callout, Disclosure, FormError, Section } from "../ui/controls";
 import { BodyPanel } from "../ui/copy";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
@@ -55,28 +54,6 @@ const direction = (values: Pick<AuthoringValues, "receive" | "deliver">) =>
   values.receive && values.deliver ? "both" : values.receive ? "source" : "destination";
 
 type ComposeInput = [key: string, contractVersion: number, name: string, description: string | null, direction: string];
-
-function Section({
-  title,
-  hint,
-  className,
-  children,
-}: {
-  title: string;
-  hint: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className={cn("flex flex-col gap-3 border-t pt-4 first:border-t-0 first:pt-0", className)}>
-      <div>
-        <h3 className="m-0 text-sm font-semibold">{title}</h3>
-        <p className="m-0 mt-0.5 text-xs text-ink-secondary">{hint}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /// A checkbox states one capability or one allowed scheme, so it is the platform control rather than
 /// a widget: the label wraps the input, which is what gives it its name and its target area without
