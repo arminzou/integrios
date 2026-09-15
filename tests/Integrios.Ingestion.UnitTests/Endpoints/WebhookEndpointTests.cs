@@ -93,6 +93,36 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
+    // A Source may name a secret that was never provisioned, and nothing at authoring time can tell:
+    // the control plane holds names and the data plane holds values, deliberately. So the failure
+    // lands here, per request. 5xx is the honest status — the request is fine and a retry succeeds
+    // once the secret exists — and the reference stays out of the response, because an external
+    // caller has no business learning how secrets are named.
+    [Fact]
+    public async Task PostWebhook_VerificationSecretDoesNotResolve_FailsWithoutNamingTheReference()
+    {
+        const string absentReference = "never_provisioned";
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
+        {
+            SourceVerification = new SourceVerification
+            {
+                Scheme = "hmac_sha256",
+                Config = JsonSerializer.Deserialize<JsonElement>("{}"),
+                SecretRefs = JsonSerializer.Deserialize<JsonElement>($$"""{"secret":"{{absentReference}}"}"""),
+            },
+        };
+
+        HttpResponseMessage response = await SendAsync(
+            callbackId, """{"action":"opened"}""", "issue.opened", "delivery-1");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        string body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("The Source could not be verified.");
+        body.ShouldNotContain(absentReference);
+        body.ShouldNotContain("configuration");
+    }
+
     [Fact]
     public async Task PostWebhook_NoVerificationConfigured_SkipsVerificationAndAccepts()
     {
