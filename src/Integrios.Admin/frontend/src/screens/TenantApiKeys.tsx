@@ -43,7 +43,7 @@ import {
   TableCard,
 } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
-import { Day, Timestamp } from "../ui/time";
+import { Timestamp } from "../ui/time";
 
 type TenantApiKeyListItem = components["schemas"]["TenantApiKeyListItemDto"];
 type CreatedKey = components["schemas"]["CreateTenantApiKeyResult"];
@@ -137,7 +137,6 @@ export function TenantApiKeysScreen({
                     <TableHead scope="col">Name</TableHead>
                     <TableHead scope="col">Prefix</TableHead>
                     <TableHead scope="col">State</TableHead>
-                    <TableHead scope="col">Expires</TableHead>
                     <TableHead scope="col">Last used</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -161,9 +160,6 @@ export function TenantApiKeysScreen({
                       <TableCell className="font-mono text-[13px]">{key.key_prefix}</TableCell>
                       <TableCell>
                         <StatusBadge status={key.state} />
-                      </TableCell>
-                      <TableCell className="text-ink-secondary">
-                        {key.expires_at ? <Day value={key.expires_at} /> : "Never"}
                       </TableCell>
                       <TableCell className="text-ink-secondary">
                         <div className="flex items-center justify-between gap-3">
@@ -263,8 +259,6 @@ function TenantApiKeyInspector({
         <dd>
           <Timestamp value={current.created_at} />
         </dd>
-        <dt>Expires</dt>
-        <dd>{current.expires_at ? <Timestamp value={current.expires_at} /> : "Never"}</dd>
         <dt>Last used</dt>
         <dd>{current.last_used_at ? <Timestamp value={current.last_used_at} /> : "Never used"}</dd>
       </Details>

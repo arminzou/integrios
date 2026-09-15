@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
@@ -23,6 +23,23 @@ const listItem = {
 };
 
 describe("Tenant API keys", () => {
+  it("omits expiration from the list and inspector", async () => {
+    const expiringKey = { ...listItem, expires_at: "2027-09-01T00:00:00Z" };
+    stubHttp(({ url }) =>
+      url.pathname.endsWith(`/tenant-api-keys/${keyId}`)
+        ? { status: 200, body: { ...expiringKey, status: expiringKey.state } }
+        : { status: 200, body: page([expiringKey]) },
+    );
+
+    renderScreen(<TenantApiKeysScreen tenantId={tenantId} selectedTenantApiKeyId={keyId} />);
+    const table = await screen.findByRole("table");
+    const inspector = await screen.findByRole("complementary", { name: "Tenant API key detail" });
+    await within(inspector).findByText("Never used");
+
+    expect(within(table).queryByRole("columnheader", { name: "Expires" })).toBeNull();
+    expect(within(inspector).queryByText("Expires")).toBeNull();
+  });
+
   it("creates a key without asking for an expiration", async () => {
     const calls = stubHttp(({ method }) =>
       method === "POST"
