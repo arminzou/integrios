@@ -676,9 +676,16 @@ describe("Create forms, filled through a real browser", () => {
     await form.getByLabel("Name", { exact: true }).fill("github-intake");
     await choose(form.getByRole("combobox", { name: "Verification" }), "HMAC SHA-256");
     await form.getByLabel("Secret reference").fill("gh-hook");
-    await choose(form.getByLabel("Event identity"), "Request header");
-    await form.getByLabel("Header name").fill("X-GitHub-Delivery");
-    expect(await form.getByRole("button", { name: "Open Integrios Event Builder" }).count()).toBe(1);
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    const builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    // The rule reads a request header, so the sample has to carry the header it reads.
+    await builder.getByLabel("Header 1 name").fill("X-GitHub-Delivery");
+    await builder.getByLabel("Header 1 sample value").fill("d-1");
+    await builder.getByLabel("Event identity").selectOption("header");
+    await builder.getByLabel("Identity header").selectOption("x-github-delivery");
+    await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
+    await builder.getByRole("button", { name: "Use configuration" }).click();
+    await form.getByText("The x-github-delivery header").waitFor();
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -692,9 +699,10 @@ describe("Create forms, filled through a real browser", () => {
     expect(sent.body.input_requirements).toBeNull();
     expect(sent.body.mapping).toBeNull();
     // allow_missing defaults to refusing, so a rule authored without touching it keeps today's meaning.
+    // Lower-cased, as the runtime presents request headers; the extractor matches case-insensitively.
     expect(sent.body.event_identity_rule).toEqual({
       kind: "header",
-      value: "X-GitHub-Delivery",
+      value: "x-github-delivery",
       allow_missing: false,
     });
     await view.close();
@@ -711,10 +719,17 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Topic", { exact: true }), /Orders/);
     await choose(form.getByLabel("Type"), "Webhook");
     await form.getByLabel("Name", { exact: true }).fill("github-intake");
-    await choose(form.getByLabel("Event identity"), "JSON body field");
-    await form.getByLabel("JSON Pointer").fill("/delivery/id");
-    await form.getByLabel("Accept a request that carries no value here").check();
-    expect(await form.getByRole("button", { name: "Open Integrios Event Builder" }).count()).toBe(1);
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    const builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByLabel("Request body (JSON)").fill('{"delivery":{"id":"d-1"}}');
+    await builder.getByLabel("Event identity").selectOption("json_path");
+    const field = builder.getByLabel("Identity field");
+    // Picked as the field the sample shows, stored as the JSON Pointer the extractor reads.
+    await expect.poll(() => field.locator("option").last().textContent()).toBe("delivery.id");
+    await field.selectOption("/delivery/id");
+    await builder.getByLabel("Accept a request that carries no value here").check();
+    await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
+    await builder.getByRole("button", { name: "Use configuration" }).click();
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -737,10 +752,13 @@ describe("Create forms, filled through a real browser", () => {
     await form.getByLabel("Name", { exact: true }).fill("broker-intake");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
     await form.getByLabel("Queue name").fill("orders");
-    await choose(form.getByLabel("Event identity"), "Message ID");
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    const builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByLabel("Event identity").selectOption("message_id");
     // No selector for this kind — the message carries its own id — but the permission still applies.
-    expect(await form.getByLabel("JSON Pointer").count()).toBe(0);
-    await form.getByLabel("Accept a message that carries no value here").check();
+    expect(await builder.getByLabel("Identity field").count()).toBe(0);
+    await builder.getByLabel("Accept a message that carries no value here").check();
+    await builder.getByRole("button", { name: "Use configuration" }).click();
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -764,14 +782,21 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Connector"), /HTTP/);
     await choose(form.getByLabel("Topic", { exact: true }), /Orders/);
     await choose(form.getByLabel("Type"), "Webhook");
-    await choose(form.getByLabel("Event identity"), "Request header");
-    await form.getByLabel("Header name").fill("X-GitHub-Delivery");
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    const builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByLabel("Header 1 name").fill("X-GitHub-Delivery");
+    await builder.getByLabel("Header 1 sample value").fill("d-1");
+    await builder.getByLabel("Event identity").selectOption("header");
+    await builder.getByLabel("Identity header").selectOption("x-github-delivery");
 
-    await choose(form.getByLabel("Event identity"), "JSON body field");
-    expect(await form.getByLabel("JSON Pointer").inputValue()).toBe("");
+    await builder.getByLabel("Event identity").selectOption("json_path");
+    expect(await builder.getByLabel("Identity field").inputValue()).toBe("");
+    // Half a rule cannot leave the dialog: it would be stored and match nothing.
+    expect(await builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(false);
 
-    await choose(form.getByRole("combobox", { name: "Event identity" }), "No duplicate detection");
-    expect(await form.getByLabel("JSON Pointer").count()).toBe(0);
+    await builder.getByLabel("Event identity").selectOption("");
+    expect(await builder.getByLabel("Identity field").count()).toBe(0);
+    expect(await builder.getByLabel("Accept a request that carries no value here").count()).toBe(0);
     await view.close();
   }, 60_000);
 
@@ -852,14 +877,20 @@ describe("Create forms, filled through a real browser", () => {
     const builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
     await builder.getByRole("heading", { name: "Sample message" }).waitFor();
     expect(await builder.getByText("Request headers").count()).toBe(0);
-    expect(await builder.getByLabel("Event name from header").count()).toBe(0);
     await builder.getByLabel("Message body (JSON)").waitFor();
-    await builder.getByRole("button", { name: "Back to Source" }).click();
+    // A broker message has no request headers, so there is nothing to read an Event type from but
+    // the body — the choice a webhook gets is not offered here.
+    await builder.getByRole("radio", { name: "From input" }).click();
+    expect(await builder.getByLabel("Read from").count()).toBe(0);
+    await builder.getByLabel("Event type field").waitFor();
+    await builder.getByRole("radio", { name: "Fixed value" }).click();
+    await builder.getByLabel("Event identity").selectOption("message_id");
+    await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
+    await builder.getByRole("button", { name: "Use configuration" }).click();
     expect(await form.getByLabel(/^Verification/).count()).toBe(0);
     expect(await form.getByLabel("Broker type").textContent()).toContain("Azure Service Bus");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
     await form.getByLabel("Queue name").fill("orders");
-    await choose(form.getByLabel("Event identity"), "Message ID");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -1022,32 +1053,52 @@ describe("Update and deactivate, driven through a real browser", () => {
 
     await view.getByRole("button", { name: "Edit", exact: true }).click();
     let form = formNamed(view, "Edit Webhook Source");
-    expect(await form.getByLabel("Header name").inputValue()).toBe("X-Wrong-Delivery");
-    await form.getByLabel("Header name").fill("X-GitHub-Delivery");
+    // The stored rule is stated where the Source is authored, without opening the Builder.
+    await form.getByText("The X-Wrong-Delivery header").waitFor();
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    let builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    // A value this sample does not carry stays selected and is named as absent rather than cleared.
+    expect(await builder.getByLabel("Identity header").inputValue()).toBe("X-Wrong-Delivery");
+    expect(await builder.getByLabel("Identity header").locator("option:checked").textContent()).toBe(
+      "X-Wrong-Delivery (not in this request)",
+    );
+    await builder.getByLabel("Header 1 name").fill("X-GitHub-Delivery");
+    await builder.getByLabel("Header 1 sample value").fill("d-1");
+    await builder.getByLabel("Identity header").selectOption("x-github-delivery");
+    await builder.getByRole("button", { name: "Use configuration" }).click();
     await form.getByRole("button", { name: "Save configuration" }).click();
     expect((await submitted(writes)).body.event_identity_rule).toEqual({
       kind: "header",
-      value: "X-GitHub-Delivery",
+      value: "x-github-delivery",
       allow_missing: false,
     });
     writes.length = 0;
 
     await view.getByRole("button", { name: "Edit", exact: true }).click();
     form = formNamed(view, "Edit Webhook Source");
-    await choose(form.getByRole("combobox", { name: "Event identity" }), "No duplicate detection");
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByLabel("Event identity").selectOption("");
+    await builder.getByRole("button", { name: "Use configuration" }).click();
+    await form.getByText("No duplicate detection").waitFor();
     await form.getByRole("button", { name: "Save configuration" }).click();
     expect((await submitted(writes)).body.event_identity_rule).toBeNull();
     writes.length = 0;
 
     await view.getByRole("button", { name: "Edit", exact: true }).click();
     form = formNamed(view, "Edit Webhook Source");
-    await choose(form.getByRole("combobox", { name: "Event identity" }), "Request header");
-    await form.getByLabel("Header name").fill("X-Provider-Delivery");
-    await form.getByLabel("Accept a request that carries no value here").check();
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByLabel("Header 1 name").fill("X-Provider-Delivery");
+    await builder.getByLabel("Header 1 sample value").fill("d-2");
+    await builder.getByLabel("Event identity").selectOption("header");
+    await builder.getByLabel("Identity header").selectOption("x-provider-delivery");
+    await builder.getByLabel("Accept a request that carries no value here").check();
+    await builder.getByRole("button", { name: "Use configuration" }).click();
     await form.getByRole("button", { name: "Save configuration" }).click();
     expect((await submitted(writes)).body.event_identity_rule).toEqual({
       kind: "header",
-      value: "X-Provider-Delivery",
+      value: "x-provider-delivery",
       allow_missing: true,
     });
     await view.close();

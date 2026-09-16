@@ -48,7 +48,7 @@ it("explains webhook normalization and shows its sample request", async () => {
   expect((within(builder).getByRole("radio", { name: "Fixed value" }) as HTMLInputElement).checked).toBe(true);
   fireEvent.click(within(builder).getByRole("radio", { name: "From input" }));
   expect(within(builder).getByLabelText("Read from")).toBeTruthy();
-  expect(within(builder).getByLabelText("Request header")).toBeTruthy();
+  expect(within(builder).getByLabelText("Event type header")).toBeTruthy();
   expect(within(builder).getByLabelText("Prefix (optional)")).toBeTruthy();
   const normalized = within(builder).getByRole("heading", { name: "Normalized Event" }).closest("section")!;
   expect(within(normalized).getByText(/supplied by Event identity when configured/)).toBeTruthy();
@@ -56,7 +56,12 @@ it("explains webhook normalization and shows its sample request", async () => {
 
 it("shows broker messages without HTTP request context", async () => {
   renderScreen(
-    <EventBuilder contractKey="broker Source" sourceType="broker" draft={{ expression: "" }} onUse={() => undefined} />,
+    <EventBuilder
+      contractKey="broker Source"
+      sourceType="broker"
+      draft={{ expression: "", identity: null }}
+      onUse={() => undefined}
+    />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
   const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
@@ -65,7 +70,7 @@ it("shows broker messages without HTTP request context", async () => {
   expect(within(builder).getByLabelText("Message body (JSON)")).toBeTruthy();
   fireEvent.click(within(builder).getByRole("radio", { name: "From input" }));
   expect(within(builder).queryByLabelText("Read from")).toBeNull();
-  expect(within(builder).getByLabelText("JSON body field")).toBeTruthy();
+  expect(within(builder).getByLabelText("Event type field")).toBeTruthy();
 });
 
 it("returns the ephemeral Builder draft to its owning Source form", async () => {
@@ -93,13 +98,18 @@ it("returns the ephemeral Builder draft to its owning Source form", async () => 
 it("reopens a stored guided mapping in the form that wrote it", async () => {
   const expression = guidedExpression({ source: "body", path: "event.type", prefix: "acme" });
   renderScreen(
-    <EventBuilder contractKey="broker Source" sourceType="broker" draft={{ expression }} onUse={() => undefined} />,
+    <EventBuilder
+      contractKey="broker Source"
+      sourceType="broker"
+      draft={{ expression, identity: null }}
+      onUse={() => undefined}
+    />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
   const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
 
   expect((within(builder).getByRole("radio", { name: "From input" }) as HTMLInputElement).checked).toBe(true);
-  expect((within(builder).getByLabelText("JSON body field") as HTMLSelectElement).value).toBe("event.type");
+  expect((within(builder).getByLabelText("Event type field") as HTMLSelectElement).value).toBe("event.type");
   expect((within(builder).getByLabelText("Prefix (optional)") as HTMLInputElement).value).toBe("acme");
   expect(within(builder).queryByRole("button", { name: "Reset to guided" })).toBeNull();
 });
@@ -109,7 +119,7 @@ it("keeps an expression it did not write in the advanced editor", async () => {
     <EventBuilder
       contractKey="broker Source"
       sourceType="broker"
-      draft={{ expression: '{ "event_type": kind, "payload": body.inner }' }}
+      draft={{ expression: '{ "event_type": kind, "payload": body.inner }', identity: null }}
       onUse={() => undefined}
     />,
   );

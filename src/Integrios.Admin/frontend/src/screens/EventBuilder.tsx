@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
-import { ConfirmAction } from "../ui/controls";
+import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { formatJson } from "../ui/json";
 import {
@@ -25,8 +25,31 @@ import {
   requirementTypes,
 } from "./sourceMapping";
 
-export type SourceContractDraft = { expression: string; schema?: Record<string, unknown> };
+/// The Source's Event-identity rule, as the Admin API stores it. `null` is a real choice: the Source
+/// then deduplicates nothing. It travels with the draft rather than through the mapping, because the
+/// rule is read before the mapping runs and an expression that emitted one would be a second writer.
+export type EventIdentityRule = { kind: string; value: string; allowMissing: boolean };
+
+export type SourceContractDraft = {
+  expression: string;
+  schema?: Record<string, unknown>;
+  identity: EventIdentityRule | null;
+};
 type SourceInputType = "webhook" | "broker";
+
+/// Where a Source's Event identity is read from. A kind offers a selector only when it needs one — a
+/// message carries its own id — and the offered set is per Source type because the affordances
+/// differ: a broker message has no request headers, a webhook request no message id.
+///
+/// The label says "Message ID", not whose: Azure Service Bus and RabbitMQ leave it to the publisher
+/// while SQS and Pub/Sub assign it, so naming either one is wrong for the other. Nor does a broker
+/// necessarily have one at all — Kafka identifies a record by its coordinates — which is why the
+/// offered set will key on the transport rather than the Source type once a second transport lands.
+const identityKinds = [
+  { value: "message_id", label: "Message ID", types: ["broker"] },
+  { value: "header", label: "Request header", types: ["webhook"] },
+  { value: "json_path", label: "JSON body field", types: ["webhook", "broker"] },
+] as const;
 
 const targetEnvelope = {
   event_type: "required string",
@@ -53,10 +76,26 @@ function requirementsFrom(schema: Record<string, unknown> | undefined): InputReq
 
 type HeaderRow = { name: string; value: string };
 
+const segmentsOf = (path: string) =>
+  [...path.matchAll(/`([^`]+)`|([A-Za-z_$][\w$]*)/g)].map(([, quoted, plain]) => quoted ?? plain);
+
 function valueAtPath(body: unknown, path: string): unknown {
-  const parts = [...path.matchAll(/`([^`]+)`|([A-Za-z_$][\w$]*)/g)].map(([, quoted, plain]) => quoted ?? plain);
-  return parts.reduce<unknown>((current, part) => (current as Record<string, unknown> | undefined)?.[part], body);
+  return segmentsOf(path).reduce<unknown>(
+    (current, part) => (current as Record<string, unknown> | undefined)?.[part],
+    body,
+  );
 }
+
+/// The same discovered field, addressed the way each artefact's reader needs it: the mapping runs
+/// through JSONata, the identity rule through `SourceEventIdentityExtractor`, which reads a JSON
+/// Pointer. Both are picked from one list, so the Operator types neither and meets one vocabulary.
+function pointerFrom(path: string): string {
+  return segmentsOf(path)
+    .map((segment) => `/${segment.replaceAll("~", "~0").replaceAll("/", "~1")}`)
+    .join("");
+}
+
+const named = (values: readonly string[]) => values.map((value) => ({ value, label: value }));
 
 /// The share of an editor row each field takes. The leading one carries the name that has to be read
 /// exactly — a header like `x-hub-signature-256`, or a discovered field path — and a row is only
@@ -127,6 +166,7 @@ export function EventBuilder({
   /// expression rather than from a stored copy beside it: the expression is the whole contract, so
   /// anything it cannot be read back into is not a rule this form may claim to represent.
   const [eventType, setEventType] = useState<EventTypeRule>(() => guidedFrom(draft.expression) ?? emptyEventType);
+  const [identity, setIdentity] = useState<EventIdentityRule | null>(draft.identity);
   const [expression, setExpression] = useState(draft.expression);
   const [mode, setMode] = useState<"guided" | "advanced">(() =>
     draft.expression.trim() === "" || guidedFrom(draft.expression) ? "guided" : "advanced",
@@ -194,23 +234,39 @@ export function EventBuilder({
       : eventType.source === "header"
         ? lastValidHeaders[eventType.header]
         : valueAtPath(lastValidBody, eventType.path);
-  const eventTypeIncomplete =
-    eventType.source === "fixed"
-      ? eventType.value.trim() === ""
-      : eventType.source === "header"
-        ? eventType.header === ""
-        : eventType.path === "";
+  /// An untouched Event type is not a broken mapping. A Source may carry no mapping at all, and then
+  /// the input is already an Integrios Event — `SourceContractEvaluator` passes it straight through.
+  /// A half-chosen one is broken, and is the only shape refused here.
+  const eventTypeUnset = eventType.source === "fixed" && eventType.value.trim() === "";
+  const eventTypeHalf =
+    eventType.source === "header" ? eventType.header === "" : eventType.source === "body" && eventType.path === "";
   const eventTypeSampleInvalid =
     eventType.source !== "fixed" &&
-    !eventTypeIncomplete &&
+    !eventTypeHalf &&
     dangling.length === 0 &&
     (typeof eventTypeInput !== "string" || eventTypeInput.trim() === "");
-  /// event_type is required and cannot be inferred, so a guided draft that names no source for it is
-  /// refused here rather than sent as an empty string the runtime would reject on every request.
+  /// A kind whose selector is still empty is a half-authored rule; the API would take it and the
+  /// Source would then refuse every input, which is the failure this dialog exists to prevent.
+  const identityIncomplete = identity !== null && identity.value === "";
+  /// What the guided panes would hand back. An untouched Event type means no mapping rather than one
+  /// mapping event_type to the empty string, which the runtime would reject on every request.
+  const settled = mode === "guided" && eventTypeUnset ? "" : expression;
+  /// Something for the Source form to take. What arrived counts as well as what is on screen, so
+  /// emptying a rule the Source already had is itself applicable — otherwise an identity could be
+  /// added here and never removed.
+  const authored =
+    settled.trim() !== "" ||
+    identity !== null ||
+    schema !== undefined ||
+    draft.expression.trim() !== "" ||
+    draft.identity !== null;
   const mappable =
-    mode === "advanced"
-      ? expression.trim() !== ""
-      : !eventTypeIncomplete && !eventTypeSampleInvalid && dangling.length === 0;
+    authored &&
+    !identityIncomplete &&
+    !eventTypeHalf &&
+    !eventTypeSampleInvalid &&
+    dangling.length === 0 &&
+    (mode !== "advanced" || expression.trim() !== "");
 
   /// What a displayed result was produced from. Any change to the contract or the sample — a header
   /// the mapping reads included — makes both a success and a failure a statement about something
@@ -236,6 +292,11 @@ export function EventBuilder({
   const message = problem ? (formError(problem) ?? "The preview could not be run.") : null;
   const fresh = previewed === signature;
 
+  const changeIdentity = (rule: EventIdentityRule | null) => {
+    setIdentity(rule);
+    preview.reset();
+  };
+
   const changeEventType = (rule: EventTypeRule) => {
     setEventType(rule);
     setExpression(guidedExpression(rule));
@@ -247,7 +308,7 @@ export function EventBuilder({
   const opaqueSchema = requirementsFrom(draft.schema).length === 0 ? draft.schema : undefined;
 
   const useDraft = () => {
-    onUse({ expression, schema: schema ?? opaqueSchema });
+    onUse({ expression: settled, schema: schema ?? opaqueSchema, identity });
     setOpen(false);
   };
 
@@ -451,36 +512,45 @@ export function EventBuilder({
               </details>
             </Pane>
 
-            {mode === "guided" ? (
-              <GuidedFields
-                eventType={eventType}
+            <div className="flex min-w-0 flex-col gap-4">
+              {mode === "guided" ? (
+                <GuidedFields
+                  eventType={eventType}
+                  headerNames={headerNames}
+                  dangling={dangling}
+                  paths={paths}
+                  stale={bodyError !== null || headerError !== null}
+                  headers={webhook ? lastValidHeaders : undefined}
+                  body={lastValidBody}
+                  onChange={changeEventType}
+                  onAdvanced={() => setMode("advanced")}
+                />
+              ) : (
+                <AdvancedExpression
+                  expression={expression}
+                  representable={representable}
+                  headers={webhook ? lastValidHeaders : undefined}
+                  onChange={(next) => {
+                    setExpression(next);
+                    preview.reset();
+                  }}
+                  onGuided={() => {
+                    // Including when the editor was emptied: the guided pane is about to claim it
+                    // represents this expression, so the expression becomes the one it generates.
+                    setExpression(generated);
+                    setMode("guided");
+                    preview.reset();
+                  }}
+                />
+              )}
+              <IdentityFields
+                identity={identity}
+                sourceType={sourceType}
                 headerNames={headerNames}
-                dangling={dangling}
                 paths={paths}
-                stale={bodyError !== null || headerError !== null}
-                headers={webhook ? lastValidHeaders : undefined}
-                body={lastValidBody}
-                onChange={changeEventType}
-                onAdvanced={() => setMode("advanced")}
+                onChange={changeIdentity}
               />
-            ) : (
-              <AdvancedExpression
-                expression={expression}
-                representable={representable}
-                headers={webhook ? lastValidHeaders : undefined}
-                onChange={(next) => {
-                  setExpression(next);
-                  preview.reset();
-                }}
-                onGuided={() => {
-                  // Including when the editor was emptied: the guided pane is about to claim it
-                  // represents this expression, so the expression becomes the one it generates.
-                  setExpression(generated);
-                  setMode("guided");
-                  preview.reset();
-                }}
-              />
-            )}
+            </div>
 
             <Pane title="Normalized Event">
               {message ? (
@@ -516,8 +586,12 @@ export function EventBuilder({
             <p role="alert" className="m-0 text-sm text-destructive">
               The selected Event type input must contain a non-empty string in this sample.
             </p>
+          ) : eventTypeHalf ? (
+            <Note>Choose where the Event type is read from before using this configuration.</Note>
+          ) : identityIncomplete ? (
+            <Note>Choose where the Event identity is read from before using this configuration.</Note>
           ) : (
-            <Note>Complete the Event type rule before using this configuration.</Note>
+            <Note>Author an Event type or an Event identity before using this configuration.</Note>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -548,6 +622,87 @@ export function EventBuilder({
   );
 }
 
+/// The Source's own Event-identity rule, authored beside the mapping because an Operator decides
+/// both from the same sample — but never generated into it. The rule is read before the mapping runs
+/// and outlives any one expression, so the mapping emitting an identity would mean one concept
+/// authored twice, with different permanence.
+function IdentityFields({
+  identity,
+  sourceType,
+  headerNames,
+  paths,
+  onChange,
+}: {
+  identity: EventIdentityRule | null;
+  sourceType: SourceInputType;
+  headerNames: string[];
+  paths: string[];
+  onChange: (identity: EventIdentityRule | null) => void;
+}) {
+  const inputNoun = sourceType === "webhook" ? "request" : "message";
+  const kinds = identityKinds.filter((kind) => (kind.types as readonly string[]).includes(sourceType));
+  const selector = identity && identity.kind !== "message_id" ? identity.kind : "";
+
+  return (
+    <Pane title="Event identity">
+      <Note>
+        Where Integrios reads <span className="font-mono">source_event_id</span>, so one {inputNoun} sent twice becomes
+        one Event. Read before the mapping, and never taken from it.
+      </Note>
+      {/* A selector carried across a kind change is submitted under the new one: a header name
+          becomes a JSON Pointer the API refuses, and a Pointer becomes a header name it accepts,
+          leaving a Source that looks configured and matches no input. So the kind carries its own
+          value, and changing it starts that value again. */}
+      <Choice
+        label="Event identity"
+        value={identity?.kind ?? ""}
+        options={kinds.map((kind) => ({ value: kind.value, label: kind.label }))}
+        noneLabel="No duplicate detection"
+        onChange={(kind) =>
+          onChange(
+            kind === ""
+              ? null
+              : {
+                  kind,
+                  value: kind === "message_id" ? "message_id" : "",
+                  allowMissing: identity?.allowMissing ?? false,
+                },
+          )
+        }
+      />
+      {selector === "header" ? (
+        <Choice
+          label="Identity header"
+          value={identity?.value ?? ""}
+          options={named(headerNames)}
+          noneLabel="Choose a header…"
+          onChange={(value) => onChange({ kind: "header", value, allowMissing: identity?.allowMissing ?? false })}
+        />
+      ) : null}
+      {selector === "json_path" ? (
+        <Choice
+          label="Identity field"
+          value={identity?.value ?? ""}
+          options={paths.map((path) => ({ value: pointerFrom(path), label: path }))}
+          noneLabel="Choose a field…"
+          onChange={(value) => onChange({ kind: "json_path", value, allowMissing: identity?.allowMissing ?? false })}
+        />
+      ) : null}
+      {identity ? (
+        /* Offered for every kind rather than gated on one: a message id is application-defined on
+           Azure Service Bus and on RabbitMQ, so an absent value is a real state for the kind that
+           looks least likely to need the permission. */
+        <CheckRow
+          checked={identity.allowMissing}
+          label={`Accept a ${inputNoun} that carries no value here`}
+          hint={`Integrios then reads the identity this Source's Event mapping produces, if it produces one, rather than rejecting the ${inputNoun}. An Event with no identity at all is not deduplicated.`}
+          onChange={(allowMissing) => onChange({ ...identity, allowMissing })}
+        />
+      ) : null}
+    </Pane>
+  );
+}
+
 function Target({ title, requirement, children }: { title: string; requirement: string; children: ReactNode }) {
   return (
     <section className="flex min-w-0 flex-col gap-2 border-t pt-3 first:border-t-0 first:pt-0">
@@ -569,11 +724,16 @@ function Choice({
 }: {
   label: string;
   value: string;
-  options: string[];
+  /// The stored value and the name it is shown under. They differ where the artefact's reader needs
+  /// a syntax the Operator should not have to read, as a JSON Pointer identity does.
+  options: { value: string; label: string }[];
   onChange: (value: string) => void;
   noneLabel?: string;
 }) {
-  const offered = value !== "" && !options.includes(value) ? [value, ...options] : options;
+  const offered =
+    value !== "" && !options.some((option) => option.value === value)
+      ? [{ value, label: `${value} (not in this request)` }, ...options]
+      : options;
   return (
     <label className="flex min-w-0 flex-col gap-1 text-sm">
       <span className="text-ink-secondary">{label}</span>
@@ -584,8 +744,8 @@ function Choice({
       >
         {noneLabel ? <option value="">{noneLabel}</option> : null}
         {offered.map((option) => (
-          <option key={option} value={option}>
-            {options.includes(option) ? option : `${option} (not in this request)`}
+          <option key={option.value} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>
@@ -713,18 +873,18 @@ function GuidedFields({
         ) : null}
         {eventType.source === "header" ? (
           <Choice
-            label="Request header"
+            label="Event type header"
             value={eventType.header}
-            options={headerNames}
+            options={named(headerNames)}
             noneLabel="Choose a header…"
             onChange={(header) => onChange({ source: "header", header, prefix: eventTypePrefix })}
           />
         ) : null}
         {eventType.source === "body" ? (
           <Choice
-            label="JSON body field"
+            label="Event type field"
             value={eventType.path}
-            options={paths}
+            options={named(paths)}
             noneLabel="Choose a field…"
             onChange={(path) => onChange({ source: "body", path, prefix: eventTypePrefix })}
           />

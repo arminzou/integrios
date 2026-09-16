@@ -5,7 +5,6 @@ import { type Control, type FieldValues, type Path, useForm, useWatch } from "re
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { FormField } from "@/components/ui/form";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Timestamp } from "@/ui/time";
@@ -15,7 +14,6 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import {
   appliedNote,
-  CheckRow,
   ConfirmAction,
   CreateSheet,
   Disclosure,
@@ -51,8 +49,9 @@ import {
 } from "../ui/layout";
 import { activeOnly, nameIn, useConnectorOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
-import { EventBuilder } from "./EventBuilder";
+import { EventBuilder, type EventIdentityRule } from "./EventBuilder";
 import { SourceGuide } from "./SourceGuide";
+import { guidedFrom } from "./sourceMapping";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
 type Source = components["schemas"]["SourceDto"];
@@ -68,32 +67,6 @@ const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC 
 
 /// `broker` is the wire value; no Operator-facing surface prints it, only the "Message broker" label.
 const typeLabel = (value: string) => sourceTypes.find((option) => option.value === value)?.label ?? value;
-
-/// Where a Source's Event identity is read from. A kind offers a selector only when it
-/// needs one — a message carries its own id — and the offered set is per Source type because the
-/// affordances differ: a broker message has no request headers, a webhook request no message id.
-///
-/// The label says "Message ID", not whose: Azure Service Bus and RabbitMQ leave it to the publisher
-/// while SQS and Pub/Sub assign it, so naming either one is wrong for the other. Nor does a broker
-/// necessarily have one at all — Kafka identifies a record by its coordinates — which is why the
-/// offered set will key on the transport rather than the Source type once a second transport lands.
-const identityKinds = [
-  { value: "message_id", label: "Message ID", types: ["broker"], selector: undefined },
-  {
-    value: "header",
-    label: "Request header",
-    types: ["webhook"],
-    selector: { label: "Header name", placeholder: "X-GitHub-Delivery" },
-  },
-  {
-    value: "json_path",
-    label: "JSON body field",
-    types: ["webhook", "broker"],
-    selector: { label: "JSON Pointer", placeholder: "/id" },
-  },
-] as const;
-
-const identitySelector = (kind: string) => identityKinds.find((option) => option.value === kind)?.selector;
 
 /// Form paths that are also Admin API field keys, so a rejection lands on the control it is about.
 /// The guided fields are deliberately absent: the API rejects the documents this form composes —
@@ -148,11 +121,6 @@ type BrokerValues = {
   [Field in keyof typeof brokerFieldSchema]: string;
 };
 
-const requireIdentitySelector = (values: IdentityValues, ctx: z.RefinementCtx) => {
-  if (values.identity_kind && values.identity_kind !== "message_id" && !values.identity_value.trim())
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["identity_value"], message: "Enter an identity selector." });
-};
-
 const requireVerificationSecret = (
   values: { verification_scheme: string; verification_secret_ref: string },
   ctx: z.RefinementCtx,
@@ -195,7 +163,6 @@ const createSchema = z
   })
   .superRefine((values, ctx) => {
     if (values.type === "webhook") requireVerificationSecret(values, ctx);
-    requireIdentitySelector(values, ctx);
     if (values.type !== "broker") return;
     requireBrokerFields(values, ctx);
   });
@@ -212,7 +179,6 @@ const editSchema = z
   })
   .superRefine((values, ctx) => {
     requireVerificationSecret(values, ctx);
-    requireIdentitySelector(values, ctx);
     if (values.broker_transport) requireBrokerFields(values, ctx);
   });
 
@@ -222,6 +188,11 @@ type EditValues = z.infer<typeof editSchema>;
 const optionalJson = (value: string) => (value.trim() ? parseJson(value).value : null);
 const mapping = (expression: string) =>
   expression.trim() ? { engine: "jsonata", version: "1", expression: expression.trim() } : null;
+const identityDraft = (values: IdentityValues): EventIdentityRule | null =>
+  values.identity_kind.trim() === ""
+    ? null
+    : { kind: values.identity_kind, value: values.identity_value, allowMissing: values.identity_allow_missing };
+
 const eventIdentityRule = (values: IdentityValues) =>
   values.identity_kind.trim() && (values.identity_kind === "message_id" || values.identity_value.trim())
     ? {
@@ -231,69 +202,54 @@ const eventIdentityRule = (values: IdentityValues) =>
       }
     : null;
 
-function SourceIdentityFields<TValues extends FieldValues>({
-  control,
-  type,
-  onKindChange,
+function eventTypeSummary(expression: string, inputNoun: string): string {
+  if (expression.trim() === "") return "Not configured";
+  const rule = guidedFrom(expression);
+  if (!rule) return "Set by a custom JSONata mapping";
+  if (rule.source === "fixed") return rule.value;
+  const from = rule.source === "header" ? `the ${rule.header} header` : `${rule.path} in the ${inputNoun} body`;
+  return rule.prefix ? `${rule.prefix}. followed by ${from}` : `From ${from}`;
+}
+
+function identitySummary(identity: EventIdentityRule | null, inputNoun: string): string {
+  if (!identity) return "No duplicate detection";
+  const read =
+    identity.kind === "message_id"
+      ? `The ${inputNoun} id`
+      : identity.kind === "header"
+        ? `The ${identity.value} header`
+        : `The ${inputNoun} body value at ${identity.value}`;
+  return identity.allowMissing ? `${read}, which may be absent` : read;
+}
+
+/// What the Event Builder settled, stated where the Source is authored. The Builder is a dialog that
+/// closes behind itself, so without this the only evidence that an Event contract exists is that a
+/// button was pressed once — and the Event identity, which decides whether this Source deduplicates
+/// at all, would not be visible until after the Source was created.
+function SettledContract({
+  mapping,
+  identity,
+  inputNoun,
 }: {
-  control: Control<TValues>;
-  type: string;
-  /// Clears the selector, which the caller owns because only it holds the form. A value left standing
-  /// when the kind changes is submitted under the new one: a header name becomes a JSON Pointer the
-  /// API refuses, and a JSON Pointer becomes a header name it accepts, leaving a Source that looks
-  /// configured and matches no request.
-  onKindChange: () => void;
+  mapping: string;
+  identity: EventIdentityRule | null;
+  inputNoun: string;
 }) {
-  const kind = String(useWatch({ control, name: "identity_kind" as Path<TValues> }) ?? "");
-  const selector = identitySelector(kind);
-  const inputNoun = type === "broker" ? "message" : "request";
   return (
-    <>
-      <SelectField
-        control={control}
-        name={"identity_kind" as Path<TValues>}
-        label="Event identity"
-        hint="Where Integrios reads source_event_id for duplicate detection; separate from Event normalization."
-        emptyLabel="No duplicate detection"
-        onChange={onKindChange}
-      >
-        {identityKinds
-          .filter((option) => (option.types as readonly string[]).includes(type))
-          .map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-      </SelectField>
-      {selector ? (
-        <TextField
-          control={control}
-          name={"identity_value" as Path<TValues>}
-          label={selector.label}
-          placeholder={selector.placeholder}
-          required
-        />
-      ) : null}
-      {kind ? (
-        /* Offered for every kind rather than gated on one: a message id is application-defined on
-           Azure Service Bus and on RabbitMQ, so an absent value is a real state for the kind that
-           looks least likely to need the permission. */
-        <FormField
-          control={control}
-          name={"identity_allow_missing" as Path<TValues>}
-          render={({ field }) => (
-            <CheckRow
-              name={field.name}
-              checked={Boolean(field.value)}
-              onBlur={field.onBlur}
-              onChange={field.onChange}
-              label={`Accept a ${inputNoun} that carries no value here`}
-              hint={`Integrios then reads the identity this Source's Event mapping produces, if it produces one, rather than rejecting the ${inputNoun}. An Event with no identity at all is not deduplicated.`}
-            />
-          )}
-        />
-      ) : null}
-    </>
+    <Details>
+      <dt>Event type</dt>
+      <dd>{eventTypeSummary(mapping, inputNoun)}</dd>
+      <dt>Event identity</dt>
+      <dd>{identitySummary(identity, inputNoun)}</dd>
+      <dt>Payload</dt>
+      <dd>
+        {mapping.trim() === ""
+          ? "Not configured"
+          : guidedFrom(mapping)
+            ? `The entire ${inputNoun} body`
+            : "Set by a custom JSONata mapping"}
+      </dd>
+    </Details>
   );
 }
 
@@ -668,6 +624,7 @@ function CreateSource({
   const sourceContractDraft = {
     expression: form.watch("mapping"),
     schema: optionalJson(form.watch("input_requirements")) as Record<string, unknown> | undefined,
+    identity: identityDraft(form.watch()),
   };
 
   const create = useMutation({
@@ -799,10 +756,10 @@ function CreateSource({
             title="Event Normalization"
             hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
           >
-            <SourceIdentityFields
-              control={form.control}
-              type={sourceType}
-              onKindChange={() => form.setValue("identity_value", "")}
+            <SettledContract
+              mapping={form.watch("mapping")}
+              identity={identityDraft(form.watch())}
+              inputNoun={sourceType === "webhook" ? "request" : "message"}
             />
             <EventBuilder
               key={sourceType}
@@ -814,6 +771,9 @@ function CreateSource({
                 form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
                   shouldDirty: true,
                 });
+                form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
+                form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
+                form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, { shouldDirty: true });
               }}
             />
           </Section>
@@ -1052,6 +1012,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
   const sourceContractDraft = {
     expression: form.watch("mapping"),
     schema: optionalJson(form.watch("input_requirements")) as Record<string, unknown> | undefined,
+    identity: identityDraft(form.watch()),
   };
 
   const save = useMutation({
@@ -1148,10 +1109,10 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                     title="Event Normalization"
                     hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
                   >
-                    <SourceIdentityFields
-                      control={form.control}
-                      type={source.type}
-                      onKindChange={() => form.setValue("identity_value", "")}
+                    <SettledContract
+                      mapping={form.watch("mapping")}
+                      identity={identityDraft(form.watch())}
+                      inputNoun={source.type === "webhook" ? "request" : "message"}
                     />
                     <EventBuilder
                       contractKey={`${source.type} Source`}
@@ -1160,6 +1121,11 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                       onUse={(draft) => {
                         form.setValue("mapping", draft.expression, { shouldDirty: true });
                         form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                          shouldDirty: true,
+                        });
+                        form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
+                        form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
+                        form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, {
                           shouldDirty: true,
                         });
                       }}
