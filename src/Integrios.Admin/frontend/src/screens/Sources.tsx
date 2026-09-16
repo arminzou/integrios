@@ -632,7 +632,7 @@ function CreateSource({
       name: "",
       connector_id: "",
       topic_id: defaultTopicId,
-      type: "webhook",
+      type: "",
       broker_transport: "azure_service_bus",
       broker_namespace: "",
       broker_entity: "queue",
@@ -768,6 +768,7 @@ function CreateSource({
           control={form.control}
           name="type"
           label="Type"
+          placeholder="Choose a type"
           onChange={() => {
             form.setValue("identity_kind", "");
             form.setValue("identity_allow_missing", false);
@@ -793,7 +794,7 @@ function CreateSource({
           />
         ) : null}
         {sourceType === "broker" ? <MessageBrokerFields control={form.control} /> : null}
-        {sourceType !== "event_api" ? (
+        {sourceType === "webhook" || sourceType === "broker" ? (
           <Section
             title="Event Normalization"
             hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."

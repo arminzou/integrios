@@ -91,6 +91,23 @@ it("names a broker Source's type as the Operator authored it", async () => {
   expect(within(row).queryByText("broker")).toBeNull();
 });
 
+it("requires an explicit Source type", async () => {
+  stubHttp(({ url }) => {
+    if (url.pathname.endsWith("/connectors"))
+      return { status: 200, body: page([{ id: connectorId, key: "http", name: "HTTP", status: "active" }]) };
+    if (url.pathname.endsWith("/topics"))
+      return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
+    return { status: 200, body: page([]) };
+  });
+
+  renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
+  fireEvent.click(await screen.findByRole("button", { name: "New Source" }));
+
+  expect(screen.getByLabelText("Type").textContent).toContain("Choose a type");
+  expect(screen.queryByRole("heading", { name: "Webhook request" })).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Event Normalization" })).toBeNull();
+});
+
 describe("Authoring a Source before anything it needs", () => {
   it("says a Topic has to exist first, instead of offering an empty picker", async () => {
     // A Tenant authored a moment ago: a Connector is installed deployment-wide, and nothing else.

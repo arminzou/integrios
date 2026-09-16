@@ -28,10 +28,8 @@ async function openSource(type: "event_api" | "webhook" | "broker" = "webhook") 
   const dialog = await screen.findByRole("dialog", { name: "New Source" });
   fireEvent.change(within(dialog).getByLabelText("Connector"), { target: { value: connectorId } });
   fireEvent.change(within(dialog).getByLabelText("Topic"), { target: { value: topicId } });
-  if (type !== "webhook") {
-    fireEvent.click(within(dialog).getByRole("combobox", { name: "Type" }));
-    fireEvent.click(await screen.findByRole("option", { name: type === "broker" ? "Message broker" : "Event API" }));
-  }
+  const typeSelect = within(dialog).getByRole("combobox", { name: "Type" });
+  fireEvent.change(typeSelect.nextElementSibling!, { target: { value: type } });
   return dialog;
 }
 

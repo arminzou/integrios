@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAccessibilityViolations } from "../test/axe";
 import { page, stubHttp } from "../test/http";
@@ -295,6 +295,9 @@ describe("Accessibility of detail and edit states", () => {
     renderScreen(<SourcesScreen tenantId={tenantId} />);
     await screen.findByRole("heading", { level: 1, name: "Sources" });
     fireEvent.click(await screen.findByText("New Source"));
+    const source = await screen.findByRole("dialog", { name: "New Source" });
+    const typeSelect = within(source).getByRole("combobox", { name: "Type" });
+    fireEvent.change(typeSelect.nextElementSibling!, { target: { value: "webhook" } });
     fireEvent.click(await screen.findByRole("button", { name: "Open Integrios Event Builder" }));
     await screen.findByRole("button", { name: "Close the Integrios Event Builder" });
     await expectNoAccessibilityViolations(await openDialog());

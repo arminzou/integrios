@@ -396,6 +396,8 @@ describe("The dashboard in a real browser", () => {
     async (_name, width, beside) => {
       const page = await openDashboard(`/tenants/${tenants.items[0].id}/sources`, { viewport: { width, height: 900 } });
       await page.getByRole("button", { name: "New Source" }).click();
+      await page.getByRole("combobox", { name: "Type" }).click();
+      await page.getByRole("option", { name: "Webhook" }).click();
       await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
 
       const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
@@ -425,6 +427,8 @@ describe("The dashboard in a real browser", () => {
   it("inserts an Advanced JSONata suggestion from the keyboard alone", async () => {
     const page = await openDashboard(`/tenants/${tenants.items[0].id}/sources`);
     await page.getByRole("button", { name: "New Source" }).click();
+    await page.getByRole("combobox", { name: "Type" }).click();
+    await page.getByRole("option", { name: "Webhook" }).click();
     await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
     await page.getByRole("button", { name: "Advanced JSONata" }).click();
 
