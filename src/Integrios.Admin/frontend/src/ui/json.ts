@@ -15,6 +15,22 @@ export function formatJson(value: unknown): string {
   return value === undefined || value === null ? "" : JSON.stringify(value, null, 2);
 }
 
+function normalizedJson(value: unknown): unknown {
+  return Array.isArray(value)
+    ? value.map(normalizedJson)
+    : value !== null && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([key, item]) => [key, normalizedJson(item)]),
+        )
+      : value;
+}
+
+export function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(normalizedJson(left)) === JSON.stringify(normalizedJson(right));
+}
+
 export type JsonObject = Record<string, unknown>;
 
 /// Reading one of those documents back. A value that is not an object reads as an empty one rather

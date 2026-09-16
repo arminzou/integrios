@@ -20,13 +20,38 @@ const connector = {
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
 };
+const connectorDetail = {
+  ...connector,
+  manifest_schema_version: 1,
+  manifest: {
+    manifest_schema_version: 1,
+    key: "http",
+    contract_version: 1,
+    direction: "both",
+    destination_configuration_schema: {
+      type: "object",
+      properties: { base_uri: { type: "string", format: "uri" } },
+      required: ["base_uri"],
+      additionalProperties: false,
+    },
+    destination_authentication: {
+      allow_unauthenticated: true,
+      schemes: [
+        { scheme: "api_key_header", required_config: ["header_name"], required_secret_refs: ["api_key"] },
+        { scheme: "bearer_token", required_config: [], required_secret_refs: ["token"] },
+      ],
+    },
+  },
+};
 
 const writes = (calls: Call[]) => calls.filter((call) => call.method !== "GET");
 
 /// The authoring pattern's two decisions that nothing else proves: what the form does with a
 /// rejected write, and what it refuses to send at all.
 async function openCreateForm(respond: (call: Call) => { status: number; body?: unknown }) {
-  const calls = stubHttp(respond);
+  const calls = stubHttp((call) =>
+    call.url.pathname.endsWith(`/connectors/${connectorId}`) ? { status: 200, body: connectorDetail } : respond(call),
+  );
   renderScreen(<DestinationsScreen tenantId={tenantId} />, `/tenants/${tenantId}/destinations`);
 
   await screen.findByRole("heading", { level: 1, name: "Destinations" });
@@ -41,12 +66,6 @@ async function openCreateForm(respond: (call: Call) => { status: number; body?: 
   return calls;
 }
 
-const describedText = (control: HTMLElement) =>
-  (control.getAttribute("aria-describedby") ?? "")
-    .split(" ")
-    .map((id) => document.getElementById(id)?.textContent ?? "")
-    .join(" ");
-
 describe("Authoring a Destination before anything it needs", () => {
   it("says a Connector has to be installed first, and sends the Operator out of the Tenant to do it", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
@@ -54,7 +73,7 @@ describe("Authoring a Destination before anything it needs", () => {
     renderScreen(<DestinationsScreen tenantId={tenantId} />, `/tenants/${tenantId}/destinations`);
     fireEvent.click(await screen.findByText("New Destination"));
 
-    const hint = await screen.findByText(/No Connectors exist yet/);
+    const hint = await screen.findByText(/No active destination-capable Connectors exist yet/);
     // Connectors are deployment-wide, so the way out is the deployment's list rather than anything
     // inside this Tenant.
     expect(within(hint).getByRole("link", { name: "Create a Connector" }).getAttribute("href")).toBe("/connectors");
@@ -64,20 +83,14 @@ describe("Authoring a Destination before anything it needs", () => {
 });
 
 describe("Creating a Destination", () => {
-  it("never sends a configuration that is not well-formed JSON", async () => {
+  it("keeps raw Destination documents out of the guided create form", async () => {
     const calls = await openCreateForm((call) => ({
       status: 200,
       body: page(call.url.pathname.endsWith("/connectors") ? [connector] : []),
     }));
 
-    fireEvent.change(screen.getByLabelText("Configuration (JSON)"), { target: { value: "{not json" } });
-    fireEvent.submit(screen.getByRole("button", { name: "Create Destination" }).closest("form")!);
-
-    const config = screen.getByLabelText("Configuration (JSON)");
-    await waitFor(() => expect(config.getAttribute("aria-invalid")).toBe("true"));
-    // The message is the parser's own, not a generic "invalid" the Operator cannot act on.
-    expect(describedText(config)).toContain("JSON");
-    // The message on this field is what proves the rule fired; nothing is sent either way.
+    expect(screen.queryByLabelText(/Configuration \(JSON\)/)).toBeNull();
+    expect(screen.queryByLabelText(/Authentication configuration \(JSON\)/)).toBeNull();
     expect(writes(calls)).toEqual([]);
   });
 
@@ -124,34 +137,28 @@ const destination = {
 };
 
 describe("Destination selection", () => {
-  it("sends Destination-owned authentication and secret references", async () => {
-    const calls = stubHttp(({ method, url }) => {
-      if (method === "PUT") return { status: 200, body: destination };
+  it("renders guided Destination configuration and authentication", async () => {
+    stubHttp(({ url }) => {
       if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: destination };
       if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([destination]) };
+      if (url.pathname.endsWith(`/connectors/${connectorId}`)) return { status: 200, body: connectorDetail };
       if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
       return { status: 200, body: page([]) };
     });
     renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     const form = await screen.findByRole("form", { name: `Edit ${destination.name}` });
-    fireEvent.change(within(form).getByLabelText("Authentication scheme (optional)"), {
-      target: { value: "bearer_token" },
-    });
-    fireEvent.change(within(form).getByLabelText("Authentication secret references (JSON)"), {
-      target: { value: '{"token":"erp-token"}' },
-    });
-    fireEvent.submit(form);
-    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
-    expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
-      authentication: { scheme: "bearer_token", config: {}, secret_refs: { token: "erp-token" } },
-    });
+    expect(within(form).getByLabelText("Base URI")).toBeTruthy();
+    expect(within(form).getByRole("combobox", { name: "Authentication" })).toBeTruthy();
+    expect(within(form).queryByLabelText(/Raw configuration/)).toBeNull();
+    expect(within(form).queryByLabelText(/Raw authentication/)).toBeNull();
   });
 
   it("reads the selected Destination beside the list it was chosen from", async () => {
     stubHttp(({ url }) => {
       if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([destination]) };
       if (url.pathname.endsWith(destinationId)) return { status: 200, body: destination };
+      if (url.pathname.endsWith(`/connectors/${connectorId}`)) return { status: 200, body: connectorDetail };
       if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
       return { status: 200, body: page([]) };
     });
@@ -188,6 +195,7 @@ describe("A selected Destination", () => {
       if (method === "PUT") return { status: 200, body: detail };
       if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: detail };
       if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([detail]) };
+      if (url.pathname.endsWith(`/connectors/${connectorId}`)) return { status: 200, body: connectorDetail };
       if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
       return { status: 200, body: page([]) };
     });
@@ -208,6 +216,33 @@ describe("A selected Destination", () => {
       authentication: authenticated.authentication,
       environment: null,
       description: null,
+    });
+  });
+
+  it("preserves stored documents the guided fields cannot represent", async () => {
+    const raw = {
+      ...destination,
+      configuration: { base_uri: "http://erp.internal/hooks", provider_option: true },
+      authentication: {
+        scheme: "bearer_token",
+        config: { audience: "orders" },
+        secret_refs: { token: "erp-token" },
+      },
+    };
+    const calls = stubDestination(raw);
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const form = await screen.findByRole("form", { name: `Edit ${destination.name}` });
+
+    expect(within(form).getByLabelText("Raw configuration (JSON)")).toBeTruthy();
+    expect(within(form).getByLabelText("Raw authentication (JSON)")).toBeTruthy();
+    expect(within(form).queryByLabelText("Base URI")).toBeNull();
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+    expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
+      configuration: raw.configuration,
+      authentication: raw.authentication,
     });
   });
 

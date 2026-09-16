@@ -83,8 +83,20 @@ const connectorDetail = {
     contract_version: 1,
     direction: connector.direction,
     source_configuration_schema: { type: "object", properties: {}, additionalProperties: true },
+    destination_configuration_schema: {
+      type: "object",
+      properties: { base_uri: { type: "string", format: "uri" } },
+      required: ["base_uri"],
+      additionalProperties: false,
+    },
     source_verification: sourceVerification,
-    destination_authentication: { allow_unauthenticated: true, schemes: [] },
+    destination_authentication: {
+      allow_unauthenticated: true,
+      schemes: [
+        { scheme: "api_key_header", required_config: ["header_name"], required_secret_refs: ["api_key"] },
+        { scheme: "bearer_token", required_config: [], required_secret_refs: ["token"] },
+      ],
+    },
     presentation: { name: connector.name, event_types: [], authoring_presets: [] },
   },
 };
@@ -97,7 +109,7 @@ const eventId = "99999999-9999-9999-9999-999999999999";
 
 const destinationDetail = {
   ...destination,
-  config: { base_uri: "http://sink.invalid" },
+  configuration: { base_uri: "http://sink.invalid" },
   authentication: null,
 };
 const subscriptionDetail = {
@@ -427,8 +439,8 @@ describe("Create forms, filled through a real browser", () => {
     await view.click("text=New Destination");
     const form = formNamed(view, "Create a Destination");
     await choose(form.getByLabel("Connector"), /HTTP/);
-    await form.getByLabel("Name").fill("sink");
-    await form.getByLabel("Configuration (JSON)", { exact: true }).fill('{"base_uri":"http://sink.invalid"}');
+    await form.getByLabel("Name", { exact: true }).fill("sink");
+    await form.getByLabel("Base URI").fill("http://sink.invalid");
     await view.click("text=Create Destination");
 
     // The field-keyed message lands on the control it names, whatever casing the server used.
@@ -440,7 +452,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends a Destination with its config parsed out of the textarea", async () => {
+  it("sends a Destination from the Connector's guided fields", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/destinations`);
 
     // The create form sits behind a "New Destination" disclosure so it does not permanently
@@ -449,7 +461,7 @@ describe("Create forms, filled through a real browser", () => {
     const form = formNamed(view, "Create a Destination");
     await choose(form.getByLabel("Connector"), /HTTP/);
     await form.getByLabel("Name").fill("sink");
-    await form.getByLabel("Configuration (JSON)", { exact: true }).fill('{"base_uri":"http://sink.invalid"}');
+    await form.getByLabel("Base URI").fill("http://sink.invalid");
     await view.click("text=Create Destination");
     await view.waitForFunction(() => true);
 
@@ -458,9 +470,79 @@ describe("Create forms, filled through a real browser", () => {
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/destinations`);
     expect(writes[0].headers()[session.antiforgery_header_name.toLowerCase()]).toBe(session.antiforgery_token);
     expect(sent.body.connector_id).toBe(connectorId);
-    // The textarea holds text; the API takes a document.
     expect(sent.body.configuration).toEqual({ base_uri: "http://sink.invalid" });
     expect(sent.body.authentication).toBeNull();
+    await view.close();
+  }, 60_000);
+
+  it("authors every constrained Destination scalar type and declared authentication", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/destinations`);
+    const sourceOnly = {
+      ...connector,
+      id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      name: "Source only",
+      direction: "source",
+    };
+    const disabled = { ...connector, id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", name: "Disabled", status: "disabled" };
+    await view.route("**/admin/connectors?*", (route) =>
+      route.fulfill({ json: page([connector, sourceOnly, disabled]) }),
+    );
+    await view.route(`**/admin/connectors/${connectorId}`, (route) =>
+      route.fulfill({
+        json: {
+          ...connectorDetail,
+          manifest: {
+            ...connectorDetail.manifest,
+            destination_configuration_schema: {
+              type: "object",
+              properties: {
+                base_uri: { type: "string", format: "uri", minLength: 8, maxLength: 100 },
+                host_name: { type: "string", format: "hostname" },
+                mode: { type: "string", enum: ["fast", "safe"] },
+                retry_ratio: { type: "number", minimum: 0, maximum: 1 },
+                attempts: { type: "integer", minimum: 1, maximum: 5 },
+                enabled: { type: "boolean" },
+              },
+              required: ["base_uri", "host_name", "mode", "retry_ratio", "attempts", "enabled"],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+    );
+    await view.reload();
+
+    await view.click("text=New Destination");
+    const form = formNamed(view, "Create a Destination");
+    await form.getByLabel("Connector").click();
+    expect(await view.getByRole("option").allInnerTexts()).toEqual(["HTTP (v1)"]);
+    await view.getByRole("option", { name: "HTTP (v1)" }).click();
+    await form.getByLabel("Base URI").fill("https://sink.invalid");
+    await form.getByLabel("Host name").fill("sink.invalid");
+    await choose(form.getByLabel("Mode"), "Fast");
+    await form.getByLabel("Retry ratio").fill("0.5");
+    await form.getByLabel("Attempts").fill("3");
+    await choose(form.getByLabel("Enabled"), "True");
+    await choose(form.getByRole("combobox", { name: "Authentication" }), "API key header");
+    await form.getByLabel("Header name").fill("X-Api-Key");
+    await form.getByLabel("API key secret reference").fill("northwind-api-key");
+    await form.getByLabel("Name", { exact: true }).fill("sink");
+    await view.click("text=Create Destination");
+
+    const sent = await submitted(writes);
+    expect(sent.body.configuration).toEqual({
+      base_uri: "https://sink.invalid",
+      host_name: "sink.invalid",
+      mode: "fast",
+      retry_ratio: 0.5,
+      attempts: 3,
+      enabled: true,
+    });
+    expect(sent.body.authentication).toEqual({
+      scheme: "api_key_header",
+      config: { header_name: "X-Api-Key" },
+      secret_refs: { api_key: "northwind-api-key" },
+    });
     await view.close();
   }, 60_000);
 
@@ -494,9 +576,21 @@ describe("Create forms, filled through a real browser", () => {
     await form.getByLabel("Name").fill("to-sink");
     await choose(form.getByLabel("Destination"), /sink/);
     await form.getByLabel("Event type").fill("order.created");
+    await choose(form.getByLabel("Method"), "PATCH");
+    await form.getByLabel("Relative path (optional)").fill("orders?notify=true");
+    await choose(form.getByLabel("Request body"), "No body");
+    await form.getByRole("button", { name: "Add header" }).click();
+    await form.getByLabel("Header 1 name").fill("X-Workflow");
+    await form.getByLabel("Header 1 value").fill("priority");
+    await choose(form.getByLabel("Success check"), "Response JSON boolean");
+    await form.getByLabel("Boolean field").fill("ok");
+    await choose(form.getByLabel("Expected value"), "True");
+    await form.getByLabel("Diagnostic field (optional)").fill("error");
+    await form.getByLabel("Maximum response bytes (optional)").fill("4096");
     expect(await form.getByLabel("Order").count()).toBe(0);
     expect(await form.getByLabel("Match rules (JSON)").count()).toBe(0);
     expect(await form.getByLabel("Mapping expression (optional)").count()).toBe(0);
+    expect(await form.getByLabel("Raw mapping (JSON)").count()).toBe(0);
     const create = view.locator('form[aria-label="Create a Subscription"] button[type="submit"]');
     await form.getByRole("button", { name: "Add mapping in Playground" }).click();
     const playground = view.getByRole("dialog", { name: "Mapping Playground" });
@@ -508,6 +602,8 @@ describe("Create forms, filled through a real browser", () => {
     await playground.getByRole("button", { name: "Confirm mapping change" }).click();
     await form.getByText("Mapping change reviewed and ready to save.").waitFor();
     expect(await create.isEnabled()).toBe(true);
+    await view.setViewportSize({ width: 320, height: 900 });
+    expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await view.click("text=Create Subscription");
 
     const sent = await submitted(writes);
@@ -520,7 +616,20 @@ describe("Create forms, filled through a real browser", () => {
       version: "1",
       expression: '{\n  "order": orderId\n}',
     });
-    expect(sent.body.http_delivery).toMatchObject({ version: 1, method: "POST", body: "json", headers: {} });
+    expect(sent.body.http_delivery).toEqual({
+      version: 1,
+      method: "PATCH",
+      path: "orders?notify=true",
+      body: "none",
+      headers: { "X-Workflow": "priority" },
+    });
+    expect(sent.body.http_success).toEqual({
+      evaluator: "json_boolean",
+      field: "ok",
+      expected: true,
+      diagnostic_field: "error",
+      max_body_bytes: 4096,
+    });
     await view.close();
   }, 60_000);
 
@@ -776,15 +885,13 @@ describe("Update and deactivate, driven through a real browser", () => {
   // documents, plus the two shapes with no other coverage at all — a confirmed deactivate and the
   // one DELETE the dashboard issues.
 
-  it("sends an updated Destination with its config reparsed and authentication untouched", async () => {
+  it("sends an updated Destination from guided configuration and preserves authentication", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/destinations/${destinationId}`);
 
     // Editing is a deliberate act now rather than the panel's resting state, and the form names
     // itself instead of repeating on screen the heading its disclosure already carries.
     await view.getByRole("button", { name: "Edit", exact: true }).click();
-    await formNamed(view, "Edit sink")
-      .getByLabel("Configuration (JSON)", { exact: true })
-      .fill('{"base_uri":"http://moved.invalid"}');
+    await formNamed(view, "Edit sink").getByLabel("Base URI").fill("http://moved.invalid");
     await view.click("text=Save changes");
 
     const sent = await submitted(writes);
@@ -792,6 +899,93 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/destinations/${destinationId}`);
     expect(sent.body.configuration).toEqual({ base_uri: "http://moved.invalid" });
     expect(sent.body.authentication).toBeNull();
+    await view.close();
+  }, 60_000);
+
+  it("changes and removes Destination authentication through declared fields", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/destinations/${destinationId}`);
+    let current = {
+      ...destinationDetail,
+      authentication: { scheme: "bearer_token", config: {}, secret_refs: { token: "old-token" } },
+    };
+    await view.route(`**/admin/tenants/${tenantId}/destinations/${destinationId}`, (route) => {
+      const request = route.request();
+      if (request.method() === "PUT") {
+        writes.push(request);
+        current = { ...current, ...request.postDataJSON() };
+      }
+      return route.fulfill({ json: current });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    let form = formNamed(view, "Edit sink");
+    await choose(form.getByRole("combobox", { name: "Authentication" }), "API key header");
+    await form.getByLabel("Header name").fill("X-Api-Key");
+    await form.getByLabel("API key secret reference").fill("new-token");
+    await form.getByRole("button", { name: "Save changes" }).click();
+    await expect.poll(() => writes.length).toBe(1);
+    expect(writes[0].postDataJSON().authentication).toEqual({
+      scheme: "api_key_header",
+      config: { header_name: "X-Api-Key" },
+      secret_refs: { api_key: "new-token" },
+    });
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    form = formNamed(view, "Edit sink");
+    await choose(form.getByRole("combobox", { name: "Authentication" }), "No authentication");
+    await form.getByRole("button", { name: "Save changes" }).click();
+    await expect.poll(() => writes.length).toBe(2);
+    expect(writes[1].postDataJSON().authentication).toBeNull();
+    await view.close();
+  }, 60_000);
+
+  it("preserves raw Destination documents that guided fields cannot round-trip", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/destinations/${destinationId}`);
+    await view.route(`**/admin/connectors/${connectorId}`, (route) =>
+      route.fulfill({
+        json: {
+          ...connectorDetail,
+          manifest: {
+            ...connectorDetail.manifest,
+            destination_configuration_schema: {
+              type: "object",
+              properties: {
+                base_uri: { type: "string", format: "uri" },
+                mode: { type: "string", enum: ["fast", "safe"] },
+              },
+              required: ["base_uri", "mode"],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+    );
+    const raw = {
+      ...destinationDetail,
+      configuration: { base_uri: "http://sink.invalid", provider_option: true },
+      authentication: {
+        scheme: "bearer_token",
+        config: { audience: "orders" },
+        secret_refs: { token: "sink-token" },
+      },
+    };
+    await view.route(`**/admin/tenants/${tenantId}/destinations/${destinationId}`, (route) => {
+      if (route.request().method() === "PUT") return route.fallback();
+      return route.fulfill({ json: raw });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    const form = formNamed(view, "Edit sink");
+    await form.getByLabel("Raw configuration (JSON)").waitFor();
+    await form.getByLabel("Raw authentication (JSON)").waitFor();
+    expect(await form.getByLabel("Base URI").count()).toBe(0);
+    await form.getByRole("button", { name: "Save changes" }).click();
+
+    const sent = await submitted(writes);
+    expect(sent.body.configuration).toEqual(raw.configuration);
+    expect(sent.body.authentication).toEqual(raw.authentication);
     await view.close();
   }, 60_000);
 
@@ -1172,6 +1366,66 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(sent.body.order_index).toBe(1);
     expect(sent.body.mapping).toBeNull();
     expect(sent.body.match_rules).toEqual({ event_type: "order.created" });
+    await view.close();
+  }, 60_000);
+
+  it("adds and removes the guided Subscription response success rule", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+    let current = { ...subscriptionDetail, http_success: null };
+    await view.route(`**/admin/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`, (route) => {
+      const request = route.request();
+      if (request.method() === "PUT") {
+        writes.push(request);
+        current = { ...current, ...request.postDataJSON() };
+      }
+      return route.fulfill({ json: current });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    let form = formNamed(view, "Edit to-sink");
+    await choose(form.getByLabel("Success check"), "Response JSON boolean");
+    await form.getByLabel("Boolean field").fill("ok");
+    await choose(form.getByLabel("Expected value"), "False");
+    await form.getByRole("button", { name: "Save changes" }).click();
+    await expect.poll(() => writes.length).toBe(1);
+    expect(writes[0].postDataJSON().http_success).toEqual({
+      evaluator: "json_boolean",
+      field: "ok",
+      expected: false,
+    });
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    form = formNamed(view, "Edit to-sink");
+    await choose(form.getByLabel("Success check"), "Any HTTP 2xx response");
+    await form.getByRole("button", { name: "Save changes" }).click();
+    await expect.poll(() => writes.length).toBe(2);
+    expect(writes[1].postDataJSON().http_success).toBeNull();
+    await view.close();
+  }, 60_000);
+
+  it("preserves a Subscription mapping document the Playground cannot round-trip", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+    const mapping = {
+      engine: "jsonata",
+      version: "1",
+      expression: '{"id": id}',
+      extension: true,
+    };
+    await view.route(`**/admin/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`, (route) => {
+      if (route.request().method() === "PUT") return route.fallback();
+      return route.fulfill({ json: { ...subscriptionDetail, mapping_config: mapping } });
+    });
+    await view.reload();
+
+    await view.getByRole("button", { name: "Edit", exact: true }).click();
+    const form = formNamed(view, "Edit to-sink");
+    await form.getByLabel("Raw mapping (JSON)").waitFor();
+    expect(await form.getByRole("button", { name: /Playground/ }).count()).toBe(0);
+    await form.getByRole("button", { name: "Save changes" }).click();
+
+    const sent = await submitted(writes);
+    expect(sent.body.mapping).toEqual(mapping);
     await view.close();
   }, 60_000);
 

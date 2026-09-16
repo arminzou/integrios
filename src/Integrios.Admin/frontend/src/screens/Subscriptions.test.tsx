@@ -130,6 +130,25 @@ it("loads eligible Destinations for the selected Topic in a new Subscription", a
   expect(calls.some(({ url }) => url.pathname.endsWith("/destinations"))).toBe(true);
 });
 
+it("guides a new Subscription without exposing raw JSON editors", async () => {
+  stubHttp(({ url }) => {
+    if (url.pathname.endsWith("/topics"))
+      return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
+    if (url.pathname.endsWith("/destinations"))
+      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "active" }]) };
+    return { status: 200, body: page([]) };
+  });
+
+  renderScreen(<SubscriptionsScreen tenantId={tenantId} />, `/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
+  fireEvent.click(await screen.findByRole("button", { name: "New Subscription" }));
+  const form = await screen.findByRole("form", { name: "Create a Subscription" });
+
+  for (const heading of ["Routing", "Event body", "HTTP request", "Response success"])
+    expect(within(form).getByRole("heading", { name: heading })).toBeTruthy();
+  expect(within(form).queryByLabelText(/JSON/)).toBeNull();
+  expect(within(form).getByRole("button", { name: "Add mapping in Playground" })).toBeTruthy();
+});
+
 it("explains when no active Source reaches the Subscription", async () => {
   stubSubscriptionSources([]);
 
@@ -230,8 +249,12 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
 });
 
 it("authors the optional HTTP success rule on the Subscription", async () => {
+  const withSuccess = {
+    ...subscription,
+    http_success: { evaluator: "json_boolean", field: "accepted", expected: false },
+  };
   const calls = stubHttp(({ method, url }) => {
-    if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: subscription };
+    if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: withSuccess };
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
@@ -245,13 +268,34 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
   );
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const form = await screen.findByRole("form", { name: `Edit ${subscription.name}` });
-  fireEvent.change(within(form).getByLabelText("HTTP success rule (JSON, optional)"), {
-    target: { value: '{"evaluator":"json_boolean","field":"ok","expected":true}' },
+  fireEvent.change(within(form).getByLabelText("Boolean field"), { target: { value: "ok" } });
+  expect(within(form).getByRole("combobox", { name: "Expected value" }).textContent).toContain("False");
+  fireEvent.change(within(form).getByLabelText("Diagnostic field (optional)"), {
+    target: { value: "message" },
   });
+  fireEvent.change(within(form).getByLabelText("Maximum response bytes (optional)"), {
+    target: { value: "4096" },
+  });
+  fireEvent.click(within(form).getByRole("button", { name: "Add header" }));
+  fireEvent.change(within(form).getByLabelText("Header 1 name"), { target: { value: "X-Trace" } });
+  fireEvent.change(within(form).getByLabelText("Header 1 value"), { target: { value: "" } });
   fireEvent.submit(form);
   await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
   expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
-    http_success: { evaluator: "json_boolean", field: "ok", expected: true },
+    http_success: {
+      evaluator: "json_boolean",
+      field: "ok",
+      expected: false,
+      diagnostic_field: "message",
+      max_body_bytes: 4096,
+    },
+    http_delivery: {
+      version: 1,
+      method: "POST",
+      path: null,
+      headers: { "X-Trace": "" },
+      body: "json",
+    },
   });
 });
 
@@ -314,6 +358,29 @@ describe("Editing a Subscription", () => {
       .map((id) => document.getElementById(id)?.textContent ?? "")
       .join(" ");
     expect(described).toContain("Event type is not routable.");
+  });
+
+  it("preserves an extended mapping through its raw fallback", async () => {
+    const mapping = {
+      engine: "jsonata",
+      version: "1",
+      expression: '{"id": id}',
+      extension: true,
+    };
+    const calls = stubEdit({ ...subscription, mapping_config: mapping });
+    renderScreen(
+      <SubscriptionsScreen tenantId={tenantId} selectedTopicId={topicId} selectedSubscriptionId={subscriptionId} />,
+      detailPath,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const form = await screen.findByRole("form", { name: `Edit ${subscription.name}` });
+
+    expect(within(form).getByLabelText("Raw mapping (JSON)")).toBeTruthy();
+    expect(within(form).queryByRole("button", { name: /Playground/ })).toBeNull();
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+    expect((calls.find((call) => call.method === "PUT")!.body as { mapping: unknown }).mapping).toEqual(mapping);
   });
 
   it("offers no deactivation once it is disabled", async () => {

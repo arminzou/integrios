@@ -186,7 +186,16 @@ describe("Accessibility of detail and edit states", () => {
     direction: "both",
     status: "active",
     description: null,
-    manifest: { key: "http" },
+    manifest: {
+      key: "http",
+      destination_configuration_schema: {
+        type: "object",
+        properties: { base_uri: { type: "string", format: "uri" } },
+        required: ["base_uri"],
+        additionalProperties: false,
+      },
+      destination_authentication: { allow_unauthenticated: true, schemes: [] },
+    },
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
   };
@@ -227,6 +236,7 @@ describe("Accessibility of detail and edit states", () => {
     stubHttp(({ url }) => {
       if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: destination };
       if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([destination]) };
+      if (url.pathname.endsWith(`/connectors/${connector.id}`)) return { status: 200, body: connector };
       if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([connector]) };
       return { status: 200, body: page([]) };
     });

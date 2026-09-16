@@ -3,7 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
-import { type UseFormReturn, useForm } from "react-hook-form";
+import { type UseFormReturn, useFieldArray, useForm } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
   LoadMore,
   narrowable,
   ReadError,
+  Section,
   SheetButton,
   WriteStatus,
 } from "../ui/controls";
@@ -39,7 +40,7 @@ import {
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
-import { formatJson, parseJson } from "../ui/json";
+import { formatJson, parseJson, sameJson } from "../ui/json";
 import {
   CloseInspector,
   Details,
@@ -84,32 +85,74 @@ const formFields = ["name", "destination_id", "event_type", "mapping", "descript
 /// Subscription keeps whatever version it already carries rather than being silently upgraded.
 const currentHttpDeliveryVersion = 1;
 
-const jsonDocument = z.string().superRefine((text, ctx) => {
-  const parsed = parseJson(text);
-  if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
-});
-
-const subscriptionSchema = z.object({
-  name: z.string().trim().min(1, "Enter a name."),
-  destination_id: z.string().min(1, "Choose a Destination."),
-  event_type: z.string().trim().min(1, "Enter an Event type."),
-  mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
-  method: z.string().min(1),
-  path: z.string(),
-  body: z.string().min(1, "Enter a body format."),
-  headers: jsonDocument,
-  http_success: z.string().superRefine((text, ctx) => {
-    if (!text.trim()) return;
-    const parsed = parseJson(text);
-    if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
-  }),
-  description: z.string(),
-});
+const subscriptionSchema = z
+  .object({
+    name: z.string().trim().min(1, "Enter a name."),
+    destination_id: z.string().min(1, "Choose a Destination."),
+    event_type: z.string().trim().min(1, "Enter an Event type."),
+    mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+    raw_mapping: z.string().superRefine((text, ctx) => {
+      if (!text.trim()) return;
+      const parsed = parseJson(text);
+      if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+    }),
+    method: z.enum(["POST", "PUT", "PATCH", "DELETE"]),
+    path: z.string(),
+    body: z.enum(["json", "none"]),
+    headers: z
+      .array(z.object({ name: z.string().trim().min(1, "Enter a header name."), value: z.string() }))
+      .max(32, "Add at most 32 headers."),
+    success_mode: z.enum(["", "json_boolean"]),
+    success_field: z.string(),
+    success_expected: z.enum(["", "true", "false"]),
+    success_diagnostic_field: z.string(),
+    success_max_body_bytes: z.string(),
+    description: z.string(),
+  })
+  .superRefine((values, ctx) => {
+    const names = new Set<string>();
+    values.headers.forEach((header, index) => {
+      const normalized = header.name.trim().toLowerCase();
+      if (normalized && names.has(normalized))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["headers", index, "name"],
+          message: "Use each header name once, ignoring case.",
+        });
+      names.add(normalized);
+    });
+    if (values.success_mode !== "json_boolean") return;
+    if (!values.success_field.trim())
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["success_field"], message: "Enter the response field." });
+    if (!values.success_expected)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["success_expected"],
+        message: "Choose the expected value.",
+      });
+    if (values.success_max_body_bytes) {
+      const maximum = Number(values.success_max_body_bytes);
+      if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1_048_576)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["success_max_body_bytes"],
+          message: "Enter an integer from 1 through 1048576.",
+        });
+    }
+  });
 
 type SubscriptionValues = z.infer<typeof subscriptionSchema>;
 
 const mappingEnvelope = (expression: string) =>
   expression.trim() === "" ? null : { engine: "jsonata", version: "1", expression };
+
+function guidedMappingExpression(mapping: unknown): string | null {
+  if (mapping === null || mapping === undefined) return "";
+  if (typeof mapping !== "object" || mapping === null) return null;
+  const expression = (mapping as { expression?: unknown }).expression;
+  if (typeof expression !== "string") return null;
+  return sameJson(mapping, mappingEnvelope(expression)) ? expression : null;
+}
 
 function mappingExpression(mapping: unknown): string {
   if (typeof mapping !== "object" || mapping === null) return "";
@@ -121,6 +164,19 @@ function subscriptionEventType(matchRules: unknown): string {
   if (typeof matchRules !== "object" || matchRules === null) return "";
   const eventType = (matchRules as { event_type?: unknown }).event_type;
   return typeof eventType === "string" ? eventType : "";
+}
+
+function httpSuccess(values: SubscriptionValues): HttpSuccessRule | null {
+  if (values.success_mode !== "json_boolean") return null;
+  return {
+    evaluator: "json_boolean",
+    field: values.success_field.trim(),
+    expected: values.success_expected === "true",
+    ...(values.success_diagnostic_field.trim()
+      ? { diagnostic_field: values.success_diagnostic_field.trim() }
+      : undefined),
+    ...(values.success_max_body_bytes ? { max_body_bytes: Number(values.success_max_body_bytes) } : undefined),
+  };
 }
 
 const editableFieldMapping = (row: FieldMapping = { output: "", source: "" }): EditableFieldMapping => ({
@@ -1231,25 +1287,39 @@ function SubscriptionForm({
   const noDestinations = destinations.isSuccess && activeOnly(destinations.data?.items).length === 0;
   const [playgroundOpen, setPlaygroundOpen] = useState(initialPlaygroundOpen);
   const [reviewedExpression, setReviewedExpression] = useState<string>();
-  const originalExpression = mappingExpression(subscription?.mapping_config);
+  const originalExpression = guidedMappingExpression(subscription?.mapping_config);
+  const rawMapping = subscription !== undefined && originalExpression === null;
+  const storedSuccess = subscription?.http_success;
 
-  const form = useForm<SubscriptionValues>({
+  const form = useForm<SubscriptionValues, unknown, SubscriptionValues>({
     resolver: zodResolver(subscriptionSchema),
     defaultValues: {
       name: subscription?.name ?? "",
       destination_id: subscription?.destination_id ?? "",
       event_type: subscriptionEventType(subscription?.match_rules),
-      mapping: originalExpression,
-      method: subscription?.http_delivery.method ?? "POST",
+      mapping: originalExpression ?? "",
+      raw_mapping: rawMapping ? formatJson(subscription.mapping_config) : "",
+      method: (subscription?.http_delivery.method ?? "POST") as SubscriptionValues["method"],
       path: subscription?.http_delivery.path ?? "",
-      body: subscription?.http_delivery.body ?? "json",
-      headers: formatJson(subscription?.http_delivery.headers) || "{}",
-      http_success: subscription?.http_success ? formatJson(subscription.http_success) : "",
+      body: (subscription?.http_delivery.body ?? "json") as SubscriptionValues["body"],
+      headers: Object.entries(subscription?.http_delivery.headers ?? {}).map(([name, value]) => ({ name, value })),
+      success_mode: storedSuccess ? "json_boolean" : "",
+      success_field: storedSuccess?.field ?? "",
+      success_expected: (storedSuccess?.expected === undefined || storedSuccess.expected === null
+        ? ""
+        : String(storedSuccess.expected)) as SubscriptionValues["success_expected"],
+      success_diagnostic_field: storedSuccess?.diagnostic_field ?? "",
+      success_max_body_bytes:
+        storedSuccess?.max_body_bytes === undefined || storedSuccess.max_body_bytes === null
+          ? ""
+          : String(storedSuccess.max_body_bytes),
       description: subscription?.description ?? "",
     },
   });
+  const headerRows = useFieldArray({ control: form.control, name: "headers" });
   const expression = form.watch("mapping");
-  const mappingChanged = expression !== originalExpression;
+  const successMode = form.watch("success_mode");
+  const mappingChanged = !rawMapping && expression !== originalExpression;
   const mappingReviewed = !mappingChanged || reviewedExpression === expression;
 
   const save = useMutation({
@@ -1258,16 +1328,16 @@ function SubscriptionForm({
         version: subscription?.http_delivery.version ?? currentHttpDeliveryVersion,
         method: values.method,
         path: values.path || null,
-        headers: parseJson(values.headers).value as Record<string, string>,
+        headers: Object.fromEntries(values.headers.map((header) => [header.name.trim(), header.value])),
         body: values.body,
       };
       const requestBody = {
         name: values.name,
         match_rules: { event_type: values.event_type.trim() },
         destination_id: values.destination_id,
-        mapping: mappingEnvelope(values.mapping),
+        mapping: rawMapping ? parseJson(values.raw_mapping).value : mappingEnvelope(values.mapping),
         http_delivery: httpDelivery,
-        http_success: values.http_success.trim() ? (parseJson(values.http_success).value as HttpSuccessRule) : null,
+        http_success: httpSuccess(values),
         order_index: subscription?.order_index ?? 0,
         description: values.description.trim() || null,
       };
@@ -1293,15 +1363,19 @@ function SubscriptionForm({
     },
   });
 
-  const submit = form.handleSubmit((values) =>
+  const submit = form.handleSubmit((values) => {
+    if (rawMapping && !values.raw_mapping.trim()) {
+      form.setError("raw_mapping", { type: "validate", message: "Enter the stored mapping document." });
+      return;
+    }
     save.mutate(values, {
       onError: (failure) => {
         applyProblem(form, failure, formFields);
         const matchRulesError = fieldError(asProblem(failure), "match_rules");
         if (matchRulesError) form.setError("event_type", { type: "server", message: matchRulesError });
       },
-    }),
-  );
+    });
+  });
 
   return (
     <Form {...form}>
@@ -1318,97 +1392,196 @@ function SubscriptionForm({
           <FormError message={formError(asProblem(save.error), writeFields)} />
 
           <TextField control={form.control} name="name" label="Name" required />
-          <SelectField
-            control={form.control}
-            name="destination_id"
-            label="Destination"
-            hint={
-              noDestinations ? (
-                <>
-                  No active Destinations yet, and a Subscription delivers to one.{" "}
-                  <Link to={`/tenants/${tenantId}/destinations`}>Create a Destination</Link> first.
-                </>
-              ) : destinations.data?.next_cursor ? (
-                "Showing the first 100 active Destinations."
-              ) : undefined
-            }
-            disabled={destinationOptionsUnavailable || noDestinations}
-            required
-          >
-            {activeOnly(destinations.data?.items).map((destination) => (
-              <SelectItem key={destination.id} value={destination.id}>
-                {destination.name}
-              </SelectItem>
-            ))}
-          </SelectField>
-          <TextField
-            control={form.control}
-            name="event_type"
-            label="Event type"
-            hint="Changing this affects how future Events route to this Subscription."
-            required
-          />
-          <section aria-labelledby="mapping-summary-heading" className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 id="mapping-summary-heading" className="m-0 text-sm">
-                Mapping
-              </h3>
-              <StatusBadge status={mappingReviewed ? "active" : "pending"}>
-                {mappingChanged ? (mappingReviewed ? "Preview reviewed" : "Review required") : "Unchanged"}
-              </StatusBadge>
-            </div>
-            <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-surface-quiet p-3">
-              {expression.trim() ? (
-                <MappingValue expression={expression} />
-              ) : (
-                <p className="m-0 text-sm text-ink-secondary">The accepted payload will be delivered unchanged.</p>
-              )}
-              <p className="m-0 text-xs text-ink-secondary">
-                {mappingChanged
-                  ? mappingReviewed
-                    ? "Mapping change reviewed and ready to save."
-                    : "Preview and confirm this mapping change before saving the Subscription."
-                  : "Mapping changes are made and reviewed in the Playground."}
-              </p>
-            </div>
-          </section>
-          <MappingPlayground
-            tenantId={tenantId}
-            topicId={topicId}
-            form={form}
-            originalExpression={originalExpression}
-            open={playgroundOpen}
-            onOpenChange={setPlaygroundOpen}
-            onReviewInvalidated={() => setReviewedExpression(undefined)}
-            onConfirmed={setReviewedExpression}
-          />
+          <Section title="Routing" hint="Which accepted Events this Subscription delivers, and where they go.">
+            <SelectField
+              control={form.control}
+              name="destination_id"
+              label="Destination"
+              hint={
+                noDestinations ? (
+                  <>
+                    No active Destinations yet, and a Subscription delivers to one.{" "}
+                    <Link to={`/tenants/${tenantId}/destinations`}>Create a Destination</Link> first.
+                  </>
+                ) : destinations.data?.next_cursor ? (
+                  "Showing the first 100 active Destinations."
+                ) : undefined
+              }
+              disabled={destinationOptionsUnavailable || noDestinations}
+              required
+            >
+              {activeOnly(destinations.data?.items).map((destination) => (
+                <SelectItem key={destination.id} value={destination.id}>
+                  {destination.name}
+                </SelectItem>
+              ))}
+            </SelectField>
+            <TextField
+              control={form.control}
+              name="event_type"
+              label="Event type"
+              hint="Only Events with this exact type follow this delivery path."
+              required
+            />
+          </Section>
+          <Section title="Event body" hint="What accepted Event data becomes the outbound HTTP request body.">
+            {rawMapping ? (
+              <TextAreaField
+                control={form.control}
+                name="raw_mapping"
+                label="Raw mapping (JSON)"
+                hint="This stored mapping cannot round-trip through the Playground. Saving replaces it exactly."
+                className="min-h-40 font-mono text-sm"
+                required
+              />
+            ) : (
+              <>
+                <section aria-labelledby="mapping-summary-heading" className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 id="mapping-summary-heading" className="m-0 text-sm">
+                      Mapping
+                    </h3>
+                    <StatusBadge status={mappingReviewed ? "active" : "pending"}>
+                      {mappingChanged ? (mappingReviewed ? "Preview reviewed" : "Review required") : "Unchanged"}
+                    </StatusBadge>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-surface-quiet p-3">
+                    {expression.trim() ? (
+                      <MappingValue expression={expression} />
+                    ) : (
+                      <p className="m-0 text-sm text-ink-secondary">
+                        The accepted payload will be delivered unchanged.
+                      </p>
+                    )}
+                    <p className="m-0 text-xs text-ink-secondary">
+                      {mappingChanged
+                        ? mappingReviewed
+                          ? "Mapping change reviewed and ready to save."
+                          : "Preview and confirm this mapping change before saving the Subscription."
+                        : "Mapping changes are made and reviewed in the Playground."}
+                    </p>
+                  </div>
+                </section>
+                <MappingPlayground
+                  tenantId={tenantId}
+                  topicId={topicId}
+                  form={form}
+                  originalExpression={originalExpression ?? ""}
+                  open={playgroundOpen}
+                  onOpenChange={setPlaygroundOpen}
+                  onReviewInvalidated={() => setReviewedExpression(undefined)}
+                  onConfirmed={setReviewedExpression}
+                />
+              </>
+            )}
+          </Section>
 
-          <fieldset className="flex flex-col gap-4 rounded-md border bg-surface-quiet p-4">
-            <legend className="px-1 text-sm font-medium">HTTP delivery</legend>
+          <Section title="HTTP request" hint="The operation this Subscription sends to its Destination.">
             <SelectField control={form.control} name="method" label="Method" required>
-              {["POST", "PUT", "PATCH", "DELETE", "GET"].map((verb) => (
+              {["POST", "PUT", "PATCH", "DELETE"].map((verb) => (
                 <SelectItem key={verb} value={verb}>
                   {verb}
                 </SelectItem>
               ))}
             </SelectField>
-            <TextField control={form.control} name="path" label="Path (optional)" />
-            <TextField control={form.control} name="body" label="Body" required />
-            <TextAreaField
+            <TextField
               control={form.control}
-              name="headers"
-              label="Headers (JSON object)"
-              className="min-h-24 font-mono text-sm"
-              required
+              name="path"
+              label="Relative path (optional)"
+              hint="Appended to the Destination base URI. A query string is allowed."
             />
-            <TextAreaField
+            <SelectField control={form.control} name="body" label="Request body" required>
+              <SelectItem value="json">Mapped Event JSON</SelectItem>
+              <SelectItem value="none">No body</SelectItem>
+            </SelectField>
+            <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
+              <legend className="text-sm font-medium">Request headers</legend>
+              <p className="m-0 text-xs text-ink-secondary">
+                Add operation-specific headers. Destination authentication supplies its own headers.
+              </p>
+              {headerRows.fields.map((row, index) => (
+                <div
+                  key={row.id}
+                  className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                >
+                  <TextField
+                    control={form.control}
+                    name={`headers.${index}.name`}
+                    label={`Header ${index + 1} name`}
+                    className="font-mono text-sm"
+                    required
+                  />
+                  <TextField
+                    control={form.control}
+                    name={`headers.${index}.value`}
+                    label={`Header ${index + 1} value`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="sm:mt-6"
+                    aria-label={`Remove header ${index + 1}`}
+                    onClick={() => headerRows.remove(index)}
+                  >
+                    <X aria-hidden="true" className="size-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                disabled={headerRows.fields.length >= 32}
+                onClick={() => headerRows.append({ name: "", value: "" })}
+              >
+                Add header
+              </Button>
+            </fieldset>
+          </Section>
+
+          <Section title="Response success" hint="How a successful HTTP response is recognized for this operation.">
+            <SelectField
               control={form.control}
-              name="http_success"
-              label="HTTP success rule (JSON, optional)"
-              hint="Leave blank for any HTTP 2xx response to succeed."
-              className="min-h-24 font-mono text-sm"
-            />
-          </fieldset>
+              name="success_mode"
+              label="Success check"
+              emptyLabel="Any HTTP 2xx response"
+            >
+              <SelectItem value="json_boolean">Response JSON boolean</SelectItem>
+            </SelectField>
+            {successMode === "json_boolean" ? (
+              <>
+                <TextField
+                  control={form.control}
+                  name="success_field"
+                  label="Boolean field"
+                  hint="Top-level response JSON field that signals success."
+                  required
+                />
+                <SelectField control={form.control} name="success_expected" label="Expected value" required>
+                  <SelectItem value="true">True</SelectItem>
+                  <SelectItem value="false">False</SelectItem>
+                </SelectField>
+                <TextField
+                  control={form.control}
+                  name="success_diagnostic_field"
+                  label="Diagnostic field (optional)"
+                  hint="Top-level response field used when the operation reports failure."
+                />
+                <TextField
+                  control={form.control}
+                  name="success_max_body_bytes"
+                  label="Maximum response bytes (optional)"
+                  hint="Defaults to 65536. Allowed range: 1 through 1048576."
+                  type="number"
+                  min={1}
+                  max={1_048_576}
+                  step={1}
+                />
+              </>
+            ) : null}
+          </Section>
 
           <TextField control={form.control} name="description" label="Description (optional)" />
 
