@@ -47,6 +47,18 @@ Content-Type: application/json
 @connectorId = {{applyHttpConnector.response.body.$.connector.id}}
 
 ###
+# Step 2a - Apply the GitHub webhook Connector
+# @name applyGithubConnector
+PUT {{baseUrl}}/admin/connectors/github/versions/1
+{{operatorKey}}
+Content-Type: application/json
+
+< ../../examples/connectors/github.json
+
+###
+@githubConnectorId = {{applyGithubConnector.response.body.$.connector.id}}
+
+###
 # Step 3 - Create the Tenant
 # @name createNorthwind
 POST {{baseUrl}}/admin/tenants
@@ -240,6 +252,18 @@ Content-Type: application/json
 }
 
 ###
+# @name createNwTopicGithubEvents
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "key": "github-events",
+  "name": "github-events",
+  "description": "Verified repository and organization webhooks received from GitHub."
+}
+
+###
 # @name createNwTopicWarehouseReceipts
 POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
 {{operatorKey}}
@@ -354,6 +378,40 @@ Content-Type: application/json
   "event_identity_rule": {
     "kind": "header",
     "value": "X-Storefront-Delivary",
+    "allow_missing": false
+  }
+}
+
+###
+# Admin generates the callback_id. Provision the value named github_webhook_secret through the
+# Ingestion source-secret provider, then enter that same value in GitHub's webhook settings.
+# @name createNwSourceGithubWebhook
+POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{githubConnectorId}}",
+  "topic_id": "{{createNwTopicGithubEvents.response.body.$.id}}",
+  "name": "Northwind GitHub webhooks",
+  "type": "webhook",
+  "configuration": {},
+  "verification": {
+    "scheme": "hmac_sha256",
+    "config": {},
+    "secret_refs": {
+      "secret": "github_webhook_secret"
+    }
+  },
+  "input_requirements": null,
+  "mapping": {
+    "engine": "jsonata",
+    "version": "1",
+    "expression": "{\"event_type\":\"github.\" & $context.headers.\"x-github-event\",\"payload\":$}"
+  },
+  "event_identity_rule": {
+    "kind": "header",
+    "value": "X-GitHub-Delivery",
     "allow_missing": false
   }
 }
