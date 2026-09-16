@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -23,7 +24,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
             .Produces<ApplyConnectorManifestResult>(StatusCodes.Status201Created);
         group.MapPost(ComposeConnectorManifest, "/{key}/versions/{contractVersion:int}/compose")
             .Produces<ComposeConnectorManifestResult>();
-        group.MapPost(PreviewSourceContract, "/source-contracts/preview").Produces<PreviewResponse>();
+        group.MapPost(PreviewSourceContract, "/source-contracts/preview").Produces<SourceContractPreviewResponse>();
     }
 
     private static async Task<IResult> ListConnectors(
@@ -122,7 +123,12 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
         CancellationToken cancellationToken)
     {
         PreviewSourceContractResult result = await mediator.Send(
-            new PreviewSourceContractQuery(request.Schema, request.Mapping, request.SampleInput, request.SampleContext),
+            new PreviewSourceContractQuery(
+                request.Schema,
+                request.Mapping,
+                request.SampleInput,
+                request.SampleContext,
+                request.EventIdentityRule),
             cancellationToken);
         if (result.Error is not null)
             return Results.ValidationProblem(
@@ -130,7 +136,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
                 statusCode: StatusCodes.Status400BadRequest);
 
         using var doc = JsonDocument.Parse(result.OutputJson!);
-        return Results.Ok(new PreviewResponse(doc.RootElement.Clone()));
+        return Results.Ok(new SourceContractPreviewResponse(doc.RootElement.Clone(), result.SourceEventId));
     }
 }
 
@@ -138,6 +144,7 @@ internal sealed record SourceContractPreviewRequest(
     JsonElement? Schema,
     JsonElement Mapping,
     JsonElement SampleInput,
-    JsonElement? SampleContext);
+    JsonElement? SampleContext,
+    SourceEventIdentityRule? EventIdentityRule);
 
 internal sealed record ConnectorComposeRequest(string? Name, string? Description, string? Direction);

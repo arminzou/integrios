@@ -2,6 +2,7 @@ using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Transforms;
+using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Transforms;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,6 +80,7 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             Json("""{"type":"object","properties":{"amount":{"type":"integer"}},"required":["amount"],"additionalProperties":false}"""),
             Json("""{"engine":"jsonata","version":"1","expression":"{ \"event_type\": \"x\", \"payload\": $ }"}"""),
             Json("{}"),
+            null,
             null));
 
         result.Error!.ShouldContain("amount", Case.Sensitive);
@@ -94,12 +96,97 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
         result.OutputJson.ShouldBeNull();
     }
 
+    // The identity rule runs before the mapping and decides whether the input is admitted at all, so
+    // a preview that showed only the mapping output would not be showing the Event that is accepted.
+    [Fact]
+    public async Task Preview_ResolvesSourceEventId_FromASampleRequestHeader()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"a\", \"payload\": $ }",
+            "{}",
+            """{"headers":{"x-github-delivery":"d-7"}}""",
+            new SourceEventIdentityRule { Kind = "header", Value = "X-GitHub-Delivery" });
+
+        result.Error.ShouldBeNull();
+        result.SourceEventId.ShouldBe("d-7");
+    }
+
+    [Fact]
+    public async Task Preview_ResolvesSourceEventId_FromAJsonPointerIntoTheSample()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"a\", \"payload\": $ }",
+            """{"delivery":{"id":"d-9"}}""",
+            """{"headers":{}}""",
+            new SourceEventIdentityRule { Kind = "json_path", Value = "/delivery/id" });
+
+        result.Error.ShouldBeNull();
+        result.SourceEventId.ShouldBe("d-9");
+    }
+
+    [Fact]
+    public async Task Preview_ReportsTheRejection_WhenTheSampleCarriesNoIdentity()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"a\", \"payload\": $ }",
+            "{}",
+            """{"headers":{}}""",
+            new SourceEventIdentityRule { Kind = "header", Value = "X-GitHub-Delivery" });
+
+        result.Error.ShouldNotBeNull();
+        result.OutputJson.ShouldBeNull();
+        result.SourceEventId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Preview_AcceptsAMissingIdentity_WhenTheRulePermitsOne()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"a\", \"payload\": $ }",
+            "{}",
+            """{"headers":{}}""",
+            new SourceEventIdentityRule { Kind = "header", Value = "X-GitHub-Delivery", AllowMissing = true });
+
+        result.Error.ShouldBeNull();
+        result.SourceEventId.ShouldBeNull();
+    }
+
+    // A broker supplies the message id with the message, so no sample can carry one. That is not the
+    // same as a rule whose value is absent, and it is not reported as a rejection.
+    [Fact]
+    public async Task Preview_LeavesABrokerMessageIdUnresolved_RatherThanRefusingTheSample()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"a\", \"payload\": $ }",
+            "{}",
+            null,
+            new SourceEventIdentityRule { Kind = "message_id", Value = "message_id" });
+
+        result.Error.ShouldBeNull();
+        result.OutputJson.ShouldNotBeNull();
+        result.SourceEventId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Preview_RefusesARuleTheSourceCouldNotBeAuthoredWith()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"a\", \"payload\": $ }",
+            "{}",
+            """{"headers":{}}""",
+            new SourceEventIdentityRule { Kind = "json_path", Value = "delivery.id" });
+
+        result.Error.ShouldNotBeNull();
+        result.Error.ShouldContain("JSON Pointer");
+    }
+
     public void Dispose() => provider.Dispose();
 
     private Task<PreviewSourceContractResult> RunMapping(
         string expression,
         string sampleInput,
-        string? sampleContext = null)
+        string? sampleContext = null,
+        SourceEventIdentityRule? identityRule = null)
     {
         string mapping =
             $$"""{"engine":"jsonata","version":"1","expression":{{JsonSerializer.Serialize(expression)}}}""";
@@ -107,7 +194,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             null,
             Json(mapping),
             Json(sampleInput),
-            sampleContext is null ? null : Json(sampleContext)));
+            sampleContext is null ? null : Json(sampleContext),
+            identityRule));
     }
 
     private static JsonElement Json(string raw) =>

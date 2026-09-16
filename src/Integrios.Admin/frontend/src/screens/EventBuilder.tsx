@@ -271,7 +271,13 @@ export function EventBuilder({
   /// What a displayed result was produced from. Any change to the contract or the sample — a header
   /// the mapping reads included — makes both a success and a failure a statement about something
   /// that is no longer on screen.
-  const signature = JSON.stringify([expression, schema ?? null, lastValidBody, webhook ? lastValidHeaders : null]);
+  const signature = JSON.stringify([
+    expression,
+    schema ?? null,
+    identity,
+    lastValidBody,
+    webhook ? lastValidHeaders : null,
+  ]);
 
   const preview = useMutation({
     mutationFn: () =>
@@ -282,6 +288,9 @@ export function EventBuilder({
             mapping: { engine: "jsonata", version: "1", expression },
             sample_input: sample.current.body,
             sample_context: webhook ? { headers: sample.current.headers } : null,
+            event_identity_rule: identity
+              ? { kind: identity.kind, value: identity.value, allow_missing: identity.allowMissing }
+              : null,
           },
         }),
       ),
@@ -564,6 +573,14 @@ export function EventBuilder({
                 <>
                   <p className="m-0 text-xs font-medium">{fresh ? "Would be accepted" : "Result is out of date"}</p>
                   <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(preview.data.output)}</pre>
+                  <Note>
+                    <span className="font-mono">source_event_id</span>:{" "}
+                    {identity === null
+                      ? "no rule, so this Event is not deduplicated"
+                      : identity.kind === "message_id"
+                        ? `supplied by the ${sampleName} itself, which a sample cannot carry`
+                        : (preview.data.source_event_id ?? "absent in this sample, which this rule permits")}
+                  </Note>
                   {fresh ? null : <Note>The contract or the sample changed. Preview again to refresh this.</Note>}
                 </>
               ) : (

@@ -133,3 +133,44 @@ it("keeps an expression it did not write in the advanced editor", async () => {
   expect(within(builder).getByRole("button", { name: "Reset to guided" })).toBeTruthy();
   expect(within(builder).queryByRole("button", { name: "Guided mode" })).toBeNull();
 });
+
+/// The identity rule runs before the mapping and is part of the Event that would be accepted, so the
+/// preview resolves it through the same extractor Ingestion uses rather than the browser guessing at
+/// a JSON Pointer of its own.
+it("previews the Event identity the rule would resolve, not only the mapping output", async () => {
+  const calls = stubHttp(({ url }) =>
+    url.pathname.endsWith("/source-contracts/preview")
+      ? { status: 200, body: { output: { event_type: "a", payload: {} }, source_event_id: "d-7" } }
+      : { status: 200, body: page([]) },
+  );
+  renderScreen(
+    <EventBuilder
+      contractKey="broker Source"
+      sourceType="broker"
+      draft={{ expression: "", identity: null }}
+      onUse={() => undefined}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+
+  fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), {
+    target: { value: '{"delivery":{"id":"d-7"}}' },
+  });
+  fireEvent.change(within(builder).getByLabelText("Event identity"), { target: { value: "json_path" } });
+  // The sample is analysed after the Operator stops typing, so the field it discovers is offered
+  // only once that has run.
+  await waitFor(() =>
+    expect(within(builder).getByLabelText("Identity field").querySelector('option[value="/delivery/id"]')).toBeTruthy(),
+  );
+  fireEvent.change(within(builder).getByLabelText("Identity field"), { target: { value: "/delivery/id" } });
+  fireEvent.click(within(builder).getByRole("button", { name: "Preview normalized Event" }));
+
+  await waitFor(() => expect(within(builder).getByText(/d-7/)).toBeTruthy());
+  const preview = calls.find((call) => call.url.pathname.endsWith("/source-contracts/preview"))!;
+  expect((preview.body as Record<string, unknown>).event_identity_rule).toEqual({
+    kind: "json_path",
+    value: "/delivery/id",
+    allow_missing: false,
+  });
+});
