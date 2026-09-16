@@ -39,6 +39,17 @@ public sealed class ExampleConnectorManifestTests
     }
 
     [Fact]
+    public void Http_OffersEverySupportedVerificationAndAuthenticationScheme()
+    {
+        ConnectorManifest manifest = ParseExample("http.json");
+
+        manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme)
+            .ShouldBe(["hmac_sha256"]);
+        manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)
+            .ShouldBe(["api_key_header", "bearer_token"]);
+    }
+
+    [Fact]
     public void ProductionProjects_DoNotLoadConnectorExamples()
     {
         string[] productionFiles = Directory.GetFiles(Path.Combine(RepositoryRoot(), "src"), "*", SearchOption.AllDirectories)

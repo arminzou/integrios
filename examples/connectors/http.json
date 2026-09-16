@@ -18,7 +18,13 @@
   },
   "source_verification": {
     "allow_unverified": true,
-    "schemes": []
+    "schemes": [
+      {
+        "scheme": "hmac_sha256",
+        "required_config": [],
+        "required_secret_refs": ["secret"]
+      }
+    ]
   },
   "destination_authentication": {
     "allow_unauthenticated": true,

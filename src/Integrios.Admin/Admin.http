@@ -1,41 +1,27 @@
 @baseUrl = {{ADMIN_BASE_URL}}
 @ingestionBaseUrl = {{INGESTION_BASE_URL}}
 @mocksinkAdmin = {{MOCKSINK_ADMIN_BASE_URL}}
+@sinkBase = {{SINK_BASE}}
 @operatorKey = Authorization: OperatorKey global_operator_key:operator_bootstrap_secret
 
-# Sink base URL:
-# - use http://mocksink:8080 when the Worker resolves a Destination's base_uri inside the Compose
-#   network; that is the value written into every Destination below
-# - MOCKSINK_ADMIN_BASE_URL is the host-side WireMock admin used to reset mappings and stub a
-#   failing Destination, e.g. http://localhost:5054
-@sinkBase = {{SINK_BASE}}
+# Progressive Operator dashboard seed
+#
+# Run Shared setup once, then run each journey from top to bottom. Every journey creates one Topic,
+# one Source, one Destination, and one Subscription using the shared HTTP Connector and Tenant.
+# The Tenant API key is shared by the Tenant, but only Event API intake uses it.
+#
+# Use a clean database: rerunning Shared setup returns 409 for the existing Tenant slug.
+# SINK_BASE must be reachable by Worker. Compose normally uses http://mocksink:8080.
 
 ###
-# Single-tenant seed for exercising the Operator dashboard
-#
-# Run top to bottom against a running Compose stack. It creates one fully-configured Tenant with
-# Destinations, Topics, Sources, and Subscriptions in active, disabled, and paused states, then
-# drives Events through Ingestion so the dashboard shows delivered, unrouted, and dead-lettered work.
-#
-# scripts/seed-dev-data.sh seeds this same Northwind Retail data plus smaller Tenants. Unlike the
-# shell script, this file cannot:
-# - wipe tenant-scoped tables first, so rerunning without a fresh database returns 409 on the Tenant
-#   slug (truncate as the script does, or start clean)
-# - write secrets/source/northwind-retail/dev_service_bus, which the broker Source below needs
-# - publish the warehouse receipt to the Service Bus emulator or wait for the failing Delivery to
-#   dead-letter
-
-###
-# Step 1 - Reset WireMock so this run starts with no recorded deliveries or stubs
+# Shared setup — reset recorded deliveries
 DELETE {{mocksinkAdmin}}/__admin/requests
 
 ###
 POST {{mocksinkAdmin}}/__admin/mappings/reset
 
 ###
-# Step 2 - Apply the generic HTTP Connector
-# Bootstrap creates only the deployment-wide OperatorKey. The Connector identity is generated when
-# the Operator applies its manifest through Admin.
+# Shared setup — apply one bidirectional Connector for all three journeys
 # @name applyHttpConnector
 PUT {{baseUrl}}/admin/connectors/http/versions/1
 {{operatorKey}}
@@ -47,19 +33,7 @@ Content-Type: application/json
 @connectorId = {{applyHttpConnector.response.body.$.connector.id}}
 
 ###
-# Step 2a - Apply the GitHub webhook Connector
-# @name applyGithubConnector
-PUT {{baseUrl}}/admin/connectors/github/versions/1
-{{operatorKey}}
-Content-Type: application/json
-
-< ../../examples/connectors/github.json
-
-###
-@githubConnectorId = {{applyGithubConnector.response.body.$.connector.id}}
-
-###
-# Step 3 - Create the Tenant
+# Shared setup — create one Tenant
 # @name createNorthwind
 POST {{baseUrl}}/admin/tenants
 {{operatorKey}}
@@ -68,366 +42,290 @@ Content-Type: application/json
 {
   "slug": "northwind-retail",
   "name": "Northwind Retail",
-  "environment": "production",
-  "description": "Retail commerce platform. Orders, payments, and stock levels flow out to the ERP, the warehouse, and the analytics lake."
+  "environment": "development",
+  "description": "Progressive UI journeys for Event API, webhook, and Azure Service Bus intake."
 }
 
 ###
-@northwindId = {{createNorthwind.response.body.$.id}}
+@tenantId = {{createNorthwind.response.body.$.id}}
 
 ###
-# Step 4 - Create the active data-plane API key
-# @name createNorthwindStorefront
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/tenant-api-keys
+# Shared setup — create the one Tenant API key reused by Event API journeys
+# @name createTenantApiKey
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/tenant-api-keys
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "northwind-storefront",
-  "description": "Storefront checkout service. Rotated quarterly.",
+  "name": "northwind-ingestion",
+  "description": "Shared Event API credential for the Northwind Tenant.",
   "expires_at": null
 }
 
 ###
-@northwindToken = {{createNorthwindStorefront.response.body.$.token}}
+@tenantApiToken = {{createTenantApiKey.response.body.$.token}}
+
+###############################################################################
+# Journey 1 — Event API -> Orders Topic -> ERP Destination
+#
+# Dashboard path:
+# HTTP Connector -> Orders Topic -> Orders Event API Source
+#                -> ERP Destination <- Orders to ERP Subscription
+###############################################################################
 
 ###
-# Step 4a - Create a retired key so the dashboard has a revoked credential to show
-# @name createNorthwindLegacy
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/tenant-api-keys
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "northwind-legacy-pos",
-  "description": "Retired point-of-sale integration.",
-  "expires_at": null
-}
-
-###
-@northwindLegacyKeyId = {{createNorthwindLegacy.response.body.$.tenant_api_key.id}}
-
-###
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/tenant-api-keys/{{northwindLegacyKeyId}}/revoke
-{{operatorKey}}
-
-###
-# Step 5 - Create the Destinations
-# @name createNwDestinationErp
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "name": "northwind-erp",
-  "configuration": {
-    "base_uri": "{{sinkBase}}/sink/northwind-erp"
-  },
-  "authentication": null,
-  "environment": "production",
-  "description": "Order and payment records into the ERP."
-}
-
-###
-# @name createNwDestinationWms
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "name": "northwind-wms",
-  "configuration": {
-    "base_uri": "{{sinkBase}}/sink/northwind-wms"
-  },
-  "authentication": null,
-  "environment": "production",
-  "description": "Warehouse management system, fulfilment side only."
-}
-
-###
-# @name createNwDestinationLake
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "name": "analytics-lake",
-  "configuration": {
-    "base_uri": "{{sinkBase}}/sink/northwind-lake"
-  },
-  "authentication": null,
-  "environment": "production",
-  "description": "Flattened order feed for the analytics lake."
-}
-
-###
-# This is the one made to fail so a Delivery dead-letters.
-# @name createNwDestinationBilling
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "name": "legacy-billing",
-  "configuration": {
-    "base_uri": "{{sinkBase}}/sink/northwind-billing"
-  },
-  "authentication": null,
-  "environment": "production",
-  "description": "Decommissioned billing host. Kept until finance signs off on the cutover."
-}
-
-###
-# @name createNwDestinationSandbox
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "name": "erp-sandbox",
-  "configuration": {
-    "base_uri": "{{sinkBase}}/sink/northwind-sandbox"
-  },
-  "authentication": null,
-  "environment": "staging",
-  "description": "Vendor sandbox used during the last ERP upgrade."
-}
-
-###
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/destinations/{{createNwDestinationSandbox.response.body.$.id}}/deactivate
-{{operatorKey}}
-
-###
-# Step 6 - Create the Topics
-# @name createNwTopicOrders
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+# Journey 1.1 — create the Topic
+# @name createOrdersTopic
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
 {{operatorKey}}
 Content-Type: application/json
 
 {
   "key": "orders",
-  "name": "orders",
-  "description": "Order lifecycle from the storefront."
+  "name": "Orders",
+  "description": "Orders accepted through the Event API."
 }
 
 ###
-# @name createNwTopicPayments
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+# Journey 1.2 — create the Event API Source
+# @name createOrdersEventApiSource
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "key": "payments",
-  "name": "payments",
-  "description": "Payment authorisation and capture."
+  "connector_id": "{{connectorId}}",
+  "topic_id": "{{createOrdersTopic.response.body.$.id}}",
+  "name": "Orders Event API",
+  "type": "event_api",
+  "configuration": {},
+  "verification": null,
+  "input_requirements": null,
+  "mapping": null,
+  "event_identity_rule": null
 }
 
 ###
-# @name createNwTopicInventory
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+# Journey 1.3 — create the HTTP Destination
+# @name createErpDestination
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "key": "inventory",
-  "name": "inventory",
-  "description": "Stock level movements per warehouse."
+  "connector_id": "{{connectorId}}",
+  "name": "orders-erp",
+  "configuration": {
+    "base_uri": "{{sinkBase}}/sink/orders-erp"
+  },
+  "authentication": null,
+  "environment": "development",
+  "description": "ERP endpoint for placed orders."
 }
 
 ###
-# @name createNwTopicStorefrontWebhooks
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
+# Journey 1.4 — route placed orders to the ERP
+# @name createOrdersSubscription
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createOrdersTopic.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "orders-to-erp",
+  "match_rules": { "event_type": "order.placed" },
+  "destination_id": "{{createErpDestination.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 0,
+  "description": "Deliver every placed order to the ERP."
+}
+
+###
+# Journey 1.5 — send one Event with the shared Tenant API key
+# @name sendPlacedOrder
+POST {{ingestionBaseUrl}}/events?source_id={{createOrdersEventApiSource.response.body.$.id}}
+Authorization: Bearer {{tenantApiToken}}
+Content-Type: application/json
+
+{
+  "event_type": "order.placed",
+  "source_event_id": "order-1001",
+  "payload": {
+    "order_id": "1001",
+    "total": 119.50,
+    "currency": "USD"
+  }
+}
+
+###
+# Journey 1.6 — rerun after Worker delivers; the response should contain one request
+POST {{mocksinkAdmin}}/__admin/requests/find
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "urlPath": "/sink/orders-erp"
+}
+
+###############################################################################
+# Journey 2 — HMAC Webhook -> Storefront Topic -> Audit Destination
+#
+# Dashboard path:
+# HTTP Connector -> Storefront Topic -> Storefront Webhook Source
+#                -> Audit Destination <- Webhook to Audit Subscription
+#
+# Resource authoring needs only the secret reference name. Sending the webhook also requires the
+# Ingestion Source secret named storefront_webhook_hmac and a signature calculated over the exact
+# request body. Keep the value outside this repository.
+###############################################################################
+
+###
+# Journey 2.1 — create the Topic
+# @name createStorefrontTopic
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
 {{operatorKey}}
 Content-Type: application/json
 
 {
   "key": "storefront-webhooks",
-  "name": "storefront-webhooks",
-  "description": "Provider callbacks received from the storefront platform."
+  "name": "Storefront webhooks",
+  "description": "Verified callbacks received from the storefront."
 }
 
 ###
-# @name createNwTopicGithubEvents
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "key": "github-events",
-  "name": "github-events",
-  "description": "Verified repository and organization webhooks received from GitHub."
-}
-
-###
-# @name createNwTopicWarehouseReceipts
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "key": "warehouse-receipts",
-  "name": "warehouse-receipts",
-  "description": "Warehouse receipts consumed from the operations queue."
-}
-
-###
-# @name createNwTopicPosTerminals
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "key": "pos-terminals",
-  "name": "pos-terminals",
-  "description": "Retired in-store terminal stream."
-}
-
-###
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicPosTerminals.response.body.$.id}}/deactivate
-{{operatorKey}}
-
-###
-# Step 7 - Create the Sources
-# @name createNwSourceOrders
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
+# Journey 2.2 — create the HMAC-verified Webhook Source
+# @name createStorefrontWebhookSource
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources
 {{operatorKey}}
 Content-Type: application/json
 
 {
   "connector_id": "{{connectorId}}",
-  "topic_id": "{{createNwTopicOrders.response.body.$.id}}",
-  "name": "Northwind orders",
-  "type": "event_api",
-  "configuration": { "source_contract": "event_json" },
-  "verification": null,
-  "input_requirements": null,
-  "mapping": null,
-  "event_identity_rule": null
-}
-
-###
-# @name createNwSourcePayments
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "topic_id": "{{createNwTopicPayments.response.body.$.id}}",
-  "name": "Northwind payments",
-  "type": "event_api",
-  "configuration": { "source_contract": "event_json" },
-  "verification": null,
-  "input_requirements": null,
-  "mapping": null,
-  "event_identity_rule": null
-}
-
-###
-# @name createNwSourceInventory
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "topic_id": "{{createNwTopicInventory.response.body.$.id}}",
-  "name": "Northwind inventory",
-  "type": "event_api",
-  "configuration": { "source_contract": "event_json" },
-  "verification": null,
-  "input_requirements": null,
-  "mapping": null,
-  "event_identity_rule": null
-}
-
-###
-# Admin generates the callback_id in the response for a webhook Source. The identity header below is
-# misspelled on purpose, while the webhook request further down carries the correct one: correct the
-# Source to X-Storefront-Delivery through Edit, without opening Advanced.
-# @name createNwSourceWebhook
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{connectorId}}",
-  "topic_id": "{{createNwTopicStorefrontWebhooks.response.body.$.id}}",
-  "name": "Northwind storefront webhooks",
-  "type": "webhook",
-  "configuration": {},
-  "verification": null,
-  "input_requirements": {
-    "type": "object",
-    "properties": {
-      "event_type": { "type": "string" }
-    },
-    "required": ["event_type"],
-    "additionalProperties": true
-  },
-  "mapping": {
-    "engine": "jsonata",
-    "version": "1",
-    "expression": "{ \"event_type\": event_type, \"payload\": payload }"
-  },
-  "event_identity_rule": {
-    "kind": "header",
-    "value": "X-Storefront-Delivary",
-    "allow_missing": false
-  }
-}
-
-###
-# Admin generates the callback_id. Provision the value named github_webhook_secret through the
-# Ingestion source-secret provider, then enter that same value in GitHub's webhook settings.
-# @name createNwSourceGithubWebhook
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "connector_id": "{{githubConnectorId}}",
-  "topic_id": "{{createNwTopicGithubEvents.response.body.$.id}}",
-  "name": "Northwind GitHub webhooks",
+  "topic_id": "{{createStorefrontTopic.response.body.$.id}}",
+  "name": "Storefront webhook",
   "type": "webhook",
   "configuration": {},
   "verification": {
     "scheme": "hmac_sha256",
     "config": {},
     "secret_refs": {
-      "secret": "github_webhook_secret"
+      "secret": "storefront_webhook_hmac"
     }
   },
-  "input_requirements": null,
+  "input_requirements": {
+    "type": "object",
+    "properties": {
+      "delivery_id": { "type": "string" },
+      "result": { "type": "string" }
+    },
+    "required": ["delivery_id", "result"],
+    "additionalProperties": false
+  },
   "mapping": {
     "engine": "jsonata",
     "version": "1",
-    "expression": "{\"event_type\":\"github.\" & $context.headers.\"x-github-event\",\"payload\":$}"
+    "expression": "{\"event_type\":\"storefront.webhook.received\",\"payload\":$}"
   },
   "event_identity_rule": {
     "kind": "header",
-    "value": "X-GitHub-Delivery",
+    "value": "X-Storefront-Delivery",
     "allow_missing": false
   }
 }
 
 ###
-# Creating the broker Source only needs the secret_ref name. The secret file that makes the Worker
-# consume the broker is written by scripts/seed-dev-data.sh, not by this file.
-# @name createNwSourceBroker
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/sources
+# Journey 2.3 — create the HTTP Destination
+# @name createAuditDestination
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
 {{operatorKey}}
 Content-Type: application/json
 
 {
   "connector_id": "{{connectorId}}",
-  "topic_id": "{{createNwTopicWarehouseReceipts.response.body.$.id}}",
-  "name": "Northwind warehouse receipts",
+  "name": "webhook-audit",
+  "configuration": {
+    "base_uri": "{{sinkBase}}/sink/webhook-audit"
+  },
+  "authentication": null,
+  "environment": "development",
+  "description": "Audit endpoint for normalized storefront callbacks."
+}
+
+###
+# Journey 2.4 — route normalized callbacks to the audit endpoint
+# @name createWebhookSubscription
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createStorefrontTopic.response.body.$.id}}/subscriptions
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "name": "storefront-webhooks-to-audit",
+  "match_rules": { "event_type": "storefront.webhook.received" },
+  "destination_id": "{{createAuditDestination.response.body.$.id}}",
+  "mapping": null,
+  "http_delivery": null,
+  "http_success": null,
+  "order_index": 0,
+  "description": "Deliver normalized storefront callbacks to the audit endpoint."
+}
+
+###
+# Journey 2.5 — optional runtime step
+# Set WEBHOOK_SIGNATURE in your private REST Client environment to sha256=<hex HMAC> for the exact
+# compact body below, after mounting storefront_webhook_hmac for Ingestion.
+POST {{ingestionBaseUrl}}/webhooks/{{createStorefrontWebhookSource.response.body.$.configuration.callback_id}}
+X-Hub-Signature-256: {{WEBHOOK_SIGNATURE}}
+X-Storefront-Delivery: storefront-delivery-1001
+Content-Type: application/json
+
+{"delivery_id":"storefront-delivery-1001","result":"accepted"}
+
+###
+# Journey 2.6 — rerun after Worker delivers; the response should contain one request
+POST {{mocksinkAdmin}}/__admin/requests/find
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "urlPath": "/sink/webhook-audit"
+}
+
+###############################################################################
+# Journey 3 — Azure Service Bus -> Warehouse Topic -> WMS Destination
+#
+# Dashboard path:
+# HTTP Connector -> Warehouse Topic -> Azure Service Bus Source
+#                -> WMS Destination <- Warehouse Receipts Subscription
+#
+# Start the queue-demo Compose profile and mount the Ingestion Source secret named dev_service_bus
+# before creating the Source. Admin.http cannot write secret files or publish broker messages.
+###############################################################################
+
+###
+# Journey 3.1 — create the Topic
+# @name createWarehouseTopic
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "key": "warehouse-receipts",
+  "name": "Warehouse receipts",
+  "description": "Receipt messages consumed from Azure Service Bus."
+}
+
+###
+# Journey 3.2 — create the Azure Service Bus Source
+# @name createWarehouseBrokerSource
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources
+{{operatorKey}}
+Content-Type: application/json
+
+{
+  "connector_id": "{{connectorId}}",
+  "topic_id": "{{createWarehouseTopic.response.body.$.id}}",
+  "name": "Warehouse receipts",
   "type": "broker",
   "configuration": {
     "transport": "azure_service_bus",
@@ -451,279 +349,52 @@ Content-Type: application/json
 }
 
 ###
-# Step 8 - Create the Subscriptions
-# @name createNwSubscriptionErpOrders
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicOrders.response.body.$.id}}/subscriptions
+# Journey 3.3 — create the HTTP Destination
+# @name createWmsDestination
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/destinations
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "erp-orders",
-  "match_rules": { "event_type": "order.placed" },
-  "destination_id": "{{createNwDestinationErp.response.body.$.id}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 0,
-  "description": "Every placed order into the ERP."
-}
-
-###
-# @name createNwSubscriptionWmsFulfilment
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicOrders.response.body.$.id}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "wms-fulfilment",
-  "match_rules": { "event_type": "order.shipped" },
-  "destination_id": "{{createNwDestinationWms.response.body.$.id}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 1,
-  "description": "Shipment confirmations back to the warehouse."
-}
-
-###
-# A JSONata transform the dashboard can show on the Subscription.
-# @name createNwSubscriptionLakeOrders
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicOrders.response.body.$.id}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "lake-orders",
-  "match_rules": { "event_type": "order.placed" },
-  "destination_id": "{{createNwDestinationLake.response.body.$.id}}",
-  "mapping": {
-    "engine": "jsonata",
-    "version": "1",
-    "expression": "{ \"order\": orderId, \"total\": total, \"placed_at\": placedAt }"
+  "connector_id": "{{connectorId}}",
+  "name": "warehouse-wms",
+  "configuration": {
+    "base_uri": "{{sinkBase}}/sink/warehouse-wms"
   },
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 2,
-  "description": "Flattened order feed for the analytics lake."
+  "authentication": null,
+  "environment": "development",
+  "description": "Warehouse management endpoint for receipt messages."
 }
 
 ###
-# @name createNwSubscriptionErpPayments
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicPayments.response.body.$.id}}/subscriptions
+# Journey 3.4 — route receipts to the WMS
+# @name createWarehouseSubscription
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createWarehouseTopic.response.body.$.id}}/subscriptions
 {{operatorKey}}
 Content-Type: application/json
 
 {
-  "name": "erp-payments",
-  "match_rules": { "event_type": "payment.captured" },
-  "destination_id": "{{createNwDestinationErp.response.body.$.id}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 0,
-  "description": "Captured payments into the ERP ledger."
-}
-
-###
-# @name createNwSubscriptionLegacyBilling
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicPayments.response.body.$.id}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "legacy-billing-feed",
-  "match_rules": { "event_type": "payment.captured" },
-  "destination_id": "{{createNwDestinationBilling.response.body.$.id}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 1,
-  "description": "Mirror of captured payments into the decommissioned billing host."
-}
-
-###
-# @name createNwSubscriptionWmsStock
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicInventory.response.body.$.id}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "wms-stock",
-  "match_rules": { "event_type": "stock.adjusted" },
-  "destination_id": "{{createNwDestinationWms.response.body.$.id}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 0,
-  "description": "Stock adjustments back to the warehouse."
-}
-
-###
-# @name createNwSubscriptionLakeStock
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicInventory.response.body.$.id}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "lake-stock",
-  "match_rules": { "event_type": "stock.adjusted" },
-  "destination_id": "{{createNwDestinationLake.response.body.$.id}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 1,
-  "description": "Paused while the lake schema migration runs."
-}
-
-###
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicInventory.response.body.$.id}}/subscriptions/{{createNwSubscriptionLakeStock.response.body.$.id}}/deactivate
-{{operatorKey}}
-
-###
-# @name createNwSubscriptionWebhookAudit
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicStorefrontWebhooks.response.body.$.id}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "webhook-audit",
-  "match_rules": { "event_type": "storefront.webhook.received" },
-  "destination_id": "{{createNwDestinationLake.response.body.$.id}}",
-  "mapping": null,
-  "http_delivery": null,
-  "http_success": null,
-  "order_index": 0,
-  "description": "Storefront callbacks retained in the analytics lake."
-}
-
-###
-# @name createNwSubscriptionWarehouseReceipts
-POST {{baseUrl}}/admin/tenants/{{northwindId}}/topics/{{createNwTopicWarehouseReceipts.response.body.$.id}}/subscriptions
-{{operatorKey}}
-Content-Type: application/json
-
-{
-  "name": "warehouse-receipts",
+  "name": "warehouse-receipts-to-wms",
   "match_rules": { "event_type": "warehouse.receipt.recorded" },
-  "destination_id": "{{createNwDestinationWms.response.body.$.id}}",
+  "destination_id": "{{createWmsDestination.response.body.$.id}}",
   "mapping": null,
   "http_delivery": null,
   "http_success": null,
   "order_index": 0,
-  "description": "Warehouse receipts delivered to the warehouse system."
+  "description": "Deliver warehouse receipts to the WMS."
 }
 
 ###
-# Step 9 - Stub the failing Destination so a Delivery dead-letters
-POST {{mocksinkAdmin}}/__admin/mappings
-Content-Type: application/json
-
-{
-  "priority": 1,
-  "request": { "method": "POST", "urlPath": "/sink/northwind-billing" },
-  "response": { "status": 503, "jsonBody": { "error": "upstream unavailable" } }
-}
+# Journey 3.5 — publish outside REST Client
+# Pipe this JSON into scripts/send-service-bus.cs using your private emulator connection string:
+# {"event_type":"warehouse.receipt.recorded","source_event_id":"receipt-1001","payload":{"receipt_id":"1001","status":"received"}}
 
 ###
-# Step 10 - Drive real traffic through Ingestion
-# The warehouse receipt goes over the Service Bus emulator and has no HTTP send here; publish it as
-# scripts/seed-dev-data.sh does. No Subscription matches order.cancelled, so it lands unrouted.
-POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
-Authorization: Bearer {{northwindToken}}
+# Journey 3.6 — rerun after the broker receiver and Worker finish; expect one request
+POST {{mocksinkAdmin}}/__admin/requests/find
 Content-Type: application/json
 
 {
-  "event_type": "order.placed",
-  "source_event_id": "nw-order-1",
-  "payload": {
-    "orderId": "SO-401",
-    "customer": "Contoso Ltd",
-    "lines": 1,
-    "total": 119.5,
-    "currency": "GBP",
-    "placedAt": "2026-09-05T09:12:00Z"
-  }
-}
-
-###
-POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
-Authorization: Bearer {{northwindToken}}
-Content-Type: application/json
-
-{
-  "event_type": "order.shipped",
-  "source_event_id": "nw-ship-1",
-  "payload": {
-    "orderId": "SO-401",
-    "carrier": "Atlas Logistics",
-    "tracking": "ATL9911772",
-    "warehouse": "LEE-01"
-  }
-}
-
-###
-POST {{ingestionBaseUrl}}/events?source_id={{createNwSourcePayments.response.body.$.id}}
-Authorization: Bearer {{northwindToken}}
-Content-Type: application/json
-
-{
-  "event_type": "payment.captured",
-  "source_event_id": "nw-pay-1",
-  "payload": {
-    "paymentId": "pay_8f21",
-    "amount": 119.5,
-    "currency": "GBP",
-    "method": "card",
-    "processor": "stripe"
-  }
-}
-
-###
-POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceInventory.response.body.$.id}}
-Authorization: Bearer {{northwindToken}}
-Content-Type: application/json
-
-{
-  "event_type": "stock.adjusted",
-  "source_event_id": "nw-stock-1",
-  "payload": {
-    "sku": "SKU-771",
-    "warehouse": "LEE-01",
-    "delta": -1,
-    "reason": "pick"
-  }
-}
-
-###
-# Refused with 422 on a top-to-bottom run: the Source's identity rule names a header this request
-# does not carry, so no identity can be extracted. That is the exercise. Correct the header through
-# Edit, then re-send this request and it is accepted. Until then the webhook-audit Subscription has
-# no deliveries, which is what a Source refusing everything looks like from the dashboard.
-POST {{ingestionBaseUrl}}/webhooks/{{createNwSourceWebhook.response.body.$.configuration.callback_id}}
-X-Storefront-Delivery: nw-webhook-1
-Content-Type: application/json
-
-{
-  "event_type": "storefront.webhook.received",
-  "source_event_id": "nw-webhook-1",
-  "payload": {
-    "deliveryId": "hook-1",
-    "provider": "storefront",
-    "result": "accepted"
-  }
-}
-
-###
-# No Subscription matches this: it lands as unrouted, the signal for a missing Subscription.
-POST {{ingestionBaseUrl}}/events?source_id={{createNwSourceOrders.response.body.$.id}}
-Authorization: Bearer {{northwindToken}}
-Content-Type: application/json
-
-{
-  "event_type": "order.cancelled",
-  "source_event_id": "nw-cancel-1",
-  "payload": {
-    "orderId": "SO-411",
-    "reason": "customer_request"
-  }
+  "method": "POST",
+  "urlPath": "/sink/warehouse-wms"
 }
