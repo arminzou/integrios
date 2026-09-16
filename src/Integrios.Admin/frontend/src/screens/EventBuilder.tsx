@@ -260,13 +260,12 @@ export function EventBuilder({
     schema !== undefined ||
     draft.expression.trim() !== "" ||
     draft.identity !== null;
+  /// Only the guided rule can be half-authored or left addressing nothing. An advanced expression
+  /// is the Operator's own text and may read whatever it likes, so a rule it no longer represents
+  /// must not hold its configuration back.
+  const guidedBlocked = mode === "guided" && (eventTypeHalf || eventTypeSampleInvalid || dangling.length > 0);
   const mappable =
-    authored &&
-    !identityIncomplete &&
-    !eventTypeHalf &&
-    !eventTypeSampleInvalid &&
-    dangling.length === 0 &&
-    (mode !== "advanced" || expression.trim() !== "");
+    authored && !identityIncomplete && !guidedBlocked && (mode !== "advanced" || expression.trim() !== "");
 
   /// What a displayed result was produced from. Any change to the contract or the sample — a header
   /// the mapping reads included — makes both a success and a failure a statement about something

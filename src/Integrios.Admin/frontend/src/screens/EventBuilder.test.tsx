@@ -174,3 +174,40 @@ it("previews the Event identity the rule would resolve, not only the mapping out
     allow_missing: false,
   });
 });
+
+/// A guided rule the Operator has left behind is not a reason to hold back an expression they wrote
+/// by hand: the advanced editor reads whatever it likes, and the stale rule addresses nothing in it.
+it("does not hold back an advanced expression for a guided rule it no longer represents", async () => {
+  renderScreen(
+    <EventBuilder
+      contractKey="webhook Source"
+      sourceType="webhook"
+      draft={{ expression: "", identity: null }}
+      onUse={() => undefined}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+
+  fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "x-kind" } });
+  fireEvent.change(within(builder).getByLabelText("Header 1 sample value"), { target: { value: "created" } });
+  fireEvent.click(within(builder).getByRole("radio", { name: "From input" }));
+  await waitFor(() =>
+    expect(within(builder).getByLabelText("Event type header").querySelector('option[value="x-kind"]')).toBeTruthy(),
+  );
+  fireEvent.change(within(builder).getByLabelText("Event type header"), { target: { value: "x-kind" } });
+
+  fireEvent.click(within(builder).getByRole("button", { name: "Advanced JSONata" }));
+  fireEvent.change(within(builder).getByLabelText("Source mapping expression"), {
+    target: { value: '{ "event_type": "fixed.thing", "payload": $ }' },
+  });
+  // The header the abandoned rule read is gone from the sample.
+  fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "" } });
+  fireEvent.change(within(builder).getByLabelText("Header 1 sample value"), { target: { value: "" } });
+
+  await waitFor(() =>
+    expect((within(builder).getByRole("button", { name: "Use configuration" }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+});
