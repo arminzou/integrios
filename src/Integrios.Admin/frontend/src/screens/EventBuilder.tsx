@@ -12,12 +12,10 @@ import { ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { formatJson } from "../ui/json";
 import {
-  type Completion,
-  completionsAt,
-  duplicatePayloadFields,
-  emptyGuided,
-  type GuidedMapping,
+  type EventTypeRule,
+  emptyEventType,
   guidedExpression,
+  guidedFrom,
   headerContext,
   type InputRequirement,
   matchesRequirementType,
@@ -55,23 +53,16 @@ function requirementsFrom(schema: Record<string, unknown> | undefined): InputReq
 
 type HeaderRow = { name: string; value: string };
 
+function valueAtPath(body: unknown, path: string): unknown {
+  const parts = [...path.matchAll(/`([^`]+)`|([A-Za-z_$][\w$]*)/g)].map(([, quoted, plain]) => quoted ?? plain);
+  return parts.reduce<unknown>((current, part) => (current as Record<string, unknown> | undefined)?.[part], body);
+}
+
 /// The share of an editor row each field takes. The leading one carries the name that has to be read
 /// exactly — a header like `x-hub-signature-256`, or a discovered field path — and a row is only
 /// about 400 pixels wide at three panes, so the split is not even.
 const leadField = "min-w-0 flex-[3]";
 const trailField = "min-w-0 flex-[2]";
-
-/// Which part of the Source-contract pipeline refused the preview. The Admin API answers with one
-/// message that names the document it was reading, so the stage is read back off that name rather
-/// than guessed at — an unrecognized message keeps the neutral label instead of a wrong one.
-function failingStage(message: string): string {
-  if (message.startsWith("schema")) return "Input requirements";
-  if (message.startsWith("sample_input") || message.startsWith("input")) return "Sample input";
-  if (message.startsWith("mapping") || message.startsWith("Failed to compile")) return "Mapping";
-  if (message.startsWith("Source mapping output") || message.startsWith("Transform evaluation"))
-    return "Normalized Event";
-  return "Preview";
-}
 
 function Pane({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
@@ -132,10 +123,13 @@ export function EventBuilder({
   const [headerError, setHeaderError] = useState<string | null>(null);
   const [lastValidHeaders, setLastValidHeaders] = useState<Record<string, string>>({});
   const [requirements, setRequirements] = useState<InputRequirement[]>(() => requirementsFrom(draft.schema));
-  const [guided, setGuided] = useState<GuidedMapping>(emptyGuided);
+  /// The rule the stored expression was generated from, when one was. Read back out of the
+  /// expression rather than from a stored copy beside it: the expression is the whole contract, so
+  /// anything it cannot be read back into is not a rule this form may claim to represent.
+  const [eventType, setEventType] = useState<EventTypeRule>(() => guidedFrom(draft.expression) ?? emptyEventType);
   const [expression, setExpression] = useState(draft.expression);
   const [mode, setMode] = useState<"guided" | "advanced">(() =>
-    draft.expression.trim() !== "" && draft.expression !== guidedExpression(emptyGuided) ? "advanced" : "guided",
+    draft.expression.trim() === "" || guidedFrom(draft.expression) ? "guided" : "advanced",
   );
   const [previewed, setPreviewed] = useState<string | null>(null);
   /// What a preview posts, written by the same effects that publish the parsed sample, so a press
@@ -171,7 +165,7 @@ export function EventBuilder({
     }
   }, [headers]);
 
-  const generated = guidedExpression(guided);
+  const generated = guidedExpression(eventType);
   const representable = expression.trim() === "" || expression === generated;
   const paths = useMemo(() => payloadFieldPaths(lastValidBody), [lastValidBody]);
   const headerNames = Object.keys(lastValidHeaders);
@@ -187,19 +181,36 @@ export function EventBuilder({
   /// A header or a field can disappear after it was chosen. The choice is kept and named rather than
   /// silently cleared, but it cannot be carried into a Connector while it addresses nothing.
   const dangling = [
-    ...(guided.eventHeader && !headerNames.includes(guided.eventHeader) ? [guided.eventHeader] : []),
-    ...(guided.actionPath && !paths.includes(guided.actionPath) ? [guided.actionPath] : []),
-    ...guided.payloadRows.filter((row) => row.source !== "" && !paths.includes(row.source)).map((row) => row.source),
+    ...(eventType.source === "header" && eventType.header !== "" && !headerNames.includes(eventType.header)
+      ? [eventType.header]
+      : []),
+    ...(eventType.source === "body" && eventType.path !== "" && !paths.includes(eventType.path)
+      ? [eventType.path]
+      : []),
   ];
-  const duplicates = guided.payloadMode === "fields" ? duplicatePayloadFields(guided.payloadRows) : [];
+  const eventTypeInput =
+    eventType.source === "fixed"
+      ? eventType.value.trim()
+      : eventType.source === "header"
+        ? lastValidHeaders[eventType.header]
+        : valueAtPath(lastValidBody, eventType.path);
+  const eventTypeIncomplete =
+    eventType.source === "fixed"
+      ? eventType.value.trim() === ""
+      : eventType.source === "header"
+        ? eventType.header === ""
+        : eventType.path === "";
+  const eventTypeSampleInvalid =
+    eventType.source !== "fixed" &&
+    !eventTypeIncomplete &&
+    dangling.length === 0 &&
+    (typeof eventTypeInput !== "string" || eventTypeInput.trim() === "");
   /// event_type is required and cannot be inferred, so a guided draft that names no source for it is
   /// refused here rather than sent as an empty string the runtime would reject on every request.
   const mappable =
     mode === "advanced"
       ? expression.trim() !== ""
-      : (guided.eventPrefix.trim() !== "" || guided.eventHeader !== "") &&
-        dangling.length === 0 &&
-        duplicates.length === 0;
+      : !eventTypeIncomplete && !eventTypeSampleInvalid && dangling.length === 0;
 
   /// What a displayed result was produced from. Any change to the contract or the sample — a header
   /// the mapping reads included — makes both a success and a failure a statement about something
@@ -223,15 +234,11 @@ export function EventBuilder({
 
   const problem = asProblem(preview.error);
   const message = problem ? (formError(problem) ?? "The preview could not be run.") : null;
-  // The stage is read off the API's own message for the request document, not off the rendered text:
-  // that text may lead with the generic validation title, which names no stage at all.
-  const stage = problem ? failingStage(problem.errors[""]?.[0] ?? problem.detail ?? "") : null;
   const fresh = previewed === signature;
 
-  const changeGuided = (change: Partial<GuidedMapping>) => {
-    const next = { ...guided, ...change };
-    setGuided(next);
-    setExpression(guidedExpression(next));
+  const changeEventType = (rule: EventTypeRule) => {
+    setEventType(rule);
+    setExpression(guidedExpression(rule));
     preview.reset();
   };
 
@@ -446,14 +453,14 @@ export function EventBuilder({
 
             {mode === "guided" ? (
               <GuidedFields
-                guided={guided}
+                eventType={eventType}
                 headerNames={headerNames}
                 dangling={dangling}
                 paths={paths}
                 stale={bodyError !== null || headerError !== null}
                 headers={webhook ? lastValidHeaders : undefined}
                 body={lastValidBody}
-                onChange={changeGuided}
+                onChange={changeEventType}
                 onAdvanced={() => setMode("advanced")}
               />
             ) : (
@@ -461,7 +468,6 @@ export function EventBuilder({
                 expression={expression}
                 representable={representable}
                 headers={webhook ? lastValidHeaders : undefined}
-                body={lastValidBody}
                 onChange={(next) => {
                   setExpression(next);
                   preview.reset();
@@ -479,7 +485,6 @@ export function EventBuilder({
             <Pane title="Normalized Event">
               {message ? (
                 <div className="flex flex-col gap-1">
-                  <p className="m-0 text-xs font-medium">{stage}</p>
                   <p role="alert" className="m-0 text-sm text-destructive">
                     {message}
                   </p>
@@ -507,12 +512,12 @@ export function EventBuilder({
             <p role="alert" className="m-0 text-sm text-destructive">
               This request no longer carries {dangling.join(", ")}. Choose another value, or restore it above.
             </p>
-          ) : duplicates.length > 0 ? (
+          ) : eventTypeSampleInvalid ? (
             <p role="alert" className="m-0 text-sm text-destructive">
-              Payload field {duplicates.join(", ")} is named more than once.
+              The selected Event type input must contain a non-empty string in this sample.
             </p>
           ) : (
-            <Note>Give event_type a source — a text prefix or a header — before using this configuration.</Note>
+            <Note>Complete the Event type rule before using this configuration.</Note>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -592,7 +597,7 @@ function Choice({
 /// choices; none of them assigns meaning on their own, so every field but the default whole-body
 /// payload is an explicit choice.
 function GuidedFields({
-  guided,
+  eventType,
   headerNames,
   dangling,
   paths,
@@ -602,7 +607,7 @@ function GuidedFields({
   onChange,
   onAdvanced,
 }: {
-  guided: GuidedMapping;
+  eventType: EventTypeRule;
   headerNames: string[];
   /// Values chosen from an earlier sample that this one no longer carries. They stay visible, and
   /// named, rather than reading as though nothing was ever chosen.
@@ -611,18 +616,23 @@ function GuidedFields({
   headers?: Record<string, string>;
   body: unknown;
   stale: boolean;
-  onChange: (change: Partial<GuidedMapping>) => void;
+  onChange: (rule: EventTypeRule) => void;
   onAdvanced: () => void;
 }) {
-  const value = (path: string) =>
-    path.split(".").reduce<unknown>((current, part) => (current as Record<string, unknown> | undefined)?.[part], body);
-  const preview = [
-    guided.eventPrefix.trim(),
-    guided.eventHeader ? headers?.[guided.eventHeader] : "",
-    guided.actionPath ? String(value(guided.actionPath) ?? "") : "",
-  ]
-    .filter(Boolean)
-    .join(".");
+  const derived = eventType.source !== "fixed";
+  const eventTypePrefix = eventType.source === "fixed" ? "" : eventType.prefix;
+  const selectedValue =
+    eventType.source === "fixed"
+      ? eventType.value.trim()
+      : eventType.source === "header"
+        ? headers?.[eventType.header]
+        : valueAtPath(body, eventType.path);
+  const preview =
+    typeof selectedValue === "string" && selectedValue.trim() !== ""
+      ? eventTypePrefix.trim()
+        ? `${eventTypePrefix.trim()}.${selectedValue}`
+        : selectedValue
+      : "";
 
   return (
     <Pane
@@ -642,111 +652,115 @@ function GuidedFields({
       ) : null}
 
       <Target title="event_type" requirement="Required">
-        <div className="flex min-w-0 flex-col gap-1 text-sm">
-          <label htmlFor="builder-event-prefix" className="text-ink-secondary">
-            Text prefix
+        <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
+          <legend className="sr-only">Event type rule</legend>
+          <label className="flex items-start gap-2.5 text-sm">
+            <input
+              type="radio"
+              name="builder-event-type-source"
+              className="mt-0.5 size-4 shrink-0"
+              checked={!derived}
+              onChange={() => onChange({ source: "fixed", value: "" })}
+            />
+            <span>Fixed value</span>
           </label>
-          <Input
-            id="builder-event-prefix"
-            value={guided.eventPrefix}
-            onChange={(event) => onChange({ eventPrefix: event.target.value })}
-          />
-        </div>
-        {headers ? (
+          <label className="flex items-start gap-2.5 text-sm">
+            <input
+              type="radio"
+              name="builder-event-type-source"
+              className="mt-0.5 size-4 shrink-0"
+              checked={derived}
+              onChange={() =>
+                onChange(
+                  headers ? { source: "header", header: "", prefix: "" } : { source: "body", path: "", prefix: "" },
+                )
+              }
+            />
+            <span>From input</span>
+          </label>
+        </fieldset>
+        {eventType.source === "fixed" ? (
+          <div className="flex min-w-0 flex-col gap-1 text-sm">
+            <label htmlFor="builder-fixed-event-type" className="text-ink-secondary">
+              Event type
+            </label>
+            <Input
+              id="builder-fixed-event-type"
+              placeholder="order.placed"
+              value={eventType.value}
+              onChange={(event) => onChange({ source: "fixed", value: event.target.value })}
+            />
+          </div>
+        ) : null}
+        {derived && headers ? (
+          <label className="flex min-w-0 flex-col gap-1 text-sm">
+            <span className="text-ink-secondary">Read from</span>
+            <select
+              className="h-9 min-w-0 rounded-md border bg-surface px-2 text-sm"
+              value={eventType.source}
+              onChange={(event) =>
+                onChange(
+                  event.target.value === "header"
+                    ? { source: "header", header: "", prefix: eventTypePrefix }
+                    : { source: "body", path: "", prefix: eventTypePrefix },
+                )
+              }
+            >
+              <option value="header">Request header</option>
+              <option value="body">JSON body field</option>
+            </select>
+          </label>
+        ) : null}
+        {eventType.source === "header" ? (
           <Choice
-            label="Event name from header"
-            value={guided.eventHeader}
+            label="Request header"
+            value={eventType.header}
             options={headerNames}
-            noneLabel="No header"
-            onChange={(eventHeader) => onChange({ eventHeader })}
+            noneLabel="Choose a header…"
+            onChange={(header) => onChange({ source: "header", header, prefix: eventTypePrefix })}
           />
         ) : null}
-        <Choice
-          label="Append field"
-          value={guided.actionPath}
-          options={paths}
-          noneLabel="None"
-          onChange={(actionPath) => onChange({ actionPath })}
-        />
+        {eventType.source === "body" ? (
+          <Choice
+            label="JSON body field"
+            value={eventType.path}
+            options={paths}
+            noneLabel="Choose a field…"
+            onChange={(path) => onChange({ source: "body", path, prefix: eventTypePrefix })}
+          />
+        ) : null}
+        {derived ? (
+          <div className="flex min-w-0 flex-col gap-1 text-sm">
+            <label htmlFor="builder-event-prefix" className="text-ink-secondary">
+              Prefix (optional)
+            </label>
+            <Input
+              id="builder-event-prefix"
+              placeholder="github"
+              value={eventTypePrefix}
+              onChange={(event) =>
+                onChange(
+                  eventType.source === "header"
+                    ? { source: "header", header: eventType.header, prefix: event.target.value }
+                    : {
+                        source: "body",
+                        path: eventType.source === "body" ? eventType.path : "",
+                        prefix: event.target.value,
+                      },
+                )
+              }
+            />
+          </div>
+        ) : null}
         <Note>Preview: {preview === "" ? "—" : preview}</Note>
       </Target>
 
       <Target title="payload" requirement="Required">
-        <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
-          <legend className="sr-only">Payload source</legend>
-          {[
-            { value: "entire" as const, label: "Use the entire request body" },
-            { value: "fields" as const, label: "Choose payload fields" },
-          ].map((option) => (
-            <label key={option.value} className="flex items-start gap-2.5 text-sm">
-              <input
-                type="radio"
-                name="builder-payload-mode"
-                className="mt-0.5 size-4 shrink-0"
-                checked={guided.payloadMode === option.value}
-                onChange={() => onChange({ payloadMode: option.value })}
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </fieldset>
-        {guided.payloadMode === "fields" ? (
-          <>
-            {guided.payloadRows.map((row, index) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
-              <div key={index} className="flex min-w-0 items-center gap-2">
-                <Input
-                  aria-label={`Payload field ${index + 1} name`}
-                  placeholder="output_field"
-                  className={`${trailField} font-mono text-sm`}
-                  value={row.output}
-                  onChange={(event) =>
-                    onChange({
-                      payloadRows: guided.payloadRows.map((current, at) =>
-                        at === index ? { ...current, output: event.target.value } : current,
-                      ),
-                    })
-                  }
-                />
-                <select
-                  aria-label={`Payload field ${index + 1} source`}
-                  className={`h-9 rounded-md border bg-surface px-2 text-sm ${leadField}`}
-                  value={row.source}
-                  onChange={(event) =>
-                    onChange({
-                      payloadRows: guided.payloadRows.map((current, at) =>
-                        at === index ? { ...current, source: event.target.value } : current,
-                      ),
-                    })
-                  }
-                >
-                  <option value="">Choose a field…</option>
-                  {(row.source === "" || paths.includes(row.source) ? paths : [row.source, ...paths]).map((path) => (
-                    <option key={path} value={path}>
-                      {paths.includes(path) ? path : `${path} (not in this request)`}
-                    </option>
-                  ))}
-                </select>
-                <RemoveRow
-                  label={`Remove payload field ${index + 1}`}
-                  onClick={() => onChange({ payloadRows: guided.payloadRows.filter((_, at) => at !== index) })}
-                />
-              </div>
-            ))}
-            {guided.payloadRows.every((row) => row.output.trim() === "" || row.source === "") ? (
-              <Note>Name a field and choose where it comes from, or the payload is sent empty.</Note>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              onClick={() => onChange({ payloadRows: [...guided.payloadRows, { output: "", source: "" }] })}
-            >
-              Add payload field
-            </Button>
-          </>
-        ) : null}
+        <Note>
+          The entire input body, unchanged. Choosing which fields reach a destination belongs to the Subscription that
+          knows where the Event is going: dropping them here would drop them for every Subscription on the Topic, and
+          from the Event ledger.
+        </Note>
       </Target>
 
       <Target title="source_event_id" requirement="From Event identity">
@@ -762,43 +776,22 @@ function GuidedFields({
   );
 }
 
-/// The same expression draft, edited directly. Completion offers the sample input's own paths and
-/// only the bounded context that the selected Source type receives.
+/// The same expression draft, edited directly, for a contract the guided rule cannot express. No
+/// completion: an Operator who has left the guided form has the JSONata documentation, the guided
+/// pane already enumerates every path the sample carries, and the preview names a wrong one at once.
 function AdvancedExpression({
   expression,
   representable,
   headers,
-  body,
   onChange,
   onGuided,
 }: {
   expression: string;
   representable: boolean;
   headers?: Record<string, string>;
-  body: unknown;
   onChange: (expression: string) => void;
   onGuided: () => void;
 }) {
-  const editor = useRef<HTMLTextAreaElement>(null);
-  const [suggestions, setSuggestions] = useState<{ start: number; items: Completion[] }>({ start: 0, items: [] });
-  const [selected, setSelected] = useState(0);
-
-  const refresh = (element: HTMLTextAreaElement) => {
-    setSuggestions(completionsAt(element.value, element.selectionStart, { headers, body }));
-    setSelected(0);
-  };
-
-  const insert = (item: Completion) => {
-    const element = editor.current;
-    if (!element) return;
-    element.setRangeText(item.insert, suggestions.start, element.selectionStart, "end");
-    element.selectionStart -= item.cursorBack ?? 0;
-    element.selectionEnd = element.selectionStart;
-    onChange(element.value);
-    setSuggestions({ start: 0, items: [] });
-    element.focus();
-  };
-
   return (
     <Pane
       title="Advanced JSONata"
@@ -825,61 +818,16 @@ function AdvancedExpression({
       </label>
       <Textarea
         id="builder-expression"
-        ref={editor}
         spellCheck={false}
         value={expression}
         className="min-h-56 font-mono text-sm"
-        onChange={(event) => {
-          onChange(event.target.value);
-          refresh(event.target);
-        }}
-        onClick={(event) => refresh(event.currentTarget)}
-        onBlur={() => setSuggestions({ start: 0, items: [] })}
-        onKeyDown={(event) => {
-          if (suggestions.items.length === 0) return;
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            const step = event.key === "ArrowDown" ? 1 : suggestions.items.length - 1;
-            setSelected((current) => (current + step) % suggestions.items.length);
-          } else if (event.key === "Enter" || event.key === "Tab") {
-            event.preventDefault();
-            insert(suggestions.items[selected]);
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            setSuggestions({ start: 0, items: [] });
-          }
-        }}
+        onChange={(event) => onChange(event.target.value)}
       />
-      {suggestions.items.length > 0 ? (
-        <ul
-          aria-label="JSONata suggestions"
-          className="m-0 flex max-h-48 list-none flex-col overflow-auto rounded-md border p-0"
-        >
-          {suggestions.items.map((item, index) => (
-            <li key={item.label}>
-              <button
-                type="button"
-                aria-current={index === selected}
-                className="flex w-full items-baseline gap-2 px-2 py-1.5 text-left text-sm aria-[current=true]:bg-selected-surface hover:bg-hover-surface"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => insert(item)}
-              >
-                <code className="font-mono text-xs">{item.label}</code>
-                <span className="min-w-0 truncate text-xs text-ink-secondary">{item.detail}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
       <Note>
-        Type <span className="font-mono">$</span>
-        {headers ? (
-          <>
-            {" "}
-            or <span className="font-mono">$context.headers.</span>
-          </>
-        ) : null}{" "}
-        for suggestions, and use the arrow keys and Enter to insert one.
+        The mapping reads the {headers ? "request body, and request headers under " : "message body"}
+        {headers ? <span className="font-mono">$context.headers</span> : null}
+        {headers ? "." : ""} It must produce <span className="font-mono">event_type</span> and{" "}
+        <span className="font-mono">payload</span>.
       </Note>
       <Note>
         {representable

@@ -424,26 +424,6 @@ describe("The dashboard in a real browser", () => {
     60_000,
   );
 
-  it("inserts an Advanced JSONata suggestion from the keyboard alone", async () => {
-    const page = await openDashboard(`/tenants/${tenants.items[0].id}/sources`);
-    await page.getByRole("button", { name: "New Source" }).click();
-    await page.getByRole("combobox", { name: "Type" }).click();
-    await page.getByRole("option", { name: "Webhook" }).click();
-    await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
-    await page.getByRole("button", { name: "Advanced JSONata" }).click();
-
-    const editor = page.getByLabel("Source mapping expression");
-    await editor.fill("");
-    await editor.type("$ex");
-    await page.getByRole("list", { name: "JSONata suggestions" }).waitFor();
-    await page.keyboard.press("Enter");
-
-    // The caret is left inside the call it inserted, which is where the argument goes.
-    expect(await editor.inputValue()).toBe("$exists()");
-    expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(8);
-    await page.close();
-  }, 60_000);
-
   // Native constraint validation and layout are both browser behaviours: jsdom runs neither, so only
   // here can the form's own message be told apart from the browser's bubble, and only here can what
   // that message costs the form be measured.

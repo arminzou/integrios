@@ -1,28 +1,21 @@
-import { type FieldMapping, payloadFieldPaths } from "../ui/fieldMapping";
-
-/// The guided half of the Integrios Event Builder: the choices an Operator makes about a
-/// provider-native request, from which the one persisted artefact — a JSONata expression in the
-/// existing versioned envelope — is generated. Nothing here is stored: the expression is.
+/// The guided half of the Integrios Event Builder: the one mapping choice an Operator makes about a
+/// provider-native request, from which the persisted artefact — a JSONata expression in the existing
+/// versioned envelope — is generated. Nothing here is stored: the expression is.
 ///
-/// Event identity is not among these choices. The Source's own Event-identity rule owns it, is read
-/// before this mapping runs, and is fixed for the Source's life; a second changeable identity here
-/// meant one concept authored twice, on two surfaces, with different permanence.
-export type GuidedMapping = {
-  eventPrefix: string;
-  /// "" means the value is not taken from a header.
-  eventHeader: string;
-  actionPath: string;
-  payloadMode: "entire" | "fields";
-  payloadRows: FieldMapping[];
-};
+/// The payload is always the whole input. Shaping it per field belongs to the Subscription's Mapping
+/// Playground, which is the surface that knows the destination; a Source that trimmed the payload
+/// would take that choice away from every Subscription on the Topic, and from the Event ledger,
+/// irreversibly and at the moment there is least reason to.
+///
+/// Event identity is not generated here either. The Source's own Event-identity rule owns it and is
+/// read before this mapping runs; a second identity emitted by the expression meant one concept
+/// authored twice, on two surfaces, with different permanence.
+export type EventTypeRule =
+  | { source: "fixed"; value: string }
+  | { source: "header"; header: string; prefix: string }
+  | { source: "body"; path: string; prefix: string };
 
-export const emptyGuided: GuidedMapping = {
-  eventPrefix: "",
-  eventHeader: "",
-  actionPath: "",
-  payloadMode: "entire",
-  payloadRows: [],
-};
+export const emptyEventType: EventTypeRule = { source: "fixed", value: "" };
 
 /// A header is addressed through the bounded webhook context the Ingestion path builds: lower-cased
 /// request headers under `$context.headers`, and nothing else. Names are backtick-quoted because a
@@ -51,51 +44,63 @@ export function headerContext(rows: { name: string; value: string }[]): Record<s
   return headers;
 }
 
-const completeRows = (rows: FieldMapping[]): FieldMapping[] =>
-  rows.filter((row) => row.output.trim() !== "" && row.source !== "");
+const missingEventType = "This request does not contain a valid Event type.";
 
-const payloadObject = (rows: FieldMapping[]): string =>
-  `{ ${completeRows(rows)
-    .map((row) => `${JSON.stringify(row.output.trim())}: ${row.source}`)
-    .join(", ")} }`;
+/// Generates the expression the runtime evaluator actually runs. The rule is never persisted beside
+/// it — this text is the whole contract — so `guidedFrom` reads the rule back out of the expression
+/// rather than a stored copy that could disagree with it.
+export function guidedExpression(rule: EventTypeRule): string {
+  if (rule.source === "fixed") return `{ "event_type": ${JSON.stringify(rule.value.trim())}, "payload": $ }`;
 
-/// Payload field names that appear more than once. JSONata refuses an object constructor with two
-/// identical keys at evaluation time, so this is a contract that would fail on every request rather
-/// than a cosmetic duplicate.
-export function duplicatePayloadFields(rows: FieldMapping[]): string[] {
-  const names = completeRows(rows).map((row) => row.output.trim());
-  return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
+  const selector = rule.source === "header" ? headerReference(rule.header) : rule.path;
+  const prefix = rule.prefix.trim();
+  const eventType = prefix ? `${JSON.stringify(`${prefix}.`)} & $event` : "$event";
+  // The type check is not redundant beside the existence one: a JSON number or object at the chosen
+  // path exists, and would be concatenated into an event_type no Subscription could ever match.
+  return (
+    `($event := ${selector}; $exists($event) and $type($event) = "string" and $event != "" ? ` +
+    `{ "event_type": ${eventType}, "payload": $ } : $error(${JSON.stringify(missingEventType)}))`
+  );
 }
 
-/// Generates the expression the runtime evaluator actually runs. The guided choices are never
-/// persisted beside it — this text is the whole contract, so an expression that no longer matches
-/// what these choices would generate is one the guided form can no longer claim to represent.
-export function guidedExpression(guided: GuidedMapping): string {
-  const assignments: string[] = [];
-  if (guided.eventHeader) assignments.push(`$event := ${headerReference(guided.eventHeader)}`);
-  if (guided.actionPath) assignments.push(`$action := ${guided.actionPath}`);
+const jsonString = String.raw`"(?:\\.|[^"\\])*"`;
+const fixedShape = new RegExp(String.raw`^\{ "event_type": (${jsonString}), "payload": \$ \}$`);
+const derivedShape = new RegExp(
+  String.raw`^\(\$event := (.+); \$exists\(\$event\) and \$type\(\$event\) = "string" and \$event != "" \? ` +
+    String.raw`\{ "event_type": (.+), "payload": \$ \} : \$error\(${jsonString}\)\)$`,
+);
+const headerShape = /^\$context\.headers\.`([^`]+)`$/;
+const prefixedShape = new RegExp(String.raw`^(${jsonString}) & \$event$`);
 
-  const prefix = guided.eventPrefix.trim();
-  const base = guided.eventHeader
-    ? prefix
-      ? `${JSON.stringify(`${prefix}.`)} & $event`
-      : "$event"
-    : JSON.stringify(prefix);
-  const eventType = guided.actionPath ? `${base} & ($exists($action) and $action != "" ? "." & $action : "")` : base;
+/// Reads an expression back into the rule that would generate it, or nothing when no rule would.
+/// The inverse exists so a Source authored here reopens in the form that authored it: without it the
+/// guided pane cannot claim to represent its own output, and an Operator returning to a Source is
+/// told to reset an expression the guided form wrote minutes earlier.
+export function guidedFrom(expression: string): EventTypeRule | undefined {
+  const text = expression.trim();
+  const rule = proposed(text);
+  // The patterns only have to propose a rule; regenerating is what proves it. Anything that does not
+  // produce this exact expression is not what wrote it, whatever it parsed as, and the guided pane
+  // must not claim to represent it.
+  return rule && guidedExpression(rule) === text ? rule : undefined;
+}
 
-  const fields = [`"event_type": ${eventType}`];
-  fields.push(`"payload": ${guided.payloadMode === "entire" ? "$" : payloadObject(guided.payloadRows)}`);
-  const output = `{ ${fields.join(", ")} }`;
+function proposed(text: string): EventTypeRule | undefined {
+  const fixed = text.match(fixedShape);
+  if (fixed) return { source: "fixed", value: JSON.parse(fixed[1]) as string };
 
-  const required: string[] = [];
-  if (guided.eventHeader) required.push('$exists($event) and $event != ""');
+  const derived = text.match(derivedShape);
+  if (!derived) return undefined;
 
-  if (assignments.length === 0 && required.length === 0) return output;
-  const body =
-    required.length === 0
-      ? output
-      : `${required.join(" and ")} ? ${output} : $error("This request is missing a value the Source contract requires.")`;
-  return assignments.length === 0 ? `(${body})` : `(${assignments.join("; ")}; ${body})`;
+  const [, selector, eventType] = derived;
+  const prefixed = eventType.match(prefixedShape);
+  if (!prefixed && eventType !== "$event") return undefined;
+  // The generated form is `"prefix." & $event`, so the literal carries a trailing separator the rule
+  // itself does not. A literal without one regenerates differently and is refused above.
+  const prefix = prefixed ? (JSON.parse(prefixed[1]) as string).slice(0, -1) : "";
+
+  const header = selector.match(headerShape);
+  return header ? { source: "header", header: header[1], prefix } : { source: "body", path: selector, prefix };
 }
 
 export type RequirementType = "string" | "number" | "integer" | "boolean";
@@ -133,72 +138,4 @@ export function requirementsSchema(rows: InputRequirement[]): Record<string, unk
     // The provider sends far more than the Operator declared, and none of it is a reason to reject.
     additionalProperties: true,
   };
-}
-
-export type Completion = { label: string; insert: string; detail: string; cursorBack?: number };
-
-/// The only functions offered are ones the runtime evaluator really has: it registers no functions
-/// of its own and removes none, so this is a small safe subset of the stock JSONata library, plus
-/// the one variable Ingestion binds.
-const functions: Completion[] = [
-  { label: "$context", insert: "$context", detail: "Bounded Source context" },
-  { label: "$exists()", insert: "$exists()", detail: "Test whether a value exists", cursorBack: 1 },
-  { label: "$error()", insert: "$error()", detail: "Reject the request with a message", cursorBack: 1 },
-  { label: "$join()", insert: "$join()", detail: "Join strings", cursorBack: 1 },
-  { label: "$lowercase()", insert: "$lowercase()", detail: "Convert text to lowercase", cursorBack: 1 },
-  { label: "$uppercase()", insert: "$uppercase()", detail: "Convert text to uppercase", cursorBack: 1 },
-  { label: "$string()", insert: "$string()", detail: "Convert a value to text", cursorBack: 1 },
-  { label: "$number()", insert: "$number()", detail: "Convert a value to a number", cursorBack: 1 },
-];
-
-/// Completion over the text before the caret. It offers the sample input's own paths and the
-/// bounded context only when that Source type actually receives one.
-export function completionsAt(
-  text: string,
-  caret: number,
-  sample: { headers?: Record<string, string>; body: unknown },
-): { start: number; items: Completion[] } {
-  const before = text.slice(0, caret);
-
-  const header = before.match(/\$context\.headers\.(`?)([A-Za-z0-9_-]*)$/);
-  if (header)
-    return {
-      // The backtick the Operator has already typed is part of what the suggestion replaces.
-      start: caret - header[1].length - header[2].length,
-      items: Object.entries(sample.headers ?? {})
-        .filter(([name]) => name.startsWith(header[2].toLowerCase()))
-        .map(([name, value]) => ({ label: `\`${name}\``, insert: `\`${name}\``, detail: value })),
-    };
-
-  const context = before.match(/\$context\.([A-Za-z_]*)$/);
-  if (context)
-    return {
-      start: caret - context[1].length,
-      items:
-        sample.headers && "headers".startsWith(context[1])
-          ? [{ label: "headers", insert: "headers", detail: "Lower-cased request headers" }]
-          : [],
-    };
-
-  const dollar = before.match(/\$([A-Za-z]*)$/);
-  if (dollar)
-    return {
-      start: caret - dollar[0].length,
-      items: functions.filter(
-        (item) =>
-          (sample.headers !== undefined || item.label !== "$context") &&
-          item.label.slice(1).startsWith(dollar[1].toLowerCase()),
-      ),
-    };
-
-  const path = before.match(/(?:^|[^$\w.`])([A-Za-z_$][\w$.]*)$/);
-  if (path)
-    return {
-      start: caret - path[1].length,
-      items: payloadFieldPaths(sample.body)
-        .filter((candidate) => candidate.toLowerCase().startsWith(path[1].toLowerCase()))
-        .map((candidate) => ({ label: candidate, insert: candidate, detail: "Sample input field" })),
-    };
-
-  return { start: caret, items: [] };
 }

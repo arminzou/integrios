@@ -85,6 +85,19 @@ public class TransformEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_SupportsEventTypeGuardUsedBySourceBuilder()
+    {
+        const string expression =
+            "($event := event.type; $exists($event) and $type($event) = \"string\" and $event != \"\" ? " +
+            "{ \"event_type\": $event, \"payload\": $ } : $error(\"Invalid Event type.\"))";
+
+        var output = evaluator.Evaluate(Jsonata(expression), "{\"event\":{\"type\":\"order.created\"}}", Context);
+
+        using var doc = JsonDocument.Parse(output);
+        doc.RootElement.GetProperty("event_type").GetString().ShouldBe("order.created");
+    }
+
+    [Fact]
     public void Evaluate_OmitsKey_ForMissingOptionalField()
     {
         // The legitimate counterpart to the wrong-prefix case: referencing a genuinely absent

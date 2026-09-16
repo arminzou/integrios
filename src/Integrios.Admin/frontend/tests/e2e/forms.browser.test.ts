@@ -1314,7 +1314,7 @@ describe("Update and deactivate, driven through a real browser", () => {
       .getByRole("button", { name: "Reset to guided" })
       .click();
     await builder.getByLabel("Request body (JSON)").fill('{"order_id":"A-42"}');
-    await builder.getByLabel("Text prefix").fill("orders");
+    await builder.getByLabel("Event type").fill("orders");
     await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
     await builder.getByRole("button", { name: "Use configuration" }).click();
     await form.getByRole("button", { name: "Save configuration" }).click();

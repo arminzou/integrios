@@ -1,21 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  completionsAt,
-  duplicatePayloadFields,
-  emptyGuided,
+  type EventTypeRule,
+  emptyEventType,
   guidedExpression,
+  guidedFrom,
   headerContext,
   matchesRequirementType,
   requirableFields,
   requirementsSchema,
 } from "./sourceMapping";
 
-const webhook = {
-  ...emptyGuided,
-  eventPrefix: "github",
-  eventHeader: "x-github-event",
-  actionPath: "action",
-};
+const webhook: EventTypeRule = { source: "header", header: "x-github-event", prefix: "github" };
 
 const body = { action: "opened", number: 4, draft: false, repository: { full_name: "northwind/orders" } };
 
@@ -25,38 +20,87 @@ describe("The generated Source mapping", () => {
 
     expect(expression).toContain("$event := $context.headers.`x-github-event`");
     expect(expression).toContain('"event_type": "github." & $event');
-    expect(expression).toContain('"payload": $');
-    expect(expression).toContain('$exists($event) and $event != ""');
+    expect(expression).toContain('$exists($event) and $type($event) = "string" and $event != ""');
     expect(expression).toContain("$error(");
+  });
+
+  it("reads an Event type directly from a body field and enforces a non-empty string", () => {
+    const expression = guidedExpression({ source: "body", path: "event.type", prefix: "" });
+
+    expect(expression).toContain("$event := event.type");
+    expect(expression).toContain('"event_type": $event');
+    expect(expression).toContain('$type($event) = "string"');
   });
 
   /// Event identity is the Source's own rule, never a mapped field. A guided mapping that
   /// emitted one gave the Source two identities with different permanence.
   it("never emits an Event identity, whatever was chosen", () => {
     expect(guidedExpression(webhook)).not.toContain("source_event_id");
-    expect(guidedExpression({ ...webhook, payloadMode: "fields", payloadRows: [] })).not.toContain("$delivery");
+    expect(guidedExpression(emptyEventType)).not.toContain("source_event_id");
   });
 
-  it("leaves out the checks and the envelope fields that were not chosen", () => {
-    const expression = guidedExpression({ ...emptyGuided, eventPrefix: "queue.order" });
+  /// Shaping the payload belongs to the Subscription that knows the destination. A Source that
+  /// trimmed it would trim it for every Subscription on the Topic, and for the Event ledger.
+  it("always carries the whole input as the payload", () => {
+    expect(guidedExpression(webhook)).toContain('"payload": $');
+    expect(guidedExpression({ source: "body", path: "event.type", prefix: "" })).toContain('"payload": $');
+    expect(guidedExpression({ source: "fixed", value: "queue.order" })).toBe(
+      '{ "event_type": "queue.order", "payload": $ }',
+    );
+  });
 
-    expect(expression).toBe('{ "event_type": "queue.order", "payload": $ }');
+  it("leaves out the checks a fixed Event type does not need", () => {
+    const expression = guidedExpression({ source: "fixed", value: "queue.order" });
+
     expect(expression).not.toContain("$error(");
-    expect(expression).not.toContain("source_event_id");
+    expect(expression).not.toContain("$event");
+  });
+});
+
+describe("Reading a mapping back into its rule", () => {
+  it("round-trips every rule the guided form can author", () => {
+    const rules: EventTypeRule[] = [
+      emptyEventType,
+      { source: "fixed", value: "order.placed" },
+      webhook,
+      { source: "header", header: "x-github-event", prefix: "" },
+      { source: "body", path: "event.type", prefix: "acme" },
+      { source: "body", path: "data.`odd-key`.kind", prefix: "" },
+    ];
+
+    for (const rule of rules) expect(guidedFrom(guidedExpression(rule))).toEqual(rule);
   });
 
-  it("names payload fields explicitly when the whole body is not the payload", () => {
-    const expression = guidedExpression({
-      ...webhook,
-      payloadMode: "fields",
-      payloadRows: [
-        { output: "repository", source: "repository.full_name" },
-        { output: "", source: "action" },
-      ],
-    });
+  /// The round trip is what lets the guided pane claim an expression. An expression it did not
+  /// write must be refused, or reopening a Source would silently rewrite a contract the Operator
+  /// authored by hand.
+  it("refuses an expression the guided form would not have written", () => {
+    expect(guidedFrom("")).toBeUndefined();
+    expect(guidedFrom('{ "event_type": "a", "payload": payload.inner }')).toBeUndefined();
+    // Shaped like the generated form but not equal to it: the prefix literal carries no separator,
+    // so no rule produces this text and the guided pane must not claim one does.
+    expect(
+      guidedFrom(
+        '($event := $context.headers.`x-github-event`; $exists($event) and $type($event) = "string" and $event != "" ? ' +
+          '{ "event_type": "github" & $event, "payload": $ } : $error("x"))',
+      ),
+    ).toBeUndefined();
+    expect(guidedFrom('{ "event_type": "a", "payload": $, "source_event_id": id }')).toBeUndefined();
+    expect(guidedFrom('($x := 1; { "event_type": "a", "payload": $ })')).toBeUndefined();
+  });
 
-    // A row with no output name is not yet a field, and is left out rather than guessed at.
-    expect(expression).toContain('"payload": { "repository": repository.full_name }');
+  /// The payload-shaping mappings this form used to generate are exactly the contracts it may no
+  /// longer claim: they stay readable as raw JSONata rather than being rewritten to the whole body.
+  it("refuses a mapping that shapes the payload per field", () => {
+    expect(
+      guidedFrom('{ "event_type": "queue.order", "payload": { "repository": repository.full_name } }'),
+    ).toBeUndefined();
+    expect(
+      guidedFrom(
+        '($event := $context.headers.`x-github-event`; $exists($event) and $type($event) = "string" and $event != "" ? ' +
+          '{ "event_type": "github." & $event, "payload": { "id": number } } : $error("x"))',
+      ),
+    ).toBeUndefined();
   });
 });
 
@@ -72,20 +116,6 @@ describe("Sample request headers", () => {
         { name: "X-A", value: "2" },
       ]),
     ).toThrow(/more than once/);
-  });
-});
-
-describe("Payload fields", () => {
-  it("reports a name used twice, which JSONata refuses to evaluate at all", () => {
-    expect(
-      duplicatePayloadFields([
-        { output: "id", source: "action" },
-        { output: "id", source: "number" },
-        { output: "other", source: "action" },
-        { output: "", source: "action" },
-      ]),
-    ).toEqual(["id"]);
-    expect(duplicatePayloadFields([{ output: "id", source: "action" }])).toEqual([]);
   });
 });
 
@@ -120,35 +150,5 @@ describe("Input requirements", () => {
     expect(matchesRequirementType(4.5, "number")).toBe(true);
     expect(matchesRequirementType("4", "number")).toBe(false);
     expect(matchesRequirementType(false, "boolean")).toBe(true);
-  });
-});
-
-describe("Advanced JSONata completion", () => {
-  const sample = { headers: { "x-github-event": "issues" }, body };
-
-  it("suggests the sample request's own headers, quoted the way the expression needs", () => {
-    const text = "$context.headers.x-git";
-    const { items, start } = completionsAt(text, text.length, sample);
-
-    expect(items).toEqual([{ label: "`x-github-event`", insert: "`x-github-event`", detail: "issues" }]);
-    expect(start).toBe("$context.headers.".length);
-  });
-
-  it("offers only functions the runtime evaluator has", () => {
-    const { items } = completionsAt("$ex", 3, sample);
-    expect(items.map((item) => item.label)).toEqual(["$exists()"]);
-    // A function the evaluator does not register is never suggested.
-    expect(completionsAt("$map", 4, sample).items).toEqual([]);
-  });
-
-  it("does not offer webhook context to a broker mapping", () => {
-    expect(completionsAt("$con", 4, { body }).items).toEqual([]);
-    expect(completionsAt("$context.headers.", 17, { body }).items).toEqual([]);
-  });
-
-  it("suggests paths the sample body really has", () => {
-    const { items } = completionsAt("$exists(repo", 12, sample);
-    expect(items.map((item) => item.insert)).toEqual(["repository.full_name"]);
-    expect(completionsAt("nothing_here", 12, sample).items).toEqual([]);
   });
 });
