@@ -11,7 +11,7 @@ const topicId = "22222222-2222-2222-2222-222222222222";
 const connectorId = "44444444-4444-4444-4444-444444444444";
 const sourceId = "55555555-5555-5555-5555-555555555555";
 
-it("shows Source input requirements and restarts paging when the Topic filter changes", async () => {
+it("hides Source input requirements and restarts paging when the Topic filter changes", async () => {
   const calls = stubHttp(({ url }) => {
     if (url.pathname.endsWith("/topics"))
       return {
@@ -40,24 +40,25 @@ it("shows Source input requirements and restarts paging when the Topic filter ch
     };
   });
   const { router } = renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
-  await screen.findByText("order_requirements");
+  await screen.findByRole("link", { name: "Orders intake" });
   expect(screen.getByRole("link", { name: "Orders intake" }).getAttribute("href")).toBe(
     `/tenants/${tenantId}/sources/source-1`,
   );
   expect(screen.queryByRole("link", { name: "source-1" })).toBeNull();
-  expect(screen.getByRole("columnheader", { name: "Input requirements" })).toBeTruthy();
+  expect(screen.queryByRole("columnheader", { name: "Input requirements" })).toBeNull();
+  expect(screen.queryByText("order_requirements")).toBeNull();
   const topicFilter = screen.getByLabelText("Topic");
   expect(topicFilter.getAttribute("aria-describedby")).toBe("source-topic-hint");
   expect(document.getElementById("source-topic-hint")?.textContent).toBe("Showing the first 100 Topics.");
   fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-  await screen.findByText("second_requirements");
+  await screen.findByRole("link", { name: "Invoices intake" });
   await act(() => router.navigate(`/tenants/${tenantId}/sources?topic_id=${topicId}`));
   await waitFor(() => {
     const latest = calls.filter(({ url }) => url.pathname.endsWith("/sources")).at(-1)!;
     expect(latest.url.searchParams.get("topic_id")).toBe(topicId);
     expect(latest.url.searchParams.has("after")).toBe(false);
   });
-  expect(screen.queryByText("second_requirements")).toBeNull();
+  expect(screen.queryByRole("link", { name: "Invoices intake" })).toBeNull();
   expect(screen.getByLabelText("Topic").textContent).toContain("orders");
   expect(screen.getByRole("link", { name: "Clear filters" })).toBeTruthy();
 });
@@ -246,11 +247,13 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
 
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const form = await screen.findByRole("form", { name: "Edit Webhook Source" });
+  expect(within(form).queryByRole("button", { name: "Advanced configuration" })).toBeNull();
   fireEvent.change(within(form).getByLabelText("Event mapping (JSONata, optional)"), { target: { value: "payload" } });
   fireEvent.submit(form);
 
   await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
   expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
+    configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
     verification,
     mapping: { engine: "jsonata", version: "1", expression: "payload" },
   });

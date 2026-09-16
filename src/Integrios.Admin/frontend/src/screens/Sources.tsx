@@ -536,7 +536,6 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                   <TableHead scope="col">Connector</TableHead>
                   <TableHead scope="col">Topic</TableHead>
                   <TableHead scope="col">Type</TableHead>
-                  <TableHead scope="col">Input requirements</TableHead>
                   <TableHead scope="col">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -563,7 +562,6 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                       </Link>
                     </TableCell>
                     <TableCell>{typeLabel(source.type)}</TableCell>
-                    <TableCell className="font-mono text-[13px]">{source.input_requirements || "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-between gap-3">
                         <StatusBadge status={source.status} />
@@ -1156,7 +1154,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                     capabilities={capabilities}
                   />
                 ) : null}
-                {source.type !== "event_api" && !storedBrokerFields ? (
+                {source.type === "broker" && !storedBrokerFields ? (
                   <Disclosure label="Advanced configuration">
                     <TextAreaField
                       control={form.control}

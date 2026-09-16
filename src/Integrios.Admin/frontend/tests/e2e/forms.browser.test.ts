@@ -1019,7 +1019,7 @@ describe("Update and deactivate, driven through a real browser", () => {
       },
       "guided",
     ],
-    ["a webhook document", "webhook", { callback_id: "66666666-6666-6666-6666-666666666666" }, "raw"],
+    ["a webhook document", "webhook", { callback_id: "66666666-6666-6666-6666-666666666666" }, "none"],
     ["an Event API document", "event_api", { region: "eu" }, "none"],
   ] as const)(
     "preserves %s with one configuration writer",
