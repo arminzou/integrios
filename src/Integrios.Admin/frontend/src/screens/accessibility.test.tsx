@@ -292,6 +292,6 @@ describe("Accessibility of detail and edit states", () => {
     // Each header row's controls carry a placeholder, which axe accepts as a name on its own. The
     // placeholder disappears once a value is typed, so the label is asserted directly.
     expect(screen.getByLabelText("Header 1 name")).toBeTruthy();
-    expect(screen.getByLabelText("Header 1 representative value")).toBeTruthy();
+    expect(screen.getByLabelText("Header 1 sample value")).toBeTruthy();
   });
 });

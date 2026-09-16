@@ -28,6 +28,14 @@ import {
 } from "./sourceMapping";
 
 export type SourceContractDraft = { expression: string; schema?: Record<string, unknown> };
+type SourceInputType = "webhook" | "broker";
+
+const targetEnvelope = {
+  event_type: "required string",
+  source_event_id: "supplied by Event identity when configured",
+  payload: "required JSON value",
+  metadata: "optional object",
+};
 
 /// Reads an existing contract schema back into requirement rows. Only the flat, scalar shape the
 /// Admin API accepts is representable here; anything else stays in the manifest it came from rather
@@ -58,7 +66,7 @@ const trailField = "min-w-0 flex-[2]";
 /// than guessed at — an unrecognized message keeps the neutral label instead of a wrong one.
 function failingStage(message: string): string {
   if (message.startsWith("schema")) return "Input requirements";
-  if (message.startsWith("sample_input") || message.startsWith("input")) return "Representative request";
+  if (message.startsWith("sample_input") || message.startsWith("input")) return "Sample input";
   if (message.startsWith("mapping") || message.startsWith("Failed to compile")) return "Mapping";
   if (message.startsWith("Source mapping output") || message.startsWith("Transform evaluation"))
     return "Normalized Event";
@@ -95,13 +103,11 @@ function Note({ children }: { children: ReactNode }) {
 
 function Stale() {
   return (
-    <p className="m-0 text-xs text-ink-secondary">
-      Showing fields from the last valid request body. Fix the body to refresh them.
-    </p>
+    <p className="m-0 text-xs text-ink-secondary">Showing fields from the last valid sample. Fix it to refresh them.</p>
   );
 }
 
-/// The Integrios Event Builder: representative input on the left, the Event fields it is mapped
+/// The Integrios Event Builder: sample input on the left, the Event fields it is mapped
 /// into in the middle, and what Integrios would accept on the right. Everything it holds is
 /// ephemeral — the sample, the headers and the guided choices never leave the browser. Only the
 /// generated expression and the input-requirements schema are handed back to the Source draft.
@@ -109,11 +115,15 @@ export function EventBuilder({
   draft,
   onUse,
   contractKey,
+  sourceType,
 }: {
   draft: SourceContractDraft;
   onUse: (draft: SourceContractDraft) => void;
   contractKey: string;
+  sourceType: SourceInputType;
 }) {
+  const webhook = sourceType === "webhook";
+  const sampleName = webhook ? "request" : "message";
   const [open, setOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderRow[]>([{ name: "", value: "" }]);
   const [body, setBody] = useState("{}");
@@ -194,7 +204,7 @@ export function EventBuilder({
   /// What a displayed result was produced from. Any change to the contract or the sample — a header
   /// the mapping reads included — makes both a success and a failure a statement about something
   /// that is no longer on screen.
-  const signature = JSON.stringify([expression, schema ?? null, lastValidBody, lastValidHeaders]);
+  const signature = JSON.stringify([expression, schema ?? null, lastValidBody, webhook ? lastValidHeaders : null]);
 
   const preview = useMutation({
     mutationFn: () =>
@@ -204,7 +214,7 @@ export function EventBuilder({
             schema: schema ?? null,
             mapping: { engine: "jsonata", version: "1", expression },
             sample_input: sample.current.body,
-            sample_context: { headers: sample.current.headers },
+            sample_context: webhook ? { headers: sample.current.headers } : null,
           },
         }),
       ),
@@ -243,7 +253,7 @@ export function EventBuilder({
       </DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-60 bg-ink/25" />
-        {/* Wider than the authoring flyout it opens from: the representative request, the Event
+        {/* Wider than the authoring flyout it opens from: the sample input, the Event
             fields it produces, and the preview are read together, and at a sheet's width they
             cannot be. One column below that, where three would each be too narrow to read. */}
         <DialogPrimitive.Content className="fixed inset-4 z-70 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto rounded-lg border bg-canvas p-4 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none md:inset-x-8 xl:inset-x-[max(2rem,calc((100vw-88rem)/2))]">
@@ -251,8 +261,8 @@ export function EventBuilder({
             <div className="min-w-0">
               <DialogPrimitive.Title className="m-0">Integrios Event Builder</DialogPrimitive.Title>
               <DialogPrimitive.Description className="m-0 mt-1 text-sm text-ink-secondary">
-                Define how a request the <span className="font-mono">{contractKey || "Source"}</span> accepts becomes an
-                Integrios Event. Only the mapping and input requirements join the Source draft.
+                Define how a sample {sampleName} the <span className="font-mono">{contractKey || "Source"}</span>{" "}
+                accepts becomes an Integrios Event. Only the mapping and input requirements join the Source draft.
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close
@@ -264,68 +274,68 @@ export function EventBuilder({
           </div>
 
           <div className="grid min-w-0 gap-4 xl:grid-cols-3">
-            <Pane title="Representative request">
-              {/* Headers come before the body because a webhook usually carries the Event's identity
-                  and type in them, and the body is what those choices are then read against. */}
-              <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
-                <legend className="text-sm font-medium">Request headers</legend>
-                <Note>Add only headers the mapping reads. Use representative values, never secrets.</Note>
-                {headers.map((row, index) => (
-                  // Rows are positional: an Operator may empty a name and type another, so nothing
-                  // stable exists to key them by.
-                  // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
-                  <div key={index} className="flex min-w-0 items-center gap-2">
-                    <Input
-                      aria-label={`Header ${index + 1} name`}
-                      placeholder="x-header-name"
-                      className={`${leadField} font-mono text-sm`}
-                      value={row.name}
-                      onChange={(event) =>
-                        setHeaders(
-                          headers.map((current, at) =>
-                            at === index ? { ...current, name: event.target.value } : current,
-                          ),
-                        )
-                      }
-                    />
-                    <Input
-                      aria-label={`Header ${index + 1} representative value`}
-                      placeholder="Representative value"
-                      className={trailField}
-                      value={row.value}
-                      onChange={(event) =>
-                        setHeaders(
-                          headers.map((current, at) =>
-                            at === index ? { ...current, value: event.target.value } : current,
-                          ),
-                        )
-                      }
-                    />
-                    <RemoveRow
-                      label={`Remove header ${index + 1}`}
-                      onClick={() => setHeaders(headers.filter((_, at) => at !== index))}
-                    />
-                  </div>
-                ))}
-                {headerError ? (
-                  <p role="alert" className="m-0 text-sm text-destructive">
-                    {headerError}
-                  </p>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="self-start"
-                  onClick={() => setHeaders([...headers, { name: "", value: "" }])}
-                >
-                  Add header
-                </Button>
-              </fieldset>
+            <Pane title={webhook ? "Sample request" : "Sample message"}>
+              {webhook ? (
+                <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
+                  <legend className="text-sm font-medium">Request headers</legend>
+                  <Note>Add only headers the mapping reads. Use sample values, never secrets.</Note>
+                  {headers.map((row, index) => (
+                    // Rows are positional: an Operator may empty a name and type another, so nothing
+                    // stable exists to key them by.
+                    // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
+                    <div key={index} className="flex min-w-0 items-center gap-2">
+                      <Input
+                        aria-label={`Header ${index + 1} name`}
+                        placeholder="x-header-name"
+                        className={`${leadField} font-mono text-sm`}
+                        value={row.name}
+                        onChange={(event) =>
+                          setHeaders(
+                            headers.map((current, at) =>
+                              at === index ? { ...current, name: event.target.value } : current,
+                            ),
+                          )
+                        }
+                      />
+                      <Input
+                        aria-label={`Header ${index + 1} sample value`}
+                        placeholder="Sample value"
+                        className={trailField}
+                        value={row.value}
+                        onChange={(event) =>
+                          setHeaders(
+                            headers.map((current, at) =>
+                              at === index ? { ...current, value: event.target.value } : current,
+                            ),
+                          )
+                        }
+                      />
+                      <RemoveRow
+                        label={`Remove header ${index + 1}`}
+                        onClick={() => setHeaders(headers.filter((_, at) => at !== index))}
+                      />
+                    </div>
+                  ))}
+                  {headerError ? (
+                    <p role="alert" className="m-0 text-sm text-destructive">
+                      {headerError}
+                    </p>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    onClick={() => setHeaders([...headers, { name: "", value: "" }])}
+                  >
+                    Add header
+                  </Button>
+                </fieldset>
+              ) : null}
 
               <div className="flex min-w-0 flex-col gap-1.5">
                 <label htmlFor="builder-body" className="text-sm font-medium">
-                  Request body (JSON)
+                  {webhook ? "Request body (JSON)" : "Message body (JSON)"}
                 </label>
                 <Textarea
                   id="builder-body"
@@ -350,8 +360,8 @@ export function EventBuilder({
                 </summary>
                 <div className="flex flex-col gap-2 border-t p-3">
                   <Note>
-                    Requirements are checked on every request this Source accepts, not on the sample. Choose a field the
-                    sample carries and the type Integrios should enforce.
+                    Requirements are checked on every {sampleName} this Source accepts, not on the sample. Choose a
+                    field the sample carries and the type Integrios should enforce.
                   </Note>
                   {fields.length === 0 && requirements.length === 0 ? (
                     <Note>Add a valid request body with top-level values before defining requirements.</Note>
@@ -441,7 +451,7 @@ export function EventBuilder({
                 dangling={dangling}
                 paths={paths}
                 stale={bodyError !== null || headerError !== null}
-                headers={lastValidHeaders}
+                headers={webhook ? lastValidHeaders : undefined}
                 body={lastValidBody}
                 onChange={changeGuided}
                 onAdvanced={() => setMode("advanced")}
@@ -450,7 +460,7 @@ export function EventBuilder({
               <AdvancedExpression
                 expression={expression}
                 representable={representable}
-                headers={lastValidHeaders}
+                headers={webhook ? lastValidHeaders : undefined}
                 body={lastValidBody}
                 onChange={(next) => {
                   setExpression(next);
@@ -482,7 +492,11 @@ export function EventBuilder({
                   {fresh ? null : <Note>The contract or the sample changed. Preview again to refresh this.</Note>}
                 </>
               ) : (
-                <Note>Preview to see the Event Integrios would accept. Nothing is saved, and nothing is called.</Note>
+                <>
+                  <Note>Target envelope</Note>
+                  <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(targetEnvelope)}</pre>
+                  <Note>Preview to see the Event Integrios would accept. Nothing is saved, and nothing is called.</Note>
+                </>
               )}
             </Pane>
           </div>
@@ -594,7 +608,7 @@ function GuidedFields({
   /// named, rather than reading as though nothing was ever chosen.
   dangling: string[];
   paths: string[];
-  headers: Record<string, string>;
+  headers?: Record<string, string>;
   body: unknown;
   stale: boolean;
   onChange: (change: Partial<GuidedMapping>) => void;
@@ -604,7 +618,7 @@ function GuidedFields({
     path.split(".").reduce<unknown>((current, part) => (current as Record<string, unknown> | undefined)?.[part], body);
   const preview = [
     guided.eventPrefix.trim(),
-    guided.eventHeader ? headers[guided.eventHeader] : "",
+    guided.eventHeader ? headers?.[guided.eventHeader] : "",
     guided.actionPath ? String(value(guided.actionPath) ?? "") : "",
   ]
     .filter(Boolean)
@@ -638,13 +652,15 @@ function GuidedFields({
             onChange={(event) => onChange({ eventPrefix: event.target.value })}
           />
         </div>
-        <Choice
-          label="Event name from header"
-          value={guided.eventHeader}
-          options={headerNames}
-          noneLabel="No header"
-          onChange={(eventHeader) => onChange({ eventHeader })}
-        />
+        {headers ? (
+          <Choice
+            label="Event name from header"
+            value={guided.eventHeader}
+            options={headerNames}
+            noneLabel="No header"
+            onChange={(eventHeader) => onChange({ eventHeader })}
+          />
+        ) : null}
         <Choice
           label="Append field"
           value={guided.actionPath}
@@ -733,6 +749,12 @@ function GuidedFields({
         ) : null}
       </Target>
 
+      <Target title="source_event_id" requirement="From Event identity">
+        <Note>
+          Supplied by Event identity when configured. Without an identity, this Event cannot be deduplicated by Source.
+        </Note>
+      </Target>
+
       <Target title="metadata" requirement="Optional">
         <Note>Not included. Use Advanced JSONata when transport metadata has to be carried.</Note>
       </Target>
@@ -740,8 +762,8 @@ function GuidedFields({
   );
 }
 
-/// The same expression draft, edited directly. Completion offers the representative request's own
-/// paths, the bounded context, and functions the runtime evaluator really has.
+/// The same expression draft, edited directly. Completion offers the sample input's own paths and
+/// only the bounded context that the selected Source type receives.
 function AdvancedExpression({
   expression,
   representable,
@@ -752,7 +774,7 @@ function AdvancedExpression({
 }: {
   expression: string;
   representable: boolean;
-  headers: Record<string, string>;
+  headers?: Record<string, string>;
   body: unknown;
   onChange: (expression: string) => void;
   onGuided: () => void;
@@ -850,8 +872,14 @@ function AdvancedExpression({
         </ul>
       ) : null}
       <Note>
-        Type <span className="font-mono">$</span> or <span className="font-mono">$context.headers.</span> for
-        suggestions, and use the arrow keys and Enter to insert one.
+        Type <span className="font-mono">$</span>
+        {headers ? (
+          <>
+            {" "}
+            or <span className="font-mono">$context.headers.</span>
+          </>
+        ) : null}{" "}
+        for suggestions, and use the arrow keys and Enter to insert one.
       </Note>
       <Note>
         {representable

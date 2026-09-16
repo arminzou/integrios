@@ -37,7 +37,7 @@ export function normalizeHeaderName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-/// The representative headers, as the runtime would present them. Throws the message an Operator has
+/// The sample headers, as the runtime would present them. Throws the message an Operator has
 /// to act on, because a duplicate or unnamed row cannot be resolved into one context object.
 export function headerContext(rows: { name: string; value: string }[]): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -151,13 +151,12 @@ const functions: Completion[] = [
   { label: "$number()", insert: "$number()", detail: "Convert a value to a number", cursorBack: 1 },
 ];
 
-/// Completion over the text before the caret. It offers the representative request's own paths and
-/// the bounded context, so what it suggests is what this Source could actually read — an authoring
-/// aid, never an extension of the runtime environment.
+/// Completion over the text before the caret. It offers the sample input's own paths and the
+/// bounded context only when that Source type actually receives one.
 export function completionsAt(
   text: string,
   caret: number,
-  sample: { headers: Record<string, string>; body: unknown },
+  sample: { headers?: Record<string, string>; body: unknown },
 ): { start: number; items: Completion[] } {
   const before = text.slice(0, caret);
 
@@ -166,7 +165,7 @@ export function completionsAt(
     return {
       // The backtick the Operator has already typed is part of what the suggestion replaces.
       start: caret - header[1].length - header[2].length,
-      items: Object.entries(sample.headers)
+      items: Object.entries(sample.headers ?? {})
         .filter(([name]) => name.startsWith(header[2].toLowerCase()))
         .map(([name, value]) => ({ label: `\`${name}\``, insert: `\`${name}\``, detail: value })),
     };
@@ -175,16 +174,21 @@ export function completionsAt(
   if (context)
     return {
       start: caret - context[1].length,
-      items: "headers".startsWith(context[1])
-        ? [{ label: "headers", insert: "headers", detail: "Lower-cased request headers" }]
-        : [],
+      items:
+        sample.headers && "headers".startsWith(context[1])
+          ? [{ label: "headers", insert: "headers", detail: "Lower-cased request headers" }]
+          : [],
     };
 
   const dollar = before.match(/\$([A-Za-z]*)$/);
   if (dollar)
     return {
       start: caret - dollar[0].length,
-      items: functions.filter((item) => item.label.slice(1).startsWith(dollar[1].toLowerCase())),
+      items: functions.filter(
+        (item) =>
+          (sample.headers !== undefined || item.label !== "$context") &&
+          item.label.slice(1).startsWith(dollar[1].toLowerCase()),
+      ),
     };
 
   const path = before.match(/(?:^|[^$\w.`])([A-Za-z_$][\w$.]*)$/);
@@ -193,7 +197,7 @@ export function completionsAt(
       start: caret - path[1].length,
       items: payloadFieldPaths(sample.body)
         .filter((candidate) => candidate.toLowerCase().startsWith(path[1].toLowerCase()))
-        .map((candidate) => ({ label: candidate, insert: candidate, detail: "Representative request field" })),
+        .map((candidate) => ({ label: candidate, insert: candidate, detail: "Sample input field" })),
     };
 
   return { start: caret, items: [] };

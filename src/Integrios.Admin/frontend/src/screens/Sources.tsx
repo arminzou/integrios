@@ -246,13 +246,14 @@ function SourceIdentityFields<TValues extends FieldValues>({
 }) {
   const kind = String(useWatch({ control, name: "identity_kind" as Path<TValues> }) ?? "");
   const selector = identitySelector(kind);
+  const inputNoun = type === "broker" ? "message" : "request";
   return (
     <>
       <SelectField
         control={control}
         name={"identity_kind" as Path<TValues>}
         label="Event identity"
-        hint="A request missing the value is rejected unless you allow it below."
+        hint="Where Integrios reads source_event_id for duplicate detection; separate from Event normalization."
         emptyLabel="No duplicate detection"
         onChange={onKindChange}
       >
@@ -286,8 +287,8 @@ function SourceIdentityFields<TValues extends FieldValues>({
               checked={Boolean(field.value)}
               onBlur={field.onBlur}
               onChange={field.onChange}
-              label="Accept a request that carries no value here"
-              hint="Integrios then reads the identity this Source's Event mapping produces, if it produces one, rather than rejecting the request. An Event with no identity at all is not deduplicated."
+              label={`Accept a ${inputNoun} that carries no value here`}
+              hint={`Integrios then reads the identity this Source's Event mapping produces, if it produces one, rather than rejecting the ${inputNoun}. An Event with no identity at all is not deduplicated.`}
             />
           )}
         />
@@ -782,6 +783,7 @@ function CreateSource({
         {sourceType === "event_api" ? (
           <EventApiRequest tenantId={tenantId} ingestionEndpoint={overview.data?.ingestion_endpoint} />
         ) : null}
+        {sourceType === "webhook" || sourceType === "broker" ? <SourceInputDescription type={sourceType} /> : null}
         {sourceType === "webhook" ? (
           <SourceVerificationFields
             control={form.control}
@@ -794,8 +796,8 @@ function CreateSource({
         {sourceType !== "event_api" ? (
           <>
             <Section
-              title="Event shape"
-              hint="What identifies an Event from this Source, and the type, payload, and requirements derived from a representative request."
+              title="Event Normalization"
+              hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
             >
               <SourceIdentityFields
                 control={form.control}
@@ -805,6 +807,7 @@ function CreateSource({
               <EventBuilder
                 key={sourceType}
                 contractKey={`${sourceType} Source`}
+                sourceType={sourceType === "webhook" ? "webhook" : "broker"}
                 draft={sourceContractDraft}
                 onUse={(draft) => {
                   form.setValue("mapping", draft.expression, { shouldDirty: true });
@@ -924,6 +927,25 @@ function EventApiRequest({ tenantId, ingestionEndpoint }: { tenantId: string; in
         <dd className="m-0 font-mono">Bearer &lt;TenantApiKey&gt;</dd>
       </dl>
       <pre className="m-0 overflow-x-auto rounded-md border bg-surface p-3 text-sm">{request}</pre>
+    </section>
+  );
+}
+
+function SourceInputDescription({ type }: { type: "webhook" | "broker" }) {
+  const webhook = type === "webhook";
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-md border bg-surface-quiet p-4"
+      aria-labelledby={`${type}-source-input`}
+    >
+      <h3 id={`${type}-source-input`} className="m-0 text-sm font-medium">
+        {webhook ? "Webhook request" : "Message broker input"}
+      </h3>
+      <p className="m-0 text-sm text-ink-secondary">
+        {webhook
+          ? "The provider sends a JSON HTTP request to the callback URL generated after this Source is created. Integrios verifies it, validates the input, and normalizes it into an Integrios Event."
+          : "Integrios consumes JSON messages from the broker below, validates each message, and normalizes it into an Integrios Event."}
+      </p>
     </section>
   );
 }
@@ -1126,8 +1148,8 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                 {storedBrokerFields ? <MessageBrokerFields control={form.control} /> : null}
                 {source.type !== "event_api" ? (
                   <Section
-                    title="Event shape"
-                    hint="What identifies an Event from this Source, and the type, payload, and requirements derived from a representative request."
+                    title="Event Normalization"
+                    hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
                   >
                     <SourceIdentityFields
                       control={form.control}
@@ -1136,6 +1158,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                     />
                     <EventBuilder
                       contractKey={`${source.type} Source`}
+                      sourceType={source.type === "webhook" ? "webhook" : "broker"}
                       draft={sourceContractDraft}
                       onUse={(draft) => {
                         form.setValue("mapping", draft.expression, { shouldDirty: true });

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { afterEach, expect, it } from "vitest";
 import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
+import { EventBuilder } from "./EventBuilder";
 import { SourcesScreen } from "./Sources";
 
 afterEach(cleanup);
@@ -27,13 +28,38 @@ async function openSource(type: "event_api" | "webhook" | "broker" = "webhook") 
   const dialog = await screen.findByRole("dialog", { name: "New Source" });
   fireEvent.change(within(dialog).getByLabelText("Connector"), { target: { value: connectorId } });
   fireEvent.change(within(dialog).getByLabelText("Topic"), { target: { value: topicId } });
-  fireEvent.change(within(dialog).getByLabelText("Type"), { target: { value: type } });
+  if (type !== "webhook") {
+    fireEvent.click(within(dialog).getByRole("combobox", { name: "Type" }));
+    fireEvent.click(await screen.findByRole("option", { name: type === "broker" ? "Message broker" : "Event API" }));
+  }
   return dialog;
 }
 
-it("hosts the Event Builder in a webhook Source draft", async () => {
+it("explains webhook normalization and shows its sample request", async () => {
   const webhook = await openSource();
+  expect(within(webhook).getByRole("heading", { name: "Webhook request" })).toBeTruthy();
+  expect(within(webhook).getByRole("heading", { name: "Event Normalization" })).toBeTruthy();
   expect(within(webhook).getByRole("button", { name: "Open Integrios Event Builder" })).toBeTruthy();
+  fireEvent.click(within(webhook).getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+  expect(within(builder).getByRole("heading", { name: "Sample request" })).toBeTruthy();
+  expect(within(builder).getByText("Request headers")).toBeTruthy();
+  expect(within(builder).getByLabelText("Request body (JSON)")).toBeTruthy();
+  expect(within(builder).getByRole("heading", { name: "source_event_id" })).toBeTruthy();
+  const normalized = within(builder).getByRole("heading", { name: "Normalized Event" }).closest("section")!;
+  expect(within(normalized).getByText(/supplied by Event identity when configured/)).toBeTruthy();
+});
+
+it("shows broker messages without HTTP request context", async () => {
+  renderScreen(
+    <EventBuilder contractKey="broker Source" sourceType="broker" draft={{ expression: "" }} onUse={() => undefined} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+  expect(within(builder).getByRole("heading", { name: "Sample message" })).toBeTruthy();
+  expect(within(builder).queryByText("Request headers")).toBeNull();
+  expect(within(builder).queryByLabelText("Event name from header")).toBeNull();
+  expect(within(builder).getByLabelText("Message body (JSON)")).toBeTruthy();
 });
 
 it("returns the ephemeral Builder draft to its owning Source form", async () => {

@@ -60,7 +60,7 @@ describe("The generated Source mapping", () => {
   });
 });
 
-describe("Representative request headers", () => {
+describe("Sample request headers", () => {
   it("lower-cases names the way the runtime does and refuses a name it cannot resolve", () => {
     expect(headerContext([{ name: "X-GitHub-Event", value: "issues" }])).toEqual({ "x-github-event": "issues" });
     // A backtick-quoted name runs to the next backtick, so a name carrying one cannot be addressed.
@@ -126,7 +126,7 @@ describe("Input requirements", () => {
 describe("Advanced JSONata completion", () => {
   const sample = { headers: { "x-github-event": "issues" }, body };
 
-  it("suggests the representative request's own headers, quoted the way the expression needs", () => {
+  it("suggests the sample request's own headers, quoted the way the expression needs", () => {
     const text = "$context.headers.x-git";
     const { items, start } = completionsAt(text, text.length, sample);
 
@@ -141,7 +141,12 @@ describe("Advanced JSONata completion", () => {
     expect(completionsAt("$map", 4, sample).items).toEqual([]);
   });
 
-  it("suggests paths the representative body really has", () => {
+  it("does not offer webhook context to a broker mapping", () => {
+    expect(completionsAt("$con", 4, { body }).items).toEqual([]);
+    expect(completionsAt("$context.headers.", 17, { body }).items).toEqual([]);
+  });
+
+  it("suggests paths the sample body really has", () => {
     const { items } = completionsAt("$exists(repo", 12, sample);
     expect(items.map((item) => item.insert)).toEqual(["repository.full_name"]);
     expect(completionsAt("nothing_here", 12, sample).items).toEqual([]);

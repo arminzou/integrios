@@ -631,7 +631,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Event identity"), "Message ID");
     // No selector for this kind — the message carries its own id — but the permission still applies.
     expect(await form.getByLabel("JSON Pointer").count()).toBe(0);
-    await form.getByLabel("Accept a request that carries no value here").check();
+    await form.getByLabel("Accept a message that carries no value here").check();
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -737,6 +737,15 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Message broker");
     await form.getByLabel("Name", { exact: true }).fill("broker-intake");
+    await form.getByRole("heading", { name: "Message broker input" }).waitFor();
+    await form.getByRole("heading", { name: "Event Normalization" }).waitFor();
+    await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    const builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
+    await builder.getByRole("heading", { name: "Sample message" }).waitFor();
+    expect(await builder.getByText("Request headers").count()).toBe(0);
+    expect(await builder.getByLabel("Event name from header").count()).toBe(0);
+    await builder.getByLabel("Message body (JSON)").waitFor();
+    await builder.getByRole("button", { name: "Back to Source" }).click();
     expect(await form.getByLabel(/^Verification/).count()).toBe(0);
     expect(await form.getByLabel("Broker type").textContent()).toContain("Azure Service Bus");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");

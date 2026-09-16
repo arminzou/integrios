@@ -401,7 +401,7 @@ describe("The dashboard in a real browser", () => {
       const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
       await builder.waitFor();
       const boxes = [];
-      for (const title of ["Representative request", "Event fields", "Normalized Event"])
+      for (const title of ["Sample request", "Event fields", "Normalized Event"])
         boxes.push((await builder.getByRole("heading", { name: title }).boundingBox())!);
 
       if (beside) {
