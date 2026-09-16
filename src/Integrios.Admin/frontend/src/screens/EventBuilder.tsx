@@ -11,6 +11,7 @@ import { asProblem, call } from "../api/query";
 import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { formatJson } from "../ui/json";
+import { JsonEditor } from "../ui/jsonEditor";
 import {
   type EventTypeRule,
   emptyEventType,
@@ -315,6 +316,34 @@ export function EventBuilder({
   /// carried back out untouched unless requirements replace it.
   const opaqueSchema = requirementsFrom(draft.schema).length === 0 ? draft.schema : undefined;
 
+  /// Returning to guided is destructive only when the expression is not one the guided rule would
+  /// generate, so the way back is a confirming control exactly then and a plain one otherwise.
+  const toGuided = () => {
+    // Including when the editor was emptied: the guided pane is about to claim it represents this
+    // expression, so the expression becomes the one it generates.
+    setExpression(generated);
+    setMode("guided");
+    preview.reset();
+  };
+  const mappingAction =
+    mode === "guided" ? (
+      <Button type="button" variant="outline" size="sm" onClick={() => setMode("advanced")}>
+        Advanced JSONata
+      </Button>
+    ) : representable ? (
+      <Button type="button" variant="outline" size="sm" onClick={toGuided}>
+        Guided mode
+      </Button>
+    ) : (
+      <ConfirmAction
+        label="Reset to guided"
+        variant="outline"
+        question="Reset this expression to the guided mapping?"
+        consequence="This expression cannot be shown in the guided form. Resetting replaces it."
+        onConfirm={toGuided}
+      />
+    );
+
   const useDraft = () => {
     onUse({ expression: settled, schema: schema ?? opaqueSchema, identity });
     setOpen(false);
@@ -410,15 +439,12 @@ export function EventBuilder({
               ) : null}
 
               <div className="flex min-w-0 flex-col gap-1.5">
-                <label htmlFor="builder-body" className="text-sm font-medium">
-                  {webhook ? "Request body (JSON)" : "Message body (JSON)"}
-                </label>
-                <Textarea
+                <JsonEditor
                   id="builder-body"
-                  spellCheck={false}
+                  label={webhook ? "Request body (JSON)" : "Message body (JSON)"}
                   value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                  className="min-h-120 font-mono text-sm"
+                  invalid={bodyError !== null}
+                  onChange={setBody}
                 />
                 {bodyError ? (
                   <p role="alert" className="m-0 text-sm text-destructive">
@@ -520,7 +546,7 @@ export function EventBuilder({
               </details>
             </Pane>
 
-            <div className="flex min-w-0 flex-col gap-4">
+            <Pane title={mode === "guided" ? "Event fields" : "Advanced JSONata"} action={mappingAction}>
               {mode === "guided" ? (
                 <GuidedFields
                   eventType={eventType}
@@ -531,7 +557,6 @@ export function EventBuilder({
                   headers={webhook ? lastValidHeaders : undefined}
                   body={lastValidBody}
                   onChange={changeEventType}
-                  onAdvanced={() => setMode("advanced")}
                 />
               ) : (
                 <AdvancedExpression
@@ -540,13 +565,6 @@ export function EventBuilder({
                   headers={webhook ? lastValidHeaders : undefined}
                   onChange={(next) => {
                     setExpression(next);
-                    preview.reset();
-                  }}
-                  onGuided={() => {
-                    // Including when the editor was emptied: the guided pane is about to claim it
-                    // represents this expression, so the expression becomes the one it generates.
-                    setExpression(generated);
-                    setMode("guided");
                     preview.reset();
                   }}
                 />
@@ -558,7 +576,7 @@ export function EventBuilder({
                 paths={paths}
                 onChange={changeIdentity}
               />
-            </div>
+            </Pane>
 
             <Pane title="Normalized Event">
               {message ? (
@@ -660,10 +678,10 @@ function IdentityFields({
   const selector = identity && identity.kind !== "message_id" ? identity.kind : "";
 
   return (
-    <Pane title="Event identity">
+    <Target title="source_event_id" requirement="Optional">
       <Note>
-        Where Integrios reads <span className="font-mono">source_event_id</span>, so one {inputNoun} sent twice becomes
-        one Event. Read before the mapping, and never taken from it.
+        Where Integrios reads it, so one {inputNoun} sent twice becomes one Event. Read before the mapping, and never
+        taken from it.
       </Note>
       {/* A selector carried across a kind change is submitted under the new one: a header name
           becomes a JSON Pointer the API refuses, and a Pointer becomes a header name it accepts,
@@ -715,7 +733,7 @@ function IdentityFields({
           onChange={(allowMissing) => onChange({ ...identity, allowMissing })}
         />
       ) : null}
-    </Pane>
+    </Target>
   );
 }
 
@@ -781,7 +799,6 @@ function GuidedFields({
   body,
   stale,
   onChange,
-  onAdvanced,
 }: {
   eventType: EventTypeRule;
   headerNames: string[];
@@ -793,7 +810,6 @@ function GuidedFields({
   body: unknown;
   stale: boolean;
   onChange: (rule: EventTypeRule) => void;
-  onAdvanced: () => void;
 }) {
   const derived = eventType.source !== "fixed";
   const eventTypePrefix = eventType.source === "fixed" ? "" : eventType.prefix;
@@ -811,14 +827,7 @@ function GuidedFields({
       : "";
 
   return (
-    <Pane
-      title="Event fields"
-      action={
-        <Button type="button" variant="outline" size="sm" onClick={onAdvanced}>
-          Advanced JSONata
-        </Button>
-      }
-    >
+    <>
       <Note>Choose where each Event value comes from. The JSONata mapping is generated from these choices.</Note>
       {stale ? <Stale /> : null}
       {dangling.length > 0 ? (
@@ -939,16 +948,10 @@ function GuidedFields({
         </Note>
       </Target>
 
-      <Target title="source_event_id" requirement="From Event identity">
-        <Note>
-          Supplied by Event identity when configured. Without an identity, this Event cannot be deduplicated by Source.
-        </Note>
-      </Target>
-
       <Target title="metadata" requirement="Optional">
         <Note>Not included. Use Advanced JSONata when transport metadata has to be carried.</Note>
       </Target>
-    </Pane>
+    </>
   );
 }
 
@@ -960,35 +963,14 @@ function AdvancedExpression({
   representable,
   headers,
   onChange,
-  onGuided,
 }: {
   expression: string;
   representable: boolean;
   headers?: Record<string, string>;
   onChange: (expression: string) => void;
-  onGuided: () => void;
 }) {
   return (
-    <Pane
-      title="Advanced JSONata"
-      action={
-        representable ? (
-          <Button type="button" variant="outline" size="sm" onClick={onGuided}>
-            Guided mode
-          </Button>
-        ) : (
-          // Returning is destructive here, and only here: the expression cannot be shown in the
-          // guided form without changing what it means, so going back replaces it.
-          <ConfirmAction
-            label="Reset to guided"
-            variant="outline"
-            question="Reset this expression to the guided mapping?"
-            consequence="This expression cannot be shown in the guided form. Resetting replaces it."
-            onConfirm={onGuided}
-          />
-        )
-      }
-    >
+    <>
       <label htmlFor="builder-expression" className="sr-only">
         Source mapping expression
       </label>
@@ -1010,6 +992,6 @@ function AdvancedExpression({
           ? "This expression matches the guided mapping and can return to it."
           : "This expression cannot be shown in the guided form."}
       </Note>
-    </Pane>
+    </>
   );
 }

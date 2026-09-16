@@ -424,6 +424,61 @@ describe("The dashboard in a real browser", () => {
     60_000,
   );
 
+  // The highlighted copy of the sample is painted by a separate element behind the textarea, so the
+  // two agreeing on every metric that positions a glyph is what makes them read as one editor.
+  // jsdom resolves no fonts and lays nothing out, so only here can that be checked at all.
+  it("paints the sample body's highlighting exactly under the text being edited", async () => {
+    const page = await openDashboard(`/tenants/${tenants.items[0].id}/sources`);
+    await page.getByRole("button", { name: "New Source" }).click();
+    await page.getByRole("combobox", { name: "Type" }).click();
+    await page.getByRole("option", { name: "Webhook" }).click();
+    await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+
+    const editor = page.getByLabel("Request body (JSON)");
+    await editor.fill(
+      '{"action":"opened","number":4,"draft":false,"repository":{"full_name":"northwind/orders-and-a-long-name"}}',
+    );
+    await page.getByRole("button", { name: "Format" }).click();
+    // Formatting is what makes a one-line sample readable at all, so it is the button's whole job.
+    expect(await editor.inputValue()).toContain('"action": "opened"');
+
+    const metrics = await editor.evaluate((element) => {
+      const painted = element.parentElement!.querySelector("pre")!;
+      const read = (node: Element) => {
+        const style = getComputedStyle(node);
+        return [
+          style.fontFamily,
+          style.fontSize,
+          style.lineHeight,
+          style.letterSpacing,
+          style.paddingTop,
+          style.paddingLeft,
+          style.whiteSpace,
+          style.overflowWrap,
+          style.tabSize,
+        ].join("|");
+      };
+      const box = (node: Element) => {
+        const rect = node.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width };
+      };
+      return { editor: read(element), painted: read(painted), editorBox: box(element), paintedBox: box(painted) };
+    });
+
+    expect(metrics.painted).toBe(metrics.editor);
+    expect(metrics.paintedBox.x).toBeCloseTo(metrics.editorBox.x, 1);
+    expect(metrics.paintedBox.y).toBeCloseTo(metrics.editorBox.y, 1);
+    expect(metrics.paintedBox.width).toBeCloseTo(metrics.editorBox.width, 1);
+
+    // The painted copy is what sizes the box, so a document taller than the minimum grows both.
+    const tall = await editor.evaluate((element) => {
+      const painted = element.parentElement!.querySelector("pre")!;
+      return painted.getBoundingClientRect().height - element.getBoundingClientRect().height;
+    });
+    expect(Math.abs(tall)).toBeLessThan(1);
+    await page.close();
+  }, 60_000);
+
   // Native constraint validation and layout are both browser behaviours: jsdom runs neither, so only
   // here can the form's own message be told apart from the browser's bubble, and only here can what
   // that message costs the form be measured.

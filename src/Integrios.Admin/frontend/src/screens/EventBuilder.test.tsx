@@ -166,7 +166,10 @@ it("previews the Event identity the rule would resolve, not only the mapping out
   fireEvent.change(within(builder).getByLabelText("Identity field"), { target: { value: "/delivery/id" } });
   fireEvent.click(within(builder).getByRole("button", { name: "Preview normalized Event" }));
 
-  await waitFor(() => expect(within(builder).getByText(/d-7/)).toBeTruthy());
+  // Scoped to the result: the sample the identity was read from carries the same text.
+  const normalized = within(builder).getByRole("heading", { name: "Normalized Event" }).closest("section")!;
+  await waitFor(() => expect(within(normalized).getByText(/source_event_id/)).toBeTruthy());
+  expect(within(normalized).getByText(/d-7/)).toBeTruthy();
   const preview = calls.find((call) => call.url.pathname.endsWith("/source-contracts/preview"))!;
   expect((preview.body as Record<string, unknown>).event_identity_rule).toEqual({
     kind: "json_path",

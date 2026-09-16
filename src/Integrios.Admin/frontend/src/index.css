@@ -52,6 +52,14 @@
   --success-ink: #1b6e34;
   --success-surface: #e8f3ec;
 
+  /* Reading a JSON document, not editing prose: the roles are the grammar's, so a value change
+     never touches the tokenizer. Each is dark enough to clear 4.5:1 on --surface, because a
+     sample an Operator is checking character by character is the worst place to save contrast. */
+  --code-key: #1f4d8f;
+  --code-string: #1a6b3c;
+  --code-number: #8a4b00;
+  --code-literal: #6d3aa0;
+
   --radius: 6px;
   /* A bounded content group — an activity-summary metric, the ledger, the inspector panel. */
   --radius-card: 10px;
@@ -74,6 +82,10 @@
   --color-danger-surface: var(--danger-surface);
   --color-success-ink: var(--success-ink);
   --color-success-surface: var(--success-surface);
+  --color-code-key: var(--code-key);
+  --color-code-string: var(--code-string);
+  --color-code-number: var(--code-number);
+  --color-code-literal: var(--code-literal);
 
   /* A placeholder that is mounted at once but not shown for a moment. Most reads answer faster than
      this, and a placeholder that appears and vanishes inside 200ms reads as a flicker rather than as
