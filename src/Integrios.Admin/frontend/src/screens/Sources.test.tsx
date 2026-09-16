@@ -247,7 +247,8 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
 
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const form = await screen.findByRole("form", { name: "Edit Webhook Source" });
-  expect(within(form).queryByRole("button", { name: "Advanced configuration" })).toBeNull();
+  expect(within(form).queryByRole("heading", { name: "Raw broker configuration" })).toBeNull();
+  fireEvent.click(within(form).getByText("Raw event contract"));
   fireEvent.change(within(form).getByLabelText("Event mapping (JSONata, optional)"), { target: { value: "payload" } });
   fireEvent.submit(form);
 

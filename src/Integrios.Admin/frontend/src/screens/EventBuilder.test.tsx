@@ -69,8 +69,11 @@ it("returns the ephemeral Builder draft to its owning Source form", async () => 
   fireEvent.change(within(builder).getByLabelText("Text prefix"), { target: { value: "github" } });
   fireEvent.click(within(builder).getByRole("button", { name: "Use configuration" }));
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Integrios Event Builder" })).toBeNull());
-  fireEvent.click(within(source).getByText("Advanced configuration"));
-  expect((within(source).getByLabelText("Generated Event mapping (JSONata)") as HTMLTextAreaElement).value).toContain(
+  expect(within(source).queryByText("Raw event contract")).toBeNull();
+  fireEvent.click(within(source).getByRole("button", { name: "Open Integrios Event Builder" }));
+  const reopened = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+  fireEvent.click(within(reopened).getByRole("button", { name: "Advanced JSONata" }));
+  expect((within(reopened).getByLabelText("Source mapping expression") as HTMLTextAreaElement).value).toContain(
     '"github"',
   );
 });

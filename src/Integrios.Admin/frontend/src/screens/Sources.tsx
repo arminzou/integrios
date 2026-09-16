@@ -794,46 +794,28 @@ function CreateSource({
         ) : null}
         {sourceType === "broker" ? <MessageBrokerFields control={form.control} /> : null}
         {sourceType !== "event_api" ? (
-          <>
-            <Section
-              title="Event Normalization"
-              hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
-            >
-              <SourceIdentityFields
-                control={form.control}
-                type={sourceType}
-                onKindChange={() => form.setValue("identity_value", "")}
-              />
-              <EventBuilder
-                key={sourceType}
-                contractKey={`${sourceType} Source`}
-                sourceType={sourceType === "webhook" ? "webhook" : "broker"}
-                draft={sourceContractDraft}
-                onUse={(draft) => {
-                  form.setValue("mapping", draft.expression, { shouldDirty: true });
-                  form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
-                    shouldDirty: true,
-                  });
-                }}
-              />
-            </Section>
-            <Disclosure label="Advanced configuration">
-              <div className="flex flex-col gap-4">
-                <TextAreaField
-                  control={form.control}
-                  name="input_requirements"
-                  label="Generated input requirements"
-                  className="min-h-32 font-mono text-sm"
-                />
-                <TextAreaField
-                  control={form.control}
-                  name="mapping"
-                  label="Generated Event mapping (JSONata)"
-                  className="min-h-32 font-mono text-sm"
-                />
-              </div>
-            </Disclosure>
-          </>
+          <Section
+            title="Event Normalization"
+            hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
+          >
+            <SourceIdentityFields
+              control={form.control}
+              type={sourceType}
+              onKindChange={() => form.setValue("identity_value", "")}
+            />
+            <EventBuilder
+              key={sourceType}
+              contractKey={`${sourceType} Source`}
+              sourceType={sourceType === "webhook" ? "webhook" : "broker"}
+              draft={sourceContractDraft}
+              onUse={(draft) => {
+                form.setValue("mapping", draft.expression, { shouldDirty: true });
+                form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                  shouldDirty: true,
+                });
+              }}
+            />
+          </Section>
         ) : null}
 
         <Button type="submit" className="self-start" disabled={create.isPending || cannotAuthor}>
@@ -1146,6 +1128,20 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
 
                 <TextField control={form.control} name="name" label="Name" required />
                 {storedBrokerFields ? <MessageBrokerFields control={form.control} /> : null}
+                {source.type === "broker" && !storedBrokerFields ? (
+                  <Section
+                    title="Raw broker configuration"
+                    hint="This stored broker configuration is not supported by the guided fields. Edit its JSON directly."
+                  >
+                    <TextAreaField
+                      control={form.control}
+                      name="configuration"
+                      label="Broker configuration (JSON)"
+                      className="min-h-56 font-mono text-sm"
+                      required
+                    />
+                  </Section>
+                ) : null}
                 {source.type !== "event_api" ? (
                   <Section
                     title="Event Normalization"
@@ -1177,24 +1173,16 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
                     capabilities={capabilities}
                   />
                 ) : null}
-                {source.type === "broker" && !storedBrokerFields ? (
-                  <Disclosure label="Advanced configuration">
-                    <TextAreaField
-                      control={form.control}
-                      name="configuration"
-                      label="Configuration (JSON)"
-                      className="min-h-56 font-mono text-sm"
-                      required
-                    />
-                  </Disclosure>
-                ) : null}
                 {source.type !== "event_api" ? (
-                  <Disclosure label="Advanced Event contract">
+                  <Disclosure label="Raw event contract">
                     <div className="flex flex-col gap-4">
+                      <p className="m-0 text-xs text-ink-secondary">
+                        Edit the input schema and JSONata mapping directly. Changes replace Event Builder output.
+                      </p>
                       <TextAreaField
                         control={form.control}
                         name="input_requirements"
-                        label="Input requirements (JSON, optional)"
+                        label="Input schema (JSON, optional)"
                         className="min-h-40 font-mono text-sm"
                       />
                       <TextAreaField

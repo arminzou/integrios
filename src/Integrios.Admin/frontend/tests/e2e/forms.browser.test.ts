@@ -1057,10 +1057,11 @@ describe("Update and deactivate, driven through a real browser", () => {
       const form = formNamed(view, `Edit ${label} Source`);
       let expectedConfiguration: Record<string, unknown> = configuration;
       expect(await form.getByLabel("Broker type").count()).toBe(editor === "guided" ? 1 : 0);
-      expect(await form.getByText("Advanced configuration", { exact: true }).count()).toBe(editor === "raw" ? 1 : 0);
+      expect(await form.getByRole("heading", { name: "Raw broker configuration" }).count()).toBe(
+        editor === "raw" ? 1 : 0,
+      );
       if (editor === "raw") {
-        await form.getByText("Advanced configuration", { exact: true }).click();
-        const raw = form.getByLabel("Configuration (JSON)");
+        const raw = form.getByLabel("Broker configuration (JSON)");
         expect(JSON.parse(await raw.inputValue())).toEqual(configuration);
         expectedConfiguration = { ...configuration, edited_as_raw: true };
         await raw.fill(JSON.stringify(expectedConfiguration));
@@ -1107,7 +1108,8 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(await builder.getByLabel("Source mapping expression").inputValue()).toBe(expression);
     await builder.getByRole("button", { name: "Back to Source" }).click();
 
-    await form.getByText("Advanced Event contract", { exact: true }).click();
+    await form.getByText("Raw event contract", { exact: true }).click();
+    await form.getByText("Changes replace Event Builder output.", { exact: false }).waitFor();
     expect(await form.getByLabel("Event mapping (JSONata, optional)").inputValue()).toBe(expression);
 
     await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
