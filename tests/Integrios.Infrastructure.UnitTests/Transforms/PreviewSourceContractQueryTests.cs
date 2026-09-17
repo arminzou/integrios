@@ -85,6 +85,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
 
         result.Error!.ShouldContain("amount", Case.Sensitive);
         result.OutputJson.ShouldBeNull();
+        // The Source's input requirements refused it, not the mapping.
+        result.RefusedBy.ShouldBe("schema");
     }
 
     [Fact]
@@ -93,6 +95,7 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
         PreviewSourceContractResult result = await RunMapping("{ \"event_type\": ", "{}");
 
         result.Error.ShouldNotBeNull();
+        result.RefusedBy.ShouldBe("mapping");
         result.OutputJson.ShouldBeNull();
     }
 
@@ -133,9 +136,26 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             """{"headers":{}}""",
             new SourceEventIdentityRule { Kind = "header", Value = "X-GitHub-Delivery" });
 
+        // The refusal names what it looked for, so an Operator can see which header the sample lacks.
         result.Error.ShouldNotBeNull();
+        result.Error.ShouldContain("'X-GitHub-Delivery' header");
+        result.RefusedBy.ShouldBe("event_identity_rule");
         result.OutputJson.ShouldBeNull();
         result.SourceEventId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Preview_NamesTheJsonPointer_WhenTheSampleCarriesNoIdentityThere()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"a\", \"payload\": $ }",
+            """{"delivery":{"id":7}}""",
+            """{"headers":{}}""",
+            new SourceEventIdentityRule { Kind = "json_path", Value = "/delivery/id" });
+
+        result.Error.ShouldNotBeNull();
+        result.Error.ShouldContain("'/delivery/id'");
+        result.RefusedBy.ShouldBe("event_identity_rule");
     }
 
     [Fact]
@@ -179,6 +199,35 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
         result.Error.ShouldNotBeNull();
         result.Error.ShouldContain("JSON Pointer");
     }
+
+    // A Source with no mapping takes its input as the Event. A provider's own JSON is not one, and
+    // the preview has to say so rather than decline to check.
+    [Fact]
+    public async Task Preview_RefusesAProviderPayload_WhenTheSourceHasNoMapping()
+    {
+        PreviewSourceContractResult result = await RunUnmapped("""{"ref":"refs/heads/main"}""");
+
+        result.Error.ShouldNotBeNull();
+        // With no mapping it is the input itself that is not an Event.
+        result.RefusedBy.ShouldBe("sample_input");
+        result.OutputJson.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Preview_AcceptsAnIntegriosEvent_WhenTheSourceHasNoMapping()
+    {
+        PreviewSourceContractResult result = await RunUnmapped(
+            """{"event_type":"order.placed","source_event_id":"o-1","payload":{"id":1}}""");
+
+        result.Error.ShouldBeNull();
+        using var document = JsonDocument.Parse(result.OutputJson!);
+        document.RootElement.GetProperty("event_type").GetString().ShouldBe("order.placed");
+        // With no rule, ingestion takes the identity the Event itself carries.
+        result.SourceEventId.ShouldBe("o-1");
+    }
+
+    private Task<PreviewSourceContractResult> RunUnmapped(string sampleInput) =>
+        mediator.Send(new PreviewSourceContractQuery(null, null, Json(sampleInput), Json("""{"headers":{}}"""), null));
 
     public void Dispose() => provider.Dispose();
 

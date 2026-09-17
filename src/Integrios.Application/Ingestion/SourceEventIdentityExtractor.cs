@@ -50,8 +50,18 @@ internal static class SourceEventIdentityExtractor
             return value;
         if (rule.AllowMissing)
             return null;
-        throw new EventAcceptanceException("Source Event identity could not be extracted.");
+        throw new EventAcceptanceException(MissingIdentity(rule));
     }
+
+    // Names what was looked for. The sender already holds the header or field it did not send, so
+    // saying which one costs nothing, and it is the difference between a refusal an Operator can act
+    // on and one they have to reverse-engineer from the Source's configuration.
+    private static string MissingIdentity(SourceEventIdentityRule rule) => rule.Kind switch
+    {
+        "header" => $"The request has no '{rule.Value}' header to read its Source Event identity from.",
+        "message_id" => "The message has no message ID to read its Source Event identity from.",
+        _ => $"The input has no non-empty string at '{rule.Value}' to read its Source Event identity from.",
+    };
 
     private static string? ReadJsonPointer(JsonElement input, string pointer)
     {

@@ -132,7 +132,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
             cancellationToken);
         if (result.Error is not null)
             return Results.ValidationProblem(
-                new Dictionary<string, string[]> { [""] = [result.Error] },
+                new Dictionary<string, string[]> { [result.RefusedBy ?? ""] = [result.Error] },
                 statusCode: StatusCodes.Status400BadRequest);
 
         using var doc = JsonDocument.Parse(result.OutputJson!);
@@ -142,7 +142,7 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
 
 internal sealed record SourceContractPreviewRequest(
     JsonElement? Schema,
-    JsonElement Mapping,
+    JsonElement? Mapping,
     JsonElement SampleInput,
     JsonElement? SampleContext,
     SourceEventIdentityRule? EventIdentityRule);

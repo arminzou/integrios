@@ -11,7 +11,7 @@ namespace Integrios.Application.Authoring.Connectors;
 
 public sealed record PreviewSourceContractQuery(
     JsonElement? Schema,
-    JsonElement Mapping,
+    JsonElement? Mapping,
     JsonElement SampleInput,
     JsonElement? SampleContext,
     SourceEventIdentityRule? EventIdentityRule) : IRequest<PreviewSourceContractResult>;
@@ -19,7 +19,19 @@ public sealed record PreviewSourceContractQuery(
 // SourceEventId is what the rule selects from this sample, so the preview shows the Event as
 // Ingestion would accept it rather than the mapping output alone. Null where the rule reads
 // something a sample cannot carry -- a broker message id -- or where an absent value is permitted.
-public sealed record PreviewSourceContractResult(string? Error, string? OutputJson, string? SourceEventId);
+//
+// RefusedBy names the request field whose part of the check refused the sample, the way a
+// validation failure is keyed everywhere else in the Admin API: event_identity_rule, schema (the
+// Source's input requirements), mapping, or sample_input (with no mapping, the input is not itself
+// an Event). A caller explains a refusal from that rather than from the wording of the message.
+public sealed record PreviewSourceContractResult(
+    string? Error,
+    string? RefusedBy,
+    string? OutputJson,
+    string? SourceEventId)
+{
+    public static PreviewSourceContractResult Refused(string refusedBy, string error) => new(error, refusedBy, null, null);
+}
 
 internal sealed class PreviewSourceContractQueryHandler(ITransformEvaluator evaluator)
     : IRequestHandler<PreviewSourceContractQuery, PreviewSourceContractResult>
@@ -40,11 +52,11 @@ internal sealed class PreviewSourceContractQueryHandler(ITransformEvaluator eval
         }
         catch (SourceValidationException exception)
         {
-            return Task.FromResult(new PreviewSourceContractResult(exception.Message, null, null));
+            return Refused("event_identity_rule", exception.Message);
         }
         catch (EventAcceptanceException exception)
         {
-            return Task.FromResult(new PreviewSourceContractResult(exception.Message, null, null));
+            return Refused("event_identity_rule", exception.Message);
         }
 
         if (query.Schema is JsonElement declaredSchema)
@@ -55,14 +67,20 @@ internal sealed class PreviewSourceContractQueryHandler(ITransformEvaluator eval
             }
             catch (ConnectorManifestValidationException exception)
             {
-                return Task.FromResult(new PreviewSourceContractResult(exception.Message, null, null));
+                return Refused("schema", exception.Message);
             }
         }
 
-        string? mappingError = MappingConfigValidator.Validate(
-            query.Mapping, evaluator, "mapping", out TransformSpec? mapping);
-        if (mappingError is not null || mapping is null)
-            return Task.FromResult(new PreviewSourceContractResult(mappingError, null, null));
+        // No mapping is a real Source configuration: ingestion then takes the input itself as the
+        // Event, so the preview checks exactly that rather than refusing to answer.
+        TransformSpec? mapping = null;
+        if (query.Mapping is JsonElement declaredMapping)
+        {
+            string? mappingError = MappingConfigValidator.Validate(
+                declaredMapping, evaluator, "mapping", out mapping);
+            if (mappingError is not null || mapping is null)
+                return Refused("mapping", mappingError ?? "The mapping is not valid.");
+        }
 
         string inputJson = query.SampleInput.ValueKind == JsonValueKind.Undefined
             ? "{}"
@@ -77,22 +95,33 @@ internal sealed class PreviewSourceContractQueryHandler(ITransformEvaluator eval
             }
             catch (ConfigurationValidationException exception)
             {
-                return Task.FromResult(new PreviewSourceContractResult(exception.Message, null, null));
+                return Refused("schema", exception.Message);
             }
         }
 
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string outputJson = evaluator.Evaluate(mapping, inputJson, query.SampleContext);
-            SourceMappingOutputValidator.Validate(outputJson);
-            return Task.FromResult(new PreviewSourceContractResult(null, outputJson, sourceEventId));
+            string outputJson = mapping is { } spec
+                ? evaluator.Evaluate(spec, inputJson, query.SampleContext)
+                : inputJson;
+            SourceContractOutput output = SourceMappingOutputValidator.Validate(outputJson);
+            // Ingestion falls back to the identity the output carries when the rule yields none. A
+            // broker message id yields none here only because a sample cannot carry one, so it does
+            // not fall back.
+            if (query.EventIdentityRule?.Kind != "message_id")
+                sourceEventId ??= output.SourceEventId;
+            return Task.FromResult(new PreviewSourceContractResult(null, null, outputJson, sourceEventId));
         }
         catch (TransformEvaluationException exception)
         {
-            return Task.FromResult(new PreviewSourceContractResult(exception.Message, null, null));
+            // With no mapping the output is the input itself, so it is the input that is refused.
+            return Refused(mapping is null ? "sample_input" : "mapping", exception.Message);
         }
     }
+
+    private static Task<PreviewSourceContractResult> Refused(string refusedBy, string error) =>
+        Task.FromResult(PreviewSourceContractResult.Refused(refusedBy, error));
 
     // The rule the Source would really use, read by the extractor Ingestion uses, so a sample that
     // would be refused for want of an identity is refused here too. A broker message id is supplied
