@@ -1,40 +1,6 @@
-import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { highlightCode } from "./codeHighlight";
 import { formatJson, parseJson } from "./json";
-
-/// One pass over a JSON document, in the order the grammar disambiguates: a quoted run followed by
-/// a colon is a property name, any other quoted run is a string value, then the bare literals and
-/// numbers. Everything unmatched — punctuation, whitespace — is left as text.
-///
-/// Deliberately a tokenizer and not a parser: the editor's whole job is to stay legible while the
-/// document is half-typed and invalid, which is exactly when a parser has nothing to say.
-const token = /("(?:\\.|[^"\\])*")(\s*:)|("(?:\\.|[^"\\])*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
-
-function highlight(source: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let last = 0;
-  for (const match of source.matchAll(token)) {
-    const start = match.index;
-    if (start > last) nodes.push(source.slice(last, start));
-    const [text, key, colon, string, literal] = match;
-    const className = key
-      ? "text-code-key"
-      : string
-        ? "text-code-string"
-        : literal
-          ? "text-code-literal"
-          : "text-code-number";
-    nodes.push(
-      <span key={start} className={className}>
-        {key ?? text}
-      </span>,
-    );
-    if (colon) nodes.push(colon);
-    last = start + text.length;
-  }
-  nodes.push(source.slice(last));
-  return nodes;
-}
 
 /// A textarea that reads like code. The document is painted once, highlighted, by a `<pre>` in
 /// normal flow; the real textarea sits over it with transparent glyphs and its own caret, so
@@ -96,7 +62,7 @@ export function JsonEditor({
           >
             {/* A document ending in a newline has no line box for that last line unless something
                 follows it, so the painted copy runs one line longer than the text it mirrors. */}
-            {highlight(value)}
+            {highlightCode(value)}
             {"\n"}
           </pre>
           <textarea

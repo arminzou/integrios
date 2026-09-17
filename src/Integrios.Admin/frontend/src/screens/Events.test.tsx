@@ -273,6 +273,11 @@ const detail = (deliveryStatus: string) => ({
 });
 
 describe("Event inspector", () => {
+  /// A shown body is highlighted, so its text is spread across the spans that colour it and only
+  /// the panel as a whole carries the document.
+  const shownBody = (document: RegExp) =>
+    screen.getByText((_, element) => element?.tagName === "PRE" && document.test(element.textContent ?? ""));
+
   it("shows what was accepted, what was sent, and what the destination returned", async () => {
     stubHttp(
       respondFor(page([routedEventWithDeadLetters]), {
@@ -303,15 +308,17 @@ describe("Event inspector", () => {
 
     expect(await screen.findByRole("heading", { name: "Accepted payload" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Event deliveries" })).toBeTruthy();
-    expect(screen.getByText(/"orderId": "SO-4014"/)).toBeTruthy();
+    expect(shownBody(/"orderId": "SO-4014"/)).toBeTruthy();
+    // Read as code: the property name carries the key colour rather than the body's own.
+    expect(screen.getByText('"orderId"').className).toContain("text-code-key");
 
     // What was sent is the mapped body, not the accepted one, and is labelled as such.
     expect(screen.getByRole("heading", { name: "Sent" })).toBeTruthy();
-    expect(screen.getByText(/"order": "SO-4014"/)).toBeTruthy();
+    expect(shownBody(/"order": "SO-4014"/)).toBeTruthy();
 
     // A stored fragment says so rather than reading as a whole response that ends strangely.
     expect(screen.getByRole("heading", { name: "Returned" })).toBeTruthy();
-    expect(screen.getByText('{"error":"upstream unavailable"}')).toBeTruthy();
+    expect(shownBody(/^\{"error":"upstream unavailable"\}$/)).toBeTruthy();
     expect(screen.getByText("Truncated")).toBeTruthy();
   });
 

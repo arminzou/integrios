@@ -276,9 +276,9 @@ function EventApiGuide({
         </p>
       </div>
       <div className="grid min-w-0 gap-4 lg:grid-cols-3">
-        <BodyPanel label="HTTP request" value={http} copyable={active} />
-        <BodyPanel label="cURL request" value={curl} copyable={active} />
-        <BodyPanel label="C# HttpClient request" value={csharp} copyable={active} />
+        <BodyPanel label="HTTP request" value={http} language="http" copyable={active} />
+        <BodyPanel label="cURL request" value={curl} language="shell" copyable={active} />
+        <BodyPanel label="C# HttpClient request" value={csharp} language="csharp" copyable={active} />
       </div>
     </section>
   );
