@@ -151,19 +151,14 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     const tenantId = await created(view, /\/tenants\/[0-9a-f-]{36}$/, "Tenant");
     await closeView(view);
 
-    // Destination. Its picker names each Connector with the version and direction it offers.
+    // Destination. Its picker already contains only destination-capable Connectors.
     view = await openDashboard(`/tenants/${tenantId}/destinations`);
     await view.click("text=New Destination");
     const destinationForm = formNamed(view, "Create a Destination");
-    const { name, contract_version, direction } = destinationConnector;
-    await choose(
-      destinationForm.getByLabel("Connector", { exact: true }),
-      `${name} (v${contract_version}, ${direction})`,
-    );
+    const { name, contract_version } = destinationConnector;
+    await choose(destinationForm.getByLabel("Connector", { exact: true }), `${name} (v${contract_version})`);
     await destinationForm.getByLabel("Name", { exact: true }).fill(`${run}-sink`);
-    await destinationForm
-      .getByLabel("Configuration (JSON)", { exact: true })
-      .fill('{"base_uri":"http://mocksink:8080"}');
+    await destinationForm.getByLabel("Base URI", { exact: true }).fill("http://mocksink:8080");
     await view.click("text=Create Destination");
     await created(view, /\/destinations\/[0-9a-f-]{36}$/, "Destination");
     await closeView(view);
