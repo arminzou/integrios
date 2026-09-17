@@ -12,6 +12,7 @@ import { asProblem, call } from "../api/query";
 import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { JsonEditor } from "../ui/jsonEditor";
+import { type CurlRequest, parseCurl } from "./curlImport";
 import { type EventTypeRule, emptyEventType, guidedExpression, guidedFrom, headerContext } from "./sourceMapping";
 
 /// The Source's Event-identity rule, as the Admin API stores it. `null` is a real choice: the Source
@@ -88,7 +89,7 @@ function Pane({ title, action, children }: { title: string; action?: ReactNode; 
         <h3 className="m-0 text-sm font-semibold">{title}</h3>
         {action}
       </header>
-      <div className="flex min-w-0 flex-col gap-3 p-3">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">{children}</div>
     </section>
   );
 }
@@ -111,6 +112,56 @@ function Note({ children }: { children: ReactNode }) {
 function Stale() {
   return (
     <p className="m-0 text-xs text-ink-secondary">Showing fields from the last valid sample. Fix it to refresh them.</p>
+  );
+}
+
+/// Filling the sample from a request an Operator already captured: request bins and browser devtools
+/// export it as a `curl` command, and retyping its headers is the slow part. The import replaces
+/// what the command carries and leaves the rest of the sample alone; a command that carries neither
+/// headers nor a body changes nothing.
+function CurlImport({ onImport, onClose }: { onImport: (request: CurlRequest) => void; onClose: () => void }) {
+  const [command, setCommand] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    try {
+      const request = parseCurl(command);
+      if (request.headers.length === 0 && request.body === null)
+        throw new Error("No headers or body found. Paste a curl command with -H or -d options.");
+      onImport(request);
+      onClose();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "The command cannot be read.");
+    }
+  };
+  return (
+    /* The form fills the pane it replaces, so importing does not resize the dialog around it. */
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+      <label htmlFor="builder-curl" className="text-sm font-medium">
+        curl command
+      </label>
+      <Textarea
+        id="builder-curl"
+        spellCheck={false}
+        placeholder="curl -H 'x-header-name: value' -d '{…}' https://…"
+        value={command}
+        aria-invalid={error !== null}
+        className="min-h-56 flex-1 resize-none font-mono text-sm"
+        onChange={(event) => {
+          setCommand(event.target.value);
+          setError(null);
+        }}
+      />
+      {error ? (
+        <p role="alert" className="m-0 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      {/* Leaving the form is the pane's own action, as it is for the mapping's editors, so the form
+          carries only the action that is its own. */}
+      <Button type="button" size="sm" className="self-start" disabled={command.trim() === ""} onClick={submit}>
+        Import
+      </Button>
+    </div>
   );
 }
 
@@ -141,6 +192,7 @@ export function EventBuilder({
   const sampleName = webhook ? "request" : "message";
   const [open, setOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderRow[]>([{ name: "", value: "" }]);
+  const [importing, setImporting] = useState(false);
   const [body, setBody] = useState("{}");
   const [lastValidBody, setLastValidBody] = useState<unknown>({});
   const [bodyError, setBodyError] = useState<string | null>(null);
@@ -373,8 +425,26 @@ export function EventBuilder({
               verdict and the action it is about stay on screen however long the sample is. */}
           <div className="min-h-0 flex-initial overflow-y-auto">
             <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-              <Pane title={webhook ? "Sample request" : "Sample message"}>
-                {webhook ? (
+              <Pane
+                title={webhook ? "Sample request" : "Sample message"}
+                action={
+                  webhook ? (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setImporting(!importing)}>
+                      {importing ? "Back to sample" : "Import cURL"}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {webhook && importing ? (
+                  <CurlImport
+                    onClose={() => setImporting(false)}
+                    onImport={(request) => {
+                      if (request.headers.length > 0) setHeaders(request.headers);
+                      if (request.body !== null) setBody(request.body);
+                    }}
+                  />
+                ) : null}
+                {webhook && !importing ? (
                   <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
                     <legend className="text-sm font-medium">Request headers</legend>
                     <Note>Headers from a real request. They are only used to check it, never stored.</Note>
@@ -432,20 +502,22 @@ export function EventBuilder({
                   </fieldset>
                 ) : null}
 
-                <div className="flex min-w-0 flex-col gap-1.5">
-                  <JsonEditor
-                    id="builder-body"
-                    label={webhook ? "Request body (JSON)" : "Message body (JSON)"}
-                    value={body}
-                    invalid={bodyError !== null}
-                    onChange={setBody}
-                  />
-                  {bodyError ? (
-                    <p role="alert" className="m-0 text-sm text-destructive">
-                      {bodyError}
-                    </p>
-                  ) : null}
-                </div>
+                {importing ? null : (
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <JsonEditor
+                      id="builder-body"
+                      label={webhook ? "Request body (JSON)" : "Message body (JSON)"}
+                      value={body}
+                      invalid={bodyError !== null}
+                      onChange={setBody}
+                    />
+                    {bodyError ? (
+                      <p role="alert" className="m-0 text-sm text-destructive">
+                        {bodyError}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </Pane>
 
               <Pane title={mode === "guided" ? "Event fields" : "Advanced JSONata"} action={mappingAction}>

@@ -474,3 +474,61 @@ it("keeps a saved header choosable after it is cleared", async () => {
     expect((within(builder).getByLabelText(label) as HTMLSelectElement).value).toBe(saved);
   }
 });
+
+const capturedCurl = String.raw`curl -X 'POST' 'https://webhook.site/5f0c6a3e' \
+  -H 'X-GitHub-Event: issues' \
+  -H 'x-github-delivery: 72d3162e-cc78-11e3-81ab-4c9367dc0958' \
+  -H 'authorization: Bearer  secret' \
+  -d $'{\n  "action": "opened",\n  "issue": { "title": "It\'s broken" }\n}'`;
+
+it("fills the sample request from a pasted curl command", async () => {
+  stubHttp(() => ({ status: 200, body: page([]) }));
+  const builder = await openBuilder("webhook");
+  fireEvent.click(within(builder).getByRole("button", { name: "Import cURL" }));
+  fireEvent.change(within(builder).getByLabelText("curl command"), { target: { value: capturedCurl } });
+  fireEvent.click(within(builder).getByRole("button", { name: "Import" }));
+
+  const value = (label: string) => (within(builder).getByLabelText(label) as HTMLInputElement).value;
+  expect([1, 2, 3].map((row) => [value(`Header ${row} name`), value(`Header ${row} sample value`)])).toEqual([
+    ["X-GitHub-Event", "issues"],
+    ["x-github-delivery", "72d3162e-cc78-11e3-81ab-4c9367dc0958"],
+    ["authorization", "Bearer  secret"],
+  ]);
+  expect(within(builder).queryByLabelText("Header 4 name")).toBeNull();
+  expect(value("Request body (JSON)")).toBe('{\n  "action": "opened",\n  "issue": { "title": "It\'s broken" }\n}');
+  expect(within(builder).queryByLabelText("curl command")).toBeNull();
+
+  const options = (label: string) =>
+    [...(within(builder).getByLabelText(label) as HTMLSelectElement).options].map((option) => option.textContent);
+  fireEvent.click(within(builder).getByRole("radio", { name: "From input" }));
+  expect(options("Event type header")).toContain("x-github-event");
+  fireEvent.change(within(builder).getByLabelText("Read from"), { target: { value: "body" } });
+  await waitFor(() => expect(options("Event type field")).toContain("issue.title"));
+  fireEvent.change(within(builder).getByLabelText("Event identity"), { target: { value: "header" } });
+  expect(options("Identity header")).toContain("x-github-delivery");
+  fireEvent.change(within(builder).getByLabelText("Event identity"), { target: { value: "json_path" } });
+  expect(options("Identity field")).toContain("action");
+});
+
+it("says so, and changes nothing, when a paste carries no headers or body", async () => {
+  stubHttp(() => ({ status: 200, body: page([]) }));
+  const builder = await openBuilder("webhook");
+  fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "x-kept" } });
+  fireEvent.click(within(builder).getByRole("button", { name: "Import cURL" }));
+  fireEvent.change(within(builder).getByLabelText("curl command"), {
+    target: { value: "curl -X POST https://webhook.site/5f0c6a3e" },
+  });
+  fireEvent.click(within(builder).getByRole("button", { name: "Import" }));
+
+  expect(within(builder).getByRole("alert").textContent).toContain("No headers or body found");
+  expect(within(builder).getByLabelText("curl command")).toBeTruthy();
+
+  fireEvent.click(within(builder).getByRole("button", { name: "Back to sample" }));
+  expect((within(builder).getByLabelText("Header 1 name") as HTMLInputElement).value).toBe("x-kept");
+  expect((within(builder).getByLabelText("Request body (JSON)") as HTMLTextAreaElement).value).toBe("{}");
+});
+
+it("offers no curl import for a broker message", async () => {
+  const builder = await openBuilder("broker");
+  expect(within(builder).queryByRole("button", { name: "Import cURL" })).toBeNull();
+});
