@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Integrios.Application.Common;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
@@ -19,6 +20,9 @@ internal static class SubscriptionAuthoringRules
     {
         if (!HasValidMatchRulesShape(matchRules))
             throw new SubscriptionValidationException(InvalidMatchRulesMessage);
+        // A Subscription matching a value no Event can carry would wait for nothing, silently.
+        if (EventTypeName.Problem(matchRules.GetProperty("event_type").GetString()) is { } problem)
+            throw new SubscriptionValidationException($"Event type {problem}.", "match_rules");
 
         HttpDeliveryConfigurationRules.Validate(httpDelivery);
         ValidateHttpSuccess(httpSuccess);

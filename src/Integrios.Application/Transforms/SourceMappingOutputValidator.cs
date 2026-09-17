@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Integrios.Application.Common;
 
 namespace Integrios.Application.Transforms;
 
@@ -38,6 +39,9 @@ public static class SourceMappingOutputValidator
         {
             throw new TransformEvaluationException("Source mapping output must include a non-empty 'event_type' string.");
         }
+
+        if (EventTypeName.Problem(eventType.GetString()) is { } problem)
+            throw new TransformEvaluationException($"Source mapping output 'event_type' {problem}.");
 
         if (!output.TryGetProperty("payload", out JsonElement payload))
             throw new TransformEvaluationException("Source mapping output must include 'payload'.");

@@ -136,6 +136,8 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     [InlineData("{\"event_type\":123}")]
     [InlineData("{\"event_type\":\"\"}")]
     [InlineData("{\"event_type\":\"payment.created\",\"foo\":\"bar\"}")]
+    [InlineData("{\"event_type\":\"payment.created \"}")]
+    [InlineData("{\"event_type\":\"payment\\tcreated\"}")]
     public async Task CreateSubscription_WithInvalidMatchRules_ReturnsUnprocessableEntity(string matchRulesJson)
     {
         var topic = await CreateTopicAsync("payments");
@@ -163,6 +165,8 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     [InlineData("{\"event_type\":null}")]
     [InlineData("{\"event_type\":\"   \"}")]
     [InlineData("{\"event_type\":\"payment.updated\",\"foo\":true}")]
+    [InlineData("{\"event_type\":\" payment.updated\"}")]
+    [InlineData("{\"event_type\":\"payment\\nupdated\"}")]
     public async Task UpdateSubscription_WithInvalidMatchRules_ReturnsUnprocessableEntity(string matchRulesJson)
     {
         var topic = await CreateTopicAsync("payments");
