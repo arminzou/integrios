@@ -361,7 +361,7 @@ export function EventBuilder({
         {/* Wider than the authoring flyout it opens from: the sample input, the Event
             fields it produces, and the preview are read together, and at a sheet's width they
             cannot be. One column below that, where three would each be too narrow to read. */}
-        <DialogPrimitive.Content className="fixed inset-4 z-70 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto rounded-lg border bg-canvas p-4 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none md:inset-x-8 xl:inset-x-[max(2rem,calc((100vw-88rem)/2))]">
+        <DialogPrimitive.Content className="fixed inset-4 z-70 flex max-h-[calc(100vh-2rem)] flex-col gap-4 rounded-lg border bg-canvas p-4 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none md:inset-x-8 xl:inset-x-[max(2rem,calc((100vw-88rem)/2))]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <DialogPrimitive.Title className="m-0">Integrios Event Builder</DialogPrimitive.Title>
@@ -378,236 +378,245 @@ export function EventBuilder({
             </DialogPrimitive.Close>
           </div>
 
-          <div className="grid min-w-0 gap-4 xl:grid-cols-3">
-            <Pane title={webhook ? "Sample request" : "Sample message"}>
-              {webhook ? (
-                <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
-                  <legend className="text-sm font-medium">Request headers</legend>
-                  <Note>Add only headers the mapping reads. Use sample values, never secrets.</Note>
-                  {headers.map((row, index) => (
-                    // Rows are positional: an Operator may empty a name and type another, so nothing
-                    // stable exists to key them by.
-                    // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
-                    <div key={index} className="flex min-w-0 items-center gap-2">
-                      <Input
-                        aria-label={`Header ${index + 1} name`}
-                        placeholder="x-header-name"
-                        className={`${leadField} font-mono text-sm`}
-                        value={row.name}
-                        onChange={(event) =>
-                          setHeaders(
-                            headers.map((current, at) =>
-                              at === index ? { ...current, name: event.target.value } : current,
-                            ),
-                          )
-                        }
-                      />
-                      <Input
-                        aria-label={`Header ${index + 1} sample value`}
-                        placeholder="Sample value"
-                        className={trailField}
-                        value={row.value}
-                        onChange={(event) =>
-                          setHeaders(
-                            headers.map((current, at) =>
-                              at === index ? { ...current, value: event.target.value } : current,
-                            ),
-                          )
-                        }
-                      />
-                      <RemoveRow
-                        label={`Remove header ${index + 1}`}
-                        onClick={() => setHeaders(headers.filter((_, at) => at !== index))}
-                      />
-                    </div>
-                  ))}
-                  {headerError ? (
+          {/* Only the panes scroll. The dialog is the height of the window, so an explanation of
+              why a configuration cannot be used, and the actions it is about, stay on screen however
+              long the sample is — reading the sample used to cost the Operator both. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-3">
+              <Pane title={webhook ? "Sample request" : "Sample message"}>
+                {webhook ? (
+                  <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
+                    <legend className="text-sm font-medium">Request headers</legend>
+                    <Note>Add only headers the mapping reads. Use sample values, never secrets.</Note>
+                    {headers.map((row, index) => (
+                      // Rows are positional: an Operator may empty a name and type another, so nothing
+                      // stable exists to key them by.
+                      // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
+                      <div key={index} className="flex min-w-0 items-center gap-2">
+                        <Input
+                          aria-label={`Header ${index + 1} name`}
+                          placeholder="x-header-name"
+                          className={`${leadField} font-mono text-sm`}
+                          value={row.name}
+                          onChange={(event) =>
+                            setHeaders(
+                              headers.map((current, at) =>
+                                at === index ? { ...current, name: event.target.value } : current,
+                              ),
+                            )
+                          }
+                        />
+                        <Input
+                          aria-label={`Header ${index + 1} sample value`}
+                          placeholder="Sample value"
+                          className={trailField}
+                          value={row.value}
+                          onChange={(event) =>
+                            setHeaders(
+                              headers.map((current, at) =>
+                                at === index ? { ...current, value: event.target.value } : current,
+                              ),
+                            )
+                          }
+                        />
+                        <RemoveRow
+                          label={`Remove header ${index + 1}`}
+                          onClick={() => setHeaders(headers.filter((_, at) => at !== index))}
+                        />
+                      </div>
+                    ))}
+                    {headerError ? (
+                      <p role="alert" className="m-0 text-sm text-destructive">
+                        {headerError}
+                      </p>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      onClick={() => setHeaders([...headers, { name: "", value: "" }])}
+                    >
+                      Add header
+                    </Button>
+                  </fieldset>
+                ) : null}
+
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <JsonEditor
+                    id="builder-body"
+                    label={webhook ? "Request body (JSON)" : "Message body (JSON)"}
+                    value={body}
+                    invalid={bodyError !== null}
+                    onChange={setBody}
+                  />
+                  {bodyError ? (
                     <p role="alert" className="m-0 text-sm text-destructive">
-                      {headerError}
+                      {bodyError}
                     </p>
                   ) : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="self-start"
-                    onClick={() => setHeaders([...headers, { name: "", value: "" }])}
-                  >
-                    Add header
-                  </Button>
-                </fieldset>
-              ) : null}
+                </div>
 
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <JsonEditor
-                  id="builder-body"
-                  label={webhook ? "Request body (JSON)" : "Message body (JSON)"}
-                  value={body}
-                  invalid={bodyError !== null}
-                  onChange={setBody}
-                />
-                {bodyError ? (
-                  <p role="alert" className="m-0 text-sm text-destructive">
-                    {bodyError}
-                  </p>
-                ) : null}
-              </div>
-
-              <details className="rounded-md border">
-                <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium">
-                  Input requirements (optional)
-                  <span className="ml-1 font-normal text-ink-secondary">
-                    {requirements.length === 0 ? "· None configured" : `· ${requirements.length} required`}
-                  </span>
-                </summary>
-                <div className="flex flex-col gap-2 border-t p-3">
-                  <Note>
-                    Requirements are checked on every {sampleName} this Source accepts, not on the sample. Choose a
-                    field the sample carries and the type Integrios should enforce.
-                  </Note>
-                  {fields.length === 0 && requirements.length === 0 ? (
-                    <Note>Add a valid request body with top-level values before defining requirements.</Note>
-                  ) : (
-                    <>
-                      {requirements.map((row, index) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
-                        <div key={index} className="flex min-w-0 items-center gap-2">
-                          <select
-                            aria-label={`Required field ${index + 1}`}
-                            className={`h-9 rounded-md border bg-surface px-2 text-sm ${leadField}`}
-                            value={row.field}
-                            onChange={(event) =>
-                              setRequirements(
-                                requirements.map((current, at) =>
-                                  at === index ? { ...current, field: event.target.value } : current,
+                <details className="rounded-md border">
+                  <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium">
+                    Input requirements (optional)
+                    <span className="ml-1 font-normal text-ink-secondary">
+                      {requirements.length === 0 ? "· None configured" : `· ${requirements.length} required`}
+                    </span>
+                  </summary>
+                  <div className="flex flex-col gap-2 border-t p-3">
+                    <Note>
+                      Requirements are checked on every {sampleName} this Source accepts, not on the sample. Choose a
+                      field the sample carries and the type Integrios should enforce.
+                    </Note>
+                    {fields.length === 0 && requirements.length === 0 ? (
+                      <Note>Add a valid request body with top-level values before defining requirements.</Note>
+                    ) : (
+                      <>
+                        {requirements.map((row, index) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
+                          <div key={index} className="flex min-w-0 items-center gap-2">
+                            <select
+                              aria-label={`Required field ${index + 1}`}
+                              className={`h-9 rounded-md border bg-surface px-2 text-sm ${leadField}`}
+                              value={row.field}
+                              onChange={(event) =>
+                                setRequirements(
+                                  requirements.map((current, at) =>
+                                    at === index ? { ...current, field: event.target.value } : current,
+                                  ),
+                                )
+                              }
+                            >
+                              <option value="">Choose a field…</option>
+                              {(fields.includes(row.field) || row.field === "" ? fields : [row.field, ...fields]).map(
+                                (field) => (
+                                  <option
+                                    key={field}
+                                    value={field}
+                                    disabled={requirements.some((other, at) => at !== index && other.field === field)}
+                                  >
+                                    {field}
+                                  </option>
                                 ),
-                              )
-                            }
-                          >
-                            <option value="">Choose a field…</option>
-                            {(fields.includes(row.field) || row.field === "" ? fields : [row.field, ...fields]).map(
-                              (field) => (
-                                <option
-                                  key={field}
-                                  value={field}
-                                  disabled={requirements.some((other, at) => at !== index && other.field === field)}
-                                >
-                                  {field}
-                                </option>
-                              ),
-                            )}
-                          </select>
-                          {/* The type is the Operator's declaration of what the provider must always
+                              )}
+                            </select>
+                            {/* The type is the Operator's declaration of what the provider must always
                               send. Nothing is preselected from the sample: one request's value does
                               not establish the contract's type. */}
-                          <select
-                            aria-label={`Required field ${index + 1} type`}
-                            className={`h-9 rounded-md border bg-surface px-2 text-sm ${trailField}`}
-                            value={row.type}
-                            onChange={(event) =>
-                              setRequirements(
-                                requirements.map((current, at) =>
-                                  at === index ? { ...current, type: event.target.value as RequirementType } : current,
-                                ),
-                              )
-                            }
-                          >
-                            <option value="">Choose a type…</option>
-                            {requirementTypes.map((type) => (
-                              <option key={type} value={type}>
-                                {type}
-                              </option>
-                            ))}
-                          </select>
-                          <RemoveRow
-                            label={`Remove required field ${index + 1}`}
-                            onClick={() => setRequirements(requirements.filter((_, at) => at !== index))}
-                          />
-                        </div>
-                      ))}
-                      {mismatch ? (
-                        <p role="alert" className="m-0 text-sm text-destructive">
-                          {mismatch.field} is not {mismatch.type} in this request body.
-                        </p>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="self-start"
-                        disabled={fields.length === 0 || requirements.length >= fields.length}
-                        onClick={() => setRequirements([...requirements, { field: "", type: "" }])}
-                      >
-                        Add required field
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </details>
-            </Pane>
+                            <select
+                              aria-label={`Required field ${index + 1} type`}
+                              className={`h-9 rounded-md border bg-surface px-2 text-sm ${trailField}`}
+                              value={row.type}
+                              onChange={(event) =>
+                                setRequirements(
+                                  requirements.map((current, at) =>
+                                    at === index
+                                      ? { ...current, type: event.target.value as RequirementType }
+                                      : current,
+                                  ),
+                                )
+                              }
+                            >
+                              <option value="">Choose a type…</option>
+                              {requirementTypes.map((type) => (
+                                <option key={type} value={type}>
+                                  {type}
+                                </option>
+                              ))}
+                            </select>
+                            <RemoveRow
+                              label={`Remove required field ${index + 1}`}
+                              onClick={() => setRequirements(requirements.filter((_, at) => at !== index))}
+                            />
+                          </div>
+                        ))}
+                        {mismatch ? (
+                          <p role="alert" className="m-0 text-sm text-destructive">
+                            {mismatch.field} is not {mismatch.type} in this request body.
+                          </p>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="self-start"
+                          disabled={fields.length === 0 || requirements.length >= fields.length}
+                          onClick={() => setRequirements([...requirements, { field: "", type: "" }])}
+                        >
+                          Add required field
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </details>
+              </Pane>
 
-            <Pane title={mode === "guided" ? "Event fields" : "Advanced JSONata"} action={mappingAction}>
-              {mode === "guided" ? (
-                <GuidedFields
-                  eventType={eventType}
+              <Pane title={mode === "guided" ? "Event fields" : "Advanced JSONata"} action={mappingAction}>
+                {mode === "guided" ? (
+                  <GuidedFields
+                    eventType={eventType}
+                    headerNames={headerNames}
+                    dangling={dangling}
+                    paths={paths}
+                    stale={bodyError !== null || headerError !== null}
+                    headers={webhook ? lastValidHeaders : undefined}
+                    body={lastValidBody}
+                    onChange={changeEventType}
+                  />
+                ) : (
+                  <AdvancedExpression
+                    expression={expression}
+                    representable={representable}
+                    headers={webhook ? lastValidHeaders : undefined}
+                    onChange={(next) => {
+                      setExpression(next);
+                      preview.reset();
+                    }}
+                  />
+                )}
+                <IdentityFields
+                  identity={identity}
+                  sourceType={sourceType}
                   headerNames={headerNames}
-                  dangling={dangling}
                   paths={paths}
-                  stale={bodyError !== null || headerError !== null}
-                  headers={webhook ? lastValidHeaders : undefined}
-                  body={lastValidBody}
-                  onChange={changeEventType}
+                  onChange={changeIdentity}
                 />
-              ) : (
-                <AdvancedExpression
-                  expression={expression}
-                  representable={representable}
-                  headers={webhook ? lastValidHeaders : undefined}
-                  onChange={(next) => {
-                    setExpression(next);
-                    preview.reset();
-                  }}
-                />
-              )}
-              <IdentityFields
-                identity={identity}
-                sourceType={sourceType}
-                headerNames={headerNames}
-                paths={paths}
-                onChange={changeIdentity}
-              />
-            </Pane>
+              </Pane>
 
-            <Pane title="Normalized Event">
-              {message ? (
-                <div className="flex flex-col gap-1">
-                  <p role="alert" className="m-0 text-sm text-destructive">
-                    {message}
-                  </p>
-                  <Note>This request would be rejected. Fix it and preview again.</Note>
-                </div>
-              ) : preview.data ? (
-                <>
-                  <p className="m-0 text-xs font-medium">{fresh ? "Would be accepted" : "Result is out of date"}</p>
-                  <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(preview.data.output)}</pre>
-                  <Note>
-                    <span className="font-mono">source_event_id</span>:{" "}
-                    {identity === null
-                      ? "no rule, so this Event is not deduplicated"
-                      : identity.kind === "message_id"
-                        ? `supplied by the ${sampleName} itself, which a sample cannot carry`
-                        : (preview.data.source_event_id ?? "absent in this sample, which this rule permits")}
-                  </Note>
-                  {fresh ? null : <Note>The contract or the sample changed. Preview again to refresh this.</Note>}
-                </>
-              ) : (
-                <>
-                  <Note>Target envelope</Note>
-                  <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(targetEnvelope)}</pre>
-                  <Note>Preview to see the Event Integrios would accept. Nothing is saved, and nothing is called.</Note>
-                </>
-              )}
-            </Pane>
+              <Pane title="Normalized Event">
+                {message ? (
+                  <div className="flex flex-col gap-1">
+                    <p role="alert" className="m-0 text-sm text-destructive">
+                      {message}
+                    </p>
+                    <Note>This request would be rejected. Fix it and preview again.</Note>
+                  </div>
+                ) : preview.data ? (
+                  <>
+                    <p className="m-0 text-xs font-medium">{fresh ? "Would be accepted" : "Result is out of date"}</p>
+                    <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(preview.data.output)}</pre>
+                    <Note>
+                      <span className="font-mono">source_event_id</span>:{" "}
+                      {identity === null
+                        ? "no rule, so this Event is not deduplicated"
+                        : identity.kind === "message_id"
+                          ? `supplied by the ${sampleName} itself, which a sample cannot carry`
+                          : (preview.data.source_event_id ?? "absent in this sample, which this rule permits")}
+                    </Note>
+                    {fresh ? null : <Note>The contract or the sample changed. Preview again to refresh this.</Note>}
+                  </>
+                ) : (
+                  <>
+                    <Note>Target envelope</Note>
+                    <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(targetEnvelope)}</pre>
+                    <Note>
+                      Preview to see the Event Integrios would accept. Nothing is saved, and nothing is called.
+                    </Note>
+                  </>
+                )}
+              </Pane>
+            </div>
           </div>
 
           {mappable ? null : mode === "advanced" ? (

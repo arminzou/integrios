@@ -434,6 +434,7 @@ describe("The dashboard in a real browser", () => {
     await page.getByRole("option", { name: "Webhook" }).click();
     await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
 
+    const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
     const editor = page.getByLabel("Request body (JSON)");
     await editor.fill(
       '{"action":"opened","number":4,"draft":false,"repository":{"full_name":"northwind/orders-and-a-long-name"}}',
@@ -470,12 +471,29 @@ describe("The dashboard in a real browser", () => {
     expect(metrics.paintedBox.y).toBeCloseTo(metrics.editorBox.y, 1);
     expect(metrics.paintedBox.width).toBeCloseTo(metrics.editorBox.width, 1);
 
-    // The painted copy is what sizes the box, so a document taller than the minimum grows both.
-    const tall = await editor.evaluate((element) => {
-      const painted = element.parentElement!.querySelector("pre")!;
-      return painted.getBoundingClientRect().height - element.getBoundingClientRect().height;
+    // A sample longer than the frame scrolls inside it, and the painted copy grows with the text
+    // rather than being left behind by it.
+    await editor.fill(JSON.stringify({ lines: Array.from({ length: 200 }, (_, at) => `line-${at}`) }, null, 2));
+    const scrolling = await editor.evaluate((element) => {
+      const content = element.parentElement!;
+      const frame = content.parentElement!;
+      const painted = content.querySelector("pre")!;
+      return {
+        frameHeight: frame.clientHeight,
+        scrollHeight: frame.scrollHeight,
+        drift: painted.getBoundingClientRect().height - element.getBoundingClientRect().height,
+      };
     });
-    expect(Math.abs(tall)).toBeLessThan(1);
+    expect(scrolling.frameHeight).toBeLessThanOrEqual(384);
+    expect(scrolling.scrollHeight).toBeGreaterThan(scrolling.frameHeight);
+    expect(Math.abs(scrolling.drift)).toBeLessThan(1);
+
+    // The point of bounding it: the actions the sample is read for stay reachable without scrolling
+    // the dialog to its foot.
+    for (const name of ["Preview normalized Event", "Use configuration"]) {
+      const button = (await builder.getByRole("button", { name }).boundingBox())!;
+      expect(button.y + button.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    }
     await page.close();
   }, 60_000);
 

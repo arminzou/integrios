@@ -77,29 +77,38 @@ export function JsonEditor({
           Format
         </Button>
       </div>
+      {/* Bounded, and it scrolls on its own. A sample is as long as the provider makes it, and an
+          editor that grew with one pushed the dialog's Preview and Use configuration past the foot
+          of the window — so reading the sample cost the Operator the actions it was read for.
+          The height is capped against the viewport as well, because the short screens are where
+          that happened first. */}
       <div
-        className={`relative min-w-0 rounded-md border bg-transparent focus-within:ring-[3px] focus-within:ring-ring/50 ${
+        className={`relative h-[min(24rem,50vh)] min-w-0 overflow-auto rounded-md border bg-transparent focus-within:ring-[3px] focus-within:ring-ring/50 ${
           invalid ? "border-destructive focus-within:border-destructive" : "border-input focus-within:border-ring"
         }`}
       >
-        <pre
-          aria-hidden="true"
-          className="m-0 min-h-120 overflow-hidden px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap"
-        >
-          {/* A document ending in a newline has no line box for that last line unless something
-              follows it, so the painted copy runs one line longer than the text it mirrors. */}
-          {highlight(value)}
-          {"\n"}
-        </pre>
-        <textarea
-          id={id}
-          spellCheck={false}
-          autoComplete="off"
-          aria-invalid={invalid}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="absolute inset-0 size-full resize-none overflow-hidden bg-transparent px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap text-transparent caret-ink outline-none"
-        />
+        {/* The painted copy sizes this box, and the textarea is positioned against it rather than
+            against the scrolling frame, so the two scroll as one thing and nothing syncs them. */}
+        <div className="relative min-h-full w-full">
+          <pre
+            aria-hidden="true"
+            className="m-0 overflow-hidden px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap"
+          >
+            {/* A document ending in a newline has no line box for that last line unless something
+                follows it, so the painted copy runs one line longer than the text it mirrors. */}
+            {highlight(value)}
+            {"\n"}
+          </pre>
+          <textarea
+            id={id}
+            spellCheck={false}
+            autoComplete="off"
+            aria-invalid={invalid}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="absolute inset-0 size-full resize-none overflow-hidden bg-transparent px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap text-transparent caret-ink outline-none"
+          />
+        </div>
       </div>
     </div>
   );
