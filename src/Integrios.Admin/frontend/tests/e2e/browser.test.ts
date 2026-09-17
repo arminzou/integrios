@@ -386,7 +386,7 @@ describe("The dashboard in a real browser", () => {
     await page.close();
   }, 60_000);
 
-  // The Builder belongs to webhook and broker Sources. Whether its three columns are readable side
+  // The Builder belongs to webhook and broker Sources. Whether its two columns are readable side
   // by side and stack rather than overflow when narrow is a layout fact, so it is decided here.
   it.each([
     ["side by side on a wide screen", 1512, true],
@@ -403,22 +403,32 @@ describe("The dashboard in a real browser", () => {
       const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
       await builder.waitFor();
       const boxes = [];
-      for (const title of ["Sample request", "Event fields", "Normalized Event"])
+      for (const title of ["Sample request", "Event fields"])
         boxes.push((await builder.getByRole("heading", { name: title }).boundingBox())!);
 
       if (beside) {
         expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
-        expect(boxes[2].x).toBeGreaterThan(boxes[1].x);
         // Same row: a pane header carrying a button is a little taller, so they share a band
         // rather than an exact offset.
         expect(Math.abs(boxes[1].y - boxes[0].y)).toBeLessThan(24);
       } else {
         expect(boxes[1].y).toBeGreaterThan(boxes[0].y);
-        expect(boxes[2].y).toBeGreaterThan(boxes[1].y);
       }
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
       ).toBe(true);
+
+      // As tall as its panes and no taller, up to the window: the action row is the dialog's last
+      // thing, and the dialog stops just under it rather than leaving the window's height of space.
+      const dialog = (await builder.boundingBox())!;
+      const action = (await builder.getByRole("button", { name: "Use configuration" }).boundingBox())!;
+      expect(dialog.y + dialog.height - (action.y + action.height)).toBeLessThanOrEqual(18);
+      expect(dialog.y).toBeGreaterThanOrEqual(16 - 1);
+      expect(dialog.y + dialog.height).toBeLessThanOrEqual(900 - 16 + 1);
+      if (beside) expect(dialog.height).toBeLessThan(900 - 32);
+      // Centred both ways: equal space on either side, and above as below.
+      expect(Math.abs(dialog.x - (width - dialog.x - dialog.width))).toBeLessThanOrEqual(1);
+      expect(Math.abs(dialog.y - (900 - dialog.y - dialog.height))).toBeLessThanOrEqual(1);
       await page.close();
     },
     60_000,
@@ -490,10 +500,45 @@ describe("The dashboard in a real browser", () => {
 
     // The point of bounding it: the actions the sample is read for stay reachable without scrolling
     // the dialog to its foot.
-    for (const name of ["Preview normalized Event", "Use configuration"]) {
+    for (const name of ["Use configuration"]) {
       const button = (await builder.getByRole("button", { name }).boundingBox())!;
       expect(button.y + button.height).toBeLessThanOrEqual(page.viewportSize()!.height);
     }
+    await page.close();
+  }, 60_000);
+
+  // The verdict changes on its own as the Operator types. If its height changed with it, the actions
+  // under it would move out from under the pointer, so every state keeps the same height.
+  it("keeps the Event Builder verdict the same height whatever it says", async () => {
+    const page = await openDashboard(`/tenants/${tenants.items[0].id}/sources`);
+    let answer: { status: number; json: unknown } = {
+      status: 200,
+      json: { output: { event_type: "github.push", payload: {} }, source_event_id: "d-1" },
+    };
+    await page.route("**/source-contracts/preview", (route) => route.fulfill(answer));
+    await page.getByRole("button", { name: "New Source" }).click();
+    await page.getByRole("combobox", { name: "Type" }).click();
+    await page.getByRole("option", { name: "Webhook" }).click();
+    await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
+    const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
+    const verdict = builder.getByRole("status");
+    const height = async () => (await verdict.boundingBox())!.height;
+
+    const blocked = await height();
+    await builder.getByLabel("Request body (JSON)").fill('{"ref":"refs/heads/main"}');
+    await builder.getByLabel("Event type").fill("github.push");
+    await verdict.getByText("Accepted").waitFor();
+    const accepted = await height();
+    answer = {
+      status: 400,
+      json: { status: 400, errors: { "": ["This request does not contain a valid Event type."] } },
+    };
+    await builder.getByLabel("Event type").fill("github.pushed");
+    await verdict.getByText("Rejected.").waitFor();
+    const rejected = await height();
+
+    expect(accepted).toBeCloseTo(blocked, 0);
+    expect(rejected).toBeCloseTo(blocked, 0);
     await page.close();
   }, 60_000);
 

@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useEffect, useState } from "react";
 import { type Control, type FieldValues, type Path, useForm, useWatch } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
@@ -32,7 +32,7 @@ import { CopyInline } from "../ui/copy";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
-import { formatJson, object, parseJson } from "../ui/json";
+import { formatJson, object, parseJson, sameJson } from "../ui/json";
 import {
   CloseInspector,
   Details,
@@ -202,24 +202,63 @@ const eventIdentityRule = (values: IdentityValues) =>
       }
     : null;
 
-function eventTypeSummary(expression: string, inputNoun: string): string {
-  if (expression.trim() === "") return "Not configured";
-  const rule = guidedFrom(expression);
-  if (!rule) return "Set by a custom JSONata mapping";
-  if (rule.source === "fixed") return rule.value;
-  const from = rule.source === "header" ? `the ${rule.header} header` : `${rule.path} in the ${inputNoun} body`;
-  return rule.prefix ? `${rule.prefix}. followed by ${from}` : `From ${from}`;
+/// Written into the configuration: the same for every input.
+function Fixed({ children }: { children: ReactNode }) {
+  return <code className="font-mono text-xs break-all text-ink">{children}</code>;
 }
 
-function identitySummary(identity: EventIdentityRule | null, inputNoun: string): string {
-  if (!identity) return "No duplicate detection";
-  const read =
-    identity.kind === "message_id"
-      ? `The ${inputNoun} id`
-      : identity.kind === "header"
-        ? `The ${identity.value} header`
-        : `The ${inputNoun} body value at ${identity.value}`;
-  return identity.allowMissing ? `${read}, which may be absent` : read;
+/// Read from each input rather than written here. Dashed, and led by where it is read from, so a
+/// template like `github.`[header x-github-event] reads as text plus a slot at a glance.
+function FromInput({ from, name }: { from: string; name?: string }) {
+  return (
+    <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-1 rounded border border-dashed border-ink-secondary px-1 font-mono text-xs">
+      <span className="text-ink-secondary">{from}</span>
+      {name ? <span className="break-all text-ink">{name}</span> : null}
+    </span>
+  );
+}
+
+/// The identity rule stores a JSON Pointer; the Operator picked it by its field name.
+const fieldName = (pointer: string) =>
+  pointer
+    .slice(1)
+    .split("/")
+    .map((segment) => segment.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .join(".");
+
+function EventTypeTemplate({ expression }: { expression: string }) {
+  if (expression.trim() === "") return <>Not configured</>;
+  const rule = guidedFrom(expression);
+  if (!rule) return <>Custom JSONata mapping</>;
+  if (rule.source === "fixed") return <Fixed>{rule.value}</Fixed>;
+  return (
+    <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-0.5">
+      {rule.prefix ? <Fixed>{`${rule.prefix}.`}</Fixed> : null}
+      {rule.source === "header" ? (
+        <FromInput from="header" name={rule.header} />
+      ) : (
+        <FromInput from="body" name={rule.path} />
+      )}
+    </span>
+  );
+}
+
+function IdentityTemplate({ identity }: { identity: EventIdentityRule | null }) {
+  if (!identity) return <>No duplicate detection</>;
+  const slot =
+    identity.kind === "message_id" ? (
+      <FromInput from="message ID" />
+    ) : identity.kind === "header" ? (
+      <FromInput from="header" name={identity.value} />
+    ) : (
+      <FromInput from="body" name={fieldName(identity.value)} />
+    );
+  return (
+    <>
+      {slot}
+      {identity.allowMissing ? <span className="text-ink-secondary"> (may be absent)</span> : null}
+    </>
+  );
 }
 
 /// What the Event Builder settled, stated where the Source is authored. The Builder is a dialog that
@@ -230,26 +269,45 @@ function SettledContract({
   mapping,
   identity,
   inputNoun,
+  unsaved = false,
 }: {
   mapping: string;
   identity: EventIdentityRule | null;
   inputNoun: string;
+  /// Whether this differs from what the Source has saved. The summary reads like the Source's own
+  /// configuration, so a draft has to say it is one.
+  unsaved?: boolean;
 }) {
+  // A guided mapping always takes the payload from the body, so anything guided reads from the input.
+  const reads = identity !== null || guidedFrom(mapping) !== undefined;
   return (
-    <Details>
-      <dt>Event type</dt>
-      <dd>{eventTypeSummary(mapping, inputNoun)}</dd>
-      <dt>Event identity</dt>
-      <dd>{identitySummary(identity, inputNoun)}</dd>
-      <dt>Payload</dt>
-      <dd>
-        {mapping.trim() === ""
-          ? "Not configured"
-          : guidedFrom(mapping)
-            ? `The entire ${inputNoun} body`
-            : "Set by a custom JSONata mapping"}
-      </dd>
-    </Details>
+    <>
+      {unsaved ? (
+        <p className="m-0 text-xs text-warning-ink">Not saved yet. Save configuration to apply it to this Source.</p>
+      ) : null}
+      <Details>
+        <dt>Event type</dt>
+        <dd>
+          <EventTypeTemplate expression={mapping} />
+        </dd>
+        <dt>Event identity</dt>
+        <dd>
+          <IdentityTemplate identity={identity} />
+        </dd>
+        <dt>Payload</dt>
+        <dd>
+          {mapping.trim() === "" ? (
+            "Not configured"
+          ) : guidedFrom(mapping) ? (
+            <FromInput from="body" />
+          ) : (
+            "Custom JSONata mapping"
+          )}
+        </dd>
+      </Details>
+      {/* The dashed style carries a meaning, so it is said once rather than left to be guessed. */}
+      {reads ? <p className="m-0 text-xs text-ink-secondary">Dashed values are read from each {inputNoun}.</p> : null}
+    </>
   );
 }
 
@@ -972,6 +1030,57 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
   );
 }
 
+/// What routes on the Source's Topic, for the confirmation that precedes retyping its Events.
+/// Subscriptions match the Event type exactly, so a Source whose mapping now types its Events
+/// differently can silently stop reaching them. Which ones is not computable - a type read from
+/// input is open-ended - so the Operator is shown what depends on the Topic and judges.
+///
+/// ponytail: one read per active Subscription, because the Topic list carries no match rules; add
+/// the Event type to that list projection if Topics come to carry many Subscriptions.
+function useTopicRouting(tenantId: string, topicId: string, enabled: boolean) {
+  const list = useQuery({
+    queryKey: ["topic-subscriptions", tenantId, topicId, "active"],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
+          params: { path: { tenantId, topicId }, query: { status: "active", limit: 100 } },
+        }),
+      ),
+    enabled,
+  });
+  const details = useQueries({
+    queries: (list.data?.items ?? []).map((item) => ({
+      queryKey: ["subscription", tenantId, topicId, item.id],
+      queryFn: () =>
+        call(() =>
+          api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
+            params: { path: { tenantId, topicId, id: item.id } },
+          }),
+        ),
+      enabled,
+    })),
+  });
+  const routes = details.flatMap((detail) => {
+    const subscription = detail.data;
+    if (!subscription) return [];
+    const eventType = object(subscription.match_rules).event_type;
+    return [`${subscription.name} (${typeof eventType === "string" ? eventType : "no Event type"})`];
+  });
+  const settled = list.isSuccess && details.every((detail) => !detail.isPending);
+  return {
+    routes,
+    settled,
+    partial: Boolean(list.data?.next_cursor) || list.isError || details.some((d) => d.isError),
+  };
+}
+
+function retypeConsequence(routing: ReturnType<typeof useTopicRouting>): string {
+  const kept = "Events already accepted keep their Event type.";
+  if (!routing.settled) return `${kept} Reading the Subscriptions on this Topic…`;
+  if (routing.routes.length === 0) return `${kept} No active Subscription on this Topic depends on it yet.`;
+  return `${kept} Subscriptions match the Event type exactly, so these active Subscriptions on this Topic may stop receiving new Events: ${routing.routes.join(", ")}${routing.partial ? ", and possibly others not shown" : ""}.`;
+}
+
 /// The Admin API owns the mutable Source contract. Type, Connector, and Topic remain fixed.
 function EditSource({ tenantId, source, onDone }: { tenantId: string; source: Source; onDone: () => void }) {
   const queryClient = useQueryClient();
@@ -979,6 +1088,56 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
     void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
     void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
   };
+  const revoke = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.DELETE("/admin/tenants/{tenantId}/sources/{id}", {
+          params: { path: { tenantId, id: source.id } },
+        }),
+      ),
+    onSuccess: () => {
+      reread();
+      onDone();
+    },
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start gap-2">
+        <EditSheet label="Edit" description="An update replaces the configuration outright">
+          {(close) => <EditSourceForm tenantId={tenantId} source={source} onSaved={reread} onClose={close} />}
+        </EditSheet>
+        {source.status === "active" ? (
+          <ConfirmAction
+            label="Revoke"
+            consequence="Revoking a Source stops it accepting Events. It cannot be restored, and a replacement is a new Source with a new identifier."
+            question={`Revoke the ${typeLabel(source.type)} Source ${source.name}? It stops accepting Events and cannot be restored.`}
+            confirmLabel={`Revoke ${source.name}`}
+            busy={revoke.isPending}
+            onConfirm={() => revoke.mutate()}
+          />
+        ) : null}
+      </div>
+      <FormError message={formError(asProblem(revoke.error))} />
+    </div>
+  );
+}
+
+/// The edit form lives inside the sheet, so it exists only while the sheet is open. Closing the sheet
+/// without saving discards the draft, as every other edit sheet does: a draft that outlived Cancel
+/// came back on the next Edit reading as the Source's configuration, and the Event Builder then took
+/// it for what the Source had.
+function EditSourceForm({
+  tenantId,
+  source,
+  onSaved,
+  onClose,
+}: {
+  tenantId: string;
+  source: Source;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
   const storedBrokerFields = source.type === "broker" ? brokerFields(source.configuration) : null;
   const connector = useQuery({
     queryKey: ["connector", source.connector_id],
@@ -1009,6 +1168,9 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
     },
   });
   const verificationScheme = form.watch("verification_scheme");
+  const storedExpression = source.mapping?.expression ?? "";
+  const mappingChanged = form.watch("mapping").trim() !== storedExpression.trim();
+  const routing = useTopicRouting(tenantId, source.topic_id, mappingChanged);
   const sourceContractDraft = {
     expression: form.watch("mapping"),
     schema: optionalJson(form.watch("input_requirements")) as Record<string, unknown> | undefined,
@@ -1050,7 +1212,7 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
           },
         }),
       ),
-    onSuccess: reread,
+    onSuccess: onSaved,
   });
   const persist = (values: EditValues, onSuccess: () => void) =>
     save.mutate(values, {
@@ -1058,143 +1220,130 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
       onError: (failure) => applyProblem(form, failure, editFields),
     });
 
-  const revoke = useMutation({
-    mutationFn: () =>
-      call(() =>
-        api.DELETE("/admin/tenants/{tenantId}/sources/{id}", {
-          params: { path: { tenantId, id: source.id } },
-        }),
-      ),
-    onSuccess: () => {
-      reread();
-      onDone();
-    },
-  });
+  const storedIdentity = source.type === "event_api" ? null : (source.event_identity_rule ?? null);
+  const identityChanged = !sameJson(eventIdentityRule(form.watch()), storedIdentity);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start gap-2">
-        <EditSheet label="Edit" description="An update replaces the configuration outright">
-          {(close) => (
-            <Form {...form}>
-              <form
-                className="flex flex-col gap-4"
-                aria-label={`Edit ${typeLabel(source.type)} Source`}
-                noValidate
-                onSubmit={form.handleSubmit((values) => {
-                  if (source.verification && !values.verification_scheme) return;
-                  persist(values, close);
-                })}
-              >
-                <FormError message={formError(asProblem(connector.error ?? save.error), editFields)} />
+    <Form {...form}>
+      <form
+        className="flex flex-col gap-4"
+        aria-label={`Edit ${typeLabel(source.type)} Source`}
+        noValidate
+        onSubmit={form.handleSubmit((values) => {
+          // Both of these are saved only through their confirmation, never by Enter.
+          if (source.verification && !values.verification_scheme) return;
+          if (values.mapping.trim() !== storedExpression.trim()) return;
+          persist(values, onClose);
+        })}
+      >
+        <FormError message={formError(asProblem(connector.error ?? save.error), editFields)} />
 
-                <TextField control={form.control} name="name" label="Name" required />
-                {storedBrokerFields ? <MessageBrokerFields control={form.control} /> : null}
-                {source.type === "broker" && !storedBrokerFields ? (
-                  <Section
-                    title="Raw broker configuration"
-                    hint="This stored broker configuration is not supported by the guided fields. Edit its JSON directly."
-                  >
-                    <TextAreaField
-                      control={form.control}
-                      name="configuration"
-                      label="Broker configuration (JSON)"
-                      className="min-h-56 font-mono text-sm"
-                      required
-                    />
-                  </Section>
-                ) : null}
-                {source.type !== "event_api" ? (
-                  <Section
-                    title="Event Normalization"
-                    hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
-                  >
-                    <SettledContract
-                      mapping={form.watch("mapping")}
-                      identity={identityDraft(form.watch())}
-                      inputNoun={source.type === "webhook" ? "request" : "message"}
-                    />
-                    <EventBuilder
-                      contractKey={`${source.type} Source`}
-                      sourceType={source.type === "webhook" ? "webhook" : "broker"}
-                      draft={sourceContractDraft}
-                      onUse={(draft) => {
-                        form.setValue("mapping", draft.expression, { shouldDirty: true });
-                        form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
-                          shouldDirty: true,
-                        });
-                        form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
-                        form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
-                        form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, {
-                          shouldDirty: true,
-                        });
-                      }}
-                    />
-                  </Section>
-                ) : null}
-                {source.type === "webhook" ? (
-                  <SourceVerificationFields
-                    control={form.control}
-                    connectorChosen
-                    pending={connector.isPending}
-                    capabilities={capabilities}
-                  />
-                ) : null}
-                {source.type !== "event_api" ? (
-                  <Disclosure label="Raw event contract">
-                    <div className="flex flex-col gap-4">
-                      <p className="m-0 text-xs text-ink-secondary">
-                        Edit the input schema and JSONata mapping directly. Changes replace Event Builder output.
-                      </p>
-                      <TextAreaField
-                        control={form.control}
-                        name="input_requirements"
-                        label="Input schema (JSON, optional)"
-                        className="min-h-40 font-mono text-sm"
-                      />
-                      <TextAreaField
-                        control={form.control}
-                        name="mapping"
-                        label="Event mapping (JSONata, optional)"
-                        className="min-h-40 font-mono text-sm"
-                      />
-                    </div>
-                  </Disclosure>
-                ) : null}
-
-                {source.verification && !verificationScheme ? (
-                  <ConfirmAction
-                    label="Remove verification and save"
-                    question={`Remove request verification from ${source.name}?`}
-                    consequence="This Source will start accepting unsigned requests."
-                    confirmLabel="Remove verification and save"
-                    busy={save.isPending}
-                    onConfirm={() => {
-                      void form.handleSubmit((values) => persist(values, close))();
-                    }}
-                  />
-                ) : (
-                  <Button type="submit" className="self-start" disabled={save.isPending}>
-                    Save configuration
-                  </Button>
-                )}
-                <WriteStatus done={save.isSuccess}>Configuration saved.</WriteStatus>
-              </form>
-            </Form>
-          )}
-        </EditSheet>
-        {source.status === "active" ? (
-          <ConfirmAction
-            label="Revoke"
-            consequence="Revoking a Source stops it accepting Events. It cannot be restored, and a replacement is a new Source with a new identifier."
-            question={`Revoke the ${typeLabel(source.type)} Source ${source.name}? It stops accepting Events and cannot be restored.`}
-            confirmLabel={`Revoke ${source.name}`}
-            busy={revoke.isPending}
-            onConfirm={() => revoke.mutate()}
+        <TextField control={form.control} name="name" label="Name" required />
+        {storedBrokerFields ? <MessageBrokerFields control={form.control} /> : null}
+        {source.type === "broker" && !storedBrokerFields ? (
+          <Section
+            title="Raw broker configuration"
+            hint="This stored broker configuration is not supported by the guided fields. Edit its JSON directly."
+          >
+            <TextAreaField
+              control={form.control}
+              name="configuration"
+              label="Broker configuration (JSON)"
+              className="min-h-56 font-mono text-sm"
+              required
+            />
+          </Section>
+        ) : null}
+        {source.type !== "event_api" ? (
+          <Section
+            title="Event Normalization"
+            hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
+          >
+            <SettledContract
+              mapping={form.watch("mapping")}
+              identity={identityDraft(form.watch())}
+              inputNoun={source.type === "webhook" ? "request" : "message"}
+              unsaved={mappingChanged || identityChanged}
+            />
+            <EventBuilder
+              contractKey={`${source.type} Source`}
+              sourceType={source.type === "webhook" ? "webhook" : "broker"}
+              draft={sourceContractDraft}
+              onUse={(draft) => {
+                form.setValue("mapping", draft.expression, { shouldDirty: true });
+                form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                  shouldDirty: true,
+                });
+                form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
+                form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
+                form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, {
+                  shouldDirty: true,
+                });
+              }}
+            />
+          </Section>
+        ) : null}
+        {source.type === "webhook" ? (
+          <SourceVerificationFields
+            control={form.control}
+            connectorChosen
+            pending={connector.isPending}
+            capabilities={capabilities}
           />
         ) : null}
-      </div>
-      <FormError message={formError(asProblem(revoke.error))} />
-    </div>
+        {source.type !== "event_api" ? (
+          <Disclosure label="Raw event contract">
+            <div className="flex flex-col gap-4">
+              <p className="m-0 text-xs text-ink-secondary">
+                Edit the input schema and JSONata mapping directly. Changes replace Event Builder output.
+              </p>
+              <TextAreaField
+                control={form.control}
+                name="input_requirements"
+                label="Input schema (JSON, optional)"
+                className="min-h-40 font-mono text-sm"
+              />
+              <TextAreaField
+                control={form.control}
+                name="mapping"
+                label="Event mapping (JSONata, optional)"
+                className="min-h-40 font-mono text-sm"
+              />
+            </div>
+          </Disclosure>
+        ) : null}
+
+        {source.verification && !verificationScheme ? (
+          <ConfirmAction
+            label="Remove verification and save"
+            question={`Remove request verification from ${source.name}?`}
+            consequence={`This Source will start accepting unsigned requests.${
+              mappingChanged ? ` ${retypeConsequence(routing)}` : ""
+            }`}
+            confirmLabel="Remove verification and save"
+            busy={save.isPending}
+            onConfirm={() => {
+              void form.handleSubmit((values) => persist(values, onClose))();
+            }}
+          />
+        ) : mappingChanged ? (
+          <ConfirmAction
+            label="Save configuration"
+            variant="outline"
+            question={`Change how Events from ${source.name} are typed?`}
+            consequence={retypeConsequence(routing)}
+            busy={save.isPending}
+            onConfirm={() => {
+              void form.handleSubmit((values) => persist(values, onClose))();
+            }}
+          />
+        ) : (
+          <Button type="submit" className="self-start" disabled={save.isPending}>
+            Save configuration
+          </Button>
+        )}
+        <WriteStatus done={save.isSuccess}>Configuration saved.</WriteStatus>
+      </form>
+    </Form>
   );
 }

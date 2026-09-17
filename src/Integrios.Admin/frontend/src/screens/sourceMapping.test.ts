@@ -1,18 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  type EventTypeRule,
-  emptyEventType,
-  guidedExpression,
-  guidedFrom,
-  headerContext,
-  matchesRequirementType,
-  requirableFields,
-  requirementsSchema,
-} from "./sourceMapping";
+import { type EventTypeRule, emptyEventType, guidedExpression, guidedFrom, headerContext } from "./sourceMapping";
 
 const webhook: EventTypeRule = { source: "header", header: "x-github-event", prefix: "github" };
-
-const body = { action: "opened", number: 4, draft: false, repository: { full_name: "northwind/orders" } };
 
 describe("The generated Source mapping", () => {
   it("reads the Event type from the bounded webhook context and refuses a request missing it", () => {
@@ -116,39 +105,5 @@ describe("Sample request headers", () => {
         { name: "X-A", value: "2" },
       ]),
     ).toThrow(/more than once/);
-  });
-});
-
-describe("Input requirements", () => {
-  it("offers only fields the manifest's flat input schema can express", () => {
-    // The Admin API rejects nested object schemas and has no array type, so a nested value is not
-    // offered as a requirement at all rather than authored into a manifest that must be refused.
-    expect(requirableFields(body)).toEqual(["action", "number", "draft"]);
-    expect(requirableFields([1, 2])).toEqual([]);
-  });
-
-  it("enforces presence and the authored type, and disappears entirely when the last row goes", () => {
-    expect(
-      requirementsSchema([
-        { field: "action", type: "string" },
-        { field: "number", type: "integer" },
-        { field: "draft", type: "" },
-      ]),
-    ).toEqual({
-      type: "object",
-      properties: { action: { type: "string" }, number: { type: "integer" } },
-      required: ["action", "number"],
-      additionalProperties: true,
-    });
-    expect(requirementsSchema([])).toBeUndefined();
-    expect(requirementsSchema([{ field: "", type: "" }])).toBeUndefined();
-  });
-
-  it("separates integer from number rather than accepting either for both", () => {
-    expect(matchesRequirementType(4, "integer")).toBe(true);
-    expect(matchesRequirementType(4.5, "integer")).toBe(false);
-    expect(matchesRequirementType(4.5, "number")).toBe(true);
-    expect(matchesRequirementType("4", "number")).toBe(false);
-    expect(matchesRequirementType(false, "boolean")).toBe(true);
   });
 });

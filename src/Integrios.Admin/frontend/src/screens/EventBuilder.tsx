@@ -1,7 +1,8 @@
-import { useMutation } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { cn } from "cn";
+import { CircleCheck, CircleX, Info, LoaderCircle, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,27 +11,16 @@ import { formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
 import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
-import { formatJson } from "../ui/json";
 import { JsonEditor } from "../ui/jsonEditor";
-import {
-  type EventTypeRule,
-  emptyEventType,
-  guidedExpression,
-  guidedFrom,
-  headerContext,
-  type InputRequirement,
-  matchesRequirementType,
-  type RequirementType,
-  requirableFields,
-  requirementsSchema,
-  requirementTypes,
-} from "./sourceMapping";
+import { type EventTypeRule, emptyEventType, guidedExpression, guidedFrom, headerContext } from "./sourceMapping";
 
 /// The Source's Event-identity rule, as the Admin API stores it. `null` is a real choice: the Source
 /// then deduplicates nothing. It travels with the draft rather than through the mapping, because the
 /// rule is read before the mapping runs and an expression that emitted one would be a second writer.
 export type EventIdentityRule = { kind: string; value: string; allowMissing: boolean };
 
+/// What the Builder hands back. `schema` is the Source's stored input requirements, carried through
+/// untouched: the Builder authors none, and a document it does not author is not its to rewrite.
 export type SourceContractDraft = {
   expression: string;
   schema?: Record<string, unknown>;
@@ -51,29 +41,6 @@ const identityKinds = [
   { value: "header", label: "Request header", types: ["webhook"] },
   { value: "json_path", label: "JSON body field", types: ["webhook", "broker"] },
 ] as const;
-
-const targetEnvelope = {
-  event_type: "required string",
-  source_event_id: "supplied by Event identity when configured",
-  payload: "required JSON value",
-  metadata: "optional object",
-};
-
-/// Reads an existing contract schema back into requirement rows. Only the flat, scalar shape the
-/// Admin API accepts is representable here; anything else stays in the manifest it came from rather
-/// than being shown as rows that would rewrite it.
-function requirementsFrom(schema: Record<string, unknown> | undefined): InputRequirement[] {
-  const properties = schema?.properties;
-  if (properties === null || typeof properties !== "object") return [];
-  const required = Array.isArray(schema?.required) ? schema.required : [];
-  return Object.entries(properties as Record<string, unknown>)
-    .filter(([name, value]) => required.includes(name) && value !== null && typeof value === "object")
-    .map(([name, value]) => [name, (value as { type?: unknown }).type] as const)
-    .filter((entry): entry is readonly [string, RequirementType] =>
-      requirementTypes.includes(entry[1] as RequirementType),
-    )
-    .map(([field, type]) => ({ field, type }));
-}
 
 type HeaderRow = { name: string; value: string };
 
@@ -99,10 +66,20 @@ function pointerFrom(path: string): string {
 const named = (values: readonly string[]) => values.map((value) => ({ value, label: value }));
 
 /// The share of an editor row each field takes. The leading one carries the name that has to be read
-/// exactly — a header like `x-hub-signature-256`, or a discovered field path — and a row is only
-/// about 400 pixels wide at three panes, so the split is not even.
+/// exactly — a header like `x-hub-signature-256` — so the split is not even.
 const leadField = "min-w-0 flex-[3]";
 const trailField = "min-w-0 flex-[2]";
+
+/// The value once it has stopped changing. The acceptance check calls the Admin API, and a request
+/// per keystroke in a header name answers a question nobody has finished asking.
+function useSettled<T>(value: T, delay: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return settled;
+}
 
 function Pane({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
@@ -117,9 +94,8 @@ function Pane({ title, action, children }: { title: string; action?: ReactNode; 
 }
 
 /// Taking one row back out. The icon is the whole control here rather than a supplement to a visible
-/// word, as it already is on the surfaces an Operator dismisses: a row repeated per header or per
-/// field cannot spend a third of its width on the label, and the accessible name still says exactly
-/// which row it removes.
+/// word, as it already is on the surfaces an Operator dismisses: a row repeated per header cannot
+/// spend a third of its width on the label, and the accessible name still says which row it removes.
 function RemoveRow({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <Button type="button" variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
@@ -138,10 +114,18 @@ function Stale() {
   );
 }
 
-/// The Integrios Event Builder: sample input on the left, the Event fields it is mapped
-/// into in the middle, and what Integrios would accept on the right. Everything it holds is
-/// ephemeral — the sample, the headers and the guided choices never leave the browser. Only the
-/// generated expression and the input-requirements schema are handed back to the Source draft.
+type Check = {
+  expression: string;
+  schema: Record<string, unknown> | null;
+  identity: EventIdentityRule | null;
+  body: unknown;
+  headers: Record<string, string> | null;
+};
+
+/// The Integrios Event Builder guides the two decisions a Source makes about its input — the Event
+/// type and the Event identity — from a sample of that input, and says whether Integrios would accept
+/// the sample. Everything it holds is ephemeral: the sample and the choices never leave the browser
+/// except to be checked. Only the generated expression and the identity rule return to the Source.
 export function EventBuilder({
   draft,
   onUse,
@@ -162,30 +146,36 @@ export function EventBuilder({
   const [bodyError, setBodyError] = useState<string | null>(null);
   const [headerError, setHeaderError] = useState<string | null>(null);
   const [lastValidHeaders, setLastValidHeaders] = useState<Record<string, string>>({});
-  const [requirements, setRequirements] = useState<InputRequirement[]>(() => requirementsFrom(draft.schema));
   /// The rule the stored expression was generated from, when one was. Read back out of the
   /// expression rather than from a stored copy beside it: the expression is the whole contract, so
   /// anything it cannot be read back into is not a rule this form may claim to represent.
   const [eventType, setEventType] = useState<EventTypeRule>(() => guidedFrom(draft.expression) ?? emptyEventType);
   const [identity, setIdentity] = useState<EventIdentityRule | null>(draft.identity);
+  /// What the Source had when the Builder opened stays choosable for as long as it is open, whether
+  /// or not the sample carries it. A picker otherwise offers only the sample's own headers and fields,
+  /// so clearing a saved choice would leave no way back to it short of retyping it into the sample.
+  const [saved] = useState(() => {
+    const rule = guidedFrom(draft.expression);
+    return {
+      eventTypeHeaders: rule?.source === "header" ? [rule.header] : [],
+      eventTypePaths: rule?.source === "body" ? [rule.path] : [],
+      identityHeaders: draft.identity?.kind === "header" ? [draft.identity.value] : [],
+      identityFields: draft.identity?.kind === "json_path" ? [draft.identity.value] : [],
+    };
+  });
   const [expression, setExpression] = useState(draft.expression);
   const [mode, setMode] = useState<"guided" | "advanced">(() =>
     draft.expression.trim() === "" || guidedFrom(draft.expression) ? "guided" : "advanced",
   );
-  const [previewed, setPreviewed] = useState<string | null>(null);
-  /// What a preview posts, written by the same effects that publish the parsed sample, so a press
-  /// landing between a debounce and the next render still sends the sample that is on screen.
-  const sample = useRef<{ body: unknown; headers: Record<string, string> }>({ body: {}, headers: {} });
 
-  // A body edit is analysed on its own rather than on an Analyze press, and only after the Operator
-  // has stopped typing: half-typed JSON is not a failure worth reporting yet.
+  // A body edit is analysed on its own, and only after the Operator has stopped typing: half-typed
+  // JSON is not a failure worth reporting yet.
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
         const parsed = JSON.parse(body) as unknown;
         if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
           throw new Error("Use a JSON object.");
-        sample.current = { ...sample.current, body: parsed };
         setLastValidBody(parsed);
         setBodyError(null);
       } catch (failure) {
@@ -197,9 +187,7 @@ export function EventBuilder({
 
   useEffect(() => {
     try {
-      const context = headerContext(headers.filter((row) => row.name.trim() !== "" || row.value !== ""));
-      sample.current = { ...sample.current, headers: context };
-      setLastValidHeaders(context);
+      setLastValidHeaders(headerContext(headers.filter((row) => row.name.trim() !== "" || row.value !== "")));
       setHeaderError(null);
     } catch (failure) {
       setHeaderError(failure instanceof Error ? failure.message : "The request headers cannot be read.");
@@ -210,17 +198,8 @@ export function EventBuilder({
   const representable = expression.trim() === "" || expression === generated;
   const paths = useMemo(() => payloadFieldPaths(lastValidBody), [lastValidBody]);
   const headerNames = Object.keys(lastValidHeaders);
-  const fields = requirableFields(lastValidBody);
-  const schema = requirementsSchema(requirements);
-  const mismatch = requirements.find(
-    (row) =>
-      row.field !== "" &&
-      row.type !== "" &&
-      !matchesRequirementType((lastValidBody as Record<string, unknown>)[row.field], row.type),
-  );
-  const incomplete = requirements.some((row) => row.field === "" || row.type === "");
-  /// A header or a field can disappear after it was chosen. The choice is kept and named rather than
-  /// silently cleared, but it cannot be carried into a Connector while it addresses nothing.
+  /// A header or a field chosen from an earlier sample that this one does not carry. The choice is
+  /// kept and named rather than cleared: a sample is one example, and the rule may well be right.
   const dangling = [
     ...(eventType.source === "header" && eventType.header !== "" && !headerNames.includes(eventType.header)
       ? [eventType.header]
@@ -229,92 +208,104 @@ export function EventBuilder({
       ? [eventType.path]
       : []),
   ];
-  const eventTypeInput =
-    eventType.source === "fixed"
-      ? eventType.value.trim()
-      : eventType.source === "header"
-        ? lastValidHeaders[eventType.header]
-        : valueAtPath(lastValidBody, eventType.path);
   /// An untouched Event type is not a broken mapping. A Source may carry no mapping at all, and then
   /// the input is already an Integrios Event — `SourceContractEvaluator` passes it straight through.
-  /// A half-chosen one is broken, and is the only shape refused here.
   const eventTypeUnset = eventType.source === "fixed" && eventType.value.trim() === "";
   const eventTypeHalf =
     eventType.source === "header" ? eventType.header === "" : eventType.source === "body" && eventType.path === "";
-  const eventTypeSampleInvalid =
-    eventType.source !== "fixed" &&
-    !eventTypeHalf &&
-    dangling.length === 0 &&
-    (typeof eventTypeInput !== "string" || eventTypeInput.trim() === "");
   /// A kind whose selector is still empty is a half-authored rule; the API would take it and the
   /// Source would then refuse every input, which is the failure this dialog exists to prevent.
   const identityIncomplete = identity !== null && identity.value === "";
-  /// What the guided panes would hand back. An untouched Event type means no mapping rather than one
+  /// What the guided pane would hand back. An untouched Event type means no mapping rather than one
   /// mapping event_type to the empty string, which the runtime would reject on every request.
   const settled = mode === "guided" && eventTypeUnset ? "" : expression;
   /// Something for the Source form to take. What arrived counts as well as what is on screen, so
   /// emptying a rule the Source already had is itself applicable — otherwise an identity could be
   /// added here and never removed.
   const authored =
-    settled.trim() !== "" ||
-    identity !== null ||
-    schema !== undefined ||
-    draft.expression.trim() !== "" ||
-    draft.identity !== null;
-  /// Only the guided rule can be half-authored or left addressing nothing. An advanced expression
-  /// is the Operator's own text and may read whatever it likes, so a rule it no longer represents
-  /// must not hold its configuration back.
-  const guidedBlocked = mode === "guided" && (eventTypeHalf || eventTypeSampleInvalid || dangling.length > 0);
+    settled.trim() !== "" || identity !== null || draft.expression.trim() !== "" || draft.identity !== null;
+  /// Complete is all a configuration has to be to leave. Whether this sample would be accepted is the
+  /// verdict's question, and a sample is one example: a rule reading a header this sample lacks may be
+  /// exactly right for the requests that will arrive.
   const mappable =
-    authored && !identityIncomplete && !guidedBlocked && (mode !== "advanced" || expression.trim() !== "");
+    authored &&
+    !identityIncomplete &&
+    !(mode === "guided" && eventTypeHalf) &&
+    (mode !== "advanced" || expression.trim() !== "");
 
-  /// What a displayed result was produced from. Any change to the contract or the sample — a header
-  /// the mapping reads included — makes both a success and a failure a statement about something
-  /// that is no longer on screen.
-  const signature = JSON.stringify([
-    expression,
-    schema ?? null,
+  /// The acceptance check runs whenever there is a whole configuration to check, without being asked
+  /// for. It is the Admin API's answer, not the browser's: the preview runs the identity extractor,
+  /// the Source's input requirements, the mapping and the output rules in the order ingestion does,
+  /// so the verdict cannot drift from what ingestion would decide. With no mapping it checks that the
+  /// input is already an Integrios Event, which a provider's own JSON never is.
+  /// Whether there is a sample to judge at all. The dialog opens with an empty body and no headers —
+  /// on an existing Source, beside a rule already chosen — and a verdict on that would reject a
+  /// request nobody sent.
+  const sampled =
+    headers.some((row) => row.name.trim() !== "") || Object.keys(lastValidBody as Record<string, unknown>).length > 0;
+  const checkable = open && mappable && sampled && bodyError === null && headerError === null;
+  const current = JSON.stringify({
+    expression: settled,
+    schema: draft.schema ?? null,
     identity,
-    lastValidBody,
-    webhook ? lastValidHeaders : null,
-  ]);
-
-  const preview = useMutation({
-    mutationFn: () =>
-      call(() =>
+    body: lastValidBody,
+    headers: webhook ? lastValidHeaders : null,
+  } satisfies Check);
+  const asked = useSettled(current, 400);
+  const verdict = useQuery({
+    queryKey: ["source-contract-verdict", asked],
+    queryFn: () => {
+      const check = JSON.parse(asked) as Check;
+      return call(() =>
         api.POST("/admin/connectors/source-contracts/preview", {
           body: {
-            schema: schema ?? null,
-            mapping: { engine: "jsonata", version: "1", expression },
-            sample_input: sample.current.body,
-            sample_context: webhook ? { headers: sample.current.headers } : null,
-            event_identity_rule: identity
-              ? { kind: identity.kind, value: identity.value, allow_missing: identity.allowMissing }
+            schema: check.schema,
+            mapping:
+              check.expression.trim() === "" ? null : { engine: "jsonata", version: "1", expression: check.expression },
+            sample_input: check.body,
+            sample_context: check.headers === null ? null : { headers: check.headers },
+            event_identity_rule: check.identity
+              ? { kind: check.identity.kind, value: check.identity.value, allow_missing: check.identity.allowMissing }
               : null,
           },
         }),
-      ),
-    onMutate: () => setPreviewed(signature),
+      );
+    },
+    enabled: checkable,
+    // A refusal is the answer, not a fault to retry.
+    retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
+    placeholderData: keepPreviousData,
   });
-
-  const problem = asProblem(preview.error);
-  const message = problem ? (formError(problem) ?? "The preview could not be run.") : null;
-  const fresh = previewed === signature;
-
-  const changeIdentity = (rule: EventIdentityRule | null) => {
-    setIdentity(rule);
-    preview.reset();
-  };
+  const answered = checkable && asked === current && !verdict.isPlaceholderData && !verdict.isFetching;
+  /// The last settled answer, kept on screen while the next is worked out so the line does not blink
+  /// out on every keystroke. It carries the check it answered, so its wording follows that check's
+  /// identity rule and requirements rather than whatever is chosen by now.
+  const [shown, setShown] = useState<Answer | null>(null);
+  useEffect(() => {
+    if (answered) setShown({ check: JSON.parse(asked) as Check, data: verdict.data, error: verdict.error });
+  }, [answered, asked, verdict.data, verdict.error]);
+  const status: VerdictStatus = !mappable
+    ? {
+        kind: "blocked",
+        reason: identityIncomplete
+          ? "Choose where the Event identity is read from before using this configuration."
+          : mode === "advanced"
+            ? "Write an expression before using this configuration."
+            : eventTypeHalf
+              ? "Choose where the Event type is read from before using this configuration."
+              : "Choose an Event type or an Event identity before using this configuration.",
+      }
+    : bodyError !== null || headerError !== null
+      ? { kind: "unchecked" }
+      : !sampled
+        ? { kind: "unsampled" }
+        : { kind: "answer", checking: !answered, answer: shown };
 
   const changeEventType = (rule: EventTypeRule) => {
     setEventType(rule);
     setExpression(guidedExpression(rule));
-    preview.reset();
   };
-
-  /// An imported schema this form cannot show as rows is not the Operator's to lose here: it is
-  /// carried back out untouched unless requirements replace it.
-  const opaqueSchema = requirementsFrom(draft.schema).length === 0 ? draft.schema : undefined;
 
   /// Returning to guided is destructive only when the expression is not one the guided rule would
   /// generate, so the way back is a confirming control exactly then and a plain one otherwise.
@@ -323,7 +314,6 @@ export function EventBuilder({
     // expression, so the expression becomes the one it generates.
     setExpression(generated);
     setMode("guided");
-    preview.reset();
   };
   const mappingAction =
     mode === "guided" ? (
@@ -345,7 +335,7 @@ export function EventBuilder({
     );
 
   const useDraft = () => {
-    onUse({ expression: settled, schema: schema ?? opaqueSchema, identity });
+    onUse({ expression: settled, schema: draft.schema, identity });
     setOpen(false);
   };
 
@@ -358,16 +348,17 @@ export function EventBuilder({
       </DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-60 bg-ink/25" />
-        {/* Wider than the authoring flyout it opens from: the sample input, the Event
-            fields it produces, and the preview are read together, and at a sheet's width they
-            cannot be. One column below that, where three would each be too narrow to read. */}
-        <DialogPrimitive.Content className="fixed inset-4 z-70 flex max-h-[calc(100vh-2rem)] flex-col gap-4 rounded-lg border bg-canvas p-4 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none md:inset-x-8 xl:inset-x-[max(2rem,calc((100vw-88rem)/2))]">
+        {/* Wider than the authoring flyout it opens from: the sample and the decisions read from it
+            are read together, and at a sheet's width they cannot be. One column below that.
+            As tall as its panes, up to the window, and centred both ways in it. */}
+        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-70 flex max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg border bg-canvas p-4 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none md:w-[calc(100%-4rem)]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <DialogPrimitive.Title className="m-0">Integrios Event Builder</DialogPrimitive.Title>
               <DialogPrimitive.Description className="m-0 mt-1 text-sm text-ink-secondary">
-                Define how a sample {sampleName} the <span className="font-mono">{contractKey || "Source"}</span>{" "}
-                accepts becomes an Integrios Event. Only the mapping and input requirements join the Source draft.
+                Choose the Event type and Event identity the{" "}
+                <span className="font-mono">{contractKey || "Source"}</span> reads from each {sampleName}, and check
+                whether Integrios would accept a sample.
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close
@@ -378,16 +369,15 @@ export function EventBuilder({
             </DialogPrimitive.Close>
           </div>
 
-          {/* Only the panes scroll. The dialog is the height of the window, so an explanation of
-              why a configuration cannot be used, and the actions it is about, stay on screen however
-              long the sample is — reading the sample used to cost the Operator both. */}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="grid min-w-0 gap-4 xl:grid-cols-3">
+          {/* Only the panes scroll, and only once the dialog has reached the window's height, so the
+              verdict and the action it is about stay on screen however long the sample is. */}
+          <div className="min-h-0 flex-initial overflow-y-auto">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
               <Pane title={webhook ? "Sample request" : "Sample message"}>
                 {webhook ? (
                   <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
                     <legend className="text-sm font-medium">Request headers</legend>
-                    <Note>Add only headers the mapping reads. Use sample values, never secrets.</Note>
+                    <Note>Headers from a real request. They are only used to check it, never stored.</Note>
                     {headers.map((row, index) => (
                       // Rows are positional: an Operator may empty a name and type another, so nothing
                       // stable exists to key them by.
@@ -400,8 +390,8 @@ export function EventBuilder({
                           value={row.name}
                           onChange={(event) =>
                             setHeaders(
-                              headers.map((current, at) =>
-                                at === index ? { ...current, name: event.target.value } : current,
+                              headers.map((currentRow, at) =>
+                                at === index ? { ...currentRow, name: event.target.value } : currentRow,
                               ),
                             )
                           }
@@ -413,8 +403,8 @@ export function EventBuilder({
                           value={row.value}
                           onChange={(event) =>
                             setHeaders(
-                              headers.map((current, at) =>
-                                at === index ? { ...current, value: event.target.value } : current,
+                              headers.map((currentRow, at) =>
+                                at === index ? { ...currentRow, value: event.target.value } : currentRow,
                               ),
                             )
                           }
@@ -456,100 +446,6 @@ export function EventBuilder({
                     </p>
                   ) : null}
                 </div>
-
-                <details className="rounded-md border">
-                  <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium">
-                    Input requirements (optional)
-                    <span className="ml-1 font-normal text-ink-secondary">
-                      {requirements.length === 0 ? "· None configured" : `· ${requirements.length} required`}
-                    </span>
-                  </summary>
-                  <div className="flex flex-col gap-2 border-t p-3">
-                    <Note>
-                      Requirements are checked on every {sampleName} this Source accepts, not on the sample. Choose a
-                      field the sample carries and the type Integrios should enforce.
-                    </Note>
-                    {fields.length === 0 && requirements.length === 0 ? (
-                      <Note>Add a valid request body with top-level values before defining requirements.</Note>
-                    ) : (
-                      <>
-                        {requirements.map((row, index) => (
-                          // biome-ignore lint/suspicious/noArrayIndexKey: positional rows with no stable identity
-                          <div key={index} className="flex min-w-0 items-center gap-2">
-                            <select
-                              aria-label={`Required field ${index + 1}`}
-                              className={`h-9 rounded-md border bg-surface px-2 text-sm ${leadField}`}
-                              value={row.field}
-                              onChange={(event) =>
-                                setRequirements(
-                                  requirements.map((current, at) =>
-                                    at === index ? { ...current, field: event.target.value } : current,
-                                  ),
-                                )
-                              }
-                            >
-                              <option value="">Choose a field…</option>
-                              {(fields.includes(row.field) || row.field === "" ? fields : [row.field, ...fields]).map(
-                                (field) => (
-                                  <option
-                                    key={field}
-                                    value={field}
-                                    disabled={requirements.some((other, at) => at !== index && other.field === field)}
-                                  >
-                                    {field}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                            {/* The type is the Operator's declaration of what the provider must always
-                              send. Nothing is preselected from the sample: one request's value does
-                              not establish the contract's type. */}
-                            <select
-                              aria-label={`Required field ${index + 1} type`}
-                              className={`h-9 rounded-md border bg-surface px-2 text-sm ${trailField}`}
-                              value={row.type}
-                              onChange={(event) =>
-                                setRequirements(
-                                  requirements.map((current, at) =>
-                                    at === index
-                                      ? { ...current, type: event.target.value as RequirementType }
-                                      : current,
-                                  ),
-                                )
-                              }
-                            >
-                              <option value="">Choose a type…</option>
-                              {requirementTypes.map((type) => (
-                                <option key={type} value={type}>
-                                  {type}
-                                </option>
-                              ))}
-                            </select>
-                            <RemoveRow
-                              label={`Remove required field ${index + 1}`}
-                              onClick={() => setRequirements(requirements.filter((_, at) => at !== index))}
-                            />
-                          </div>
-                        ))}
-                        {mismatch ? (
-                          <p role="alert" className="m-0 text-sm text-destructive">
-                            {mismatch.field} is not {mismatch.type} in this request body.
-                          </p>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="self-start"
-                          disabled={fields.length === 0 || requirements.length >= fields.length}
-                          onClick={() => setRequirements([...requirements, { field: "", type: "" }])}
-                        >
-                          Add required field
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </details>
               </Pane>
 
               <Pane title={mode === "guided" ? "Event fields" : "Advanced JSONata"} action={mappingAction}>
@@ -562,6 +458,8 @@ export function EventBuilder({
                     stale={bodyError !== null || headerError !== null}
                     headers={webhook ? lastValidHeaders : undefined}
                     body={lastValidBody}
+                    savedHeaders={saved.eventTypeHeaders}
+                    savedPaths={saved.eventTypePaths}
                     onChange={changeEventType}
                   />
                 ) : (
@@ -569,10 +467,7 @@ export function EventBuilder({
                     expression={expression}
                     representable={representable}
                     headers={webhook ? lastValidHeaders : undefined}
-                    onChange={(next) => {
-                      setExpression(next);
-                      preview.reset();
-                    }}
+                    onChange={setExpression}
                   />
                 )}
                 <IdentityFields
@@ -580,62 +475,15 @@ export function EventBuilder({
                   sourceType={sourceType}
                   headerNames={headerNames}
                   paths={paths}
-                  onChange={changeIdentity}
+                  savedHeaders={saved.identityHeaders}
+                  savedFields={saved.identityFields}
+                  onChange={setIdentity}
                 />
-              </Pane>
-
-              <Pane title="Normalized Event">
-                {message ? (
-                  <div className="flex flex-col gap-1">
-                    <p role="alert" className="m-0 text-sm text-destructive">
-                      {message}
-                    </p>
-                    <Note>This request would be rejected. Fix it and preview again.</Note>
-                  </div>
-                ) : preview.data ? (
-                  <>
-                    <p className="m-0 text-xs font-medium">{fresh ? "Would be accepted" : "Result is out of date"}</p>
-                    <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(preview.data.output)}</pre>
-                    <Note>
-                      <span className="font-mono">source_event_id</span>:{" "}
-                      {identity === null
-                        ? "no rule, so this Event is not deduplicated"
-                        : identity.kind === "message_id"
-                          ? `supplied by the ${sampleName} itself, which a sample cannot carry`
-                          : (preview.data.source_event_id ?? "absent in this sample, which this rule permits")}
-                    </Note>
-                    {fresh ? null : <Note>The contract or the sample changed. Preview again to refresh this.</Note>}
-                  </>
-                ) : (
-                  <>
-                    <Note>Target envelope</Note>
-                    <pre className="m-0 max-h-96 overflow-auto text-xs">{formatJson(targetEnvelope)}</pre>
-                    <Note>
-                      Preview to see the Event Integrios would accept. Nothing is saved, and nothing is called.
-                    </Note>
-                  </>
-                )}
               </Pane>
             </div>
           </div>
 
-          {mappable ? null : mode === "advanced" ? (
-            <Note>Write an expression before using this configuration.</Note>
-          ) : dangling.length > 0 ? (
-            <p role="alert" className="m-0 text-sm text-destructive">
-              This request no longer carries {dangling.join(", ")}. Choose another value, or restore it above.
-            </p>
-          ) : eventTypeSampleInvalid ? (
-            <p role="alert" className="m-0 text-sm text-destructive">
-              The selected Event type input must contain a non-empty string in this sample.
-            </p>
-          ) : eventTypeHalf ? (
-            <Note>Choose where the Event type is read from before using this configuration.</Note>
-          ) : identityIncomplete ? (
-            <Note>Choose where the Event identity is read from before using this configuration.</Note>
-          ) : (
-            <Note>Author an Event type or an Event identity before using this configuration.</Note>
-          )}
+          <Verdict status={status} sampleName={sampleName} webhook={webhook} />
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <DialogPrimitive.Close asChild>
@@ -643,25 +491,164 @@ export function EventBuilder({
                 Back to Source
               </Button>
             </DialogPrimitive.Close>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={preview.isPending || bodyError !== null || headerError !== null}
-                onClick={() => preview.mutate()}
-              >
-                Preview normalized Event
-              </Button>
-              {/* A preview is evidence, not a gate: what stops this is an incomplete requirement row,
-                  which would apply a manifest the API must refuse. */}
-              <Button type="button" disabled={incomplete || mismatch !== undefined || !mappable} onClick={useDraft}>
-                Use configuration
-              </Button>
-            </div>
+            <Button type="button" disabled={!mappable} onClick={useDraft}>
+              Use configuration
+            </Button>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+type Answer = {
+  check: Check;
+  data?: { output: unknown; source_event_id?: string | null };
+  error: unknown;
+};
+
+type VerdictStatus =
+  | { kind: "blocked"; reason: string }
+  | { kind: "unchecked" }
+  | { kind: "unsampled" }
+  | { kind: "answer"; checking: boolean; answer: Answer | null };
+
+/// The dashboard's tone pairs (see `ui/status.tsx`): the word leads and says what happened, and the
+/// colour is only the second cue. Guidance and waiting stay quiet; only an answer carries colour.
+const verdictTones = {
+  quiet: "bg-surface-quiet text-ink-secondary",
+  success: "bg-success-surface text-success-ink",
+  failure: "bg-danger-surface text-danger-ink",
+} as const;
+
+function Callout({
+  tone,
+  icon,
+  busy = false,
+  children,
+}: {
+  tone: keyof typeof verdictTones;
+  icon: ReactNode;
+  busy?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    // Two lines tall whatever it says, so the actions under it stay put as the answer changes.
+    <div className={cn("flex min-h-14 min-w-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm", verdictTones[tone])}>
+      <span aria-hidden="true" className="flex h-5 shrink-0 items-center">
+        {icon}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</div>
+      {/* A spinner beside the answer it will replace, rather than the answer disappearing: the
+          Operator keeps reading what was true a moment ago, and knows it is being rechecked. */}
+      {busy ? (
+        <span aria-hidden="true" className="flex h-5 shrink-0 items-center">
+          <LoaderCircle className="size-4 animate-spin" />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/// A value Integrios resolved from the sample, set apart from the sentence around it. An identity is
+/// often a long opaque id, so it may break anywhere rather than widen the dialog.
+function Resolved({ children }: { children: ReactNode }) {
+  return <code className="rounded bg-surface px-1 py-px font-mono text-xs break-all text-ink">{children}</code>;
+}
+
+const iconClass = "size-4";
+
+/// Beside the action it is about: why the configuration cannot be used yet, or what Integrios would
+/// do with this sample. Polite, and busy while a check is out, so a screen reader hears the settled
+/// answer once rather than every state it passed through while the Operator typed.
+function Verdict({ status, sampleName, webhook }: { status: VerdictStatus; sampleName: string; webhook: boolean }) {
+  const checking = status.kind === "answer" && status.checking;
+  return (
+    <div role="status" aria-live="polite" aria-busy={checking} className="min-w-0">
+      {status.kind === "blocked" ? (
+        <Callout tone="quiet" icon={<Info className={iconClass} />}>
+          <p className="m-0">{status.reason}</p>
+        </Callout>
+      ) : status.kind === "unchecked" ? (
+        <Callout tone="quiet" icon={<Info className={iconClass} />}>
+          <p className="m-0">Fix the sample to check it.</p>
+        </Callout>
+      ) : status.kind === "unsampled" ? (
+        <Callout tone="quiet" icon={<Info className={iconClass} />}>
+          <p className="m-0">Add a sample {sampleName} to check whether Integrios would accept it.</p>
+        </Callout>
+      ) : status.answer === null ? (
+        <Callout tone="quiet" icon={<LoaderCircle className={cn(iconClass, "animate-spin")} />}>
+          <p className="m-0">Checking this {sampleName}…</p>
+        </Callout>
+      ) : status.answer.error ? (
+        <Rejected answer={status.answer} sampleName={sampleName} busy={checking} />
+      ) : (
+        <Accepted answer={status.answer} webhook={webhook} busy={checking} />
+      )}
+    </div>
+  );
+}
+
+function Rejected({ answer, sampleName, busy }: { answer: Answer; sampleName: string; busy: boolean }) {
+  const details = asProblem(answer.error);
+  // The preview keys its refusal by the part of the check that refused, as every Admin validation
+  // failure is keyed by the field it is about. The message is the API's own sentence for it, not the
+  // generic validation title.
+  const [refusedBy, messages] = Object.entries(details?.errors ?? {})[0] ?? ["", []];
+  const reason = messages[0] ?? (details ? formError(details) : null);
+  return (
+    <Callout tone="failure" icon={<CircleX className={iconClass} />} busy={busy}>
+      <p className="m-0">
+        <strong className="font-semibold">{reason ? "Rejected." : "Not checked."}</strong>{" "}
+        {reason ?? `This ${sampleName} could not be checked.`}
+      </p>
+      {/* The Builder authors neither of these, so a refusal from one has to say where it comes from,
+          or it reads as a fault in the two choices made here. */}
+      {refusedBy === "schema" ? (
+        <p className="m-0 text-xs">
+          That comes from this Source's input requirements, edited under Raw event contract.
+        </p>
+      ) : refusedBy === "sample_input" ? (
+        <p className="m-0 text-xs">With no Event type rule, each {sampleName} must already be an Integrios Event.</p>
+      ) : null}
+    </Callout>
+  );
+}
+
+function Accepted({ answer, webhook, busy }: { answer: Answer; webhook: boolean; busy: boolean }) {
+  const eventType = (answer.data?.output as { event_type?: unknown } | undefined)?.event_type;
+  const sourceEventId = answer.data?.source_event_id ?? null;
+  const identity = answer.check.identity;
+  const identified =
+    identity?.kind === "message_id" ? (
+      "Identity from the broker's message ID."
+    ) : sourceEventId !== null ? (
+      <>
+        Identity <Resolved>{sourceEventId}</Resolved>.
+      </>
+    ) : identity === null ? (
+      "No identity, so it is not deduplicated."
+    ) : (
+      "No identity in this sample, which the rule permits."
+    );
+  return (
+    <Callout tone="success" icon={<CircleCheck className={iconClass} />} busy={busy}>
+      <p className="m-0">
+        <strong className="font-semibold">Accepted</strong>
+        {typeof eventType === "string" ? (
+          <>
+            {" "}
+            as <Resolved>{eventType}</Resolved>
+          </>
+        ) : null}
+      </p>
+      <p className="m-0 text-xs">
+        {identified}
+        {/* The sample is not signed with the Source's secret, so this cannot be a promise about it. */}
+        {webhook ? " Signature verification is not part of this check." : null}
+      </p>
+    </Callout>
   );
 }
 
@@ -674,12 +661,16 @@ function IdentityFields({
   sourceType,
   headerNames,
   paths,
+  savedHeaders,
+  savedFields,
   onChange,
 }: {
   identity: EventIdentityRule | null;
   sourceType: SourceInputType;
   headerNames: string[];
   paths: string[];
+  savedHeaders: string[];
+  savedFields: string[];
   onChange: (identity: EventIdentityRule | null) => void;
 }) {
   const inputNoun = sourceType === "webhook" ? "request" : "message";
@@ -718,6 +709,7 @@ function IdentityFields({
           label="Identity header"
           value={identity?.value ?? ""}
           options={named(headerNames)}
+          saved={savedHeaders}
           noneLabel="Choose a header…"
           onChange={(value) => onChange({ kind: "header", value, allowMissing: identity?.allowMissing ?? false })}
         />
@@ -727,6 +719,7 @@ function IdentityFields({
           label="Identity field"
           value={identity?.value ?? ""}
           options={paths.map((path) => ({ value: pointerFrom(path), label: path }))}
+          saved={savedFields}
           noneLabel="Choose a field…"
           onChange={(value) => onChange({ kind: "json_path", value, allowMissing: identity?.allowMissing ?? false })}
         />
@@ -764,6 +757,7 @@ function Choice({
   options,
   onChange,
   noneLabel,
+  saved = [],
 }: {
   label: string;
   value: string;
@@ -772,11 +766,17 @@ function Choice({
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   noneLabel?: string;
+  /// Values offered whether or not the sample carries them: what the Source had when the Builder
+  /// opened, so clearing a choice never strands it.
+  saved?: string[];
 }) {
-  const offered =
-    value !== "" && !options.some((option) => option.value === value)
-      ? [{ value, label: `${value} (not in this request)` }, ...options]
-      : options;
+  // A chosen value this sample does not carry stays selected, under its own name, and so does what the
+  // Source had. What that absence means for the sample is the verdict's to say.
+  const extra = [...saved, value].filter(
+    (candidate, at, all) =>
+      candidate !== "" && all.indexOf(candidate) === at && !options.some((option) => option.value === candidate),
+  );
+  const offered = [...extra.map((candidate) => ({ value: candidate, label: candidate })), ...options];
   return (
     <label className="flex min-w-0 flex-col gap-1 text-sm">
       <span className="text-ink-secondary">{label}</span>
@@ -807,17 +807,21 @@ function GuidedFields({
   headers,
   body,
   stale,
+  savedHeaders,
+  savedPaths,
   onChange,
 }: {
   eventType: EventTypeRule;
   headerNames: string[];
-  /// Values chosen from an earlier sample that this one no longer carries. They stay visible, and
-  /// named, rather than reading as though nothing was ever chosen.
+  /// Values chosen that this sample does not carry. They stay visible, and named, rather than
+  /// reading as though nothing was ever chosen.
   dangling: string[];
   paths: string[];
   headers?: Record<string, string>;
   body: unknown;
   stale: boolean;
+  savedHeaders: string[];
+  savedPaths: string[];
   onChange: (rule: EventTypeRule) => void;
 }) {
   const derived = eventType.source !== "fixed";
@@ -837,12 +841,13 @@ function GuidedFields({
 
   return (
     <>
-      <Note>Choose where each Event value comes from. The JSONata mapping is generated from these choices.</Note>
+      <Note>
+        Choose where the Event type comes from. The JSONata mapping is generated from this choice, and the payload is
+        always the whole body.
+      </Note>
       {stale ? <Stale /> : null}
       {dangling.length > 0 ? (
-        <p role="alert" className="m-0 text-sm text-destructive">
-          This request no longer carries {dangling.join(", ")}.
-        </p>
+        <Note>This sample does not carry {dangling.join(", ")}; the check below says what that means for it.</Note>
       ) : null}
 
       <Target title="event_type" requirement="Required">
@@ -910,6 +915,7 @@ function GuidedFields({
             label="Event type header"
             value={eventType.header}
             options={named(headerNames)}
+            saved={savedHeaders}
             noneLabel="Choose a header…"
             onChange={(header) => onChange({ source: "header", header, prefix: eventTypePrefix })}
           />
@@ -919,6 +925,7 @@ function GuidedFields({
             label="Event type field"
             value={eventType.path}
             options={named(paths)}
+            saved={savedPaths}
             noneLabel="Choose a field…"
             onChange={(path) => onChange({ source: "body", path, prefix: eventTypePrefix })}
           />
@@ -947,18 +954,6 @@ function GuidedFields({
           </div>
         ) : null}
         <Note>Preview: {preview === "" ? "—" : preview}</Note>
-      </Target>
-
-      <Target title="payload" requirement="Required">
-        <Note>
-          The entire input body, unchanged. Choosing which fields reach a destination belongs to the Subscription that
-          knows where the Event is going: dropping them here would drop them for every Subscription on the Topic, and
-          from the Event ledger.
-        </Note>
-      </Target>
-
-      <Target title="metadata" requirement="Optional">
-        <Note>Not included. Use Advanced JSONata when transport metadata has to be carried.</Note>
       </Target>
     </>
   );

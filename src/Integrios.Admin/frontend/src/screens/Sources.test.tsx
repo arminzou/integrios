@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { SourcesScreen } from "./Sources";
+import { guidedExpression } from "./sourceMapping";
 
 afterEach(cleanup);
 
@@ -267,7 +268,17 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
   expect(within(form).queryByRole("heading", { name: "Raw broker configuration" })).toBeNull();
   fireEvent.click(within(form).getByText("Raw event contract"));
   fireEvent.change(within(form).getByLabelText("Event mapping (JSONata, optional)"), { target: { value: "payload" } });
+
+  // A changed mapping retypes this Source's Events, so Enter alone does not save it.
   fireEvent.submit(form);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(calls.some((call) => call.method === "PUT")).toBe(false);
+
+  fireEvent.click(within(form).getByRole("button", { name: "Save configuration" }));
+  const confirm = await screen.findByRole("dialog", { name: "Save configuration" });
+  await within(confirm).findByText(/No active Subscription on this Topic depends on it yet/);
+  expect(within(confirm).getByText(/Events already accepted keep their Event type/)).toBeTruthy();
+  fireEvent.click(within(confirm).getByRole("button", { name: "Save configuration" }));
 
   await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
   expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
@@ -275,6 +286,64 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
     verification,
     mapping: { engine: "jsonata", version: "1", expression: "payload" },
   });
+});
+
+/// Closing Edit without saving is Cancel. A draft that outlived it came back on the next Edit reading
+/// as the Source's configuration - and the Event Builder took it for what the Source had.
+it("discards an unsaved Source draft when the Edit sheet closes", async () => {
+  const stored = guidedExpression({ source: "header", header: "x-github-event", prefix: "github" });
+  const calls = stubHttp(({ method, url }) => {
+    if (url.pathname.endsWith(`/sources/${sourceId}`))
+      return {
+        status: 200,
+        body: {
+          id: sourceId,
+          tenant_id: tenantId,
+          connector_id: connectorId,
+          topic_id: topicId,
+          name: "github-intake",
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification: null,
+          input_requirements: null,
+          mapping: { engine: "jsonata", version: "1", expression: stored },
+          event_identity_rule: { kind: "header", value: "x-github-delivery", allow_missing: false },
+          revision: "revision",
+          status: "active",
+          revoked_at: null,
+          created_at: "2026-09-09T00:00:00Z",
+          updated_at: "2026-09-09T00:00:00Z",
+        },
+      };
+    return { status: method === "GET" ? 200 : 500, body: page([]) };
+  });
+  renderScreen(
+    <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />,
+    `/tenants/${tenantId}/sources/${sourceId}`,
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  let form = await screen.findByRole("form", { name: "Edit Webhook Source" });
+  expect(within(form).queryByText(/Not saved yet/)).toBeNull();
+  fireEvent.click(within(form).getByText("Raw event contract"));
+  fireEvent.change(within(form).getByLabelText("Event mapping (JSONata, optional)"), {
+    target: { value: '{ "event_type": repository.owner.email, "payload": $ }' },
+  });
+  // While the sheet is open the summary shows the draft, and says it is one.
+  expect(within(form).getByText(/Not saved yet/)).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Close Edit" }));
+  await waitFor(() => expect(screen.queryByRole("form", { name: "Edit Webhook Source" })).toBeNull());
+
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  form = await screen.findByRole("form", { name: "Edit Webhook Source" });
+  expect(within(form).queryByText(/Not saved yet/)).toBeNull();
+  // The saved rule, as a template: fixed text, then the part read from each request.
+  expect(within(form).getByText("github.")).toBeTruthy();
+  expect(within(form).getByText("x-github-event")).toBeTruthy();
+  fireEvent.click(within(form).getByText("Raw event contract"));
+  expect((within(form).getByLabelText("Event mapping (JSONata, optional)") as HTMLTextAreaElement).value).toBe(stored);
+  expect(calls.some((call) => call.method === "PUT")).toBe(false);
 });
 
 function guideHttp({

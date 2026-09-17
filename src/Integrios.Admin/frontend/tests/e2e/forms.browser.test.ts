@@ -407,7 +407,10 @@ async function choose(control: Locator, option: string | RegExp) {
 async function submitted(
   writes: Request[],
 ): Promise<{ method: string; pathname: string; body: Record<string, unknown> }> {
-  const request = writes.find((candidate) => new URL(candidate.url()).pathname !== "/admin/transform/preview");
+  // Dry runs are POSTs that change nothing: the Mapping Playground's preview, and the acceptance
+  // check the Event Builder runs on its own while an Operator edits.
+  const dryRuns = ["/admin/transform/preview", "/admin/connectors/source-contracts/preview"];
+  const request = writes.find((candidate) => !dryRuns.includes(new URL(candidate.url()).pathname));
   expect(request, "The form submitted no request at all.").toBeDefined();
   if (!request) throw new Error("The form submitted no request at all.");
   return {
@@ -685,7 +688,7 @@ describe("Create forms, filled through a real browser", () => {
     await builder.getByLabel("Identity header").selectOption("x-github-delivery");
     await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
     await builder.getByRole("button", { name: "Use configuration" }).click();
-    await form.getByText("The x-github-delivery header").waitFor();
+    await form.getByText("x-github-delivery", { exact: true }).waitFor();
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -1054,13 +1057,14 @@ describe("Update and deactivate, driven through a real browser", () => {
     await view.getByRole("button", { name: "Edit", exact: true }).click();
     let form = formNamed(view, "Edit Webhook Source");
     // The stored rule is stated where the Source is authored, without opening the Builder.
-    await form.getByText("The X-Wrong-Delivery header").waitFor();
+    await form.getByText("X-Wrong-Delivery", { exact: true }).waitFor();
     await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
     let builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
-    // A value this sample does not carry stays selected and is named as absent rather than cleared.
+    // A value this sample does not carry stays selected under its own name rather than being cleared;
+    // the verdict, not the picker, says what its absence means.
     expect(await builder.getByLabel("Identity header").inputValue()).toBe("X-Wrong-Delivery");
     expect(await builder.getByLabel("Identity header").locator("option:checked").textContent()).toBe(
-      "X-Wrong-Delivery (not in this request)",
+      "X-Wrong-Delivery",
     );
     await builder.getByLabel("Header 1 name").fill("X-GitHub-Delivery");
     await builder.getByLabel("Header 1 sample value").fill("d-1");
@@ -1369,6 +1373,11 @@ describe("Update and deactivate, driven through a real browser", () => {
     await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
     await builder.getByRole("button", { name: "Use configuration" }).click();
     await form.getByRole("button", { name: "Save configuration" }).click();
+    // The mapping changed, so saving names what routes on this Topic by Event type first.
+    const confirm = view.getByRole("dialog", { name: "Save configuration" });
+    await confirm.getByText(/to-sink \(order\.created\)/).waitFor();
+    expect(writes.some((request) => request.method() === "PUT")).toBe(false);
+    await confirm.getByRole("button", { name: "Save configuration" }).click();
 
     const sent = await submitted(writes);
     expect(sent.body.mapping).toEqual({

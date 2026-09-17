@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
-import { EventBuilder } from "./EventBuilder";
+import { EventBuilder, type SourceContractDraft } from "./EventBuilder";
 import { SourcesScreen } from "./Sources";
 import { guidedExpression } from "./sourceMapping";
 
@@ -50,8 +50,10 @@ it("explains webhook normalization and shows its sample request", async () => {
   expect(within(builder).getByLabelText("Read from")).toBeTruthy();
   expect(within(builder).getByLabelText("Event type header")).toBeTruthy();
   expect(within(builder).getByLabelText("Prefix (optional)")).toBeTruthy();
-  const normalized = within(builder).getByRole("heading", { name: "Normalized Event" }).closest("section")!;
-  expect(within(normalized).getByText(/supplied by Event identity when configured/)).toBeTruthy();
+  // Two decisions and a verdict: no envelope to read, no button to ask, no requirements to author.
+  expect(within(builder).queryByRole("heading", { name: "Normalized Event" })).toBeNull();
+  expect(within(builder).queryByRole("button", { name: /Preview/ })).toBeNull();
+  expect(within(builder).queryByText(/Input requirements/)).toBeNull();
 });
 
 it("shows broker messages without HTTP request context", async () => {
@@ -137,10 +139,13 @@ it("keeps an expression it did not write in the advanced editor", async () => {
 /// The identity rule runs before the mapping and is part of the Event that would be accepted, so the
 /// preview resolves it through the same extractor Ingestion uses rather than the browser guessing at
 /// a JSON Pointer of its own.
-it("previews the Event identity the rule would resolve, not only the mapping output", async () => {
+/// The Operator's question is whether the sample would be accepted, and as what. The answer comes
+/// from the Admin API, which resolves the identity with the extractor ingestion uses, and it arrives
+/// without being asked for once the configuration is whole.
+it("says, unasked, whether the sample would be accepted and as what", async () => {
   const calls = stubHttp(({ url }) =>
     url.pathname.endsWith("/source-contracts/preview")
-      ? { status: 200, body: { output: { event_type: "a", payload: {} }, source_event_id: "d-7" } }
+      ? { status: 200, body: { output: { event_type: "order.placed", payload: {} }, source_event_id: "d-7" } }
       : { status: 200, body: page([]) },
   );
   renderScreen(
@@ -157,6 +162,7 @@ it("previews the Event identity the rule would resolve, not only the mapping out
   fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), {
     target: { value: '{"delivery":{"id":"d-7"}}' },
   });
+  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "order.placed" } });
   fireEvent.change(within(builder).getByLabelText("Event identity"), { target: { value: "json_path" } });
   // The sample is analysed after the Operator stops typing, so the field it discovers is offered
   // only once that has run.
@@ -164,17 +170,89 @@ it("previews the Event identity the rule would resolve, not only the mapping out
     expect(within(builder).getByLabelText("Identity field").querySelector('option[value="/delivery/id"]')).toBeTruthy(),
   );
   fireEvent.change(within(builder).getByLabelText("Identity field"), { target: { value: "/delivery/id" } });
-  fireEvent.click(within(builder).getByRole("button", { name: "Preview normalized Event" }));
 
-  // Scoped to the result: the sample the identity was read from carries the same text.
-  const normalized = within(builder).getByRole("heading", { name: "Normalized Event" }).closest("section")!;
-  await waitFor(() => expect(within(normalized).getByText(/source_event_id/)).toBeTruthy());
-  expect(within(normalized).getByText(/d-7/)).toBeTruthy();
-  const preview = calls.find((call) => call.url.pathname.endsWith("/source-contracts/preview"))!;
+  const verdict = within(builder).getByRole("status");
+  await waitFor(() => expect(verdict.textContent).toContain("Accepted as order.placed"), {
+    timeout: 3000,
+  });
+  expect(verdict.textContent).toContain("Identity d-7.");
+  const preview = calls.filter((call) => call.url.pathname.endsWith("/source-contracts/preview")).at(-1)!;
   expect((preview.body as Record<string, unknown>).event_identity_rule).toEqual({
     kind: "json_path",
     value: "/delivery/id",
     allow_missing: false,
+  });
+});
+
+it("names the API's reason when the sample would be rejected, and where an input requirement lives", async () => {
+  stubHttp(({ url }) =>
+    url.pathname.endsWith("/source-contracts/preview")
+      ? {
+          status: 400,
+          body: {
+            title: "One or more validation errors occurred.",
+            status: 400,
+            errors: { schema: ["sample_input field 'result' is required."] },
+          },
+        }
+      : { status: 200, body: page([]) },
+  );
+  renderScreen(
+    <EventBuilder
+      contractKey="webhook Source"
+      sourceType="webhook"
+      draft={{
+        expression: guidedExpression({ source: "fixed", value: "storefront.webhook.received" }),
+        schema: { type: "object", required: ["result"], properties: { result: { type: "string" } } },
+        identity: null,
+      }}
+      onUse={() => undefined}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+
+  fireEvent.change(within(builder).getByLabelText("Request body (JSON)"), {
+    target: { value: '{"delivery_id":"d-1"}' },
+  });
+  const verdict = within(builder).getByRole("status");
+  await waitFor(() => expect(verdict.textContent).toContain("Rejected. sample_input field 'result' is required."), {
+    timeout: 3000,
+  });
+  expect(verdict.textContent).not.toContain("One or more validation errors occurred.");
+  expect(verdict.textContent).toContain("input requirements, edited under Raw event contract");
+});
+
+/// The Builder authors no input requirements, so a stored document it cannot author must leave
+/// exactly as it arrived - including the additionalProperties the old requirement rows rewrote.
+it("hands a stored input-requirements document back untouched", async () => {
+  stubHttp(() => ({ status: 200, body: page([]) }));
+  const schema = {
+    type: "object",
+    required: ["delivery_id", "result"],
+    properties: { result: { type: "string" }, delivery_id: { type: "string" } },
+    additionalProperties: false,
+  };
+  const onUse = vi.fn();
+  renderScreen(
+    <EventBuilder
+      contractKey="webhook Source"
+      sourceType="webhook"
+      draft={{ expression: "", schema, identity: null }}
+      onUse={onUse}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "storefront.webhook.received" } });
+  fireEvent.click(within(builder).getByRole("button", { name: "Use configuration" }));
+
+  expect(onUse).toHaveBeenCalledOnce();
+  expect(onUse.mock.calls[0][0].schema).toStrictEqual({
+    type: "object",
+    required: ["delivery_id", "result"],
+    properties: { result: { type: "string" }, delivery_id: { type: "string" } },
+    additionalProperties: false,
   });
 });
 
@@ -213,4 +291,186 @@ it("does not hold back an advanced expression for a guided rule it no longer rep
       false,
     ),
   );
+});
+
+async function openBuilder(
+  sourceType: "webhook" | "broker",
+  draft: SourceContractDraft = { expression: "", identity: null },
+) {
+  renderScreen(
+    <EventBuilder contractKey={`${sourceType} Source`} sourceType={sourceType} draft={draft} onUse={() => undefined} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  return screen.findByRole("dialog", { name: "Integrios Event Builder" });
+}
+
+const acceptedAs = (eventType: string) => ({
+  status: 200,
+  body: { output: { event_type: eventType, payload: {} }, source_event_id: null },
+});
+
+/// The answer does not blink out while the next one is worked out: the last verdict stays, marked
+/// busy so a screen reader hears only the settled one, and is replaced when the new answer lands.
+it("keeps the last verdict on screen, busy, while a change is checked", async () => {
+  const pending: Array<() => void> = [];
+  stubHttp(({ url, body }) => {
+    if (!url.pathname.endsWith("/source-contracts/preview")) return { status: 200, body: page([]) };
+    const expression = ((body as { mapping: { expression: string } }).mapping.expression ?? "") as string;
+    const answer = acceptedAs(expression.includes("second") ? "second" : "first");
+    if (!expression.includes("second")) return answer;
+    return new Promise((resolve) => pending.push(() => resolve(answer)));
+  });
+  const builder = await openBuilder("broker");
+  const verdict = within(builder).getByRole("status");
+
+  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "first" } });
+  fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), { target: { value: '{"id":1}' } });
+
+  await waitFor(() => expect(verdict.textContent).toContain("Accepted as first"), { timeout: 3000 });
+  expect(verdict.getAttribute("aria-busy")).toBe("false");
+
+  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "second" } });
+  // Straight after the edit, and while the request is out, the first answer is still what reads.
+  expect(verdict.textContent).toContain("Accepted as first");
+  expect(verdict.getAttribute("aria-busy")).toBe("true");
+  await waitFor(() => expect(pending.length).toBe(1), { timeout: 3000 });
+  expect(verdict.textContent).toContain("Accepted as first");
+  expect(verdict.textContent).not.toContain("Checking");
+
+  pending[0]();
+  await waitFor(() => expect(verdict.textContent).toContain("Accepted as second"));
+  expect(verdict.getAttribute("aria-busy")).toBe("false");
+});
+
+/// A sample is one example. A rule reading a header this sample lacks can be right for the requests
+/// that will arrive, so the verdict says what happens to this sample and the configuration can still
+/// be used.
+it("reports a sample that lacks the chosen header without holding the configuration back", async () => {
+  stubHttp(({ url }) =>
+    url.pathname.endsWith("/source-contracts/preview")
+      ? {
+          status: 400,
+          body: { status: 400, errors: { mapping: ["This request does not contain a valid Event type."] } },
+        }
+      : { status: 200, body: page([]) },
+  );
+  const builder = await openBuilder("webhook", {
+    expression: guidedExpression({ source: "header", header: "x-github-event", prefix: "github" }),
+    identity: null,
+  });
+  fireEvent.change(within(builder).getByLabelText("Request body (JSON)"), {
+    target: { value: '{"ref":"refs/heads/main"}' },
+  });
+
+  const verdict = within(builder).getByRole("status");
+  await waitFor(
+    () => expect(verdict.textContent).toContain("Rejected. This request does not contain a valid Event type."),
+    {
+      timeout: 3000,
+    },
+  );
+  expect(within(builder).getByText(/This sample does not carry x-github-event/)).toBeTruthy();
+  expect((within(builder).getByRole("button", { name: "Use configuration" }) as HTMLButtonElement).disabled).toBe(
+    false,
+  );
+});
+
+/// With only an identity chosen the Source has no mapping, and ingestion takes the input itself as
+/// the Event. That is checked too, because a provider's own JSON never is one.
+it("checks a Source with no Event type rule as taking its input as the Event", async () => {
+  const calls = stubHttp(({ url }) =>
+    url.pathname.endsWith("/source-contracts/preview")
+      ? {
+          status: 400,
+          body: { status: 400, errors: { sample_input: ["Source mapping output contains unsupported field 'ref'."] } },
+        }
+      : { status: 200, body: page([]) },
+  );
+  const builder = await openBuilder("broker");
+  fireEvent.change(within(builder).getByLabelText("Event identity"), { target: { value: "message_id" } });
+  fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), {
+    target: { value: '{"ref":"refs/heads/main"}' },
+  });
+
+  const verdict = within(builder).getByRole("status");
+  await waitFor(() => expect(verdict.textContent).toContain("Rejected."), { timeout: 3000 });
+  expect(verdict.textContent).toContain("With no Event type rule, each message must already be an Integrios Event.");
+  const preview = calls.filter((call) => call.url.pathname.endsWith("/source-contracts/preview")).at(-1)!;
+  expect((preview.body as Record<string, unknown>).mapping).toBeNull();
+});
+
+/// The identity rule runs before the input is looked at as an Event, so a refusal from it says nothing
+/// about the missing Event type rule, and the dialog must not suggest that it does.
+it("does not blame a missing Event type rule for an identity refusal", async () => {
+  stubHttp(({ url }) =>
+    url.pathname.endsWith("/source-contracts/preview")
+      ? {
+          status: 400,
+          body: {
+            status: 400,
+            errors: {
+              event_identity_rule: [
+                "The request has no 'x-github-delivery' header to read its Source Event identity from.",
+              ],
+            },
+          },
+        }
+      : { status: 200, body: page([]) },
+  );
+  const builder = await openBuilder("webhook", {
+    expression: "",
+    identity: { kind: "header", value: "x-github-delivery", allowMissing: false },
+  });
+  fireEvent.change(within(builder).getByLabelText("Request body (JSON)"), {
+    target: { value: '{"ref":"refs/heads/main"}' },
+  });
+
+  const verdict = within(builder).getByRole("status");
+  await waitFor(() => expect(verdict.textContent).toContain("no 'x-github-delivery' header"), { timeout: 3000 });
+  expect(verdict.textContent).not.toContain("With no Event type rule");
+  expect(verdict.textContent).not.toContain("input requirements");
+});
+
+/// Opening a saved Source shows its rule beside an empty sample. That is nothing to judge, so the
+/// dialog asks for a sample instead of rejecting a request nobody sent, and asks the API nothing.
+it("asks for a sample before checking anything", async () => {
+  const calls = stubHttp(() => ({ status: 200, body: page([]) }));
+  const builder = await openBuilder("webhook", {
+    expression: guidedExpression({ source: "header", header: "x-github-event", prefix: "github" }),
+    identity: { kind: "header", value: "x-github-delivery", allowMissing: false },
+  });
+  const verdict = within(builder).getByRole("status");
+  expect((within(builder).getByLabelText("Identity header") as HTMLSelectElement).value).toBe("x-github-delivery");
+
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  expect(verdict.textContent).toContain("Add a sample request to check whether Integrios would accept it.");
+  expect(verdict.textContent).not.toContain("Rejected");
+  expect(calls.some((call) => call.url.pathname.endsWith("/source-contracts/preview"))).toBe(false);
+
+  fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "x-github-event" } });
+  await waitFor(() => expect(verdict.textContent).not.toContain("Add a sample"));
+});
+
+/// Clearing a saved choice must not strand it. The sample need not carry what the Source reads, so
+/// the saved header stays offered after the Operator picks "Choose a header…", and can be picked back.
+it("keeps a saved header choosable after it is cleared", async () => {
+  stubHttp(() => ({ status: 200, body: page([]) }));
+  const builder = await openBuilder("webhook", {
+    expression: guidedExpression({ source: "header", header: "x-github-event", prefix: "github" }),
+    identity: { kind: "header", value: "x-github-delivery", allowMissing: false },
+  });
+  const optionValues = (label: string) =>
+    [...(within(builder).getByLabelText(label) as HTMLSelectElement).options].map((option) => option.value);
+
+  for (const [label, saved] of [
+    ["Identity header", "x-github-delivery"],
+    ["Event type header", "x-github-event"],
+  ] as const) {
+    const picker = within(builder).getByLabelText(label) as HTMLSelectElement;
+    fireEvent.change(picker, { target: { value: "" } });
+    expect(picker.value).toBe("");
+    expect(optionValues(label)).toContain(saved);
+    fireEvent.change(picker, { target: { value: saved } });
+    expect((within(builder).getByLabelText(label) as HTMLSelectElement).value).toBe(saved);
+  }
 });
