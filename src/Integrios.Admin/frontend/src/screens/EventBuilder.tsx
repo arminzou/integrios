@@ -145,7 +145,10 @@ function CurlImport({ onImport, onClose }: { onImport: (request: CurlRequest) =>
         placeholder="curl -H 'x-header-name: value' -d '{…}' https://…"
         value={command}
         aria-invalid={error !== null}
-        className="min-h-56 flex-1 resize-none font-mono text-sm"
+        /* Fixed to the pane: a captured command is as long as the provider's headers make it, and a
+           box that grew with one would push the verdict and the actions past the foot of the
+           window — the same trap the sample editor is bounded against. */
+        className="min-h-56 flex-1 resize-none overflow-auto font-mono text-sm field-sizing-fixed"
         onChange={(event) => {
           setCommand(event.target.value);
           setError(null);

@@ -261,6 +261,23 @@ function IdentityTemplate({ identity }: { identity: EventIdentityRule | null }) 
   );
 }
 
+/// The three values the Event Builder owns, in one card with the control that edits them. The
+/// Builder is a dialog, so what it settled and the button that reopens it are the only trace it
+/// leaves on the form; sitting loose among the Source's own fields, the three read as three more
+/// fields to fill in rather than one thing the Builder decides.
+///
+/// Captioned with what the three values are together, rather than with the tool that sets them: the
+/// button inside already names the Builder, and the Event contract is the thing this Source keeps
+/// once the dialog has closed. The raw editors below carry the same words.
+function BuilderContract({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-surface-quiet p-3">
+      <h4 className="m-0 text-sm font-semibold">Event contract</h4>
+      {children}
+    </div>
+  );
+}
+
 /// What the Event Builder settled, stated where the Source is authored. The Builder is a dialog that
 /// closes behind itself, so without this the only evidence that an Event contract exists is that a
 /// button was pressed once — and the Event identity, which decides whether this Source deduplicates
@@ -814,26 +831,28 @@ function CreateSource({
             title="Event Normalization"
             hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
           >
-            <SettledContract
-              mapping={form.watch("mapping")}
-              identity={identityDraft(form.watch())}
-              inputNoun={sourceType === "webhook" ? "request" : "message"}
-            />
-            <EventBuilder
-              key={sourceType}
-              contractKey={`${sourceType} Source`}
-              sourceType={sourceType === "webhook" ? "webhook" : "broker"}
-              draft={sourceContractDraft}
-              onUse={(draft) => {
-                form.setValue("mapping", draft.expression, { shouldDirty: true });
-                form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
-                  shouldDirty: true,
-                });
-                form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
-                form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
-                form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, { shouldDirty: true });
-              }}
-            />
+            <BuilderContract>
+              <SettledContract
+                mapping={form.watch("mapping")}
+                identity={identityDraft(form.watch())}
+                inputNoun={sourceType === "webhook" ? "request" : "message"}
+              />
+              <EventBuilder
+                key={sourceType}
+                contractKey={`${sourceType} Source`}
+                sourceType={sourceType === "webhook" ? "webhook" : "broker"}
+                draft={sourceContractDraft}
+                onUse={(draft) => {
+                  form.setValue("mapping", draft.expression, { shouldDirty: true });
+                  form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                    shouldDirty: true,
+                  });
+                  form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
+                  form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
+                  form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, { shouldDirty: true });
+                }}
+              />
+            </BuilderContract>
           </Section>
         ) : null}
 
@@ -1259,28 +1278,30 @@ function EditSourceForm({
             title="Event Normalization"
             hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
           >
-            <SettledContract
-              mapping={form.watch("mapping")}
-              identity={identityDraft(form.watch())}
-              inputNoun={source.type === "webhook" ? "request" : "message"}
-              unsaved={mappingChanged || identityChanged}
-            />
-            <EventBuilder
-              contractKey={`${source.type} Source`}
-              sourceType={source.type === "webhook" ? "webhook" : "broker"}
-              draft={sourceContractDraft}
-              onUse={(draft) => {
-                form.setValue("mapping", draft.expression, { shouldDirty: true });
-                form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
-                  shouldDirty: true,
-                });
-                form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
-                form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
-                form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, {
-                  shouldDirty: true,
-                });
-              }}
-            />
+            <BuilderContract>
+              <SettledContract
+                mapping={form.watch("mapping")}
+                identity={identityDraft(form.watch())}
+                inputNoun={source.type === "webhook" ? "request" : "message"}
+                unsaved={mappingChanged || identityChanged}
+              />
+              <EventBuilder
+                contractKey={`${source.type} Source`}
+                sourceType={source.type === "webhook" ? "webhook" : "broker"}
+                draft={sourceContractDraft}
+                onUse={(draft) => {
+                  form.setValue("mapping", draft.expression, { shouldDirty: true });
+                  form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
+                    shouldDirty: true,
+                  });
+                  form.setValue("identity_kind", draft.identity?.kind ?? "", { shouldDirty: true });
+                  form.setValue("identity_value", draft.identity?.value ?? "", { shouldDirty: true });
+                  form.setValue("identity_allow_missing", draft.identity?.allowMissing ?? false, {
+                    shouldDirty: true,
+                  });
+                }}
+              />
+            </BuilderContract>
           </Section>
         ) : null}
         {source.type === "webhook" ? (
