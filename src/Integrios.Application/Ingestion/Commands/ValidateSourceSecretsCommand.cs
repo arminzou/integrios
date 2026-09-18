@@ -106,7 +106,7 @@ internal sealed class ValidateSourceSecretsCommandHandler(
         CancellationToken cancellationToken)
     {
         if (sourceId is null)
-            return await reader.ListActiveSourcesAsync(tenant.Id, cancellationToken);
+            return await reader.ListSourcesAsync(tenant.Id, cancellationToken);
 
         Source? source = await reader.FindSourceAsync(tenant.Id, sourceId.Value, cancellationToken);
         return source is null

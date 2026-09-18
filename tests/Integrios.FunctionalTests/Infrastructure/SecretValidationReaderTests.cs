@@ -19,7 +19,7 @@ public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixtu
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Reader_OwnsActiveEnumeration_ButFindsDisabledSelections()
+    public async Task Reader_EnumeratesActiveTenantsAndEveryDestination()
     {
         Guid activeDestinationId = await fixture.SeedDestinationAsync(
             fixture.TenantAId,
@@ -49,10 +49,12 @@ public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixtu
 
         var selectedDestination = await reader.FindDestinationAsync(fixture.TenantAId, disabledDestinationId, CancellationToken.None);
         selectedDestination.ShouldNotBeNull();
-        selectedDestination.Status.ShouldBe(OperationalStatus.Disabled);
+        selectedDestination.Status.ShouldBe(EnablementStatus.Disabled);
 
-        var activeDestinations = await reader.ListActiveDestinationsAsync(fixture.TenantAId, CancellationToken.None);
-        activeDestinations.ShouldContain(destination => destination.Id == activeDestinationId);
-        activeDestinations.ShouldNotContain(destination => destination.Id == disabledDestinationId);
+        // A Disabled Destination can be enabled again, and its snapshotted deliveries still resolve its
+        // secrets, so it is validated with the rest.
+        var destinations = await reader.ListDestinationsAsync(fixture.TenantAId, CancellationToken.None);
+        destinations.ShouldContain(destination => destination.Id == activeDestinationId);
+        destinations.ShouldContain(destination => destination.Id == disabledDestinationId);
     }
 }

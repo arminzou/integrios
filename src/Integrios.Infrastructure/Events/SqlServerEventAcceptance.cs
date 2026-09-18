@@ -76,7 +76,7 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
         try
         {
             bool activeSource = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-                "SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status=N'active') THEN 1 ELSE 0 END AS bit)",
+                "SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status=N'enabled') THEN 1 ELSE 0 END AS bit)",
                 new { submission.TenantId, submission.SourceId, submission.TopicId }, dbTransaction, cancellationToken: cancellationToken));
             if (!activeSource)
                 throw new EventAcceptanceException("The Source is not active for the requested Topic.");

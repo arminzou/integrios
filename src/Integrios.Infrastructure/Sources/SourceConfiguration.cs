@@ -14,8 +14,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         {
             table.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'broker')");
             table.HasCheckConstraint("ck_sources_event_types_array", "jsonb_typeof(event_types) = 'array'");
-            table.HasCheckConstraint("ck_sources_status", "status IN ('active', 'revoked')");
-            table.HasCheckConstraint("ck_sources_revoked_at", "((status = 'active' AND revoked_at IS NULL) OR (status = 'revoked' AND revoked_at IS NOT NULL))");
+            table.HasCheckConstraint("ck_sources_status", "status IN ('enabled', 'disabled')");
         });
 
         entity.HasAlternateKey(source => new { source.TenantId, source.Id }).HasName("uq_sources_tenant_id_id");
@@ -35,10 +34,11 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         entity.Property(source => source.Mapping).HasColumnType("jsonb").HasColumnName("mapping");
         entity.Property(source => source.EventIdentityRule).HasColumnType("jsonb").HasColumnName("event_identity_rule");
         entity.Property(source => source.Revision).HasColumnName("revision");
-        entity.Property(source => source.Status).HasColumnName("status").HasDefaultValueSql("'active'::text");
+        // No database default: Enabled is the enum's zero value, which EF reads as "unset" and would
+        // replace with the column default. The application always states the status it means.
+        entity.Property(source => source.Status).HasColumnName("status");
         entity.Property(source => source.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         entity.Property(source => source.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
-        entity.Property(source => source.RevokedAt).HasColumnName("revoked_at");
 
         entity.HasOne<Tenant>().WithMany().HasForeignKey(source => source.TenantId)
             .OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_sources_tenant");

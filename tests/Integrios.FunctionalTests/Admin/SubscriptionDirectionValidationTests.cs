@@ -191,7 +191,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             VALUES (
                 @Id, @TenantId, @TopicId, 'cross-tenant-direct',
                 {{{fixture.Json("@EventTypes")}}},
-                @DestinationId, 'active', 0);
+                @DestinationId, 'enabled', 0);
             """, new
         {
             Id = Guid.NewGuid(),
@@ -248,7 +248,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, authentication, status, environment, description, created_at, updated_at)
-            VALUES (@Id, @TenantId, @ConnectorId, @Name, {{{fixture.Json("@Config")}}}, NULL, 'active', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
+            VALUES (@Id, @TenantId, @ConnectorId, @Name, {{{fixture.Json("@Config")}}}, NULL, 'enabled', NULL, NULL, {{{fixture.Now}}}, {{{fixture.Now}}});
             """, new
         {
             Id = destinationId,

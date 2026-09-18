@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form";
 import { Link, NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
@@ -13,7 +12,6 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import {
   appliedNote,
-  ConfirmAction,
   CreateSheet,
   EditSheet,
   FilterBar,
@@ -26,7 +24,7 @@ import {
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
-import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
+import { FilterSearch, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import {
@@ -73,18 +71,16 @@ type EditValues = z.infer<typeof editSchema>;
 const optional = (text: string) => text.trim() || null;
 
 export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; selectedTopicId?: string }) {
-  const [status, setStatus] = useFilterParam("status");
   const [name, setName] = useFilterParam("name");
-  const applied = [status, name].filter(Boolean).length;
+  const applied = [name].filter(Boolean).length;
   const list = useInfiniteQuery({
-    queryKey: ["topics", tenantId, { status, name }],
+    queryKey: ["topics", tenantId, { name }],
     queryFn: ({ pageParam }) =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/topics", {
           params: {
             path: { tenantId },
             query: {
-              status: status || undefined,
               name: name || undefined,
               after: pageParam ?? undefined,
               limit: 20,
@@ -114,10 +110,6 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
         {narrowing ? (
           <FilterBar applied={applied}>
             <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
-            <Filter id="topic-status" label="Status" value={status} onChange={setStatus}>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="disabled">Disabled</SelectItem>
-            </Filter>
           </FilterBar>
         ) : null}
 
@@ -154,7 +146,9 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                     <TableHead scope="col" className="text-right">
                       Subscriptions
                     </TableHead>
-                    <TableHead scope="col">Status</TableHead>
+                    <TableHead scope="col">
+                      <span className="sr-only">Open</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -181,8 +175,7 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                           the count is what the list is scanned for rather than a detail. */}
                       <TableCell className="text-right">{topic.subscription_count}</TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-between gap-3">
-                          <StatusBadge status={topic.status} />
+                        <div className="flex items-center justify-end">
                           <RowChevron />
                         </div>
                       </TableCell>
@@ -220,7 +213,6 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
 /// panel, a filter and a cursor-paged table inside a 400-pixel panel would be a list-with-detail
 /// nested inside a detail. Authoring keeps its own route, which this panel links to.
 function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: string }) {
-  const [notice, setNotice] = useState("");
   const topic = useQuery({
     queryKey: ["topic", tenantId, topicId],
     queryFn: () =>
@@ -269,7 +261,6 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <StatusBadge status={current.status} className="mt-0.5" />
           <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
         </div>
       </div>
@@ -329,13 +320,7 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
         </Button>
       </section>
 
-      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-      <EditTopic
-        key={current.updated_at}
-        tenantId={tenantId}
-        topic={current}
-        onDone={() => setNotice("Topic deactivated.")}
-      />
+      <EditTopic key={current.updated_at} tenantId={tenantId} topic={current} />
     </Inspector>
   );
 }
@@ -395,7 +380,9 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
   );
 }
 
-function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic; onDone: () => void }) {
+/// A Topic has no status of its own: it groups its Sources and Subscriptions and exists until deleted,
+/// so the only thing to change on it is its label.
+function EditTopic({ tenantId, topic }: { tenantId: string; topic: Topic }) {
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["topic", tenantId, topic.id] });
@@ -415,19 +402,6 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
         }),
       ),
     onSuccess: reread,
-  });
-
-  const deactivate = useMutation({
-    mutationFn: () =>
-      call(() =>
-        api.POST("/admin/tenants/{tenantId}/topics/{id}/deactivate", {
-          params: { path: { tenantId, id: topic.id } },
-        }),
-      ),
-    onSuccess: () => {
-      reread();
-      onDone();
-    },
   });
 
   return (
@@ -464,17 +438,7 @@ function EditTopic({ tenantId, topic, onDone }: { tenantId: string; topic: Topic
             </Form>
           )}
         </EditSheet>
-        {topic.status === "active" ? (
-          <ConfirmAction
-            label="Deactivate"
-            question={`Deactivate the Topic "${topic.name}"? Its Subscriptions stop receiving Events.`}
-            confirmLabel={`Deactivate ${topic.name}`}
-            busy={deactivate.isPending}
-            onConfirm={() => deactivate.mutate()}
-          />
-        ) : null}
       </div>
-      <FormError message={formError(asProblem(deactivate.error))} />
     </div>
   );
 }

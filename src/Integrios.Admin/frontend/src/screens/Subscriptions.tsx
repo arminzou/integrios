@@ -50,7 +50,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { activeOnly, useDestinationOptions, useTopicOptions } from "../ui/options";
+import { enabledOnly, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { MappingPlayground, mappingEnvelope } from "./SubscriptionPlayground";
 
@@ -332,7 +332,7 @@ export function SubscriptionsScreen({
             ))}
           </Filter>
           <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="enabled">Enabled</SelectItem>
             <SelectItem value="disabled">Disabled</SelectItem>
           </Filter>
         </FilterBar>
@@ -464,7 +464,7 @@ function CreateTenantSubscription({
   const topics = useTopicOptions(tenantId);
   // A Subscription routes from a Topic to a Destination, so it is the last thing a Tenant can
   // author: both have to exist before this form can say anything.
-  const noTopics = topics.isSuccess && activeOnly(topics.data?.items).length === 0;
+  const noTopics = topics.isSuccess && (topics.data?.items ?? []).length === 0;
   const topicForm = useForm<{ topic_id: string }>({ defaultValues: { topic_id: defaultTopicId } });
   const topicId = topicForm.watch("topic_id");
   const topic = topics.data?.items.find((item) => item.id === topicId);
@@ -479,17 +479,17 @@ function CreateTenantSubscription({
           hint={
             noTopics ? (
               <>
-                No active Topics yet, and a Subscription routes from one.{" "}
+                No Topics yet, and a Subscription routes from one.{" "}
                 <Link to={`/tenants/${tenantId}/topics`}>Create a Topic</Link> first.
               </>
             ) : topics.data?.next_cursor ? (
-              "Showing the first 100 active Topics."
+              "Showing the first 100 Topics."
             ) : undefined
           }
           disabled={topics.isPending || topics.isError || noTopics}
           required
         >
-          {activeOnly(topics.data?.items).map((option) => (
+          {(topics.data?.items ?? []).map((option) => (
             <SelectItem key={option.id} value={option.id}>
               {option.name}
             </SelectItem>
@@ -541,12 +541,16 @@ function SubscriptionInspector({
         }),
       ),
   });
-  const deactivate = useMutation({
-    mutationFn: () =>
+  const setStatus = useMutation({
+    mutationFn: (action: "enable" | "disable") =>
       call(() =>
-        api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/deactivate", {
-          params: { path: { tenantId, topicId, id: subscriptionId } },
-        }),
+        action === "enable"
+          ? api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/enable", {
+              params: { path: { tenantId, topicId, id: subscriptionId } },
+            })
+          : api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/disable", {
+              params: { path: { tenantId, topicId, id: subscriptionId } },
+            }),
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["subscription", tenantId, topicId, subscriptionId] });
@@ -643,20 +647,27 @@ function SubscriptionInspector({
             />
           )}
         </EditSheet>
-        {current.status === "active" ? (
+        {current.status === "enabled" ? (
           <ConfirmAction
-            label="Deactivate"
-            consequence={`Deactivating ${current.name} stops it receiving Events from this Topic. Deliveries already queued are not cancelled.`}
-            question={`Deactivate the Subscription "${current.name}"? It stops receiving Events from this Topic.`}
-            confirmLabel={`Deactivate ${current.name}`}
-            busy={deactivate.isPending}
-            onConfirm={() => deactivate.mutate()}
+            label="Disable"
+            variant="outline"
+            consequence={`${current.name} stops receiving new Events from this Topic, and nothing is held back for it: enabling it again affects only Events routed afterwards. Deliveries already queued are not cancelled.`}
+            question={`Disable the Subscription "${current.name}"?`}
+            confirmLabel={`Disable ${current.name}`}
+            busy={setStatus.isPending}
+            onConfirm={() => setStatus.mutate("disable")}
           />
-        ) : null}
+        ) : (
+          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("enable")}>
+            Enable
+          </Button>
+        )}
       </div>
 
-      <WriteStatus done={deactivate.isSuccess}>Subscription deactivated.</WriteStatus>
-      <FormError message={formError(asProblem(deactivate.error))} />
+      <WriteStatus done={setStatus.isSuccess}>
+        {setStatus.variables === "enable" ? "Subscription enabled." : "Subscription disabled."}
+      </WriteStatus>
+      <FormError message={formError(asProblem(setStatus.error))} />
     </Inspector>
   );
 }
@@ -678,7 +689,7 @@ function SubscriptionSourcePath({
       do {
         const page = await call(() =>
           api.GET("/admin/tenants/{tenantId}/sources", {
-            params: { path: { tenantId }, query: { topic_id: topicId, status: "active", after, limit: 100 } },
+            params: { path: { tenantId }, query: { topic_id: topicId, status: "enabled", after, limit: 100 } },
           }),
         );
         items.push(...page.items);
@@ -706,7 +717,7 @@ function SubscriptionSourcePath({
         How Events reach this Subscription
       </h3>
       <p className="m-0 text-[13px] text-ink-secondary">
-        Publishers address an active Source, not this Subscription. Matching Events then follow this configured path.
+        Publishers address an Enabled Source, not this Subscription. Matching Events then follow this configured path.
       </p>
       <ol aria-label="Subscription Event path" className="m-0 flex list-none flex-wrap items-center gap-1.5 text-xs">
         <li className="rounded-full border px-2.5 py-1">{items.length === 1 ? "Source" : "Sources"}</li>
@@ -726,11 +737,11 @@ function SubscriptionSourcePath({
           </span>
         ))}
       </p>
-      {sources.isPending ? <p className="m-0 text-sm">Loading active Sources…</p> : null}
-      {sourcesProblem ? <ReadError problem={sourcesProblem} what="Active Sources" /> : null}
+      {sources.isPending ? <p className="m-0 text-sm">Loading Enabled Sources…</p> : null}
+      {sourcesProblem ? <ReadError problem={sourcesProblem} what="Enabled Sources" /> : null}
       {!sources.isPending && !sources.error && items.length === 0 ? (
         <p className="m-0 text-sm">
-          No active Source publishes to this Topic.{" "}
+          No Enabled Source publishes to this Topic.{" "}
           <Link to={`/tenants/${tenantId}/sources?topic_id=${topicId}`} state={{ openSourceCreate: true }}>
             Create a Source
           </Link>
@@ -851,7 +862,7 @@ function SubscriptionForm({
   const queryClient = useQueryClient();
   const destinations = useDestinationOptions(tenantId);
   const destinationOptionsUnavailable = destinations.isPending || destinations.isError;
-  const noDestinations = destinations.isSuccess && activeOnly(destinations.data?.items).length === 0;
+  const noDestinations = destinations.isSuccess && enabledOnly(destinations.data?.items).length === 0;
   const [playgroundOpen, setPlaygroundOpen] = useState(initialPlaygroundOpen);
   const [reviewedExpression, setReviewedExpression] = useState<string>();
   const originalExpression = guidedMappingExpression(subscription?.mapping_config);
@@ -966,17 +977,17 @@ function SubscriptionForm({
             hint={
               noDestinations ? (
                 <>
-                  No active Destinations yet, and a Subscription delivers to one.{" "}
+                  No Enabled Destinations yet, and a Subscription delivers to one.{" "}
                   <Link to={`/tenants/${tenantId}/destinations`}>Create a Destination</Link> first.
                 </>
               ) : destinations.data?.next_cursor ? (
-                "Showing the first 100 active Destinations."
+                "Showing the first 100 Enabled Destinations."
               ) : undefined
             }
             disabled={destinationOptionsUnavailable || noDestinations}
             required
           >
-            {activeOnly(destinations.data?.items).map((destination) => (
+            {enabledOnly(destinations.data?.items).map((destination) => (
               <SelectItem key={destination.id} value={destination.id}>
                 {destination.name}
               </SelectItem>

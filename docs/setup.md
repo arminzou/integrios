@@ -85,8 +85,12 @@ SOURCE=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources -H "$AUTH" -H 'Con
   -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"topic_id\":\"$TOPIC\",\"name\":\"Payments Event API\",\"type\":\"event_api\",\"event_types\":[\"payment.created\"],\"configuration\":{},\"verification\":null,\"input_requirements\":null,\"mapping\":null,\"event_identity_rule\":null}" | jq -r .id)
 
 # 7. Subscribe the destination to payment.created events
-curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"acme-erp-sub\",\"event_types\":[\"payment.created\"],\"destination_id\":\"$DST\",\"mapping\":null,\"http_delivery\":null,\"http_success\":null,\"order_index\":0}" > /dev/null
+SUB=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
+  -d "{\"name\":\"acme-erp-sub\",\"event_types\":[\"payment.created\"],\"destination_id\":\"$DST\",\"mapping\":null,\"http_delivery\":null,\"http_success\":null,\"order_index\":0}" | jq -r .id)
+
+# Sources and Subscriptions are created Disabled, so nothing flows until each is enabled.
+curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources/$SOURCE/enable -H "$AUTH" > /dev/null
+curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions/$SUB/enable -H "$AUTH" > /dev/null
 
 # 8. Send an event to the data plane. source_id (query parameter) names the Source; the body is the
 # fixed Event API contract -- event_type and payload are required,
@@ -105,8 +109,8 @@ curl -s -X POST http://localhost:5054/__admin/requests/find \
 
 Destination updates replace the complete `configuration` object rather than merging fields. A
 Destination's configuration schema is declared by its Connector's manifest; the example `http`
-Connector requires an absolute HTTP(S) `base_uri` with no query or fragment for any Destination an
-active Subscription references (see [architecture.md](architecture.md) for the full Connector,
+Connector requires an absolute HTTP(S) `base_uri` with no query or fragment for any Destination a
+Subscription references (see [architecture.md](architecture.md) for the full Connector,
 Source, and Destination model, including
 Operator-authored Connectors such as the ones in the [GitHub-to-Slack
 walkthrough](github-to-slack-walkthrough.md)).

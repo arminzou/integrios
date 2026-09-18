@@ -17,7 +17,7 @@ type CursorPage<Item> = { items: Item[]; next_cursor?: string | null };
 export async function call<T>(request: () => Promise<FetchResult<T>>): Promise<T> {
   const { data, error, response } = await request();
   if (response.status < 200 || response.status >= 300) throw problemFrom(error, response.status);
-  // A successful deactivate, revoke, or replay answers with no body at all.
+  // A successful revoke or replay answers with no body at all.
   return data as T;
 }
 

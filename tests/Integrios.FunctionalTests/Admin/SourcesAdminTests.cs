@@ -26,7 +26,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     [Fact]
-    public async Task SourceLifecycle_CreatesListsUpdatesAndPermanentlyRevokesWebhook()
+    public async Task SourceLifecycle_CreatesDisabledAndIsEditableEnabledOrDisabled()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -37,6 +37,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         create.StatusCode.ShouldBe(HttpStatusCode.Created);
         SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
         source.Configuration.TryGetProperty("callback_id", out _).ShouldBeTrue();
+        // Declared and authorable, but closed to intake until an Operator enables it.
+        source.Status.ShouldBe("disabled");
         source.EventTypes.ShouldBe(["Order.Created", "order.shipped"]);
 
         SourceListDto listed = (await (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/sources", null))).Content.ReadFromJsonAsync<SourceListDto>(HostJson.Options))!;
@@ -46,8 +48,18 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         SourceDto updated = (await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
         updated.Configuration.GetProperty("callback_id").GetString().ShouldBe(source.Configuration.GetProperty("callback_id").GetString());
 
-        (await client.SendAsync(AdminRequest(HttpMethod.Delete, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", null))).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", FullSourceUpdate(configuration)))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        foreach ((string action, string expected) in new[] { ("enable", "enabled"), ("disable", "disabled") })
+        {
+            HttpResponseMessage changed = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}/{action}", null));
+            changed.StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await changed.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!.Status.ShouldBe(expected);
+            // Re-enabling resumes the same identity and webhook callback.
+            HttpResponseMessage edited = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", FullSourceUpdate(configuration)));
+            edited.StatusCode.ShouldBe(HttpStatusCode.OK);
+            SourceDto read = (await edited.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+            read.Status.ShouldBe(expected);
+            read.Configuration.GetProperty("callback_id").GetString().ShouldBe(source.Configuration.GetProperty("callback_id").GetString());
+        }
     }
 
     // Intake resolves one revision per request and an accepted Event is never remapped, so the

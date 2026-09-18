@@ -69,7 +69,7 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
         try
         {
             bool activeSource = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-                "SELECT EXISTS (SELECT 1 FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status='active')",
+                "SELECT EXISTS (SELECT 1 FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status='enabled')",
                 new { submission.TenantId, submission.SourceId, submission.TopicId }, dbTransaction, cancellationToken: cancellationToken));
             if (!activeSource)
                 throw new EventAcceptanceException("The Source is not active for the requested Topic.");

@@ -50,7 +50,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
             command.TopicId,
             command.Id,
             cancellationToken);
-        if (existing is null || existing.Status == OperationalStatus.Disabled)
+        if (existing is null)
         {
             return null;
         }

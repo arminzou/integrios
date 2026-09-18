@@ -17,7 +17,7 @@ public sealed record Subscription
     public JsonElement? MappingConfig { get; init; }
     public required HttpDeliveryConfiguration HttpDelivery { get; init; }
     public HttpSuccessRule? HttpSuccess { get; init; }
-    public required OperationalStatus Status { get; init; }
+    public required EnablementStatus Status { get; init; }
     public required int OrderIndex { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }

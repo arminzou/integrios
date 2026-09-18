@@ -41,12 +41,13 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         body.Name.ShouldBe("erp-sink");
         body.DestinationId.ShouldBe(Fixture.DestinationId);
         body.OrderIndex.ShouldBe(10);
-        body.Status.ShouldBe("active");
+        // Authorable before it routes anything: fanout ignores it until it is enabled.
+        body.Status.ShouldBe("disabled");
         body.EventTypes.ShouldBe(["payment.created"]);
     }
 
     [Fact]
-    public async Task CreateSubscription_WithDeactivatedDestination_ReturnsUnprocessableEntity()
+    public async Task CreateSubscription_OnADisabledDestination_IsAuthoredDisabled()
     {
         var topic = await CreateTopicAsync("deactivated-destination");
         await SetDestinationStatusAsync(Fixture.DestinationId, "disabled");
@@ -62,7 +63,9 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
                 order_index = 0
             }));
 
-        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        // A Disabled Subscription may point at a Disabled Destination; neither creates work.
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!.Status.ShouldBe("disabled");
     }
 
     [Fact]
@@ -221,43 +224,43 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     }
 
     [Fact]
-    public async Task DeactivateSubscription_Returns200_AndStatusBecomesDisabled()
+    public async Task EnableAndDisable_AreExplicitReversibleActions()
     {
         var topic = await CreateTopicAsync("payments");
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
+        string path = $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}";
 
-        var deactivate = await client.SendAsync(AdminRequest(
-            HttpMethod.Post,
-            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
-        deactivate.StatusCode.ShouldBe(HttpStatusCode.OK);
+        foreach ((string action, string expected) in new[] { ("enable", "enabled"), ("enable", "enabled"), ("disable", "disabled"), ("enable", "enabled") })
+        {
+            var response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"{path}/{action}"));
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!.Status.ShouldBe(expected);
+        }
 
-        var get = await client.SendAsync(AdminRequest(
-            HttpMethod.Get,
-            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}"));
-        get.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var body = await get.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options);
-        body.ShouldNotBeNull();
-        body.Status.ShouldBe("disabled");
+        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{Guid.NewGuid()}/enable")))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
-    [Fact]
-    public async Task UpdateSubscription_WhenDisabled_ReturnsNotFound()
+    // Disabling pauses routing; it does not freeze the configuration, so the Operator can fix what
+    // made them pause it before enabling it again.
+    [Theory]
+    [InlineData("enable")]
+    [InlineData("disable")]
+    public async Task UpdateSubscription_EditsEitherStatus(string action)
     {
         var topic = await CreateTopicAsync("payments");
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
-
         await client.SendAsync(AdminRequest(
             HttpMethod.Post,
-            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
+            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/{action}"));
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Put,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
             new
             {
-                name = "erp-sink",
-                event_types = new[] { "payment.created" },
+                name = "erp-sink-renamed",
+                event_types = new[] { "payment.updated" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
                 mapping = (object?)null,
@@ -266,24 +269,10 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
                 description = (string?)null,
             }));
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
-    public async Task DeactivateSubscription_AlreadyDisabled_ReturnsNotFound()
-    {
-        var topic = await CreateTopicAsync("payments");
-        var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
-
-        await client.SendAsync(AdminRequest(
-            HttpMethod.Post,
-            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
-
-        var response = await client.SendAsync(AdminRequest(
-            HttpMethod.Post,
-            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/deactivate"));
-
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!;
+        body.Name.ShouldBe("erp-sink-renamed");
+        body.Status.ShouldBe(action == "enable" ? "enabled" : "disabled");
     }
 
     [Fact]

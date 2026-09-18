@@ -21,8 +21,7 @@ public sealed record SourceDto(
     string Revision,
     string Status,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt,
-    DateTimeOffset? RevokedAt)
+    DateTimeOffset UpdatedAt)
 {
     public static SourceDto From(Source source) => new(
         source.Id,
@@ -40,6 +39,5 @@ public sealed record SourceDto(
         source.Revision,
         source.Status.ToString().ToLowerInvariant(),
         source.CreatedAt,
-        source.UpdatedAt,
-        source.RevokedAt);
+        source.UpdatedAt);
 }

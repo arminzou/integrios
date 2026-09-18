@@ -101,7 +101,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         Guid topicId = Guid.NewGuid();
         await ExecuteAsync(
-            $"INSERT INTO topics (id,tenant_id,{database.KeyColumn},name,status,created_at,updated_at) VALUES (@Id,@TenantId,@Name,@Name,'active',{database.Now},{database.Now})",
+            $"INSERT INTO topics (id,tenant_id,{database.KeyColumn},name,created_at,updated_at) VALUES (@Id,@TenantId,@Name,@Name,{database.Now},{database.Now})",
             new { Id = topicId, TenantId = tenantId, Name = name });
         return topicId;
     }
@@ -122,7 +122,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         return connectorId;
     }
 
-    public async Task<Guid> SeedDestinationAsync(Guid tenantId, string name, string status = "active")
+    public async Task<Guid> SeedDestinationAsync(Guid tenantId, string name, string status = "enabled")
     {
         string key = $"test_destination_{Guid.NewGuid():N}";
         Guid connectorId = await database.ApplyConnectorManifestAsync(
@@ -158,7 +158,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         Guid sourceId = Guid.NewGuid();
         await ExecuteAsync(
-            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-intake', 'event_api', '[\"payment.created\"]', {database.Json("@Configuration")}, @Revision, 'active', {database.Now}, {database.Now})",
+            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-intake', 'event_api', '[\"payment.created\"]', {database.Json("@Configuration")}, @Revision, 'enabled', {database.Now}, {database.Now})",
             new { SourceId = sourceId, TenantId = tenantId, ConnectorId = connectorId, TopicId = topicId, Configuration = configuration, Revision = Guid.NewGuid().ToString("N") });
         return sourceId;
     }
@@ -179,10 +179,10 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             "http", TestConnectorManifest.Create("http", "HTTP", "both"));
         await ExecuteAsync($$$"""
             INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status)
-            VALUES (@DestinationId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
-            INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','replay-test-topic','active');
+            VALUES (@DestinationId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'enabled');
+            INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name) VALUES (@TopicId,@TenantId,'replay-test-topic','replay-test-topic');
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,event_types,destination_id,order_index,status)
-            VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@EventTypes")}}},@DestinationId,0,'active');
+            VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@EventTypes")}}},@DestinationId,0,'enabled');
             INSERT INTO event_deliveries
                 (event_id,subscription_id,destination_id,http_execution_snapshot,connector_key,
                  status,lifetime_attempt_count,retry_cycle_attempt_count,failed_at)

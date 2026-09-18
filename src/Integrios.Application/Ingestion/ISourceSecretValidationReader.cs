@@ -13,5 +13,5 @@ public interface ISourceSecretValidationReader
 
     Task<Source?> FindSourceAsync(Guid tenantId, Guid sourceId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<Source>> ListActiveSourcesAsync(Guid tenantId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Source>> ListSourcesAsync(Guid tenantId, CancellationToken cancellationToken);
 }

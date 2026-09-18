@@ -18,7 +18,7 @@ public interface ISecretValidationReader
         Guid destinationId,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<Destination>> ListActiveDestinationsAsync(
+    Task<IReadOnlyList<Destination>> ListDestinationsAsync(
         Guid tenantId,
         CancellationToken cancellationToken);
 }

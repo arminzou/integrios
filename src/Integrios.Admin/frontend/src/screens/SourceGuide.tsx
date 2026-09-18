@@ -37,7 +37,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
     routeState?.openSourceGuide === source.id ? routeState.sourceGuideContext : undefined,
   );
   const trigger = useRef<HTMLButtonElement>(null);
-  const active = source.status === "active";
+  const enabled = source.status === "enabled";
   useEffect(() => {
     if (routeState?.openSourceGuide !== source.id) return;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
@@ -72,7 +72,9 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
           ? "The Publisher sends to the configured broker entity; Integrios consumes and publishes accepted Events to this Source's Topic."
           : "The Publisher sends to this Source; Integrios validates the input and publishes accepted Events to its Topic."}
       </p>
-      {!active ? <p className="m-0 text-sm text-destructive">This Source cannot accept new Events.</p> : null}
+      {!enabled ? (
+        <p className="m-0 text-sm text-warning-ink">Disabled: this Source refuses new Events until it is enabled.</p>
+      ) : null}
       <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
         <DialogPrimitive.Trigger asChild>
           <Button ref={trigger} type="button" variant="outline" size="sm" className="self-start">
@@ -103,10 +105,12 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
               </DialogPrimitive.Close>
             </header>
 
-            {!active ? (
-              <div className="rounded-lg bg-danger-surface p-3 text-sm text-danger-ink">
-                <strong>This Source cannot accept new Events.</strong> Its former configuration remains visible for
-                historical Event attribution, but runnable copy actions are unavailable.
+            {/* Staged setup is the point of a Disabled Source: the publisher is configured from this
+                guide first, and the Source enabled once it is. So everything here stays copyable. */}
+            {!enabled ? (
+              <div className="rounded-lg bg-warning-surface p-3 text-sm text-warning-ink">
+                <strong>This Source is Disabled.</strong> It refuses Events until it is enabled. Configure the publisher
+                from this guide, then enable the Source.
               </div>
             ) : null}
 
@@ -130,7 +134,6 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
             <GuideBody
               tenantId={tenantId}
               source={source}
-              active={active}
               connector={connector.data}
               topicName={topic.data?.name}
               ingestionEndpoint={overview.data?.ingestion_endpoint}
@@ -142,9 +145,8 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
               <div className="rounded-lg border p-4">
                 <h3 className="mt-0 text-base">Expected result</h3>
                 <p className="mb-2 text-sm">
-                  {active
-                    ? "Integrios accepts the Event durably before asynchronous routing and delivery. The accepted Event appears in the Tenant ledger with this Source and Topic."
-                    : "When this Source was active, accepted Events appeared in the Tenant ledger with this Source and Topic."}
+                  Once the Source is enabled, Integrios accepts the Event durably before asynchronous routing and
+                  delivery. The accepted Event appears in the Tenant ledger with this Source and Topic.
                 </p>
                 <Button asChild variant="outline" size="sm">
                   <Link to={`/tenants/${tenantId}/events?source_id=${source.id}`}>Open accepted Events</Link>
@@ -154,7 +156,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
                 <h3 className="mt-0 text-base">If nothing arrives downstream</h3>
                 <p className="m-0 text-sm">
                   A rejected input never becomes an Event. An accepted Event whose <code>event_type</code> matches no
-                  active Subscription remains unrouted; inspect the Event ledger before changing the Source.
+                  Enabled Subscription remains unrouted; inspect the Event ledger before changing the Source.
                 </p>
               </div>
             </section>
@@ -168,7 +170,6 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
 function GuideBody({
   tenantId,
   source,
-  active,
   connector,
   topicName,
   ingestionEndpoint,
@@ -177,7 +178,6 @@ function GuideBody({
 }: {
   tenantId: string;
   source: Source;
-  active: boolean;
   connector?: components["schemas"]["ConnectorDto"];
   topicName?: string;
   ingestionEndpoint?: string | null;
@@ -217,11 +217,11 @@ function GuideBody({
       ) : null}
 
       {source.type === "event_api" ? (
-        <EventApiGuide tenantId={tenantId} source={source} active={active} baseUri={baseUri} context={context} />
+        <EventApiGuide tenantId={tenantId} source={source} baseUri={baseUri} context={context} />
       ) : source.type === "webhook" ? (
-        <WebhookGuide source={source} active={active} baseUri={baseUri} contract={contract} />
+        <WebhookGuide source={source} baseUri={baseUri} contract={contract} />
       ) : (
-        <BrokerGuide source={source} active={active} contract={contract} />
+        <BrokerGuide source={source} contract={contract} />
       )}
       {context?.advancedMapping ? (
         <p className="m-0 text-sm text-ink-secondary">
@@ -239,13 +239,11 @@ function GuideBody({
 function EventApiGuide({
   tenantId,
   source,
-  active,
   baseUri,
   context,
 }: {
   tenantId: string;
   source: Source;
-  active: boolean;
   baseUri: string;
   context?: SourceGuideContext;
 }) {
@@ -274,25 +272,15 @@ function EventApiGuide({
         </p>
       </div>
       <div className="grid min-w-0 gap-4 lg:grid-cols-3">
-        <BodyPanel label="HTTP request" value={http} language="http" copyable={active} />
-        <BodyPanel label="cURL request" value={curl} language="shell" copyable={active} />
-        <BodyPanel label="C# HttpClient request" value={csharp} language="csharp" copyable={active} />
+        <BodyPanel label="HTTP request" value={http} language="http" copyable />
+        <BodyPanel label="cURL request" value={curl} language="shell" copyable />
+        <BodyPanel label="C# HttpClient request" value={csharp} language="csharp" copyable />
       </div>
     </section>
   );
 }
 
-function WebhookGuide({
-  source,
-  active,
-  baseUri,
-  contract,
-}: {
-  source: Source;
-  active: boolean;
-  baseUri: string;
-  contract: JsonObject | null;
-}) {
+function WebhookGuide({ source, baseUri, contract }: { source: Source; baseUri: string; contract: JsonObject | null }) {
   const callbackId = text(source.configuration, "callback_id");
   const callback = callbackId ? append(baseUri, `/webhooks/${callbackId}`) : "Callback identity unavailable";
   const schema = contract?.schema;
@@ -308,12 +296,12 @@ function WebhookGuide({
           normalizes it through the selected Source contract. Do not wrap it in the Event API envelope.
         </p>
       </div>
-      <BodyPanel label="Webhook callback URL" value={callback} copyable={active && Boolean(callbackId)} />
+      <BodyPanel label="Webhook callback URL" value={callback} copyable={Boolean(callbackId)} />
       <p className="m-0 text-sm">
         Required media type: <code>application/json</code>
       </p>
       {schema !== undefined ? (
-        <BodyPanel label="Declared native input schema" value={schema} copyable={active} />
+        <BodyPanel label="Declared native input schema" value={schema} copyable />
       ) : (
         <p className="m-0 text-sm text-ink-secondary">
           This contract declares no native example or schema. Use the provider's JSON payload and the selected
@@ -324,7 +312,7 @@ function WebhookGuide({
   );
 }
 
-function BrokerGuide({ source, active, contract }: { source: Source; active: boolean; contract: JsonObject | null }) {
+function BrokerGuide({ source, contract }: { source: Source; contract: JsonObject | null }) {
   const configuration = object(source.configuration);
   const transport = object(configuration.transport_config);
   const namespace = text(transport, "namespace") ?? "—";
@@ -345,9 +333,9 @@ function BrokerGuide({ source, active, contract }: { source: Source; active: boo
           or rejected input.
         </p>
       </div>
-      <BodyPanel label="Broker entity" value={address} copyable={active} />
+      <BodyPanel label="Broker entity" value={address} copyable />
       {contract?.schema !== undefined ? (
-        <BodyPanel label="Declared native input schema" value={contract.schema} copyable={active} />
+        <BodyPanel label="Declared native input schema" value={contract.schema} copyable />
       ) : (
         <p className="m-0 text-sm text-ink-secondary">
           This mapped Source contract declares no safe message example. Send its native JSON input; the contract derives

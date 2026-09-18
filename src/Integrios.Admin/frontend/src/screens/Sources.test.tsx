@@ -32,7 +32,7 @@ it("hides Source input requirements and restarts paging when the Topic filter ch
             topic_id: topicId,
             connector_id: connectorId,
             type: "event_api",
-            status: "active",
+            status: "enabled",
             input_requirements: second ? "second_requirements" : "order_requirements",
           },
         ],
@@ -80,7 +80,7 @@ it("names a broker Source's type as the Operator authored it", async () => {
           topic_id: topicId,
           connector_id: connectorId,
           type: "broker",
-          status: "active",
+          status: "enabled",
           input_requirements: null,
         },
       ]),
@@ -121,7 +121,7 @@ describe("Authoring a Source before anything it needs", () => {
     renderScreen(<SourcesScreen tenantId={tenantId} />, `/tenants/${tenantId}/sources`);
     fireEvent.click(await screen.findByRole("button", { name: "New Source" }));
 
-    const hint = await screen.findByText(/No active Topics yet/);
+    const hint = await screen.findByText(/No Topics yet/);
     expect(hint.textContent).toContain("a Source needs one");
     expect(within(hint).getByRole("link", { name: "Create a Topic" }).getAttribute("href")).toBe(
       `/tenants/${tenantId}/topics`,
@@ -175,7 +175,9 @@ describe("Source setup guide", () => {
     expect(screen.getByRole("list", { name: "Event path" }).textContent).toContain("Matching Subscriptions");
   });
 
-  it("copies an active request and removes runnable copy actions for a revoked Source", async () => {
+  /// A Disabled Source is where setup happens: the publisher is configured from the guide before the
+  /// Source is enabled, so nothing in it is withheld, and the guide says why Events are refused.
+  it("keeps the request copyable for a Disabled Source and says it refuses Events", async () => {
     const clipboard = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: clipboard } });
     guideHttp({ type: "event_api", configuration: {} });
@@ -194,17 +196,15 @@ describe("Source setup guide", () => {
     guideHttp({
       type: "event_api",
       configuration: {},
-      status: "revoked",
+      status: "disabled",
     });
     renderScreen(
       <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />,
       `/tenants/${tenantId}/sources/${sourceId}`,
     );
     fireEvent.click(await screen.findByRole("button", { name: "Open setup guide" }));
-    expect(await screen.findByText("This Source cannot accept new Events.", { selector: "strong" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Copy / })).toBeNull();
-    expect(screen.getByText("When this Source was active", { exact: false })).toBeTruthy();
-    expect(screen.queryByText("Running copied material", { exact: false })).toBeNull();
+    expect(await screen.findByText("This Source is Disabled.", { selector: "strong" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Copy http request" })).toBeTruthy();
   });
 });
 
@@ -251,8 +251,7 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
           event_identity_rule: null,
           event_types: ["order.created"],
           revision: "revision",
-          status: "active",
-          revoked_at: null,
+          status: "enabled",
           created_at: "2026-09-09T00:00:00Z",
           updated_at: "2026-09-09T00:00:00Z",
         },
@@ -277,7 +276,7 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
 
   fireEvent.click(within(form).getByRole("button", { name: "Save configuration" }));
   const confirm = await screen.findByRole("dialog", { name: "Save configuration" });
-  await within(confirm).findByText(/No active Subscription on this Topic depends on it yet/);
+  await within(confirm).findByText(/No Enabled Subscription on this Topic depends on it yet/);
   expect(within(confirm).getByText(/Events already accepted keep their Event type/)).toBeTruthy();
   fireEvent.click(within(confirm).getByRole("button", { name: "Save configuration" }));
 
@@ -311,8 +310,7 @@ it("discards an unsaved Source draft when the Edit sheet closes", async () => {
           event_identity_rule: { kind: "header", value: "x-github-delivery", allow_missing: false },
           event_types: ["order.created"],
           revision: "revision",
-          status: "active",
-          revoked_at: null,
+          status: "enabled",
           created_at: "2026-09-09T00:00:00Z",
           updated_at: "2026-09-09T00:00:00Z",
         },
@@ -377,7 +375,6 @@ function guideHttp({
           event_types: ["order.created"],
           revision: "revision",
           status,
-          revoked_at: status === "revoked" ? "2026-09-09T00:00:00Z" : null,
           created_at: "2026-09-09T00:00:00Z",
           updated_at: "2026-09-09T00:00:00Z",
         },
@@ -392,7 +389,7 @@ function guideHttp({
           manifest_schema_version: 1,
           name: type === "webhook" ? "GitHub" : type === "broker" ? "Dataverse" : "HTTP",
           direction: "source",
-          status: "active",
+          status: "enabled",
           manifest: {},
           created_at: "2026-09-09T00:00:00Z",
           updated_at: "2026-09-09T00:00:00Z",
@@ -406,7 +403,7 @@ function guideHttp({
           tenant_id: tenantId,
           key: "orders",
           name: "orders",
-          status: "active",
+          status: "enabled",
           description: null,
           subscription_count: 1,
           created_at: "2026-09-09T00:00:00Z",

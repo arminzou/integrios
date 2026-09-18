@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Authoring.Subscriptions;
@@ -35,7 +36,8 @@ public interface ISubscriptionRepository
         string? description,
         CancellationToken cancellationToken);
 
-    Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken);
+    Task<bool> SetStatusAsync(
+        Guid tenantId, Guid topicId, Guid id, EnablementStatus status, CancellationToken cancellationToken);
 
     // Destination authoring checks every active use before changing authentication, so header
     // ownership is validated from both directions under the same per-Destination lock.

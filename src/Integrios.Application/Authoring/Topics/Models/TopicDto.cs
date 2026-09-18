@@ -8,7 +8,6 @@ public sealed record TopicDto(
     Guid TenantId,
     string Key,
     string Name,
-    string Status,
     string? Description,
     // How many Subscriptions match this Topic. Nothing else on the Topic says whether anything is
     // listening to it, and a Topic nothing subscribes to is the established signal for a missing
@@ -25,7 +24,6 @@ public sealed record TopicDto(
         t.TenantId,
         t.Key,
         t.Name,
-        t.Status.ToString().ToLowerInvariant(),
         t.Description,
         subscriptionCount,
         eventTypes,

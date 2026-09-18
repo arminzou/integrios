@@ -33,13 +33,13 @@ internal sealed class SecretValidationReader(IntegriosDbContext context) : ISecr
             destination => destination.TenantId == tenantId && destination.Id == destinationId,
             cancellationToken);
 
-    public async Task<IReadOnlyList<Destination>> ListActiveDestinationsAsync(
+    public async Task<IReadOnlyList<Destination>> ListDestinationsAsync(
         Guid tenantId,
         CancellationToken cancellationToken) =>
         await context.Destinations.AsNoTracking()
-            .Where(destination =>
-                destination.TenantId == tenantId
-                && destination.Status == OperationalStatus.Active)
+            // Disabled Destinations included: they can be enabled again, and deliveries already
+            // snapshotted against one still resolve its secrets.
+            .Where(destination => destination.TenantId == tenantId)
             .OrderBy(destination => destination.CreatedAt)
             .ThenBy(destination => destination.Id)
             .ToListAsync(cancellationToken);

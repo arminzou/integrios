@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using Integrios.Application.Authoring.Topics;
-using Integrios.Domain.Enums;
 using MediatR;
 
 namespace Integrios.Admin.Endpoints;
@@ -15,7 +14,6 @@ public sealed class TopicsEndpoints : IEndpointGroup
         group.MapGet(ListTopics).Produces<AdminTopicListResponse>();
         group.MapGet(GetTopicById, "/{id:guid}").Produces<AdminTopicResponse>();
         group.MapPut(UpdateTopic, "/{id:guid}").Produces<AdminTopicResponse>();
-        group.MapPost(DeactivateTopic, "/{id:guid}/deactivate");
     }
 
     private static async Task<IResult> CreateTopic(
@@ -35,15 +33,12 @@ public sealed class TopicsEndpoints : IEndpointGroup
         Guid tenantId,
         IMediator mediator,
         CancellationToken cancellationToken,
-        string? status,
         string? name = null,
         string? after = null,
         int limit = 20)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var filter = new TopicListFilter(
-            ListFilter.ParseEnum<OperationalStatus>(status, "Topic status must be active or disabled."),
-            ListFilter.Trimmed(name));
+        var filter = new TopicListFilter(ListFilter.Trimmed(name));
         var dto = await mediator.Send(new ListTopicsByTenantQuery(tenantId, filter, after, limit), cancellationToken);
         return Results.Ok(AdminTopicListResponse.From(dto));
     }
@@ -70,16 +65,6 @@ public sealed class TopicsEndpoints : IEndpointGroup
             cancellationToken);
         return dto is null ? Results.NotFound() : Results.Ok(AdminTopicResponse.From(dto));
     }
-
-    private static async Task<IResult> DeactivateTopic(
-        Guid tenantId,
-        Guid id,
-        IMediator mediator,
-        CancellationToken cancellationToken)
-    {
-        var deactivated = await mediator.Send(new DeactivateTopicCommand(tenantId, id), cancellationToken);
-        return deactivated ? Results.Ok() : Results.NotFound();
-    }
 }
 
 internal sealed record CreateTopicRequest(
@@ -96,7 +81,6 @@ internal sealed record AdminTopicResponse(
     Guid TenantId,
     string Key,
     string Name,
-    string Status,
     string? Description,
     int SubscriptionCount,
     IReadOnlyList<string> EventTypes,
@@ -108,7 +92,6 @@ internal sealed record AdminTopicResponse(
         dto.TenantId,
         dto.Key,
         dto.Name,
-        dto.Status,
         dto.Description,
         dto.SubscriptionCount,
         dto.EventTypes,

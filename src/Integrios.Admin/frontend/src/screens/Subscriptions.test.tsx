@@ -22,7 +22,7 @@ const subscription = {
   mapping_config: { engine: "jsonata", version: "1", expression: '{ "customer": customer.id }' },
   http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
   http_success: null,
-  status: "active",
+  status: "enabled",
   order_index: 1,
   description: null,
   created_at: "2026-09-08T00:00:00Z",
@@ -49,7 +49,7 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
-      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "active" }]) };
+      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "enabled" }]) };
     return {
       status: 200,
       body: page([
@@ -61,7 +61,7 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
           destination_id: destinationId,
           destination_name: "Primary CRM",
           name: "Send priority orders",
-          status: "active",
+          status: "enabled",
           order_index: 1,
           description: null,
           created_at: "2026-09-08T00:00:00Z",
@@ -73,7 +73,7 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
 
   renderScreen(
     <SubscriptionsScreen tenantId={tenantId} />,
-    `/tenants/${tenantId}/subscriptions?name=priority&topic_id=${topicId}&destination_id=${destinationId}&status=active`,
+    `/tenants/${tenantId}/subscriptions?name=priority&topic_id=${topicId}&destination_id=${destinationId}&status=enabled`,
   );
 
   expect(await screen.findByRole("link", { name: "Send priority orders" })).toBeTruthy();
@@ -90,7 +90,7 @@ it("lists Tenant Subscriptions with their Topic and destination names and sends 
       name: "priority",
       topic_id: topicId,
       destination_id: destinationId,
-      status: "active",
+      status: "enabled",
     });
   });
 });
@@ -104,7 +104,7 @@ it("says what a Subscription is missing when the Tenant has no Topic and no Dest
 
   // A Subscription is the last thing a Tenant authors, so it is the form most able to be blocked:
   // it routes from a Topic to a Destination and needs both to exist first.
-  const topicHint = await within(sheet).findByText(/No active Topics yet/);
+  const topicHint = await within(sheet).findByText(/No Topics yet/);
   expect(within(topicHint).getByRole("link", { name: "Create a Topic" }).getAttribute("href")).toBe(
     `/tenants/${tenantId}/topics`,
   );
@@ -116,7 +116,7 @@ it("loads eligible Destinations for the selected Topic in a new Subscription", a
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
-      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "active" }]) };
+      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "enabled" }]) };
     return { status: 200, body: page([]) };
   });
 
@@ -135,7 +135,7 @@ it("guides a new Subscription without exposing raw JSON editors", async () => {
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
-      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "active" }]) };
+      return { status: 200, body: page([{ id: destinationId, name: "Primary CRM", status: "enabled" }]) };
     return { status: 200, body: page([]) };
   });
 
@@ -149,7 +149,7 @@ it("guides a new Subscription without exposing raw JSON editors", async () => {
   expect(within(form).getByRole("button", { name: "Add mapping in Playground" })).toBeTruthy();
 });
 
-it("explains when no active Source reaches the Subscription", async () => {
+it("explains when no Enabled Source reaches the Subscription", async () => {
   stubSubscriptionSources([]);
 
   const { router } = renderScreen(
@@ -157,7 +157,7 @@ it("explains when no active Source reaches the Subscription", async () => {
     `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`,
   );
 
-  expect(await screen.findByText("No active Source publishes to this Topic.", { exact: false })).toBeTruthy();
+  expect(await screen.findByText("No Enabled Source publishes to this Topic.", { exact: false })).toBeTruthy();
   expect(screen.getByText("order.placed")).toBeTruthy();
   screen.getByRole("link", { name: "Create a Source" }).click();
   await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/sources`));
@@ -176,7 +176,7 @@ it("opens the sole Source guide with simple mapping context", async () => {
       topic_id: topicId,
       name: "orders-intake",
       type: "event_api",
-      status: "active",
+      status: "enabled",
       input_requirements: "",
     },
   ]);
@@ -204,7 +204,7 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
         topic_id: topicId,
         name: "orders-intake",
         type: "event_api",
-        status: "active",
+        status: "enabled",
         input_requirements: "",
       },
       ...Array.from({ length: 99 }, (_, index) => ({
@@ -214,7 +214,7 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
         topic_id: topicId,
         name: `bulk-intake-${index}`,
         type: "event_api",
-        status: "active",
+        status: "enabled",
         input_requirements: "",
       })),
     ],
@@ -227,7 +227,7 @@ it("distinguishes multiple Sources and marks advanced mapping context", async ()
         topic_id: topicId,
         name: "webhook-intake",
         type: "webhook",
-        status: "active",
+        status: "enabled",
         input_requirements: "",
       },
     ],
@@ -258,7 +258,7 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
     if (url.pathname.endsWith("/destinations"))
-      return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
+      return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "enabled" }]) };
     if (method === "PUT") return { status: 200, body: subscription };
     return { status: 200, body: page([]) };
   });
@@ -312,7 +312,7 @@ describe("Editing a Subscription", () => {
         return { status: 200, body: { ...orders, event_types: ["order.placed", "order.shipped"] } };
       if (url.pathname.endsWith("/topics")) return { status: 200, body: page([orders]) };
       if (url.pathname.endsWith("/destinations"))
-        return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
+        return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "enabled" }]) };
       return { status: 200, body: page([]) };
     });
   }
@@ -408,8 +408,8 @@ describe("Editing a Subscription", () => {
     expect((calls.find((call) => call.method === "PUT")!.body as { mapping: unknown }).mapping).toEqual(mapping);
   });
 
-  it("offers no deactivation once it is disabled", async () => {
-    stubEdit({ ...subscription, status: "disabled" });
+  it("offers Enable and editing once it is disabled", async () => {
+    const calls = stubEdit({ ...subscription, status: "disabled" });
     renderScreen(
       <SubscriptionsScreen tenantId={tenantId} selectedTopicId={topicId} selectedSubscriptionId={subscriptionId} />,
       detailPath,
@@ -417,6 +417,13 @@ describe("Editing a Subscription", () => {
 
     const panel = await screen.findByRole("complementary", { name: "Subscription detail" });
     await within(panel).findByRole("heading", { name: subscription.name });
-    expect(within(panel).queryByRole("button", { name: /Deactivate/ })).toBeNull();
+    expect(within(panel).queryByRole("button", { name: "Disable" })).toBeNull();
+    expect(within(panel).getByRole("button", { name: "Edit" })).toBeTruthy();
+    fireEvent.click(within(panel).getByRole("button", { name: "Enable" }));
+    await waitFor(() =>
+      expect(
+        calls.some((call) => call.method === "POST" && call.url.pathname.endsWith(`/${subscriptionId}/enable`)),
+      ).toBe(true),
+    );
   });
 });

@@ -45,7 +45,7 @@ internal sealed class CreateDestinationCommandHandler(
                 connector,
                 command.Authentication,
                 authenticationRegistry),
-            Status = OperationalStatus.Active,
+            Status = EnablementStatus.Enabled,
             Environment = command.Environment,
             Description = command.Description,
             CreatedAt = DateTimeOffset.UtcNow,

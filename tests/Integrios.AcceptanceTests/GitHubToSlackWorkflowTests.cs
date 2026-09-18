@@ -127,6 +127,7 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
                 event_identity_rule = new { kind = "header", value = "X-GitHub-Delivery" }
             });
         JsonElement source = await AssertJsonAsync(response, HttpStatusCode.Created);
+        await EnableAsync($"/admin/tenants/{tenant}/sources/{source.GetProperty("id").GetGuid()}");
         return $"/webhooks/{source.GetProperty("configuration").GetProperty("callback_id").GetString()}";
     }
 
@@ -149,7 +150,16 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
                 http_delivery = new { version = 1, method = "POST", headers = new { }, body = "json" },
                 http_success = new { evaluator = "json_boolean", field = "ok", expected = true },
             });
-        return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
+        Guid subscription = (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
+        await EnableAsync($"/admin/tenants/{tenant}/topics/{topic}/subscriptions/{subscription}");
+        return subscription;
+    }
+
+    // Sources and Subscriptions are authored Disabled; the journey enables each before its traffic.
+    private async Task EnableAsync(string path)
+    {
+        using HttpResponseMessage response = await PostAdminAsync($"{path}/enable", new { });
+        (await AssertJsonAsync(response, HttpStatusCode.OK)).GetProperty("status").GetString().ShouldBe("enabled");
     }
 
     private async Task<Guid> SendSignedPushAsync(string callbackPath, string secret)

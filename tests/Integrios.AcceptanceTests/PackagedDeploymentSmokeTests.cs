@@ -126,6 +126,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
             new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "payment.created", "payment.unreachable" }, configuration = new { } });
+        await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
@@ -134,6 +135,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 event_types = new[] { "payment.created" },
                 destination_id = destinationId
             });
+        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{subscriptionId}");
 
         // A refused endpoint is the only exercised path that leaves DeliveryResult.Error non-null
         // on the HTTP phase. Without it the exported-status assertion below is vacuous for
@@ -147,7 +149,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 configuration = new { base_uri = "http://mocksink:9/sink/unreachable" },
                 environment = "production"
             });
-        await PostAdminForIdAsync(
+        Guid unreachableSubscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
@@ -155,6 +157,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 event_types = new[] { "payment.unreachable" },
                 destination_id = unreachableDestinationId
             });
+        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{unreachableSubscriptionId}");
 
         await fixture.WireMockSink.ConfigureAsync(sinkName, "fail");
 
@@ -505,6 +508,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
             new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "delivery.blocked" }, configuration = new { } });
+        await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
@@ -513,6 +517,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 event_types = new[] { "delivery.blocked" },
                 destination_id = destinationId
             });
+        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{subscriptionId}");
 
         await fixture.WireMockSink.ConfigureAsync(sinkName, "slow", delayMs: 8000);
         Guid? blockedEventId = null;
@@ -558,6 +563,10 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
 
     private async Task<Guid> PostAdminForIdAsync(string path, object body) =>
         Guid.Parse(await PostAdminForPropertyAsync(path, body, "id"));
+
+    // Sources and Subscriptions are authored Disabled; a journey enables each before its traffic.
+    private async Task EnableAsync(string path) =>
+        (await PostAdminForPropertyAsync($"{path}/enable", new { }, "status")).ShouldBe("enabled");
 
     private async Task<string> PostAdminForPropertyAsync(string path, object body, string property)
     {

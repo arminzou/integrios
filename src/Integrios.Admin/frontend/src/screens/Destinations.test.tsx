@@ -127,7 +127,7 @@ const destination = {
   tenant_id: tenantId,
   connector_id: connectorId,
   name: "northwind-erp",
-  status: "active",
+  status: "enabled",
   environment: "production",
   description: "Order and payment records into the ERP.",
   configuration: { base_uri: "http://erp.internal/hooks" },
@@ -178,7 +178,7 @@ describe("Destination selection", () => {
     expect(row.getAttribute("aria-current")).toBe("page");
 
     // The destructive action names what it will change, and stays in the panel that shows it.
-    expect(within(panel).getByRole("button", { name: /Deactivate/ })).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "Disable" })).toBeTruthy();
   });
 });
 
@@ -256,13 +256,16 @@ describe("A selected Destination", () => {
     expect(within(panel).getByText("bearer_token")).toBeTruthy();
   });
 
-  it("offers no deactivation once it is disabled", async () => {
+  it("offers Enable, not Disable, once it is disabled", async () => {
     stubDestination({ ...destination, status: "disabled" });
     renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
 
     const panel = await screen.findByRole("complementary", { name: "Destination detail" });
     await within(panel).findByRole("heading", { name: destination.name });
-    expect(within(panel).queryByRole("button", { name: /Deactivate/ })).toBeNull();
+    expect(within(panel).queryByRole("button", { name: "Disable" })).toBeNull();
+    expect(within(panel).getByRole("button", { name: "Enable" })).toBeTruthy();
+    // Disabled is reversible configuration, not a removed resource: it stays editable.
+    expect(within(panel).getByRole("button", { name: "Edit" })).toBeTruthy();
   });
 });
 

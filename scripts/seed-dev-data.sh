@@ -74,16 +74,23 @@ new_topic() { # tenant key name description  (the demo keys double as their disp
 }
 
 new_source() { # tenant connector topic name event_types_csv [type] [configuration_json]
-  local type=${6:-event_api} configuration=${7:-'{"source_contract":"event_json"}'}
-  admin POST "/admin/tenants/$1/sources" "$(jq -n --arg c "$2" --arg t "$3" --arg n "$4" --arg et "$5" \
+  # Sources are authored Disabled; the demo enables each so traffic flows.
+  local type=${6:-event_api} configuration=${7:-'{"source_contract":"event_json"}'} id
+  id=$(admin POST "/admin/tenants/$1/sources" "$(jq -n --arg c "$2" --arg t "$3" --arg n "$4" --arg et "$5" \
     --arg type "$type" --argjson cfg "$configuration" \
-    '{connector_id:$c,topic_id:$t,name:$n,type:$type,event_types:($et|split(",")),configuration:$cfg,verification:null,input_requirements:null,mapping:null,event_identity_rule:null}')" | jq -r .id
+    '{connector_id:$c,topic_id:$t,name:$n,type:$type,event_types:($et|split(",")),configuration:$cfg,verification:null,input_requirements:null,mapping:null,event_identity_rule:null}')" | jq -r .id)
+  admin POST "/admin/tenants/$1/sources/$id/enable" > /dev/null
+  printf '%s\n' "$id"
 }
 
 new_subscription() { # tenant topic name event_type destination order description [mapping_json]
-  admin POST "/admin/tenants/$1/topics/$2/subscriptions" "$(jq -n --arg n "$3" --arg et "$4" \
+  # Subscriptions are authored Disabled; the demo enables each so fanout routes to it.
+  local id
+  id=$(admin POST "/admin/tenants/$1/topics/$2/subscriptions" "$(jq -n --arg n "$3" --arg et "$4" \
     --arg dst "$5" --argjson o "$6" --arg d "$7" --argjson m "${8:-null}" \
-    '{name:$n,event_types:[$et],destination_id:$dst,mapping:$m,http_delivery:null,http_success:null,order_index:$o,description:$d}')" | jq -r .id
+    '{name:$n,event_types:[$et],destination_id:$dst,mapping:$m,http_delivery:null,http_success:null,order_index:$o,description:$d}')" | jq -r .id)
+  admin POST "/admin/tenants/$1/topics/$2/subscriptions/$id/enable" > /dev/null
+  printf '%s\n' "$id"
 }
 
 new_key() { # tenant name description
@@ -114,7 +121,7 @@ NW_WMS=$(new_destination "$NW" northwind-wms http://mocksink:8080/sink/northwind
 NW_LAKE=$(new_destination "$NW" analytics-lake http://mocksink:8080/sink/northwind-lake production "Flattened order feed for the analytics lake.")
 NW_BILLING=$(new_destination "$NW" legacy-billing http://mocksink:8080/sink/northwind-billing production "Decommissioned billing host. Kept until finance signs off on the cutover.")
 NW_SANDBOX=$(new_destination "$NW" erp-sandbox http://mocksink:8080/sink/northwind-sandbox staging "Vendor sandbox used during the last ERP upgrade.")
-admin POST "/admin/tenants/$NW/destinations/$NW_SANDBOX/deactivate" > /dev/null
+admin POST "/admin/tenants/$NW/destinations/$NW_SANDBOX/disable" > /dev/null
 
 NW_ORDERS=$(new_topic "$NW" orders orders "Order lifecycle from the storefront.")
 NW_PAY=$(new_topic "$NW" payments payments "Payment authorisation and capture.")
@@ -122,7 +129,6 @@ NW_STOCK=$(new_topic "$NW" inventory inventory "Stock level movements per wareho
 NW_WEBHOOKS=$(new_topic "$NW" storefront-webhooks storefront-webhooks "Provider callbacks received from the storefront platform.")
 NW_QUEUE=$(new_topic "$NW" warehouse-receipts warehouse-receipts "Warehouse receipts consumed from the operations queue.")
 NW_OLD=$(new_topic "$NW" pos-terminals pos-terminals "Retired in-store terminal stream.")
-admin POST "/admin/tenants/$NW/topics/$NW_OLD/deactivate" > /dev/null
 
 NW_ORDERS_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_ORDERS" "Northwind orders" order.placed,order.shipped,order.cancelled)
 NW_PAY_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_PAY" "Northwind payments" payment.captured)
@@ -145,7 +151,7 @@ new_subscription "$NW" "$NW_STOCK" wms-stock stock.adjusted "$NW_WMS" 0 "Stock a
 new_subscription "$NW" "$NW_WEBHOOKS" webhook-audit storefront.webhook.received "$NW_LAKE" 0 "Storefront callbacks retained in the analytics lake." > /dev/null
 new_subscription "$NW" "$NW_QUEUE" warehouse-receipts warehouse.receipt.recorded "$NW_WMS" 0 "Warehouse receipts delivered to the warehouse system." > /dev/null
 NW_PAUSED=$(new_subscription "$NW" "$NW_STOCK" lake-stock stock.adjusted "$NW_LAKE" 1 "Paused while the lake schema migration runs.")
-admin POST "/admin/tenants/$NW/topics/$NW_STOCK/subscriptions/$NW_PAUSED/deactivate" > /dev/null
+admin POST "/admin/tenants/$NW/topics/$NW_STOCK/subscriptions/$NW_PAUSED/disable" > /dev/null
 
 # --- 4. Helios Energy: smaller, staging -------------------------------------------------------
 say "Helios Energy"

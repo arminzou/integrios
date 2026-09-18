@@ -7,7 +7,7 @@ public interface ISubscriptionQueries
     Task<SubscriptionListDto> ListByTopicAsync(
         Guid tenantId,
         Guid topicId,
-        OperationalStatus? status,
+        EnablementStatus? status,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken);

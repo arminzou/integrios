@@ -75,10 +75,10 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             UPDATE destinations SET status = 'disabled' WHERE id = @DestinationId;
             INSERT INTO tenant_api_keys (id, tenant_id, name, key_prefix, key_hash, status, created_at, revoked_at)
             VALUES (@RevokedKeyId, @TenantId, 'revoked-list-key', 'ik_revoked', 'sha256:test', 'disabled', @Now, @Now);
-            INSERT INTO topics (id, tenant_id, {{{fixture.KeyColumn}}}, name, status, created_at, updated_at)
-            VALUES (@TopicId, @TenantId, 'disabled-list-topic', 'disabled-list-topic', 'disabled', @Now, @Now);
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at, revoked_at)
-            VALUES (@SourceId, @TenantId, @SourceConnectorId, @TopicId, 'disabled-list-intake', 'event_api', '["list.contract"]', {{{fixture.Json("@Configuration")}}}, 'fixture-revision', 'revoked', @Now, @Now, @Now);
+            INSERT INTO topics (id, tenant_id, {{{fixture.KeyColumn}}}, name, created_at, updated_at)
+            VALUES (@TopicId, @TenantId, 'disabled-list-topic', 'disabled-list-topic', @Now, @Now);
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at)
+            VALUES (@SourceId, @TenantId, @SourceConnectorId, @TopicId, 'disabled-list-intake', 'event_api', '["list.contract"]', {{{fixture.Json("@Configuration")}}}, 'fixture-revision', 'disabled', @Now, @Now);
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, event_types, destination_id, order_index, status, created_at, updated_at)
             VALUES (@SubscriptionId, @TenantId, @TopicId, 'disabled-list-subscription', {{{fixture.Json("@EventTypes")}}}, @DestinationId, 0, 'disabled', @Now, @Now);
             """,
@@ -106,11 +106,9 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         (await client.SendAsync(AdminRequest(HttpMethod.Get, "/admin/connectors?direction=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/destinations?status=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/sources?status=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics?status=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/topics/{topicId}/subscriptions?status=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/sources?status=revoked&type=event_api")).ShouldContain(sourceId);
-        (await GetListAsync($"/admin/tenants/{fixture.TenantId}/sources?status=revoked&type=event_api")).GetProperty("items")[0].GetProperty("type").GetString().ShouldBe("event_api");
-        (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/topics?status=disabled")).ShouldContain(topicId);
+        (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/sources?status=disabled&type=event_api")).ShouldContain(sourceId);
+        (await GetListAsync($"/admin/tenants/{fixture.TenantId}/sources?status=disabled&type=event_api")).GetProperty("items")[0].GetProperty("type").GetString().ShouldBe("event_api");
         (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/topics/{topicId}/subscriptions?status=disabled")).ShouldContain(subscriptionId);
 
         (await GetListAsync("/admin/connectors")).GetProperty("items")[0].TryGetProperty("manifest", out _).ShouldBeFalse();
@@ -131,17 +129,17 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         Guid excluded = Guid.NewGuid();
         DateTimeOffset now = DateTimeOffset.UtcNow;
         await ExecuteAsync($$$"""
-            INSERT INTO topics (id, tenant_id, {{{fixture.KeyColumn}}}, name, status, created_at, updated_at) VALUES
-            (@FirstTopic, @TenantId, 'orders', 'Orders', 'active', @Now, @Now),
-            (@SecondTopic, @TenantId, 'invoices', 'Invoices', 'active', @Now, @Now);
+            INSERT INTO topics (id, tenant_id, {{{fixture.KeyColumn}}}, name, created_at, updated_at) VALUES
+            (@FirstTopic, @TenantId, 'orders', 'Orders', @Now, @Now),
+            (@SecondTopic, @TenantId, 'invoices', 'Invoices', @Now, @Now);
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status, created_at, updated_at) VALUES
-            (@FirstDestination, @TenantId, @ConnectorId, 'Primary CRM', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now),
-            (@SecondDestination, @TenantId, @ConnectorId, 'Archive', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now);
+            (@FirstDestination, @TenantId, @ConnectorId, 'Primary CRM', {{{fixture.Json("@Config")}}}, 'enabled', @Now, @Now),
+            (@SecondDestination, @TenantId, @ConnectorId, 'Archive', {{{fixture.Json("@Config")}}}, 'enabled', @Now, @Now);
             INSERT INTO subscriptions
                 (id, tenant_id, topic_id, name, event_types, destination_id, order_index, status, created_at, updated_at) VALUES
-            (@First, @TenantId, @FirstTopic, 'Send priority orders', {{{fixture.Json("@Rules")}}}, @FirstDestination, 1, 'active', @Now, @Now),
+            (@First, @TenantId, @FirstTopic, 'Send priority orders', {{{fixture.Json("@Rules")}}}, @FirstDestination, 1, 'enabled', @Now, @Now),
             (@Second, @TenantId, @FirstTopic, 'Archive orders', {{{fixture.Json("@Rules")}}}, @SecondDestination, 2, 'disabled', @Now, @Now),
-            (@Excluded, @TenantId, @SecondTopic, 'Send invoices', {{{fixture.Json("@Rules")}}}, @FirstDestination, 3, 'active', @Now, @Now);
+            (@Excluded, @TenantId, @SecondTopic, 'Send invoices', {{{fixture.Json("@Rules")}}}, @FirstDestination, 3, 'enabled', @Now, @Now);
             """,
             new
             {
@@ -224,8 +222,8 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         Guid second = Guid.NewGuid();
         await ExecuteAsync($$"""
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status, environment) VALUES
-            (@First, @TenantId, @ConnectorId, 'Ledger gateway', {{fixture.Json("@Config")}}, 'active', 'Production'),
-            (@Second, @TenantId, @ConnectorId, 'Ledger relay', {{fixture.Json("@Config")}}, 'active', 'Production')
+            (@First, @TenantId, @ConnectorId, 'Ledger gateway', {{fixture.Json("@Config")}}, 'enabled', 'Production'),
+            (@Second, @TenantId, @ConnectorId, 'Ledger relay', {{fixture.Json("@Config")}}, 'enabled', 'Production')
             """, new
         {
             First = first,
@@ -257,13 +255,13 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         Guid excluded = Guid.NewGuid();
         DateTimeOffset now = DateTimeOffset.UtcNow;
         await ExecuteAsync($$"""
-            INSERT INTO topics (id, tenant_id, {{fixture.KeyColumn}}, name, status, created_at, updated_at) VALUES
-            (@Topic, @TenantId, 'source-filter-topic', 'source-filter-topic', 'active', @Now, @Now),
-            (@OtherTopic, @TenantId, 'other-source-filter-topic', 'other-source-filter-topic', 'active', @Now, @Now);
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at, revoked_at) VALUES
-            (@First, @TenantId, @ConnectorId, @Topic, 'first-intake', 'event_api', '["list.contract"]', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL),
-            (@Second, @TenantId, @ConnectorId, @Topic, 'second-intake', 'webhook', '["list.contract"]', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'revoked', @Now, @Now, @Now),
-            (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'excluded-intake', 'broker', '["list.contract"]', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'active', @Now, @Now, NULL)
+            INSERT INTO topics (id, tenant_id, {{fixture.KeyColumn}}, name, created_at, updated_at) VALUES
+            (@Topic, @TenantId, 'source-filter-topic', 'source-filter-topic', @Now, @Now),
+            (@OtherTopic, @TenantId, 'other-source-filter-topic', 'other-source-filter-topic', @Now, @Now);
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at) VALUES
+            (@First, @TenantId, @ConnectorId, @Topic, 'first-intake', 'event_api', '["list.contract"]', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'enabled', @Now, @Now),
+            (@Second, @TenantId, @ConnectorId, @Topic, 'second-intake', 'webhook', '["list.contract"]', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'disabled', @Now, @Now),
+            (@Excluded, @TenantId, @ConnectorId, @OtherTopic, 'excluded-intake', 'broker', '["list.contract"]', {{fixture.Json("@Configuration")}}, 'fixture-revision', 'enabled', @Now, @Now)
             """, new
         {
             Topic = topic,
@@ -279,7 +277,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
 
         string root = $"/admin/tenants/{fixture.TenantId}/sources";
         (await ListIdsAsync($"{root}?topic_id={topic}")).Order().ShouldBe(new[] { first, second }.Order());
-        (await ListIdsAsync($"{root}?topic_id={topic}&type=event_api&status=active")).ShouldBe(new[] { first });
+        (await ListIdsAsync($"{root}?topic_id={topic}&type=event_api&status=enabled")).ShouldBe(new[] { first });
         (await ListIdsAsync($"{root}?topic_id={topic}&type=broker")).ShouldBeEmpty();
         (await ListIdsAsync($"/admin/tenants/{fixture.OtherTenantId}/sources?topic_id={topic}")).ShouldBeEmpty();
         (await ListIdsAsync($"{root}?topic_id={Guid.NewGuid()}")).ShouldBeEmpty();
@@ -292,7 +290,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         JsonElement next = await GetListAsync($"{root}?topic_id={topic}&limit=1&after={cursor}");
         next.GetProperty("items").GetArrayLength().ShouldBe(1);
         next.GetProperty("items")[0].GetProperty("id").GetGuid().ShouldNotBe(page.GetProperty("items")[0].GetProperty("id").GetGuid());
-        foreach (string changed in new[] { $"topic_id={otherTopic}", "", $"topic_id={topic}&status=active", $"topic_id={topic}&type=event_api" })
+        foreach (string changed in new[] { $"topic_id={otherTopic}", "", $"topic_id={topic}&status=enabled", $"topic_id={topic}&type=event_api" })
             (await client.SendAsync(AdminRequest(HttpMethod.Get, $"{root}?{changed}&after={cursor}"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.OtherTenantId}/sources?topic_id={topic}&after={cursor}"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }

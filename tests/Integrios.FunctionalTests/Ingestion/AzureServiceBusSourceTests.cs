@@ -228,7 +228,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, mapping, revision, status)
             VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'sb-intake', 'broker',
                 '["order.created"]',
-                {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'active');
+                {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'enabled');
             """,
             new
             {
@@ -259,8 +259,8 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
             INSERT INTO tenants (id, slug, name, status, created_at, updated_at)
             VALUES (@TenantId, @Slug, 'SB Integration', 'active', {{{database.Now}}}, {{{database.Now}}});
 
-            INSERT INTO topics (id, tenant_id, {{{database.KeyColumn}}}, name, status, created_at, updated_at)
-            VALUES (@TopicId, @TenantId, 'sb-topic', 'sb-topic', 'active', {{{database.Now}}}, {{{database.Now}}});
+            INSERT INTO topics (id, tenant_id, {{{database.KeyColumn}}}, name, created_at, updated_at)
+            VALUES (@TopicId, @TenantId, 'sb-topic', 'sb-topic', {{{database.Now}}}, {{{database.Now}}});
             """,
             new
             {

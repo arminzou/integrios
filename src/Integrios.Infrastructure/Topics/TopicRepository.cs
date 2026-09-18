@@ -28,7 +28,6 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             TenantId = tenantId,
             Key = key,
             Name = name,
-            Status = OperationalStatus.Active,
             Description = description,
             CreatedAt = now,
             UpdatedAt = now,
@@ -78,15 +77,12 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             ':',
             "topics",
             tenantId.ToString("N"),
-            filter.Status?.ToString() ?? "all",
             filter.NameContains ?? "all");
         bool hasCursor = afterCursor is not null;
         if (hasCursor && !PageCursor.TryDecode(dataProtectionProvider, afterCursor!, cursorScope, out cursorTime, out cursorId))
             throw new InvalidCursorException();
 
         IQueryable<Topic> query = context.Topics.AsNoTracking().Where(topic => topic.TenantId == tenantId);
-        if (filter.Status is not null)
-            query = query.Where(topic => topic.Status == filter.Status);
         // Lowered on both sides so the match does not depend on the provider's collation.
         if (filter.NameContains is not null)
         {
@@ -143,8 +139,6 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             return null;
         if (string.IsNullOrWhiteSpace(name))
             throw new TopicValidationException("Topic name is required for update.");
-        if (existing.Status == OperationalStatus.Disabled)
-            return null;
 
         DateTimeOffset updatedAt = DateTimeOffset.UtcNow;
         await context.Topics
@@ -159,27 +153,14 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
         return existing with { Name = name, Description = description, UpdatedAt = updatedAt };
     }
 
-    public async Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct)
-        => await context.Topics
-            .Where(topic =>
-                topic.TenantId == tenantId
-                && topic.Id == id
-                && topic.Status != OperationalStatus.Disabled)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(topic => topic.Status, OperationalStatus.Disabled)
-                    .SetProperty(topic => topic.UpdatedAt, DateTimeOffset.UtcNow),
-                ct) > 0;
-
-    // ponytail: Revoked is the only removal a Source has until deletion lands; the union follows
-    // whichever state means the Source can no longer publish.
+    // Disabled Sources count: their declarations let Subscriptions be authored before intake opens.
     public async Task<IReadOnlyList<SourceDeclaration>> ListSourceDeclarationsAsync(
         Guid tenantId, IReadOnlyCollection<Guid> topicIds, CancellationToken ct) =>
         await context.Sources.AsNoTracking()
             .Where(source =>
                 source.TenantId == tenantId
                 && topicIds.Contains(source.TopicId)
-                && source.Status == SourceStatus.Active)
+)
             .Select(source => new SourceDeclaration(source.Id, source.TopicId, source.EventTypes))
             .ToListAsync(ct);
 

@@ -32,21 +32,23 @@ public sealed class SourceSecretValidationCliTests
     // one bare reference inside its transport configuration. Covering only the first would leave
     // every broker credential unchecked.
     [Fact]
-    public async Task RunAsync_CoversBrokerAndWebhookShapesAndSkipsRevokedSourcesAndInactiveTenants()
+    public async Task RunAsync_CoversBrokerAndWebhookShapesAndDisabledSourcesButSkipsInactiveTenants()
     {
         Tenant tenant = MakeTenant("tenant-a");
         Tenant disabled = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Disabled };
         Source webhook = WebhookSource(tenant.Id, "hook_secret");
         Source broker = BrokerSource(tenant.Id, "bus_connection");
-        Source revoked = WebhookSource(tenant.Id, "gone_secret") with { Status = SourceStatus.Revoked };
+        // Disabled is reversible, so its secrets have to resolve before it is enabled, not after.
+        Source paused = WebhookSource(tenant.Id, "paused_secret") with { Status = EnablementStatus.Disabled };
         Source otherTenant = WebhookSource(disabled.Id, "ignored_secret");
         using ServiceProvider services = BuildServices(
             [tenant, disabled],
-            [webhook, broker, revoked, otherTenant],
+            [webhook, broker, paused, otherTenant],
             new Dictionary<string, string>
             {
                 ["tenant-a/hook_secret"] = "hook-value",
                 ["tenant-a/bus_connection"] = "bus-value",
+                ["tenant-a/paused_secret"] = "paused-value",
             });
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -58,7 +60,7 @@ public sealed class SourceSecretValidationCliTests
         string report = output.ToString();
         report.ShouldContain("hook_secret: resolvable", Case.Sensitive);
         report.ShouldContain("bus_connection: resolvable", Case.Sensitive);
-        report.ShouldNotContain("gone_secret", Case.Sensitive);
+        report.ShouldContain("paused_secret: resolvable", Case.Sensitive);
         report.ShouldNotContain("ignored_secret", Case.Sensitive);
     }
 
@@ -145,7 +147,7 @@ public sealed class SourceSecretValidationCliTests
             SecretRefs = JsonSerializer.SerializeToElement(new { secret = reference }),
         },
         Revision = Guid.NewGuid().ToString("N"),
-        Status = SourceStatus.Active,
+        Status = EnablementStatus.Enabled,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };
@@ -166,7 +168,7 @@ public sealed class SourceSecretValidationCliTests
             transport_config = new { @namespace = "acme.servicebus.windows.net", queue_name = "events" },
         }),
         Revision = Guid.NewGuid().ToString("N"),
-        Status = SourceStatus.Active,
+        Status = EnablementStatus.Enabled,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };
@@ -188,9 +190,9 @@ public sealed class SourceSecretValidationCliTests
             Task.FromResult(sources.SingleOrDefault(
                 source => source.TenantId == tenantId && source.Id == sourceId));
 
-        public Task<IReadOnlyList<Source>> ListActiveSourcesAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyList<Source>> ListSourcesAsync(Guid tenantId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Source>>(
-                [.. sources.Where(source => source.TenantId == tenantId && source.Status == SourceStatus.Active)]);
+                [.. sources.Where(source => source.TenantId == tenantId)]);
     }
 
     private sealed class FakeSourceSecretResolver(IReadOnlyDictionary<string, string> secrets)

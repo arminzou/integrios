@@ -125,7 +125,7 @@ internal sealed class ValidateSecretsCommandHandler(
                 : [destination];
         }
 
-        return await reader.ListActiveDestinationsAsync(tenant.Id, cancellationToken);
+        return await reader.ListDestinationsAsync(tenant.Id, cancellationToken);
     }
 
     private static IEnumerable<string> SecretReferences(Destination destination)

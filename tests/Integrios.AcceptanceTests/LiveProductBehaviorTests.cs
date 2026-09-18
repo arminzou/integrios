@@ -111,10 +111,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         destinationOnly.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         Guid inactiveSource = await CreateEventApiSourceAsync(primary, HttpConnectorId, topic);
-        using HttpResponseMessage deactivate = await SendAdminAsync(
-            HttpMethod.Delete,
-            $"/admin/tenants/{primary.Id}/sources/{inactiveSource}");
-        deactivate.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using HttpResponseMessage disable = await PostAdminAsync(
+            $"/admin/tenants/{primary.Id}/sources/{inactiveSource}/disable", new { });
+        disable.StatusCode.ShouldBe(HttpStatusCode.OK);
         await AssertAcceptanceRejectedAsync(primary, inactiveSource, "payments");
 
         (await fixture.ScalarAsync<string>($"SELECT name FROM topics WHERE id = '{topic}'")).ShouldBe("payments");
@@ -388,19 +387,14 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
         foreach (string path in new[]
         {
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{subscription}/deactivate",
-            $"/admin/tenants/{tenant.Id}/destinations/{destination}/deactivate",
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/deactivate"
+            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{subscription}/disable",
+            $"/admin/tenants/{tenant.Id}/destinations/{destination}/disable",
+            $"/admin/tenants/{tenant.Id}/sources/{source}/disable"
         })
         {
-            using HttpResponseMessage deactivated = await PostAdminAsync(path, new { });
-            deactivated.StatusCode.ShouldBe(HttpStatusCode.OK);
+            using HttpResponseMessage disabled = await PostAdminAsync(path, new { });
+            disabled.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
-
-        using HttpResponseMessage revoked = await SendAdminAsync(
-            HttpMethod.Delete,
-            $"/admin/tenants/{tenant.Id}/sources/{source}");
-        revoked.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await fixture.ScalarAsync<string>(
             $"SELECT status FROM event_deliveries WHERE event_id = '{accepted.Id}' AND subscription_id = '{subscription}'")).ShouldBe("succeeded");
@@ -571,6 +565,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 event_identity_rule = (object?)null,
             });
         JsonElement source = await AssertJsonAsync(created, HttpStatusCode.Created);
+        await EnableAsync($"/admin/tenants/{tenant.Id}/sources/{source.GetProperty("id").GetGuid()}");
         string callback = source.GetProperty("configuration").GetProperty("callback_id").GetString()!;
 
         const string payload = """{"probe":"inbound"}""";
@@ -648,7 +643,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 event_types = JourneyEventTypes.Concat(extraEventTypes).Distinct().ToArray(),
                 configuration = new { },
             });
-        return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
+        Guid source = (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
+        await EnableAsync($"/admin/tenants/{tenant.Id}/sources/{source}");
+        return source;
     }
 
     private async Task<Guid> CreateSubscriptionAsync(
@@ -662,7 +659,16 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions",
             SubscriptionBody(name, destination, eventType, transform));
-        return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
+        Guid subscription = (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
+        await EnableAsync($"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{subscription}");
+        return subscription;
+    }
+
+    // Sources and Subscriptions are authored Disabled; a journey enables each before its traffic.
+    private async Task EnableAsync(string path)
+    {
+        using HttpResponseMessage response = await PostAdminAsync($"{path}/enable", new { });
+        (await AssertJsonAsync(response, HttpStatusCode.OK)).GetProperty("status").GetString().ShouldBe("enabled");
     }
 
     private async Task<(Guid Source, Guid Topic)> CreateSourceTopicAsync(TenantContext tenant, string topicName)

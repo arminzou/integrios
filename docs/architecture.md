@@ -101,7 +101,7 @@ platform capability.
 of accepting inbound HTTP requests. Its `configuration` additionally names the transport
 (`azure_service_bus`), the namespace and entity to read from, and an authentication scheme
 (`connection_string` with a secret reference, or `azure_identity` for an ambient credential).
-Ingestion runs one background processor per active `broker` Source, reconciled on an interval so
+Ingestion runs one background processor per Enabled `broker` Source, reconciled on an interval so
 authoring changes take effect without a restart; a deployment with no `broker` Source configured
 creates no Service Bus client and needs no Azure credentials. Integrios never provisions the
 namespace, queue, topic, or subscription itself — the Operator points a Source at an entity that
@@ -149,11 +149,11 @@ Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
    authenticates with a TenantApiKey, a `webhook` Source verifies and normalizes a provider HTTP
    request at `POST /webhooks/{callback_id}`, or a `broker` Source's background processor receives a
    message from Azure Service Bus — before Ingestion ever sees an Event contract in any case.
-2. Ingestion resolves the Tenant and the addressed Source, which names its active Connector and
-   the Topic it may publish to.
+2. Ingestion resolves the Tenant and the addressed Enabled Source, which names its active Connector
+   and the Topic it may publish to.
 3. One database transaction writes the canonical Event and its outbox row before Ingestion
    acknowledges acceptance.
-4. Worker fanout reads matching active Subscriptions and creates one EventDelivery for each.
+4. Worker fanout reads matching Enabled Subscriptions and creates one EventDelivery for each.
 5. Each EventDelivery is claimed independently, transformed, and sent through the generic
    HTTP delivery module.
 6. Worker records the DeliveryAttempt and advances that delivery to success, retry, or dead letter.
@@ -170,7 +170,7 @@ availability and avoids a database/message-transport dual write.
 ### Idempotency and source provenance
 
 An `event_api` caller addresses a `source_id` and may provide a `source_event_id`. Ingestion accepts
-the Source only when it belongs to the authenticated Tenant, is active, and may publish to its
+the Source only when it belongs to the authenticated Tenant, is Enabled, and may publish to its
 Topic. There is no separate idempotency key field: when a `source_event_id` is supplied, the
 idempotency key combines the Source id with a hash of `source_event_id`, and repeated submissions
 with the same identity resolve to the same accepted Event.

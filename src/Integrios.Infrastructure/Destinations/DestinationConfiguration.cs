@@ -44,7 +44,6 @@ internal sealed class DestinationConfiguration : IEntityTypeConfiguration<Destin
         entity.Property(e => e.ConnectorId).HasColumnName("connector_id");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.Status)
-            .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");
         entity.Property(e => e.UpdatedAt)

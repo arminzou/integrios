@@ -31,9 +31,6 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
         entity.Property(e => e.Description).HasColumnName("description");
         entity.Property(e => e.Key).HasColumnName("key");
         entity.Property(e => e.Name).HasColumnName("name");
-        entity.Property(e => e.Status)
-            .HasDefaultValueSql("'active'::text")
-            .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");
         entity.Property(e => e.UpdatedAt)
             .HasDefaultValueSql("now()")

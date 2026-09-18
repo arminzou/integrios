@@ -31,8 +31,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         configurationBuilder.Conventions.Remove<ForeignKeyIndexConvention>();
         configurationBuilder.Properties<OperationalStatus>()
             .HaveConversion<SnakeCaseEnumConverter<OperationalStatus>>();
-        configurationBuilder.Properties<SourceStatus>()
-            .HaveConversion<SnakeCaseEnumConverter<SourceStatus>>();
+        configurationBuilder.Properties<EnablementStatus>()
+            .HaveConversion<SnakeCaseEnumConverter<EnablementStatus>>();
         configurationBuilder.Properties<SourceType>()
             .HaveConversion<SnakeCaseEnumConverter<SourceType>>();
         configurationBuilder.Properties<DeliveryFailurePhase>()
@@ -106,7 +106,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.Configuration).HasDefaultValueSql(JsonDefault("{}")).HasColumnType(jsonType);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Authentication).HasColumnType(jsonType);
-            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 
@@ -185,7 +184,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.Mapping).HasColumnType(jsonType);
             entity.Property(e => e.EventIdentityRule).HasColumnType(jsonType);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
-            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 
@@ -208,7 +206,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 .HasColumnType(jsonType);
             entity.Property(e => e.EventTypes).HasColumnType(jsonType);
             entity.Property(e => e.HttpSuccess).HasColumnType(jsonType);
-            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.MappingConfig).HasColumnType(jsonType);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
@@ -254,7 +251,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
                 "LEN([key]) BETWEEN 1 AND 63 AND [key] COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^a-z0-9-]%' "
                 + "AND LEFT([key], 1) <> '-' AND RIGHT([key], 1) <> '-'"));
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
-            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 

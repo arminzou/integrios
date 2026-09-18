@@ -136,7 +136,6 @@ public sealed class SubscriptionAuthoringApplicationTests
             TenantId = tenantId,
             Key = "payments",
             Name = "payments",
-            Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -148,7 +147,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             ConnectorId = connectorId,
             Name = "destination",
             Configuration = Json("""{"base_uri":"https://erp.example.test"}"""),
-            Status = OperationalStatus.Active,
+            Status = EnablementStatus.Enabled,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -236,9 +235,6 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Topic?> UpdateAsync(Guid tenantId, Guid id, string? name, string? description, CancellationToken ct = default) =>
             Task.FromResult<Topic?>(topic);
 
-        public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
-            Task.FromResult(true);
-
         public Task<IReadOnlyList<SourceDeclaration>> ListSourceDeclarationsAsync(
             Guid tenantId, IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<SourceDeclaration>>(
@@ -269,7 +265,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Destination?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement configuration, DestinationAuthentication? authentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Destination?>(destination);
 
-        public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
+        public Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
     }
 
@@ -311,7 +307,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, IReadOnlyList<string> eventTypes, Guid destinationId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, HttpSuccessRule? httpSuccess, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
-        public Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
+        public Task<bool> SetStatusAsync(Guid tenantId, Guid topicId, Guid id, EnablementStatus status, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
 
         public Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(

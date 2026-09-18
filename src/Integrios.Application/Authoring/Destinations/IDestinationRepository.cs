@@ -20,5 +20,5 @@ public interface IDestinationRepository
         string? environment,
         string? description,
         CancellationToken cancellationToken);
-    Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
+    Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken);
 }

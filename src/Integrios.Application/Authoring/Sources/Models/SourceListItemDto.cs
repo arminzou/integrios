@@ -10,5 +10,4 @@ public sealed record SourceListItemDto(
     string Status,
     string InputRequirements,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt,
-    DateTimeOffset? RevokedAt);
+    DateTimeOffset UpdatedAt);

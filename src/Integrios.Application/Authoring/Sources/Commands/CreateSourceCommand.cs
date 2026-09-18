@@ -36,8 +36,6 @@ internal sealed class CreateSourceCommandHandler(
 
         Topic topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken)
             ?? throw new SourceValidationException("Source Topic must exist in the same Tenant.");
-        if (topic.Status != OperationalStatus.Active)
-            throw new SourceValidationException("Source Topic must be active.");
         Connector connector = await connectorReader.GetByIdAsync(command.ConnectorId, cancellationToken)
             ?? throw new SourceValidationException("The specified Connector does not exist.");
         SourceAuthoringValidator.Validate(command.Type, command.Configuration, command.Verification, connector);
@@ -69,7 +67,8 @@ internal sealed class CreateSourceCommandHandler(
             Mapping = command.Mapping,
             EventIdentityRule = command.EventIdentityRule,
             Revision = Guid.NewGuid().ToString("N"),
-            Status = SourceStatus.Active,
+            // Declared and authorable first; intake opens only when an Operator enables it.
+            Status = EnablementStatus.Disabled,
             CreatedAt = now,
             UpdatedAt = now,
         };

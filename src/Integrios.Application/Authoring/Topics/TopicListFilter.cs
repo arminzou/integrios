@@ -1,5 +1,4 @@
 using Integrios.Domain.Entities;
-using Integrios.Domain.Enums;
 
 namespace Integrios.Application.Authoring.Topics;
 
@@ -8,7 +7,7 @@ namespace Integrios.Application.Authoring.Topics;
 /// reach the cursor scope would let a stale cursor page a different set under a token the caller
 /// cannot tell apart.
 /// </summary>
-public sealed record TopicListFilter(OperationalStatus? Status = null, string? NameContains = null);
+public sealed record TopicListFilter(string? NameContains = null);
 
 /// <summary>
 /// A Topic with how many Subscriptions match it. The count answers the question the list is read to

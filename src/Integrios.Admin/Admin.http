@@ -143,6 +143,16 @@ Content-Type: application/json
 }
 
 ###
+# Journey 1.4a — enable the Source; Sources are authored Disabled and refuse Events until enabled
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources/{{createOrdersEventApiSource.response.body.$.id}}/enable
+{{operatorKey}}
+
+###
+# Journey 1.4b — enable the Subscription; fanout ignores it until it is enabled
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createOrdersTopic.response.body.$.id}}/subscriptions/{{createOrdersSubscription.response.body.$.id}}/enable
+{{operatorKey}}
+
+###
 # Journey 1.5 — send one Event with the shared Tenant API key
 # @name sendPlacedOrder
 POST {{ingestionBaseUrl}}/events?source_id={{createOrdersEventApiSource.response.body.$.id}}
@@ -273,6 +283,16 @@ Content-Type: application/json
 }
 
 ###
+# Journey 2.4a — enable the Source; Sources are authored Disabled and refuse Events until enabled
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources/{{createStorefrontWebhookSource.response.body.$.id}}/enable
+{{operatorKey}}
+
+###
+# Journey 2.4b — enable the Subscription; fanout ignores it until it is enabled
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createStorefrontTopic.response.body.$.id}}/subscriptions/{{createWebhookSubscription.response.body.$.id}}/enable
+{{operatorKey}}
+
+###
 # Journey 2.5 — optional runtime step
 # Set WEBHOOK_SIGNATURE in your private REST Client environment to sha256=<hex HMAC> for the exact
 # compact body below, after mounting storefront_webhook_hmac for Ingestion.
@@ -386,6 +406,16 @@ Content-Type: application/json
   "order_index": 0,
   "description": "Deliver warehouse receipts to the WMS."
 }
+
+###
+# Journey 3.4a — enable the Source; Sources are authored Disabled and refuse Events until enabled
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/sources/{{createWarehouseBrokerSource.response.body.$.id}}/enable
+{{operatorKey}}
+
+###
+# Journey 3.4b — enable the Subscription; fanout ignores it until it is enabled
+POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createWarehouseTopic.response.body.$.id}}/subscriptions/{{createWarehouseSubscription.response.body.$.id}}/enable
+{{operatorKey}}
 
 ###
 # Journey 3.5 — publish outside REST Client

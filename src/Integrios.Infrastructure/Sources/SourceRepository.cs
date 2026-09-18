@@ -32,7 +32,7 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
         IReadOnlyList<string> eventTypes,
         CancellationToken cancellationToken)
     {
-        int affected = await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id && source.Status == SourceStatus.Active)
+        int affected = await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(source => source.Name, name)
                 .SetProperty(source => source.Configuration, configuration)
@@ -46,10 +46,9 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
         return affected == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);
     }
 
-    public async Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
-        await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id && source.Status == SourceStatus.Active)
+    public async Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken) =>
+        await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id)
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(source => source.Status, SourceStatus.Revoked)
-                .SetProperty(source => source.RevokedAt, DateTimeOffset.UtcNow)
+                .SetProperty(source => source.Status, status)
                 .SetProperty(source => source.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken) > 0;
 }

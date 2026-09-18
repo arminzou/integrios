@@ -48,7 +48,8 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             MappingConfig = NormalizeNullableJson(transformConfig),
             HttpDelivery = httpDelivery,
             HttpSuccess = httpSuccess,
-            Status = OperationalStatus.Active,
+            // Authorable before it routes anything: fanout ignores it until an Operator enables it.
+            Status = EnablementStatus.Disabled,
             OrderIndex = orderIndex,
             Description = description,
             CreatedAt = now,
@@ -98,8 +99,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             .Where(subscription =>
                 subscription.TenantId == tenantId
                 && subscription.TopicId == topicId
-                && subscription.Id == id
-                && subscription.Status != OperationalStatus.Disabled)
+                && subscription.Id == id)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(subscription => subscription.Name, name)
@@ -116,20 +116,20 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         return affected == 0 ? null : await GetByIdAsync(tenantId, topicId, id, cancellationToken);
     }
 
-    public async Task<bool> DeactivateAsync(
+    public async Task<bool> SetStatusAsync(
         Guid tenantId,
         Guid topicId,
         Guid id,
+        EnablementStatus status,
         CancellationToken cancellationToken) =>
         await context.Subscriptions
             .Where(subscription =>
                 subscription.TenantId == tenantId
                 && subscription.TopicId == topicId
-                && subscription.Id == id
-                && subscription.Status != OperationalStatus.Disabled)
+                && subscription.Id == id)
             .ExecuteUpdateAsync(
                 setters => setters
-                    .SetProperty(subscription => subscription.Status, OperationalStatus.Disabled)
+                    .SetProperty(subscription => subscription.Status, status)
                     .SetProperty(subscription => subscription.UpdatedAt, DateTimeOffset.UtcNow),
                 cancellationToken) > 0;
 
@@ -141,7 +141,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             .Where(subscription =>
                 subscription.TenantId == tenantId
                 && subscription.DestinationId == destinationId
-                && subscription.Status == OperationalStatus.Active)
+                && subscription.Status == EnablementStatus.Enabled)
             .Select(subscription => subscription.HttpDelivery)
             .ToListAsync(cancellationToken);
 

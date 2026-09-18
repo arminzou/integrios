@@ -20,5 +20,5 @@ public interface ISourceRepository
         SourceEventIdentityRule? eventIdentityRule,
         IReadOnlyList<string> eventTypes,
         CancellationToken cancellationToken);
-    Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
+    Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken);
 }

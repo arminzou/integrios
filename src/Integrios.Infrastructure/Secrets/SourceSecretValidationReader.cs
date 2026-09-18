@@ -25,12 +25,12 @@ internal sealed class SourceSecretValidationReader(IntegriosDbContext context) :
             source => source.TenantId == tenantId && source.Id == sourceId,
             cancellationToken);
 
-    // Revocation is permanent, so a revoked Source's references can never be needed again.
-    public async Task<IReadOnlyList<Source>> ListActiveSourcesAsync(
+    // Disabled Sources included: enabling one must not be the moment a missing secret is found.
+    public async Task<IReadOnlyList<Source>> ListSourcesAsync(
         Guid tenantId,
         CancellationToken cancellationToken) =>
         await context.Sources.AsNoTracking()
-            .Where(source => source.TenantId == tenantId && source.Status == SourceStatus.Active)
+            .Where(source => source.TenantId == tenantId)
             .OrderBy(source => source.CreatedAt)
             .ThenBy(source => source.Id)
             .ToListAsync(cancellationToken);

@@ -79,7 +79,7 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
         await connection.ExecuteAsync(
-            $"UPDATE sources SET status='revoked', revoked_at={fixture.Database.Now} " +
+            $"UPDATE sources SET status = 'disabled' " +
             "WHERE tenant_id=@TenantId AND id=@SourceId",
             new { seed.TenantId, seed.SourceId });
 
@@ -226,7 +226,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
         await connection.ExecuteAsync($$$"""
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status, created_at, updated_at)
             VALUES (@DestinationId, @TenantId, @ConnectorId, 'provider-contract-destination',
-                {{{Database.Json("@Config")}}}, 'active', {{{now}}}, {{{now}}})
+                {{{Database.Json("@Config")}}}, 'enabled', {{{now}}}, {{{now}}})
             """, new
         {
             seed.DestinationId,
@@ -244,14 +244,14 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
         }
         await connection.ExecuteAsync($$$"""
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status)
-            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'contract-intake', 'event_api', '["payment.created"]', {{{Database.Json("@SourceConfig")}}}, 'fixture-revision', 'active')
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'contract-intake', 'event_api', '["payment.created"]', {{{Database.Json("@SourceConfig")}}}, 'fixture-revision', 'enabled')
             """, new { seed.SourceId, seed.TenantId, seed.ConnectorId, seed.TopicId, SourceConfig = "{}" });
 
         await connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (id, topic_id, tenant_id, name, event_types, destination_id,
                 http_delivery, status, order_index, created_at, updated_at)
             VALUES (@SubscriptionId, @TopicId, @TenantId, 'payments-http', {{{Database.Json("@EventTypes")}}},
-                @DestinationId, {{{Database.Json("@HttpDelivery")}}}, 'active', 0, {{{now}}}, {{{now}}})
+                @DestinationId, {{{Database.Json("@HttpDelivery")}}}, 'enabled', 0, {{{now}}}, {{{now}}})
             """, new
         {
             seed.SubscriptionId,

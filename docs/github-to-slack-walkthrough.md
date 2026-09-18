@@ -93,8 +93,8 @@ exact same shape under `secrets/source/` instead of `secrets/destination/`.)
 
 A Topic on its own accepts nothing; a **Source** binds one Connector to one Topic and authorizes it
 to publish there. Creating a `webhook` Source mints a stable `callback_id` — the sole routing
-coordinate GitHub's requests carry. Revoking and re-creating the Source later mints a new
-`callback_id`; this one is stable for as long as the Source exists.
+coordinate GitHub's requests carry. Disabling and enabling the Source keeps it; deleting and
+re-creating the Source later mints a new `callback_id`.
 
 A Source also declares the Event types it may publish. Integrios refuses any other type from it, and
 Subscriptions on the Topic choose from these declarations. This mapping produces one type per GitHub
@@ -103,15 +103,16 @@ GitHub sends once when the webhook is created.
 
 ```bash
 GITHUB_MAPPING='{"event_type":"github." & $context.headers."x-github-event","payload":$}'
-CALLBACK_ID=$(jq -n --arg connector "$GITHUB_CONNECTOR" --arg topic "$TOPIC" --arg mapping "$GITHUB_MAPPING" \
+SOURCE_JSON=$(jq -n --arg connector "$GITHUB_CONNECTOR" --arg topic "$TOPIC" --arg mapping "$GITHUB_MAPPING" \
   '{connector_id:$connector,topic_id:$topic,name:"GitHub webhook",type:"webhook",
     event_types:["github.push","github.ping"],configuration:{},
     verification:{scheme:"hmac_sha256",config:{},secret_refs:{secret:"github_webhook_secret"}},
     input_requirements:null,mapping:{engine:"jsonata",version:"1",expression:$mapping},
     event_identity_rule:{kind:"header",value:"X-GitHub-Delivery"}}' \
   | curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources" -H "$AUTH" \
-      -H 'Content-Type: application/json' --data-binary @- \
-  | jq -r '.configuration.callback_id')
+      -H 'Content-Type: application/json' --data-binary @-)
+SOURCE=$(echo "$SOURCE_JSON" | jq -r .id)
+CALLBACK_ID=$(echo "$SOURCE_JSON" | jq -r .configuration.callback_id)
 
 CALLBACK_URL="$INGESTION/webhooks/$CALLBACK_ID"
 echo "$CALLBACK_URL"
@@ -167,7 +168,7 @@ metadata bound to `$context`; `http_delivery` supplies the method, relative path
 all owned by the Subscription rather than the Destination.
 
 ```bash
-curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions" -H "$AUTH" \
+SUBSCRIPTION=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions" -H "$AUTH" \
   -H 'Content-Type: application/json' \
   -d "{\"name\":\"push-to-slack\",
        \"event_types\":[\"github.push\"],
@@ -177,7 +178,15 @@ curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions" -H "$
          \"expression\":\"{'channel': '#deploys', 'text': pusher.name & ' pushed to ' & repository.full_name & ': ' & head_commit.message}\"},
        \"http_delivery\":{\"version\":1,\"method\":\"POST\",\"path\":\"chat.postMessage\",
          \"headers\":{},\"body\":\"json\"},
-       \"http_success\":{\"evaluator\":\"json_boolean\",\"field\":\"ok\",\"expected\":true}}" | jq
+       \"http_success\":{\"evaluator\":\"json_boolean\",\"field\":\"ok\",\"expected\":true}}" | jq -r .id)
+```
+
+A Source and a Subscription are both created Disabled, so they can be reviewed before anything
+flows. Enable both once the GitHub webhook is configured:
+
+```bash
+curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources/$SOURCE/enable" -H "$AUTH" | jq .status
+curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions/$SUBSCRIPTION/enable" -H "$AUTH" | jq .status
 ```
 
 Adjust the transform's hardcoded `#deploys` channel, or extend it to read a channel per repository,

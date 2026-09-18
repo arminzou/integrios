@@ -32,7 +32,7 @@ internal sealed class UpdateSourceCommandHandler(
             throw new SourceValidationException("Name is required.", "name");
 
         Source? source = await sourceRepository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
-        if (source is null || source.Status != Domain.Enums.SourceStatus.Active)
+        if (source is null)
             return null;
         Connector connector = await connectorReader.GetByIdAsync(source.ConnectorId, cancellationToken)
             ?? throw new SourceValidationException("The Source's Connector does not exist.");

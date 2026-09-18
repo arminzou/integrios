@@ -38,7 +38,6 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasDefaultValue(0)
             .HasColumnName("order_index");
         entity.Property(e => e.Status)
-            .HasDefaultValueSql("'active'::text")
             .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");
         entity.Property(e => e.TopicId).HasColumnName("topic_id");

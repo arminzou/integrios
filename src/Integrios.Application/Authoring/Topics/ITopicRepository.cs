@@ -15,7 +15,6 @@ public interface ITopicRepository
         string? name,
         string? description,
         CancellationToken ct);
-    Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct);
     // Every Source that can still publish to these Topics, with what each declares.
     Task<IReadOnlyList<SourceDeclaration>> ListSourceDeclarationsAsync(
         Guid tenantId, IReadOnlyCollection<Guid> topicIds, CancellationToken ct);

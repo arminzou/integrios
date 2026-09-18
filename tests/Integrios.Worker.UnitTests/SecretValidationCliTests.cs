@@ -34,22 +34,24 @@ public sealed class SecretValidationCliTests
     }
 
     [Fact]
-    public async Task RunAsync_AllValidReferencesReturnsSuccessAndSkipsInactiveDestinationsAndTenants()
+    public async Task RunAsync_AllValidReferencesReturnsSuccessIncludingDisabledDestinationsButSkipsInactiveTenants()
     {
         Tenant tenantA = MakeTenant("tenant-a");
         Tenant tenantB = MakeTenant("tenant-b");
         Tenant disabledTenant = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Disabled };
         Destination activeA = MakeDestination(tenantA.Id, "shared");
         Destination activeB = MakeDestination(tenantB.Id, "shared");
-        Destination inactive = MakeDestination(tenantA.Id, "missing") with { Status = OperationalStatus.Disabled };
+        // Disabled is reversible, and its snapshotted deliveries still resolve its secrets.
+        Destination paused = MakeDestination(tenantA.Id, "paused") with { Status = EnablementStatus.Disabled };
         Destination disabledTenantDestination = MakeDestination(disabledTenant.Id, "missing");
         using ServiceProvider services = BuildServices(
             [tenantA, tenantB, disabledTenant],
-            [activeA, activeB, inactive, disabledTenantDestination],
+            [activeA, activeB, paused, disabledTenantDestination],
             new Dictionary<string, string>
             {
                 ["tenant-a/shared"] = "one",
-                ["tenant-b/shared"] = "two"
+                ["tenant-b/shared"] = "two",
+                ["tenant-a/paused"] = "three"
             });
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -58,7 +60,7 @@ public sealed class SecretValidationCliTests
             ["secrets", "validate", "--all"], services, output, error);
 
         exitCode.ShouldBe(0);
-        output.ToString().ShouldContain("Validated 2 secret reference(s): resolvable", Case.Sensitive);
+        output.ToString().ShouldContain("Validated 3 secret reference(s): resolvable", Case.Sensitive);
         output.ToString().ShouldNotContain("missing", Case.Sensitive);
     }
 
@@ -177,7 +179,7 @@ public sealed class SecretValidationCliTests
             Config = JsonSerializer.Deserialize<JsonElement>("{}"),
             SecretRefs = JsonSerializer.Deserialize<JsonElement>($"{{\"token\":\"{reference}\"}}")
         },
-        Status = OperationalStatus.Active,
+        Status = EnablementStatus.Enabled,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow
     };
@@ -211,9 +213,9 @@ public sealed class SecretValidationCliTests
         public Task<Destination?> FindDestinationAsync(Guid tenantId, Guid destinationId, CancellationToken cancellationToken = default) =>
             Task.FromResult(destinations.SingleOrDefault(item => item.TenantId == tenantId && item.Id == destinationId));
 
-        public Task<IReadOnlyList<Destination>> ListActiveDestinationsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<Destination>> ListDestinationsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<Destination>>(destinations
-                .Where(item => item.TenantId == tenantId && item.Status == OperationalStatus.Active)
+                .Where(item => item.TenantId == tenantId)
                 .ToList());
     }
 }

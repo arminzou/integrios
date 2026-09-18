@@ -3,7 +3,7 @@ using MediatR;
 
 namespace Integrios.Application.Authoring.Subscriptions;
 
-public sealed record ListSubscriptionsByTopicQuery(Guid TenantId, Guid TopicId, OperationalStatus? Status, string? AfterCursor, int Limit) : IRequest<SubscriptionListDto>;
+public sealed record ListSubscriptionsByTopicQuery(Guid TenantId, Guid TopicId, EnablementStatus? Status, string? AfterCursor, int Limit) : IRequest<SubscriptionListDto>;
 
 internal sealed class ListSubscriptionsByTopicQueryHandler(ISubscriptionQueries subscriptionQueries)
     : IRequestHandler<ListSubscriptionsByTopicQuery, SubscriptionListDto>

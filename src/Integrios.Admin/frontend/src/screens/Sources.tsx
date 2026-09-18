@@ -17,7 +17,6 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Timestamp } from "@/ui/time";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
@@ -632,8 +631,8 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             ))}
           </Filter>
           <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="revoked">Revoked</SelectItem>
+            <SelectItem value="enabled">Enabled</SelectItem>
+            <SelectItem value="disabled">Disabled</SelectItem>
           </Filter>
           <Filter id="source-type" label="Type" value={type} onChange={setType}>
             {sourceTypes.map((option) => (
@@ -761,7 +760,7 @@ function CreateSource({
   // The control is disabled and the sentence left standing beside it. A disabled control is skipped
   // by the Tab key, so the reason has to live in the form's reading order rather than only in the
   // description of a field a keyboard never reaches.
-  const noTopics = topics.isSuccess && activeOnly(topics.data?.items).length === 0;
+  const noTopics = topics.isSuccess && (topics.data?.items ?? []).length === 0;
   // Connectors are deployment-wide, so an Operator whose deployment has none cannot author here at
   // all — the way out leaves the Tenant rather than staying inside it.
   const noConnectors = connectors.isSuccess && activeOnly(connectors.data?.items).length === 0;
@@ -896,17 +895,17 @@ function CreateSource({
           hint={
             noTopics ? (
               <>
-                No active Topics yet, and a Source needs one.{" "}
-                <Link to={`/tenants/${tenantId}/topics`}>Create a Topic</Link> first.
+                No Topics yet, and a Source needs one. <Link to={`/tenants/${tenantId}/topics`}>Create a Topic</Link>{" "}
+                first.
               </>
             ) : topics.data?.next_cursor ? (
-              "Showing the first 100 active Topics."
+              "Showing the first 100 Topics."
             ) : undefined
           }
           disabled={topics.isPending || topics.isError || noTopics}
           required
         >
-          {activeOnly(topics.data?.items).map((topic) => (
+          {(topics.data?.items ?? []).map((topic) => (
             <SelectItem key={topic.id} value={topic.id}>
               {topic.name}
             </SelectItem>
@@ -1145,26 +1144,11 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
             {nameIn(topicOptions.data?.items, current.topic_id)}
           </Link>
         </dd>
-        {current.revoked_at ? (
-          <>
-            <dt>Revoked</dt>
-            <dd>
-              <Timestamp value={current.revoked_at} />
-            </dd>
-          </>
-        ) : null}
       </Details>
 
       <SourceGuide tenantId={tenantId} source={current} />
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-      {current.status === "active" ? (
-        <EditSource
-          key={current.updated_at}
-          tenantId={tenantId}
-          source={current}
-          onDone={() => setNotice("Source revoked.")}
-        />
-      ) : null}
+      <EditSource key={current.updated_at} tenantId={tenantId} source={current} onDone={setNotice} />
     </Inspector>
   );
 }
@@ -1178,11 +1162,11 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
 /// the Event type to that list projection if Topics come to carry many Subscriptions.
 function useTopicRouting(tenantId: string, topicId: string, enabled: boolean) {
   const list = useQuery({
-    queryKey: ["topic-subscriptions", tenantId, topicId, "active"],
+    queryKey: ["topic-subscriptions", tenantId, topicId, "enabled"],
     queryFn: () =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
-          params: { path: { tenantId, topicId }, query: { status: "active", limit: 100 } },
+          params: { path: { tenantId, topicId }, query: { status: "enabled", limit: 100 } },
         }),
       ),
     enabled,
@@ -1204,9 +1188,11 @@ function useTopicRouting(tenantId: string, topicId: string, enabled: boolean) {
     if (!subscription) return [];
     return [`${subscription.name} (${subscription.event_types.join(", ")})`];
   });
+  const routed = details.flatMap((detail) => detail.data?.event_types ?? []);
   const settled = list.isSuccess && details.every((detail) => !detail.isPending);
   return {
     routes,
+    routed,
     settled,
     partial: Boolean(list.data?.next_cursor) || list.isError || details.some((d) => d.isError),
   };
@@ -1215,29 +1201,47 @@ function useTopicRouting(tenantId: string, topicId: string, enabled: boolean) {
 function retypeConsequence(routing: ReturnType<typeof useTopicRouting>): string {
   const kept = "Events already accepted keep their Event type.";
   if (!routing.settled) return `${kept} Reading the Subscriptions on this Topic…`;
-  if (routing.routes.length === 0) return `${kept} No active Subscription on this Topic depends on it yet.`;
-  return `${kept} Subscriptions match the Event type exactly, so these active Subscriptions on this Topic may stop receiving new Events: ${routing.routes.join(", ")}${routing.partial ? ", and possibly others not shown" : ""}.`;
+  if (routing.routes.length === 0) return `${kept} No Enabled Subscription on this Topic depends on it yet.`;
+  return `${kept} Subscriptions match the Event type exactly, so these Enabled Subscriptions on this Topic may stop receiving new Events: ${routing.routes.join(", ")}${routing.partial ? ", and possibly others not shown" : ""}.`;
 }
 
-/// The Admin API owns the mutable Source contract. Type, Connector, and Topic remain fixed.
-function EditSource({ tenantId, source, onDone }: { tenantId: string; source: Source; onDone: () => void }) {
+/// The Admin API owns the mutable Source contract. Type, Connector, and Topic remain fixed. Enabled and
+/// Disabled are both editable, and switching between them keeps the same identity and callback.
+function EditSource({
+  tenantId,
+  source,
+  onDone,
+}: {
+  tenantId: string;
+  source: Source;
+  onDone: (notice: string) => void;
+}) {
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
     void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
   };
-  const revoke = useMutation({
-    mutationFn: () =>
+  const enabled = source.status === "enabled";
+  const setStatus = useMutation({
+    mutationFn: (action: "enable" | "disable") =>
       call(() =>
-        api.DELETE("/admin/tenants/{tenantId}/sources/{id}", {
-          params: { path: { tenantId, id: source.id } },
-        }),
+        action === "enable"
+          ? api.POST("/admin/tenants/{tenantId}/sources/{id}/enable", { params: { path: { tenantId, id: source.id } } })
+          : api.POST("/admin/tenants/{tenantId}/sources/{id}/disable", {
+              params: { path: { tenantId, id: source.id } },
+            }),
       ),
-    onSuccess: () => {
+    onSuccess: (_, action) => {
       reread();
-      onDone();
+      onDone(action === "enable" ? "Source enabled." : "Source disabled.");
     },
   });
+  // Enabling is never blocked on coverage: an Event nothing routes is still accepted, as Unrouted.
+  // The Operator is told which declarations that applies to before, not after, traffic arrives.
+  const routing = useTopicRouting(tenantId, source.topic_id, !enabled);
+  const uncovered = source.event_types.filter(
+    (eventType) => !routing.routed.some((routed) => routed.toLowerCase() === eventType.toLowerCase()),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -1245,18 +1249,29 @@ function EditSource({ tenantId, source, onDone }: { tenantId: string; source: So
         <EditSheet label="Edit" description="An update replaces the configuration outright">
           {(close) => <EditSourceForm tenantId={tenantId} source={source} onSaved={reread} onClose={close} />}
         </EditSheet>
-        {source.status === "active" ? (
+        {enabled ? (
           <ConfirmAction
-            label="Revoke"
-            consequence="Revoking a Source stops it accepting Events. It cannot be restored, and a replacement is a new Source with a new identifier."
-            question={`Revoke the ${typeLabel(source.type)} Source ${source.name}? It stops accepting Events and cannot be restored.`}
-            confirmLabel={`Revoke ${source.name}`}
-            busy={revoke.isPending}
-            onConfirm={() => revoke.mutate()}
+            label="Disable"
+            variant="outline"
+            consequence="New Events are refused until it is enabled again. Events already accepted are still routed and delivered."
+            question={`Disable the ${typeLabel(source.type)} Source ${source.name}?`}
+            confirmLabel={`Disable ${source.name}`}
+            busy={setStatus.isPending}
+            onConfirm={() => setStatus.mutate("disable")}
           />
-        ) : null}
+        ) : (
+          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("enable")}>
+            Enable
+          </Button>
+        )}
       </div>
-      <FormError message={formError(asProblem(revoke.error))} />
+      {!enabled && routing.settled && uncovered.length > 0 ? (
+        <p className="m-0 text-xs text-warning-ink">
+          No Enabled Subscription on this Topic routes {uncovered.join(", ")}. Once enabled, Events of{" "}
+          {uncovered.length === 1 ? "that type are" : "those types are"} accepted and left Unrouted.
+        </p>
+      ) : null}
+      <FormError message={formError(asProblem(setStatus.error))} />
     </div>
   );
 }

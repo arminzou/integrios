@@ -368,6 +368,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
             new { connector_id = HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { $"{name}.test" }, configuration = new { } });
+        await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
@@ -376,6 +377,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
                 event_types = new[] { $"{name}.test" },
                 destination_id = destinationId
             });
+        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{subscriptionId}");
 
         return new Pipeline(
             tenantId,
@@ -412,6 +414,10 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
     private async Task<Guid> PostAdminForIdAsync(string path, object body) =>
         Guid.Parse(await PostAdminForPropertyAsync(path, body, "id"));
+
+    // Sources and Subscriptions are authored Disabled; a journey enables each before its traffic.
+    private async Task EnableAsync(string path) =>
+        (await PostAdminForPropertyAsync($"{path}/enable", new { }, "status")).ShouldBe("enabled");
 
     private async Task<string> PostAdminForPropertyAsync(string path, object body, string property)
     {

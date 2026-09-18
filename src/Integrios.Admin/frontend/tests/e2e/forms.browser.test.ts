@@ -44,7 +44,6 @@ const topic = {
   tenant_id: tenantId,
   key: "orders",
   name: "Orders",
-  status: "active",
   description: null,
   subscription_count: 1,
   event_types: ["order.created", "order.refunded"],
@@ -55,7 +54,7 @@ const destination = {
   tenant_id: tenantId,
   connector_id: connectorId,
   name: "sink",
-  status: "active",
+  status: "enabled",
   environment: null,
   description: null,
   ...stamps,
@@ -127,7 +126,7 @@ const subscriptionDetail = {
     expression: '{ "order": orderId, "total": total, "placed_at": placedAt }',
   },
   http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
-  status: "active",
+  status: "enabled",
   order_index: 1,
   description: null,
   ...stamps,
@@ -141,7 +140,7 @@ const sourceDetail = {
   type: "event_api",
   event_types: ["order.created"],
   configuration: {},
-  status: "active",
+  status: "enabled",
   revoked_at: null,
   ...stamps,
 };
@@ -1743,52 +1742,44 @@ describe("Update and deactivate, driven through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("deactivates a Topic only after the confirmation naming it", async () => {
-    const { page: view, writes } = await open(`/tenants/${tenantId}/topics/${topicId}`);
+  /// A Topic has no status: it groups its Sources and Subscriptions and exists until deleted.
+  it("offers no status action on a Topic", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/topics/${topicId}`);
+    await view.getByRole("button", { name: "Edit", exact: true }).waitFor();
 
-    await view.getByRole("button", { name: "Deactivate", exact: true }).click();
-    await view.getByText(/Deactivate the Topic "Orders"\?/).waitFor();
-    // Arming the confirmation must not be the action itself.
-    expect(writes, "Deactivation ran before it was confirmed.").toHaveLength(0);
+    for (const action of ["Deactivate", "Disable", "Enable"])
+      expect(await view.getByRole("button", { name: action, exact: true }).count()).toBe(0);
+    await view.close();
+  }, 60_000);
 
-    await view.getByRole("button", { name: "Cancel" }).click();
-    const trigger = view.getByRole("button", { name: "Deactivate" });
-    expect(await trigger.evaluate((button) => document.activeElement === button)).toBe(true);
+  it("disables a Source only after the confirmation naming it", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
 
-    await trigger.click();
-    await view.getByRole("button", { name: "Deactivate Orders" }).click();
+    await view.getByRole("button", { name: "Disable", exact: true }).click();
+    expect(writes, "Disabling ran before it was confirmed.").toHaveLength(0);
+    await view.click("text=Disable orders-intake");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
-    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/topics/${topicId}/deactivate`);
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}/disable`);
     await view.close();
   }, 60_000);
 
-  it("revokes a Source with the one DELETE the dashboard issues", async () => {
+  /// Disabled is reversible configuration: the Source stays editable and is enabled again directly.
+  it("keeps a Disabled Source editable and enables it again", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
-
-    await view.getByRole("button", { name: "Revoke", exact: true }).click();
-    expect(writes, "Revocation ran before it was confirmed.").toHaveLength(0);
-    await view.click("text=Revoke orders-intake");
-
-    const sent = await submitted(writes);
-    expect(sent.method).toBe("DELETE");
-    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}`);
-    await view.close();
-  }, 60_000);
-
-  it("keeps a revoked Source read-only", async () => {
-    const { page: view } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
     await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) =>
-      route.fulfill({
-        status: 200,
-        json: { ...sourceDetail, status: "revoked", revoked_at: "2026-09-15T16:43:52Z" },
-      }),
+      route.fulfill({ status: 200, json: { ...sourceDetail, status: "disabled" } }),
     );
     await view.reload();
 
-    expect(await view.getByRole("button", { name: "Edit", exact: true }).count()).toBe(0);
-    expect(await view.getByRole("button", { name: "Revoke", exact: true }).count()).toBe(0);
+    await view.getByRole("button", { name: "Edit", exact: true }).waitFor();
+    expect(await view.getByRole("button", { name: "Disable", exact: true }).count()).toBe(0);
+    await view.getByRole("button", { name: "Enable", exact: true }).click();
+
+    const sent = await submitted(writes);
+    expect(sent.method).toBe("POST");
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}/enable`);
     await view.close();
   }, 60_000);
 });

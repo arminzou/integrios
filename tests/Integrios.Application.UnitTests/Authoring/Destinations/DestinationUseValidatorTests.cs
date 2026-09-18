@@ -92,7 +92,7 @@ public sealed class DestinationUseValidatorTests
         Name = "destination",
         Configuration = configuration,
         Authentication = authentication,
-        Status = OperationalStatus.Active,
+        Status = EnablementStatus.Enabled,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };

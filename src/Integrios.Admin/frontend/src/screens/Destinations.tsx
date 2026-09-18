@@ -452,7 +452,7 @@ export function DestinationsScreen({
         <FilterBar applied={applied}>
           <FilterSearch id="destination-name" label="Find by name" value={name} onChange={setName} />
           <Filter id="destination-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="enabled">Enabled</SelectItem>
             <SelectItem value="disabled">Disabled</SelectItem>
           </Filter>
           {/* The environments a Tenant actually uses, read off the rows it already has rather than
@@ -835,12 +835,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
       </section>
 
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-      <EditDestination
-        key={current.updated_at}
-        tenantId={tenantId}
-        destination={current}
-        onDone={() => setNotice("Destination deactivated.")}
-      />
+      <EditDestination key={current.updated_at} tenantId={tenantId} destination={current} onDone={setNotice} />
     </Inspector>
   );
 }
@@ -852,7 +847,7 @@ function EditDestination({
 }: {
   tenantId: string;
   destination: Destination;
-  onDone: () => void;
+  onDone: (notice: string) => void;
 }) {
   const queryClient = useQueryClient();
   /// Both reads that can now be wrong: this Destination, and any list it appears in.
@@ -866,16 +861,20 @@ function EditDestination({
       call(() => api.GET("/admin/connectors/{id}", { params: { path: { id: destination.connector_id } } })),
   });
 
-  const deactivate = useMutation({
-    mutationFn: () =>
+  const setStatus = useMutation({
+    mutationFn: (action: "enable" | "disable") =>
       call(() =>
-        api.POST("/admin/tenants/{tenantId}/destinations/{id}/deactivate", {
-          params: { path: { tenantId, id: destination.id } },
-        }),
+        action === "enable"
+          ? api.POST("/admin/tenants/{tenantId}/destinations/{id}/enable", {
+              params: { path: { tenantId, id: destination.id } },
+            })
+          : api.POST("/admin/tenants/{tenantId}/destinations/{id}/disable", {
+              params: { path: { tenantId, id: destination.id } },
+            }),
       ),
-    onSuccess: () => {
+    onSuccess: (_, action) => {
       reread();
-      onDone();
+      onDone(action === "enable" ? "Destination enabled." : "Destination disabled.");
     },
   });
 
@@ -900,18 +899,23 @@ function EditDestination({
             )
           }
         </EditSheet>
-        {destination.status === "active" ? (
+        {destination.status === "enabled" ? (
           <ConfirmAction
-            label="Deactivate"
-            consequence={`Deactivating ${destination.name} is blocked while active Subscriptions deliver to it. Deliveries already queued are not cancelled.`}
-            question={`Deactivate the Destination "${destination.name}"?`}
-            confirmLabel={`Deactivate ${destination.name}`}
-            busy={deactivate.isPending}
-            onConfirm={() => deactivate.mutate()}
+            label="Disable"
+            variant="outline"
+            consequence={`Disabling ${destination.name} is refused while Enabled Subscriptions deliver to it; disable or move those first. Deliveries already queued are not cancelled.`}
+            question={`Disable the Destination "${destination.name}"?`}
+            confirmLabel={`Disable ${destination.name}`}
+            busy={setStatus.isPending}
+            onConfirm={() => setStatus.mutate("disable")}
           />
-        ) : null}
+        ) : (
+          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("enable")}>
+            Enable
+          </Button>
+        )}
       </div>
-      <FormError message={formError(asProblem(deactivate.error))} />
+      <FormError message={formError(asProblem(setStatus.error))} />
     </div>
   );
 }

@@ -11,7 +11,7 @@ namespace Integrios.Infrastructure.Sources;
 
 internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDataProtectionProvider dataProtectionProvider) : ISourceQueries
 {
-    public async Task<SourceListDto> ListAsync(Guid tenantId, SourceStatus? status, SourceType? type, Guid? topicId, string? afterCursor, int limit, CancellationToken cancellationToken)
+    public async Task<SourceListDto> ListAsync(Guid tenantId, EnablementStatus? status, SourceType? type, Guid? topicId, string? afterCursor, int limit, CancellationToken cancellationToken)
     {
         string scope = "sources:" + JsonSerializer.Serialize(new { tenantId, status, type, topicId });
         DateTimeOffset cursorTime = default;
@@ -36,7 +36,7 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
                 {(sqlServer
                     ? "COALESCE(input_requirements, '')"
                     : "COALESCE(input_requirements::text, '')")} AS InputRequirements,
-                created_at AS CreatedAt, updated_at AS UpdatedAt, revoked_at AS RevokedAt
+                created_at AS CreatedAt, updated_at AS UpdatedAt
             FROM sources
             WHERE {string.Join(" AND ", where)}
             ORDER BY created_at DESC, id DESC
@@ -58,7 +58,7 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
             rows.RemoveAt(rows.Count - 1);
         return new SourceListDto(rows.Select(row => new SourceListItemDto(
             row.Id, row.TenantId, row.ConnectorId, row.TopicId, row.Name, row.Type, row.Status, row.InputRequirements,
-            row.CreatedAt, row.UpdatedAt, row.RevokedAt)).ToList(),
+            row.CreatedAt, row.UpdatedAt)).ToList(),
             hasMore ? PageCursor.Encode(dataProtectionProvider, scope, rows[^1].CreatedAt, rows[^1].Id, DateTimeOffset.UtcNow) : null);
     }
 
@@ -80,6 +80,5 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
         public string InputRequirements { get; init; } = "";
         public DateTimeOffset CreatedAt { get; init; }
         public DateTimeOffset UpdatedAt { get; init; }
-        public DateTimeOffset? RevokedAt { get; init; }
     }
 }

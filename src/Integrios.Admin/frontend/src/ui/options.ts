@@ -8,8 +8,8 @@ import { call } from "../api/query";
 /// already making.
 ///
 /// They are read unfiltered on purpose. A picker offers only what can still be chosen and narrows
-/// these to `active` itself, but a name has to resolve for every row a list can show — including the
-/// deactivated Destination a Subscription is still bound to, which is exactly the row an Operator is most
+/// these itself, but a name has to resolve for every row a list can show — including the
+/// Disabled Destination a Subscription is still bound to, which is exactly the row an Operator is most
 /// likely to be looking up. Reading them filtered under a key that did not say so is what let the
 /// Event ledger and the Sources create panel share `topic-options` while asking for different rows:
 /// whichever mounted first decided what the other saw.
@@ -54,4 +54,9 @@ export function nameIn(items: { id: string; name: string }[] | undefined, id: st
 /// which is why the reads above answer both rather than one at the other's expense.
 export function activeOnly<T extends { status: string }>(items: T[] | undefined): T[] {
   return (items ?? []).filter((item) => item.status === "active");
+}
+
+/// The same, for the resources whose status is Enabled or Disabled rather than Active.
+export function enabledOnly<T extends { status: string }>(items: T[] | undefined): T[] {
+  return (items ?? []).filter((item) => item.status === "enabled");
 }
