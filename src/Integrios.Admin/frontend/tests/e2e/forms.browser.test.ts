@@ -581,7 +581,10 @@ describe("Create forms, filled through a real browser", () => {
     await form.getByLabel("Event type").fill("order.created");
     await choose(form.getByLabel("Method"), "PATCH");
     await form.getByLabel("Relative path (optional)").fill("orders?notify=true");
+    // A request without a body has nothing to map, so the mapping is not offered for one.
     await choose(form.getByLabel("Request body"), "No body");
+    expect(await form.getByRole("button", { name: "Add mapping in Playground" }).count()).toBe(0);
+    await choose(form.getByLabel("Request body"), "Mapped Event JSON");
     await form.getByRole("button", { name: "Add header" }).click();
     await form.getByLabel("Header 1 name").fill("X-Workflow");
     await form.getByLabel("Header 1 value").fill("priority");
@@ -623,7 +626,7 @@ describe("Create forms, filled through a real browser", () => {
       version: 1,
       method: "PATCH",
       path: "orders?notify=true",
-      body: "none",
+      body: "json",
       headers: { "X-Workflow": "priority" },
     });
     expect(sent.body.http_success).toEqual({
