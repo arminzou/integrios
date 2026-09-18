@@ -1,9 +1,74 @@
 import { cn } from "cn";
-import { useRef, useState } from "react";
+import { Check, Copy, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CodeBlock, type CodeLanguage } from "./codeHighlight";
+
+type CopyState = "idle" | "copied" | "failed";
+
+/// Ink only, and on hover too: the pointer is still on the button when the outcome appears.
+const tone: Record<CopyState, string | undefined> = {
+  idle: undefined,
+  copied: "text-success-ink hover:text-success-ink",
+  failed: "text-danger-ink hover:text-danger-ink",
+};
+
+/// One copy, three controls. The outcome shows on the control the Operator just pressed and clears
+/// itself, so a "copied" left over from minutes ago cannot vouch for what is on the clipboard now.
+/// Clipboard access can be missing or refused; then the text is selected instead, so a keyboard copy
+/// still finishes the job and the control is never a dead end.
+function useCopy(label: string) {
+  const [state, setState] = useState<CopyState>("idle");
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const settle = (next: CopyState) => {
+    setState(next);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setState("idle"), 2000);
+  };
+  const copy = (text: string, select: () => void) => {
+    const failed = () => {
+      select();
+      settle("failed");
+    };
+    if (!navigator.clipboard) return failed();
+    navigator.clipboard.writeText(text).then(() => settle("copied"), failed);
+  };
+  const announcement =
+    state === "copied"
+      ? `${label} copied.`
+      : state === "failed"
+        ? `Could not copy the ${label.toLowerCase()}. It is selected; press Ctrl+C to copy it.`
+        : "";
+  return { state, copy, announcement, tone: tone[state] };
+}
+
+/// Selects a rendered value so a keyboard copy takes exactly it.
+function selectContents(element: HTMLElement | null) {
+  if (element) window.getSelection()?.selectAllChildren(element);
+}
+
+/// The visible half of a copy outcome, for a button that carries words.
+function CopyLabel({ state, idle }: { state: CopyState; idle: string }) {
+  if (state === "copied")
+    return (
+      <>
+        <Check aria-hidden="true" />
+        Copied
+      </>
+    );
+  if (state === "failed")
+    return (
+      <>
+        <X aria-hidden="true" />
+        Copy failed
+      </>
+    );
+  return <>{idle}</>;
+}
 
 /// An opaque value an Operator has to get out of the dashboard and into something else — a trace
 /// identity pasted into whatever observability backend the deployment runs, an identifier quoted in
@@ -11,10 +76,9 @@ import { CodeBlock, type CodeLanguage } from "./codeHighlight";
 ///
 /// The value stays in a read-only field rather than plain text on purpose: clipboard access can be
 /// unavailable or refused, and selecting the field still lets the Operator copy by hand, so the
-/// control is never a dead end. The confirmation is announced rather than only shown, because the
-/// visible change is a few words appearing beside a button that already looked the same before.
+/// control is never a dead end.
 export function CopyValue({ id, label, value }: { id: string; label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
+  const { state, copy, announcement, tone } = useCopy(label);
   const field = useRef<HTMLInputElement>(null);
 
   return (
@@ -25,18 +89,13 @@ export function CopyValue({ id, label, value }: { id: string; label: string; val
         <Button
           type="button"
           variant="outline"
-          onClick={() => {
-            field.current?.select();
-            void navigator.clipboard
-              ?.writeText(value)
-              .then(() => setCopied(true))
-              .catch(() => setCopied(false));
-          }}
+          className={tone}
+          onClick={() => copy(value, () => field.current?.select())}
         >
-          Copy {label.toLowerCase()}
+          <CopyLabel state={state} idle={`Copy ${label.toLowerCase()}`} />
         </Button>
-        <span role="status" className="text-sm text-ink-secondary">
-          {copied ? `${label} copied.` : ""}
+        <span role="status" className="sr-only">
+          {announcement}
         </span>
       </div>
     </div>
@@ -56,37 +115,32 @@ export function CopyValue({ id, label, value }: { id: string; label: string; val
 /// two ids they are copying. A panel wraps it; a ledger keeps it on one line and lets the card the
 /// table sits in scroll, which is the width that ledger already absorbs for every other column.
 export function CopyInline({ label, value, oneLine }: { label: string; value: string; oneLine?: boolean }) {
-  const [copied, setCopied] = useState(false);
+  const { state, copy, announcement, tone } = useCopy(label);
+  const shown = useRef<HTMLSpanElement>(null);
+  const Icon = state === "copied" ? Check : state === "failed" ? X : Copy;
 
   return (
     <span className="flex items-center gap-1">
-      <span className={cn("font-mono", oneLine ? "whitespace-nowrap" : "block break-all")}>{value}</span>
+      <span ref={shown} className={cn("font-mono", oneLine ? "whitespace-nowrap" : "block break-all")}>
+        {value}
+      </span>
       <Button
         type="button"
         variant="ghost"
         size="sm"
         aria-label={`Copy ${label.toLowerCase()}`}
-        className="size-6 shrink-0 p-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(value)
-            .then(() => setCopied(true))
-            .catch(() => setCopied(false));
-        }}
+        // An outcome stays visible after the pointer leaves, or it would vanish with the button.
+        className={cn(
+          "size-6 shrink-0 p-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+          state === "idle" ? undefined : "opacity-100",
+          tone,
+        )}
+        onClick={() => copy(value, () => selectContents(shown.current))}
       >
-        <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3.5">
-          <path
-            d="M5.5 5.5V3.5A1 1 0 0 1 6.5 2.5h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M3.5 5.5h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <Icon aria-hidden="true" className="size-3.5" />
       </Button>
       <span role="status" className="sr-only">
-        {copied ? `${label} copied.` : ""}
+        {announcement}
       </span>
     </span>
   );
@@ -124,7 +178,8 @@ export function BodyPanel({
   unbounded?: boolean;
 }) {
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  const [copied, setCopied] = useState(false);
+  const { state, copy, announcement, tone } = useCopy(label);
+  const shown = useRef<HTMLDivElement>(null);
 
   return (
     <section className="flex flex-col gap-2">
@@ -140,19 +195,17 @@ export function BodyPanel({
               variant="outline"
               size="sm"
               aria-label={`Copy ${label.toLowerCase()}`}
-              onClick={() => {
-                void navigator.clipboard
-                  ?.writeText(text)
-                  .then(() => setCopied(true))
-                  .catch(() => setCopied(false));
-              }}
+              className={tone}
+              onClick={() => copy(text, () => selectContents(shown.current))}
             >
-              Copy
+              <CopyLabel state={state} idle="Copy" />
             </Button>
           ) : null}
         </div>
       </div>
-      <CodeBlock value={value} language={language} className={unbounded ? undefined : "max-h-64 overflow-auto"} />
+      <div ref={shown} className="min-w-0">
+        <CodeBlock value={value} language={language} className={unbounded ? undefined : "max-h-64 overflow-auto"} />
+      </div>
       {truncated ? (
         <p className="m-0 text-xs text-ink-secondary">
           Only the first 8 KiB the destination returned is stored. {note}
@@ -161,7 +214,7 @@ export function BodyPanel({
         <p className="m-0 text-xs text-ink-secondary">{note}</p>
       ) : null}
       <span role="status" className="sr-only">
-        {copied ? `${label} copied.` : ""}
+        {announcement}
       </span>
     </section>
   );

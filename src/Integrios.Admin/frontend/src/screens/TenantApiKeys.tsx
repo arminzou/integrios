@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { NavLink } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { CodeBlock } from "../ui/codeHighlight";
 import {
   appliedNote,
   ConfirmAction,
@@ -24,7 +25,7 @@ import {
   SheetButton,
   WriteStatus,
 } from "../ui/controls";
-import { CopyValue } from "../ui/copy";
+import { BodyPanel } from "../ui/copy";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -36,7 +37,6 @@ import {
   openRow,
   Page,
   PageHeader,
-  Panel,
   RowChevron,
   RowHeader,
   SplitList,
@@ -192,7 +192,7 @@ export function TenantApiKeysScreen({
 
       <CreateSheet
         label="New API key"
-        description="The token is shown once, at creation"
+        description="Lets one system send Events to this Tenant"
         open={creating}
         onOpenChange={setCreating}
       >
@@ -330,6 +330,11 @@ function RevokeTenantApiKey({
 function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
   const [created, setCreated] = useState<CreatedKey | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const overview = useQuery({
+    queryKey: ["tenant-overview", tenantId],
+    queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
+  });
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     defaultValues: { name: "", description: "" },
@@ -348,9 +353,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
         }),
       ),
     onSuccess: (result) => {
-      form.reset();
-      // The token is in this response and nowhere else; the list below re-reads and will only ever
-      // carry the key's prefix.
+      // The list re-reads and will only ever carry the key's prefix.
       setCreated(result ?? null);
       void queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
     },
@@ -360,47 +363,57 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
     create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
   );
 
+  // The token exists in that one response and nowhere else — the server stores only its hash — so
+  // once it arrives the form is gone: nothing is left to submit twice, and the sheet is the hand-off.
+  if (created) {
+    const base = overview.data?.ingestion_endpoint?.replace(/\/$/, "") ?? "<ingestion URL>";
+    return (
+      <section className="flex flex-col gap-4" aria-label={`New Tenant API key ${created.tenant_api_key.name}`}>
+        <h3 role="status" className="m-0">
+          {created.tenant_api_key.name} is active
+        </h3>
+        <p className="m-0 rounded-md bg-warning-surface p-3 text-sm text-warning-ink">
+          This is the only time the key is shown. Store it in your secret manager before you close this.
+        </p>
+        <BodyPanel label="Key" value={created.token} language="text" unbounded />
+        <section className="flex flex-col gap-2">
+          <h4 className="m-0 text-sm font-semibold">Use it</h4>
+          <CodeBlock
+            value={`POST ${base}/events?source_id=<Source id>\nAuthorization: Bearer <this key>`}
+            language="http"
+          />
+        </section>
+        <Button
+          type="button"
+          className="self-start"
+          onClick={() => {
+            onCreated();
+            navigate(`/tenants/${tenantId}/tenant-api-keys/${created.tenant_api_key.id}`);
+          }}
+        >
+          Done
+        </Button>
+      </section>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <Form {...form}>
-        <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Tenant API key">
-          <FormError message={formError(asProblem(create.error), createFields)} />
+    <Form {...form}>
+      <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Tenant API key">
+        <FormError message={formError(asProblem(create.error), createFields)} />
 
-          <TextField control={form.control} name="name" label="Name" required />
-          <TextField control={form.control} name="description" label="Description (optional)" />
-          <Button type="submit" className="self-start" disabled={create.isPending}>
-            Create Tenant API key
-          </Button>
-        </form>
-      </Form>
-
-      {/* The token exists in this response and nowhere else — the server stores only its hash, so it
-          is shown once, here, and is gone as soon as this panel is dismissed. */}
-      {created ? (
-        <Panel asChild aria-label={`New Tenant API key ${created.tenant_api_key.name}`}>
-          <section className="flex flex-col gap-3">
-            <h3>Copy the key for {created.tenant_api_key.name} now</h3>
-            <p role="status" className="m-0 text-ink-secondary">
-              This key is shown once. It cannot be read again after you dismiss this message.
-            </p>
-            <CopyValue id="created-tenant-api-key" label="Tenant API key" value={created.token} />
-            {/* The sheet stays open through the create: this token is in that one response and
-                nowhere else, so closing on success would destroy the only copy of it. Dismissing the
-                message is what says the Operator has it, and only then does the sheet close. */}
-            <Button
-              type="button"
-              variant="outline"
-              className="self-start"
-              onClick={() => {
-                setCreated(null);
-                onCreated();
-              }}
-            >
-              I have copied the key
-            </Button>
-          </section>
-        </Panel>
-      ) : null}
-    </div>
+        <TextField
+          control={form.control}
+          name="name"
+          label="Name"
+          hint="Name the system that will use it. You'll find the key by this name when you revoke it."
+          required
+        />
+        <TextField control={form.control} name="description" label="Description (optional)" />
+        <Button type="submit" className="self-start" disabled={create.isPending}>
+          Create API key
+        </Button>
+      </form>
+    </Form>
   );
 }

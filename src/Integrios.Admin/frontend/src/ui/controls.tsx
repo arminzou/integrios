@@ -157,7 +157,12 @@ function FormSheet({
           </Button>
         </SheetTrigger>
       )}
-      <SheetContent aria-label={title}>
+      <SheetContent
+        aria-label={title}
+        // Every sheet holds a form, and closing one discards it. A click beside the sheet is not a
+        // decision to leave; Escape and the close button are.
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <SheetHeader title={title} description={description} />
         {children(() => setOpen(false))}
       </SheetContent>

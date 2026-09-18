@@ -51,7 +51,7 @@ describe("Tenant API keys", () => {
     fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
     expect(screen.queryByLabelText(/Expires|Lifetime/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Create Tenant API key" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
     await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
     expect((calls.find((call) => call.method === "POST")!.body as { expires_at: null }).expires_at).toBeNull();
   });
@@ -66,14 +66,14 @@ describe("Tenant API keys", () => {
     renderScreen(<TenantApiKeysScreen tenantId={tenantId} />);
     fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Tenant API key" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
 
-    expect(await screen.findByDisplayValue(token)).toBeTruthy();
+    expect(await screen.findByText(token)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "I have copied the key" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     // The key exists in that one response and nowhere else: the reloaded list carries only a prefix.
-    expect(screen.queryByDisplayValue(token)).toBeNull();
+    expect(screen.queryByText(token)).toBeNull();
     expect(await screen.findByText("itk_live_ab")).toBeTruthy();
   });
 
