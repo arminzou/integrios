@@ -144,6 +144,32 @@ public sealed class EventEndpointTests(IngestionApiFixture fixture)
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
 
+    /// A body that parses as JSON can still carry bytes that are not UTF-8 inside a string, such as
+    /// a Windows-1252 em dash. The parser does not look inside strings, so without a check the
+    /// failure surfaced later as a 500; it is a malformed request, refused as one.
+    [Fact]
+    public async Task PostEvent_BodyWithInvalidUtf8InAString_Returns400()
+    {
+        (var tenantApiKey, var tenant) = TenantApiKeyAuthHandlerTests.BuildValidTenantApiKey(TenantApiKeyAuthHandlerTests.TestToken);
+        fixture.TenantApiKeyRepository.Result = (tenantApiKey, tenant);
+        fixture.EventApiSourceResolver.Result = new ResolvedEventApiSource
+        {
+            TopicId = Guid.NewGuid(),
+            SourceContractSchema = null,
+            SourceMapping = null,
+        };
+        byte[] body = [.. "{\"event_type\":\"order.placed\",\"payload\":{\"notes\":\"a"u8, 0x97, .. "b\"}}"u8];
+        var message = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={Guid.NewGuid()}")
+        {
+            Content = new ByteArrayContent(body) { Headers = { { "Content-Type", "application/json" } } }
+        };
+        message.Headers.TryAddWithoutValidation("Authorization", $"Bearer {TenantApiKeyAuthHandlerTests.TestToken}");
+
+        var response = await client.SendAsync(message);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task ReplayRoute_IsNotMapped()
     {

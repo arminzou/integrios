@@ -320,6 +320,24 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
     }
 
     [Fact]
+    public async Task PostWebhook_BodyWithInvalidUtf8InAString_Returns400()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with { SourceVerification = null };
+        byte[] body = [.. "{\"action\":\"a"u8, 0x97, .. "b\"}"u8];
+        HttpRequestMessage request = new(HttpMethod.Post, $"/webhooks/{callbackId}")
+        {
+            Content = new ByteArrayContent(body) { Headers = { { "Content-Type", "application/json" } } }
+        };
+        request.Headers.TryAddWithoutValidation(EventTypeHeaderName, "issue.opened");
+        request.Headers.TryAddWithoutValidation(DeliveryIdHeaderName, "delivery-utf8");
+
+        HttpResponseMessage response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task PostWebhook_BodyExceedsBound_Returns413()
     {
         Guid callbackId = Guid.NewGuid();

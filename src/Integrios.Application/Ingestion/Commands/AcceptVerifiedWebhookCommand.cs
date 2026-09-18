@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Unicode;
 using Integrios.Application.Secrets;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
@@ -35,6 +36,11 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
 
         if (command.ContentType?.Split(';')[0].Trim().Equals("application/json", StringComparison.OrdinalIgnoreCase) != true)
             throw new WebhookPayloadException("The request Content-Type must be application/json.");
+
+        // Checked on the raw bytes: the JSON parser does not validate the UTF-8 inside strings, and
+        // a body that parses anyway would fault later, when a string is read, as a server error.
+        if (!Utf8.IsValid(command.RawBody.Span))
+            throw new WebhookPayloadException("The request body must be valid UTF-8.");
 
         JsonElement rawInput;
         try

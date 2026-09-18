@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Unicode;
 using Integrios.Application.Ingestion;
 using Integrios.Ingestion.Auth;
 using MediatR;
@@ -24,6 +26,12 @@ public sealed class EventsEndpoints : IEndpointGroup
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // The JSON parser does not validate the UTF-8 inside strings, so a body carrying, say, a
+        // Windows-1252 em dash binds here and faults later when a string is read. Refused now, the
+        // way the framework refuses a body that is not JSON at all.
+        if (!Utf8.IsValid(JsonMarshal.GetRawUtf8Value(request)))
+            throw new BadHttpRequestException("The request body is not valid UTF-8.");
+
         var tenantContext = httpContext.GetTenantContext();
         var response = await mediator.Send(
             new IngestEventCommand(tenantContext.Tenant.Id, sourceId, request),

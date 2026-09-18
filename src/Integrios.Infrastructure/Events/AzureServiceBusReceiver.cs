@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Unicode;
 using Azure.Identity;
 using Azure.Messaging.ServiceBus;
 using Integrios.Application.Ingestion;
@@ -227,6 +228,10 @@ internal sealed class AzureServiceBusReceiver(
         JsonElement rawInput;
         try
         {
+            // The JSON parser does not validate the UTF-8 inside strings; such a message would
+            // otherwise fault on every delivery attempt instead of being dead-lettered once.
+            if (!Utf8.IsValid(args.Message.Body.ToMemory().Span))
+                throw new JsonException("Message body must be valid UTF-8.");
             rawInput = JsonSerializer.Deserialize<JsonElement>(args.Message.Body);
             if (rawInput.ValueKind != JsonValueKind.Object)
                 throw new JsonException("Message body must be a JSON object.");
