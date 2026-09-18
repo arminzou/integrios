@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
 import { CircleCheck, CircleX, Info, LoaderCircle, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -141,6 +141,8 @@ function CurlImport({ onImport, onClose }: { onImport: (request: CurlRequest) =>
       </label>
       <Textarea
         id="builder-curl"
+        name="curl-command"
+        autoComplete="off"
         spellCheck={false}
         placeholder="curl -H 'x-header-name: value' -d '{…}' https://…"
         value={command}
@@ -201,6 +203,7 @@ export function EventBuilder({
   const [bodyError, setBodyError] = useState<string | null>(null);
   const [headerError, setHeaderError] = useState<string | null>(null);
   const [lastValidHeaders, setLastValidHeaders] = useState<Record<string, string>>({});
+  const importButton = useRef<HTMLButtonElement>(null);
   /// The rule the stored expression was generated from, when one was. Read back out of the
   /// expression rather than from a stored copy beside it: the expression is the whole contract, so
   /// anything it cannot be read back into is not a rule this form may claim to represent.
@@ -209,15 +212,13 @@ export function EventBuilder({
   /// What the Source had when the Builder opened stays choosable for as long as it is open, whether
   /// or not the sample carries it. A picker otherwise offers only the sample's own headers and fields,
   /// so clearing a saved choice would leave no way back to it short of retyping it into the sample.
-  const [saved] = useState(() => {
-    const rule = guidedFrom(draft.expression);
-    return {
-      eventTypeHeaders: rule?.source === "header" ? [rule.header] : [],
-      eventTypePaths: rule?.source === "body" ? [rule.path] : [],
-      identityHeaders: draft.identity?.kind === "header" ? [draft.identity.value] : [],
-      identityFields: draft.identity?.kind === "json_path" ? [draft.identity.value] : [],
-    };
-  });
+  const savedRule = guidedFrom(draft.expression);
+  const saved = {
+    eventTypeHeaders: savedRule?.source === "header" ? [savedRule.header] : [],
+    eventTypePaths: savedRule?.source === "body" ? [savedRule.path] : [],
+    identityHeaders: draft.identity?.kind === "header" ? [draft.identity.value] : [],
+    identityFields: draft.identity?.kind === "json_path" ? [draft.identity.value] : [],
+  };
   const [expression, setExpression] = useState(draft.expression);
   const [mode, setMode] = useState<"guided" | "advanced">(() =>
     draft.expression.trim() === "" || guidedFrom(draft.expression) ? "guided" : "advanced",
@@ -330,6 +331,7 @@ export function EventBuilder({
     // A refusal is the answer, not a fault to retry.
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 0,
     placeholderData: keepPreviousData,
   });
   const answered = checkable && asked === current && !verdict.isPlaceholderData && !verdict.isFetching;
@@ -340,6 +342,26 @@ export function EventBuilder({
   useEffect(() => {
     if (answered) setShown({ check: JSON.parse(asked) as Check, data: verdict.data, error: verdict.error });
   }, [answered, asked, verdict.data, verdict.error]);
+
+  const reset = () => {
+    const rule = guidedFrom(draft.expression);
+    setHeaders([{ name: "", value: "" }]);
+    setImporting(false);
+    setBody("{}");
+    setLastValidBody({});
+    setBodyError(null);
+    setHeaderError(null);
+    setLastValidHeaders({});
+    setEventType(rule ?? emptyEventType);
+    setIdentity(draft.identity);
+    setExpression(draft.expression);
+    setMode(draft.expression.trim() === "" || rule ? "guided" : "advanced");
+    setShown(null);
+  };
+  const changeOpen = (next: boolean) => {
+    reset();
+    setOpen(next);
+  };
   const status: VerdictStatus = !mappable
     ? {
         kind: "blocked",
@@ -391,11 +413,11 @@ export function EventBuilder({
 
   const useDraft = () => {
     onUse({ expression: settled, schema: draft.schema, identity });
-    setOpen(false);
+    changeOpen(false);
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
+    <DialogPrimitive.Root open={open} onOpenChange={changeOpen}>
       <DialogPrimitive.Trigger asChild>
         <Button type="button" variant="outline" className="self-start">
           Open Integrios Event Builder
@@ -432,7 +454,13 @@ export function EventBuilder({
                 title={webhook ? "Sample request" : "Sample message"}
                 action={
                   webhook ? (
-                    <Button type="button" variant="outline" size="sm" onClick={() => setImporting(!importing)}>
+                    <Button
+                      ref={importButton}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setImporting(!importing)}
+                    >
                       {importing ? "Back to sample" : "Import cURL"}
                     </Button>
                   ) : undefined
@@ -440,7 +468,10 @@ export function EventBuilder({
               >
                 {webhook && importing ? (
                   <CurlImport
-                    onClose={() => setImporting(false)}
+                    onClose={() => {
+                      setImporting(false);
+                      requestAnimationFrame(() => importButton.current?.focus());
+                    }}
                     onImport={(request) => {
                       if (request.headers.length > 0) setHeaders(request.headers);
                       if (request.body !== null) setBody(request.body);

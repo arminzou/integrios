@@ -488,6 +488,10 @@ it("fills the sample request from a pasted curl command", async () => {
   fireEvent.change(within(builder).getByLabelText("curl command"), { target: { value: capturedCurl } });
   fireEvent.click(within(builder).getByRole("button", { name: "Import" }));
 
+  await waitFor(() =>
+    expect(document.activeElement).toBe(within(builder).getByRole("button", { name: "Import cURL" })),
+  );
+
   const value = (label: string) => (within(builder).getByLabelText(label) as HTMLInputElement).value;
   expect([1, 2, 3].map((row) => [value(`Header ${row} name`), value(`Header ${row} sample value`)])).toEqual([
     ["X-GitHub-Event", "issues"],
@@ -508,6 +512,27 @@ it("fills the sample request from a pasted curl command", async () => {
   expect(options("Identity header")).toContain("x-github-delivery");
   fireEvent.change(within(builder).getByLabelText("Event identity"), { target: { value: "json_path" } });
   expect(options("Identity field")).toContain("action");
+});
+
+it("discards the ephemeral sample and unsaved choices when it closes", async () => {
+  const builder = await openBuilder("webhook", {
+    expression: guidedExpression({ source: "fixed", value: "saved.event" }),
+    identity: null,
+  });
+  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "unsaved.event" } });
+  fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "authorization" } });
+  fireEvent.change(within(builder).getByLabelText("Header 1 sample value"), { target: { value: "Bearer secret" } });
+  fireEvent.change(within(builder).getByLabelText("Request body (JSON)"), { target: { value: '{"secret":"value"}' } });
+
+  fireEvent.click(within(builder).getByRole("button", { name: "Close the Integrios Event Builder" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Integrios Event Builder" })).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  const reopened = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+
+  expect((within(reopened).getByLabelText("Event type") as HTMLInputElement).value).toBe("saved.event");
+  expect((within(reopened).getByLabelText("Header 1 name") as HTMLInputElement).value).toBe("");
+  expect((within(reopened).getByLabelText("Header 1 sample value") as HTMLInputElement).value).toBe("");
+  expect((within(reopened).getByLabelText("Request body (JSON)") as HTMLTextAreaElement).value).toBe("{}");
 });
 
 it("says so, and changes nothing, when a paste carries no headers or body", async () => {
