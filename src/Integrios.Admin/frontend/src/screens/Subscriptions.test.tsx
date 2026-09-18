@@ -143,7 +143,7 @@ it("guides a new Subscription without exposing raw JSON editors", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "New Subscription" }));
   const form = await screen.findByRole("form", { name: "Create a Subscription" });
 
-  for (const heading of ["Routing", "Event body", "HTTP request", "Response success"])
+  for (const heading of ["Routing", "HTTP request", "Mapping", "Response success"])
     expect(within(form).getByRole("heading", { name: heading })).toBeTruthy();
   expect(within(form).queryByLabelText(/JSON/)).toBeNull();
   expect(within(form).getByRole("button", { name: "Add mapping in Playground" })).toBeTruthy();

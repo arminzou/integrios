@@ -49,7 +49,6 @@ import {
   openRow,
   Page,
   PageHeader,
-  Panel,
   RowChevron,
   RowHeader,
   SplitList,
@@ -1315,7 +1314,10 @@ function SubscriptionForm({
   const headerRows = useFieldArray({ control: form.control, name: "headers" });
   const expression = form.watch("mapping");
   const successMode = form.watch("success_mode");
-  const mappingChanged = !rawMapping && expression !== originalExpression;
+  // Delivery runs the mapping even when the request carries no body, so a mapping there could only
+  // fail a delivery. A request without a body is saved without one.
+  const mapsBody = form.watch("body") === "json";
+  const mappingChanged = mapsBody && !rawMapping && expression !== originalExpression;
   const mappingReviewed = !mappingChanged || reviewedExpression === expression;
 
   const save = useMutation({
@@ -1331,7 +1333,7 @@ function SubscriptionForm({
         name: values.name,
         match_rules: { event_type: values.event_type.trim() },
         destination_id: values.destination_id,
-        mapping: rawMapping ? parseJson(values.raw_mapping).value : mappingEnvelope(values.mapping),
+        mapping: !mapsBody ? null : rawMapping ? parseJson(values.raw_mapping).value : mappingEnvelope(values.mapping),
         http_delivery: httpDelivery,
         http_success: httpSuccess(values),
         order_index: subscription?.order_index ?? 0,
@@ -1360,7 +1362,7 @@ function SubscriptionForm({
   });
 
   const submit = form.handleSubmit((values) => {
-    if (rawMapping && !values.raw_mapping.trim()) {
+    if (mapsBody && rawMapping && !values.raw_mapping.trim()) {
       form.setError("raw_mapping", { type: "validate", message: "Enter the stored mapping document." });
       return;
     }
@@ -1375,228 +1377,216 @@ function SubscriptionForm({
 
   return (
     <Form {...form}>
-      <Panel asChild>
-        <form
-          className="flex flex-col gap-4"
-          aria-label={subscription ? `Edit ${subscription.name}` : "Create a Subscription"}
-          noValidate
-          onSubmit={submit}
-        >
-          {/* Both paths open in a sheet that carries the title, so the form states its name rather
+      <form
+        className="flex flex-col gap-4"
+        aria-label={subscription ? `Edit ${subscription.name}` : "Create a Subscription"}
+        noValidate
+        onSubmit={submit}
+      >
+        {/* Both paths open in a sheet that carries the title, so the form states its name rather
               than repeating a heading under one. */}
-          <FormError message={formError(asProblem(destinations.error))} />
-          <FormError message={formError(asProblem(save.error), writeFields)} />
+        <FormError message={formError(asProblem(destinations.error))} />
+        <FormError message={formError(asProblem(save.error), writeFields)} />
 
-          <TextField control={form.control} name="name" label="Name" required />
-          <Section title="Routing" hint="Which accepted Events this Subscription delivers, and where they go.">
-            <SelectField
-              control={form.control}
-              name="destination_id"
-              label="Destination"
-              hint={
-                noDestinations ? (
-                  <>
-                    No active Destinations yet, and a Subscription delivers to one.{" "}
-                    <Link to={`/tenants/${tenantId}/destinations`}>Create a Destination</Link> first.
-                  </>
-                ) : destinations.data?.next_cursor ? (
-                  "Showing the first 100 active Destinations."
-                ) : undefined
-              }
-              disabled={destinationOptionsUnavailable || noDestinations}
-              required
-            >
-              {activeOnly(destinations.data?.items).map((destination) => (
-                <SelectItem key={destination.id} value={destination.id}>
-                  {destination.name}
-                </SelectItem>
-              ))}
-            </SelectField>
-            <TextField
-              control={form.control}
-              name="event_type"
-              label="Event type"
-              hint="Only Events with this exact type follow this delivery path."
-              required
-            />
-          </Section>
-          <Section title="Event body" hint="What accepted Event data becomes the outbound HTTP request body.">
-            {rawMapping ? (
-              <TextAreaField
-                control={form.control}
-                name="raw_mapping"
-                label="Raw mapping (JSON)"
-                hint="This stored mapping cannot round-trip through the Playground. Saving replaces it exactly."
-                language="json"
-                className="min-h-40"
-                required
-              />
-            ) : (
-              <>
-                <section aria-labelledby="mapping-summary-heading" className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 id="mapping-summary-heading" className="m-0 text-sm">
-                      Mapping
-                    </h3>
-                    <StatusBadge status={mappingReviewed ? "active" : "pending"}>
-                      {mappingChanged ? (mappingReviewed ? "Preview reviewed" : "Review required") : "Unchanged"}
-                    </StatusBadge>
-                  </div>
-                  <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-surface-quiet p-3">
-                    {expression.trim() ? (
-                      <MappingValue expression={expression} />
-                    ) : (
-                      <p className="m-0 text-sm text-ink-secondary">
-                        The accepted payload will be delivered unchanged.
-                      </p>
-                    )}
-                    <p className="m-0 text-xs text-ink-secondary">
-                      {mappingChanged
-                        ? mappingReviewed
-                          ? "Mapping change reviewed and ready to save."
-                          : "Preview and confirm this mapping change before saving the Subscription."
-                        : "Mapping changes are made and reviewed in the Playground."}
-                    </p>
-                  </div>
-                </section>
-                <MappingPlayground
-                  tenantId={tenantId}
-                  topicId={topicId}
-                  form={form}
-                  originalExpression={originalExpression ?? ""}
-                  open={playgroundOpen}
-                  onOpenChange={setPlaygroundOpen}
-                  onReviewInvalidated={() => setReviewedExpression(undefined)}
-                  onConfirmed={setReviewedExpression}
-                />
-              </>
-            )}
-          </Section>
-
-          <Section title="HTTP request" hint="The operation this Subscription sends to its Destination.">
-            <SelectField control={form.control} name="method" label="Method" required>
-              {["POST", "PUT", "PATCH", "DELETE"].map((verb) => (
-                <SelectItem key={verb} value={verb}>
-                  {verb}
-                </SelectItem>
-              ))}
-            </SelectField>
-            <TextField
-              control={form.control}
-              name="path"
-              label="Relative path (optional)"
-              hint="Appended to the Destination base URI. A query string is allowed."
-            />
-            <SelectField control={form.control} name="body" label="Request body" required>
-              <SelectItem value="json">Mapped Event JSON</SelectItem>
-              <SelectItem value="none">No body</SelectItem>
-            </SelectField>
-            <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
-              <legend className="text-sm font-medium">Request headers</legend>
-              <p className="m-0 text-xs text-ink-secondary">
-                Add operation-specific headers. Destination authentication supplies its own headers.
-              </p>
-              {headerRows.fields.map((row, index) => (
-                <div
-                  key={row.id}
-                  className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                >
-                  <TextField
-                    control={form.control}
-                    name={`headers.${index}.name`}
-                    label={`Header ${index + 1} name`}
-                    className="font-mono text-sm"
-                    required
-                  />
-                  <TextField
-                    control={form.control}
-                    name={`headers.${index}.value`}
-                    label={`Header ${index + 1} value`}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="sm:mt-6"
-                    aria-label={`Remove header ${index + 1}`}
-                    onClick={() => headerRows.remove(index)}
-                  >
-                    <X aria-hidden="true" className="size-4" />
-                  </Button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="self-start"
-                disabled={headerRows.fields.length >= 32}
-                onClick={() => headerRows.append({ name: "", value: "" })}
+        <TextField control={form.control} name="name" label="Name" required />
+        <TextField control={form.control} name="description" label="Description (optional)" />
+        <Section title="Routing" hint="Which accepted Events this Subscription delivers, and where they go.">
+          <SelectField
+            control={form.control}
+            name="destination_id"
+            label="Destination"
+            hint={
+              noDestinations ? (
+                <>
+                  No active Destinations yet, and a Subscription delivers to one.{" "}
+                  <Link to={`/tenants/${tenantId}/destinations`}>Create a Destination</Link> first.
+                </>
+              ) : destinations.data?.next_cursor ? (
+                "Showing the first 100 active Destinations."
+              ) : undefined
+            }
+            disabled={destinationOptionsUnavailable || noDestinations}
+            required
+          >
+            {activeOnly(destinations.data?.items).map((destination) => (
+              <SelectItem key={destination.id} value={destination.id}>
+                {destination.name}
+              </SelectItem>
+            ))}
+          </SelectField>
+          <TextField
+            control={form.control}
+            name="event_type"
+            label="Event type"
+            hint="Match the event_type a Source on this Topic produces. Only Events with this exact type follow this delivery path."
+            required
+          />
+        </Section>
+        <Section title="HTTP request" hint="The operation this Subscription sends to its Destination.">
+          <SelectField control={form.control} name="method" label="Method" required>
+            {["POST", "PUT", "PATCH", "DELETE"].map((verb) => (
+              <SelectItem key={verb} value={verb}>
+                {verb}
+              </SelectItem>
+            ))}
+          </SelectField>
+          <TextField
+            control={form.control}
+            name="path"
+            label="Relative path (optional)"
+            hint="Appended to the Destination base URI. A query string is allowed."
+          />
+          <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
+            <legend className="text-sm font-medium">Request headers</legend>
+            <p className="m-0 text-xs text-ink-secondary">
+              Add operation-specific headers. Destination authentication supplies its own headers.
+            </p>
+            {headerRows.fields.map((row, index) => (
+              <div
+                key={row.id}
+                className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
               >
-                Add header
-              </Button>
-            </fieldset>
-          </Section>
-
-          <Section title="Response success" hint="How a successful HTTP response is recognized for this operation.">
-            <SelectField
-              control={form.control}
-              name="success_mode"
-              label="Success check"
-              emptyLabel="Any HTTP 2xx response"
-            >
-              <SelectItem value="json_boolean">Response JSON boolean</SelectItem>
-            </SelectField>
-            {successMode === "json_boolean" ? (
-              <>
                 <TextField
                   control={form.control}
-                  name="success_field"
-                  label="Boolean field"
-                  hint="Top-level response JSON field that signals success."
+                  name={`headers.${index}.name`}
+                  label={`Header ${index + 1} name`}
+                  className="font-mono text-sm"
                   required
                 />
-                <SelectField control={form.control} name="success_expected" label="Expected value" required>
-                  <SelectItem value="true">True</SelectItem>
-                  <SelectItem value="false">False</SelectItem>
-                </SelectField>
-                <TextField
-                  control={form.control}
-                  name="success_diagnostic_field"
-                  label="Diagnostic field (optional)"
-                  hint="Top-level response field used when the operation reports failure."
-                />
-                <TextField
-                  control={form.control}
-                  name="success_max_body_bytes"
-                  label="Maximum response bytes (optional)"
-                  hint="Defaults to 65536. Allowed range: 1 through 1048576."
-                  type="number"
-                  min={1}
-                  max={1_048_576}
-                  step={1}
-                />
-              </>
-            ) : null}
-          </Section>
+                <TextField control={form.control} name={`headers.${index}.value`} label={`Header ${index + 1} value`} />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="sm:mt-6"
+                  aria-label={`Remove header ${index + 1}`}
+                  onClick={() => headerRows.remove(index)}
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              disabled={headerRows.fields.length >= 32}
+              onClick={() => headerRows.append({ name: "", value: "" })}
+            >
+              Add header
+            </Button>
+          </fieldset>
+          <SelectField control={form.control} name="body" label="Request body" required>
+            <SelectItem value="json">Mapped Event JSON</SelectItem>
+            <SelectItem value="none">No body</SelectItem>
+          </SelectField>
+          {!mapsBody ? null : rawMapping ? (
+            <TextAreaField
+              control={form.control}
+              name="raw_mapping"
+              label="Raw mapping (JSON)"
+              hint="This stored mapping cannot round-trip through the Playground. Saving replaces it exactly."
+              language="json"
+              className="min-h-40"
+              required
+            />
+          ) : (
+            <>
+              <section aria-labelledby="mapping-summary-heading" className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 id="mapping-summary-heading" className="m-0 text-sm">
+                    Mapping
+                  </h3>
+                  <StatusBadge status={mappingReviewed ? "active" : "pending"}>
+                    {mappingChanged ? (mappingReviewed ? "Preview reviewed" : "Review required") : "Unchanged"}
+                  </StatusBadge>
+                </div>
+                <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-surface-quiet p-3">
+                  {expression.trim() ? (
+                    <MappingValue expression={expression} />
+                  ) : (
+                    <p className="m-0 text-sm text-ink-secondary">The accepted payload will be delivered unchanged.</p>
+                  )}
+                  <p className="m-0 text-xs text-ink-secondary">
+                    {mappingChanged
+                      ? mappingReviewed
+                        ? "Mapping change reviewed and ready to save."
+                        : "Preview and confirm this mapping change before saving the Subscription."
+                      : "Mapping changes are made and reviewed in the Playground."}
+                  </p>
+                </div>
+              </section>
+              <MappingPlayground
+                tenantId={tenantId}
+                topicId={topicId}
+                form={form}
+                originalExpression={originalExpression ?? ""}
+                open={playgroundOpen}
+                onOpenChange={setPlaygroundOpen}
+                onReviewInvalidated={() => setReviewedExpression(undefined)}
+                onConfirmed={setReviewedExpression}
+              />
+            </>
+          )}
+        </Section>
 
-          <TextField control={form.control} name="description" label="Description (optional)" />
-
-          <Button
-            type="submit"
-            className="self-start"
-            disabled={save.isPending || destinationOptionsUnavailable || noDestinations || !mappingReviewed}
-            aria-describedby={mappingReviewed ? undefined : "mapping-save-requirement"}
+        <Section title="Response success" hint="How a successful HTTP response is recognized for this operation.">
+          <SelectField
+            control={form.control}
+            name="success_mode"
+            label="Success check"
+            emptyLabel="Any HTTP 2xx response"
           >
-            {subscription ? "Save changes" : "Create Subscription"}
-          </Button>
-          {!mappingReviewed ? (
-            <p id="mapping-save-requirement" className="m-0 text-sm text-warning-ink">
-              Save is unavailable until the changed mapping has a successful preview and is confirmed in the Playground.
-            </p>
+            <SelectItem value="json_boolean">Response JSON boolean</SelectItem>
+          </SelectField>
+          {successMode === "json_boolean" ? (
+            <>
+              <TextField
+                control={form.control}
+                name="success_field"
+                label="Boolean field"
+                hint="Top-level response JSON field that signals success."
+                required
+              />
+              <SelectField control={form.control} name="success_expected" label="Expected value" required>
+                <SelectItem value="true">True</SelectItem>
+                <SelectItem value="false">False</SelectItem>
+              </SelectField>
+              <TextField
+                control={form.control}
+                name="success_diagnostic_field"
+                label="Diagnostic field (optional)"
+                hint="Top-level response field used when the operation reports failure."
+              />
+              <TextField
+                control={form.control}
+                name="success_max_body_bytes"
+                label="Maximum response bytes (optional)"
+                hint="Defaults to 65536. Allowed range: 1 through 1048576."
+                type="number"
+                min={1}
+                max={1_048_576}
+                step={1}
+              />
+            </>
           ) : null}
-        </form>
-      </Panel>
+        </Section>
+
+        <Button
+          type="submit"
+          className="self-start"
+          disabled={save.isPending || destinationOptionsUnavailable || noDestinations || !mappingReviewed}
+          aria-describedby={mappingReviewed ? undefined : "mapping-save-requirement"}
+        >
+          {subscription ? "Save changes" : "Create Subscription"}
+        </Button>
+        {!mappingReviewed ? (
+          <p id="mapping-save-requirement" className="m-0 text-sm text-warning-ink">
+            Save is unavailable until the changed mapping has a successful preview and is confirmed in the Playground.
+          </p>
+        ) : null}
+      </form>
     </Form>
   );
 }
