@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { CodeBlock, CodeTextarea } from "../ui/codeHighlight";
 import {
   appliedNote,
   CreateSheet,
@@ -25,7 +25,7 @@ import {
 } from "../ui/controls";
 import { Filter } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
-import { formatJson, parseJson } from "../ui/json";
+import { parseJson } from "../ui/json";
 import {
   CloseInspector,
   Details,
@@ -138,7 +138,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                     >
                       <RowHeader>
                         <NavLink
-                          className="-mx-3 block px-3 py-2 font-mono text-[13px] no-underline"
+                          className="-mx-3 block px-3 py-2 font-mono no-underline"
                           to={`/connectors/${connector.id}`}
                           end
                         >
@@ -258,17 +258,16 @@ function ConnectorManifestImport() {
       <FormError message={formError(asProblem(apply.error))} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="connector-manifest-import">Connector manifest</Label>
-        <Textarea
+        <CodeTextarea
           id="connector-manifest-import"
           value={text}
           disabled={apply.isPending}
-          spellCheck={false}
           onChange={(event) => {
             if (apply.isPending) return;
             setText(event.target.value);
             apply.reset();
           }}
-          className="min-h-72 font-mono text-sm"
+          className="min-h-72"
           aria-describedby="connector-manifest-import-status"
         />
         <p id="connector-manifest-import-status" className="m-0 text-xs text-ink-secondary">
@@ -400,12 +399,12 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         ) : null}
       </Details>
 
-      {current.description ? <p className="m-0 text-[13px] text-ink-secondary">{current.description}</p> : null}
+      {current.description ? <p className="m-0 text-ink-secondary">{current.description}</p> : null}
 
       <section className="flex min-w-0 flex-col gap-2">
         <h3 className="eyebrow">Manifest</h3>
         {!knownSchema ? (
-          <p className="m-0 text-[13px] text-ink-secondary">
+          <p className="m-0 text-ink-secondary">
             This dashboard does not explain manifest schema version {current.manifest_schema_version}. Review the raw
             JSON.
           </p>
@@ -421,7 +420,7 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
             {showRaw ? "Hide raw JSON" : "Show raw JSON"}
           </Button>
         )}
-        {!knownSchema || showRaw ? <pre className="text-xs">{formatJson(current.manifest)}</pre> : null}
+        {!knownSchema || showRaw ? <CodeBlock value={current.manifest} /> : null}
         <p className="m-0 text-xs text-ink-secondary">
           Applied by an Operator. A Connector is deployment-wide and shared by every Tenant.
         </p>

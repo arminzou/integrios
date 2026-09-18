@@ -12,6 +12,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { CodeBlock } from "../ui/codeHighlight";
 import {
   appliedNote,
   ConfirmAction,
@@ -917,10 +918,8 @@ function MessageBrokerFields<TValues extends FieldValues>({ control }: { control
 }
 
 function EventApiRequest({ tenantId, ingestionEndpoint }: { tenantId: string; ingestionEndpoint?: string | null }) {
-  const endpoint = ingestionEndpoint
-    ? `${ingestionEndpoint.replace(/\/$/, "")}/events?source_id=<Source id after create>`
-    : "Loading the ingestion URL…";
-  const request = JSON.stringify(
+  const base = ingestionEndpoint ? ingestionEndpoint.replace(/\/$/, "") : "<ingestion URL>";
+  const body = JSON.stringify(
     {
       event_type: "<event-type>",
       payload: {},
@@ -930,9 +929,10 @@ function EventApiRequest({ tenantId, ingestionEndpoint }: { tenantId: string; in
     null,
     2,
   );
+  const request = `POST ${base}/events?source_id=<Source id after create>\nAuthorization: Bearer <TenantApiKey>\nContent-Type: application/json\n\n${body}`;
 
   return (
-    <section className="flex flex-col gap-2 rounded-md border bg-surface-quiet p-4" aria-labelledby="event-api-request">
+    <section className="flex flex-col gap-2" aria-labelledby="event-api-request">
       <h3 id="event-api-request" className="m-0 text-sm font-medium">
         Event API request
       </h3>
@@ -940,13 +940,7 @@ function EventApiRequest({ tenantId, ingestionEndpoint }: { tenantId: string; in
         This Source accepts the fixed Integrios Event JSON. It has no Source verification, input requirements, or
         mapping; authenticate with a <Link to={`/tenants/${tenantId}/tenant-api-keys`}>Tenant API key</Link>.
       </p>
-      <dl className="grid gap-1 text-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3">
-        <dt className="font-medium">Ingestion URL</dt>
-        <dd className="m-0 min-w-0 break-all font-mono">{endpoint}</dd>
-        <dt className="font-medium">Authorization</dt>
-        <dd className="m-0 font-mono">Bearer &lt;TenantApiKey&gt;</dd>
-      </dl>
-      <pre className="m-0 overflow-x-auto rounded-md border bg-surface p-3 text-sm">{request}</pre>
+      <CodeBlock value={request} language="http" />
     </section>
   );
 }
@@ -1015,13 +1009,13 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
         <dd>{current.type}</dd>
         <dt>Connector</dt>
         <dd>
-          <Link className="font-mono" to={`/connectors/${current.connector_id}`}>
+          <Link to={`/connectors/${current.connector_id}`}>
             {nameIn(connectorOptions.data?.items, current.connector_id)}
           </Link>
         </dd>
         <dt>Topic</dt>
         <dd>
-          <Link className="font-mono" to={`/tenants/${tenantId}/topics/${current.topic_id}`}>
+          <Link to={`/tenants/${tenantId}/topics/${current.topic_id}`}>
             {nameIn(topicOptions.data?.items, current.topic_id)}
           </Link>
         </dd>
@@ -1268,7 +1262,8 @@ function EditSourceForm({
               control={form.control}
               name="configuration"
               label="Broker configuration (JSON)"
-              className="min-h-56 font-mono text-sm"
+              language="json"
+              className="min-h-56"
               required
             />
           </Section>
@@ -1322,13 +1317,15 @@ function EditSourceForm({
                 control={form.control}
                 name="input_requirements"
                 label="Input schema (JSON, optional)"
-                className="min-h-40 font-mono text-sm"
+                language="json"
+                className="min-h-40"
               />
               <TextAreaField
                 control={form.control}
                 name="mapping"
                 label="Event mapping (JSONata, optional)"
-                className="min-h-40 font-mono text-sm"
+                language="text"
+                className="min-h-40"
               />
             </div>
           </Disclosure>

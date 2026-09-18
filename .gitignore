@@ -40,3 +40,4 @@ src/Integrios.Admin/wwwroot/
 src/Integrios.Admin/frontend/src/api/schema.d.ts
 artifacts/openapi/
 .playwright-cli/*
+.playwright-mcp/*

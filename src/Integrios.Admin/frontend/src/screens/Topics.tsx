@@ -168,7 +168,7 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                         {/* The route is the selection, so `aria-current` follows the URL rather than a
                         separately tracked flag — the same contract every other ledger has. */}
                         <NavLink
-                          className="-mx-3 block px-3 py-2 font-mono text-[13px] no-underline"
+                          className="-mx-3 block px-3 py-2 font-mono no-underline"
                           to={`/tenants/${tenantId}/topics/${topic.id}`}
                           end
                         >
@@ -283,11 +283,11 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
 
       <section className="flex flex-col gap-2">
         <h3 className="eyebrow">Subscriptions</h3>
-        {subscriptions.isPending ? <p className="m-0 text-[13px] text-ink-secondary">Loading…</p> : null}
+        {subscriptions.isPending ? <p className="m-0 text-ink-secondary">Loading…</p> : null}
         {/* A Topic nothing matches accepts Events and routes none of them, which is the established
             signal for a missing Subscription rather than an empty section. */}
         {subscriptions.isSuccess && matched.length === 0 ? (
-          <p className="m-0 text-[13px] text-ink-secondary">
+          <p className="m-0 text-ink-secondary">
             No Subscription matches this Topic, so nothing accepted here is ever routed.
           </p>
         ) : null}
@@ -296,7 +296,7 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
             key={subscription.id}
             className="flex items-center justify-between gap-2 rounded-md bg-surface-quiet px-2.5 py-2"
           >
-            <div className="min-w-0 text-[13px]">
+            <div className="min-w-0">
               <Link
                 className="block truncate no-underline"
                 to={`/tenants/${tenantId}/subscriptions/${topicId}/${subscription.id}`}

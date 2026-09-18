@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type CodeLanguage, highlightCode } from "./codeHighlight";
@@ -55,5 +57,30 @@ describe("Highlighting a shown document", () => {
 
   it("paints nothing without a grammar to paint by", () => {
     expect(painted("https://x.test/webhooks/9ad1", "text")).toEqual([]);
+  });
+});
+
+/// A screen that renders its own `<pre>` shows a document in a box of its own making, unpainted —
+/// which is how five panels drifted apart before this rule existed.
+describe("Showing a document on a screen", () => {
+  const folder = join(process.cwd(), "src/screens");
+  const screens = readdirSync(folder)
+    .filter((name) => name.endsWith(".tsx") && !name.endsWith(".test.tsx"))
+    .map((name) => [name, readFileSync(join(folder, name), "utf8")] as const);
+
+  it("goes through CodeBlock rather than a bare pre", () => {
+    const offenders = screens.filter(([, source]) => /<pre[\s>]/.test(source)).map(([name]) => name);
+    expect(screens.length).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+
+  it("edits a document in CodeTextarea rather than a textarea styled as code", () => {
+    const offenders = screens
+      .filter(
+        ([, source]) =>
+          source.includes("@/components/ui/textarea") || /<TextAreaField(?:(?!\/>)[\s\S])*font-mono/.test(source),
+      )
+      .map(([name]) => name);
+    expect(offenders).toEqual([]);
   });
 });

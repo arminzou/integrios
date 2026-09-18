@@ -24,6 +24,7 @@ import {
   SheetButton,
   WriteStatus,
 } from "../ui/controls";
+import { CopyValue } from "../ui/copy";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -157,7 +158,7 @@ export function TenantApiKeysScreen({
                         </NavLink>
                       </RowHeader>
                       {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
-                      <TableCell className="font-mono text-[13px]">{key.key_prefix}</TableCell>
+                      <TableCell className="font-mono">{key.key_prefix}</TableCell>
                       <TableCell>
                         <StatusBadge status={key.state} />
                       </TableCell>
@@ -263,7 +264,7 @@ function TenantApiKeyInspector({
         <dd>{current.last_used_at ? <Timestamp value={current.last_used_at} /> : "Never used"}</dd>
       </Details>
 
-      {current.description ? <p className="m-0 text-[13px] text-ink-secondary">{current.description}</p> : null}
+      {current.description ? <p className="m-0 text-ink-secondary">{current.description}</p> : null}
 
       <RevokeTenantApiKey
         tenantId={tenantId}
@@ -306,7 +307,7 @@ function RevokeTenantApiKey({
 
   if (apiKey.revoked)
     return (
-      <p className="m-0 text-[13px] text-ink-secondary">
+      <p className="m-0 text-ink-secondary">
         Revoked keys are kept so a request that still carries one can be recognised in the logs.
       </p>
     );
@@ -382,9 +383,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
             <p role="status" className="m-0 text-ink-secondary">
               This key is shown once. It cannot be read again after you dismiss this message.
             </p>
-            <output className="rounded-md bg-surface-quiet px-3 py-2 font-mono text-sm break-all">
-              {created.token}
-            </output>
+            <CopyValue id="created-tenant-api-key" label="Tenant API key" value={created.token} />
             {/* The sheet stays open through the create: this token is in that one response and
                 nowhere else, so closing on success would destroy the only copy of it. Dismissing the
                 message is what says the Operator has it, and only then does the sheet close. */}

@@ -68,12 +68,12 @@ describe("Tenant API keys", () => {
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Tenant API key" }));
 
-    expect(await screen.findByText(token)).toBeTruthy();
+    expect(await screen.findByDisplayValue(token)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "I have copied the key" }));
 
     // The key exists in that one response and nowhere else: the reloaded list carries only a prefix.
-    expect(screen.queryByText(token)).toBeNull();
+    expect(screen.queryByDisplayValue(token)).toBeNull();
     expect(await screen.findByText("itk_live_ab")).toBeTruthy();
   });
 

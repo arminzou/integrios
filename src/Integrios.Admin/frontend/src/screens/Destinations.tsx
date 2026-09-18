@@ -11,6 +11,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { CodeBlock } from "../ui/codeHighlight";
 import {
   appliedNote,
   ConfirmAction,
@@ -532,7 +533,7 @@ export function DestinationsScreen({
                         {destination.name}
                       </NavLink>
                     </RowHeader>
-                    <TableCell className="font-mono text-[13px]">{destination.connector_key}</TableCell>
+                    <TableCell className="font-mono">{destination.connector_key}</TableCell>
                     <TableCell>{destination.environment ?? "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={destination.status} />
@@ -801,7 +802,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
           Operator checks before reading anything else in the panel. */}
       <div className="flex items-start justify-between gap-3">
         <div className="group min-w-0">
-          <h2 className="font-mono break-all">{current.name}</h2>
+          <h2 className="break-all">{current.name}</h2>
           <span className="block text-xs text-ink-secondary">
             <CopyInline label="Destination id" value={current.id} />
           </span>
@@ -815,7 +816,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
       <Details className="border-b pb-3.5">
         <dt>Connector</dt>
         <dd>
-          <Link className="font-mono" to={`/connectors/${current.connector_id}`}>
+          <Link to={`/connectors/${current.connector_id}`}>
             {connectorLabel(connectors.data?.items, current.connector_id)}
           </Link>
         </dd>
@@ -827,7 +828,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
 
       <section className="flex min-w-0 flex-col gap-2">
         <h3 className="eyebrow">Configuration</h3>
-        <pre className="text-xs">{formatJson(current.configuration)}</pre>
+        <CodeBlock value={current.configuration} />
         <p className="m-0 text-xs text-ink-secondary">
           An update replaces this object outright rather than merging fields.
         </p>
@@ -1028,7 +1029,8 @@ function EditDestinationForm({
               control={form.control}
               name="raw_configuration"
               label="Raw configuration (JSON)"
-              className="min-h-40 font-mono text-sm"
+              language="json"
+              className="min-h-40"
               required
             />
           </Section>
@@ -1059,7 +1061,8 @@ function EditDestinationForm({
               name="raw_authentication"
               label="Raw authentication (JSON)"
               hint="Secret reference names only; never enter secret values."
-              className="min-h-32 font-mono text-sm"
+              language="json"
+              className="min-h-32"
               required
             />
           </Section>

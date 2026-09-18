@@ -125,7 +125,7 @@
 
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: Georgia, "Times New Roman", ui-serif, serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: "Cascadia Mono", "Cascadia Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Where the signed-in shell stops being a column beside the document and becomes a band above it.
      Named because several utilities depend on the same width and a retyped number drifts. */

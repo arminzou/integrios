@@ -3,8 +3,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { type CodeLanguage, highlightCode } from "./codeHighlight";
-import { parseJson } from "./json";
+import { CodeBlock, type CodeLanguage } from "./codeHighlight";
 
 /// An opaque value an Operator has to get out of the dashboard and into something else — a trace
 /// identity pasted into whatever observability backend the deployment runs, an identifier quoted in
@@ -126,10 +125,6 @@ export function BodyPanel({
 }) {
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   const [copied, setCopied] = useState(false);
-  /// Colour is for the documents that have a grammar this dashboard knows. A panel also carries
-  /// prose-shaped text — a callback URL, a broker address — and painting keywords into those would
-  /// claim a structure they do not have.
-  const painted = language ?? (typeof value !== "string" || parseJson(text).error === undefined ? "json" : "text");
 
   return (
     <section className="flex flex-col gap-2">
@@ -157,14 +152,7 @@ export function BodyPanel({
           ) : null}
         </div>
       </div>
-      <pre
-        className={cn(
-          "m-0 rounded-md bg-surface-quiet p-3 font-mono text-xs whitespace-pre-wrap",
-          unbounded ? undefined : "max-h-64 overflow-auto",
-        )}
-      >
-        {highlightCode(text, painted)}
-      </pre>
+      <CodeBlock value={value} language={language} className={unbounded ? undefined : "max-h-64 overflow-auto"} />
       {truncated ? (
         <p className="m-0 text-xs text-ink-secondary">
           Only the first 8 KiB the destination returned is stored. {note}

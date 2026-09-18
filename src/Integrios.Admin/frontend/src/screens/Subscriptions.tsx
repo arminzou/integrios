@@ -9,11 +9,11 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { CodeBlock, CodeTextarea } from "../ui/codeHighlight";
 import {
   appliedNote,
   ConfirmAction,
@@ -258,11 +258,7 @@ function MappingValue({ expression }: { expression: string }) {
       </dl>
     );
 
-  return (
-    <pre className="m-0 max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words text-xs">
-      {formatMappingExpression(expression)}
-    </pre>
-  );
+  return <CodeBlock value={formatMappingExpression(expression)} className="max-h-40 overflow-auto" />;
 }
 
 export function SubscriptionsScreen({
@@ -1012,14 +1008,13 @@ function MappingPlayground({
             <div className="grid gap-3 md:grid-cols-2">
               <label htmlFor="manual-payload" className="flex flex-col gap-1 text-sm md:col-span-2">
                 <span className="font-medium">Sample input (JSON)</span>
-                <Textarea
+                <CodeTextarea
                   id="manual-payload"
                   value={manualPayload}
                   onChange={(event) => {
                     setManualPayload(event.target.value);
                     invalidateReview();
                   }}
-                  className="min-h-32 font-mono text-sm"
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm">
@@ -1058,7 +1053,7 @@ function MappingPlayground({
             <section className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
               <h3 className="m-0 text-sm">{manual ? "Sample input" : "Accepted Event"}</h3>
               {input !== undefined ? (
-                <pre className="m-0 overflow-auto text-sm">{formatJson(input)}</pre>
+                <CodeBlock value={input} />
               ) : (
                 <p className="m-0 text-sm text-ink-secondary">Choose a sample with an available payload.</p>
               )}
@@ -1179,8 +1174,9 @@ function MappingPlayground({
                 </div>
               ) : (
                 <>
-                  <Textarea
+                  <CodeTextarea
                     id="playground-mapping"
+                    language="text"
                     aria-label="Playground mapping expression"
                     aria-invalid={Boolean(form.formState.errors.mapping)}
                     aria-describedby={form.formState.errors.mapping ? "playground-mapping-error" : undefined}
@@ -1190,7 +1186,7 @@ function MappingPlayground({
                       form.clearErrors("mapping");
                       invalidateReview();
                     }}
-                    className="min-h-44 font-mono text-sm"
+                    className="min-h-44"
                   />
                   <p className="m-0 text-xs text-ink-secondary">
                     {parsedExpression
@@ -1217,7 +1213,7 @@ function MappingPlayground({
                   </p>
                 </div>
               ) : output !== undefined ? (
-                <pre className="m-0 overflow-auto text-sm">{formatJson(output)}</pre>
+                <CodeBlock value={output} />
               ) : (
                 <p className="m-0 text-sm text-ink-secondary">
                   Preview this expression to see what would be delivered.
@@ -1431,7 +1427,8 @@ function SubscriptionForm({
                 name="raw_mapping"
                 label="Raw mapping (JSON)"
                 hint="This stored mapping cannot round-trip through the Playground. Saving replaces it exactly."
-                className="min-h-40 font-mono text-sm"
+                language="json"
+                className="min-h-40"
                 required
               />
             ) : (

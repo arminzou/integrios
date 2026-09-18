@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { cn } from "cn";
+import type { ComponentProps, ReactNode } from "react";
+import { parseJson } from "./json";
 
 /// The languages the dashboard shows an Operator: the documents Integrios carries, and the requests
 /// a guide hands over to be pasted into a terminal or an editor. `text` is everything with no
@@ -64,4 +66,82 @@ export function highlightCode(source: string, language: CodeLanguage = "json"): 
     ...paint(source.slice(0, separator + 2), httpHead, "head-"),
     ...paint(source.slice(separator + 2), json, "body-"),
   ];
+}
+
+/// Every document the dashboard shows is one kind of box, so a manifest, a stored body, and a
+/// request to paste read alike on every screen. `className` is for where the box sits — height,
+/// scroll — not for how the code inside it reads.
+///
+/// Colour is for the documents that have a grammar this dashboard knows. A value that is not JSON
+/// and names no language — a callback URL, a JSONata expression — is shown unpainted, because
+/// painting keywords into it would claim a structure it does not have.
+export function CodeBlock({
+  value,
+  language,
+  className,
+}: {
+  value: unknown;
+  language?: CodeLanguage;
+  className?: string;
+}) {
+  const text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? "");
+  const painted = language ?? (typeof value !== "string" || parseJson(text).error === undefined ? "json" : "text");
+  return (
+    <pre
+      className={cn(
+        "m-0 min-w-0 rounded-md border bg-surface-quiet p-3 font-mono text-sm break-words whitespace-pre-wrap",
+        className,
+      )}
+    >
+      {highlightCode(text, painted)}
+    </pre>
+  );
+}
+
+/// `CodeBlock`'s editable twin, and a drop-in for `Textarea`: every prop reaches the real textarea.
+/// The document is painted once, highlighted, by a `<pre>` in normal flow; the textarea sits over
+/// it with transparent glyphs and its own caret, so everything a textarea gives for free —
+/// selection, undo, the accessible name its label carries — is still a textarea's, and nothing here
+/// reimplements an editor.
+///
+/// The `<pre>` is what sizes the box, so the two never need their scroll positions kept in step:
+/// they grow together and the frame around them does the scrolling. `className` sizes that frame.
+export function CodeTextarea({
+  language = "json",
+  className,
+  value,
+  ...textarea
+}: Omit<ComponentProps<"textarea">, "value" | "defaultValue"> & {
+  /// Controlled only: the painted copy is drawn from this, so an uncontrolled textarea would type
+  /// into a box that shows nothing.
+  value: string;
+  language?: CodeLanguage;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative min-h-32 min-w-0 overflow-auto rounded-md border border-input bg-transparent focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 has-[[aria-invalid=true]]:border-destructive",
+        className,
+      )}
+    >
+      <div className="relative min-h-full w-full">
+        <pre
+          aria-hidden="true"
+          className="m-0 overflow-hidden px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap"
+        >
+          {/* A document ending in a newline has no line box for that last line unless something
+              follows it, so the painted copy runs one line longer than the text it mirrors. */}
+          {highlightCode(value, language)}
+          {"\n"}
+        </pre>
+        <textarea
+          spellCheck={false}
+          autoComplete="off"
+          {...textarea}
+          value={value}
+          className="absolute inset-0 size-full resize-none overflow-hidden bg-transparent px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap text-transparent caret-ink outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+        />
+      </div>
+    </div>
+  );
 }

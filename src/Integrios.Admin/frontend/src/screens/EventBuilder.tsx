@@ -5,10 +5,10 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
+import { CodeTextarea } from "../ui/codeHighlight";
 import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { JsonEditor } from "../ui/jsonEditor";
@@ -139,18 +139,17 @@ function CurlImport({ onImport, onClose }: { onImport: (request: CurlRequest) =>
       <label htmlFor="builder-curl" className="text-sm font-medium">
         curl command
       </label>
-      <Textarea
+      <CodeTextarea
         id="builder-curl"
+        language="shell"
         name="curl-command"
-        autoComplete="off"
-        spellCheck={false}
         placeholder="curl -H 'x-header-name: value' -d '{…}' https://…"
         value={command}
         aria-invalid={error !== null}
         /* Fixed to the pane: a captured command is as long as the provider's headers make it, and a
            box that grew with one would push the verdict and the actions past the foot of the
            window — the same trap the sample editor is bounded against. */
-        className="min-h-56 flex-1 resize-none overflow-auto font-mono text-sm field-sizing-fixed"
+        className="min-h-56 flex-1"
         onChange={(event) => {
           setCommand(event.target.value);
           setError(null);
@@ -433,9 +432,8 @@ export function EventBuilder({
             <div className="min-w-0">
               <DialogPrimitive.Title className="m-0">Integrios Event Builder</DialogPrimitive.Title>
               <DialogPrimitive.Description className="m-0 mt-1 text-sm text-ink-secondary">
-                Choose the Event type and Event identity the{" "}
-                <span className="font-mono">{contractKey || "Source"}</span> reads from each {sampleName}, and check
-                whether Integrios would accept a sample.
+                Choose the Event type and Event identity the <code>{contractKey || "Source"}</code> reads from each{" "}
+                {sampleName}, and check whether Integrios would accept a sample.
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close
@@ -1084,18 +1082,17 @@ function AdvancedExpression({
       <label htmlFor="builder-expression" className="sr-only">
         Source mapping expression
       </label>
-      <Textarea
+      <CodeTextarea
         id="builder-expression"
-        spellCheck={false}
+        language="text"
         value={expression}
-        className="min-h-56 font-mono text-sm"
+        className="min-h-56"
         onChange={(event) => onChange(event.target.value)}
       />
       <Note>
         The mapping reads the {headers ? "request body, and request headers under " : "message body"}
-        {headers ? <span className="font-mono">$context.headers</span> : null}
-        {headers ? "." : ""} It must produce <span className="font-mono">event_type</span> and{" "}
-        <span className="font-mono">payload</span>.
+        {headers ? <code>$context.headers</code> : null}
+        {headers ? "." : ""} It must produce <code>event_type</code> and <code>payload</code>.
       </Note>
       <Note>
         {representable

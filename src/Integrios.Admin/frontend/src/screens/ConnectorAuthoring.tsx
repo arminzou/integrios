@@ -237,8 +237,7 @@ export function ConnectorAuthoring({
               Connector is read back under, so the choice is named in the word it becomes. */}
           {values.receive || values.deliver ? (
             <p className="m-0 text-xs text-ink-secondary">
-              Applies as direction <span className="font-mono">{direction(values)}</span>. Pick both if one external
-              system does both.
+              Applies as direction <code>{direction(values)}</code>. Pick both if one external system does both.
             </p>
           ) : null}
           <Callout message={form.formState.errors.receive?.message} />

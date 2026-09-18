@@ -151,7 +151,7 @@ export function TenantsScreen() {
                       {tenant.name}
                     </Link>
                   </RowHeader>
-                  <TableCell className="font-mono text-[13px] whitespace-nowrap">{tenant.slug}</TableCell>
+                  <TableCell className="font-mono whitespace-nowrap">{tenant.slug}</TableCell>
                   <TableCell>{tenant.environment ?? "—"}</TableCell>
                   <TableCell>
                     <StatusBadge status={tenant.status} />
@@ -354,7 +354,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
             <dt>Name</dt>
             <dd>{current.name}</dd>
             <dt>Slug</dt>
-            <dd className="font-mono text-[13px]">{current.slug}</dd>
+            <dd className="font-mono">{current.slug}</dd>
             <dt>Environment</dt>
             <dd>{current.environment ?? "—"}</dd>
             <dt>Status</dt>
@@ -366,7 +366,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
               <Timestamp value={current.created_at} />
             </dd>
             <dt>Ingestion endpoint</dt>
-            <dd className="font-mono text-[13px] break-all">{overview.data?.ingestion_endpoint ?? "—"}</dd>
+            <dd className="font-mono break-all">{overview.data?.ingestion_endpoint ?? "—"}</dd>
           </Details>
           {current.description ? <p className="m-0 mt-4 text-ink-secondary">{current.description}</p> : null}
         </Panel>

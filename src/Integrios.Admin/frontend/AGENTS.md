@@ -123,6 +123,9 @@ beside a raw editor for the same document, and any precedence rule between them.
   form an Operator has started filling in.
 - Build forms with Zod, `react-hook-form`, and the field wrappers in `ui/fields.tsx`. Keep each
   form's capability-specific schema, conversion, request, and mutations in its owning screen.
+- Show every read-only document — JSON, a request, an expression — through `CodeBlock`, and edit
+  one through `CodeTextarea` (or `TextAreaField` with a `language`), both in `ui/codeHighlight.tsx`.
+  A screen never renders a bare `<pre>` or a textarea styled as code; a test enforces it.
 - Keep shared UI modules limited to repeated presentation or interaction behavior. Do not introduce
   a generic schema-driven authoring form or move capability semantics into `ui/`.
 - Treat the Admin API as authoritative for domain validation. Browser validation may catch syntax,
