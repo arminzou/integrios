@@ -695,6 +695,36 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
+  it("creates a Subscription for an unrouted Event's type from its inspector", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/events/${eventId}`);
+    // The shared handler answers Events as routed; this one is the unrouted case the action is for.
+    await view.route(
+      (url) => url.pathname.endsWith(`/events/${eventId}/deliveries`),
+      (route) =>
+        route.fulfill({
+          json: {
+            event_id: eventId,
+            topic_id: topicId,
+            event_type: "order.refunded",
+            status: "unrouted",
+            accepted_at: "2026-09-08T12:00:00Z",
+            payload: { orderId: "SO-4014" },
+            event_deliveries: [],
+            delivery_attempts: [],
+          },
+        }),
+    );
+    await view.reload();
+
+    const inspector = view.getByRole("complementary", { name: "Event detail" });
+    await inspector.getByRole("link", { name: "Create Subscription" }).click();
+
+    const sheet = view.getByRole("dialog", { name: "New Subscription" });
+    expect(await sheet.getByLabel("Topic").textContent()).toContain("Orders");
+    expect(await formNamed(view, "Create a Subscription").getByLabel("Event type").inputValue()).toBe("order.refunded");
+    await view.close();
+  }, 60_000);
+
   it("sends a Source, then opens its setup guide without narrow-screen overflow", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources`);
 

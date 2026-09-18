@@ -239,9 +239,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         title="Events"
         action={
           <Button asChild variant="outline">
-            <Link className="no-underline" to={`/tenants/${tenantId}`}>
-              Tenant overview
-            </Link>
+            <Link to={`/tenants/${tenantId}`}>Tenant overview</Link>
           </Button>
         }
       >
@@ -293,7 +291,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 control={form.control}
                 name="deliveryStatus"
                 label="Delivery status"
-                hint="Matches Events with at least one EventDelivery in this state."
+                hint="Matches Events with at least one delivery in this state."
               >
                 {deliveryStatuses.map((status) => (
                   <SelectItem key={status} value={status}>
@@ -516,7 +514,8 @@ function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDelive
   ];
   const present = states.filter(([, count]) => Number(count) > 0);
 
-  if (present.length === 0) return <span className="text-ink-secondary">No EventDeliveries</span>;
+  // The same pill as a count, in the quiet tone: an Event with nothing to deliver is a state, not a fault.
+  if (present.length === 0) return <StatusBadge status="none">None</StatusBadge>;
   return (
     <span className="flex flex-wrap gap-1">
       {present.map(([status, count]) => (
@@ -695,8 +694,24 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
               </li>
             ))}
           </ul>
+        ) : current.status === "unrouted" && current.topic_id && current.event_type ? (
+          // Unrouted means no active Subscription matched this type, so the missing Subscription is
+          // the answer; the sheet opens on arrival with this Event's Topic and type already chosen.
+          <div className="flex flex-col items-start gap-2">
+            <p className="m-0 text-[13px]">
+              No active Subscription matches <code>{current.event_type}</code> on this Topic.
+            </p>
+            <Button asChild size="sm">
+              <Link
+                to={`/tenants/${tenantId}/subscriptions?topic_id=${current.topic_id}`}
+                state={{ createSubscriptionFor: current.event_type }}
+              >
+                Create Subscription
+              </Link>
+            </Button>
+          </div>
         ) : (
-          <p className="m-0 text-[13px]">This Event has no EventDeliveries.</p>
+          <p className="m-0 text-[13px]">No deliveries.</p>
         )}
       </section>
 
@@ -710,7 +725,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
         {attempts.length ? (
           <ol
             className="m-0 list-none border-l border-dotted pl-5 text-[13px]"
-            aria-label="Every attempt made against this Event's EventDeliveries"
+            aria-label="Every delivery attempt for this Event"
           >
             {shownAttempts.map((attempt) => {
               // Only a terminal "failed" attempt gets the failure marker and its detail line.

@@ -36,6 +36,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
                     {top}id      AS Id,
                     status       AS Status,
                     event_type   AS EventType,
+                    topic_id     AS TopicId,
                     accepted_at  AS AcceptedAt,
                     processed_at AS ProcessedAt,
                     failed_at    AS FailedAt,
@@ -105,6 +106,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
             EventId = row.Id,
             Status = EventStatusMap.FromDbValue(row.Status),
             EventType = row.EventType,
+            TopicId = row.TopicId,
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
             FailedAt = row.FailedAt,
@@ -167,6 +169,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         public Guid Id { get; init; }
         public string Status { get; init; } = "";
         public string? EventType { get; init; }
+        public Guid? TopicId { get; init; }
         public DateTimeOffset AcceptedAt { get; init; }
         public DateTimeOffset? ProcessedAt { get; init; }
         public DateTimeOffset? FailedAt { get; init; }

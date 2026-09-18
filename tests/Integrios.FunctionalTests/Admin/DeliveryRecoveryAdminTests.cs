@@ -47,6 +47,15 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         diagnostics.Payload.ShouldNotBeNull();
         diagnostics.Payload!.Value.GetProperty("recovery").GetBoolean().ShouldBeTrue();
 
+        // The detail names the Topic and type an unrouted Event would need a Subscription for, the
+        // same Topic the ledger row carries.
+        JsonElement ledger = await (await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/events"))).Content.ReadFromJsonAsync<JsonElement>();
+        Guid ledgerTopicId = ledger.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("event_id").GetGuid() == eventId).GetProperty("topic_id").GetGuid();
+        diagnostics.TopicId.ShouldBe(ledgerTopicId);
+        diagnostics.EventType.ShouldBe("recovery.test");
+
         DeliveryAttemptDiagnosticsDto attempt = diagnostics.DeliveryAttempts.ShouldHaveSingleItem();
         attempt.RequestPayload.ShouldNotBeNull();
         attempt.RequestPayload!.Value.GetProperty("sent").GetString().ShouldBe("body");

@@ -395,7 +395,7 @@ describe("Event inspector", () => {
 
     renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     const timeline = await screen.findByRole("list", {
-      name: "Every attempt made against this Event's EventDeliveries",
+      name: "Every delivery attempt for this Event",
     });
 
     expect(within(timeline).getAllByRole("listitem")).toHaveLength(5);
@@ -462,7 +462,7 @@ describe("Event inspector", () => {
 
     renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     const timeline = await screen.findByRole("list", {
-      name: "Every attempt made against this Event's EventDeliveries",
+      name: "Every delivery attempt for this Event",
     });
     const entries = within(timeline).getAllByRole("listitem");
 

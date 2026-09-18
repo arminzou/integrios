@@ -287,7 +287,17 @@ export function SubscriptionsScreen({
   // table, carrying the action itself, and a screen that guessed first would retract them.
   const narrowing = narrowable(list.isSuccess, subscriptions.length, applied);
 
-  const [creating, setCreating] = useState(false);
+  // An unrouted Event's inspector sends the Operator here to route its type: New Subscription opens on
+  // arrival with that type filled in. Read once, then cleared, so reloading does not reopen it.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const requestedEventType = (location.state as { createSubscriptionFor?: string } | null)?.createSubscriptionFor;
+  const [creating, setCreating] = useState(requestedEventType !== undefined);
+  const [initialEventType, setInitialEventType] = useState(requestedEventType);
+  useEffect(() => {
+    if (requestedEventType === undefined) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.pathname, location.search, navigate, requestedEventType]);
   const create = <SheetButton label="New Subscription" expanded={creating} onOpen={() => setCreating(true)} />;
 
   return (
@@ -425,9 +435,19 @@ export function SubscriptionsScreen({
         label="New Subscription"
         description="Routes matching Events from one Topic"
         open={creating}
-        onOpenChange={setCreating}
+        onOpenChange={(open) => {
+          setCreating(open);
+          if (!open) setInitialEventType(undefined);
+        }}
       >
-        {(close) => <CreateTenantSubscription tenantId={tenantId} defaultTopicId={topicId} onCreated={close} />}
+        {(close) => (
+          <CreateTenantSubscription
+            tenantId={tenantId}
+            defaultTopicId={topicId}
+            defaultEventType={initialEventType}
+            onCreated={close}
+          />
+        )}
       </CreateSheet>
     </Page>
   );
@@ -436,10 +456,12 @@ export function SubscriptionsScreen({
 function CreateTenantSubscription({
   tenantId,
   defaultTopicId,
+  defaultEventType,
   onCreated,
 }: {
   tenantId: string;
   defaultTopicId: string;
+  defaultEventType?: string;
   onCreated: () => void;
 }) {
   const navigate = useNavigate();
@@ -483,6 +505,7 @@ function CreateTenantSubscription({
         <SubscriptionForm
           tenantId={tenantId}
           topicId={topic.id}
+          defaultEventType={defaultEventType}
           onSaved={(created) => {
             onCreated();
             if (created) navigate(`/tenants/${tenantId}/subscriptions/${topic.id}/${created.id}`);
@@ -742,12 +765,15 @@ function SubscriptionForm({
   tenantId,
   topicId,
   subscription,
+  defaultEventType,
   initialPlaygroundOpen = false,
   onSaved,
 }: {
   tenantId: string;
   topicId: string;
   subscription?: Subscription;
+  /// A new Subscription's starting Event type, when it is created for Events already seen.
+  defaultEventType?: string;
   initialPlaygroundOpen?: boolean;
   onSaved?: (saved: Subscription | undefined) => void;
 }) {
@@ -766,7 +792,7 @@ function SubscriptionForm({
     defaultValues: {
       name: subscription?.name ?? "",
       destination_id: subscription?.destination_id ?? "",
-      event_type: subscriptionEventType(subscription?.match_rules),
+      event_type: subscription ? subscriptionEventType(subscription.match_rules) : (defaultEventType ?? ""),
       mapping: originalExpression ?? "",
       raw_mapping: rawMapping ? formatJson(subscription.mapping_config) : "",
       method: (subscription?.http_delivery.method ?? "POST") as SubscriptionValues["method"],

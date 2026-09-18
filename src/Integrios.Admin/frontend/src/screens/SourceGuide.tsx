@@ -147,9 +147,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
                     : "When this Source was active, accepted Events appeared in the Tenant ledger with this Source and Topic."}
                 </p>
                 <Button asChild variant="outline" size="sm">
-                  <Link className="no-underline" to={`/tenants/${tenantId}/events?source_id=${source.id}`}>
-                    Open accepted Events
-                  </Link>
+                  <Link to={`/tenants/${tenantId}/events?source_id=${source.id}`}>Open accepted Events</Link>
                 </Button>
               </div>
               <div className="rounded-lg border p-4">

@@ -23,6 +23,7 @@ public sealed record EventDiagnosticsDto
     public DateTimeOffset? FailedAt { get; init; }
     public string? TraceId { get; init; }
     public string? EventType { get; init; }
+    public Guid? TopicId { get; init; }
     public JsonElement? Payload { get; init; }
     public JsonElement? Metadata { get; init; }
     public IReadOnlyList<EventDeliveryDto> EventDeliveries { get; init; } = [];
