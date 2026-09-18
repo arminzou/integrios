@@ -210,6 +210,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         return eventId;
     }
 
+    public Task DisableSourceAsync() =>
+        ExecuteAsync("UPDATE sources SET status='disabled' WHERE id=@SourceId", new { SourceId });
+
     public Task<string?> GetEventStatusAsync(Guid eventId) =>
         ScalarAsync<string?>("SELECT status FROM events WHERE id=@Id", new { Id = eventId });
 

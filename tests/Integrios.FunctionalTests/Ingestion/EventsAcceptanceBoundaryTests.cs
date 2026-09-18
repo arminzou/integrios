@@ -7,6 +7,7 @@ using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.FunctionalTests.Ingestion;
 
@@ -250,9 +251,75 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         response.StatusCode.ShouldBe(HttpStatusCode.UnsupportedMediaType);
     }
 
-    private static object BuildBody(string? sourceEventId) => new
+    // A Source's declarations are the only Event types intake accepts from it, however the caller
+    // spells the request; the check matches the way routing does, ignoring case.
+    [Fact]
+    public async Task PostEvents_UndeclaredEventType_IsRefusedWithoutAnEvent()
     {
-        event_type = "payment.created",
+        var refused = await PostEventAsync(defaultSourceId, BuildBody("evt-undeclared", "payment.refunded"));
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("payment.refunded");
+        (await fixture.GetEventCountAsync()).ShouldBe(0);
+        (await fixture.GetOutboxCountAsync()).ShouldBe(0);
+
+        (await PostEventAsync(defaultSourceId, BuildBody("evt-declared", "PAYMENT.CREATED"))).StatusCode
+            .ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    // A webhook's Event type comes from the provider's request, so the declaration is the only thing
+    // standing between a provider's new event kind and a silently unroutable Event.
+    [Fact]
+    public async Task PostWebhook_UndeclaredEventType_IsRefusedWithoutAnEvent()
+    {
+        Guid connectorId = await fixture.SeedSourceConnectorAsync(fixture.TenantAId, "webhook-source");
+        Guid callbackId = await fixture.CreateWebhookSourceAsync(
+            fixture.TenantAId, connectorId, defaultTopicId, "[\"github.push\"]");
+
+        using var refused = await client.PostAsync(
+            $"/webhooks/{callbackId}",
+            JsonContent.Create(new { event_type = "github.ping", payload = new { zen = "Keep it logically awesome." } }));
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await fixture.GetEventCountAsync()).ShouldBe(0);
+
+        using var accepted = await client.PostAsync(
+            $"/webhooks/{callbackId}",
+            JsonContent.Create(new { event_type = "github.push", payload = new { @ref = "refs/heads/main" } }));
+        accepted.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    // Every entry point resolves its Source ahead of acceptance, and a broker receiver may hold a
+    // resolution for as long as its reconciliation interval. Only the acceptance transaction reads
+    // the Source authoritatively, so a committed disable or declaration change binds a submission
+    // made from an older resolution.
+    [Theory]
+    [InlineData("disabled", "[\"payment.created\"]", "not enabled")]
+    [InlineData("enabled", "[\"payment.updated\"]", "does not declare")]
+    public async Task Acceptance_RefusesASubmissionResolvedBeforeACommittedChange(
+        string status, string eventTypes, string refusal)
+    {
+        var acceptance = fixture.WebFactory.Services.GetRequiredService<IEventAcceptance>();
+        var submission = new EventSubmission
+        {
+            TenantId = fixture.TenantAId,
+            TopicId = defaultTopicId,
+            SourceId = defaultSourceId,
+            EventType = "payment.created",
+            Payload = JsonSerializer.SerializeToElement(new { paymentId = "pay_stale" }),
+        };
+        await fixture.ChangeSourceAsync(defaultSourceId, status, eventTypes);
+
+        var exception = await Should.ThrowAsync<EventAcceptanceException>(
+            () => acceptance.AcceptAsync(submission, traceparent: null, CancellationToken.None));
+
+        exception.Message.ShouldContain(refusal);
+        (await fixture.GetEventCountAsync()).ShouldBe(0);
+    }
+
+    private static object BuildBody(string? sourceEventId, string eventType = "payment.created") => new
+    {
+        event_type = eventType,
         source_event_id = sourceEventId,
         payload = new { paymentId = "pay_123", amount = 1200 },
         metadata = new { source = "connector-tests" },

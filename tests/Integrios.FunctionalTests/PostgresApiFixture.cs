@@ -163,6 +163,30 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         return sourceId;
     }
 
+    // An unverified webhook Source with no mapping: each request body is already an Integrios Event.
+    public async Task<Guid> CreateWebhookSourceAsync(Guid tenantId, Guid connectorId, Guid topicId, string eventTypesJson)
+    {
+        Guid callbackId = Guid.NewGuid();
+        await ExecuteAsync(
+            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-webhook', 'webhook', {database.Json("@EventTypes")}, {database.Json("@Configuration")}, @Revision, 'enabled', {database.Now}, {database.Now})",
+            new
+            {
+                SourceId = Guid.NewGuid(),
+                TenantId = tenantId,
+                ConnectorId = connectorId,
+                TopicId = topicId,
+                EventTypes = eventTypesJson,
+                Configuration = $"{{\"callback_id\":\"{callbackId}\"}}",
+                Revision = Guid.NewGuid().ToString("N"),
+            });
+        return callbackId;
+    }
+
+    // A committed change a resolver or broker receiver may not have seen yet.
+    public Task ChangeSourceAsync(Guid sourceId, string status, string eventTypesJson) => ExecuteAsync(
+        $"UPDATE sources SET status=@Status, event_types={database.Json("@EventTypes")} WHERE id=@Id",
+        new { Id = sourceId, Status = status, EventTypes = eventTypesJson });
+
     public Task<Guid?> GetEventSourceIdAsync(Guid eventId) =>
         ScalarAsync<Guid?>("SELECT source_id FROM events WHERE id=@Id", new { Id = eventId });
 

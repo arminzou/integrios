@@ -75,6 +75,28 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         eventCount.ShouldBe(0);
     }
 
+    // A type the Source does not declare is refused by the acceptance transaction, deterministically,
+    // so the message is dead-lettered once rather than redelivered.
+    [Fact]
+    public async Task UndeclaredEventType_DeadLettersWithoutCreatingEvent()
+    {
+        string sourceEventId = $"evt-{Guid.NewGuid():N}";
+        await PublishAsync(new { event_type = "order.cancelled", source_event_id = sourceEventId, payload = new { } });
+
+        await using ServiceBusClient client = new(fixture.ServiceBus.GetConnectionString());
+        await using ServiceBusReceiver receiver = client.CreateReceiver(
+            QueueName, new ServiceBusReceiverOptions { SubQueue = SubQueue.DeadLetter });
+        ServiceBusReceivedMessage? deadLettered = await ReceiveDeadLetterAsync(receiver);
+        deadLettered.ShouldNotBeNull();
+        deadLettered!.DeadLetterReason.ShouldBe("source_rejection");
+        deadLettered.DeadLetterErrorDescription.ShouldContain("order.cancelled");
+
+        long eventCount = await QuerySingleAsync<long>(
+            "SELECT COUNT(*) FROM events WHERE tenant_id=@TenantId AND source_event_id=@SourceEventId",
+            new { fixture.TenantId, SourceEventId = sourceEventId });
+        eventCount.ShouldBe(0);
+    }
+
     [Fact]
     public async Task TransientAcceptanceFailure_AbandonsAndRedeliversMessage()
     {

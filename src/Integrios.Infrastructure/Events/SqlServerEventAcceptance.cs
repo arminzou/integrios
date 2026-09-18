@@ -75,11 +75,14 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
 
         try
         {
-            bool activeSource = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-                "SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status=N'enabled') THEN 1 ELSE 0 END AS bit)",
+            // HOLDLOCK keeps the shared lock on the Source row until commit, so a disable or
+            // declaration change waits for acceptances already past this point and every later one
+            // sees it.
+            string? declared = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+                "SELECT event_types FROM sources WITH (HOLDLOCK, ROWLOCK) WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status=N'enabled'",
                 new { submission.TenantId, submission.SourceId, submission.TopicId }, dbTransaction, cancellationToken: cancellationToken));
-            if (!activeSource)
-                throw new EventAcceptanceException("The Source is not active for the requested Topic.");
+            SourceAuthority.Ensure(
+                declared is null ? null : JsonSerializer.Deserialize<string[]>(declared), submission.EventType);
 
             await connection.ExecuteAsync(new CommandDefinition(
                 """
@@ -132,12 +135,6 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
                 throw;
 
             return ToAlreadyAccepted(existing);
-        }
-        catch (SqlException ex) when (ex.Number == 51001)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw new EventAcceptanceException(
-                "The Source is not active for the requested Topic.");
         }
         catch
         {

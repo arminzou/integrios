@@ -31,6 +31,19 @@ public sealed class WorkerRouteMatchingTests : IClassFixture<WorkerRoutingFixtur
         (await fixture.IsOutboxRowProcessedAsync(eventId)).ShouldBeTrue();
     }
 
+    // Disabling a Source is prospective: it fences new acceptance, and everything accepted before it
+    // committed is still routed and delivered.
+    [Fact]
+    public async Task Worker_EventAcceptedBeforeItsSourceIsDisabled_IsStillRoutedAndDelivered()
+    {
+        var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        await fixture.DisableSourceAsync();
+
+        (await fixture.RunWorkerBatchAsync()).ShouldBe(1);
+
+        (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Status.ShouldBe("succeeded");
+    }
+
     [Fact]
     public async Task Worker_SubscriptionMatchingSelectsByEventType_CorrectSinkReceivesDelivery()
     {

@@ -68,11 +68,13 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
 
         try
         {
-            bool activeSource = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-                "SELECT EXISTS (SELECT 1 FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status='enabled')",
+            // FOR SHARE holds the Source row until commit, so a disable or declaration change
+            // waits for acceptances already past this point and every later one sees it.
+            string? declared = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+                "SELECT event_types::text FROM sources WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status='enabled' FOR SHARE",
                 new { submission.TenantId, submission.SourceId, submission.TopicId }, dbTransaction, cancellationToken: cancellationToken));
-            if (!activeSource)
-                throw new EventAcceptanceException("The Source is not active for the requested Topic.");
+            SourceAuthority.Ensure(
+                declared is null ? null : JsonSerializer.Deserialize<string[]>(declared), submission.EventType);
 
             await connection.ExecuteAsync(new CommandDefinition(
                 """
