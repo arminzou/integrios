@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
@@ -79,23 +79,31 @@ export function MappingPlayground({
       ),
     enabled: open,
   });
-  // A Subscription only ever maps Events of its own type, so those are the only accepted Events worth
-  // previewing against. Without a type there is nothing to choose from, and another type's payload
-  // would preview a shape this Subscription never receives.
-  const subscriptionEventType = form.watch("event_type").trim();
-  const sampleEventType = manualEventType ?? (subscriptionEventType || "sample.event");
-  const events = useQuery({
-    queryKey: ["mapping-events", tenantId, topicId, subscriptionEventType],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/events", {
-          params: { path: { tenantId }, query: { topic_id: topicId, event_type: subscriptionEventType, limit: 20 } },
-        }),
-      ),
-    enabled: open && subscriptionEventType !== "",
+  // A Subscription only ever maps Events of the types it selects, so those are the only accepted
+  // Events worth previewing against. Without a type there is nothing to choose from, and another
+  // type's payload would preview a shape this Subscription never receives.
+  const subscriptionEventTypes = form.watch("event_types");
+  const sampleEventType = manualEventType ?? subscriptionEventTypes[0] ?? "sample.event";
+  // ponytail: one read per selected type, merged newest first; a multi-type filter on the Events list
+  // replaces this if Subscriptions come to select many types.
+  const eventReads = useQueries({
+    queries: subscriptionEventTypes.map((eventType) => ({
+      queryKey: ["mapping-events", tenantId, topicId, eventType],
+      queryFn: () =>
+        call(() =>
+          api.GET("/admin/tenants/{tenantId}/events", {
+            params: { path: { tenantId }, query: { topic_id: topicId, event_type: eventType, limit: 20 } },
+          }),
+        ),
+      enabled: open,
+    })),
   });
-  const samples = events.data?.items ?? [];
-  const noSamples = subscriptionEventType === "" || (events.isSuccess && samples.length === 0);
+  const samples = eventReads
+    .flatMap((read) => read.data?.items ?? [])
+    .sort((left, right) => right.accepted_at.localeCompare(left.accepted_at))
+    .slice(0, 20);
+  const noSamples =
+    subscriptionEventTypes.length === 0 || (eventReads.every((read) => read.isSuccess) && samples.length === 0);
   const pasting = manual || noSamples;
   const sampleIndex = Math.max(
     0,
@@ -329,14 +337,9 @@ export function MappingPlayground({
           </div>
           {noSamples ? (
             <p className="m-0 text-sm text-ink-secondary">
-              {subscriptionEventType === "" ? (
-                "Enter this Subscription's Event type to preview against its accepted Events. Until then, paste a sample."
-              ) : (
-                <>
-                  No <code>{subscriptionEventType}</code> Events on this Topic yet. Send a test Event from the Source's
-                  setup guide, or paste a sample.
-                </>
-              )}
+              {subscriptionEventTypes.length === 0
+                ? "Select this Subscription's Event types to preview against its accepted Events. Until then, paste a sample."
+                : "No Events of the selected types on this Topic yet. Send a test Event from the Source's setup guide, or paste a sample."}
             </p>
           ) : null}
 
@@ -562,7 +565,7 @@ export function MappingPlayground({
             message={
               manualError ??
               formError(asProblem(topic.error)) ??
-              formError(asProblem(events.error)) ??
+              formError(asProblem(eventReads.find((read) => read.isError)?.error)) ??
               formError(asProblem(event.error))
             }
           />

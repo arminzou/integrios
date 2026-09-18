@@ -44,7 +44,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = destinationId,
                 order_index = 10
             }));
@@ -66,7 +66,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = destinationId,
                 order_index = 10
             }));
@@ -89,7 +89,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new
             {
                 name = "cross-tenant-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = destinationId,
                 order_index = 10
             }));
@@ -112,7 +112,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new
             {
                 name = "missing-authentication",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = destinationId,
                 order_index = 10
             }));
@@ -133,7 +133,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new
             {
                 name = "erp-sink-v2",
-                match_rules = new { event_type = "payment.updated" },
+                event_types = new[] { "payment.updated" },
                 destination_id = destinationId,
                 order_index = 25,
                 mapping = (object?)null,
@@ -161,7 +161,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new
             {
                 name = "cross-tenant-sink",
-                match_rules = new { event_type = "payment.updated" },
+                event_types = new[] { "payment.updated" },
                 destination_id = destinationId,
                 order_index = 25,
                 mapping = (object?)null,
@@ -186,18 +186,18 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         await connection.OpenAsync();
         Task insert = connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (
-                id, tenant_id, topic_id, name, match_rules,
+                id, tenant_id, topic_id, name, event_types,
                 destination_id, status, order_index)
             VALUES (
                 @Id, @TenantId, @TopicId, 'cross-tenant-direct',
-                {{{fixture.Json("@MatchRules")}}},
+                {{{fixture.Json("@EventTypes")}}},
                 @DestinationId, 'active', 0);
             """, new
         {
             Id = Guid.NewGuid(),
             fixture.TenantId,
             TopicId = topic.Id,
-            MatchRules = "{\"event_type\":\"payment.created\"}",
+            EventTypes = "[\"payment.created\"]",
             DestinationId = destinationId
         });
 
@@ -212,7 +212,9 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new { key }));
 
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;
+        AdminTopicResponse topic = (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;
+        await fixture.DeclareEventTypesAsync(topic.Id, "payment.created", "payment.updated");
+        return topic;
     }
 
     private async Task<SubscriptionDto> CreateSubscriptionAsync(Guid topicId, string name, string eventType)
@@ -223,7 +225,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
             new
             {
                 name,
-                match_rules = new { event_type = eventType },
+                event_types = new[] { eventType },
                 destination_id = fixture.DestinationId,
                 order_index = 10
             }));
@@ -264,7 +266,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
         Guid TopicId,
         Guid TenantId,
         string Name,
-        JsonElement MatchRules,
+        IReadOnlyList<string> EventTypes,
         Guid DestinationId,
         JsonElement? MappingConfig,
         string Status,

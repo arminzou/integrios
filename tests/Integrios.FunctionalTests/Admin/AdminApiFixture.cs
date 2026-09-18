@@ -83,9 +83,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
             VALUES (@TopicId, @TenantId, @TopicName, @TopicName, 'active');
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status)
             VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'fixture-intake', 'event_api', '["recovery.test"]', {{{database.Json("@SourceConfig")}}}, 'fixture-revision', 'active');
-            INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_id, order_index, status)
+            INSERT INTO subscriptions (id, tenant_id, topic_id, name, event_types, destination_id, order_index, status)
             VALUES (@SubscriptionId, @TenantId, @TopicId, @SubscriptionName,
-                {{{database.Json("@MatchRules")}}}, @DestinationId, 0, 'active');
+                {{{database.Json("@EventTypes")}}}, @DestinationId, 0, 'active');
             INSERT INTO events (id, tenant_id, topic_id, source_id, event_type, payload, status)
             VALUES (@EventId, @TenantId, @TopicId, @SourceId, 'recovery.test',
                 {{{database.Json("@Payload")}}}, 'routed');
@@ -114,7 +114,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
             SubscriptionName = $"recovery-subscription-{subscriptionId:N}",
             AttemptId = attemptId,
             DestinationConfig = "{\"base_uri\":\"http://localhost:5054/sink/recovery\"}",
-            MatchRules = "{\"event_types\":[\"recovery.test\"]}",
+            EventTypes = "[\"recovery.test\"]",
             Payload = "{\"recovery\":true}",
             RequestPayload = "{\"sent\":\"body\"}",
             ResponseBody = SeededResponseBody,
@@ -123,6 +123,27 @@ public sealed class AdminApiFixture : IAsyncLifetime
         });
 
         return (eventId, deliveryId);
+    }
+
+    // A Subscription selects only what a Source on its Topic declares, so a test that authors
+    // Subscriptions declares the types it routes first.
+    public async Task DeclareEventTypesAsync(Guid topicId, params string[] eventTypes)
+    {
+        await using DbConnection connection = database.CreateConnection();
+        await connection.OpenAsync();
+        await connection.ExecuteAsync($$$"""
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status)
+            VALUES (@Id, @TenantId, @ConnectorId, @TopicId, @Name, 'event_api', {{{database.Json("@EventTypes")}}}, {{{database.Json("@Config")}}}, 'fixture-revision', 'active');
+            """, new
+        {
+            Id = Guid.NewGuid(),
+            TenantId,
+            ConnectorId = HttpConnectorId,
+            TopicId = topicId,
+            Name = $"declaring-{Guid.NewGuid():N}",
+            EventTypes = JsonSerializer.Serialize(eventTypes),
+            Config = "{}",
+        });
     }
 
     public async Task<Guid> ApplyConnectorManifestAsync(string key, string manifestJson)

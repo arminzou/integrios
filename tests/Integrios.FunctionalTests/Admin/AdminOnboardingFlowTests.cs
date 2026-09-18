@@ -99,7 +99,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
             new
             {
                 name = "acme-erp-subscription",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = destination.Id,
                 order_index = 10,
                 description = "ERP sink"
@@ -170,7 +170,7 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
         Guid TopicId,
         Guid TenantId,
         string Name,
-        JsonElement MatchRules,
+        IReadOnlyList<string> EventTypes,
         Guid DestinationId,
         string Status,
         int OrderIndex,

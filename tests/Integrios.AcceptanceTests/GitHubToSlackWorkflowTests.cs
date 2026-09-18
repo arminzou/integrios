@@ -137,7 +137,7 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
             new
             {
                 name = "push-to-slack",
-                match_rules = new { event_type = "github.push" },
+                event_types = new[] { "github.push" },
                 destination_id = destination,
                 order_index = 0,
                 mapping = new

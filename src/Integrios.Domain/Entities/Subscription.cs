@@ -10,7 +10,9 @@ public sealed record Subscription
     public required Guid TopicId { get; init; }
     public required Guid TenantId { get; init; }
     public required string Name { get; init; }
-    public required JsonElement MatchRules { get; init; }
+    /// The Event types this Subscription routes, each one its Topic's Sources declare. Never empty;
+    /// matched exactly, ignoring case.
+    public required IReadOnlyList<string> EventTypes { get; init; }
     public required Guid DestinationId { get; init; }
     public JsonElement? MappingConfig { get; init; }
     public required HttpDeliveryConfiguration HttpDelivery { get; init; }

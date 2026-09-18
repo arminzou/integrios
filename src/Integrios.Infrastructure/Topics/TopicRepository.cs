@@ -171,4 +171,22 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
                     .SetProperty(topic => topic.UpdatedAt, DateTimeOffset.UtcNow),
                 ct) > 0;
 
+    // ponytail: Revoked is the only removal a Source has until deletion lands; the union follows
+    // whichever state means the Source can no longer publish.
+    public async Task<IReadOnlyList<SourceDeclaration>> ListSourceDeclarationsAsync(
+        Guid tenantId, IReadOnlyCollection<Guid> topicIds, CancellationToken ct) =>
+        await context.Sources.AsNoTracking()
+            .Where(source =>
+                source.TenantId == tenantId
+                && topicIds.Contains(source.TopicId)
+                && source.Status == SourceStatus.Active)
+            .Select(source => new SourceDeclaration(source.Id, source.TopicId, source.EventTypes))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<SubscriptionSelection>> ListSubscriptionSelectionsAsync(
+        Guid tenantId, Guid topicId, CancellationToken ct) =>
+        await context.Subscriptions.AsNoTracking()
+            .Where(subscription => subscription.TenantId == tenantId && subscription.TopicId == topicId)
+            .Select(subscription => new SubscriptionSelection(subscription.Id, subscription.Name, subscription.EventTypes))
+            .ToListAsync(ct);
 }

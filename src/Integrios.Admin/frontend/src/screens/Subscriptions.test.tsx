@@ -17,7 +17,7 @@ const subscription = {
   tenant_id: tenantId,
   topic_id: topicId,
   name: "Send priority orders",
-  match_rules: { event_type: "order.placed" },
+  event_types: ["order.placed"],
   destination_id: destinationId,
   mapping_config: { engine: "jsonata", version: "1", expression: '{ "customer": customer.id }' },
   http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
@@ -302,12 +302,15 @@ it("authors the optional HTTP success rule on the Subscription", async () => {
 describe("Editing a Subscription", () => {
   const detailPath = `/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`;
 
+  const orders = { id: topicId, key: "orders", name: "Orders", status: "active" };
+
   function stubEdit(detail: object, put: { status: number; body?: unknown } = { status: 200, body: detail }) {
     return stubHttp(({ method, url }) => {
       if (method === "PUT") return put;
       if (url.pathname.endsWith(`/subscriptions/${subscriptionId}`)) return { status: 200, body: detail };
-      if (url.pathname.endsWith("/topics"))
-        return { status: 200, body: page([{ id: topicId, key: "orders", name: "Orders", status: "active" }]) };
+      if (url.pathname.endsWith(`/topics/${topicId}`))
+        return { status: 200, body: { ...orders, event_types: ["order.placed", "order.shipped"] } };
+      if (url.pathname.endsWith("/topics")) return { status: 200, body: page([orders]) };
       if (url.pathname.endsWith("/destinations"))
         return { status: 200, body: page([{ id: destinationId, name: "CRM", status: "active" }]) };
       return { status: 200, body: page([]) };
@@ -337,7 +340,7 @@ describe("Editing a Subscription", () => {
     // field sent as empty text, changes what the Subscription delivers.
     expect(calls.find((call) => call.method === "PUT")!.body).toEqual({
       name: subscription.name,
-      match_rules: subscription.match_rules,
+      event_types: subscription.event_types,
       destination_id: destinationId,
       mapping: subscription.mapping_config,
       http_delivery: subscription.http_delivery,
@@ -347,17 +350,39 @@ describe("Editing a Subscription", () => {
     });
   });
 
-  it("puts a refused match rule on the Event type field", async () => {
-    stubEdit(subscription, { status: 422, body: { errors: { match_rules: ["Event type is not routable."] } } });
+  it("puts a refused Event type selection on the Event types", async () => {
+    stubEdit(subscription, {
+      status: 422,
+      body: { errors: { event_types: ["Event type 'order.placed' is not declared by any Source on this Topic."] } },
+    });
     const form = await submitUnchanged();
 
-    const eventType = within(form).getByLabelText("Event type");
-    await waitFor(() => expect(eventType.getAttribute("aria-invalid")).toBe("true"));
-    const described = (eventType.getAttribute("aria-describedby") ?? "")
-      .split(" ")
-      .map((id) => document.getElementById(id)?.textContent ?? "")
-      .join(" ");
-    expect(described).toContain("Event type is not routable.");
+    expect(await within(form).findByText(/is not declared by any Source on this Topic/)).toBeTruthy();
+  });
+
+  /// Only a type some Source on the Topic declares can arrive, so the form offers those and no box to
+  /// type another into, and it sends every type chosen.
+  it("offers the Topic's declared Event types and sends each one chosen", async () => {
+    const calls = stubEdit(subscription);
+    renderScreen(
+      <SubscriptionsScreen tenantId={tenantId} selectedTopicId={topicId} selectedSubscriptionId={subscriptionId} />,
+      detailPath,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const form = await screen.findByRole("form", { name: `Edit ${subscription.name}` });
+    const selection = within(form).getByRole("group", { name: "Event types" });
+
+    const shipped = (await within(selection).findByRole("checkbox", { name: "order.shipped" })) as HTMLInputElement;
+    expect((within(selection).getByRole("checkbox", { name: "order.placed" }) as HTMLInputElement).checked).toBe(true);
+    expect(within(selection).queryByRole("textbox")).toBeNull();
+    fireEvent.click(shipped);
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+    expect((calls.find((call) => call.method === "PUT")!.body as { event_types: unknown }).event_types).toEqual([
+      "order.placed",
+      "order.shipped",
+    ]);
   });
 
   it("preserves an extended mapping through its raw fallback", async () => {

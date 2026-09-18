@@ -38,8 +38,9 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
             new { key }));
 
         response.EnsureSuccessStatusCode();
-        var topic = await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options);
-        return topic!;
+        var topic = (await response.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;
+        await Fixture.DeclareEventTypesAsync(topic.Id, "payment.created", "payment.updated");
+        return topic;
     }
 
     protected async Task<SubscriptionDto> CreateSubscriptionAsync(
@@ -56,7 +57,7 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
             new
             {
                 name,
-                match_rules = new { event_type = eventType },
+                event_types = new[] { eventType },
                 destination_id = Fixture.DestinationId,
                 order_index = orderIndex,
                 description,
@@ -82,7 +83,7 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
         Guid TopicId,
         Guid TenantId,
         string Name,
-        JsonElement MatchRules,
+        IReadOnlyList<string> EventTypes,
         Guid DestinationId,
         JsonElement? MappingConfig,
         string Status,

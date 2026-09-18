@@ -117,7 +117,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     s.id AS SubscriptionId,
                     s.destination_id AS DestinationId,
                     s.order_index AS OrderIndex,
-                    s.match_rules::text AS MatchRulesJson,
+                    s.event_types::text AS EventTypesJson,
                     s.mapping_config::text AS MappingConfigJson,
                     s.http_delivery::text AS HttpDeliveryJson,
                     COALESCE(d.configuration->>'base_uri', '') AS DestinationUrl,
@@ -139,7 +139,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 row.SubscriptionId,
                 row.DestinationId,
                 row.OrderIndex,
-                row.MatchRulesJson,
+                JsonSerializer.Deserialize<string[]>(row.EventTypesJson, StoredJson.Options) ?? [],
                 row.MappingConfigJson,
                 row.ConnectorKey,
                 BuildHttpExecutionSnapshotJson(
@@ -230,7 +230,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
         public Guid SubscriptionId { get; init; }
         public Guid DestinationId { get; init; }
         public int OrderIndex { get; init; }
-        public string? MatchRulesJson { get; init; }
+        public string EventTypesJson { get; init; } = "[]";
         public string? MappingConfigJson { get; init; }
         public string HttpDeliveryJson { get; init; } = "{}";
         public string DestinationUrl { get; init; } = string.Empty;

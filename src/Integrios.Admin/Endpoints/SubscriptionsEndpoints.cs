@@ -33,7 +33,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 tenantId,
                 topicId,
                 request.Name,
-                request.MatchRules,
+                request.EventTypes,
                 request.DestinationId,
                 request.Mapping,
                 request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
@@ -86,7 +86,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
                 topicId,
                 id,
                 request.Name,
-                request.MatchRules,
+                request.EventTypes,
                 request.DestinationId,
                 request.Mapping,
                 request.HttpDelivery ?? HttpDeliveryConfiguration.Default,
@@ -113,7 +113,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
 
 internal sealed record CreateSubscriptionRequest(
     string? Name,
-    JsonElement MatchRules,
+    IReadOnlyList<string>? EventTypes,
     Guid DestinationId,
     JsonElement? Mapping,
     HttpDeliveryConfiguration? HttpDelivery,
@@ -123,7 +123,7 @@ internal sealed record CreateSubscriptionRequest(
 
 internal sealed record UpdateSubscriptionRequest(
     [property: JsonRequired] string? Name,
-    [property: JsonRequired] JsonElement MatchRules,
+    [property: JsonRequired] IReadOnlyList<string>? EventTypes,
     [property: JsonRequired] Guid DestinationId,
     [property: JsonRequired] JsonElement? Mapping,
     [property: JsonRequired] HttpDeliveryConfiguration? HttpDelivery,

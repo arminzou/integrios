@@ -86,7 +86,7 @@ SOURCE=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources -H "$AUTH" -H 'Con
 
 # 7. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"acme-erp-sub\",\"match_rules\":{\"event_type\":\"payment.created\"},\"destination_id\":\"$DST\",\"mapping\":null,\"http_delivery\":null,\"http_success\":null,\"order_index\":0}" > /dev/null
+  -d "{\"name\":\"acme-erp-sub\",\"event_types\":[\"payment.created\"],\"destination_id\":\"$DST\",\"mapping\":null,\"http_delivery\":null,\"http_success\":null,\"order_index\":0}" > /dev/null
 
 # 8. Send an event to the data plane. source_id (query parameter) names the Source; the body is the
 # fixed Event API contract -- event_type and payload are required,

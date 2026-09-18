@@ -220,7 +220,7 @@ describe("Accessibility of detail and edit states", () => {
     tenant_id: tenantId,
     topic_id: topicId,
     name: "Send priority orders",
-    match_rules: { event_type: "order.placed" },
+    event_types: ["order.placed"],
     destination_id: destinationId,
     mapping_config: null,
     http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },

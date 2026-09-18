@@ -15,7 +15,7 @@ public sealed record CreateSubscriptionCommand(
     Guid TenantId,
     Guid TopicId,
     string? Name,
-    JsonElement MatchRules,
+    IReadOnlyList<string>? EventTypes,
     Guid DestinationId,
     JsonElement? MappingConfig,
     HttpDeliveryConfiguration HttpDelivery,
@@ -38,7 +38,7 @@ internal sealed class CreateSubscriptionCommandHandler(
             throw new SubscriptionValidationException("Name is required.", "name");
 
         SubscriptionAuthoringRules.Validate(
-            command.MatchRules,
+            command.EventTypes,
             command.MappingConfig,
             command.HttpDelivery,
             command.HttpSuccess,
@@ -49,6 +49,10 @@ internal sealed class CreateSubscriptionCommandHandler(
         {
             return null;
         }
+        IReadOnlyList<string> eventTypes = SubscriptionAuthoringRules.SelectFromTopic(
+            command.EventTypes!,
+            TopicEventTypes.Union(await topicRepository.ListSourceDeclarationsAsync(
+                command.TenantId, [command.TopicId], cancellationToken)));
 
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
             [command.DestinationId],
@@ -60,7 +64,7 @@ internal sealed class CreateSubscriptionCommandHandler(
             command.TenantId,
             command.TopicId,
             command.Name,
-            command.MatchRules,
+            eventTypes,
             command.DestinationId,
             command.MappingConfig,
             command.HttpDelivery,

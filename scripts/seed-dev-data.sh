@@ -83,7 +83,7 @@ new_source() { # tenant connector topic name event_types_csv [type] [configurati
 new_subscription() { # tenant topic name event_type destination order description [mapping_json]
   admin POST "/admin/tenants/$1/topics/$2/subscriptions" "$(jq -n --arg n "$3" --arg et "$4" \
     --arg dst "$5" --argjson o "$6" --arg d "$7" --argjson m "${8:-null}" \
-    '{name:$n,match_rules:{event_type:$et},destination_id:$dst,mapping:$m,http_delivery:null,http_success:null,order_index:$o,description:$d}')" | jq -r .id
+    '{name:$n,event_types:[$et],destination_id:$dst,mapping:$m,http_delivery:null,http_success:null,order_index:$o,description:$d}')" | jq -r .id
 }
 
 new_key() { # tenant name description

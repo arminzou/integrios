@@ -2,19 +2,21 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { type Control, useFieldArray, useForm } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
-import { fieldError, formError } from "../api/problem";
+import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import { CodeBlock } from "../ui/codeHighlight";
 import {
   appliedNote,
+  CheckRow,
   ConfirmAction,
   CreateSheet,
   EditSheet,
@@ -59,7 +61,7 @@ type HttpSuccessRule = components["schemas"]["HttpSuccessRule"];
 
 const writeFields = [
   "name",
-  "match_rules",
+  "event_types",
   "destination_id",
   "mapping",
   "http_delivery",
@@ -70,7 +72,7 @@ const writeFields = [
 /// The rows the form itself renders. `http_delivery` is not one of them: the server names the whole
 /// delivery configuration, which is spread across four controls here, so its message stays at form
 /// level rather than being attached to an arbitrary one of them.
-const formFields = ["name", "destination_id", "event_type", "mapping", "description"] as const;
+const formFields = ["name", "destination_id", "event_types", "mapping", "description"] as const;
 
 /// The version the dashboard authors. The server owns the meaning of each version, so an existing
 /// Subscription keeps whatever version it already carries rather than being silently upgraded.
@@ -80,7 +82,7 @@ const subscriptionSchema = z
   .object({
     name: z.string().trim().min(1, "Enter a name."),
     destination_id: z.string().min(1, "Choose a Destination."),
-    event_type: z.string().trim().min(1, "Enter an Event type."),
+    event_types: z.array(z.string()).min(1, "Choose at least one Event type."),
     mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
     raw_mapping: z.string().superRefine((text, ctx) => {
       if (!text.trim()) return;
@@ -146,12 +148,6 @@ function mappingExpression(mapping: unknown): string {
   if (typeof mapping !== "object" || mapping === null) return "";
   const expression = (mapping as { expression?: unknown }).expression;
   return typeof expression === "string" ? expression : "";
-}
-
-function subscriptionEventType(matchRules: unknown): string {
-  if (typeof matchRules !== "object" || matchRules === null) return "";
-  const eventType = (matchRules as { event_type?: unknown }).event_type;
-  return typeof eventType === "string" ? eventType : "";
 }
 
 function httpSuccess(values: SubscriptionValues): HttpSuccessRule | null {
@@ -691,12 +687,13 @@ function SubscriptionSourcePath({
       return items;
     },
   });
-  const eventType = subscriptionEventType(subscription.match_rules);
+  const eventTypes = subscription.event_types;
   const fieldMappings = parseFieldMappings(mappingExpression(subscription.mapping_config));
   const context = {
     subscriptionId: subscription.id,
     subscriptionPath: `/tenants/${tenantId}/subscriptions/${topicId}/${subscription.id}`,
-    eventType,
+    // The guide shows one request; any selected type is one this Subscription receives.
+    eventType: eventTypes[0] ?? "",
     payload: payloadPlaceholder(fieldMappings ?? []),
     advancedMapping: fieldMappings === undefined,
   };
@@ -721,7 +718,13 @@ function SubscriptionSourcePath({
         <li className="rounded-full border px-2.5 py-1">Destination</li>
       </ol>
       <p className="m-0 text-sm">
-        Event type: <code>{eventType || "—"}</code>
+        {eventTypes.length === 1 ? "Event type" : "Event types"}:{" "}
+        {eventTypes.map((eventType, index) => (
+          <span key={eventType}>
+            {index > 0 ? ", " : null}
+            <code>{eventType}</code>
+          </span>
+        ))}
       </p>
       {sources.isPending ? <p className="m-0 text-sm">Loading active Sources…</p> : null}
       {sourcesProblem ? <ReadError problem={sourcesProblem} what="Active Sources" /> : null}
@@ -761,6 +764,74 @@ function SubscriptionSourcePath({
   );
 }
 
+/// The Event types this Subscription routes, chosen from what the Sources on its Topic declare. There
+/// is no free text: only a declared type can arrive, so any other value would be a route nothing takes.
+function EventTypeSelection({
+  control,
+  tenantId,
+  topicId,
+}: {
+  control: Control<SubscriptionValues>;
+  tenantId: string;
+  topicId: string;
+}) {
+  const topic = useQuery({
+    queryKey: ["topic", tenantId, topicId],
+    queryFn: () =>
+      call(() => api.GET("/admin/tenants/{tenantId}/topics/{id}", { params: { path: { tenantId, id: topicId } } })),
+  });
+  const topicProblem = asProblem(topic.error);
+  const available = topic.data?.event_types ?? [];
+  const declared = (eventType: string) => available.some((value) => value.toLowerCase() === eventType.toLowerCase());
+  return (
+    <FormField
+      control={control}
+      name="event_types"
+      render={({ field }) => {
+        const selected = field.value;
+        // A selection the Topic no longer offers stays visible, so it can be cleared rather than lost.
+        const options = [...available, ...selected.filter((eventType) => !declared(eventType))];
+        return (
+          <FormItem>
+            <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0">
+              <legend className="text-sm font-medium">Event types</legend>
+              <p className="m-0 text-xs text-ink-secondary">
+                Only Events of a selected type follow this delivery path. The choices are the Event types the Sources on
+                this Topic declare.
+              </p>
+              {topic.isPending ? <p className="m-0 text-sm">Loading the Topic's Event types…</p> : null}
+              {topicProblem ? <ReadError problem={topicProblem} what="This Topic's Event types" /> : null}
+              {topic.isSuccess && options.length === 0 ? (
+                <p className="m-0 text-sm">
+                  No Source on this Topic declares an Event type yet.{" "}
+                  <Link to={`/tenants/${tenantId}/sources?topic_id=${topicId}`} state={{ openSourceCreate: true }}>
+                    Declare them on a Source
+                  </Link>{" "}
+                  first.
+                </p>
+              ) : null}
+              {options.map((eventType) => (
+                <CheckRow
+                  key={eventType}
+                  name={field.name}
+                  checked={selected.includes(eventType)}
+                  label={eventType}
+                  hint={declared(eventType) ? undefined : "No Source on this Topic declares this type any more."}
+                  onBlur={field.onBlur}
+                  onChange={(checked) =>
+                    field.onChange(checked ? [...selected, eventType] : selected.filter((value) => value !== eventType))
+                  }
+                />
+              ))}
+            </fieldset>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
+}
+
 function SubscriptionForm({
   tenantId,
   topicId,
@@ -792,7 +863,7 @@ function SubscriptionForm({
     defaultValues: {
       name: subscription?.name ?? "",
       destination_id: subscription?.destination_id ?? "",
-      event_type: subscription ? subscriptionEventType(subscription.match_rules) : (defaultEventType ?? ""),
+      event_types: subscription ? subscription.event_types : defaultEventType ? [defaultEventType] : [],
       mapping: originalExpression ?? "",
       raw_mapping: rawMapping ? formatJson(subscription.mapping_config) : "",
       method: (subscription?.http_delivery.method ?? "POST") as SubscriptionValues["method"],
@@ -832,7 +903,7 @@ function SubscriptionForm({
       };
       const requestBody = {
         name: values.name,
-        match_rules: { event_type: values.event_type.trim() },
+        event_types: values.event_types,
         destination_id: values.destination_id,
         mapping: !mapsBody ? null : rawMapping ? parseJson(values.raw_mapping).value : mappingEnvelope(values.mapping),
         http_delivery: httpDelivery,
@@ -868,11 +939,7 @@ function SubscriptionForm({
       return;
     }
     save.mutate(values, {
-      onError: (failure) => {
-        applyProblem(form, failure, formFields);
-        const matchRulesError = fieldError(asProblem(failure), "match_rules");
-        if (matchRulesError) form.setError("event_type", { type: "server", message: matchRulesError });
-      },
+      onError: (failure) => applyProblem(form, failure, formFields),
     });
   });
 
@@ -915,13 +982,7 @@ function SubscriptionForm({
               </SelectItem>
             ))}
           </SelectField>
-          <TextField
-            control={form.control}
-            name="event_type"
-            label="Event type"
-            hint="Match the event_type a Source on this Topic produces. Only Events with this exact type follow this delivery path."
-            required
-          />
+          <EventTypeSelection control={form.control} tenantId={tenantId} topicId={topicId} />
         </Section>
         <Section title="HTTP request" hint="The operation this Subscription sends to its Destination.">
           <SelectField control={form.control} name="method" label="Method" required>

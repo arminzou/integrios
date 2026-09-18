@@ -12,7 +12,8 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
     {
         entity.HasKey(e => e.Id).HasName("routes_pkey");
 
-        entity.ToTable("subscriptions");
+        entity.ToTable("subscriptions", table =>
+            table.HasCheckConstraint("ck_subscriptions_event_types_array", "jsonb_typeof(event_types) = 'array'"));
 
         entity.HasIndex(e => e.TopicId, "idx_subscriptions_topic_id");
 
@@ -29,10 +30,9 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasColumnType("jsonb")
             .HasColumnName("http_delivery");
         entity.Property(e => e.HttpSuccess).HasColumnType("jsonb").HasColumnName("http_success");
-        entity.Property(e => e.MatchRules)
-            .HasDefaultValueSql("'{}'::jsonb")
+        entity.Property(e => e.EventTypes)
             .HasColumnType("jsonb")
-            .HasColumnName("match_rules");
+            .HasColumnName("event_types");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.OrderIndex)
             .HasDefaultValue(0)

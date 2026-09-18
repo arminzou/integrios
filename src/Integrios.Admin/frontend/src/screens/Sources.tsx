@@ -1202,8 +1202,7 @@ function useTopicRouting(tenantId: string, topicId: string, enabled: boolean) {
   const routes = details.flatMap((detail) => {
     const subscription = detail.data;
     if (!subscription) return [];
-    const eventType = object(subscription.match_rules).event_type;
-    return [`${subscription.name} (${typeof eventType === "string" ? eventType : "no Event type"})`];
+    return [`${subscription.name} (${subscription.event_types.join(", ")})`];
   });
   const settled = list.isSuccess && details.every((detail) => !detail.isPending);
   return {

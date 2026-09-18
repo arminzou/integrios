@@ -22,7 +22,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
                 description = "Primary ERP delivery"
@@ -42,7 +42,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         body.DestinationId.ShouldBe(Fixture.DestinationId);
         body.OrderIndex.ShouldBe(10);
         body.Status.ShouldBe("active");
-        body.MatchRules.GetProperty("event_type").GetString().ShouldBe("payment.created");
+        body.EventTypes.ShouldBe(["payment.created"]);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "disabled-destination",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 0
             }));
@@ -89,7 +89,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         var topic = await CreateTopicAsync("payments");
         await CreateSubscriptionAsync(topic.Id, "sub-a", "payment.created", orderIndex: 1);
         await CreateSubscriptionAsync(topic.Id, "sub-b", "payment.updated", orderIndex: 2);
-        await CreateSubscriptionAsync(topic.Id, "sub-c", "payment.failed", orderIndex: 3);
+        await CreateSubscriptionAsync(topic.Id, "sub-c", "payment.created", orderIndex: 3);
 
         var page1 = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
@@ -131,14 +131,13 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     }
 
     [Theory]
-    [InlineData("{}")]
-    [InlineData("{\"event_types\":[\"payment.created\"]}")]
-    [InlineData("{\"event_type\":123}")]
-    [InlineData("{\"event_type\":\"\"}")]
-    [InlineData("{\"event_type\":\"payment.created\",\"foo\":\"bar\"}")]
-    [InlineData("{\"event_type\":\"payment.created \"}")]
-    [InlineData("{\"event_type\":\"payment\\tcreated\"}")]
-    public async Task CreateSubscription_WithInvalidMatchRules_ReturnsUnprocessableEntity(string matchRulesJson)
+    [InlineData("[]")]
+    [InlineData("[\"\"]")]
+    [InlineData("[\"payment.created \"]")]
+    [InlineData("[\"payment\\tcreated\"]")]
+    [InlineData("[\"payment.created\",\"PAYMENT.CREATED\"]")]
+    [InlineData("[\"payment.refunded\"]")]
+    public async Task CreateSubscription_WithInvalidEventTypes_IsRefused(string eventTypesJson)
     {
         var topic = await CreateTopicAsync("payments");
 
@@ -148,7 +147,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = JsonDocument.Parse(matchRulesJson).RootElement,
+                event_types = JsonDocument.Parse(eventTypesJson).RootElement,
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
                 description = "Primary ERP delivery"
@@ -160,14 +159,13 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     }
 
     [Theory]
-    [InlineData("{}")]
-    [InlineData("{\"event_types\":[\"payment.updated\"]}")]
-    [InlineData("{\"event_type\":null}")]
-    [InlineData("{\"event_type\":\"   \"}")]
-    [InlineData("{\"event_type\":\"payment.updated\",\"foo\":true}")]
-    [InlineData("{\"event_type\":\" payment.updated\"}")]
-    [InlineData("{\"event_type\":\"payment\\nupdated\"}")]
-    public async Task UpdateSubscription_WithInvalidMatchRules_ReturnsUnprocessableEntity(string matchRulesJson)
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("[\"   \"]")]
+    [InlineData("[\" payment.updated\"]")]
+    [InlineData("[\"payment\\nupdated\"]")]
+    [InlineData("[\"payment.refunded\"]")]
+    public async Task UpdateSubscription_WithInvalidEventTypes_IsRefused(string eventTypesJson)
     {
         var topic = await CreateTopicAsync("payments");
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
@@ -178,7 +176,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink-v2",
-                match_rules = JsonDocument.Parse(matchRulesJson).RootElement,
+                event_types = JsonDocument.Parse(eventTypesJson).RootElement,
                 destination_id = Fixture.DestinationId,
                 order_index = 25,
                 mapping = (object?)null,
@@ -204,7 +202,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink-v2",
-                match_rules = new { event_type = "payment.updated" },
+                event_types = new[] { "payment.updated" },
                 destination_id = Fixture.DestinationId,
                 order_index = 25,
                 mapping = (object?)null,
@@ -219,7 +217,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         body.ShouldNotBeNull();
         body.Name.ShouldBe("erp-sink-v2");
         body.OrderIndex.ShouldBe(25);
-        body.MatchRules.GetProperty("event_type").GetString().ShouldBe("payment.updated");
+        body.EventTypes.ShouldBe(["payment.updated"]);
     }
 
     [Fact]
@@ -259,7 +257,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
                 mapping = (object?)null,
@@ -299,7 +297,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 1
             }));
@@ -319,7 +317,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink-v2",
-                match_rules = new { event_type = "payment.updated" },
+                event_types = new[] { "payment.updated" },
                 destination_id = Fixture.DestinationId,
                 order_index = 2,
                 mapping = (object?)null,
@@ -342,7 +340,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "missing-subscription",
-                match_rules = new { event_type = "payment.updated" },
+                event_types = new[] { "payment.updated" },
                 destination_id = Guid.NewGuid(),
                 order_index = 2,
                 mapping = (object?)null,

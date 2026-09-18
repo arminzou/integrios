@@ -133,7 +133,7 @@ Content-Type: application/json
 
 {
   "name": "orders-to-erp",
-  "match_rules": { "event_type": "order.placed" },
+  "event_types": ["order.placed"],
   "destination_id": "{{createErpDestination.response.body.$.id}}",
   "mapping": null,
   "http_delivery": null,
@@ -263,7 +263,7 @@ Content-Type: application/json
 
 {
   "name": "storefront-webhooks-to-audit",
-  "match_rules": { "event_type": "storefront.webhook.received" },
+  "event_types": ["storefront.webhook.received"],
   "destination_id": "{{createAuditDestination.response.body.$.id}}",
   "mapping": null,
   "http_delivery": null,
@@ -378,7 +378,7 @@ Content-Type: application/json
 
 {
   "name": "warehouse-receipts-to-wms",
-  "match_rules": { "event_type": "warehouse.receipt.recorded" },
+  "event_types": ["warehouse.receipt.recorded"],
   "destination_id": "{{createWmsDestination.response.body.$.id}}",
   "mapping": null,
   "http_delivery": null,

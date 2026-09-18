@@ -20,6 +20,7 @@ public sealed class AdminExceptionHandler(IProblemDetailsService problemDetailsS
         {
             AuthoringValidationException validation => ValidationProblem(validation),
             DuplicateResourceException => Problem(StatusCodes.Status409Conflict, exception.Message),
+            AuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             DestinationAuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             ConnectorVersionConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             InvalidCursorException or InvalidListFilterException => Problem(StatusCodes.Status400BadRequest, exception.Message),

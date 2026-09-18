@@ -107,7 +107,7 @@ public sealed class AdminRequiredTextValidationTests
         return AdminRequest(method, path, new
         {
             name,
-            match_rules = new { event_type = "validation.test" },
+            event_types = new[] { "validation.test" },
             destination_id = fixture.DestinationId,
             mapping = (object?)null,
             http_delivery = (object?)null,

@@ -14,10 +14,13 @@ public sealed record TopicDto(
     // listening to it, and a Topic nothing subscribes to is the established signal for a missing
     // Subscription rather than an empty section.
     int SubscriptionCount,
+    // What the Topic's Sources declare, Disabled ones included, so Subscriptions can be authored
+    // before intake is enabled. Computed on read; a Topic stores no Event types of its own.
+    IReadOnlyList<string> EventTypes,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
-    public static TopicDto From(Topic t, int subscriptionCount) => new(
+    public static TopicDto From(Topic t, int subscriptionCount, IReadOnlyList<string> eventTypes) => new(
         t.Id,
         t.TenantId,
         t.Key,
@@ -25,6 +28,7 @@ public sealed record TopicDto(
         t.Status.ToString().ToLowerInvariant(),
         t.Description,
         subscriptionCount,
+        eventTypes,
         t.CreatedAt,
         t.UpdatedAt);
 }

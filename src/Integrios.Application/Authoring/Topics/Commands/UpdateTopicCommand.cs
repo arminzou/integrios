@@ -29,6 +29,8 @@ internal sealed class UpdateTopicCommandHandler(ITopicRepository topicRepository
             return null;
         int subscriptions = await topicRepository.CountSubscriptionsAsync(
             command.TenantId, topic.Id, cancellationToken);
-        return TopicDto.From(topic, subscriptions);
+        IReadOnlyList<SourceDeclaration> declarations = await topicRepository.ListSourceDeclarationsAsync(
+            topic.TenantId, [topic.Id], cancellationToken);
+        return TopicDto.From(topic, subscriptions, TopicEventTypes.Union(declarations));
     }
 }

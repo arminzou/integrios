@@ -8,21 +8,14 @@ namespace Integrios.Application.Authoring.Subscriptions;
 
 internal static class SubscriptionAuthoringRules
 {
-    private const string InvalidMatchRulesMessage =
-        "matchRules must be an object with exactly one non-empty string property: event_type";
-
     public static void Validate(
-        JsonElement matchRules,
+        IReadOnlyList<string>? eventTypes,
         JsonElement? transformConfig,
         HttpDeliveryConfiguration httpDelivery,
         HttpSuccessRule? httpSuccess,
         ITransformEvaluator transformEvaluator)
     {
-        if (!HasValidMatchRulesShape(matchRules))
-            throw new SubscriptionValidationException(InvalidMatchRulesMessage);
-        // A Subscription matching a value no Event can carry would wait for nothing, silently.
-        if (EventTypeName.Problem(matchRules.GetProperty("event_type").GetString()) is { } problem)
-            throw new SubscriptionValidationException($"Event type {problem}.", "match_rules");
+        ValidateEventTypes(eventTypes);
 
         HttpDeliveryConfigurationRules.Validate(httpDelivery);
         ValidateHttpSuccess(httpSuccess);
@@ -39,20 +32,34 @@ internal static class SubscriptionAuthoringRules
             throw new SubscriptionValidationException(error, "mapping");
     }
 
-    private static bool HasValidMatchRulesShape(JsonElement matchRules)
+    private static void ValidateEventTypes(IReadOnlyList<string>? eventTypes)
     {
-        if (matchRules.ValueKind != JsonValueKind.Object)
-            return false;
+        if (eventTypes is null || eventTypes.Count == 0)
+            throw new SubscriptionValidationException("Select at least one Event type to route.", "event_types");
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? eventType in eventTypes)
+        {
+            // A Subscription matching a value no Event can carry would wait for nothing, silently.
+            if (EventTypeName.Problem(eventType) is { } problem)
+                throw new SubscriptionValidationException($"Event type {problem}.", "event_types");
+            if (!seen.Add(eventType!))
+                throw new SubscriptionValidationException($"Event type '{eventType}' is selected more than once.", "event_types");
+        }
+    }
 
-        var enumerator = matchRules.EnumerateObject();
-        if (!enumerator.MoveNext())
-            return false;
-
-        JsonProperty property = enumerator.Current;
-        return property.Name == "event_type"
-            && !enumerator.MoveNext()
-            && property.Value.ValueKind == JsonValueKind.String
-            && !string.IsNullOrWhiteSpace(property.Value.GetString());
+    // Only a type some Source on the Topic declares can ever arrive, so anything else is refused
+    // rather than stored as a route no producer satisfies. Kept in the Topic's spelling.
+    public static IReadOnlyList<string> SelectFromTopic(IReadOnlyList<string> eventTypes, IReadOnlyList<string> available)
+    {
+        var selected = new List<string>(eventTypes.Count);
+        foreach (string eventType in eventTypes)
+        {
+            string? declared = available.FirstOrDefault(
+                candidate => string.Equals(candidate, eventType, StringComparison.OrdinalIgnoreCase));
+            selected.Add(declared ?? throw new SubscriptionValidationException(
+                $"Event type '{eventType}' is not declared by any Source on this Topic.", "event_types"));
+        }
+        return selected;
     }
 
     private static void ValidateHttpSuccess(HttpSuccessRule? httpSuccess)

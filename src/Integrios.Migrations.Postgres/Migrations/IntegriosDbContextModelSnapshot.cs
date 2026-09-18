@@ -709,6 +709,11 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("destination_id");
 
+                    b.Property<string>("EventTypes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("event_types");
+
                     b.Property<string>("HttpDelivery")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -723,12 +728,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.Property<JsonElement?>("MappingConfig")
                         .HasColumnType("jsonb")
                         .HasColumnName("mapping_config");
-
-                    b.Property<JsonElement>("MatchRules")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("match_rules")
-                        .HasDefaultValueSql("'{}'::jsonb");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -767,7 +766,10 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                     b.HasIndex(new[] { "TopicId" }, "idx_subscriptions_topic_id");
 
-                    b.ToTable("subscriptions", (string)null);
+                    b.ToTable("subscriptions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_subscriptions_event_types_array", "jsonb_typeof(event_types) = 'array'");
+                        });
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Tenant", b =>

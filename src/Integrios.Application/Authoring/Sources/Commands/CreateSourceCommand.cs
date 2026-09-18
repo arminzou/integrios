@@ -46,6 +46,10 @@ internal sealed class CreateSourceCommandHandler(
         IReadOnlyList<string> eventTypes = SourceAuthoringValidator.ValidateEventTypes(command.EventTypes);
         SourceAuthoringValidator.ValidateEventIdentityRule(command.Type, command.EventIdentityRule);
 
+        TopicEventTypes.EnsureSameSpelling(
+            eventTypes,
+            await topicRepository.ListSourceDeclarationsAsync(command.TenantId, [command.TopicId], cancellationToken));
+
         var now = DateTimeOffset.UtcNow;
         JsonElement configuration = command.Type == SourceType.Webhook
             ? WebhookCallbackConfiguration.WithCallbackId(command.Configuration, Guid.NewGuid())

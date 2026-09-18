@@ -181,8 +181,8 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status)
             VALUES (@DestinationId,@TenantId,@ConnectorId,'replay-test-sink',{{{database.Json("@Config")}}},'active');
             INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name,status) VALUES (@TopicId,@TenantId,'replay-test-topic','replay-test-topic','active');
-            INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_id,order_index,status)
-            VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@MatchRules")}}},@DestinationId,0,'active');
+            INSERT INTO subscriptions (id,tenant_id,topic_id,name,event_types,destination_id,order_index,status)
+            VALUES (@SubscriptionId,@TenantId,@TopicId,'replay-test-sub',{{{database.Json("@EventTypes")}}},@DestinationId,0,'active');
             INSERT INTO event_deliveries
                 (event_id,subscription_id,destination_id,http_execution_snapshot,connector_key,
                  status,lifetime_attempt_count,retry_cycle_attempt_count,failed_at)
@@ -196,7 +196,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
             Config = "{\"base_uri\":\"http://test/sink\"}",
             TopicId = topicId,
             SubscriptionId = subscriptionId,
-            MatchRules = "{\"event_types\":[\"payment.created\"]}",
+            EventTypes = "[\"payment.created\"]",
             Snapshot = "{\"version\":1,\"base_uri\":\"http://test/sink\",\"request\":{\"version\":1,\"method\":\"POST\",\"headers\":{},\"body\":\"json\"}}",
             EventId = eventId
         });

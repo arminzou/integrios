@@ -14,7 +14,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         Guid tenantId,
         Guid topicId,
         string name,
-        JsonElement matchRules,
+        IReadOnlyList<string> eventTypes,
         Guid destinationId,
         JsonElement? transformConfig,
         HttpDeliveryConfiguration httpDelivery,
@@ -43,7 +43,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             TenantId = tenantId,
             TopicId = topicId,
             Name = name,
-            MatchRules = matchRules,
+            EventTypes = eventTypes,
             DestinationId = destinationId,
             MappingConfig = NormalizeNullableJson(transformConfig),
             HttpDelivery = httpDelivery,
@@ -77,7 +77,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         Guid topicId,
         Guid id,
         string name,
-        JsonElement matchRules,
+        IReadOnlyList<string> eventTypes,
         Guid destinationId,
         JsonElement? transformConfig,
         HttpDeliveryConfiguration httpDelivery,
@@ -103,7 +103,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(subscription => subscription.Name, name)
-                    .SetProperty(subscription => subscription.MatchRules, matchRules)
+                    .SetProperty(subscription => subscription.EventTypes, eventTypes)
                     .SetProperty(subscription => subscription.DestinationId, destinationId)
                     .SetProperty(subscription => subscription.MappingConfig, NormalizeNullableJson(transformConfig))
                     .SetProperty(subscription => subscription.HttpDelivery, httpDelivery)

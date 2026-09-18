@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
+using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
@@ -15,7 +16,7 @@ public sealed record UpdateSubscriptionCommand(
     Guid TopicId,
     Guid Id,
     string? Name,
-    JsonElement MatchRules,
+    IReadOnlyList<string>? EventTypes,
     Guid DestinationId,
     JsonElement? MappingConfig,
     HttpDeliveryConfiguration HttpDelivery,
@@ -25,6 +26,7 @@ public sealed record UpdateSubscriptionCommand(
 
 internal sealed class UpdateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
+    ITopicRepository topicRepository,
     IDestinationRepository destinationRepository,
     IDestinationAuthoringLock authoringLock,
     IConnectorReader connectorReader,
@@ -37,7 +39,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
             throw new SubscriptionValidationException("Name is required.", "name");
 
         SubscriptionAuthoringRules.Validate(
-            command.MatchRules,
+            command.EventTypes,
             command.MappingConfig,
             command.HttpDelivery,
             command.HttpSuccess,
@@ -52,6 +54,10 @@ internal sealed class UpdateSubscriptionCommandHandler(
         {
             return null;
         }
+        IReadOnlyList<string> eventTypes = SubscriptionAuthoringRules.SelectFromTopic(
+            command.EventTypes!,
+            TopicEventTypes.Union(await topicRepository.ListSourceDeclarationsAsync(
+                command.TenantId, [command.TopicId], cancellationToken)));
 
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
             [command.DestinationId],
@@ -64,7 +70,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
             command.TopicId,
             command.Id,
             command.Name,
-            command.MatchRules,
+            eventTypes,
             command.DestinationId,
             command.MappingConfig,
             command.HttpDelivery,

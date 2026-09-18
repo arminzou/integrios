@@ -16,7 +16,7 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
     public async Task Deactivate_IsRefusedWhileAnActiveSubscriptionReferencesTheDestination()
     {
         AdminTopicResponse topic = await CreateTopicAsync("deactivation-topic");
-        SubscriptionDto subscription = await CreateSubscriptionAsync(topic.Id, "holds-the-destination", "order.placed");
+        SubscriptionDto subscription = await CreateSubscriptionAsync(topic.Id, "holds-the-destination", "payment.created");
 
         HttpResponseMessage refused = await client.SendAsync(AdminRequest(
             HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/deactivate"));

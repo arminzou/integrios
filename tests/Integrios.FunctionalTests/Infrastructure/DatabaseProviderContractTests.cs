@@ -248,9 +248,9 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             """, new { seed.SourceId, seed.TenantId, seed.ConnectorId, seed.TopicId, SourceConfig = "{}" });
 
         await connection.ExecuteAsync($$$"""
-            INSERT INTO subscriptions (id, topic_id, tenant_id, name, match_rules, destination_id,
+            INSERT INTO subscriptions (id, topic_id, tenant_id, name, event_types, destination_id,
                 http_delivery, status, order_index, created_at, updated_at)
-            VALUES (@SubscriptionId, @TopicId, @TenantId, 'payments-http', {{{Database.Json("@MatchRules")}}},
+            VALUES (@SubscriptionId, @TopicId, @TenantId, 'payments-http', {{{Database.Json("@EventTypes")}}},
                 @DestinationId, {{{Database.Json("@HttpDelivery")}}}, 'active', 0, {{{now}}}, {{{now}}})
             """, new
         {
@@ -258,7 +258,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             seed.TopicId,
             seed.TenantId,
             seed.DestinationId,
-            MatchRules = """{"event_type":"payment.created"}""",
+            EventTypes = """["payment.created"]""",
             HttpDelivery = """{"body":"json","method":"POST","headers":{},"version":1}""",
         });
 

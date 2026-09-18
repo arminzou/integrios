@@ -46,6 +46,8 @@ const topic = {
   name: "Orders",
   status: "active",
   description: null,
+  subscription_count: 1,
+  event_types: ["order.created", "order.refunded"],
   ...stamps,
 };
 const destination = {
@@ -117,7 +119,7 @@ const subscriptionDetail = {
   topic_id: topicId,
   tenant_id: tenantId,
   name: "to-sink",
-  match_rules: { event_type: "order.created" },
+  event_types: ["order.created"],
   destination_id: destinationId,
   mapping_config: {
     engine: "jsonata",
@@ -573,13 +575,13 @@ describe("Create forms, filled through a real browser", () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
 
     await view.click("text=New Subscription");
-    expect(await view.getByRole("dialog", { name: "New Subscription" }).getByLabel("Topic").textContent()).toContain(
-      "Orders",
-    );
+    expect(
+      await view.getByRole("dialog", { name: "New Subscription" }).getByLabel("Topic", { exact: true }).textContent(),
+    ).toContain("Orders");
     const form = formNamed(view, "Create a Subscription");
     await form.getByLabel("Name").fill("to-sink");
     await choose(form.getByLabel("Destination"), /sink/);
-    await form.getByLabel("Event type").fill("order.created");
+    await form.getByRole("checkbox", { name: "order.created" }).check();
     await choose(form.getByLabel("Method"), "PATCH");
     await form.getByLabel("Relative path (optional)").fill("orders?notify=true");
     // A request without a body has nothing to map, so the mapping is not offered for one.
@@ -594,7 +596,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Expected value"), "True");
     await form.getByLabel("Diagnostic field (optional)").fill("error");
     await form.getByLabel("Maximum response bytes (optional)").fill("4096");
-    expect(await form.getByLabel("Order").count()).toBe(0);
+    expect(await form.getByLabel("Order", { exact: true }).count()).toBe(0);
     expect(await form.getByLabel("Match rules (JSON)").count()).toBe(0);
     expect(await form.getByLabel("Mapping expression (optional)").count()).toBe(0);
     expect(await form.getByLabel("Raw mapping (JSON)").count()).toBe(0);
@@ -623,7 +625,7 @@ describe("Create forms, filled through a real browser", () => {
     expect(sent.method).toBe("POST");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/topics/${topicId}/subscriptions`);
     expect(sent.body.order_index).toBe(0);
-    expect(sent.body.match_rules).toEqual({ event_type: "order.created" });
+    expect(sent.body.event_types).toEqual(["order.created"]);
     expect(sent.body.mapping).toEqual({
       engine: "jsonata",
       version: "1",
@@ -678,7 +680,7 @@ describe("Create forms, filled through a real browser", () => {
 
     await view.click("text=New Subscription");
     const form = formNamed(view, "Create a Subscription");
-    await form.getByLabel("Event type").fill("order.created");
+    await form.getByRole("checkbox", { name: "order.created" }).check();
     await form.getByRole("button", { name: "Add mapping in Playground" }).click();
     const playground = view.getByRole("dialog", { name: "Mapping Playground" });
     await playground.getByText("1 of 2").waitFor();
@@ -721,8 +723,10 @@ describe("Create forms, filled through a real browser", () => {
     await inspector.getByRole("link", { name: "Create Subscription" }).click();
 
     const sheet = view.getByRole("dialog", { name: "New Subscription" });
-    expect(await sheet.getByLabel("Topic").textContent()).toContain("Orders");
-    expect(await formNamed(view, "Create a Subscription").getByLabel("Event type").inputValue()).toBe("order.refunded");
+    expect(await sheet.getByLabel("Topic", { exact: true }).textContent()).toContain("Orders");
+    expect(
+      await formNamed(view, "Create a Subscription").getByRole("checkbox", { name: "order.refunded" }).isChecked(),
+    ).toBe(true);
     await view.close();
   }, 60_000);
 
@@ -1500,7 +1504,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(await form.locator('section[aria-labelledby="mapping-summary-heading"] dl').textContent()).toContain(
       "placed_at←placedAt",
     );
-    expect(await form.getByLabel("Order").count()).toBe(0);
+    expect(await form.getByLabel("Order", { exact: true }).count()).toBe(0);
     const save = view.locator('form[aria-label="Edit to-sink"] button[type="submit"]');
     await form.getByRole("button", { name: "Edit in Playground" }).click();
     const playground = view.getByRole("dialog", { name: "Mapping Playground" });
@@ -1522,7 +1526,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(sent.method).toBe("PUT");
     expect(sent.body.order_index).toBe(1);
     expect(sent.body.mapping).toBeNull();
-    expect(sent.body.match_rules).toEqual({ event_type: "order.created" });
+    expect(sent.body.event_types).toEqual(["order.created"]);
     await view.close();
   }, 60_000);
 
@@ -1651,7 +1655,7 @@ describe("Update and deactivate, driven through a real browser", () => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        json: { ...subscriptionDetail, match_rules: { event_type: "order's.placed" } },
+        json: { ...subscriptionDetail, event_types: ["order's.placed"] },
       }),
     );
     await view.reload();

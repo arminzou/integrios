@@ -125,13 +125,13 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new { key = $"payments-{suffix}" });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "payment.created" }, configuration = new { } });
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "payment.created", "payment.unreachable" }, configuration = new { } });
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
             new
             {
                 name = "acceptance-retry",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = destinationId
             });
 
@@ -152,7 +152,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new
             {
                 name = "acceptance-unreachable",
-                match_rules = new { event_type = "payment.unreachable" },
+                event_types = new[] { "payment.unreachable" },
                 destination_id = unreachableDestinationId
             });
 
@@ -510,7 +510,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new
             {
                 name = "blocked-delivery",
-                match_rules = new { event_type = "delivery.blocked" },
+                event_types = new[] { "delivery.blocked" },
                 destination_id = destinationId
             });
 

@@ -288,7 +288,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             TenantId, identity.TopicId, identity.Id, CancellationToken.None)
             ?? throw new InvalidOperationException("The ledger Subscription could not be loaded.");
         Subscription? updated = await subscriptionRepository.UpdateAsync(
-            TenantId, identity.TopicId, identity.Id, existing.Name, existing.MatchRules,
+            TenantId, identity.TopicId, identity.Id, existing.Name, existing.EventTypes,
             existing.DestinationId, existing.MappingConfig, httpDelivery, existing.HttpSuccess,
             existing.OrderIndex, existing.Description, CancellationToken.None);
         return SubscriptionDto.From(updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated."));
@@ -303,7 +303,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             TenantId, identity.TopicId, identity.Id, CancellationToken.None)
             ?? throw new InvalidOperationException("The ledger Subscription could not be loaded.");
         Subscription? updated = await subscriptionRepository.UpdateAsync(
-            TenantId, identity.TopicId, identity.Id, existing.Name, existing.MatchRules,
+            TenantId, identity.TopicId, identity.Id, existing.Name, existing.EventTypes,
             existing.DestinationId, existing.MappingConfig, existing.HttpDelivery, httpSuccess,
             existing.OrderIndex, existing.Description, CancellationToken.None);
         _ = updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated.");
@@ -346,9 +346,9 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@TopicId,@TenantId,'test-topic','test-topic','active'),
                 (@OrphanTopicId,@OrphanTenantId,'orphan-topic','orphan-topic','active');
             INSERT INTO sources (id,tenant_id,connector_id,topic_id,name,type,event_types,configuration,revision,status) VALUES
-                (@SourceId,@TenantId,@ConnectorId,@TopicId,'routing-intake','event_api','["payment.created","payment.authorized"]', {{{database.Json("@EmptyConfig")}}},@SourceRevision,'active'),
-                (@OrphanSourceId,@OrphanTenantId,@ConnectorId,@OrphanTopicId,'orphan-intake','event_api','["payment.created","payment.authorized"]', {{{database.Json("@EmptyConfig")}}},@OrphanSourceRevision,'active');
-            INSERT INTO subscriptions (id,tenant_id,topic_id,name,match_rules,destination_id,order_index,status) VALUES
+                (@SourceId,@TenantId,@ConnectorId,@TopicId,'routing-intake','event_api','["payment.created","payment.authorized","payment.settled","payment.multi"]', {{{database.Json("@EmptyConfig")}}},@SourceRevision,'active'),
+                (@OrphanSourceId,@OrphanTenantId,@ConnectorId,@OrphanTopicId,'orphan-intake','event_api','["payment.created","payment.authorized","payment.settled","payment.multi"]', {{{database.Json("@EmptyConfig")}}},@OrphanSourceRevision,'active');
+            INSERT INTO subscriptions (id,tenant_id,topic_id,name,event_types,destination_id,order_index,status) VALUES
                 (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerDestinationId,0,'active'),
                 (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskDestinationId,1,'active');
             """, new
@@ -372,8 +372,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             OrphanSourceRevision = Guid.NewGuid().ToString("N"),
             LedgerSubscriptionId = Guid.NewGuid(),
             RiskSubscriptionId = Guid.NewGuid(),
-            LedgerRules = "{\"event_types\":[\"payment.created\",\"payment.settled\",\"payment.multi\"]}",
-            RiskRules = "{\"event_types\":[\"payment.authorized\",\"payment.multi\"]}"
+            LedgerRules = "[\"payment.created\",\"payment.settled\",\"payment.multi\"]",
+            RiskRules = "[\"payment.authorized\",\"payment.multi\"]"
         });
     }
 

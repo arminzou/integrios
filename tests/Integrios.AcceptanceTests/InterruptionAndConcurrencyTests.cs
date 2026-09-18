@@ -373,7 +373,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             new
             {
                 name = "resilience-subscription",
-                match_rules = new { event_type = $"{name}.test" },
+                event_types = new[] { $"{name}.test" },
                 destination_id = destinationId
             });
 

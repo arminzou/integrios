@@ -170,7 +170,7 @@ all owned by the Subscription rather than the Destination.
 curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions" -H "$AUTH" \
   -H 'Content-Type: application/json' \
   -d "{\"name\":\"push-to-slack\",
-       \"match_rules\":{\"event_type\":\"github.push\"},
+       \"event_types\":[\"github.push\"],
        \"destination_id\":\"$SLACK_DESTINATION\",
        \"order_index\":0,
        \"mapping\":{\"engine\":\"jsonata\",\"version\":\"1\",

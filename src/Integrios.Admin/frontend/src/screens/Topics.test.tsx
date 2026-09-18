@@ -17,6 +17,7 @@ const topic = {
   status: "active",
   description: null,
   subscription_count: 0,
+  event_types: ["order.created", "order.shipped"],
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
 };
@@ -90,4 +91,20 @@ it("edits the label and offers no way to change the key", async () => {
 
   await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
   expect(calls.find((call) => call.method === "PUT")!.body).toEqual({ name: "Orders", description: null });
+});
+
+/// A Topic owns no Event types; it shows what its Sources declare, and offers nothing to edit them.
+it("shows the Event types its Sources declare, read-only", async () => {
+  stubTopics();
+  renderScreen(
+    <TopicsScreen tenantId={tenantId} selectedTopicId={topicId} />,
+    `/tenants/${tenantId}/topics/${topicId}`,
+  );
+
+  const panel = await screen.findByRole("complementary", { name: "Topic detail" });
+  expect(await within(panel).findByText("order.created")).toBeTruthy();
+  expect(within(panel).getByText("order.shipped")).toBeTruthy();
+  fireEvent.click(within(panel).getByRole("button", { name: "Edit" }));
+  const form = await screen.findByRole("form", { name: `Edit ${topic.name}` });
+  expect(within(form).queryByText(/Event type/)).toBeNull();
 });

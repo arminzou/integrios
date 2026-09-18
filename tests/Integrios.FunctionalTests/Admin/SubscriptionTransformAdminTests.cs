@@ -24,7 +24,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
@@ -51,7 +51,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = (object?)null
@@ -79,7 +79,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
                 http_delivery = (object?)null,
@@ -110,7 +110,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
                 http_delivery = (object?)null,
@@ -139,7 +139,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
@@ -161,7 +161,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
@@ -183,7 +183,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
@@ -206,7 +206,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "erp-sink",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 1,
                 mapping = transformElement
@@ -225,7 +225,7 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
             new
             {
                 name = "oversized-transform",
-                match_rules = new { event_type = "payment.created" },
+                event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 10,
                 mapping = new

@@ -114,7 +114,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 subscription.Id,
                 subscription.DestinationId,
                 subscription.OrderIndex,
-                subscription.MatchRules.GetRawText(),
+                subscription.EventTypes,
                 subscription.MappingConfig?.GetRawText(),
                 connector.Key,
                 JsonSerializer.Serialize(snapshot, StoredJson.Options));

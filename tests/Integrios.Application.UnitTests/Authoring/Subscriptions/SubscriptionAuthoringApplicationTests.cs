@@ -18,15 +18,40 @@ namespace Integrios.Application.UnitTests;
 public sealed class SubscriptionAuthoringApplicationTests
 {
     [Fact]
-    public async Task CreateSubscription_InvalidMatchRules_AreRejectedThroughMediator()
+    public async Task CreateSubscription_WithoutEventTypes_IsRejectedThroughMediator()
     {
         await using AuthoringHarness harness = new();
 
         var exception = await Should.ThrowAsync<SubscriptionValidationException>(() =>
-            harness.Mediator.Send(harness.Command(matchRules: Json("{}"))));
+            harness.Mediator.Send(harness.Command(eventTypes: [])));
 
-        exception.Message.ShouldContain("matchRules", Case.Sensitive);
+        exception.Field.ShouldBe("event_types");
         harness.SubscriptionRepository.CreateCalls.ShouldBe(0);
+    }
+
+    // Only a type a Source on the Topic declares can ever arrive, so a route to anything else is a
+    // typo or a guess, and is refused rather than stored.
+    [Fact]
+    public async Task CreateSubscription_TypeNoSourceDeclares_IsRejectedThroughMediator()
+    {
+        await using AuthoringHarness harness = new();
+
+        var exception = await Should.ThrowAsync<SubscriptionValidationException>(() =>
+            harness.Mediator.Send(harness.Command(eventTypes: ["payment.created", "payment.refunded"])));
+
+        exception.Field.ShouldBe("event_types");
+        exception.Message.ShouldContain("payment.refunded", Case.Sensitive);
+        harness.SubscriptionRepository.CreateCalls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task CreateSubscription_SelectsSeveralTypesInTheTopicsSpelling()
+    {
+        await using AuthoringHarness harness = new();
+
+        await harness.Mediator.Send(harness.Command(eventTypes: ["PAYMENT.CREATED", "payment.captured"]));
+
+        harness.SubscriptionRepository.CreatedEventTypes.ShouldBe(["payment.created", "payment.captured"]);
     }
 
     [Fact]
@@ -89,13 +114,13 @@ public sealed class SubscriptionAuthoringApplicationTests
         public FakeSubscriptionRepository SubscriptionRepository { get; }
 
         public CreateSubscriptionCommand Command(
-            JsonElement? matchRules = null,
+            IReadOnlyList<string>? eventTypes = null,
             JsonElement? transformConfig = null) =>
             new(
                 tenantId,
                 topicId,
                 "destination-subscription",
-                matchRules ?? Json("""{"event_type":"payment.created"}"""),
+                eventTypes ?? ["payment.created"],
                 destinationId,
                 transformConfig,
                 HttpDeliveryConfiguration.Default,
@@ -122,7 +147,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             TenantId = tenantId,
             ConnectorId = connectorId,
             Name = "destination",
-            Configuration = Json("{}"),
+            Configuration = Json("""{"base_uri":"https://erp.example.test"}"""),
             Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -214,6 +239,17 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
             Task.FromResult(true);
 
+        public Task<IReadOnlyList<SourceDeclaration>> ListSourceDeclarationsAsync(
+            Guid tenantId, IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<SourceDeclaration>>(
+            [
+                new SourceDeclaration(Guid.NewGuid(), topic.Id, ["payment.created"]),
+                new SourceDeclaration(Guid.NewGuid(), topic.Id, ["payment.created", "payment.captured"]),
+            ]);
+
+        public Task<IReadOnlyList<SubscriptionSelection>> ListSubscriptionSelectionsAsync(
+            Guid tenantId, Guid topicId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<SubscriptionSelection>>([]);
     }
 
     private sealed class FakeDestinationRepository(Destination destination) : IDestinationRepository
@@ -249,12 +285,13 @@ public sealed class SubscriptionAuthoringApplicationTests
     public sealed class FakeSubscriptionRepository : ISubscriptionRepository
     {
         public int CreateCalls { get; private set; }
+        public IReadOnlyList<string>? CreatedEventTypes { get; private set; }
 
         public Task<Subscription?> CreateAsync(
             Guid tenantId,
             Guid topicId,
             string name,
-            JsonElement matchRules,
+            IReadOnlyList<string> eventTypes,
             Guid destinationId,
             JsonElement? transformConfig,
             HttpDeliveryConfiguration httpDelivery,
@@ -264,13 +301,14 @@ public sealed class SubscriptionAuthoringApplicationTests
             CancellationToken cancellationToken = default)
         {
             CreateCalls++;
+            CreatedEventTypes = eventTypes;
             return Task.FromResult<Subscription?>(null);
         }
 
         public Task<Subscription?> GetByIdAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
-        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, JsonElement matchRules, Guid destinationId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, HttpSuccessRule? httpSuccess, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
+        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, IReadOnlyList<string> eventTypes, Guid destinationId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, HttpSuccessRule? httpSuccess, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
         public Task<bool> DeactivateAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>

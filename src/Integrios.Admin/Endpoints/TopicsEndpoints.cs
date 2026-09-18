@@ -99,6 +99,7 @@ internal sealed record AdminTopicResponse(
     string Status,
     string? Description,
     int SubscriptionCount,
+    IReadOnlyList<string> EventTypes,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
@@ -110,6 +111,7 @@ internal sealed record AdminTopicResponse(
         dto.Status,
         dto.Description,
         dto.SubscriptionCount,
+        dto.EventTypes,
         dto.CreatedAt,
         dto.UpdatedAt);
 }

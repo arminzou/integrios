@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
@@ -21,6 +22,7 @@ public sealed record UpdateSourceCommand(
 internal sealed class UpdateSourceCommandHandler(
     ISourceRepository sourceRepository,
     IConnectorReader connectorReader,
+    ITopicRepository topicRepository,
     ITransformEvaluator evaluator)
     : IRequestHandler<UpdateSourceCommand, SourceDto?>
 {
@@ -39,6 +41,16 @@ internal sealed class UpdateSourceCommandHandler(
             source.Type, command.InputRequirements, command.Mapping, command.EventIdentityRule, evaluator);
         IReadOnlyList<string> eventTypes = SourceAuthoringValidator.ValidateEventTypes(command.EventTypes);
         SourceAuthoringValidator.ValidateEventIdentityRule(source.Type, command.EventIdentityRule);
+        IReadOnlyList<SourceDeclaration> otherSources = (await topicRepository.ListSourceDeclarationsAsync(
+                command.TenantId, [source.TopicId], cancellationToken))
+            .Where(declaration => declaration.SourceId != source.Id)
+            .ToList();
+        TopicEventTypes.EnsureSameSpelling(eventTypes, otherSources);
+        TopicEventTypes.EnsureNoSelectionLosesItsDeclaration(
+            source.EventTypes.Where(previous => !eventTypes.Contains(previous, StringComparer.OrdinalIgnoreCase)),
+            otherSources,
+            await topicRepository.ListSubscriptionSelectionsAsync(command.TenantId, source.TopicId, cancellationToken));
+
         JsonElement configuration = source.Type == Domain.Enums.SourceType.Webhook
             ? WebhookCallbackConfiguration.WithCallbackId(
                 command.Configuration,

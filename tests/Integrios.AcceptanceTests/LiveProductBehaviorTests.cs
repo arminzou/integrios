@@ -626,11 +626,28 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateEventApiSourceAsync(TenantContext tenant, string connectorId, Guid topic)
+    // Every Event type these journeys publish or route. A Source declares what it may publish, and a
+    // Subscription selects only from that, so each test Source declares the whole vocabulary.
+    private static readonly string[] JourneyEventTypes =
+    [
+        "payment.created", "rejected.test", "independent.test", "snapshot.test", "runtime.transform",
+        "redirect.test", "slow.test", "drain.test", "rotation.test",
+    ];
+
+    private async Task<Guid> CreateEventApiSourceAsync(
+        TenantContext tenant, string connectorId, Guid topic, params string[] extraEventTypes)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/sources",
-            new { connector_id = connectorId, topic_id = topic, name = "intake", type = "event_api", event_types = new[] { "payment.created", "rejected.test" }, configuration = new { } });
+            new
+            {
+                connector_id = connectorId,
+                topic_id = topic,
+                name = "intake",
+                type = "event_api",
+                event_types = JourneyEventTypes.Concat(extraEventTypes).Distinct().ToArray(),
+                configuration = new { },
+            });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
@@ -651,7 +668,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private async Task<(Guid Source, Guid Topic)> CreateSourceTopicAsync(TenantContext tenant, string topicName)
     {
         Guid topic = await CreateTopicAsync(tenant, topicName);
-        Guid source = await CreateEventApiSourceAsync(tenant, HttpConnectorId, topic);
+        Guid source = await CreateEventApiSourceAsync(tenant, HttpConnectorId, topic, $"{topicName}.test");
         return (source, topic);
     }
 
@@ -822,7 +839,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     private static object SubscriptionBody(string name, Guid destinationId, string eventType, object? transform = null) => new
     {
         name,
-        match_rules = new { event_type = eventType },
+        event_types = new[] { eventType },
         destination_id = destinationId,
         mapping = transform,
         http_delivery = (object?)null,

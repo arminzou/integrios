@@ -36,6 +36,6 @@ internal sealed class CreateTopicCommandHandler(ITopicRepository topicRepository
             name,
             command.Description,
             cancellationToken);
-        return TopicDto.From(topic, subscriptionCount: 0);
+        return TopicDto.From(topic, subscriptionCount: 0, eventTypes: []);
     }
 }

@@ -279,6 +279,18 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
         <dd>{current.description ?? "—"}</dd>
         <dt>Subscriptions</dt>
         <dd className="tabular-nums">{current.subscription_count}</dd>
+        {/* Read-only: a Topic owns no Event types. These are what its Sources declare, and they are
+            edited there. */}
+        <dt>Event types</dt>
+        <dd className="flex flex-wrap gap-x-2 gap-y-1">
+          {current.event_types.length === 0
+            ? "None declared by a Source yet"
+            : current.event_types.map((eventType) => (
+                <code key={eventType} className="font-mono text-xs break-all">
+                  {eventType}
+                </code>
+              ))}
+        </dd>
       </Details>
 
       <section className="flex flex-col gap-2">

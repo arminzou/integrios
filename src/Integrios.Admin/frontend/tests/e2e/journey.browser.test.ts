@@ -169,21 +169,9 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await formNamed(view, "Create a Topic").getByLabel("Key", { exact: true }).fill(`${run}-orders`);
     await view.click("text=Create Topic");
     const topicId = await created(view, /\/topics\/[0-9a-f-]{36}$/, "Topic");
-
-    // Subscription, authored for the Topic it belongs to. Creating the Topic lands on the Topic
-    // selected beside the Topics list, which summarises its Subscriptions and links to the
-    // Tenant's Subscriptions filtered to it; a created Subscription is addressed under its Topic.
-    await view.click("text=Manage Subscriptions");
-    await view.click("text=New Subscription");
-    const subscriptionForm = formNamed(view, "Create a Subscription");
-    await subscriptionForm.getByLabel("Name", { exact: true }).fill(`${run}-to-sink`);
-    await choose(subscriptionForm.getByLabel("Destination", { exact: true }), `${run}-sink`);
-    await subscriptionForm.getByLabel("Event type", { exact: true }).fill(`${run}.created`);
-    await view.click("text=Create Subscription");
-    await created(view, /\/subscriptions\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, "Subscription");
     await closeView(view);
 
-    // Source.
+    // Source, declaring the Event types it publishes before any traffic exists.
     view = await openDashboard(`/tenants/${tenantId}/sources`);
     await view.click("text=New Source");
     const sourceForm = formNamed(view, "Create a Source");
@@ -191,9 +179,29 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await choose(sourceForm.getByLabel("Topic", { exact: true }), `${run}-orders`);
     await choose(sourceForm.getByLabel("Type", { exact: true }), "Event API");
     await sourceForm.getByLabel("Name", { exact: true }).fill(`${run}-intake`);
+    await sourceForm.getByLabel("Event type 1", { exact: true }).fill(`${run}.created`);
+    await sourceForm.getByRole("button", { name: "Add Event type" }).click();
+    await sourceForm.getByLabel("Event type 2", { exact: true }).fill(`${run}.shipped`);
     await view.click("text=Create Source");
     await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
     await view.getByRole("dialog", { name: "Publish through this Source" }).waitFor();
+    await closeView(view);
+
+    // The Topic shows what its Source declares, and the Subscription chooses from exactly that.
+    view = await openDashboard(`/tenants/${tenantId}/topics/${topicId}`);
+    const topicDetail = view.getByRole("complementary", { name: "Topic detail" });
+    await topicDetail.getByText(`${run}.shipped`, { exact: true }).waitFor();
+    await view.click("text=Manage Subscriptions");
+    await view.click("text=New Subscription");
+    const subscriptionForm = formNamed(view, "Create a Subscription");
+    await subscriptionForm.getByLabel("Name", { exact: true }).fill(`${run}-to-sink`);
+    await choose(subscriptionForm.getByLabel("Destination", { exact: true }), `${run}-sink`);
+    const selection = subscriptionForm.getByRole("group", { name: "Event types" });
+    await selection.getByRole("checkbox", { name: `${run}.created` }).check();
+    await selection.getByRole("checkbox", { name: `${run}.shipped` }).check();
+    expect(await selection.getByRole("textbox").count()).toBe(0);
+    await view.click("text=Create Subscription");
+    await created(view, /\/subscriptions\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, "Subscription");
     await closeView(view);
 
     // Everything the journey authored is readable from the deployment, not merely echoed by a form.
@@ -208,5 +216,6 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     expect((topics.items as unknown[]).length).toBe(1);
     expect((sources.items as unknown[]).length).toBe(1);
     expect((subscriptions.items as { name: string }[])[0].name).toBe(`${run}-to-sink`);
+    expect((topics.items as { event_types: string[] }[])[0].event_types).toEqual([`${run}.created`, `${run}.shipped`]);
   }, 180_000);
 });

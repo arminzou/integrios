@@ -79,8 +79,8 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             VALUES (@TopicId, @TenantId, 'disabled-list-topic', 'disabled-list-topic', 'disabled', @Now, @Now);
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at, revoked_at)
             VALUES (@SourceId, @TenantId, @SourceConnectorId, @TopicId, 'disabled-list-intake', 'event_api', '["list.contract"]', {{{fixture.Json("@Configuration")}}}, 'fixture-revision', 'revoked', @Now, @Now, @Now);
-            INSERT INTO subscriptions (id, tenant_id, topic_id, name, match_rules, destination_id, order_index, status, created_at, updated_at)
-            VALUES (@SubscriptionId, @TenantId, @TopicId, 'disabled-list-subscription', {{{fixture.Json("@MatchRules")}}}, @DestinationId, 0, 'disabled', @Now, @Now);
+            INSERT INTO subscriptions (id, tenant_id, topic_id, name, event_types, destination_id, order_index, status, created_at, updated_at)
+            VALUES (@SubscriptionId, @TenantId, @TopicId, 'disabled-list-subscription', {{{fixture.Json("@EventTypes")}}}, @DestinationId, 0, 'disabled', @Now, @Now);
             """,
             new
             {
@@ -94,7 +94,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
                 RevokedKeyId = revokedKeyId,
                 Now = now,
                 Configuration = "{\"source_contract\":\"event_json\"}",
-                MatchRules = "{\"event_type\":\"list.contract\"}",
+                EventTypes = "[\"list.contract\"]",
             });
 
         (await ListIdsAsync("/admin/tenants?status=disabled")).ShouldContain(fixture.OtherTenantId);
@@ -116,7 +116,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         (await GetListAsync("/admin/connectors")).GetProperty("items")[0].TryGetProperty("manifest", out _).ShouldBeFalse();
         (await GetListAsync($"/admin/tenants/{fixture.TenantId}/destinations")).GetProperty("items")[0].TryGetProperty("configuration", out _).ShouldBeFalse();
         (await GetListAsync($"/admin/tenants/{fixture.TenantId}/sources")).GetProperty("items")[0].TryGetProperty("configuration", out _).ShouldBeFalse();
-        (await GetListAsync($"/admin/tenants/{fixture.TenantId}/topics/{topicId}/subscriptions")).GetProperty("items")[0].TryGetProperty("match_rules", out _).ShouldBeFalse();
+        (await GetListAsync($"/admin/tenants/{fixture.TenantId}/topics/{topicId}/subscriptions")).GetProperty("items")[0].TryGetProperty("event_types", out _).ShouldBeFalse();
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
             (@FirstDestination, @TenantId, @ConnectorId, 'Primary CRM', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now),
             (@SecondDestination, @TenantId, @ConnectorId, 'Archive', {{{fixture.Json("@Config")}}}, 'active', @Now, @Now);
             INSERT INTO subscriptions
-                (id, tenant_id, topic_id, name, match_rules, destination_id, order_index, status, created_at, updated_at) VALUES
+                (id, tenant_id, topic_id, name, event_types, destination_id, order_index, status, created_at, updated_at) VALUES
             (@First, @TenantId, @FirstTopic, 'Send priority orders', {{{fixture.Json("@Rules")}}}, @FirstDestination, 1, 'active', @Now, @Now),
             (@Second, @TenantId, @FirstTopic, 'Archive orders', {{{fixture.Json("@Rules")}}}, @SecondDestination, 2, 'disabled', @Now, @Now),
             (@Excluded, @TenantId, @SecondTopic, 'Send invoices', {{{fixture.Json("@Rules")}}}, @FirstDestination, 3, 'active', @Now, @Now);
@@ -156,7 +156,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
                 Excluded = excluded,
                 Now = now,
                 Config = "{}",
-                Rules = "{}",
+                Rules = "[\"order.created\"]",
             });
 
         string root = $"/admin/tenants/{fixture.TenantId}/subscriptions";

@@ -16,4 +16,9 @@ public interface ITopicRepository
         string? description,
         CancellationToken ct);
     Task<bool> DeactivateAsync(Guid tenantId, Guid id, CancellationToken ct);
+    // Every Source that can still publish to these Topics, with what each declares.
+    Task<IReadOnlyList<SourceDeclaration>> ListSourceDeclarationsAsync(
+        Guid tenantId, IReadOnlyCollection<Guid> topicIds, CancellationToken ct);
+    // Every Subscription on the Topic, whatever its status: a Disabled one can be enabled again.
+    Task<IReadOnlyList<SubscriptionSelection>> ListSubscriptionSelectionsAsync(Guid tenantId, Guid topicId, CancellationToken ct);
 }
