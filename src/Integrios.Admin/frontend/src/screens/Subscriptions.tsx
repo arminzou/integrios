@@ -1,19 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { Dialog as DialogPrimitive } from "radix-ui";
-import { useEffect, useRef, useState } from "react";
-import { type UseFormReturn, useFieldArray, useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SelectItem } from "@/components/ui/select";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
-import { CodeBlock, CodeTextarea } from "../ui/codeHighlight";
+import { CodeBlock } from "../ui/codeHighlight";
 import {
   appliedNote,
   ConfirmAction,
@@ -30,13 +29,7 @@ import {
   WriteStatus,
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
-import {
-  expressionFromFieldMappings,
-  type FieldMapping,
-  parseFieldMappings,
-  payloadFieldPaths,
-  payloadPlaceholder,
-} from "../ui/fieldMapping";
+import { parseFieldMappings, payloadPlaceholder } from "../ui/fieldMapping";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -57,13 +50,12 @@ import {
 } from "../ui/layout";
 import { activeOnly, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
+import { MappingPlayground, mappingEnvelope } from "./SubscriptionPlayground";
 
 type SubscriptionByTenantListItem = components["schemas"]["SubscriptionByTenantListItemDto"];
 type Subscription = components["schemas"]["SubscriptionDto"];
 type HttpDelivery = components["schemas"]["HttpDeliveryConfiguration"];
 type HttpSuccessRule = components["schemas"]["HttpSuccessRule"];
-type EventListItem = components["schemas"]["EventListItemDto"];
-type EditableFieldMapping = FieldMapping & { id: string };
 
 const writeFields = [
   "name",
@@ -140,10 +132,7 @@ const subscriptionSchema = z
     }
   });
 
-type SubscriptionValues = z.infer<typeof subscriptionSchema>;
-
-const mappingEnvelope = (expression: string) =>
-  expression.trim() === "" ? null : { engine: "jsonata", version: "1", expression };
+export type SubscriptionValues = z.infer<typeof subscriptionSchema>;
 
 function guidedMappingExpression(mapping: unknown): string | null {
   if (mapping === null || mapping === undefined) return "";
@@ -177,11 +166,6 @@ function httpSuccess(values: SubscriptionValues): HttpSuccessRule | null {
     ...(values.success_max_body_bytes ? { max_body_bytes: Number(values.success_max_body_bytes) } : undefined),
   };
 }
-
-const editableFieldMapping = (row: FieldMapping = { output: "", source: "" }): EditableFieldMapping => ({
-  ...row,
-  id: crypto.randomUUID(),
-});
 
 function formatMappingExpression(expression: string): string {
   const parsed = parseJson(expression);
@@ -754,515 +738,6 @@ function SubscriptionSourcePath({
   );
 }
 
-function MappingPlayground({
-  tenantId,
-  topicId,
-  form,
-  originalExpression,
-  open,
-  onOpenChange,
-  onReviewInvalidated,
-  onConfirmed,
-}: {
-  tenantId: string;
-  topicId: string;
-  form: UseFormReturn<SubscriptionValues>;
-  originalExpression: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onReviewInvalidated: () => void;
-  onConfirmed: (expression: string) => void;
-}) {
-  const expression = form.watch("mapping");
-  const parsedExpression = parseFieldMappings(expression);
-  const [mappingMode, setMappingMode] = useState<"fields" | "advanced">(() =>
-    parsedExpression ? "fields" : "advanced",
-  );
-  const [fieldMappings, setFieldMappings] = useState<EditableFieldMapping[]>(() =>
-    (parsedExpression?.length ? parsedExpression : [{ output: "", source: "" }]).map(editableFieldMapping),
-  );
-  const [manual, setManual] = useState(false);
-  const [eventId, setEventId] = useState<string>();
-  const [manualPayload, setManualPayload] = useState("{}");
-  const [manualEventType, setManualEventType] = useState("sample.event");
-  const [manualAcceptedAt, setManualAcceptedAt] = useState(() => new Date().toISOString().slice(0, 16));
-  const [manualError, setManualError] = useState<string>();
-  const [output, setOutput] = useState<unknown>();
-  const [evaluationError, setEvaluationError] = useState<string>();
-  const previewAttempt = useRef(0);
-
-  const topic = useQuery({
-    queryKey: ["topic", tenantId, topicId],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/topics/{id}", {
-          params: { path: { tenantId, id: topicId } },
-        }),
-      ),
-    enabled: open,
-  });
-  const events = useQuery({
-    queryKey: ["mapping-events", tenantId, topicId],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/events", {
-          params: { path: { tenantId }, query: { topic_id: topicId, limit: 20 } },
-        }),
-      ),
-    enabled: open,
-  });
-  const recentEvents = events.data?.items ?? [];
-  const selectedEventId = eventId ?? recentEvents[0]?.event_id;
-  const selectedEvent = recentEvents.find((item) => item.event_id === selectedEventId);
-  const event = useQuery({
-    queryKey: ["event", tenantId, selectedEventId],
-    queryFn: () => {
-      if (!selectedEventId) throw new Error("No Event is selected.");
-      return call(() =>
-        api.GET("/admin/tenants/{tenantId}/events/{eventId}/deliveries", {
-          params: { path: { tenantId, eventId: selectedEventId } },
-        }),
-      );
-    },
-    enabled: open && !manual && Boolean(selectedEventId),
-  });
-
-  const resetPreview = () => {
-    previewAttempt.current += 1;
-    setOutput(undefined);
-    setEvaluationError(undefined);
-    setManualError(undefined);
-  };
-
-  const invalidateReview = () => {
-    resetPreview();
-    onReviewInvalidated();
-  };
-
-  const updateFieldMappings = (next: EditableFieldMapping[]) => {
-    setFieldMappings(next);
-    form.setValue("mapping", expressionFromFieldMappings(next), { shouldDirty: true, shouldValidate: true });
-    form.clearErrors("mapping");
-    invalidateReview();
-  };
-
-  const preview = useMutation({
-    mutationFn: ({
-      payload,
-      eventType,
-      acceptedAt,
-      topicName,
-    }: {
-      payload: unknown;
-      eventType: string;
-      acceptedAt: string;
-      topicName: string;
-      attempt: number;
-    }) => {
-      const transform = mappingEnvelope(expression);
-      if (!transform) throw new Error("No mapping expression was provided.");
-      return call(() =>
-        api.POST("/admin/transform/preview", {
-          body: {
-            transform,
-            sample_input: payload,
-            sample_context: { event_type: eventType, topic_name: topicName, accepted_at: acceptedAt },
-          },
-        }),
-      );
-    },
-    onSuccess: (result, { attempt }) => {
-      if (attempt === previewAttempt.current) setOutput(result?.output);
-    },
-    onError: (failure, { attempt }) => {
-      if (attempt !== previewAttempt.current) return;
-      const problem = asProblem(failure);
-      const syntaxError = fieldError(problem, "transform");
-      if (syntaxError) form.setError("mapping", { type: "server", message: syntaxError });
-      else setEvaluationError(formError(problem));
-    },
-  });
-
-  const runPreview = () => {
-    form.clearErrors("mapping");
-    resetPreview();
-
-    const topicName = topic.data?.key;
-    if (!topicName) return;
-
-    let payload: unknown;
-    let eventType: string;
-    let acceptedAt: string;
-    if (manual) {
-      const parsed = parseJson(manualPayload);
-      if (parsed.error) {
-        setManualError(parsed.error);
-        return;
-      }
-      if (!manualEventType.trim() || Number.isNaN(new Date(manualAcceptedAt).getTime())) {
-        setManualError("Enter an Event type and acceptance time.");
-        return;
-      }
-      payload = parsed.value;
-      eventType = manualEventType.trim();
-      acceptedAt = new Date(manualAcceptedAt).toISOString();
-    } else {
-      if (!selectedEvent || event.data?.payload === undefined || event.data.payload === null) return;
-      payload = event.data.payload;
-      eventType = selectedEvent.event_type;
-      acceptedAt = selectedEvent.accepted_at;
-    }
-
-    if (expression.trim() === "") {
-      setOutput(payload);
-      return;
-    }
-    preview.mutate({ payload, eventType, acceptedAt, topicName, attempt: previewAttempt.current });
-  };
-
-  const input = manual ? parseJson(manualPayload).value : event.data?.payload;
-  const contextEventType = manual ? manualEventType : selectedEvent?.event_type;
-  const contextAcceptedAt = manual ? manualAcceptedAt : selectedEvent?.accepted_at;
-  const unavailable = manual
-    ? false
-    : !selectedEvent || event.data?.payload === undefined || event.data.payload === null;
-  const sourceOptions = [
-    ...payloadFieldPaths(input),
-    "$context.event_type",
-    "$context.topic_name",
-    "$context.accepted_at",
-  ];
-
-  return (
-    <DialogPrimitive.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (next) resetPreview();
-        onOpenChange(next);
-      }}
-    >
-      <DialogPrimitive.Trigger asChild>
-        <Button type="button" variant="outline" className="self-start">
-          {expression.trim() ? "Edit in Playground" : "Add mapping in Playground"}
-        </Button>
-      </DialogPrimitive.Trigger>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-60 bg-ink/25" />
-        <DialogPrimitive.Content className="fixed inset-4 z-70 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto rounded-lg border bg-surface p-4 shadow-[0_24px_64px_-32px_rgb(23_23_23/0.45)] outline-none md:inset-x-10 lg:inset-x-[max(2.5rem,calc((100vw-80rem)/2))]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <DialogPrimitive.Title className="m-0">Mapping Playground</DialogPrimitive.Title>
-              <DialogPrimitive.Description className="m-0 mt-1 text-sm text-ink-secondary">
-                Preview this unsaved expression against one accepted Event or a manual sample. Nothing is saved.
-              </DialogPrimitive.Description>
-            </div>
-            <DialogPrimitive.Close
-              aria-label="Back to Subscription"
-              className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-hover-surface focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <X aria-hidden="true" className="size-4" />
-            </DialogPrimitive.Close>
-          </div>
-
-          <div className="flex flex-wrap items-end gap-2">
-            {!manual ? (
-              <div className="flex min-w-64 flex-1 flex-col gap-1 text-sm">
-                <span id="recent-event-label" className="font-medium">
-                  Preview against
-                </span>
-                <Select
-                  value={selectedEventId}
-                  onValueChange={(value) => {
-                    setEventId(value);
-                    invalidateReview();
-                  }}
-                  disabled={recentEvents.length === 0}
-                >
-                  <SelectTrigger aria-labelledby="recent-event-label">
-                    <SelectValue placeholder={events.isPending ? "Loading Events…" : "No recent Events"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {recentEvents.map((item: EventListItem) => (
-                      <SelectItem key={item.event_id} value={item.event_id}>
-                        {item.event_type} · {new Date(item.accepted_at).toLocaleString()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setManual((value) => !value);
-                invalidateReview();
-              }}
-            >
-              {manual ? "Choose a recent Event" : "Paste sample JSON"}
-            </Button>
-          </div>
-
-          {manual ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <label htmlFor="manual-payload" className="flex flex-col gap-1 text-sm md:col-span-2">
-                <span className="font-medium">Sample input (JSON)</span>
-                <CodeTextarea
-                  id="manual-payload"
-                  value={manualPayload}
-                  onChange={(event) => {
-                    setManualPayload(event.target.value);
-                    invalidateReview();
-                  }}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium">Event type</span>
-                <input
-                  value={manualEventType}
-                  onChange={(event) => {
-                    setManualEventType(event.target.value);
-                    invalidateReview();
-                  }}
-                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium">Accepted at</span>
-                <input
-                  type="datetime-local"
-                  value={manualAcceptedAt}
-                  onChange={(event) => {
-                    setManualAcceptedAt(event.target.value);
-                    invalidateReview();
-                  }}
-                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                />
-              </label>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2 text-xs text-ink-secondary">
-            <span className="rounded-full border px-2 py-1">event_type: {contextEventType ?? "—"}</span>
-            <span className="rounded-full border px-2 py-1">topic_name: {topic.data?.key ?? "—"}</span>
-            <span className="rounded-full border px-2 py-1">accepted_at: {contextAcceptedAt ?? "—"}</span>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.5fr)_minmax(0,0.75fr)]">
-            <section className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
-              <h3 className="m-0 text-sm">{manual ? "Sample input" : "Accepted Event"}</h3>
-              {input !== undefined ? (
-                <CodeBlock value={input} />
-              ) : (
-                <p className="m-0 text-sm text-ink-secondary">Choose a sample with an available payload.</p>
-              )}
-            </section>
-            <section className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="m-0 text-sm">{mappingMode === "fields" ? "Field mapping" : "Advanced JSONata"}</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={mappingMode === "advanced" && !parsedExpression}
-                  onClick={() => {
-                    if (mappingMode === "fields") {
-                      setMappingMode("advanced");
-                      return;
-                    }
-                    if (parsedExpression) {
-                      setFieldMappings(
-                        (parsedExpression.length ? parsedExpression : [{ output: "", source: "" }]).map(
-                          editableFieldMapping,
-                        ),
-                      );
-                      setMappingMode("fields");
-                    }
-                  }}
-                >
-                  {mappingMode === "fields" ? "Advanced JSONata" : "Field mapping"}
-                </Button>
-              </div>
-              {mappingMode === "fields" ? (
-                <div className="flex flex-col gap-3">
-                  <p className="m-0 text-xs text-ink-secondary">
-                    Name each output field, then choose the Event or context value it receives.
-                  </p>
-                  {fieldMappings.length > 0 ? (
-                    <div className="hidden grid-cols-[minmax(0,0.8fr)_auto_minmax(0,1.2fr)_auto] gap-2 text-xs font-medium text-ink-secondary sm:grid">
-                      <span>Output field</span>
-                      <span aria-hidden="true" />
-                      <span>Event or context field</span>
-                      <span aria-hidden="true" />
-                    </div>
-                  ) : null}
-                  {fieldMappings.length === 0 ? (
-                    <p className="m-0 text-sm text-ink-secondary">
-                      No fields mapped. The accepted payload will be delivered unchanged.
-                    </p>
-                  ) : null}
-                  {fieldMappings.map((row, index) => {
-                    const options =
-                      row.source && !sourceOptions.includes(row.source)
-                        ? [row.source, ...sourceOptions]
-                        : sourceOptions;
-                    return (
-                      <div
-                        key={row.id}
-                        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,0.8fr)_auto_minmax(0,1.2fr)_auto] sm:items-center"
-                      >
-                        <input
-                          aria-label={`Output field ${index + 1}`}
-                          placeholder="output_field"
-                          value={row.output}
-                          onChange={(event) => {
-                            const next = fieldMappings.map((item, itemIndex) =>
-                              itemIndex === index ? { ...item, output: event.target.value } : item,
-                            );
-                            updateFieldMappings(next);
-                          }}
-                          className="h-9 min-w-0 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        />
-                        <span aria-hidden="true" className="text-ink-secondary">
-                          ←
-                        </span>
-                        <select
-                          aria-label={`Event field ${index + 1}`}
-                          value={row.source}
-                          onChange={(event) => {
-                            const next = fieldMappings.map((item, itemIndex) =>
-                              itemIndex === index ? { ...item, source: event.target.value } : item,
-                            );
-                            updateFieldMappings(next);
-                          }}
-                          className="col-span-2 h-9 min-w-0 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:col-span-1"
-                        >
-                          <option value="">Choose a field…</option>
-                          {options.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Remove mapping ${index + 1}`}
-                          onClick={() =>
-                            updateFieldMappings(fieldMappings.filter((_, itemIndex) => itemIndex !== index))
-                          }
-                        >
-                          <X aria-hidden="true" className="size-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="self-start"
-                    onClick={() => {
-                      setFieldMappings((current) => [...current, editableFieldMapping()]);
-                      invalidateReview();
-                    }}
-                  >
-                    Add field
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <CodeTextarea
-                    id="playground-mapping"
-                    language="text"
-                    aria-label="Playground mapping expression"
-                    aria-invalid={Boolean(form.formState.errors.mapping)}
-                    aria-describedby={form.formState.errors.mapping ? "playground-mapping-error" : undefined}
-                    value={expression}
-                    onChange={(event) => {
-                      form.setValue("mapping", event.target.value, { shouldDirty: true, shouldValidate: true });
-                      form.clearErrors("mapping");
-                      invalidateReview();
-                    }}
-                    className="min-h-44"
-                  />
-                  <p className="m-0 text-xs text-ink-secondary">
-                    {parsedExpression
-                      ? "This expression can return to field mapping without losing information."
-                      : "This expression uses advanced JSONata and cannot be represented safely as field rows."}
-                  </p>
-                </>
-              )}
-              {form.formState.errors.mapping?.message ? (
-                <p id="playground-mapping-error" role="alert" className="m-0 text-sm text-destructive">
-                  {form.formState.errors.mapping.message}
-                </p>
-              ) : null}
-            </section>
-            <section className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
-              <h3 className="m-0 text-sm">Preview body</h3>
-              {evaluationError ? (
-                <div className="flex flex-col gap-2">
-                  <p role="alert" className="m-0 text-sm text-destructive">
-                    {evaluationError}
-                  </p>
-                  <p className="m-0 text-sm text-ink-secondary">
-                    This Event would fail delivery. Equivalent Events would retry and may dead-letter after save.
-                  </p>
-                </div>
-              ) : output !== undefined ? (
-                <CodeBlock value={output} />
-              ) : (
-                <p className="m-0 text-sm text-ink-secondary">
-                  Preview this expression to see what would be delivered.
-                </p>
-              )}
-            </section>
-          </div>
-
-          <FormError
-            message={
-              manualError ??
-              formError(asProblem(topic.error)) ??
-              formError(asProblem(events.error)) ??
-              formError(asProblem(event.error))
-            }
-          />
-          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-            <DialogPrimitive.Close asChild>
-              <Button type="button" variant="outline">
-                Back to Subscription
-              </Button>
-            </DialogPrimitive.Close>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={preview.isPending || unavailable || topic.isPending}
-                onClick={runPreview}
-              >
-                Preview mapping
-              </Button>
-              <DialogPrimitive.Close asChild>
-                <Button
-                  type="button"
-                  disabled={expression === originalExpression || output === undefined || Boolean(evaluationError)}
-                  onClick={() => onConfirmed(expression)}
-                >
-                  Confirm mapping change
-                </Button>
-              </DialogPrimitive.Close>
-            </div>
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
-  );
-}
-
-/// One form for both create and update: the Admin API takes the same body for each, so splitting it
-/// into two near-identical forms would only invite them to drift apart.
 function SubscriptionForm({
   tenantId,
   topicId,
