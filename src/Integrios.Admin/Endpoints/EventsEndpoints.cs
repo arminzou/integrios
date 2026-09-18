@@ -28,6 +28,7 @@ public sealed class EventsEndpoints : IEndpointGroup
         [FromQuery(Name = "source_id")] Guid? sourceId,
         [FromQuery(Name = "topic_id")] Guid? topicId,
         [FromQuery(Name = "source_event_id")] string? sourceEventId,
+        [FromQuery(Name = "event_type")] string? eventType,
         [FromQuery(Name = "accepted_from")] DateTimeOffset? acceptedFrom,
         [FromQuery(Name = "accepted_to")] DateTimeOffset? acceptedTo,
         string? after,
@@ -41,7 +42,8 @@ public sealed class EventsEndpoints : IEndpointGroup
 
         var filter = new TenantEventFilter(
             ParseEventStatus(status), deliveryStatus, sourceId, topicId,
-            string.IsNullOrEmpty(sourceEventId) ? null : sourceEventId, acceptedFrom, acceptedTo);
+            string.IsNullOrEmpty(sourceEventId) ? null : sourceEventId, acceptedFrom, acceptedTo,
+            string.IsNullOrEmpty(eventType) ? null : eventType);
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         EventListDto response = await mediator.Send(
             new ListTenantEventsQuery(tenantId, filter, after, limit), cancellationToken);

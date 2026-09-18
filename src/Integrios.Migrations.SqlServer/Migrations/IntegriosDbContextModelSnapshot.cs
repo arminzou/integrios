@@ -268,7 +268,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.Property<string>("EventType")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
+                        .HasColumnType("nvarchar(450)")
                         .HasColumnName("event_type");
 
                     b.Property<DateTimeOffset?>("FailedAt")
@@ -328,6 +328,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
                         .IsDescending(false, true, true);
+
+                    b.HasIndex(new[] { "TenantId", "TopicId", "EventType", "AcceptedAt", "Id" }, "idx_events_topic_type_accepted")
+                        .IsDescending(false, false, false, true, true);
 
                     b.ToTable("events", null, t =>
                         {

@@ -135,6 +135,15 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         walked.ShouldBe(tied.ToList(), ignoreOrder: true);
         walked.Distinct().Count().ShouldBe(tied.Length);
 
+        // The event type narrows to exactly the tied Events, alone and alongside the Topic; the seeded
+        // Event of another type shares that Topic, so dropping the predicate would return it too.
+        (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/events?event_type=tie.test"))
+            .ShouldBe(tied.ToList(), ignoreOrder: true);
+        (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/events?topic_id={topicId}&event_type=tie.test"))
+            .ShouldBe(tied.ToList(), ignoreOrder: true);
+        (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/events?topic_id={topicId}&event_type=nothing.matches"))
+            .ShouldBeEmpty();
+
         // A cursor is bound to its tenant and to every active filter, so none of these may be reused.
         JsonElement firstPage = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1");
         string unfiltered = firstPage.GetProperty("next_cursor").GetString()!;
@@ -144,6 +153,7 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         await AssertBadRequestAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&source_id={Guid.NewGuid()}&after={carried}");
         await AssertBadRequestAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&topic_id={Guid.NewGuid()}&after={carried}");
         await AssertBadRequestAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&source_event_id=abc&after={carried}");
+        await AssertBadRequestAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&event_type=tie.test&after={carried}");
         await AssertBadRequestAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&accepted_from=2026-01-01T00:00:00Z&after={carried}");
         await AssertBadRequestAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&accepted_to=2027-01-01T00:00:00Z&after={carried}");
     }

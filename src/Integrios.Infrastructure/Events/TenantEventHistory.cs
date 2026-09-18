@@ -35,7 +35,8 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
             filter.TopicId,
             filter.SourceEventId,
             acceptedFrom,
-            acceptedTo));
+            acceptedTo,
+            filter.EventType));
         DateTimeOffset cursorAcceptedAt = default;
         Guid cursorId = default;
         bool hasCursor = afterCursor is not null;
@@ -52,6 +53,8 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
             where.Add("e.topic_id = @TopicId");
         if (filter.SourceEventId is not null)
             where.Add("e.source_event_id = @SourceEventId");
+        if (filter.EventType is not null)
+            where.Add("e.event_type = @EventType");
         if (filter.AcceptedFrom is not null)
             where.Add("e.accepted_at >= @AcceptedFrom");
         if (filter.AcceptedTo is not null)
@@ -89,6 +92,7 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
             filter.SourceId,
             filter.TopicId,
             filter.SourceEventId,
+            filter.EventType,
             AcceptedFrom = acceptedFrom,
             AcceptedTo = acceptedTo,
             CursorAcceptedAt = cursorAcceptedAt,
@@ -125,7 +129,8 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
         Guid? TopicId,
         string? SourceEventId,
         DateTimeOffset? AcceptedFrom,
-        DateTimeOffset? AcceptedTo);
+        DateTimeOffset? AcceptedTo,
+        string? EventType);
 
     private sealed record EventListRow
     {

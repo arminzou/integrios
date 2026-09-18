@@ -29,6 +29,11 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
         entity.HasIndex(e => new { e.TenantId, e.AcceptedAt, e.Id }, "idx_events_tenant_accepted")
             .IsDescending(false, true, true);
 
+        // A Subscription previews its mapping against the newest Events of its own type on its
+        // Topic. A rare type among busy ones would otherwise walk the whole Tenant history above.
+        entity.HasIndex(e => new { e.TenantId, e.TopicId, e.EventType, e.AcceptedAt, e.Id }, "idx_events_topic_type_accepted")
+            .IsDescending(false, false, false, true, true);
+
         entity.Property(e => e.Id)
             .ValueGeneratedNever()
             .HasColumnName("id");

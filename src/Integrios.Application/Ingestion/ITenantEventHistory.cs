@@ -23,4 +23,5 @@ public sealed record TenantEventFilter(
     Guid? TopicId,
     string? SourceEventId,
     DateTimeOffset? AcceptedFrom,
-    DateTimeOffset? AcceptedTo);
+    DateTimeOffset? AcceptedTo,
+    string? EventType = null);
