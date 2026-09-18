@@ -598,8 +598,14 @@ describe("Create forms, filled through a real browser", () => {
     expect(await form.getByLabel("Mapping expression (optional)").count()).toBe(0);
     expect(await form.getByLabel("Raw mapping (JSON)").count()).toBe(0);
     const create = view.locator('form[aria-label="Create a Subscription"] button[type="submit"]');
+    // Samples are the Subscription's own Event type: another type's payload is a shape it never maps.
+    const samplesRead = view.waitForRequest((request) => new URL(request.url()).pathname.endsWith("/events"));
     await form.getByRole("button", { name: "Add mapping in Playground" }).click();
     const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    expect(new URL((await samplesRead).url()).searchParams.get("event_type")).toBe("order.created");
+    await playground.getByText("1 of 1").waitFor();
+    expect(await playground.getByRole("button", { name: "Newer Event" }).isDisabled()).toBe(true);
+    expect(await playground.getByRole("button", { name: "Older Event" }).isDisabled()).toBe(true);
     await playground.getByLabel("Output field 1").fill("order");
     await playground.getByLabel("Event field 1").selectOption("orderId");
     expect(await create.isDisabled()).toBe(true);
@@ -636,6 +642,56 @@ describe("Create forms, filled through a real browser", () => {
       diagnostic_field: "error",
       max_body_bytes: 4096,
     });
+    await view.close();
+  }, 60_000);
+
+  it("steps a previewed mapping through the Subscription's own Events", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
+    const samples = ["SO-1", "SO-2"].map((order, index) => ({
+      event_id: `0000000${index + 1}-0000-0000-0000-000000000000`,
+      topic_id: topicId,
+      source_event_id: `created-${order}`,
+      event_type: "order.created",
+      status: "unrouted",
+      accepted_at: `2026-09-08T12:0${2 - index}:00Z`,
+      deliveries: { pending: 0, in_flight: 0, succeeded: 0, dead_lettered: 0 },
+      // Only the newest sample carries an email: the shape difference stepping exists to reveal.
+      payload: index === 0 ? { orderId: order, email: "buyer@example.test" } : { orderId: order },
+    }));
+    await view.route(
+      (url) => url.pathname.endsWith("/events"),
+      (route) => route.fulfill({ json: { items: samples, next_cursor: null } }),
+    );
+    await view.route(
+      (url) => url.pathname.endsWith("/deliveries"),
+      (route) => {
+        const id = new URL(route.request().url()).pathname.split("/").at(-2);
+        const sample = samples.find((item) => item.event_id === id);
+        return route.fulfill({ json: { ...sample, tenant_id: tenantId, event_deliveries: [], delivery_attempts: [] } });
+      },
+    );
+    // The preview echoes the sample it was sent, so each step's result names the Event it ran on.
+    await view.route("**/admin/transform/preview", (route) =>
+      route.fulfill({ json: { output: { email: route.request().postDataJSON().sample_input.email } } }),
+    );
+
+    await view.click("text=New Subscription");
+    const form = formNamed(view, "Create a Subscription");
+    await form.getByLabel("Event type").fill("order.created");
+    await form.getByRole("button", { name: "Add mapping in Playground" }).click();
+    const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    await playground.getByText("1 of 2").waitFor();
+    await playground.getByLabel("Output field 1").fill("email");
+    await playground.getByLabel("Event field 1").selectOption("email");
+    const previewBody = playground.locator("section", { has: view.getByRole("heading", { name: "Preview body" }) });
+    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await previewBody.getByText('"email": "buyer@example.test"').waitFor();
+
+    // Stepping re-runs the preview the Operator already asked for, against the next sample.
+    await playground.getByRole("button", { name: "Older Event" }).click();
+    await playground.getByText("2 of 2").waitFor();
+    await previewBody.getByText("{}", { exact: true }).waitFor({ timeout: 5_000 });
+    expect(await playground.getByRole("button", { name: "Older Event" }).isDisabled()).toBe(true);
     await view.close();
   }, 60_000);
 

@@ -1,10 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "../api/client";
 import { fieldError, formError } from "../api/problem";
 import { asProblem, call } from "../api/query";
@@ -18,6 +17,7 @@ import {
   payloadFieldPaths,
 } from "../ui/fieldMapping";
 import { parseJson } from "../ui/json";
+import { since } from "../ui/time";
 import type { SubscriptionValues } from "./Subscriptions";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
@@ -61,7 +61,8 @@ export function MappingPlayground({
   const [manual, setManual] = useState(false);
   const [eventId, setEventId] = useState<string>();
   const [manualPayload, setManualPayload] = useState("{}");
-  const [manualEventType, setManualEventType] = useState("sample.event");
+  // Unset until the Operator types one, so a pasted sample follows the Subscription's own Event type.
+  const [manualEventType, setManualEventType] = useState<string>();
   const [manualAcceptedAt, setManualAcceptedAt] = useState(() => new Date().toISOString().slice(0, 16));
   const [manualError, setManualError] = useState<string>();
   const [output, setOutput] = useState<unknown>();
@@ -78,19 +79,30 @@ export function MappingPlayground({
       ),
     enabled: open,
   });
+  // A Subscription only ever maps Events of its own type, so those are the only accepted Events worth
+  // previewing against. Without a type there is nothing to choose from, and another type's payload
+  // would preview a shape this Subscription never receives.
+  const subscriptionEventType = form.watch("event_type").trim();
+  const sampleEventType = manualEventType ?? (subscriptionEventType || "sample.event");
   const events = useQuery({
-    queryKey: ["mapping-events", tenantId, topicId],
+    queryKey: ["mapping-events", tenantId, topicId, subscriptionEventType],
     queryFn: () =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/events", {
-          params: { path: { tenantId }, query: { topic_id: topicId, limit: 20 } },
+          params: { path: { tenantId }, query: { topic_id: topicId, event_type: subscriptionEventType, limit: 20 } },
         }),
       ),
-    enabled: open,
+    enabled: open && subscriptionEventType !== "",
   });
-  const recentEvents = events.data?.items ?? [];
-  const selectedEventId = eventId ?? recentEvents[0]?.event_id;
-  const selectedEvent = recentEvents.find((item) => item.event_id === selectedEventId);
+  const samples = events.data?.items ?? [];
+  const noSamples = subscriptionEventType === "" || (events.isSuccess && samples.length === 0);
+  const pasting = manual || noSamples;
+  const sampleIndex = Math.max(
+    0,
+    samples.findIndex((item) => item.event_id === eventId),
+  );
+  const selectedEvent: EventListItem | undefined = samples[sampleIndex];
+  const selectedEventId = selectedEvent?.event_id;
   const event = useQuery({
     queryKey: ["event", tenantId, selectedEventId],
     queryFn: () => {
@@ -101,7 +113,7 @@ export function MappingPlayground({
         }),
       );
     },
-    enabled: open && !manual && Boolean(selectedEventId),
+    enabled: open && !pasting && Boolean(selectedEventId),
   });
 
   const resetPreview = () => {
@@ -114,6 +126,16 @@ export function MappingPlayground({
   const invalidateReview = () => {
     resetPreview();
     onReviewInvalidated();
+  };
+
+  // Stepping to another sample re-runs a preview the Operator already asked for, once that sample's
+  // payload has loaded: the point of stepping is to see the same mapping against a different shape.
+  const rerunOnLoad = useRef(false);
+  const step = (next: EventListItem | undefined) => {
+    if (!next) return;
+    rerunOnLoad.current = output !== undefined || evaluationError !== undefined;
+    setEventId(next.event_id);
+    invalidateReview();
   };
 
   const updateFieldMappings = (next: EditableFieldMapping[]) => {
@@ -170,18 +192,18 @@ export function MappingPlayground({
     let payload: unknown;
     let eventType: string;
     let acceptedAt: string;
-    if (manual) {
+    if (pasting) {
       const parsed = parseJson(manualPayload);
       if (parsed.error) {
         setManualError(parsed.error);
         return;
       }
-      if (!manualEventType.trim() || Number.isNaN(new Date(manualAcceptedAt).getTime())) {
+      if (!sampleEventType.trim() || Number.isNaN(new Date(manualAcceptedAt).getTime())) {
         setManualError("Enter an Event type and acceptance time.");
         return;
       }
       payload = parsed.value;
-      eventType = manualEventType.trim();
+      eventType = sampleEventType.trim();
       acceptedAt = new Date(manualAcceptedAt).toISOString();
     } else {
       if (!selectedEvent || event.data?.payload === undefined || event.data.payload === null) return;
@@ -197,10 +219,17 @@ export function MappingPlayground({
     preview.mutate({ payload, eventType, acceptedAt, topicName, attempt: previewAttempt.current });
   };
 
-  const input = manual ? parseJson(manualPayload).value : event.data?.payload;
-  const contextEventType = manual ? manualEventType : selectedEvent?.event_type;
-  const contextAcceptedAt = manual ? manualAcceptedAt : selectedEvent?.accepted_at;
-  const unavailable = manual
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once per loaded sample, not per render of runPreview.
+  useEffect(() => {
+    if (!rerunOnLoad.current || event.data?.payload === undefined || event.data.payload === null) return;
+    rerunOnLoad.current = false;
+    runPreview();
+  }, [event.data]);
+
+  const input = pasting ? parseJson(manualPayload).value : event.data?.payload;
+  const contextEventType = pasting ? sampleEventType : selectedEvent?.event_type;
+  const contextAcceptedAt = pasting ? manualAcceptedAt : selectedEvent?.accepted_at;
+  const unavailable = pasting
     ? false
     : !selectedEvent || event.data?.payload === undefined || event.data.payload === null;
   const sourceOptions = [
@@ -242,45 +271,76 @@ export function MappingPlayground({
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
-            {!manual ? (
-              <div className="flex min-w-64 flex-1 flex-col gap-1 text-sm">
-                <span id="recent-event-label" className="font-medium">
-                  Preview against
-                </span>
-                <Select
-                  value={selectedEventId}
-                  onValueChange={(value) => {
-                    setEventId(value);
-                    invalidateReview();
-                  }}
-                  disabled={recentEvents.length === 0}
-                >
-                  <SelectTrigger aria-labelledby="recent-event-label">
-                    <SelectValue placeholder={events.isPending ? "Loading Events…" : "No recent Events"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {recentEvents.map((item: EventListItem) => (
-                      <SelectItem key={item.event_id} value={item.event_id}>
-                        {item.event_type} · {new Date(item.accepted_at).toLocaleString()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {!pasting ? (
+              <fieldset className="m-0 flex min-w-64 flex-1 flex-col gap-1 border-0 p-0 text-sm">
+                <legend className="mb-1 p-0 font-medium">Preview against</legend>
+                <div className="flex items-center gap-2">
+                  <p className="m-0 min-w-0 flex-1 rounded-md border px-3 py-2 break-words">
+                    {selectedEvent ? (
+                      <>
+                        <code>{selectedEvent.event_type}</code>
+                        {selectedEvent.source_event_id ? <> · {selectedEvent.source_event_id}</> : null} ·{" "}
+                        <span title={new Date(selectedEvent.accepted_at).toLocaleString()}>
+                          {since(selectedEvent.accepted_at)}
+                        </span>
+                      </>
+                    ) : (
+                      "Loading Events…"
+                    )}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Newer Event"
+                    disabled={sampleIndex === 0}
+                    onClick={() => step(samples[sampleIndex - 1])}
+                  >
+                    <ChevronLeft aria-hidden="true" />
+                  </Button>
+                  <span aria-live="polite" className="shrink-0 text-ink-secondary tabular-nums">
+                    {samples.length > 0 ? `${sampleIndex + 1} of ${samples.length}` : ""}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Older Event"
+                    disabled={sampleIndex >= samples.length - 1}
+                    onClick={() => step(samples[sampleIndex + 1])}
+                  >
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                </div>
+              </fieldset>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setManual((value) => !value);
-                invalidateReview();
-              }}
-            >
-              {manual ? "Choose a recent Event" : "Paste sample JSON"}
-            </Button>
+            {samples.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setManual((value) => !value);
+                  invalidateReview();
+                }}
+              >
+                {manual ? "Use accepted Events" : "Paste sample JSON"}
+              </Button>
+            ) : null}
           </div>
+          {noSamples ? (
+            <p className="m-0 text-sm text-ink-secondary">
+              {subscriptionEventType === "" ? (
+                "Enter this Subscription's Event type to preview against its accepted Events. Until then, paste a sample."
+              ) : (
+                <>
+                  No <code>{subscriptionEventType}</code> Events on this Topic yet. Send a test Event from the Source's
+                  setup guide, or paste a sample.
+                </>
+              )}
+            </p>
+          ) : null}
 
-          {manual ? (
+          {pasting ? (
             <div className="grid gap-3 md:grid-cols-2">
               <label htmlFor="manual-payload" className="flex flex-col gap-1 text-sm md:col-span-2">
                 <span className="font-medium">Sample input (JSON)</span>
@@ -296,7 +356,7 @@ export function MappingPlayground({
               <label className="flex flex-col gap-1 text-sm">
                 <span className="font-medium">Event type</span>
                 <input
-                  value={manualEventType}
+                  value={sampleEventType}
                   onChange={(event) => {
                     setManualEventType(event.target.value);
                     invalidateReview();
@@ -327,7 +387,7 @@ export function MappingPlayground({
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.5fr)_minmax(0,0.75fr)]">
             <section className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
-              <h3 className="m-0 text-sm">{manual ? "Sample input" : "Accepted Event"}</h3>
+              <h3 className="m-0 text-sm">{pasting ? "Sample input" : "Accepted Event"}</h3>
               {input !== undefined ? (
                 <CodeBlock value={input} />
               ) : (
