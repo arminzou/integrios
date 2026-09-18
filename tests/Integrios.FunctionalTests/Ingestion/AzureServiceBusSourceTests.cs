@@ -225,8 +225,9 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
-            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, mapping, revision, status)
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, mapping, revision, status)
             VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'sb-intake', 'broker',
+                '["order.created"]',
                 {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'active');
             """,
             new

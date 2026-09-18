@@ -136,6 +136,7 @@ public sealed class SourceSecretValidationCliTests
         TopicId = Guid.NewGuid(),
         Name = "webhook-intake",
         Type = SourceType.Webhook,
+        EventTypes = ["order.created"],
         Configuration = Json("{}"),
         Verification = new SourceVerification
         {
@@ -157,6 +158,7 @@ public sealed class SourceSecretValidationCliTests
         TopicId = Guid.NewGuid(),
         Name = "broker-intake",
         Type = SourceType.Broker,
+        EventTypes = ["order.created"],
         Configuration = JsonSerializer.SerializeToElement(new
         {
             transport = "azure_service_bus",

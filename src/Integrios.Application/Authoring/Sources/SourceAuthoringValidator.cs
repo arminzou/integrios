@@ -52,6 +52,25 @@ internal static class SourceAuthoringValidator
         throw new SourceValidationException("Source type is not supported.");
     }
 
+    // The declarations are what the Topic offers Subscriptions and what intake accepts, so each one
+    // meets the Event-type floor as written. Matching ignores case, which makes two spellings of one
+    // type in a single list the same declaration twice.
+    public static IReadOnlyList<string> ValidateEventTypes(IReadOnlyList<string>? eventTypes)
+    {
+        if (eventTypes is null || eventTypes.Count == 0)
+            throw new SourceValidationException("Declare at least one Event type this Source may publish.", "event_types");
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? eventType in eventTypes)
+        {
+            if (EventTypeName.Problem(eventType) is { } problem)
+                throw new SourceValidationException($"Event type {problem}.", "event_types");
+            if (!seen.Add(eventType!))
+                throw new SourceValidationException($"Event type '{eventType}' is declared more than once.", "event_types");
+        }
+        return [.. eventTypes];
+    }
+
     public static SourceVerification? ToVerification(SourceVerificationInput? input) => input is null
         ? null
         : new SourceVerification

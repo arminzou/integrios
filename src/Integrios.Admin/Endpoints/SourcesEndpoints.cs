@@ -41,7 +41,8 @@ public sealed class SourcesEndpoints : IEndpointGroup
                 request.Verification?.ToInput(),
                 request.InputRequirements,
                 request.Mapping,
-                request.EventIdentityRule),
+                request.EventIdentityRule,
+                request.EventTypes),
             cancellationToken);
         return Results.Created($"/admin/tenants/{tenantId}/sources/{source.Id}", source);
     }
@@ -71,7 +72,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
         SourceDto? source = await mediator.Send(
             new UpdateSourceCommand(
                 tenantId, id, request.Name, request.Configuration, request.Verification?.ToInput(), request.InputRequirements,
-                request.Mapping, request.EventIdentityRule),
+                request.Mapping, request.EventIdentityRule, request.EventTypes),
             cancellationToken);
         return source is null ? Results.NotFound() : Results.Ok(source);
     }
@@ -89,14 +90,16 @@ internal sealed record CreateSourceRequest(
     SourceVerificationSelectionRequest? Verification,
     JsonElement? InputRequirements,
     SourceMapping? Mapping,
-    SourceEventIdentityRule? EventIdentityRule);
+    SourceEventIdentityRule? EventIdentityRule,
+    IReadOnlyList<string>? EventTypes);
 internal sealed record UpdateSourceRequest(
     [property: JsonRequired] string? Name,
     [property: JsonRequired] JsonElement Configuration,
     [property: JsonRequired] SourceVerificationSelectionRequest? Verification,
     [property: JsonRequired] JsonElement? InputRequirements,
     [property: JsonRequired] SourceMapping? Mapping,
-    [property: JsonRequired] SourceEventIdentityRule? EventIdentityRule);
+    [property: JsonRequired] SourceEventIdentityRule? EventIdentityRule,
+    [property: JsonRequired] IReadOnlyList<string>? EventTypes);
 
 internal sealed record SourceVerificationSelectionRequest(string Scheme, JsonElement Config, JsonElement SecretRefs)
 {

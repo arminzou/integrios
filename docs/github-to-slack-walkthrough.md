@@ -96,10 +96,16 @@ to publish there. Creating a `webhook` Source mints a stable `callback_id` — t
 coordinate GitHub's requests carry. Revoking and re-creating the Source later mints a new
 `callback_id`; this one is stable for as long as the Source exists.
 
+A Source also declares the Event types it may publish. Integrios refuses any other type from it, and
+Subscriptions on the Topic choose from these declarations. This mapping produces one type per GitHub
+event, so declare each one you expect: `github.push` for the flow below, and `github.ping`, which
+GitHub sends once when the webhook is created.
+
 ```bash
 GITHUB_MAPPING='{"event_type":"github." & $context.headers."x-github-event","payload":$}'
 CALLBACK_ID=$(jq -n --arg connector "$GITHUB_CONNECTOR" --arg topic "$TOPIC" --arg mapping "$GITHUB_MAPPING" \
-  '{connector_id:$connector,topic_id:$topic,name:"GitHub webhook",type:"webhook",configuration:{},
+  '{connector_id:$connector,topic_id:$topic,name:"GitHub webhook",type:"webhook",
+    event_types:["github.push","github.ping"],configuration:{},
     verification:{scheme:"hmac_sha256",config:{},secret_refs:{secret:"github_webhook_secret"}},
     input_requirements:null,mapping:{engine:"jsonata",version:"1",expression:$mapping},
     event_identity_rule:{kind:"header",value:"X-GitHub-Delivery"}}' \

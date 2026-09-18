@@ -13,13 +13,26 @@ const topicId = "22222222-2222-2222-2222-222222222222";
 const connectorId = "33333333-3333-3333-3333-333333333333";
 
 function stubOptions() {
-  stubHttp(({ url }) => {
+  return stubHttp(({ method, url }) => {
+    if (method === "POST") return { status: 201, body: {} };
     if (url.pathname.endsWith("/connectors"))
       return { status: 200, body: page([{ id: connectorId, name: "GitHub", status: "active" }]) };
     if (url.pathname.endsWith("/topics"))
       return { status: 200, body: page([{ id: topicId, key: "orders", name: "orders", status: "active" }]) };
     return { status: 200, body: page([]) };
   });
+}
+
+/// The native select behind each picker gains its options only once the option lists load.
+async function chooseConnectorAndTopic(dialog: HTMLElement) {
+  for (const [name, value] of [
+    ["Connector", connectorId],
+    ["Topic", topicId],
+  ]) {
+    const select = within(dialog).getByRole("combobox", { name }).nextElementSibling as HTMLSelectElement;
+    await waitFor(() => expect(select.querySelector(`option[value="${value}"]`)).not.toBeNull());
+    fireEvent.change(select, { target: { value } });
+  }
 }
 
 async function openSource(type: "event_api" | "webhook" | "broker" = "webhook") {
@@ -61,6 +74,7 @@ it("shows broker messages without HTTP request context", async () => {
     <EventBuilder
       contractKey="broker Source"
       sourceType="broker"
+      eventTypes={[]}
       draft={{ expression: "", identity: null }}
       onUse={() => undefined}
     />,
@@ -94,6 +108,47 @@ it("returns the ephemeral Builder draft to its owning Source form", async () => 
   );
 });
 
+/// A fixed Event type is the one type such a Source publishes, so the form declares it rather than
+/// asking for the same value a second time.
+it("declares a fixed Event type from the Event contract", async () => {
+  const source = await openSource();
+  fireEvent.change(within(source).getByLabelText("Name"), { target: { value: "github-intake" } });
+  await chooseConnectorAndTopic(source);
+  fireEvent.click(within(source).getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "github.push" } });
+  fireEvent.click(within(builder).getByRole("button", { name: "Use configuration" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Integrios Event Builder" })).toBeNull());
+
+  expect(within(source).queryByLabelText("Event type 1")).toBeNull();
+  expect(within(source).getByText("— the fixed Event type from the Event contract.")).toBeTruthy();
+  const calls = stubOptions();
+  fireEvent.click(within(source).getByRole("button", { name: "Create Source" }));
+  await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+  const created = calls.find((call) => call.method === "POST")!;
+  expect((created.body as Record<string, unknown>).event_types).toEqual(["github.push"]);
+});
+
+/// Anything but a fixed type can produce types the dashboard cannot enumerate, so the Operator
+/// declares them, and one type in two spellings is caught before the API refuses it.
+it("asks for the Event types an Event API Source publishes", async () => {
+  const source = await openSource("event_api");
+  fireEvent.change(within(source).getByLabelText("Name"), { target: { value: "orders-intake" } });
+  await chooseConnectorAndTopic(source);
+  fireEvent.change(within(source).getByLabelText("Event type 1"), { target: { value: "Order.Created" } });
+  fireEvent.click(within(source).getByRole("button", { name: "Add Event type" }));
+  fireEvent.change(within(source).getByLabelText("Event type 2"), { target: { value: "order.created" } });
+  fireEvent.click(within(source).getByRole("button", { name: "Create Source" }));
+  expect(await within(source).findByText("This Event type is already declared.")).toBeTruthy();
+
+  fireEvent.change(within(source).getByLabelText("Event type 2"), { target: { value: "order.shipped" } });
+  const calls = stubOptions();
+  fireEvent.click(within(source).getByRole("button", { name: "Create Source" }));
+  await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+  const created = calls.find((call) => call.method === "POST")!;
+  expect((created.body as Record<string, unknown>).event_types).toEqual(["Order.Created", "order.shipped"]);
+});
+
 /// A Source the guided form authored has to reopen in the form that authored it. Without the
 /// inverse the Builder lands in the advanced editor and offers to reset an expression it wrote
 /// itself, so the guided rule is unreachable the moment the Operator leaves the page.
@@ -103,6 +158,7 @@ it("reopens a stored guided mapping in the form that wrote it", async () => {
     <EventBuilder
       contractKey="broker Source"
       sourceType="broker"
+      eventTypes={[]}
       draft={{ expression, identity: null }}
       onUse={() => undefined}
     />,
@@ -121,6 +177,7 @@ it("keeps an expression it did not write in the advanced editor", async () => {
     <EventBuilder
       contractKey="broker Source"
       sourceType="broker"
+      eventTypes={[]}
       draft={{ expression: '{ "event_type": kind, "payload": body.inner }', identity: null }}
       onUse={() => undefined}
     />,
@@ -152,6 +209,7 @@ it("says, unasked, whether the sample would be accepted and as what", async () =
     <EventBuilder
       contractKey="broker Source"
       sourceType="broker"
+      eventTypes={[]}
       draft={{ expression: "", identity: null }}
       onUse={() => undefined}
     />,
@@ -201,6 +259,7 @@ it("names the API's reason when the sample would be rejected, and where an input
     <EventBuilder
       contractKey="webhook Source"
       sourceType="webhook"
+      eventTypes={[]}
       draft={{
         expression: guidedExpression({ source: "fixed", value: "storefront.webhook.received" }),
         schema: { type: "object", required: ["result"], properties: { result: { type: "string" } } },
@@ -238,6 +297,7 @@ it("hands a stored input-requirements document back untouched", async () => {
     <EventBuilder
       contractKey="webhook Source"
       sourceType="webhook"
+      eventTypes={[]}
       draft={{ expression: "", schema, identity: null }}
       onUse={onUse}
     />,
@@ -263,6 +323,7 @@ it("does not hold back an advanced expression for a guided rule it no longer rep
     <EventBuilder
       contractKey="webhook Source"
       sourceType="webhook"
+      eventTypes={[]}
       draft={{ expression: "", identity: null }}
       onUse={() => undefined}
     />,
@@ -296,9 +357,16 @@ it("does not hold back an advanced expression for a guided rule it no longer rep
 async function openBuilder(
   sourceType: "webhook" | "broker",
   draft: SourceContractDraft = { expression: "", identity: null },
+  eventTypes: string[] = [],
 ) {
   renderScreen(
-    <EventBuilder contractKey={`${sourceType} Source`} sourceType={sourceType} draft={draft} onUse={() => undefined} />,
+    <EventBuilder
+      contractKey={`${sourceType} Source`}
+      sourceType={sourceType}
+      draft={draft}
+      eventTypes={eventTypes}
+      onUse={() => undefined}
+    />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
   return screen.findByRole("dialog", { name: "Integrios Event Builder" });
@@ -397,6 +465,57 @@ it("checks a Source with no Event type rule as taking its input as the Event", a
   expect(verdict.textContent).toContain("With no Event type rule, each message must already be an Integrios Event.");
   const preview = calls.filter((call) => call.url.pathname.endsWith("/source-contracts/preview")).at(-1)!;
   expect((preview.body as Record<string, unknown>).mapping).toBeNull();
+});
+
+/// Intake refuses an Event type the Source does not declare, so the verdict is checked against the
+/// declarations on the form, and a refusal from them says where they are edited.
+it("checks the output type against the Source's declared Event types", async () => {
+  const calls = stubHttp(({ url }) =>
+    url.pathname.endsWith("/source-contracts/preview")
+      ? {
+          status: 400,
+          body: {
+            status: 400,
+            errors: { event_types: ["Event type 'broker.message.pull' is not declared by this Source."] },
+          },
+        }
+      : { status: 200, body: page([]) },
+  );
+  const builder = await openBuilder(
+    "broker",
+    {
+      expression: guidedExpression({ source: "body", path: "kind", prefix: "broker.message" }),
+      identity: null,
+    },
+    ["broker.message.push"],
+  );
+  fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), { target: { value: '{"kind":"pull"}' } });
+
+  const verdict = within(builder).getByRole("status");
+  await waitFor(() => expect(verdict.textContent).toContain("is not declared by this Source"), { timeout: 3000 });
+  expect(verdict.textContent).toContain("Declare it under this Source's Event types");
+  const preview = calls.filter((call) => call.url.pathname.endsWith("/source-contracts/preview")).at(-1)!;
+  expect((preview.body as Record<string, unknown>).event_types).toEqual(["broker.message.push"]);
+});
+
+/// A fixed Event type is declared by construction, so the check has nothing to compare it with.
+it("does not check a fixed Event type against the declarations", async () => {
+  const calls = stubHttp(({ url }) =>
+    url.pathname.endsWith("/source-contracts/preview")
+      ? { status: 200, body: { output: { event_type: "order.created", payload: {} }, source_event_id: null } }
+      : { status: 200, body: page([]) },
+  );
+  const builder = await openBuilder("broker", {
+    expression: guidedExpression({ source: "fixed", value: "order.created" }),
+    identity: null,
+  });
+  fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), { target: { value: '{"id":1}' } });
+
+  await waitFor(() => expect(within(builder).getByRole("status").textContent).toContain("Accepted"), {
+    timeout: 3000,
+  });
+  const preview = calls.filter((call) => call.url.pathname.endsWith("/source-contracts/preview")).at(-1)!;
+  expect((preview.body as Record<string, unknown>).event_types).toBeNull();
 });
 
 /// The identity rule runs before the input is looked at as an Event, so a refusal from it says nothing

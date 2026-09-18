@@ -114,6 +114,7 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
                 topic_id = topic,
                 name = "github-intake",
                 type = "webhook",
+                event_types = new[] { "github.push" },
                 configuration = new { },
                 verification = new { scheme = "hmac_sha256", config = new { }, secret_refs = new { secret = GitHubSecretReference } },
                 input_requirements = (object?)null,

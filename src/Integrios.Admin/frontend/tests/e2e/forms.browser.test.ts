@@ -137,6 +137,7 @@ const sourceDetail = {
   topic_id: topicId,
   name: "orders-intake",
   type: "event_api",
+  event_types: ["order.created"],
   configuration: {},
   status: "active",
   revoked_at: null,
@@ -735,6 +736,7 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Type"), "Event API");
     await form.getByLabel("Name", { exact: true }).fill("orders-intake");
     expect(await form.getByText("Advanced configuration").count()).toBe(0);
+    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await view.click("text=Create Source");
 
     const guide = view.getByRole("dialog", { name: "Publish through this Source" });
@@ -752,6 +754,7 @@ describe("Create forms, filled through a real browser", () => {
     expect(sent.body.topic_id).toBe(topicId);
     expect(sent.body.type).toBe("event_api");
     expect(sent.body.configuration).toEqual({});
+    expect(sent.body.event_types).toEqual(["order.created"]);
     await view.close();
   }, 60_000);
 
@@ -778,6 +781,7 @@ describe("Create forms, filled through a real browser", () => {
     await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
     await builder.getByRole("button", { name: "Use configuration" }).click();
     await form.getByText("x-github-delivery", { exact: true }).waitFor();
+    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -822,6 +826,7 @@ describe("Create forms, filled through a real browser", () => {
     await builder.getByLabel("Accept a request that carries no value here").check();
     await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
     await builder.getByRole("button", { name: "Use configuration" }).click();
+    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -851,6 +856,7 @@ describe("Create forms, filled through a real browser", () => {
     expect(await builder.getByLabel("Identity field").count()).toBe(0);
     await builder.getByLabel("Accept a message that carries no value here").check();
     await builder.getByRole("button", { name: "Use configuration" }).click();
+    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -910,6 +916,7 @@ describe("Create forms, filled through a real browser", () => {
     await form.getByLabel("Subscription name").fill("integrios");
     await choose(form.getByLabel("Authentication"), "Connection string reference");
     await form.getByLabel("Connection string reference", { exact: true }).fill("orders-bus");
+    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -983,6 +990,7 @@ describe("Create forms, filled through a real browser", () => {
     expect(await form.getByLabel("Broker type").textContent()).toContain("Azure Service Bus");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
     await form.getByLabel("Queue name").fill("orders");
+    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);

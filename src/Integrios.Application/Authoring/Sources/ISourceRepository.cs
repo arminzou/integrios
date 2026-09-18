@@ -18,6 +18,7 @@ public interface ISourceRepository
         JsonElement? inputRequirements,
         SourceMapping? mapping,
         SourceEventIdentityRule? eventIdentityRule,
+        IReadOnlyList<string> eventTypes,
         CancellationToken cancellationToken);
     Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
 }

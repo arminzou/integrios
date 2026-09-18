@@ -63,6 +63,15 @@ export function guidedExpression(rule: EventTypeRule): string {
   );
 }
 
+/// The one Event type a fixed guided mapping produces, or nothing for any other expression. A Source
+/// with such a mapping declares exactly that type, so the form fills the declaration rather than
+/// asking for the same value twice. Every other mapping — derived, Advanced, or none — can produce
+/// types the dashboard cannot enumerate, and the Operator declares them.
+export function fixedEventType(expression: string): string | undefined {
+  const rule = guidedFrom(expression);
+  return rule?.source === "fixed" && rule.value.trim() !== "" ? rule.value.trim() : undefined;
+}
+
 const jsonString = String.raw`"(?:\\.|[^"\\])*"`;
 const fixedShape = new RegExp(String.raw`^\{ "event_type": (${jsonString}), "payload": \$ \}$`);
 const derivedShape = new RegExp(

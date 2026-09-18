@@ -158,7 +158,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         Guid sourceId = Guid.NewGuid();
         await ExecuteAsync(
-            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-intake', 'event_api', {database.Json("@Configuration")}, @Revision, 'active', {database.Now}, {database.Now})",
+            $"INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at) VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-intake', 'event_api', '[\"payment.created\"]', {database.Json("@Configuration")}, @Revision, 'active', {database.Now}, {database.Now})",
             new { SourceId = sourceId, TenantId = tenantId, ConnectorId = connectorId, TopicId = topicId, Configuration = configuration, Revision = Guid.NewGuid().ToString("N") });
         return sourceId;
     }

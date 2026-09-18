@@ -98,6 +98,7 @@ Content-Type: application/json
   "topic_id": "{{createOrdersTopic.response.body.$.id}}",
   "name": "Orders Event API",
   "type": "event_api",
+  "event_types": ["order.placed"],
   "configuration": {},
   "verification": null,
   "input_requirements": null,
@@ -205,6 +206,7 @@ Content-Type: application/json
   "topic_id": "{{createStorefrontTopic.response.body.$.id}}",
   "name": "Storefront webhook",
   "type": "webhook",
+  "event_types": ["storefront.webhook.received"],
   "configuration": {},
   "verification": {
     "scheme": "hmac_sha256",
@@ -327,6 +329,7 @@ Content-Type: application/json
   "topic_id": "{{createWarehouseTopic.response.body.$.id}}",
   "name": "Warehouse receipts",
   "type": "broker",
+  "event_types": ["warehouse.receipt.recorded"],
   "configuration": {
     "transport": "azure_service_bus",
     "authentication": {

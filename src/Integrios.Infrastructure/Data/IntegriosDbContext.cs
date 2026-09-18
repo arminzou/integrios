@@ -57,6 +57,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<StoredJsonConverter<HttpDeliveryConfiguration>>();
         configurationBuilder.Properties<HttpSuccessRule>()
             .HaveConversion<StoredJsonConverter<HttpSuccessRule>>();
+        configurationBuilder.Properties<IReadOnlyList<string>>()
+            .HaveConversion<StoredJsonConverter<IReadOnlyList<string>>, StoredStringListComparer>();
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -174,8 +176,10 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.ToTable("sources", table =>
             {
                 table.HasCheckConstraint("ck_sources_configuration_json", "ISJSON(configuration, VALUE) = 1");
+                table.HasCheckConstraint("ck_sources_event_types_array", "ISJSON(event_types, ARRAY) = 1");
             });
             entity.Property(e => e.Configuration).HasColumnType(jsonType);
+            entity.Property(e => e.EventTypes).HasColumnType(jsonType);
             entity.Property(e => e.Verification).HasColumnType(jsonType);
             entity.Property(e => e.InputRequirements).HasColumnType(jsonType);
             entity.Property(e => e.Mapping).HasColumnType(jsonType);

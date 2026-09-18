@@ -15,7 +15,8 @@ public sealed record UpdateSourceCommand(
     SourceVerificationInput? Verification,
     JsonElement? InputRequirements,
     SourceMapping? Mapping,
-    SourceEventIdentityRule? EventIdentityRule) : IRequest<SourceDto?>;
+    SourceEventIdentityRule? EventIdentityRule,
+    IReadOnlyList<string>? EventTypes) : IRequest<SourceDto?>;
 
 internal sealed class UpdateSourceCommandHandler(
     ISourceRepository sourceRepository,
@@ -36,6 +37,7 @@ internal sealed class UpdateSourceCommandHandler(
         SourceAuthoringValidator.Validate(source.Type, command.Configuration, command.Verification, connector);
         SourceAuthoringValidator.ValidateRuntimeContract(
             source.Type, command.InputRequirements, command.Mapping, command.EventIdentityRule, evaluator);
+        IReadOnlyList<string> eventTypes = SourceAuthoringValidator.ValidateEventTypes(command.EventTypes);
         SourceAuthoringValidator.ValidateEventIdentityRule(source.Type, command.EventIdentityRule);
         JsonElement configuration = source.Type == Domain.Enums.SourceType.Webhook
             ? WebhookCallbackConfiguration.WithCallbackId(
@@ -51,6 +53,7 @@ internal sealed class UpdateSourceCommandHandler(
             command.InputRequirements?.Clone(),
             command.Mapping,
             command.EventIdentityRule,
+            eventTypes,
             cancellationToken);
         return updated is null ? null : SourceDto.From(updated);
     }

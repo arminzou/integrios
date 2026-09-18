@@ -82,7 +82,7 @@ TOPIC=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics -H "$AUTH" -H 'Conte
 # 6. Create an Event API Source directly from the Connector and Topic. Event API uses the fixed
 # Integrios Event JSON contract and does not configure verification, mapping, or identity extraction.
 SOURCE=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"topic_id\":\"$TOPIC\",\"name\":\"Payments Event API\",\"type\":\"event_api\",\"configuration\":{},\"verification\":null,\"input_requirements\":null,\"mapping\":null,\"event_identity_rule\":null}" | jq -r .id)
+  -d "{\"connector_id\":\"$HTTP_CONNECTOR\",\"topic_id\":\"$TOPIC\",\"name\":\"Payments Event API\",\"type\":\"event_api\",\"event_types\":[\"payment.created\"],\"configuration\":{},\"verification\":null,\"input_requirements\":null,\"mapping\":null,\"event_identity_rule\":null}" | jq -r .id)
 
 # 7. Subscribe the destination to payment.created events
 curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \

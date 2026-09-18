@@ -14,6 +14,9 @@ public sealed record Source
     /// addresses it by identifier.
     public required string Name { get; init; }
     public required SourceType Type { get; init; }
+    /// The Event types this Source may publish: the only authority for what its Topic offers
+    /// Subscriptions and for what intake accepts from it. Never empty.
+    public required IReadOnlyList<string> EventTypes { get; init; }
     public required JsonElement Configuration { get; init; }
     public SourceVerification? Verification { get; init; }
     public JsonElement? InputRequirements { get; init; }

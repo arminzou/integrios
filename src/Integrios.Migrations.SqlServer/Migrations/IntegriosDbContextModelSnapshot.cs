@@ -631,6 +631,11 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("event_identity_rule");
 
+                    b.Property<string>("EventTypes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("event_types");
+
                     b.Property<string>("InputRequirements")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("input_requirements");
@@ -698,6 +703,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.ToTable("sources", null, t =>
                         {
                             t.HasCheckConstraint("ck_sources_configuration_json", "ISJSON(configuration, VALUE) = 1");
+
+                            t.HasCheckConstraint("ck_sources_event_types_array", "ISJSON(event_types, ARRAY) = 1");
 
                             t.HasCheckConstraint("ck_sources_revoked_at", "((status = 'active' AND revoked_at IS NULL) OR (status = 'revoked' AND revoked_at IS NOT NULL))");
 

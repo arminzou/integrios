@@ -226,6 +226,32 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
         result.SourceEventId.ShouldBe("o-1");
     }
 
+    // Intake refuses an Event type the Source does not declare, so a preview that answered with the
+    // output would show an Operator an Event that could never be accepted.
+    [Fact]
+    public async Task Preview_RefusesAnOutputTypeTheSourceDoesNotDeclare()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"payment.refunded\", \"payload\": $ }",
+            "{}",
+            eventTypes: ["payment.created"]);
+
+        result.RefusedBy.ShouldBe("event_types");
+        result.Error!.ShouldContain("payment.refunded");
+        result.OutputJson.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Preview_AcceptsADeclaredOutputTypeInAnyCase()
+    {
+        PreviewSourceContractResult result = await RunMapping(
+            "{ \"event_type\": \"payment.created\", \"payload\": $ }",
+            "{}",
+            eventTypes: ["Payment.Created"]);
+
+        result.Error.ShouldBeNull();
+    }
+
     private Task<PreviewSourceContractResult> RunUnmapped(string sampleInput) =>
         mediator.Send(new PreviewSourceContractQuery(null, null, Json(sampleInput), Json("""{"headers":{}}"""), null));
 
@@ -235,7 +261,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
         string expression,
         string sampleInput,
         string? sampleContext = null,
-        SourceEventIdentityRule? identityRule = null)
+        SourceEventIdentityRule? identityRule = null,
+        IReadOnlyList<string>? eventTypes = null)
     {
         string mapping =
             $$"""{"engine":"jsonata","version":"1","expression":{{JsonSerializer.Serialize(expression)}}}""";
@@ -244,7 +271,8 @@ public sealed class PreviewSourceContractQueryTests : IDisposable
             Json(mapping),
             Json(sampleInput),
             sampleContext is null ? null : Json(sampleContext),
-            identityRule));
+            identityRule,
+            eventTypes));
     }
 
     private static JsonElement Json(string raw) =>

@@ -107,7 +107,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
         using HttpResponseMessage destinationOnly = await PostAdminAsync(
             $"/admin/tenants/{primary.Id}/sources",
-            new { connector_id = ApiKeyConnectorId, topic_id = topic, name = "intake", type = "event_api", configuration = new { } });
+            new { connector_id = ApiKeyConnectorId, topic_id = topic, name = "intake", type = "event_api", event_types = new[] { "payment.created" }, configuration = new { } });
         destinationOnly.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         Guid inactiveSource = await CreateEventApiSourceAsync(primary, HttpConnectorId, topic);
@@ -563,6 +563,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
                 topic_id = topic,
                 name = "verified-intake",
                 type = "webhook",
+                event_types = new[] { "probe.inbound" },
                 configuration = new { },
                 verification = new { scheme = "hmac_sha256", config = new { }, secret_refs = new { secret = secretReference } },
                 input_requirements = (object?)null,
@@ -629,7 +630,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         using HttpResponseMessage response = await PostAdminAsync(
             $"/admin/tenants/{tenant.Id}/sources",
-            new { connector_id = connectorId, topic_id = topic, name = "intake", type = "event_api", configuration = new { } });
+            new { connector_id = connectorId, topic_id = topic, name = "intake", type = "event_api", event_types = new[] { "payment.created", "rejected.test" }, configuration = new { } });
         return (await AssertJsonAsync(response, HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 

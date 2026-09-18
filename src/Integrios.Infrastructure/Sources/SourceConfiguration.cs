@@ -13,6 +13,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         entity.ToTable("sources", table =>
         {
             table.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'broker')");
+            table.HasCheckConstraint("ck_sources_event_types_array", "jsonb_typeof(event_types) = 'array'");
             table.HasCheckConstraint("ck_sources_status", "status IN ('active', 'revoked')");
             table.HasCheckConstraint("ck_sources_revoked_at", "((status = 'active' AND revoked_at IS NULL) OR (status = 'revoked' AND revoked_at IS NOT NULL))");
         });
@@ -27,6 +28,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         entity.Property(source => source.TopicId).HasColumnName("topic_id");
         entity.Property(source => source.Name).HasColumnName("name");
         entity.Property(source => source.Type).HasColumnName("type");
+        entity.Property(source => source.EventTypes).HasColumnType("jsonb").HasColumnName("event_types");
         entity.Property(source => source.Configuration).HasColumnType("jsonb").HasColumnName("configuration");
         entity.Property(source => source.Verification).HasColumnType("jsonb").HasColumnName("verification");
         entity.Property(source => source.InputRequirements).HasColumnType("jsonb").HasColumnName("input_requirements");

@@ -249,6 +249,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
                 topic_id = topicId,
                 name = "guided-source",
                 type = "webhook",
+                event_types = new[] { "probe.created" },
                 configuration = new { },
                 verification = new
                 {

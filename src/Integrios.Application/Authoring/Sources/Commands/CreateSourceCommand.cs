@@ -19,7 +19,8 @@ public sealed record CreateSourceCommand(
     SourceVerificationInput? Verification,
     JsonElement? InputRequirements,
     SourceMapping? Mapping,
-    SourceEventIdentityRule? EventIdentityRule) : IRequest<SourceDto>;
+    SourceEventIdentityRule? EventIdentityRule,
+    IReadOnlyList<string>? EventTypes) : IRequest<SourceDto>;
 
 internal sealed class CreateSourceCommandHandler(
     ISourceRepository sourceRepository,
@@ -42,6 +43,7 @@ internal sealed class CreateSourceCommandHandler(
         SourceAuthoringValidator.Validate(command.Type, command.Configuration, command.Verification, connector);
         SourceAuthoringValidator.ValidateRuntimeContract(
             command.Type, command.InputRequirements, command.Mapping, command.EventIdentityRule, evaluator);
+        IReadOnlyList<string> eventTypes = SourceAuthoringValidator.ValidateEventTypes(command.EventTypes);
         SourceAuthoringValidator.ValidateEventIdentityRule(command.Type, command.EventIdentityRule);
 
         var now = DateTimeOffset.UtcNow;
@@ -56,6 +58,7 @@ internal sealed class CreateSourceCommandHandler(
             TopicId = command.TopicId,
             Name = command.Name.Trim(),
             Type = command.Type,
+            EventTypes = eventTypes,
             Configuration = configuration,
             Verification = SourceAuthoringValidator.ToVerification(command.Verification),
             InputRequirements = command.InputRequirements?.Clone(),

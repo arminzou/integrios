@@ -31,12 +31,13 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
         var configuration = new { };
-        var request = new { connector_id = connectorId, topic_id = topicId, name = "webhook-intake", type = "webhook", configuration };
+        var request = new { connector_id = connectorId, topic_id = topicId, name = "webhook-intake", type = "webhook", configuration, event_types = new[] { "Order.Created", "order.shipped" } };
 
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", request));
         create.StatusCode.ShouldBe(HttpStatusCode.Created);
         SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
         source.Configuration.TryGetProperty("callback_id", out _).ShouldBeTrue();
+        source.EventTypes.ShouldBe(["Order.Created", "order.shipped"]);
 
         SourceListDto listed = (await (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/sources", null))).Content.ReadFromJsonAsync<SourceListDto>(HostJson.Options))!;
         listed.Items.ShouldHaveSingleItem().Id.ShouldBe(source.Id);
@@ -60,6 +61,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -73,6 +75,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
         {
+            event_types = new[] { "probe.created" },
             name = "webhook-intake",
             configuration = new { },
             verification = (object?)null,
@@ -94,6 +97,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage eventApi = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -102,6 +106,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         }));
         HttpResponseMessage queue = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -128,6 +133,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -153,6 +159,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -183,6 +190,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -210,6 +218,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -266,6 +275,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -290,6 +300,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -307,6 +318,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
         {
+            event_types = new[] { "probe.created" },
             name = "webhook-intake",
             configuration = read.GetProperty("configuration"),
             verification = new
@@ -340,6 +352,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -367,6 +380,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -406,6 +420,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             topic_id = topicId,
             type = "event_api",
@@ -415,6 +430,32 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         body.RootElement.GetProperty("errors").GetProperty("name")[0].GetString().ShouldBe("Name is required.");
+    }
+
+    // The declarations are the Topic's only source of Event types for Subscriptions, so a Source that
+    // declares none, or one type twice in different case, is refused rather than stored.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("order.created,Order.Created")]
+    public async Task SourceAuthoring_RefusesMissingOrDuplicateEventTypes(string? declared)
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            event_types = declared?.Split(',', StringSplitOptions.RemoveEmptyEntries),
+            connector_id = connectorId,
+            name = "event-api-intake",
+            topic_id = topicId,
+            type = "event_api",
+            configuration = new { },
+        }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("errors").TryGetProperty("event_types", out _).ShouldBeTrue();
     }
 
     // A header kind names a header a provider request carries. A value that cannot be a header name —
@@ -432,6 +473,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -451,6 +493,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -469,6 +512,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid topicId = await CreateTopicAsync();
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -510,6 +554,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid topicId = await CreateTopicAsync();
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -521,6 +566,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
 
         HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
         {
+            event_types = new[] { "probe.created" },
             name = "renamed",
             configuration = new { },
             verification = (object?)null,
@@ -542,6 +588,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid topicId = await CreateTopicAsync();
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -569,6 +616,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid topicId = await CreateTopicAsync();
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -602,6 +650,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid topicId = await CreateTopicAsync();
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "webhook-intake",
             topic_id = topicId,
@@ -634,6 +683,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         Guid topicId = await CreateTopicAsync();
         HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
         {
+            event_types = new[] { "probe.created" },
             connector_id = connectorId,
             name = "api-intake",
             topic_id = topicId,
@@ -660,6 +710,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         input_requirements = (object?)null,
         mapping = (object?)null,
         event_identity_rule = eventIdentityRule,
+        event_types = new[] { "probe.created" },
     };
 
     private async Task<Guid> CreateTopicAsync()

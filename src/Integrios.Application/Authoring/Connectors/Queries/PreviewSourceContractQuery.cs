@@ -14,7 +14,8 @@ public sealed record PreviewSourceContractQuery(
     JsonElement? Mapping,
     JsonElement SampleInput,
     JsonElement? SampleContext,
-    SourceEventIdentityRule? EventIdentityRule) : IRequest<PreviewSourceContractResult>;
+    SourceEventIdentityRule? EventIdentityRule,
+    IReadOnlyList<string>? EventTypes = null) : IRequest<PreviewSourceContractResult>;
 
 // SourceEventId is what the rule selects from this sample, so the preview shows the Event as
 // Ingestion would accept it rather than the mapping output alone. Null where the rule reads
@@ -22,8 +23,9 @@ public sealed record PreviewSourceContractQuery(
 //
 // RefusedBy names the request field whose part of the check refused the sample, the way a
 // validation failure is keyed everywhere else in the Admin API: event_identity_rule, schema (the
-// Source's input requirements), mapping, or sample_input (with no mapping, the input is not itself
-// an Event). A caller explains a refusal from that rather than from the wording of the message.
+// Source's input requirements), mapping, sample_input (with no mapping, the input is not itself an
+// Event), or event_types (the output's Event type is not one the Source declares). A caller explains
+// a refusal from that rather than from the wording of the message.
 public sealed record PreviewSourceContractResult(
     string? Error,
     string? RefusedBy,
@@ -106,6 +108,14 @@ internal sealed class PreviewSourceContractQueryHandler(ITransformEvaluator eval
                 ? evaluator.Evaluate(spec, inputJson, query.SampleContext)
                 : inputJson;
             SourceContractOutput output = SourceMappingOutputValidator.Validate(outputJson);
+            // Intake refuses an Event type the Source does not declare, so the preview does too.
+            if (query.EventTypes is { } declared
+                && !declared.Contains(output.EventType, StringComparer.OrdinalIgnoreCase))
+            {
+                return Refused(
+                    "event_types",
+                    $"Event type '{output.EventType}' is not declared by this Source. Add it to the Source's Event types.");
+            }
             // Ingestion falls back to the identity the output carries when the rule yields none. A
             // broker message id yields none here only because a sample cannot carry one, so it does
             // not fall back.

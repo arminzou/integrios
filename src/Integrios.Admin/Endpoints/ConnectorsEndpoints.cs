@@ -128,7 +128,8 @@ public sealed class ConnectorsEndpoints : IEndpointGroup
                 request.Mapping,
                 request.SampleInput,
                 request.SampleContext,
-                request.EventIdentityRule),
+                request.EventIdentityRule,
+                request.EventTypes),
             cancellationToken);
         if (result.Error is not null)
             return Results.ValidationProblem(
@@ -145,6 +146,7 @@ internal sealed record SourceContractPreviewRequest(
     JsonElement? Mapping,
     JsonElement SampleInput,
     JsonElement? SampleContext,
-    SourceEventIdentityRule? EventIdentityRule);
+    SourceEventIdentityRule? EventIdentityRule,
+    IReadOnlyList<string>? EventTypes);
 
 internal sealed record ConnectorComposeRequest(string? Name, string? Description, string? Direction);

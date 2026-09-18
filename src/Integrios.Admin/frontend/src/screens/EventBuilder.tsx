@@ -13,7 +13,14 @@ import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { JsonEditor } from "../ui/jsonEditor";
 import { type CurlRequest, parseCurl } from "./curlImport";
-import { type EventTypeRule, emptyEventType, guidedExpression, guidedFrom, headerContext } from "./sourceMapping";
+import {
+  type EventTypeRule,
+  emptyEventType,
+  fixedEventType,
+  guidedExpression,
+  guidedFrom,
+  headerContext,
+} from "./sourceMapping";
 
 /// The Source's Event-identity rule, as the Admin API stores it. `null` is a real choice: the Source
 /// then deduplicates nothing. It travels with the draft rather than through the mapping, because the
@@ -173,6 +180,9 @@ type Check = {
   expression: string;
   schema: Record<string, unknown> | null;
   identity: EventIdentityRule | null;
+  /// The declarations the output type is checked against, or null when the mapping fixes the type
+  /// and the Source declares that one type by construction.
+  eventTypes: string[] | null;
   body: unknown;
   headers: Record<string, string> | null;
 };
@@ -183,11 +193,15 @@ type Check = {
 /// except to be checked. Only the generated expression and the identity rule return to the Source.
 export function EventBuilder({
   draft,
+  eventTypes,
   onUse,
   contractKey,
   sourceType,
 }: {
   draft: SourceContractDraft;
+  /// The Event types the Source form currently declares. Intake refuses any other type, so the
+  /// verdict does too; the Builder only reads them, because they are authored on the form.
+  eventTypes: string[];
   onUse: (draft: SourceContractDraft) => void;
   contractKey: string;
   sourceType: SourceInputType;
@@ -303,6 +317,7 @@ export function EventBuilder({
     expression: settled,
     schema: draft.schema ?? null,
     identity,
+    eventTypes: fixedEventType(settled) === undefined ? eventTypes : null,
     body: lastValidBody,
     headers: webhook ? lastValidHeaders : null,
   } satisfies Check);
@@ -322,6 +337,7 @@ export function EventBuilder({
             event_identity_rule: check.identity
               ? { kind: check.identity.kind, value: check.identity.value, allow_missing: check.identity.allowMissing }
               : null,
+            event_types: check.eventTypes,
           },
         }),
       );
@@ -715,6 +731,8 @@ function Rejected({ answer, sampleName, busy }: { answer: Answer; sampleName: st
         </p>
       ) : refusedBy === "sample_input" ? (
         <p className="m-0 text-xs">With no Event type rule, each {sampleName} must already be an Integrios Event.</p>
+      ) : refusedBy === "event_types" ? (
+        <p className="m-0 text-xs">Declare it under this Source's Event types, or change the Event type rule.</p>
       ) : null}
     </Callout>
   );
