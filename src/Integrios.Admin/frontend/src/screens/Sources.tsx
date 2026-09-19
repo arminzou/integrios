@@ -40,7 +40,7 @@ import {
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
 import { Filter, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
-import { useFilterParam } from "../ui/filters";
+import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, object, parseJson, sameJson } from "../ui/json";
 import {
@@ -566,6 +566,8 @@ function brokerFields(configuration: unknown): BrokerValues | null {
     : null;
 }
 
+const sourceFilters = ["type", "topic_id", "status"] as const;
+
 export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string; selectedSourceId?: string }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -576,10 +578,9 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
   }, [location.pathname, location.search, navigate, openCreate]);
   const connectorOptions = useConnectorOptions();
   const topicOptions = useTopicOptions(tenantId);
-  const [status, setStatus] = useFilterParam("status");
-  const [type, setType] = useFilterParam("type");
-  const [topicId, setTopicId] = useFilterParam("topic_id");
-  const applied = [status, type, topicId].filter(Boolean).length;
+  const filters = useListFilters(sourceFilters);
+  const { status, type, topic_id: topicId } = filters.values;
+  const applied = filters.applied;
   const list = useInfiniteQuery({
     queryKey: ["sources", tenantId, { status, type, topicId }],
     queryFn: ({ pageParam }) =>
@@ -616,12 +617,19 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
       </PageHeader>
 
       {narrowing ? (
-        <FilterBar applied={applied}>
+        <FilterBar applied={applied} onClear={filters.clear}>
+          <Filter id="source-type" label="Type" value={type} onChange={(value) => filters.set("type", value)}>
+            {sourceTypes.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </Filter>
           <Filter
             id="source-topic"
             label="Topic"
             value={topicId}
-            onChange={setTopicId}
+            onChange={(value) => filters.set("topic_id", value)}
             hint={topicOptions.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
           >
             {(topicOptions.data?.items ?? []).map((topic) => (
@@ -630,16 +638,9 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
               </SelectItem>
             ))}
           </Filter>
-          <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
+          <Filter id="source-status" label="Status" value={status} onChange={(value) => filters.set("status", value)}>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
-          </Filter>
-          <Filter id="source-type" label="Type" value={type} onChange={setType}>
-            {sourceTypes.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
           </Filter>
         </FilterBar>
       ) : null}

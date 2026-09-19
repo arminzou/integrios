@@ -29,7 +29,7 @@ import {
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
-import { useFilterParam } from "../ui/filters";
+import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, object, parseJson, sameJson } from "../ui/json";
 import {
@@ -389,6 +389,8 @@ function AuthenticationFields<TValues extends FieldValues>({
   );
 }
 
+const destinationFilters = ["name", "connector", "environment", "status"] as const;
+
 export function DestinationsScreen({
   tenantId,
   selectedDestinationId,
@@ -396,13 +398,11 @@ export function DestinationsScreen({
   tenantId: string;
   selectedDestinationId?: string;
 }) {
-  const [status, setStatus] = useFilterParam("status");
-  const [environment, setEnvironment] = useFilterParam("environment");
-  const [connector, setConnector] = useFilterParam("connector");
-  const [name, setName] = useFilterParam("name");
+  const filters = useListFilters(destinationFilters);
+  const { status, environment, connector, name } = filters.values;
   const connectors = useConnectorOptions();
   const destinationOptions = useDestinationOptions(tenantId);
-  const applied = [status, environment, connector, name].filter(Boolean).length;
+  const applied = filters.applied;
   // Environment is free text on a Destination, so there is no vocabulary to enumerate — the options
   // are the values this Tenant actually uses, read off the Destination list the screen already holds
   // for naming. ponytail: first hundred Destinations, which is what that read carries; a Tenant past
@@ -449,28 +449,53 @@ export function DestinationsScreen({
       </PageHeader>
 
       {narrowing ? (
-        <FilterBar applied={applied}>
-          <FilterSearch id="destination-name" label="Find by name" value={name} onChange={setName} />
-          <Filter id="destination-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
+        <FilterBar applied={applied} onClear={filters.clear}>
+          <FilterSearch
+            id="destination-name"
+            label="Name"
+            placeholder="Name contains…"
+            value={name}
+            onChange={(value) => filters.set("name", value)}
+          />
+          <Filter
+            id="destination-connector"
+            label="Connector"
+            value={connector}
+            onChange={(value) => filters.set("connector", value)}
+            hint={connectors.data?.next_cursor ? "Showing the first 100 Connectors." : undefined}
+          >
+            {(connectors.data?.items ?? []).map((option) => (
+              <SelectItem key={option.id} value={option.key}>
+                {option.key}
+              </SelectItem>
+            ))}
           </Filter>
           {/* The environments a Tenant actually uses, read off the rows it already has rather than
             from a fixed list: environment is free text on a Destination, so there is no vocabulary
             to enumerate. */}
-          <Filter id="destination-environment" label="Environment" value={environment} onChange={setEnvironment}>
+          <Filter
+            id="destination-environment"
+            label="Environment"
+            value={environment}
+            onChange={(value) => filters.set("environment", value)}
+            hint={
+              destinationOptions.data?.next_cursor ? "Showing environments from the first 100 Destinations." : undefined
+            }
+          >
             {environments.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>
             ))}
           </Filter>
-          <Filter id="destination-connector" label="Connector" value={connector} onChange={setConnector}>
-            {(connectors.data?.items ?? []).map((option) => (
-              <SelectItem key={option.id} value={option.key}>
-                {option.key}
-              </SelectItem>
-            ))}
+          <Filter
+            id="destination-status"
+            label="Status"
+            value={status}
+            onChange={(value) => filters.set("status", value)}
+          >
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
           </Filter>
         </FilterBar>
       ) : null}

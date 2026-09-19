@@ -24,7 +24,7 @@ import {
   WriteStatus,
 } from "../ui/controls";
 import { Filter } from "../ui/fields";
-import { useFilterParam } from "../ui/filters";
+import { useListFilters } from "../ui/filters";
 import { parseJson } from "../ui/json";
 import {
   CloseInspector,
@@ -44,10 +44,13 @@ import { ConnectorAuthoring } from "./ConnectorAuthoring";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
 
+const connectorFilters = ["direction"] as const;
+
 /// Connectors are deployment-wide rather than Tenant-scoped, so this screen carries no Tenant.
 export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?: string } = {}) {
   const navigate = useNavigate();
-  const [direction, setDirection] = useFilterParam("direction");
+  const filters = useListFilters(connectorFilters);
+  const { direction } = filters.values;
   const list = useInfiniteQuery({
     queryKey: ["connectors", { direction }],
     queryFn: ({ pageParam }) =>
@@ -63,7 +66,7 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
   // Whether there is a list to narrow yet. Until the read answers, neither the filter bar nor the
   // header's create action is rendered: an empty scope answers with the card that replaces the
   // table, carrying the action itself, and a screen that guessed first would retract them.
-  const narrowing = narrowable(list.isSuccess, connectors.length, direction ? 1 : 0);
+  const narrowing = narrowable(list.isSuccess, connectors.length, filters.applied);
 
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -81,92 +84,95 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
         Deployment-wide capability definitions. Sources and Destinations are built from these, per Tenant.
       </PageHeader>
 
-      <section className="flex flex-col gap-4">
-        {narrowing ? (
-          <FilterBar applied={(direction ? 1 : 0) as number}>
-            <Filter id="connector-direction" label="Direction" value={direction} onChange={setDirection}>
-              <SelectItem value="source">Source</SelectItem>
-              <SelectItem value="destination">Destination</SelectItem>
-              <SelectItem value="both">Both</SelectItem>
-            </Filter>
-          </FilterBar>
-        ) : null}
+      {narrowing ? (
+        <FilterBar applied={filters.applied} onClear={filters.clear}>
+          <Filter
+            id="connector-direction"
+            label="Direction"
+            value={direction}
+            onChange={(value) => filters.set("direction", value)}
+          >
+            <SelectItem value="source">Source</SelectItem>
+            <SelectItem value="destination">Destination</SelectItem>
+            <SelectItem value="both">Both</SelectItem>
+          </Filter>
+        </FilterBar>
+      ) : null}
 
-        <SplitView>
-          <SplitList>
-            <ListStatus
-              busy={list.isFetching}
-              loaded={list.isSuccess}
-              problem={asProblem(list.error)}
-              empty={connectors.length === 0}
-              applied={direction ? 1 : 0}
-              noun="Connectors"
-              emptyText="A deployment-wide capability definition. Sources and Destinations are built from these, per Tenant."
-              action={actions}
-            />
-            {connectors.length > 0 ? (
-              <TableCard
-                caption={`Connectors, newest first${appliedNote(direction ? 1 : 0)}`}
-                footer={
-                  <LoadMore
-                    noun="Connector"
-                    hasMore={list.hasNextPage}
-                    busy={list.isFetching}
-                    loaded={connectors.length}
-                    onLoadMore={() => void list.fetchNextPage()}
-                  />
-                }
-              >
-                <TableHeader>
-                  <TableRow>
-                    {/* The key is what an Operator writes in a manifest and what a Source or Destination is built
-                    from, so it names the row; the presentation name follows it. */}
-                    <TableHead scope="col">Key</TableHead>
-                    <TableHead scope="col">Name</TableHead>
-                    <TableHead scope="col">Direction</TableHead>
-                    <TableHead scope="col">Contract</TableHead>
+      <SplitView>
+        <SplitList>
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={connectors.length === 0}
+            applied={filters.applied}
+            noun="Connectors"
+            emptyText="A deployment-wide capability definition. Sources and Destinations are built from these, per Tenant."
+            action={actions}
+          />
+          {connectors.length > 0 ? (
+            <TableCard
+              caption={`Connectors, newest first${appliedNote(filters.applied)}`}
+              footer={
+                <LoadMore
+                  noun="Connector"
+                  hasMore={list.hasNextPage}
+                  busy={list.isFetching}
+                  loaded={connectors.length}
+                  onLoadMore={() => void list.fetchNextPage()}
+                />
+              }
+            >
+              <TableHeader>
+                <TableRow>
+                  {/* The key is what an Operator writes in a manifest and what a Source or Destination is built
+                  from, so it names the row; the presentation name follows it. */}
+                  <TableHead scope="col">Key</TableHead>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Direction</TableHead>
+                  <TableHead scope="col">Contract</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {connectors.map((connector) => (
+                  <TableRow
+                    key={connector.id}
+                    className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                    onClick={openRow}
+                  >
+                    <RowHeader>
+                      <NavLink
+                        className="-mx-3 block px-3 py-2 font-mono no-underline"
+                        to={`/connectors/${connector.id}`}
+                        end
+                      >
+                        {connector.key}
+                      </NavLink>
+                    </RowHeader>
+                    <TableCell>{connector.name}</TableCell>
+                    <TableCell>{connector.direction}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>v{connector.contract_version}</span>
+                        <RowChevron />
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {connectors.map((connector) => (
-                    <TableRow
-                      key={connector.id}
-                      className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
-                      onClick={openRow}
-                    >
-                      <RowHeader>
-                        <NavLink
-                          className="-mx-3 block px-3 py-2 font-mono no-underline"
-                          to={`/connectors/${connector.id}`}
-                          end
-                        >
-                          {connector.key}
-                        </NavLink>
-                      </RowHeader>
-                      <TableCell>{connector.name}</TableCell>
-                      <TableCell>{connector.direction}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-between gap-3">
-                          <span>v{connector.contract_version}</span>
-                          <RowChevron />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </TableCard>
-            ) : null}
-          </SplitList>
-
-          {selectedConnectorId ? (
-            <ConnectorInspector key={selectedConnectorId} connectorId={selectedConnectorId} />
-          ) : connectors.length > 0 ? (
-            <InspectorPlaceholder label="Connector detail">
-              Select a Connector to read its manifest and what it permits.
-            </InspectorPlaceholder>
+                ))}
+              </TableBody>
+            </TableCard>
           ) : null}
-        </SplitView>
-      </section>
+        </SplitList>
+
+        {selectedConnectorId ? (
+          <ConnectorInspector key={selectedConnectorId} connectorId={selectedConnectorId} />
+        ) : connectors.length > 0 ? (
+          <InspectorPlaceholder label="Connector detail">
+            Select a Connector to read its manifest and what it permits.
+          </InspectorPlaceholder>
+        ) : null}
+      </SplitView>
 
       <CreateSheet
         label="New Connector"

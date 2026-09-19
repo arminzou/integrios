@@ -248,9 +248,10 @@ it("applies the list filters through their controls and keeps them usable at 320
     await view.getByLabel("Name or slug", { exact: true }).fill("acme");
     await view.getByLabel("Name or slug", { exact: true }).press("Enter");
     await view.waitForURL("**/tenants?name=acme");
-    await view.getByLabel("Environment", { exact: true }).fill("production");
-    await view.getByLabel("Environment", { exact: true }).press("Enter");
-    await view.waitForURL("**environment=production");
+    // The first hundred Tenants name no environment here, so a URL value stays visible as itself.
+    await view.goto(`${origin}/tenants?environment=production`);
+    await view.getByRole("combobox", { name: "Environment" }).waitFor();
+    expect(await view.getByRole("combobox", { name: "Environment" }).textContent()).toContain("production");
     await view.setViewportSize({ width: 320, height: 900 });
     expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await view.goto(`${origin}/tenants/${tenantId}/sources`);

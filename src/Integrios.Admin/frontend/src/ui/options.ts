@@ -36,6 +36,15 @@ export function useTopicOptions(tenantId: string) {
   });
 }
 
+/// Tenants are deployment-wide, so this is one read for the deployment. The Environment filter
+/// offers the values in use among these.
+export function useTenantOptions() {
+  return useQuery({
+    queryKey: ["tenant-options"],
+    queryFn: () => call(() => api.GET("/admin/tenants", { params: { query: { limit } } })),
+  });
+}
+
 export function useConnectorOptions() {
   return useQuery({
     queryKey: ["connector-options"],

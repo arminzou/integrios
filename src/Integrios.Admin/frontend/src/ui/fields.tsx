@@ -265,7 +265,6 @@ export function FilterSearch({
   placeholder,
   value,
   onChange,
-  fullWidth = true,
 }: {
   id: string;
   /// The field the box matches; it is the box's accessible name.
@@ -274,7 +273,6 @@ export function FilterSearch({
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
-  fullWidth?: boolean;
 }) {
   const [typed, setTyped] = useState(value);
   const [seen, setSeen] = useState(value);
@@ -293,27 +291,24 @@ export function FilterSearch({
 
   return (
     <form
-      className={fullWidth ? searchFilterPill : filterPill}
+      className={searchFilterPill}
       data-applied={String(Boolean(value))}
       onSubmit={(event) => {
         event.preventDefault();
         commit();
       }}
     >
-      <Label htmlFor={id} className={fullWidth ? "sr-only" : "font-normal text-ink-secondary"}>
+      <Label htmlFor={id} className="sr-only">
         {label}
       </Label>
       <input
         id={id}
         type="search"
         value={typed}
-        placeholder={placeholder ?? (fullWidth ? label : "Any")}
+        placeholder={placeholder ?? label}
         onChange={(event) => setTyped(event.target.value)}
         onBlur={commit}
-        className={cn(
-          "min-w-0 appearance-none rounded-sm bg-transparent font-medium outline-none",
-          fullWidth ? "flex-1" : "focus-visible:ring-[3px] focus-visible:ring-ring/50",
-        )}
+        className={cn("min-w-0 appearance-none rounded-sm bg-transparent font-medium outline-none", "flex-1")}
       />
     </form>
   );

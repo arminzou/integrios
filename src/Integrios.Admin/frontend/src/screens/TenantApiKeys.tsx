@@ -27,7 +27,7 @@ import {
 } from "../ui/controls";
 import { BodyPanel } from "../ui/copy";
 import { Filter, Form, TextField } from "../ui/fields";
-import { useFilterParam } from "../ui/filters";
+import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import {
   CloseInspector,
@@ -58,6 +58,8 @@ const createSchema = z.object({
 
 type CreateValues = z.infer<typeof createSchema>;
 
+const apiKeyFilters = ["state"] as const;
+
 export function TenantApiKeysScreen({
   tenantId,
   selectedTenantApiKeyId,
@@ -66,7 +68,8 @@ export function TenantApiKeysScreen({
   selectedTenantApiKeyId?: string;
 }) {
   const [notice, setNotice] = useState("");
-  const [state, setState] = useFilterParam("state");
+  const filters = useListFilters(apiKeyFilters);
+  const { state } = filters.values;
   const navigate = useNavigate();
   const list = useInfiniteQuery({
     queryKey: ["tenant-api-keys", tenantId, { state }],
@@ -86,7 +89,7 @@ export function TenantApiKeysScreen({
   // Whether there is a list to narrow yet. Until the read answers, neither the filter bar nor the
   // header's create action is rendered: an empty scope answers with the card that replaces the
   // table, carrying the action itself, and a screen that guessed first would retract them.
-  const narrowing = narrowable(list.isSuccess, keys.length, state ? 1 : 0);
+  const narrowing = narrowable(list.isSuccess, keys.length, filters.applied);
 
   const [creating, setCreating] = useState(false);
   const create = <SheetButton label="New API key" expanded={creating} onOpen={() => setCreating(true)} />;
@@ -97,103 +100,106 @@ export function TenantApiKeysScreen({
         Tenant credentials for the intake endpoint. The token itself is shown once, at creation.
       </PageHeader>
 
-      <section className="flex flex-col gap-4">
-        {narrowing ? (
-          <FilterBar applied={state ? 1 : 0}>
-            <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="expired">Expired</SelectItem>
-            </Filter>
-          </FilterBar>
-        ) : null}
+      {narrowing ? (
+        <FilterBar applied={filters.applied} onClear={filters.clear}>
+          <Filter
+            id="tenant-api-key-state"
+            label="State"
+            value={state}
+            onChange={(value) => filters.set("state", value)}
+          >
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="expired">Expired</SelectItem>
+          </Filter>
+        </FilterBar>
+      ) : null}
 
-        <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
-        <SplitView>
-          <SplitList>
-            <ListStatus
-              busy={list.isFetching}
-              loaded={list.isSuccess}
-              problem={asProblem(list.error)}
-              empty={keys.length === 0}
-              applied={state ? 1 : 0}
-              noun="API keys"
-              emptyText="Tenant credentials for the intake endpoint. Without one, nothing can post an Event to this Tenant."
-              action={create}
-            />
-            {keys.length > 0 ? (
-              <TableCard
-                caption={`API keys, newest first${appliedNote(state ? 1 : 0)}`}
-                footer={
-                  <LoadMore
-                    noun="API key"
-                    hasMore={list.hasNextPage}
-                    busy={list.isFetching}
-                    loaded={keys.length}
-                    onLoadMore={() => void list.fetchNextPage()}
-                  />
-                }
-              >
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">Name</TableHead>
-                    <TableHead scope="col">Prefix</TableHead>
-                    <TableHead scope="col">State</TableHead>
-                    <TableHead scope="col">Last used</TableHead>
+      <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
+      <SplitView>
+        <SplitList>
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={keys.length === 0}
+            applied={filters.applied}
+            noun="API keys"
+            emptyText="Tenant credentials for the intake endpoint. Without one, nothing can post an Event to this Tenant."
+            action={create}
+          />
+          {keys.length > 0 ? (
+            <TableCard
+              caption={`API keys, newest first${appliedNote(filters.applied)}`}
+              footer={
+                <LoadMore
+                  noun="API key"
+                  hasMore={list.hasNextPage}
+                  busy={list.isFetching}
+                  loaded={keys.length}
+                  onLoadMore={() => void list.fetchNextPage()}
+                />
+              }
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Prefix</TableHead>
+                  <TableHead scope="col">State</TableHead>
+                  <TableHead scope="col">Last used</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {keys.map((key) => (
+                  <TableRow
+                    key={key.id}
+                    className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                    onClick={openRow}
+                  >
+                    <RowHeader>
+                      <NavLink
+                        className="-mx-3 block px-3 py-2 no-underline"
+                        to={`/tenants/${tenantId}/tenant-api-keys/${key.id}`}
+                        end
+                      >
+                        {key.name}
+                      </NavLink>
+                    </RowHeader>
+                    {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
+                    <TableCell className="font-mono">{key.key_prefix}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={key.state} />
+                    </TableCell>
+                    <TableCell className="text-ink-secondary">
+                      <div className="flex items-center justify-between gap-3">
+                        {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}
+                        <RowChevron />
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {keys.map((key) => (
-                    <TableRow
-                      key={key.id}
-                      className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
-                      onClick={openRow}
-                    >
-                      <RowHeader>
-                        <NavLink
-                          className="-mx-3 block px-3 py-2 no-underline"
-                          to={`/tenants/${tenantId}/tenant-api-keys/${key.id}`}
-                          end
-                        >
-                          {key.name}
-                        </NavLink>
-                      </RowHeader>
-                      {/* Only the prefix is ever stored or shown. The key itself exists once, at creation. */}
-                      <TableCell className="font-mono">{key.key_prefix}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={key.state} />
-                      </TableCell>
-                      <TableCell className="text-ink-secondary">
-                        <div className="flex items-center justify-between gap-3">
-                          {key.last_used_at ? <Timestamp value={key.last_used_at} /> : "Never used"}
-                          <RowChevron />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </TableCard>
-            ) : null}
-          </SplitList>
-
-          {selectedTenantApiKeyId ? (
-            <TenantApiKeyInspector
-              key={selectedTenantApiKeyId}
-              tenantId={tenantId}
-              tenantApiKeyId={selectedTenantApiKeyId}
-              onRevoked={(name) => {
-                // A revoked key vanishes from authoring reads, so its detail closes rather than
-                // re-reading into a not-found panel.
-                setNotice(`${name} revoked.`);
-                navigate(`/tenants/${tenantId}/tenant-api-keys`);
-              }}
-            />
-          ) : keys.length > 0 ? (
-            <InspectorPlaceholder label="Tenant API key detail">
-              Select a key to read when it was last used and to revoke it.
-            </InspectorPlaceholder>
+                ))}
+              </TableBody>
+            </TableCard>
           ) : null}
-        </SplitView>
-      </section>
+        </SplitList>
+
+        {selectedTenantApiKeyId ? (
+          <TenantApiKeyInspector
+            key={selectedTenantApiKeyId}
+            tenantId={tenantId}
+            tenantApiKeyId={selectedTenantApiKeyId}
+            onRevoked={(name) => {
+              // A revoked key vanishes from authoring reads, so its detail closes rather than
+              // re-reading into a not-found panel.
+              setNotice(`${name} revoked.`);
+              navigate(`/tenants/${tenantId}/tenant-api-keys`);
+            }}
+          />
+        ) : keys.length > 0 ? (
+          <InspectorPlaceholder label="Tenant API key detail">
+            Select a key to read when it was last used and to revoke it.
+          </InspectorPlaceholder>
+        ) : null}
+      </SplitView>
 
       <CreateSheet
         label="New API key"
