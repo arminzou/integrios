@@ -834,6 +834,11 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
               </Link>
             </Button>
           </div>
+        ) : current.status === "unrouted" && current.unrouted_has_current_match ? (
+          <p className="m-0 text-[13px]">
+            A matching active Subscription now exists. This retained Event remains unrouted; later matching Events use
+            the current routing.
+          </p>
         ) : current.status === "unrouted" ? (
           // Historical-only: the Event stays as it was, but current configuration can no longer
           // route its type, so a Subscription for it could not be authored.

@@ -25,22 +25,38 @@ public sealed class EventDiagnosticsActionsTests(AdminApiFixture fixture) : Admi
     }
 
     [Fact]
-    public async Task Diagnostics_ReportWhetherAnUnroutedEventCanStillBeRouted()
+    public async Task Diagnostics_DistinguishCurrentGapFromRestoredAndHistoricalRouting()
     {
         var (routedEventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
         var (sourceId, topicId) = await OriginOfAsync(routedEventId);
-        // The seeded Source declares recovery.test; the match ignores case, as acceptance does.
-        Guid actionable = await InsertEventAsync(sourceId, topicId, "Recovery.Test", "unrouted");
+        // The seeded Source and active Subscription both match recovery.test, ignoring case.
+        Guid remediatedEvent = await InsertEventAsync(sourceId, topicId, "Recovery.Test", "unrouted");
         Guid undeclared = await InsertEventAsync(sourceId, topicId, "recovery.retired", "unrouted");
 
-        (await DiagnosticsAsync(client, actionable)).GetProperty("unrouted_actionable").GetBoolean().ShouldBeTrue();
-        (await DiagnosticsAsync(client, undeclared)).GetProperty("unrouted_actionable").GetBoolean().ShouldBeFalse();
-        (await DiagnosticsAsync(client, routedEventId)).GetProperty("unrouted_actionable").GetBoolean().ShouldBeFalse();
+        JsonElement remediated = await DiagnosticsAsync(client, remediatedEvent);
+        remediated.GetProperty("unrouted_actionable").GetBoolean().ShouldBeFalse();
+        remediated.GetProperty("unrouted_has_current_match").GetBoolean().ShouldBeTrue();
+        JsonElement historical = await DiagnosticsAsync(client, undeclared);
+        historical.GetProperty("unrouted_actionable").GetBoolean().ShouldBeFalse();
+        historical.GetProperty("unrouted_has_current_match").GetBoolean().ShouldBeFalse();
+        JsonElement routed = await DiagnosticsAsync(client, routedEventId);
+        routed.GetProperty("unrouted_actionable").GetBoolean().ShouldBeFalse();
+        routed.GetProperty("unrouted_has_current_match").GetBoolean().ShouldBeFalse();
+
+        await ExecuteAsync("UPDATE subscriptions SET status = 'inactive' WHERE topic_id = @TopicId", new { TopicId = topicId });
+        JsonElement actionable = await DiagnosticsAsync(client, remediatedEvent);
+        actionable.GetProperty("unrouted_actionable").GetBoolean().ShouldBeTrue();
+        actionable.GetProperty("unrouted_has_current_match").GetBoolean().ShouldBeFalse();
+
+        await ExecuteAsync("UPDATE subscriptions SET status = 'active' WHERE topic_id = @TopicId", new { TopicId = topicId });
+        (await DiagnosticsAsync(client, remediatedEvent))
+            .GetProperty("unrouted_has_current_match").GetBoolean().ShouldBeTrue();
 
         // Deleting the only declaring Source leaves the Event readable but historical-only.
         await ExecuteAsync($"UPDATE sources SET deleted_at = {fixture.Now} WHERE id = @Id", new { Id = sourceId });
-        JsonElement historical = await DiagnosticsAsync(client, actionable);
+        historical = await DiagnosticsAsync(client, remediatedEvent);
         historical.GetProperty("unrouted_actionable").GetBoolean().ShouldBeFalse();
+        historical.GetProperty("unrouted_has_current_match").GetBoolean().ShouldBeFalse();
         historical.GetProperty("status").GetString().ShouldBe("unrouted");
     }
 

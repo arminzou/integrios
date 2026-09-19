@@ -470,6 +470,16 @@ describe("Event inspector actions", () => {
     expect(screen.queryByRole("link", { name: "Create Subscription" })).toBeNull();
   });
 
+  it("explains when current routing has remedied a retained unrouted Event", async () => {
+    stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: false, unrouted_has_current_match: true })));
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+
+    expect(await screen.findByText(/matching active Subscription now exists/)).toBeTruthy();
+    expect(screen.getByText(/retained Event remains unrouted/)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Create Subscription" })).toBeNull();
+  });
+
   it("names a deleted Topic as the reason a historical-only Event cannot be routed", async () => {
     stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: false, topic_deleted: true })));
 
