@@ -926,10 +926,11 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_topics_tenant_id_id");
 
-                    b.HasAlternateKey("TenantId", "Key")
-                        .HasName("uq_topics_tenant_key");
-
                     b.HasIndex(new[] { "TenantId" }, "idx_topics_tenant_id");
+
+                    b.HasIndex(new[] { "TenantId", "Key" }, "uq_topics_tenant_key")
+                        .IsUnique()
+                        .HasFilter("(deleted_at IS NULL)");
 
                     b.ToTable("topics", null, t =>
                         {

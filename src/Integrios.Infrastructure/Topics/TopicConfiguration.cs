@@ -20,7 +20,11 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
 
         entity.HasAlternateKey(e => new { e.TenantId, e.Id }).HasName("uq_topics_tenant_id_id");
 
-        entity.HasAlternateKey(e => new { e.TenantId, e.Key }).HasName("uq_topics_tenant_key");
+        // Only live Topics hold their key: a deleted Topic releases it, and history reaches the
+        // tombstone by identifier rather than by key.
+        entity.HasIndex(e => new { e.TenantId, e.Key }, "uq_topics_tenant_key")
+            .IsUnique()
+            .HasFilter("(deleted_at IS NULL)");
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()

@@ -19,12 +19,19 @@ internal sealed class SetSubscriptionStatusCommandHandler(
 {
     public async Task<SubscriptionDto?> Handle(SetSubscriptionStatusCommand command, CancellationToken cancellationToken)
     {
+        // The Topic lease comes first, in the same order Create and Update take theirs: while it is
+        // held no Update can move this Subscription to another Destination, so the Destination read
+        // below is the one the status change is judged against.
+        await using IAsyncDisposable topicLease = await authoringLock.AcquireAsync(
+            AuthoringResource.Topic,
+            [command.TopicId],
+            cancellationToken);
         Subscription? existing = await subscriptionRepository.GetByIdAsync(
             command.TenantId, command.TopicId, command.Id, cancellationToken);
         if (existing is null)
             return null;
 
-        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+        await using IAsyncDisposable destinationLease = await authoringLock.AcquireAsync(
             AuthoringResource.Destination,
             [existing.DestinationId], cancellationToken);
         if (command.Status == OperationalStatus.Active)

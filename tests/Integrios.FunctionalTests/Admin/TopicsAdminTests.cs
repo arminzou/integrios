@@ -117,4 +117,25 @@ public sealed class TopicsAdminTests(AdminApiFixture fixture) : AdminApiTestBase
         updated.Name.ShouldBe("Order events");
         updated.Key.ShouldBe("order-events");
     }
+
+    // A live Topic holds its key, but a deleted one releases it: history reaches the tombstone by
+    // identifier, so re-creating the key yields a new Topic rather than a conflict with a hidden one.
+    [Fact]
+    public async Task Create_ReusesTheKeyOfADeletedTopicButNotOfALiveOne()
+    {
+        string path = $"/admin/tenants/{fixture.TenantId}/topics";
+        HttpResponseMessage first = await client.SendAsync(AdminRequest(HttpMethod.Post, path, new { key = "orders" }));
+        AdminTopicResponse original = (await first.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;
+
+        (await client.SendAsync(AdminRequest(HttpMethod.Post, path, new { key = "orders" })))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        (await client.SendAsync(AdminRequest(HttpMethod.Delete, $"{path}/{original.Id}")))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        HttpResponseMessage recreated = await client.SendAsync(AdminRequest(HttpMethod.Post, path, new { key = "orders" }));
+        recreated.StatusCode.ShouldBe(HttpStatusCode.Created);
+        AdminTopicResponse replacement = (await recreated.Content.ReadFromJsonAsync<AdminTopicResponse>(HostJson.Options))!;
+        replacement.Id.ShouldNotBe(original.Id);
+    }
 }

@@ -49,6 +49,52 @@ public sealed class AuthoringLockTests(AdminApiFixture fixture) : SubscriptionAd
             (await SelectedEventTypesAsync(responses[1])).ShouldBeSubsetOf(union);
     }
 
+    // Activation judges the Subscription's Destination, so it must not race an Update that moves the
+    // Subscription elsewhere. Repeated rounds give the interleaving room to happen.
+    [Fact]
+    public async Task ConcurrentAuthoring_NeverLeavesAnActiveSubscriptionOnAnInactiveDestination()
+    {
+        AdminTopicResponse topic = await CreateTopicAsync("payments");
+        HttpResponseMessage createdDestination = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new
+            {
+                connector_id = Fixture.HttpConnectorId,
+                name = "inactive-target",
+                configuration = new { base_uri = "http://localhost:5054/sink" },
+            }));
+        Guid inactiveDestination = await CreatedIdAsync(createdDestination);
+        (await client.SendAsync(AdminRequest(
+                HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{inactiveDestination}/deactivate")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        for (int round = 0; round < 10; round++)
+        {
+            SubscriptionDto subscription = await CreateSubscriptionAsync(topic.Id, $"erp-{round}", "payment.created");
+            string path = $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{subscription.Id}";
+
+            await Task.WhenAll(
+                client.SendAsync(AdminRequest(HttpMethod.Put, path, new
+                {
+                    name = $"erp-{round}",
+                    event_types = new[] { "payment.created" },
+                    destination_id = inactiveDestination,
+                    order_index = 10,
+                    mapping = (object?)null,
+                    http_delivery = (object?)null,
+                    http_success = (object?)null,
+                    description = (string?)null,
+                })),
+                client.SendAsync(AdminRequest(HttpMethod.Post, $"{path}/activate")));
+
+            SubscriptionDto final = (await (await client.SendAsync(AdminRequest(HttpMethod.Get, path)))
+                .Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!;
+            if (final.Status == "active")
+                final.DestinationId.ShouldNotBe(inactiveDestination, $"round {round}");
+        }
+    }
+
     private async Task<AdminTopicResponse> CreateBareTopicAsync(string key)
     {
         HttpResponseMessage response = await client.SendAsync(AdminRequest(
