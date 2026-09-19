@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Integrios.Migrations.SqlServer.Migrations
 {
     [DbContext(typeof(IntegriosDbContext))]
-    [Migration("20260918212342_ReplaceSubscriptionMatchRulesWithEventTypes")]
-    partial class ReplaceSubscriptionMatchRulesWithEventTypes
+    [Migration("20260919045444_AdoptSourceDeclaredEventTypesAndLifecycle")]
+    partial class AdoptSourceDeclaredEventTypesAndLifecycle
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -68,13 +68,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("name");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("N'active'");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -211,6 +204,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("deleted_at");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
@@ -226,10 +223,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("N'active'");
+                        .HasColumnName("status");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier")
@@ -630,6 +625,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("deleted_at");
+
                     b.Property<string>("EventIdentityRule")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("event_identity_rule");
@@ -657,16 +656,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("revision");
 
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("datetimeoffset")
-                        .HasColumnName("revoked_at");
-
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("N'active'");
+                        .HasColumnName("status");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier")
@@ -709,9 +702,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                             t.HasCheckConstraint("ck_sources_event_types_array", "ISJSON(event_types, ARRAY) = 1");
 
-                            t.HasCheckConstraint("ck_sources_revoked_at", "((status = 'active' AND revoked_at IS NULL) OR (status = 'revoked' AND revoked_at IS NOT NULL))");
-
-                            t.HasCheckConstraint("ck_sources_status", "status IN ('active', 'revoked')");
+                            t.HasCheckConstraint("ck_sources_status", "status IN ('active', 'inactive')");
 
                             t.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'broker')");
                         });
@@ -729,6 +720,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("deleted_at");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
@@ -743,7 +738,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("event_types");
 
                     b.Property<string>("HttpDelivery")
-                        .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("http_delivery")
@@ -770,10 +764,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("N'active'");
+                        .HasColumnName("status");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier")
@@ -798,7 +790,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         {
                             t.HasCheckConstraint("ck_subscriptions_event_types_array", "ISJSON(event_types, ARRAY) = 1");
 
-                            t.HasCheckConstraint("ck_subscriptions_http_delivery_json", "ISJSON(http_delivery, VALUE) = 1");
+                            t.HasCheckConstraint("ck_subscriptions_http_delivery_json", "http_delivery IS NULL OR ISJSON(http_delivery, VALUE) = 1");
 
                             t.HasCheckConstraint("ck_subscriptions_http_success_json", "http_success IS NULL OR ISJSON(http_success, OBJECT) = 1");
 
@@ -904,13 +896,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("datetimeoffset")
                         .HasColumnName("revoked_at");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("N'active'");
-
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("tenant_id");
@@ -941,6 +926,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("deleted_at");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
@@ -954,13 +943,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("name");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("N'active'");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier")
@@ -978,10 +960,11 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("uq_topics_tenant_id_id");
 
-                    b.HasAlternateKey("TenantId", "Key")
-                        .HasName("uq_topics_tenant_key");
-
                     b.HasIndex(new[] { "TenantId" }, "idx_topics_tenant_id");
+
+                    b.HasIndex(new[] { "TenantId", "Key" }, "uq_topics_tenant_key")
+                        .IsUnique()
+                        .HasFilter("(deleted_at IS NULL)");
 
                     b.ToTable("topics", null, t =>
                         {

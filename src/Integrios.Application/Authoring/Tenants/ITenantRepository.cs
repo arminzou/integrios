@@ -11,6 +11,5 @@ public interface ITenantRepository
     Task<(IReadOnlyList<Tenant> Items, string? NextCursor)> ListAsync(
         OperationalStatus? status, string? environment, string? name, string? afterCursor, int limit, CancellationToken cancellationToken);
     Task<Tenant?> UpdateAsync(Guid id, string name, string? description, string? environment, CancellationToken cancellationToken);
-    Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken);
-    Task<bool> ActivateAsync(Guid id, CancellationToken cancellationToken);
+    Task<bool> SetStatusAsync(Guid id, OperationalStatus status, CancellationToken cancellationToken);
 }

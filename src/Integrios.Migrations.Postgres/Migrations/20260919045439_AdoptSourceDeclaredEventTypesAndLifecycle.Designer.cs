@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Integrios.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(IntegriosDbContext))]
-    [Migration("20260919042240_ReleaseDeletedTopicKeys")]
-    partial class ReleaseDeletedTopicKeys
+    [Migration("20260919045439_AdoptSourceDeclaredEventTypesAndLifecycle")]
+    partial class AdoptSourceDeclaredEventTypesAndLifecycle
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

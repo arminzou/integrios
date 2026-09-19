@@ -4,7 +4,7 @@ namespace Integrios.Application.Authoring.Topics;
 public sealed record SourceDeclaration(Guid SourceId, Guid TopicId, IReadOnlyList<string> EventTypes);
 
 /// One Subscription's Event-type selection, read for the Topic it routes from.
-public sealed record SubscriptionSelection(Guid SubscriptionId, string Name, IReadOnlyList<string> EventTypes);
+public sealed record SubscriptionSelection(string Name, IReadOnlyList<string> EventTypes);
 
 /// A Topic owns no Event types. It exposes the union of what its Sources declare, and Subscriptions on
 /// it select from that union, so these rules are the only place the two meet.

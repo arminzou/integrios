@@ -36,12 +36,11 @@ internal static class SubscriptionAuthoringRules
     {
         if (eventTypes is null || eventTypes.Count == 0)
             throw new SubscriptionValidationException("Select at least one Event type to route.", "event_types");
+        // Names need no floor here: SelectFromTopic admits only a type some Source declared, and every
+        // declaration already met it. Two spellings of one type would still select it twice.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string? eventType in eventTypes)
         {
-            // A Subscription matching a value no Event can carry would wait for nothing, silently.
-            if (EventTypeName.Problem(eventType) is { } problem)
-                throw new SubscriptionValidationException($"Event type {problem}.", "event_types");
             if (!seen.Add(eventType!))
                 throw new SubscriptionValidationException($"Event type '{eventType}' is selected more than once.", "event_types");
         }

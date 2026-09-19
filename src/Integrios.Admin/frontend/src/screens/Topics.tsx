@@ -73,7 +73,7 @@ const optional = (text: string) => text.trim() || null;
 
 export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; selectedTopicId?: string }) {
   const [name, setName] = useFilterParam("name");
-  const applied = [name].filter(Boolean).length;
+  const applied = name ? 1 : 0;
   const list = useInfiniteQuery({
     queryKey: ["topics", tenantId, { name }],
     queryFn: ({ pageParam }) =>

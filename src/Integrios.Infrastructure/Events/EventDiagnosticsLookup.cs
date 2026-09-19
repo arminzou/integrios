@@ -28,12 +28,8 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         string limit = sqlServer ? string.Empty : "LIMIT 1;";
         string payload = sqlServer ? "payload" : "payload::text";
         string metadata = sqlServer ? "metadata" : "metadata::text";
-        string sourceDeleted = sqlServer
-            ? "CAST(CASE WHEN s.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
-            : "(s.deleted_at IS NOT NULL)";
-        string topicDeleted = sqlServer
-            ? "CAST(CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
-            : "(t.deleted_at IS NOT NULL)";
+        string sourceDeleted = Deleted("s", sqlServer);
+        string topicDeleted = Deleted("t", sqlServer);
         string topicKey = sqlServer ? "t.[key]" : "t.key";
 
         var row = await connection.QuerySingleOrDefaultAsync<EventRow>(
@@ -69,12 +65,8 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         if (row is null)
             return null;
 
-        string subscriptionDeleted = sqlServer
-            ? "CAST(CASE WHEN s.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
-            : "(s.deleted_at IS NOT NULL)";
-        string destinationDeleted = sqlServer
-            ? "CAST(CASE WHEN d.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
-            : "(d.deleted_at IS NOT NULL)";
+        string subscriptionDeleted = Deleted("s", sqlServer);
+        string destinationDeleted = Deleted("d", sqlServer);
         var deliveries = await connection.QueryAsync<DeliveryRow>(
             new CommandDefinition(
                 $"""
@@ -185,6 +177,11 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
 
     // Stored JSON is returned as text and reparsed rather than passed through as a string, so the
     // Admin response carries it as JSON an Operator can read instead of an escaped blob.
+    // SQL Server has no boolean expression to select, so the flag is cast from a CASE.
+    private static string Deleted(string alias, bool sqlServer) => sqlServer
+        ? $"CAST(CASE WHEN {alias}.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
+        : $"({alias}.deleted_at IS NOT NULL)";
+
     private static JsonElement? Parse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))

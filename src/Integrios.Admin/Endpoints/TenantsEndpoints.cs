@@ -84,23 +84,17 @@ public sealed class TenantsEndpoints : IEndpointGroup
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
-    private static async Task<IResult> ActivateTenant(
-        Guid id,
-        IMediator mediator,
-        CancellationToken cancellationToken)
-    {
-        bool activated = await mediator.Send(new ActivateTenantCommand(id), cancellationToken);
-        return activated ? Results.Ok() : Results.NotFound();
-    }
+    private static Task<IResult> ActivateTenant(Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        SetStatus(id, OperationalStatus.Active, mediator, cancellationToken);
 
-    private static async Task<IResult> DeactivateTenant(
-        Guid id,
-        IMediator mediator,
-        CancellationToken cancellationToken)
-    {
-        bool deactivated = await mediator.Send(new DeactivateTenantCommand(id), cancellationToken);
-        return deactivated ? Results.Ok() : Results.NotFound();
-    }
+    private static Task<IResult> DeactivateTenant(Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        SetStatus(id, OperationalStatus.Inactive, mediator, cancellationToken);
+
+    private static async Task<IResult> SetStatus(
+        Guid id, OperationalStatus status, IMediator mediator, CancellationToken cancellationToken) =>
+        await mediator.Send(new SetTenantStatusCommand(id, status), cancellationToken)
+            ? Results.Ok()
+            : Results.NotFound();
 }
 
 internal sealed record CreateTenantRequest(string? Slug, string? Name, string? Environment, string? Description);

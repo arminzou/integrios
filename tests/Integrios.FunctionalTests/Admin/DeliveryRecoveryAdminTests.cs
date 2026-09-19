@@ -113,11 +113,13 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         {
             (await client.SendAsync(AdminRequest(HttpMethod.Get, path))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         }
+        // A deleted Topic releases its key; history below must still resolve to the tombstone, not
+        // to the new Topic that now holds the same key.
         (await client.SendAsync(AdminRequest(
                 HttpMethod.Post,
                 $"/admin/tenants/{fixture.TenantId}/topics",
                 new { key = resources.TopicKey })))
-            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
 
         EventDiagnosticsDto history = (await (await client.SendAsync(AdminRequest(
                 HttpMethod.Get,

@@ -172,7 +172,7 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
         Guid tenantId, Guid topicId, CancellationToken ct) =>
         await context.Subscriptions.AsNoTracking()
             .Where(subscription => subscription.TenantId == tenantId && subscription.TopicId == topicId)
-            .Select(subscription => new SubscriptionSelection(subscription.Id, subscription.Name, subscription.EventTypes))
+            .Select(subscription => new SubscriptionSelection(subscription.Name, subscription.EventTypes))
             .ToListAsync(ct);
 
     public async Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken ct)
