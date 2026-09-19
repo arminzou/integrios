@@ -1,3 +1,4 @@
+using Integrios.Application.Authoring;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using MediatR;
@@ -20,7 +21,7 @@ internal sealed class SetDestinationStatusCommandHandler(
         if (command.Status == EnablementStatus.Disabled
             && await repository.HasActiveSubscriptionsAsync(command.TenantId, command.Id, cancellationToken))
         {
-            throw new DestinationValidationException(
+            throw new AuthoringConflictException(
                 "The Destination cannot be disabled while Enabled Subscriptions reference it.");
         }
 

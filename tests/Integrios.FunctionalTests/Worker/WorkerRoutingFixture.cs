@@ -213,6 +213,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public Task DisableSourceAsync() =>
         ExecuteAsync("UPDATE sources SET status='disabled' WHERE id=@SourceId", new { SourceId });
 
+    public Task SetLedgerSubscriptionStatusAsync(string status) =>
+        ExecuteAsync("UPDATE subscriptions SET status=@Status WHERE name='to-ledger'", new { Status = status });
+
+    public Task SetLedgerDestinationStatusAsync(string status) =>
+        ExecuteAsync("UPDATE destinations SET status=@Status WHERE id=@LedgerDestinationId", new { Status = status, LedgerDestinationId });
+
     public Task<string?> GetEventStatusAsync(Guid eventId) =>
         ScalarAsync<string?>("SELECT status FROM events WHERE id=@Id", new { Id = eventId });
 

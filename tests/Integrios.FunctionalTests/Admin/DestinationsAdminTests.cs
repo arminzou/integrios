@@ -23,7 +23,7 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         HttpResponseMessage refused = await client.SendAsync(AdminRequest(
             HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/disable"));
 
-        refused.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("enabled");
 
         // Releasing the reference has to let it through, or the assertion above would hold for a

@@ -45,6 +45,38 @@ public sealed class WorkerRouteMatchingTests : IClassFixture<WorkerRoutingFixtur
     }
 
     [Fact]
+    public async Task Worker_DisabledSubscriptionCreatesNoBacklogOrCatchUp()
+    {
+        await fixture.SetLedgerSubscriptionStatusAsync("disabled");
+        Guid earlierEventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
+        (await fixture.GetEventDeliveriesAsync(earlierEventId)).ShouldBeEmpty();
+        (await fixture.GetEventStatusAsync(earlierEventId)).ShouldBe("unrouted");
+
+        await fixture.SetLedgerSubscriptionStatusAsync("enabled");
+        (await fixture.RunFanoutBatchAsync()).ShouldBe(0);
+        (await fixture.GetEventDeliveriesAsync(earlierEventId)).ShouldBeEmpty();
+
+        Guid laterEventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
+        (await fixture.GetEventDeliveriesAsync(laterEventId)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Worker_ExistingDeliveryContinuesAfterSubscriptionAndDestinationAreDisabled()
+    {
+        Guid eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+        (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
+        await fixture.SetLedgerSubscriptionStatusAsync("disabled");
+        await fixture.SetLedgerDestinationStatusAsync("disabled");
+
+        (await fixture.RunDeliveryBatchAsync()).ShouldBe(1);
+
+        (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Status.ShouldBe("succeeded");
+    }
+
+    [Fact]
     public async Task Worker_SubscriptionMatchingSelectsByEventType_CorrectSinkReceivesDelivery()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.authorized");

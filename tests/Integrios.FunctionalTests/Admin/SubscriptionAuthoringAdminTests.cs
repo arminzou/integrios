@@ -241,6 +241,66 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Enable_OnADisabledDestination_ReturnsConflict()
+    {
+        var topic = await CreateTopicAsync("disabled-destination-enable");
+        var created = await CreateSubscriptionAsync(topic.Id, "cannot-enable", "payment.created");
+        await SetDestinationStatusAsync(Fixture.DestinationId, "disabled");
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/enable"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        HttpResponseMessage read = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}"));
+        (await read.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!
+            .Status.ShouldBe("disabled");
+    }
+
+    [Fact]
+    public async Task Update_EnabledSubscriptionOntoDisabledDestination_ReturnsConflict()
+    {
+        var topic = await CreateTopicAsync("disabled-destination-move");
+        var created = await CreateSubscriptionAsync(topic.Id, "cannot-move", "payment.created");
+        HttpResponseMessage destinationResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new
+            {
+                connector_id = Fixture.HttpConnectorId,
+                name = "disabled-target",
+                configuration = new { base_uri = "http://localhost:5054/disabled-target" },
+            }));
+        destinationResponse.EnsureSuccessStatusCode();
+        Guid disabledDestinationId = (await destinationResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetGuid();
+        await SetDestinationStatusAsync(disabledDestinationId, "disabled");
+        (await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/enable")))
+            .EnsureSuccessStatusCode();
+
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Put,
+            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}",
+            new
+            {
+                name = "cannot-move",
+                event_types = new[] { "payment.created" },
+                destination_id = disabledDestinationId,
+                order_index = 10,
+                mapping = (object?)null,
+                http_delivery = (object?)null,
+                http_success = (object?)null,
+                description = (string?)null,
+            }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
     // Disabling pauses routing; it does not freeze the configuration, so the Operator can fix what
     // made them pause it before enabling it again.
     [Theory]

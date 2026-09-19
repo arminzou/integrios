@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.Topics;
@@ -63,7 +64,11 @@ internal sealed class UpdateSubscriptionCommandHandler(
             [command.DestinationId],
             cancellationToken);
         await EnsureDestinationIsAllowed(
-            command.TenantId, command.DestinationId, command.HttpDelivery, cancellationToken);
+            command.TenantId,
+            command.DestinationId,
+            command.HttpDelivery,
+            existing.Status == EnablementStatus.Enabled,
+            cancellationToken);
 
         var subscription = await subscriptionRepository.UpdateAsync(
             command.TenantId,
@@ -86,6 +91,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
         Guid tenantId,
         Guid destinationId,
         HttpDeliveryConfiguration httpDelivery,
+        bool mustBeEnabled,
         CancellationToken cancellationToken)
     {
         var destination = await destinationRepository.GetByIdAsync(tenantId, destinationId, cancellationToken);
@@ -93,6 +99,12 @@ internal sealed class UpdateSubscriptionCommandHandler(
         {
             throw new SubscriptionValidationException(
                 "The specified Destination does not exist for this tenant.");
+        }
+
+        if (mustBeEnabled && destination.Status != EnablementStatus.Enabled)
+        {
+            throw new AuthoringConflictException(
+                "An Enabled Subscription cannot reference a Disabled Destination.");
         }
 
         Connector? connector = await connectorReader.GetByIdAsync(destination.ConnectorId, cancellationToken);
