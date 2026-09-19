@@ -31,6 +31,10 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         string sourceDeleted = Deleted("s", sqlServer);
         string topicDeleted = Deleted("t", sqlServer);
         string topicKey = sqlServer ? "t.[key]" : "t.key";
+        string actionable = $"events.status = 'unrouted' AND {UnroutedActionability.Predicate(sqlServer, "events")}";
+        string unroutedActionable = sqlServer
+            ? $"CAST(CASE WHEN {actionable} THEN 1 ELSE 0 END AS bit)"
+            : $"({actionable})";
 
         var row = await connection.QuerySingleOrDefaultAsync<EventRow>(
             new CommandDefinition(
@@ -51,7 +55,8 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
                     events.failed_at       AS FailedAt,
                     events.{payload}       AS PayloadJson,
                     events.{metadata}      AS MetadataJson,
-                    (SELECT traceparent FROM outbox WHERE event_id = events.id) AS Traceparent
+                    (SELECT traceparent FROM outbox WHERE event_id = events.id) AS Traceparent,
+                    {unroutedActionable} AS UnroutedActionable
                 FROM events
                 LEFT JOIN sources s ON s.tenant_id = events.tenant_id AND s.id = events.source_id
                 LEFT JOIN topics t ON t.tenant_id = events.tenant_id AND t.id = events.topic_id
@@ -132,6 +137,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
             TopicKey = row.TopicKey,
             TopicName = row.TopicName,
             TopicDeleted = row.TopicDeleted,
+            UnroutedActionable = row.UnroutedActionable,
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
             FailedAt = row.FailedAt,
@@ -216,6 +222,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         public string? PayloadJson { get; init; }
         public string? MetadataJson { get; init; }
         public string? Traceparent { get; init; }
+        public bool UnroutedActionable { get; init; }
     }
 
     private sealed record DeliveryRow

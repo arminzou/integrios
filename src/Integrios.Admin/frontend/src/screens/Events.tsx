@@ -735,7 +735,22 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
       ) : null}
 
       {current.trace_id ? (
-        <CopyValue id="event-trace-id" label="Trace id" value={current.trace_id} />
+        <CopyValue
+          id="event-trace-id"
+          label="Trace id"
+          value={current.trace_id}
+          action={
+            // Only when the deployment configured a tracing product; the link leaves the dashboard,
+            // so it opens a new tab that cannot reach back into this one.
+            current.trace_url ? (
+              <Button asChild variant="outline">
+                <a href={current.trace_url} target="_blank" rel="noopener noreferrer">
+                  Open trace
+                </a>
+              </Button>
+            ) : null
+          }
+        />
       ) : (
         <p>This Event carries no trace identity.</p>
       )}
@@ -797,7 +812,7 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
               </li>
             ))}
           </ul>
-        ) : current.status === "unrouted" && current.topic_id && current.event_type ? (
+        ) : current.status === "unrouted" && current.unrouted_actionable && current.topic_id && current.event_type ? (
           // Unrouted means no active Subscription matched this type, so the missing Subscription is
           // the answer; the sheet opens on arrival with this Event's Topic and type already chosen.
           <div className="flex flex-col items-start gap-2">
@@ -813,6 +828,19 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
               </Link>
             </Button>
           </div>
+        ) : current.status === "unrouted" ? (
+          // Historical-only: the Event stays as it was, but current configuration can no longer
+          // route its type, so a Subscription for it could not be authored.
+          current.topic_deleted ? (
+            <p className="m-0 text-[13px]">
+              This Event's Topic has been deleted, so current configuration can no longer route it.
+            </p>
+          ) : (
+            <p className="m-0 text-[13px]">
+              No Source on this Topic declares <code>{current.event_type}</code> any more, so current configuration can
+              no longer route it.
+            </p>
+          )
         ) : (
           <p className="m-0 text-[13px]">No deliveries.</p>
         )}

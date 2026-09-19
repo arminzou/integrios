@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { Check, Copy, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,7 +77,18 @@ function CopyLabel({ state, idle }: { state: CopyState; idle: string }) {
 /// The value stays in a read-only field rather than plain text on purpose: clipboard access can be
 /// unavailable or refused, and selecting the field still lets the Operator copy by hand, so the
 /// control is never a dead end.
-export function CopyValue({ id, label, value }: { id: string; label: string; value: string }) {
+/// `action` sits beside the copy control, for a second thing to do with the same value.
+export function CopyValue({
+  id,
+  label,
+  value,
+  action,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  action?: ReactNode;
+}) {
   const { state, copy, announcement, tone } = useCopy(label);
   const field = useRef<HTMLInputElement>(null);
 
@@ -94,6 +105,7 @@ export function CopyValue({ id, label, value }: { id: string; label: string; val
         >
           <CopyLabel state={state} idle={`Copy ${label.toLowerCase()}`} />
         </Button>
+        {action}
         <span role="status" className="sr-only">
           {announcement}
         </span>

@@ -715,6 +715,7 @@ describe("Create forms, filled through a real browser", () => {
             topic_id: topicId,
             event_type: "order.refunded",
             status: "unrouted",
+            unrouted_actionable: true,
             accepted_at: "2026-09-08T12:00:00Z",
             payload: { orderId: "SO-4014" },
             event_deliveries: [],

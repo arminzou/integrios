@@ -408,6 +408,57 @@ const detail = (deliveryStatus: string) => ({
   delivery_attempts: [],
 });
 
+describe("Event inspector actions", () => {
+  const unrouted = (overrides: Record<string, unknown>) => ({
+    ...detail("succeeded"),
+    status: "unrouted",
+    topic_id: "99999999-0000-0000-0000-000000000000",
+    event_type: "order.refunded",
+    event_deliveries: [],
+    ...overrides,
+  });
+
+  it("offers Create Subscription only while current configuration can still route the Event", async () => {
+    stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: true })));
+    const actionable = renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    expect(await screen.findByRole("link", { name: "Create Subscription" })).toBeTruthy();
+    actionable.unmount();
+
+    stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: false })));
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    expect(await screen.findByText(/any more, so current configuration can no longer route it\./)).toBeTruthy();
+    expect(screen.getByText("order.refunded").tagName).toBe("CODE");
+    expect(screen.queryByRole("link", { name: "Create Subscription" })).toBeNull();
+  });
+
+  it("names a deleted Topic as the reason a historical-only Event cannot be routed", async () => {
+    stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: false, topic_deleted: true })));
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+
+    expect(
+      await screen.findByText("This Event's Topic has been deleted, so current configuration can no longer route it."),
+    ).toBeTruthy();
+  });
+
+  it("opens the trace in a new tab without opener access, only when the deployment offers a link", async () => {
+    const traceUrl = "https://tracing.example.test/trace/0af7651916cd43dd8448eb211c80319c";
+    stubHttp(respondFor(page([]), { ...detail("succeeded"), trace_url: traceUrl }));
+    const linked = renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+
+    const open = await screen.findByRole("link", { name: "Open trace" });
+    expect(open.getAttribute("href")).toBe(traceUrl);
+    expect(open.getAttribute("target")).toBe("_blank");
+    expect(open.getAttribute("rel")).toContain("noopener");
+    linked.unmount();
+
+    stubHttp(respondFor(page([]), { ...detail("succeeded"), trace_url: null }));
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    expect(await screen.findByRole("button", { name: "Copy trace id" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Open trace" })).toBeNull();
+  });
+});
+
 describe("Event inspector", () => {
   /// A shown body is highlighted, so its text is spread across the spans that colour it and only
   /// the panel as a whole carries the document.

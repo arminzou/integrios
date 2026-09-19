@@ -10,13 +10,15 @@ internal static class UnroutedActionability
         // Both providers compare lowered values: SQL Server's default collation would already ignore
         // case, but a case-sensitive database collation must not quietly change the answer.
         string declared = sqlServer
-            ? $"SELECT 1 FROM OPENJSON(s.event_types) declared WHERE LOWER(declared.value) = LOWER({eventAlias}.event_type)"
-            : $"SELECT 1 FROM jsonb_array_elements_text(s.event_types) declared(value) WHERE lower(declared.value) = lower({eventAlias}.event_type)";
+            ? $"SELECT 1 FROM OPENJSON(declaring.event_types) declared WHERE LOWER(declared.value) = LOWER({eventAlias}.event_type)"
+            : $"SELECT 1 FROM jsonb_array_elements_text(declaring.event_types) declared(value) WHERE lower(declared.value) = lower({eventAlias}.event_type)";
         return $"""
             EXISTS (
-                SELECT 1 FROM topics t
-                JOIN sources s ON s.topic_id = t.id AND s.tenant_id = t.tenant_id AND s.deleted_at IS NULL
-                WHERE t.id = {eventAlias}.topic_id AND t.tenant_id = {eventAlias}.tenant_id AND t.deleted_at IS NULL
+                SELECT 1 FROM topics live_topic
+                JOIN sources declaring ON declaring.topic_id = live_topic.id AND declaring.tenant_id = live_topic.tenant_id
+                    AND declaring.deleted_at IS NULL
+                WHERE live_topic.id = {eventAlias}.topic_id AND live_topic.tenant_id = {eventAlias}.tenant_id
+                  AND live_topic.deleted_at IS NULL
                   AND EXISTS ({declared}))
             """;
     }
