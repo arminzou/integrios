@@ -32,11 +32,18 @@ public sealed record EventDiagnosticsDto
     public bool TopicDeleted { get; init; }
 
     /// <summary>
-    /// Whether this unrouted Event could still be routed by authoring a Subscription: its Topic is
-    /// live and a non-deleted Source on it declares the Event's type. The same test decides whether
-    /// it counts toward Needs attention. Always false for an Event that is not unrouted.
+    /// Whether this unrouted Event is authorable and current fanout has no matching Subscription.
+    /// The same test decides whether it counts toward Needs attention. Always false for an Event
+    /// that is not unrouted.
     /// </summary>
     public bool UnroutedActionable { get; init; }
+
+    /// <summary>
+    /// Whether this unrouted Event is still authorable and current fanout has a matching active
+    /// Subscription. This distinguishes a restored route from historical-only configuration.
+    /// Always false for an Event that is not unrouted.
+    /// </summary>
+    public bool UnroutedHasCurrentMatch { get; init; }
 
     /// <summary>
     /// A link to this Event's trace in the deployment's tracing product, when the Admin host is

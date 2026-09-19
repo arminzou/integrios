@@ -54,6 +54,7 @@ public sealed class TenantEventBacklogTests(AdminApiFixture fixture) : AdminApiT
     {
         DateTimeOffset now = WholeSeconds(DateTimeOffset.UtcNow);
         var (sourceId, topicId) = await CreateSourceAsync(fixture.TenantId, "order.created");
+        Guid subscriptionId = Guid.NewGuid();
 
         // Actionable: the live Source still declares the type, matched ignoring case, however old.
         await InsertEventAsync(fixture.TenantId, sourceId, topicId, "Order.Created", "unrouted", now.AddDays(-2));
@@ -72,12 +73,37 @@ public sealed class TenantEventBacklogTests(AdminApiFixture fixture) : AdminApiT
         await InsertEventAsync(fixture.TenantId, orphanSourceId, deletedTopicId, "shipment.sent", "unrouted", now.AddDays(-7));
         await ExecuteAsync($"UPDATE topics SET deleted_at = {fixture.Now} WHERE id = @Id", new { Id = deletedTopicId });
 
+        // An Inactive Subscription does not change current fanout.
+        await ExecuteAsync($$"""
+            INSERT INTO subscriptions (id, tenant_id, topic_id, name, event_types, destination_id, order_index, status)
+            VALUES (@Id, @TenantId, @TopicId, @Name, {{fixture.Json("@EventTypes")}}, @DestinationId, 0, 'inactive');
+            """,
+            new
+            {
+                Id = subscriptionId,
+                TenantId = fixture.TenantId,
+                TopicId = topicId,
+                Name = $"backlog-subscription-{subscriptionId:N}",
+                EventTypes = "[\"ORDER.CREATED\"]",
+                DestinationId = fixture.DestinationId,
+            });
+
         JsonElement unrouted = (await GetBacklogAsync(fixture.TenantId)).GetProperty("unrouted");
 
         unrouted.GetProperty("count").GetInt32().ShouldBe(2);
         unrouted.GetProperty("oldest_at").GetDateTimeOffset().ShouldBe(now.AddDays(-2));
 
-        // Historical-only Events are still Event history, only not backlog.
+        await ExecuteAsync("UPDATE subscriptions SET status = 'active' WHERE id = @Id", new { Id = subscriptionId });
+        unrouted = (await GetBacklogAsync(fixture.TenantId)).GetProperty("unrouted");
+        unrouted.GetProperty("count").GetInt32().ShouldBe(0);
+        unrouted.GetProperty("oldest_at").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        await ExecuteAsync("UPDATE subscriptions SET status = 'inactive' WHERE id = @Id", new { Id = subscriptionId });
+        unrouted = (await GetBacklogAsync(fixture.TenantId)).GetProperty("unrouted");
+        unrouted.GetProperty("count").GetInt32().ShouldBe(2);
+        unrouted.GetProperty("oldest_at").GetDateTimeOffset().ShouldBe(now.AddDays(-2));
+
+        // Configuration changes never rewrite retained Event history.
         JsonElement history = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?status=unrouted");
         history.GetProperty("items").GetArrayLength().ShouldBe(5);
     }

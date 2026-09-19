@@ -31,10 +31,17 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         string sourceDeleted = Deleted("s", sqlServer);
         string topicDeleted = Deleted("t", sqlServer);
         string topicKey = sqlServer ? "t.[key]" : "t.key";
-        string actionable = $"events.status = 'unrouted' AND {UnroutedActionability.Predicate(sqlServer, "events")}";
+        string unrouted = "events.status = 'unrouted'";
+        string authorable = UnroutedActionability.AuthorablePredicate(sqlServer, "events");
+        string currentMatch = UnroutedActionability.CurrentMatchPredicate(sqlServer, "events");
+        string actionable = $"{unrouted} AND ({UnroutedActionability.Predicate(sqlServer, "events")})";
+        string remediated = $"{unrouted} AND ({authorable}) AND ({currentMatch})";
         string unroutedActionable = sqlServer
             ? $"CAST(CASE WHEN {actionable} THEN 1 ELSE 0 END AS bit)"
             : $"({actionable})";
+        string unroutedHasCurrentMatch = sqlServer
+            ? $"CAST(CASE WHEN {remediated} THEN 1 ELSE 0 END AS bit)"
+            : $"({remediated})";
 
         var row = await connection.QuerySingleOrDefaultAsync<EventRow>(
             new CommandDefinition(
@@ -56,7 +63,8 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
                     events.{payload}       AS PayloadJson,
                     events.{metadata}      AS MetadataJson,
                     (SELECT traceparent FROM outbox WHERE event_id = events.id) AS Traceparent,
-                    {unroutedActionable} AS UnroutedActionable
+                    {unroutedActionable} AS UnroutedActionable,
+                    {unroutedHasCurrentMatch} AS UnroutedHasCurrentMatch
                 FROM events
                 LEFT JOIN sources s ON s.tenant_id = events.tenant_id AND s.id = events.source_id
                 LEFT JOIN topics t ON t.tenant_id = events.tenant_id AND t.id = events.topic_id
@@ -138,6 +146,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
             TopicName = row.TopicName,
             TopicDeleted = row.TopicDeleted,
             UnroutedActionable = row.UnroutedActionable,
+            UnroutedHasCurrentMatch = row.UnroutedHasCurrentMatch,
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
             FailedAt = row.FailedAt,
@@ -223,6 +232,7 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         public string? MetadataJson { get; init; }
         public string? Traceparent { get; init; }
         public bool UnroutedActionable { get; init; }
+        public bool UnroutedHasCurrentMatch { get; init; }
     }
 
     private sealed record DeliveryRow

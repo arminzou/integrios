@@ -167,6 +167,6 @@ public sealed class MonitoringPlanMeasurement(AdminApiFixture fixture, ITestOutp
             CROSS JOIN (SELECT http_execution_snapshot FROM event_deliveries WHERE event_id = @SeededEventId) s;
             """, new { fixture.TenantId, SubscriptionId = subscriptionId, DestinationId = destinationId, SeededEventId = seededEventId }, commandTimeout: 600));
 
-        await c.ExecuteAsync(new CommandDefinition(Pg ? "ANALYZE events, event_deliveries, sources, topics" : "EXEC sp_updatestats", commandTimeout: 600));
+        await c.ExecuteAsync(new CommandDefinition(Pg ? "ANALYZE events, event_deliveries, sources, topics, subscriptions, destinations" : "EXEC sp_updatestats", commandTimeout: 600));
     }
 }
