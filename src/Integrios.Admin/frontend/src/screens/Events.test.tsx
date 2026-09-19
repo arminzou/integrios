@@ -101,7 +101,8 @@ describe("Event history", () => {
     const filters = screen.getByRole("region", { name: "Filters" });
     const sourceEventId = within(filters).getByRole("searchbox", { name: "Source Event id" });
     expect(filters.querySelector("input, button")).toBe(sourceEventId);
-    expect(sourceEventId.getAttribute("placeholder")).toBe("Source Event id");
+    expect(sourceEventId.getAttribute("placeholder")).toBe("Exact id…");
+    expect(screen.queryByRole("button", { name: "Apply filters" })).toBeNull();
     expect(screen.queryByText(/filter.? applied/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
     unfiltered.unmount();
@@ -165,6 +166,27 @@ describe("Event history", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("Sources are unavailable.");
     expect((screen.getByLabelText("Source") as HTMLSelectElement).disabled).toBe(true);
+  });
+});
+
+describe("Event filter hints", () => {
+  it("describes the capped Source and Topic options to assistive technology", async () => {
+    stubHttp((call) =>
+      call.url.pathname.endsWith("/sources") || call.url.pathname.endsWith("/topics")
+        ? { status: 200, body: page([], "more") }
+        : respondFor(page([routedEventWithDeadLetters]))(call),
+    );
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+
+    for (const [name, id, text] of [
+      ["Source", "event-source-hint", "Showing the first 100 Sources."],
+      ["Topic", "event-topic-hint", "Showing the first 100 Topics."],
+    ]) {
+      const control = await screen.findByRole("combobox", { name });
+      await waitFor(() => expect(control.getAttribute("aria-describedby")).toBe(id));
+      expect(document.getElementById(id)!.textContent).toBe(text);
+    }
   });
 });
 
@@ -237,11 +259,20 @@ describe("Ledger Event type and freshness", () => {
     const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
     const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
-    fireEvent.change(await screen.findByLabelText("Event type"), { target: { value: "Order.Created" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+    const type = await screen.findByLabelText("Event type");
+    const reads = eventsCall(calls).length;
+    fireEvent.change(type, { target: { value: "Order.Created" } });
+
+    // Typed, not committed: no read, no history entry, and the pill is not tinted as scope.
+    expect(eventsCall(calls).length).toBe(reads);
+    expect(router.state.location.search).toBe("");
+    expect(type.closest("form")!.getAttribute("data-applied")).toBe("false");
+
+    fireEvent.submit(type.closest("form")!);
 
     await waitFor(() => expect(eventsCall(calls).at(-1)?.url.searchParams.get("event_type")).toBe("Order.Created"));
     expect(router.state.location.search).toBe("?event_type=Order.Created");
+    expect(type.closest("form")!.getAttribute("data-applied")).toBe("true");
   });
 
   it("counts new Events without moving rows, and Show reloads the first page under the next watermark", async () => {
@@ -493,7 +524,7 @@ describe("Event activity", () => {
       expect(tenth.getAttribute("aria-pressed")).toBe("true");
     });
 
-    it("keeps a link's instants through a load and an unrelated Apply", async () => {
+    it("keeps a link's instants through a load and an unrelated filter change", async () => {
       const calls = stubHttp(respond);
 
       const { router } = renderScreen(
@@ -504,8 +535,9 @@ describe("Event activity", () => {
         expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-11-01T06:45:00Z"),
       );
 
-      fireEvent.change(await screen.findByLabelText("Event type"), { target: { value: "order.created" } });
-      fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+      const type = await screen.findByLabelText("Event type");
+      fireEvent.change(type, { target: { value: "order.created" } });
+      fireEvent.submit(type.closest("form")!);
 
       await waitFor(() => expect(router.state.location.search).toContain("event_type=order.created"));
       const applied = new URLSearchParams(router.state.location.search);
