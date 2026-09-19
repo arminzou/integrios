@@ -5,7 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <EnableMonitoringMeasurement Condition="'$(EnableMonitoringMeasurement)' == ''">false</EnableMonitoringMeasurement>
   </PropertyGroup>
+
+  <!-- The monitoring plan harness is manual-only: opt into compiling it explicitly. -->
+  <ItemGroup Condition="'$(EnableMonitoringMeasurement)' != 'true'">
+    <Compile Remove="Measurement/**/*.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.2" />
