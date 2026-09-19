@@ -189,6 +189,31 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         $"UPDATE sources SET deleted_at={database.Now} WHERE id=@Id",
         new { Id = sourceId });
 
+    // Tenant deactivation is a control-plane write the data plane sees on the next request or
+    // reconcile pass; a test drives it directly to prove the fence.
+    public Task ChangeTenantStatusAsync(Guid tenantId, string status) => ExecuteAsync(
+        $"UPDATE tenants SET status=@Status, updated_at={database.Now} WHERE id=@Id",
+        new { Id = tenantId, Status = status });
+
+    public async Task<Guid> CreateBrokerSourceAsync(Guid tenantId, Guid connectorId, Guid topicId)
+    {
+        Guid sourceId = Guid.NewGuid();
+        await ExecuteAsync($$$"""
+            INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status, created_at, updated_at)
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'seeded-broker', 'broker', {{{database.Json("@EventTypes")}}}, {{{database.Json("@Configuration")}}}, @Revision, 'active', {{{database.Now}}}, {{{database.Now}}})
+            """, new
+        {
+            SourceId = sourceId,
+            TenantId = tenantId,
+            ConnectorId = connectorId,
+            TopicId = topicId,
+            EventTypes = "[\"payment.created\"]",
+            Configuration = """{"transport":"azure_service_bus","transport_config":{"namespace":"acme.servicebus.windows.net","queue_name":"events"},"authentication":{"scheme":"azure_identity"}}""",
+            Revision = Guid.NewGuid().ToString("N"),
+        });
+        return sourceId;
+    }
+
     public Task<Guid?> GetEventSourceIdAsync(Guid eventId) =>
         ScalarAsync<Guid?>("SELECT source_id FROM events WHERE id=@Id", new { Id = eventId });
 

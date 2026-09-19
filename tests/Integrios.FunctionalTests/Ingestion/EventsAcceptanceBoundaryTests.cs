@@ -306,6 +306,29 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         (await fixture.GetEventCountAsync()).ShouldBe(0);
     }
 
+    // The Tenant is the top of the same fence: a receiver that resolved its Source while the Tenant
+    // was active cannot land an Event after the Tenant's deactivation commits.
+    [Fact]
+    public async Task Acceptance_RefusesASubmissionResolvedBeforeTenantDeactivation()
+    {
+        var acceptance = fixture.WebFactory.Services.GetRequiredService<IEventAcceptance>();
+        var submission = new EventSubmission
+        {
+            TenantId = fixture.TenantAId,
+            TopicId = defaultTopicId,
+            SourceId = defaultSourceId,
+            EventType = "payment.created",
+            Payload = JsonSerializer.SerializeToElement(new { paymentId = "pay_inactive_tenant" }),
+        };
+        await fixture.ChangeTenantStatusAsync(fixture.TenantAId, "inactive");
+
+        EventAcceptanceException exception = await Should.ThrowAsync<EventAcceptanceException>(
+            () => acceptance.AcceptAsync(submission, traceparent: null, CancellationToken.None));
+
+        exception.Message.ShouldContain("not active");
+        (await fixture.GetEventCountAsync()).ShouldBe(0);
+    }
+
     [Fact]
     public async Task Acceptance_RefusesASubmissionResolvedBeforeCommittedDeletion()
     {

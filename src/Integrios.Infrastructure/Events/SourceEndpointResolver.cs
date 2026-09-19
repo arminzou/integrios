@@ -31,6 +31,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 JOIN tenants t ON t.id = s.tenant_id
                 WHERE JSON_VALUE(s.configuration, '$.callback_id') = @CallbackId
                   AND s.type = N'webhook' AND s.status = N'active' AND s.deleted_at IS NULL
+                  AND t.status = N'active'
                   AND i.direction IN (N'source', N'both')
                 """
             : """
@@ -50,6 +51,7 @@ internal sealed class SourceEndpointResolver(IDbConnectionFactory connectionFact
                 JOIN tenants t ON t.id = s.tenant_id
                 WHERE s.configuration ->> 'callback_id' = @CallbackId
                   AND s.type = 'webhook' AND s.status = 'active' AND s.deleted_at IS NULL
+                  AND t.status = 'active'
                   AND i.direction IN ('source', 'both')
                 LIMIT 1
                 """;

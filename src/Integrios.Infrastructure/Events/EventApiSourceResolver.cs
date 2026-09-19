@@ -20,8 +20,10 @@ internal sealed class EventApiSourceResolver(IDbConnectionFactory connectionFact
                     s.topic_id AS TopicId
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
+                JOIN tenants t ON t.id = s.tenant_id
                 WHERE s.tenant_id = @TenantId AND s.id = @SourceId
                   AND s.type = N'event_api' AND s.status = N'active' AND s.deleted_at IS NULL
+                  AND t.status = N'active'
                   AND i.direction IN (N'source', N'both')
                 """
             : """
@@ -29,8 +31,10 @@ internal sealed class EventApiSourceResolver(IDbConnectionFactory connectionFact
                     s.topic_id AS TopicId
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
+                JOIN tenants t ON t.id = s.tenant_id
                 WHERE s.tenant_id = @TenantId AND s.id = @SourceId
                   AND s.type = 'event_api' AND s.status = 'active' AND s.deleted_at IS NULL
+                  AND t.status = 'active'
                   AND i.direction IN ('source', 'both')
                 LIMIT 1
                 """;

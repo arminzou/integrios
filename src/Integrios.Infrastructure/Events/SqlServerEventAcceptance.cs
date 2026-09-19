@@ -75,11 +75,11 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
 
         try
         {
-            // HOLDLOCK keeps the shared lock on the Source row until commit, so a disable or
-            // declaration change waits for acceptances already past this point and every later one
-            // sees it.
+            // HOLDLOCK keeps the shared lock on the Source and Tenant rows until commit, so a
+            // Source disable, declaration change, or Tenant deactivation waits for acceptances
+            // already past this point and every later one sees it.
             string? declared = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
-                "SELECT event_types FROM sources WITH (HOLDLOCK, ROWLOCK) WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status=N'active' AND deleted_at IS NULL",
+                "SELECT s.event_types FROM sources s WITH (HOLDLOCK, ROWLOCK) JOIN tenants t WITH (HOLDLOCK, ROWLOCK) ON t.id = s.tenant_id WHERE s.tenant_id=@TenantId AND s.id=@SourceId AND s.topic_id=@TopicId AND s.status=N'active' AND s.deleted_at IS NULL AND t.status=N'active'",
                 new { submission.TenantId, submission.SourceId, submission.TopicId }, dbTransaction, cancellationToken: cancellationToken));
             SourceAuthority.Ensure(
                 declared is null ? null : JsonSerializer.Deserialize<string[]>(declared), submission.EventType);
