@@ -371,6 +371,45 @@ describe("Event activity", () => {
     );
   });
 
+  it("applies a drag once, on release, rather than once per interval crossed", async () => {
+    const calls = stubHttp(respondFor(page([])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    await waitFor(() => expect(eventsCall(calls).length).toBe(1));
+
+    fireEvent.pointerDown(buttons[6]);
+    fireEvent.pointerEnter(buttons[7]);
+    fireEvent.pointerEnter(buttons[8]);
+    // Previewed while dragging, before anything is read.
+    expect(buttons[7].getAttribute("aria-pressed")).toBe("true");
+    expect(router.state.location.search).toBe("");
+    fireEvent.pointerUp(window);
+    fireEvent.click(buttons[8]);
+
+    await waitFor(() => expect(router.state.location.search).toContain("accepted_from="));
+    await waitFor(() => expect(eventsCall(calls).length).toBe(2));
+    expect(eventsCall(calls)[1].url.searchParams.get("accepted_from")).toBe("2026-09-01T09:30:00.000Z");
+    expect(eventsCall(calls)[1].url.searchParams.get("accepted_to")).toBe("2026-09-01T09:45:00.000Z");
+  });
+
+  it("leaves one history entry for a keyboard extension, however many steps it takes", async () => {
+    stubHttp(respondFor(page([])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    fireEvent.click(buttons[10]);
+    await waitFor(() => expect(router.state.historyAction).toBe("PUSH"));
+    fireEvent.keyDown(buttons[10], { key: "ArrowLeft", shiftKey: true });
+    await waitFor(() => expect(router.state.historyAction).toBe("PUSH"));
+    fireEvent.keyDown(buttons[9], { key: "ArrowLeft", shiftKey: true });
+
+    await waitFor(() => expect(router.state.historyAction).toBe("REPLACE"));
+    expect(new URLSearchParams(router.state.location.search).get("accepted_from")).toBe("2026-09-01T09:40:00.000Z");
+  });
+
   it("reads the week in 6-hour intervals when the 7 d range is chosen", async () => {
     const calls = stubHttp(respondFor(page([])));
 
@@ -525,6 +564,19 @@ describe("Event inspector", () => {
     await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
     expect(calls.find((call) => call.method === "POST")!.url.pathname).toBe(
       `/admin/tenants/${tenantId}/events/${eventId}/deliveries/${deliveryId}/replay`,
+    );
+  });
+
+  it("reads the backlog again after a replay, so Right now and the rail stop counting it", async () => {
+    const calls = stubHttp(respondFor(page([]), detail("dead_lettered")));
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Replay" }));
+    const before = calls.filter((call) => call.url.pathname.endsWith("/backlog")).length;
+    fireEvent.click(screen.getByRole("button", { name: "Replay this delivery" }));
+
+    await waitFor(() =>
+      expect(calls.filter((call) => call.url.pathname.endsWith("/backlog")).length).toBeGreaterThan(before),
     );
   });
 
