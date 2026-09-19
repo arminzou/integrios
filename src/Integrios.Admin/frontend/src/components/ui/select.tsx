@@ -9,7 +9,7 @@ import type * as React from "react";
 /// What is gained is one menu that looks the same on every machine an Operator signs in from.
 ///
 /// Radix reserves the empty string as a value — it means "nothing selected" internally — so a filter
-/// whose empty case is a real choice ("Any") gives that choice a name of its own and translates at
+/// whose empty case is a real choice ("All") gives that choice a name of its own and translates at
 /// the boundary. Screens never see the sentinel.
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />;

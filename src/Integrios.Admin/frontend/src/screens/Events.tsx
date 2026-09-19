@@ -275,6 +275,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 control={form.control}
                 name="eventType"
                 label="Event type"
+                type="search"
                 hint="Matched exactly, ignoring case, including types no Source declares any more."
               />
               <FilterSelectField

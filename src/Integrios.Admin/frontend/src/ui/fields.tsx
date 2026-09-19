@@ -128,7 +128,7 @@ export function SelectField<TValues extends FieldValues>({
   /// Names the empty value as a choice, for a field that is genuinely optional. Without it the
   /// first selection is final: the placeholder is not an option, so there is nothing to pick to get
   /// back to unset, and an Operator who chose by mistake has to abandon the form. `Filter` offers
-  /// the same thing as "Any"; a form says what its own empty case means.
+  /// the same thing as "All"; a form says what its own empty case means.
   emptyLabel?: string;
   disabled?: boolean;
   /// The trigger is a button, so it cannot carry the native attribute; the schema is what refuses an
@@ -182,7 +182,7 @@ export const filterPill =
 
 const searchFilterPill = cn(
   filterPill,
-  "w-full max-w-sm focus-within:border-accent-border focus-within:bg-selected-surface focus-within:text-selected-ink",
+  "w-full max-w-64 focus-within:border-accent-border focus-within:bg-selected-surface focus-within:text-selected-ink",
 );
 
 /// A list filter, which belongs to the list rather than to a form: it re-reads from the first cursor
@@ -190,8 +190,9 @@ const searchFilterPill = cn(
 /// vendored Radix listbox, not a native `<select>`, so the menu is the product's own on every
 /// platform, phones included; only the trigger borrows the pill's shape.
 ///
-/// "Any" is the filter's own empty case rather than an option each screen has to remember to write,
-/// which is also what keeps the sentinel Radix needs out of every call site.
+/// "All" is the filter's own empty case rather than an option each screen has to remember to write,
+/// which is also what keeps the sentinel Radix needs out of every call site. It is named in the menu
+/// only: an unset pill shows just its label, and the value appears once one is applied.
 /// `hint` says what the offered options do not cover. A filter built from a read of its own is
 /// capped the way every picker here is, so a Topic past the first hundred is a row the list can
 /// show but this control cannot select. The trigger describes that limit for assistive technology,
@@ -201,7 +202,7 @@ export function Filter({
   label,
   value,
   onChange,
-  anyLabel = "Any",
+  allLabel = "All",
   hint,
   children,
 }: {
@@ -209,7 +210,7 @@ export function Filter({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  anyLabel?: string;
+  allLabel?: string;
   hint?: string;
   children: ReactNode;
 }) {
@@ -232,12 +233,15 @@ export function Filter({
         className={`${filterPill} w-auto justify-start`}
       >
         <span className="font-normal text-ink-secondary">{label}</span>
-        <span className="min-w-0 truncate font-medium">
-          <SelectValue />
-        </span>
+        {/* An unset filter shows its label alone; the value appears once one is applied. */}
+        {value !== "" ? (
+          <span className="min-w-0 truncate font-medium">
+            <SelectValue />
+          </span>
+        ) : null}
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={EMPTY}>{anyLabel}</SelectItem>
+        <SelectItem value={EMPTY}>{allLabel}</SelectItem>
         {unnamed ? <SelectItem value={value}>{value}</SelectItem> : null}
         {children}
         {hint ? (
@@ -322,10 +326,10 @@ export function FilterSelectField<TValues extends FieldValues>({
   name,
   label,
   hint,
-  anyLabel,
+  allLabel,
   children,
   ...select
-}: Row<TValues> & Omit<ComponentProps<"select">, "name"> & { anyLabel?: string }) {
+}: Row<TValues> & Omit<ComponentProps<"select">, "name"> & { allLabel?: string }) {
   return (
     <FormField
       control={control}
@@ -343,12 +347,14 @@ export function FilterSelectField<TValues extends FieldValues>({
             className={`${filterPill} w-auto justify-start`}
           >
             <span className="truncate font-normal text-ink-secondary">{label}</span>
-            <span className="min-w-0 truncate font-medium">
-              <SelectValue />
-            </span>
+            {field.value ? (
+              <span className="min-w-0 truncate font-medium">
+                <SelectValue />
+              </span>
+            ) : null}
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={EMPTY}>{anyLabel ?? "Any"}</SelectItem>
+            <SelectItem value={EMPTY}>{allLabel ?? "All"}</SelectItem>
             {children}
           </SelectContent>
         </Select>
@@ -384,7 +390,7 @@ export function FilterTextField<TValues extends FieldValues>({
             placeholder={search ? label : input.placeholder}
             className={cn(
               "min-w-0 appearance-none rounded-sm bg-transparent font-medium outline-none",
-              search ? "flex-1" : "focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              search ? "flex-1" : "w-40 focus-visible:ring-[3px] focus-visible:ring-ring/50",
             )}
           />
         </label>

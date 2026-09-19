@@ -1,3 +1,4 @@
+import { CalendarDays, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,7 +16,7 @@ function summary(from: string, to: string): string {
   if (from && to) return `${instantText(from)} – ${instantText(to)}`;
   if (from) return `from ${instantText(from)}`;
   if (to) return `to ${instantText(to)}`;
-  return "Any";
+  return "";
 }
 
 /// The one control for the accepted range: what the ledger is scoped to, in the viewer's zone, and
@@ -64,8 +65,10 @@ export function AcceptedRangePill({
         data-applied={String(from !== "" || to !== "")}
         className={`${filterPill} cursor-pointer justify-start`}
       >
+        <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-ink-secondary" />
         <span className="font-normal text-ink-secondary">Accepted</span>
-        <span className="min-w-0 truncate font-medium">{summary(from, to)}</span>
+        {from || to ? <span className="min-w-0 truncate font-medium">{summary(from, to)}</span> : null}
+        <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-ink-secondary" />
       </PopoverTrigger>
       <PopoverContent aria-label="Accepted range">
         <div className="flex flex-wrap gap-2">

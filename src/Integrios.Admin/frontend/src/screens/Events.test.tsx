@@ -327,11 +327,11 @@ describe("Ledger Event type and freshness", () => {
 describe("Accepted range pill", () => {
   // The popover it opens is positioned by measuring, so what choosing in it writes is decided in
   // the browser suite; here only what is visible without opening it.
-  it("says Any when no range is in force, and states a range that is", async () => {
+  it("says nothing beyond its label when no range is in force, and states a range that is", async () => {
     stubHttp(respondFor(page([routedEventWithDeadLetters])));
     const { unmount } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
 
-    expect((await screen.findByRole("button", { name: "Accepted Any" })).getAttribute("data-applied")).toBe("false");
+    expect((await screen.findByRole("button", { name: "Accepted" })).getAttribute("data-applied")).toBe("false");
     unmount();
 
     stubHttp(respondFor(page([routedEventWithDeadLetters])));
