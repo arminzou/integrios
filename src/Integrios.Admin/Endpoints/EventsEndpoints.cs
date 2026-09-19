@@ -60,7 +60,7 @@ public sealed class EventsEndpoints : IEndpointGroup
 /// The Event-history filters as the wire spells them. Untrusted query values become a trusted
 /// TenantEventFilter here and nowhere else, for the ledger and its freshness count alike.
 public sealed record TenantEventFilterRequest(
-    string? Status,
+    [property: FromQuery(Name = "status")] string? Status,
     [property: FromQuery(Name = "delivery_status")] string? DeliveryStatus,
     [property: FromQuery(Name = "source_id")] Guid? SourceId,
     [property: FromQuery(Name = "topic_id")] Guid? TopicId,

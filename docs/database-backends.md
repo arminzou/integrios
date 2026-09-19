@@ -22,6 +22,16 @@ command uses EF Core migrations for the selected provider and takes a database-l
 lock. The first EF-managed release requires an empty database and does not adopt schemas created by
 the former Flyway migration path; subsequent EF-managed releases migrate normally.
 
+Event types are compared ignoring case on both backends. On PostgreSQL this uses a
+nondeterministic ICU collation, so the server must be built with ICU support; the official images
+and managed services such as Azure Database for PostgreSQL include it. SQL Server pins a
+case-insensitive collation on the column, whatever the database default.
+
+Some migrations rebuild indexes on the `events` table, and PostgreSQL does so without
+`CONCURRENTLY`. While they run, Event acceptance waits on the table lock, for as long as the index
+build takes. On a large `events` table, run `database migrate` in a maintenance window or with
+Ingestion stopped.
+
 The SQL Server work queues run at `READ COMMITTED` and use locking hints that work with
 `READ_COMMITTED_SNAPSHOT` either `ON` or `OFF`. Operators do not need to change that database option
 for Integrios. The claim queries combine `READPAST` with `READCOMMITTEDLOCK`, as required by

@@ -147,6 +147,9 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             // than on each query is what lets idx_events_source_event_id actually serve the
             // duplicate lookup; a query-level COLLATE would leave it unusable.
             entity.Property(e => e.SourceEventId).UseCollation("Latin1_General_100_BIN2");
+            // Event types are matched ignoring case. Pinned rather than inherited, so a database
+            // created with a case-sensitive default still agrees with PostgreSQL's collation.
+            entity.Property(e => e.EventType).UseCollation("Latin1_General_100_CI_AS");
         });
 
         modelBuilder.Entity<Connector>(entity =>
