@@ -208,7 +208,7 @@ export function EventActivity({
                       anchor.current = index;
                       select(index, index);
                     }}
-                    className="group flex min-w-6 flex-1 cursor-pointer flex-col-reverse rounded-sm px-px pt-1 hover:bg-hover-surface aria-pressed:bg-selected-surface focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                    className="group flex min-w-6 flex-1 cursor-pointer flex-col-reverse rounded-sm px-px pt-1 hover:bg-hover-surface aria-pressed:bg-selected-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
                   >
                     {total === 0 ? <span className="h-px w-full bg-accent-border" /> : null}
                     {activityOutcomes.map(({ key, swatch }) =>
