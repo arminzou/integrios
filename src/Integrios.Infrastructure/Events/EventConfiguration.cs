@@ -25,9 +25,13 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
         entity.HasIndex(e => new { e.SourceId, e.SourceEventId }, "idx_events_source_event_id")
             .HasFilter("(source_event_id IS NOT NULL)");
 
-        // Newest-first Tenant Event history keyset: (accepted_at, id) is the cursor tuple.
-        entity.HasIndex(e => new { e.TenantId, e.AcceptedAt, e.Id }, "idx_events_tenant_accepted")
+        // Newest-first Tenant Event history keyset: (accepted_at, id) is the cursor tuple. Status is
+        // included because Event activity classifies every Event in a window by it; without it SQL
+        // Server scans the clustered index rather than look each windowed Event up.
+        IndexBuilder<DomainEvent> history = entity.HasIndex(e => new { e.TenantId, e.AcceptedAt, e.Id }, "idx_events_tenant_accepted")
             .IsDescending(false, true, true);
+        NpgsqlIndexBuilderExtensions.IncludeProperties(history, e => e.Status);
+        SqlServerIndexBuilderExtensions.IncludeProperties(history, e => e.Status);
 
         // A Subscription previews its mapping against the newest Events of its own type on its
         // Topic. A rare type among busy ones would otherwise walk the whole Tenant history above.

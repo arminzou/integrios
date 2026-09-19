@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { type Browser, chromium, type Locator, type Page, type Request } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { activityOf } from "../../src/test/http";
 
 /// Every create form, filled and submitted through a real browser.
 ///
@@ -160,6 +161,7 @@ function readFor(pathname: string): unknown {
       live_api_keys: 1,
       ingestion_endpoint: "http://localhost:5231/",
     };
+  if (/\/events\/activity$/.test(pathname)) return activityOf();
   if (/\/events\/backlog$/.test(pathname))
     return {
       awaiting_routing: { count: 0, oldest_at: null },

@@ -31,6 +31,11 @@ internal sealed class EventDeliveryConfiguration : IEntityTypeConfiguration<Even
 
         entity.HasIndex(e => e.EventId, "idx_event_deliveries_event_id");
 
+        // Event activity asks, for each windowed Event, whether any of its Deliveries is dead-lettered.
+        // Filtered to that one state, the probe stays as small as the dead-letter backlog itself.
+        entity.HasIndex(e => e.EventId, "idx_event_deliveries_dead_lettered")
+            .HasFilter("(status = 'dead_lettered')");
+
         entity.HasIndex(e => e.SubscriptionId, "idx_event_deliveries_subscription_id");
 
         entity.HasAlternateKey(e => new { e.EventId, e.SubscriptionId })

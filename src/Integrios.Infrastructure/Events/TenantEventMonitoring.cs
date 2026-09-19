@@ -18,6 +18,70 @@ internal sealed class TenantEventMonitoring(IDbConnectionFactory connectionFacto
             new EventBacklogItemDto(row.DeadLetteredCount, row.DeadLetteredOldestAt));
     }
 
+    public async Task<IReadOnlyList<EventActivityBucketCounts>> GetActivityAsync(
+        Guid tenantId,
+        DateTimeOffset windowStart,
+        TimeSpan bucketLength,
+        int bucketCount,
+        CancellationToken cancellationToken)
+    {
+        string sql = ActivitySql(connectionFactory.Provider == DatabaseProvider.SqlServer);
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        IEnumerable<EventActivityBucketCounts> rows = await connection.QueryAsync<EventActivityBucketCounts>(
+            new CommandDefinition(sql, new
+            {
+                TenantId = tenantId,
+                WindowStart = windowStart,
+                WindowEnd = windowStart + bucketLength * bucketCount,
+                BucketSeconds = (int)bucketLength.TotalSeconds,
+            }, cancellationToken: cancellationToken));
+        return rows.ToList();
+    }
+
+    internal static string ActivitySql(bool sqlServer)
+    {
+        // Whole seconds since the window start, floored by integer division. SQL Server's DATEDIFF
+        // counts second boundaries crossed, which equals the floor only because the window start is
+        // whole-second aligned; the handler guarantees that.
+        string bucket = sqlServer
+            ? "CAST(DATEDIFF_BIG(second, @WindowStart, e.accepted_at) / @BucketSeconds AS INT)"
+            : "CAST(FLOOR(EXTRACT(EPOCH FROM (e.accepted_at - @WindowStart)) / @BucketSeconds) AS INT)";
+
+        // The window is half-open, so an Event on a boundary lands in exactly one bucket. Statuses are
+        // counted in one pass over the Tenant's window; Events with a dead-lettered Delivery are
+        // counted separately as a semi-join, so several dead-lettered Deliveries never multiply an
+        // Event and the probe runs once per Event rather than once per aggregate. Routed is what is
+        // left of the non-backlog Events once those are taken out.
+        string window = "e.tenant_id = @TenantId AND e.accepted_at >= @WindowStart AND e.accepted_at < @WindowEnd";
+        return $"""
+            SELECT
+                statuses.bucket_index AS BucketIndex,
+                statuses.awaiting AS AwaitingRouting,
+                statuses.unrouted AS Unrouted,
+                COALESCE(dead.dead_lettered, 0) AS DeliveryDeadLettered,
+                statuses.settled - COALESCE(dead.dead_lettered, 0) AS Routed
+            FROM (
+                SELECT
+                    bucketed.bucket_index,
+                    CAST(SUM(CASE WHEN bucketed.status = 'accepted' THEN 1 ELSE 0 END) AS INT) AS awaiting,
+                    CAST(SUM(CASE WHEN bucketed.status = 'unrouted' THEN 1 ELSE 0 END) AS INT) AS unrouted,
+                    CAST(SUM(CASE WHEN bucketed.status IN ('accepted', 'unrouted') THEN 0 ELSE 1 END) AS INT) AS settled
+                FROM (SELECT {bucket} AS bucket_index, e.status FROM events e WHERE {window}) bucketed
+                GROUP BY bucketed.bucket_index
+            ) statuses
+            LEFT JOIN (
+                SELECT bucketed.bucket_index, CAST(COUNT(*) AS INT) AS dead_lettered
+                FROM (
+                    SELECT {bucket} AS bucket_index FROM events e
+                    WHERE {window} AND e.status NOT IN ('accepted', 'unrouted')
+                      AND EXISTS (SELECT 1 FROM event_deliveries d WHERE d.event_id = e.id AND d.status = 'dead_lettered')
+                ) bucketed
+                GROUP BY bucketed.bucket_index
+            ) dead ON dead.bucket_index = statuses.bucket_index
+            ORDER BY statuses.bucket_index;
+            """;
+    }
+
     internal static string BacklogSql(bool sqlServer)
     {
         // One statement, one derived row per backlog, so the three values describe the same moment.

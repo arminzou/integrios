@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
@@ -32,6 +32,7 @@ import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
 import { since, Timestamp } from "../ui/time";
+import { activityOutcomes, outcomeTotals, useEventActivity } from "./EventActivity";
 import { backlogs, useEventBacklog } from "./Events";
 
 type Tenant = components["schemas"]["TenantDto"];
@@ -264,12 +265,9 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
     queryKey: ["tenant-overview", tenantId],
     queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
   });
-  // The same read the ledger uses, unscoped, so both screens report the same window.
-  const activity = useQuery({
-    queryKey: ["activity-summary", tenantId, {}],
-    queryFn: () =>
-      call(() => api.GET("/admin/tenants/{tenantId}/events/activity-summary", { params: { path: { tenantId } } })),
-  });
+  // The Events chart's own 1-hour read, so both screens name and count the same four outcomes.
+  const activity = useEventActivity(tenantId, "1h");
+  const lastHour = activity.data ? outcomeTotals(activity.data.buckets) : null;
 
   const problem = asProblem(tenant.error);
   if (problem)
@@ -355,13 +353,15 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
           <h2 className="mb-3.5">Last 60 minutes</h2>
           <Details>
             <dt>Events accepted</dt>
-            <dd className="tabular-nums">{activity.data?.events_accepted ?? "—"}</dd>
-            <dt>Awaiting routing</dt>
-            <dd className="tabular-nums">{activity.data?.awaiting_routing ?? "—"}</dd>
-            <dt>Unrouted</dt>
-            <dd className="tabular-nums">{activity.data?.unrouted ?? "—"}</dd>
-            <dt>Dead-lettered Deliveries</dt>
-            <dd className="tabular-nums">{activity.data?.dead_lettered_deliveries ?? "—"}</dd>
+            <dd className="tabular-nums">
+              {lastHour ? Object.values(lastHour).reduce((sum, value) => sum + value, 0) : "—"}
+            </dd>
+            {activityOutcomes.map(({ key, label }) => (
+              <Fragment key={key}>
+                <dt>{label}</dt>
+                <dd className="tabular-nums">{lastHour?.[key] ?? "—"}</dd>
+              </Fragment>
+            ))}
           </Details>
           <Button asChild variant="outline" size="sm" className="mt-4 self-start">
             <Link className="no-underline" to={`/tenants/${tenantId}/events`}>

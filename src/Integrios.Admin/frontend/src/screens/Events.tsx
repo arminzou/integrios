@@ -36,6 +36,7 @@ import {
 import { nameIn, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge, statusLabel, statusMarker } from "../ui/status";
 import { dayLabel, localDay, since, TimeOfDay, Timestamp } from "../ui/time";
+import { EventActivity } from "./EventActivity";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
 type EventDelivery = components["schemas"]["EventDeliveryDiagnosticsDto"];
@@ -232,6 +233,45 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
       </PageHeader>
 
       <RightNow backlog={backlog} activeQuery={query} onSelect={(next) => setSearchParams(new URLSearchParams(next))} />
+
+      <EventActivity
+        tenantId={tenantId}
+        selectedFrom={instant(applied.acceptedFrom)}
+        selectedTo={instant(applied.acceptedTo)}
+        onSelect={(from, to) =>
+          setSearchParams(
+            writeFilters({ ...applied, acceptedFrom: localInputValue(from), acceptedTo: localInputValue(to) }),
+          )
+        }
+      />
+
+      {/* The accepted range is the one filter a chart can set, so it is stated where the chart is and
+          removable on its own without clearing the rest of the scope. */}
+      {applied.acceptedFrom || applied.acceptedTo ? (
+        <p className="m-0 flex flex-wrap items-center gap-2 text-[13px]">
+          <span>
+            Ledger scoped to Events accepted{" "}
+            {applied.acceptedFrom ? (
+              <>
+                from <Timestamp value={instant(applied.acceptedFrom) ?? ""} />{" "}
+              </>
+            ) : null}
+            {applied.acceptedTo ? (
+              <>
+                to <Timestamp value={instant(applied.acceptedTo) ?? ""} />
+              </>
+            ) : null}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setSearchParams(writeFilters({ ...applied, acceptedFrom: "", acceptedTo: "" }))}
+          >
+            Remove time range
+          </Button>
+        </p>
+      ) : null}
 
       {narrowing ? (
         <Form {...form}>

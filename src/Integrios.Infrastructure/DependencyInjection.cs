@@ -96,7 +96,6 @@ public static class DependencyInjection
         // way to reach it.
         services.AddSingleton<IEventDiagnosticsLookup, EventDiagnosticsLookup>();
         services.AddSingleton<ITenantEventHistory, TenantEventHistory>();
-        services.AddSingleton<ITenantEventActivitySummary, TenantEventActivitySummary>();
         services.AddSingleton<ITenantEventMonitoring, TenantEventMonitoring>();
         services.AddSingleton<ITenantOverview, TenantOverviewReader>();
         services.AddScoped<IOperatorIdentityStore, OperatorIdentityStore>();

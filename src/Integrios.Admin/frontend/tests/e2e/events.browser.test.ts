@@ -3,6 +3,7 @@
 import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { activityOf } from "../../src/test/http";
 
 /// What jsdom cannot decide for the Event ledger and its inspector: real layout (whether the
 /// inspector sits beside the ledger or below it) and `matchMedia`, which the narrow-width focus
@@ -38,6 +39,14 @@ const backlog = {
   unrouted: { count: 0, oldest_at: null },
   dead_lettered_deliveries: { count: 0, oldest_at: null },
 };
+
+const activityFor = (range: string | null) =>
+  range === "7d"
+    ? activityOf(
+        { 20: { routed: 40, delivery_dead_lettered: 2 } },
+        { range: "7d", bucketMinutes: 360, bucketCount: 28 },
+      )
+    : activityOf({ 6: { routed: 3 }, 9: { routed: 5, unrouted: 1 } });
 
 const secondEventId = "55555555-5555-5555-5555-555555555555";
 
@@ -114,6 +123,9 @@ async function openEvents(
   const browserPage = await browser.newPage({ viewport });
   await browserPage.route("**/auth/session", (route) => route.fulfill({ json: session }));
   await browserPage.route(`**/admin/tenants/${tenantId}/events/backlog`, (route) => route.fulfill({ json: backlog }));
+  await browserPage.route(`**/admin/tenants/${tenantId}/events/activity*`, (route) =>
+    route.fulfill({ json: activityFor(new URL(route.request().url()).searchParams.get("range")) }),
+  );
   await browserPage.route(`**/admin/tenants/${tenantId}/events/*/deliveries`, (route) => {
     const eventId = new URL(route.request().url()).pathname.split("/").at(-2)!;
     return route.fulfill({ json: { ...eventDetail(eventId), event_deliveries: deliveries } });
@@ -182,9 +194,11 @@ describe("The Event ledger and inspector in a real browser", () => {
         ? eventDetail(loadedEventId)
         : path.endsWith("/backlog")
           ? backlog
-          : path === `/admin/tenants/${tenantId}`
-            ? tenant
-            : listPage([loadedEvent]);
+          : path.endsWith("/activity")
+            ? activityFor("1h")
+            : path === `/admin/tenants/${tenantId}`
+              ? tenant
+              : listPage([loadedEvent]);
       return route.fulfill({ json: body });
     });
     const opened = page.context().waitForEvent("page");
@@ -311,6 +325,41 @@ describe("The Event ledger and inspector in a real browser", () => {
     await page.waitForFunction(() => window.location.search === "?delivery_status=dead_lettered");
     // Applying is a navigation, so the previous scope is what Back returns to.
     expect(new URL(page.url()).pathname).toBe(`/tenants/${tenantId}/events`);
+    await page.close();
+  }, 60_000);
+
+  it("drags across Activity intervals to scope the ledger to their accepted range", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
+    const intervals = page.getByRole("group", { name: /Event activity intervals/ }).getByRole("button");
+    const first = (await intervals.nth(6).boundingBox())!;
+    const last = (await intervals.nth(9).boundingBox())!;
+    await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(last.x + last.width / 2, last.y + last.height / 2, { steps: 8 });
+    await page.mouse.up();
+
+    await expect.poll(() => new URL(page.url()).searchParams.get("accepted_from")).toBe("2026-09-01T09:30:00.000Z");
+    expect(new URL(page.url()).searchParams.get("accepted_to")).toBe("2026-09-01T09:50:00.000Z");
+    for (const index of [6, 7, 8, 9]) expect(await intervals.nth(index).getAttribute("aria-pressed")).toBe("true");
+    expect(await intervals.nth(10).getAttribute("aria-pressed")).toBe("false");
+    await page.getByRole("button", { name: "Remove time range" }).waitFor();
+    await page.close();
+  }, 60_000);
+
+  it("keeps the week of Activity inside its card at 320 CSS pixels, with usable intervals", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 320, height: 900 });
+    await page.getByRole("button", { name: "7 d" }).click();
+    const intervals = page.getByRole("group", { name: /Event activity intervals/ }).getByRole("button");
+    await expect.poll(() => intervals.count()).toBe(28);
+
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+    expect((await intervals.first().boundingBox())!.width).toBeGreaterThanOrEqual(24);
+    // The last interval is reachable by keyboard even though it starts scrolled out of view.
+    await intervals.nth(27).focus();
+    await page.keyboard.press("Home");
+    expect(await intervals.first().evaluate((element) => element === document.activeElement)).toBe(true);
     await page.close();
   }, 60_000);
 });

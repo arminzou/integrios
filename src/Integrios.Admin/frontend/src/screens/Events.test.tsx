@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { type Call, page, stubHttp } from "../test/http";
+import { activityOf, type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { EventsScreen } from "./Events";
 
@@ -33,6 +33,12 @@ const backlog = {
   dead_lettered_deliveries: { count: 2, oldest_at: "2026-08-31T10:00:00Z" },
 };
 
+/// The last hour in twelve 5-minute buckets from 09:00, and a week in 6-hour buckets for the 7 d range.
+const activityFor = (range: string | null) =>
+  range === "7d"
+    ? activityOf({}, { range: "7d", start: "2026-08-25T10:00:00Z", bucketMinutes: 360, bucketCount: 28 })
+    : activityOf({ 9: { routed: 3, delivery_dead_lettered: 1 }, 10: { awaiting_routing: 2 } });
+
 const eventsCall = (calls: Call[]) => calls.filter((call) => call.url.pathname.endsWith("/events"));
 
 /// Distinguishes the ledger list, the backlog, and an Event's own detail read, all of which
@@ -41,6 +47,7 @@ function respondFor(eventsBody: unknown, detailBody: unknown = page([])) {
   return ({ url, method }: Call) => {
     if (method === "POST") return { status: 202 };
     if (url.pathname.endsWith("/backlog")) return { status: 200, body: backlog };
+    if (url.pathname.endsWith("/activity")) return { status: 200, body: activityFor(url.searchParams.get("range")) };
     if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detailBody };
     if (url.pathname.endsWith("/events")) return { status: 200, body: eventsBody };
     return { status: 200, body: page([]) };
@@ -225,6 +232,88 @@ describe("Right now", () => {
   });
 });
 
+describe("Event activity", () => {
+  it("names each interval by its time and every outcome count", async () => {
+    stubHttp(respondFor(page([])));
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+
+    const chart = await screen.findByRole("region", { name: "Activity" });
+    await within(chart).findByText("6 Events accepted, by current outcome.");
+    const intervals = within(chart).getByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    expect(buttons).toHaveLength(12);
+    expect(buttons[9].getAttribute("aria-label")).toMatch(
+      /: 3 routed, 0 awaiting routing, 0 unrouted, 1 delivery dead-lettered$/,
+    );
+    // One tab stop for the whole chart, on the most recent interval.
+    expect(buttons.filter((button) => button.tabIndex === 0)).toEqual([buttons[11]]);
+  });
+
+  it("scopes the ledger to a selected interval through a visible, removable filter", async () => {
+    const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events?status=routed`);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const tenth = within(intervals).getAllByRole("button")[9];
+    fireEvent.click(tenth);
+
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:45:00.000Z"),
+    );
+    const read = eventsCall(calls).at(-1)!.url.searchParams;
+    expect(read.get("accepted_to")).toBe("2026-09-01T09:50:00.000Z");
+    // The rest of the scope is kept; only the accepted range comes from the chart.
+    expect(read.get("status")).toBe("routed");
+    expect(tenth.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove time range" }));
+    await waitFor(() => expect(router.state.location.search).toBe("?status=routed"));
+    expect(tenth.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("extends a selection with Shift and an arrow key, and moves focus with the arrow alone", async () => {
+    const calls = stubHttp(respondFor(page([])));
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    buttons[11].focus();
+    fireEvent.keyDown(buttons[11], { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(buttons[10]);
+    expect(buttons[10].tabIndex).toBe(0);
+
+    fireEvent.click(buttons[10]);
+    fireEvent.keyDown(buttons[10], { key: "ArrowLeft", shiftKey: true });
+    fireEvent.keyDown(buttons[9], { key: "ArrowLeft", shiftKey: true });
+
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:40:00.000Z"),
+    );
+    expect(eventsCall(calls).at(-1)!.url.searchParams.get("accepted_to")).toBe("2026-09-01T09:55:00.000Z");
+    expect(document.activeElement).toBe(buttons[8]);
+    // Contracting back towards the anchor narrows the range again.
+    fireEvent.keyDown(buttons[8], { key: "ArrowRight", shiftKey: true });
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:45:00.000Z"),
+    );
+  });
+
+  it("reads the week in 6-hour intervals when the 7 d range is chosen", async () => {
+    const calls = stubHttp(respondFor(page([])));
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "7 d" }));
+
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    await waitFor(() => expect(within(intervals).getAllByRole("button")).toHaveLength(28));
+    expect(
+      calls.some((call) => call.url.pathname.endsWith("/activity") && call.url.searchParams.get("range") === "7d"),
+    ).toBe(true);
+    expect(screen.getByRole("button", { name: "7 d" }).getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
 const detail = (deliveryStatus: string) => ({
   event_id: eventId,
   status: "routed",
@@ -327,6 +416,7 @@ describe("Event inspector", () => {
         return { status: 202 };
       }
       if (url.pathname.endsWith("/backlog")) return { status: 200, body: backlog };
+      if (url.pathname.endsWith("/activity")) return { status: 200, body: activityFor("1h") };
       if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detail(deliveryStatus) };
       return { status: 200, body: page([]) };
     });

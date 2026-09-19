@@ -20,7 +20,7 @@ public static class DependencyInjection
         [typeof(ReplayEventDeliveryCommandHandler)] = Admin,
         [typeof(GetEventDeliveryRecoveryQueryHandler)] = Admin,
         [typeof(ListTenantEventsQueryHandler)] = Admin,
-        [typeof(GetTenantEventActivitySummaryQueryHandler)] = Admin,
+        [typeof(GetTenantEventActivityQueryHandler)] = Admin,
         [typeof(GetTenantEventBacklogQueryHandler)] = Admin
     };
 
