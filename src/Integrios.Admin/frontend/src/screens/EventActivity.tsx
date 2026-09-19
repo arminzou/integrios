@@ -67,7 +67,8 @@ export function EventActivity({
   /// The ledger's applied accepted range, as instants; a bucket inside it reads as selected.
   selectedFrom?: string;
   selectedTo?: string;
-  onSelect: (from: string, to: string) => void;
+  /// replace is true for a later step of one keyboard extension, so the gesture leaves one history entry.
+  onSelect: (from: string, to: string, replace: boolean) => void;
 }) {
   const [range, setRange] = useState<ActivityRange>("1h");
   const activity = useEventActivity(tenantId, range);
@@ -76,8 +77,14 @@ export function EventActivity({
   // Roving focus: the chart is one tab stop, and the arrow keys move between its intervals.
   const [focused, setFocused] = useState(buckets.length - 1);
   const anchor = useRef<number | null>(null);
+  // A drag is previewed here and applied once on release, so one gesture is one ledger read and one
+  // history entry rather than one per interval the pointer crosses.
+  const [preview, setPreview] = useState<{ low: number; high: number } | null>(null);
+  const previewRef = useRef(preview);
+  previewRef.current = preview;
   const dragging = useRef(false);
   const dragged = useRef(false);
+  const extending = useRef(false);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
@@ -86,17 +93,32 @@ export function EventActivity({
     anchor.current = null;
   }, [buckets.length]);
 
+  const commit = useRef<(low: number, high: number) => void>(() => {});
+  commit.current = (low, high) => onSelect(buckets[low].start, buckets[high].end, false);
+
   useEffect(() => {
     const stop = () => {
       dragging.current = false;
+      // The click that may follow this release belongs to the drag; after it, clicks and Enter select again.
+      setTimeout(() => {
+        dragged.current = false;
+      });
+      const pending = previewRef.current;
+      if (pending === null) return;
+      setPreview(null);
+      commit.current(pending.low, pending.high);
     };
     window.addEventListener("pointerup", stop);
     return () => window.removeEventListener("pointerup", stop);
   }, []);
 
-  function select(from: number, to: number) {
-    const [low, high] = from <= to ? [from, to] : [to, from];
-    onSelect(buckets[low].start, buckets[high].end);
+  function span(from: number, to: number) {
+    return from <= to ? { low: from, high: to } : { low: to, high: from };
+  }
+
+  function select(from: number, to: number, replace = false) {
+    const { low, high } = span(from, to);
+    onSelect(buckets[low].start, buckets[high].end, replace);
   }
 
   function move(to: number) {
@@ -113,8 +135,12 @@ export function EventActivity({
       if (event.shiftKey) {
         const from = anchor.current ?? index;
         anchor.current = from;
-        select(from, move(index + step));
-      } else move(index + step);
+        select(from, move(index + step), extending.current);
+        extending.current = true;
+      } else {
+        extending.current = false;
+        move(index + step);
+      }
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
       move(event.key === "Home" ? 0 : buckets.length - 1);
@@ -123,9 +149,11 @@ export function EventActivity({
 
   const from = selectedFrom ? new Date(selectedFrom).getTime() : Number.NaN;
   const to = selectedTo ? new Date(selectedTo).getTime() : Number.NaN;
-  const isSelected = (bucket: EventActivityBucket) =>
-    new Date(bucket.start).getTime() >= (Number.isNaN(from) ? Number.POSITIVE_INFINITY : from) &&
-    new Date(bucket.end).getTime() <= (Number.isNaN(to) ? Number.NEGATIVE_INFINITY : to);
+  const isSelected = (bucket: EventActivityBucket, index: number) =>
+    preview
+      ? index >= preview.low && index <= preview.high
+      : new Date(bucket.start).getTime() >= (Number.isNaN(from) ? Number.POSITIVE_INFINITY : from) &&
+        new Date(bucket.end).getTime() <= (Number.isNaN(to) ? Number.NEGATIVE_INFINITY : to);
   const totalOf = (bucket: EventActivityBucket) =>
     activityOutcomes.reduce((sum, { key }) => sum + Number(bucket[key]), 0);
   const max = Math.max(1, ...buckets.map(totalOf));
@@ -185,7 +213,7 @@ export function EventActivity({
                     type="button"
                     tabIndex={index === focused ? 0 : -1}
                     aria-label={bucketName(bucket)}
-                    aria-pressed={isSelected(bucket)}
+                    aria-pressed={isSelected(bucket, index)}
                     onFocus={() => setFocused(index)}
                     onKeyDown={(event) => onKeyDown(event, index)}
                     onPointerDown={(event) => {
@@ -193,18 +221,20 @@ export function EventActivity({
                       event.currentTarget.releasePointerCapture?.(event.pointerId);
                       dragging.current = true;
                       dragged.current = false;
+                      extending.current = false;
                       anchor.current = index;
                     }}
                     onPointerEnter={() => {
                       if (!dragging.current || anchor.current === null || anchor.current === index) return;
                       dragged.current = true;
-                      select(anchor.current, index);
+                      setPreview(span(anchor.current, index));
                     }}
                     onClick={() => {
                       if (dragged.current) {
                         dragged.current = false;
                         return;
                       }
+                      extending.current = false;
                       anchor.current = index;
                       select(index, index);
                     }}

@@ -340,8 +340,13 @@ describe("The Event ledger and inspector in a real browser", () => {
 
     await expect.poll(() => new URL(page.url()).searchParams.get("accepted_from")).toBe("2026-09-01T09:30:00.000Z");
     expect(new URL(page.url()).searchParams.get("accepted_to")).toBe("2026-09-01T09:50:00.000Z");
-    for (const index of [6, 7, 8, 9]) expect(await intervals.nth(index).getAttribute("aria-pressed")).toBe("true");
+    for (const index of [6, 7, 8, 9])
+      await expect.poll(() => intervals.nth(index).getAttribute("aria-pressed")).toBe("true");
     expect(await intervals.nth(10).getAttribute("aria-pressed")).toBe("false");
+    // A drag leaves the keyboard path intact: Enter on one interval selects it alone.
+    await intervals.nth(2).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => new URL(page.url()).searchParams.get("accepted_from")).toBe("2026-09-01T09:10:00.000Z");
     await page.getByRole("button", { name: "Remove time range" }).waitFor();
     await page.close();
   }, 60_000);

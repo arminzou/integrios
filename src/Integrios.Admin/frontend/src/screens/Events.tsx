@@ -153,6 +153,8 @@ export function useEventBacklog(tenantId: string) {
   return useQuery({
     queryKey: ["event-backlog", tenantId],
     queryFn: () => call(() => api.GET("/admin/tenants/{tenantId}/events/backlog", { params: { path: { tenantId } } })),
+    // Current state is only current if it is read again; the same cadence as the ledger's freshness.
+    refetchInterval: 15_000,
   });
 }
 
@@ -238,6 +240,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
       data ? { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) } : data,
     );
     void queryClient.invalidateQueries({ queryKey: ledgerKey, exact: true });
+    void queryClient.invalidateQueries({ queryKey: ["event-backlog", tenantId] });
   }
   // Whether there is a ledger to narrow yet. Until the read answers, the filter form is not
   // rendered: a Tenant that has accepted nothing has nothing to filter, and a screen that guessed
@@ -265,9 +268,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         tenantId={tenantId}
         selectedFrom={instant(applied.acceptedFrom)}
         selectedTo={instant(applied.acceptedTo)}
-        onSelect={(from, to) =>
+        onSelect={(from, to, replace) =>
           setSearchParams(
             writeFilters({ ...applied, acceptedFrom: localInputValue(from), acceptedTo: localInputValue(to) }),
+            { replace },
           )
         }
       />
@@ -579,7 +583,7 @@ function FreshnessNotice({
       ? `${count}${freshness.data?.capped ? "+" : ""} new ${count === 1 ? "Event" : "Events"} since you opened this`
       : null;
   return (
-    <div role="status" className="empty:hidden">
+    <div role="status">
       {message ? (
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-selected-surface px-3.5 py-2 text-[13px] text-selected-ink">
           <span>{message}</span>
@@ -806,6 +810,8 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
                     onReplayed={() => {
                       setReplayed(true);
                       void queryClient.invalidateQueries({ queryKey: eventKey });
+                      // A replayed Delivery leaves the dead-lettered backlog the strip and rail count.
+                      void queryClient.invalidateQueries({ queryKey: ["event-backlog", tenantId] });
                     }}
                   />
                 </div>
