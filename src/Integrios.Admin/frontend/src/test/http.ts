@@ -45,6 +45,13 @@ export function stubHttp(
   return calls;
 }
 
+/// The Event backlog of a Tenant with nothing waiting, for tests whose subject is not the backlog.
+export const quietBacklog = {
+  awaiting_routing: { count: 0, oldest_at: null },
+  unrouted: { count: 0, oldest_at: null },
+  dead_lettered_deliveries: { count: 0, oldest_at: null },
+};
+
 /// One cursor page as every Admin list returns it.
 export function page(items: unknown[], nextCursor: string | null = null) {
   return { items, next_cursor: nextCursor };

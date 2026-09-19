@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAccessibilityViolations } from "../test/axe";
-import { page, stubHttp } from "../test/http";
+import { page, quietBacklog, stubHttp } from "../test/http";
 import { renderScreen as renderInRouter } from "../test/router";
 import { ConnectorsScreen } from "./Connectors";
 import { DestinationsScreen } from "./Destinations";
@@ -139,7 +139,7 @@ describe("Accessibility of the Operator workflows", () => {
   });
 
   it("passes the automated rules on a populated table and its confirmation", async () => {
-    stubHttp(() => ({ status: 200, body: tenant }));
+    stubHttp(({ url }) => ({ status: 200, body: url.pathname.endsWith("/backlog") ? quietBacklog : tenant }));
 
     const container = renderScreen(<TenantScreen tenantId={tenantId} />);
     await screen.findByRole("heading", { level: 1, name: "Overview" });
@@ -154,7 +154,11 @@ describe("Accessibility of the Operator workflows", () => {
   it("passes the automated rules on the investigation screens", async () => {
     stubHttp(({ url }) => ({
       status: 200,
-      body: url.pathname.endsWith("/deliveries") ? eventDetail : page([]),
+      body: url.pathname.endsWith("/deliveries")
+        ? eventDetail
+        : url.pathname.endsWith("/backlog")
+          ? quietBacklog
+          : page([]),
     }));
 
     const events = renderScreen(<EventsScreen tenantId={tenantId} />);

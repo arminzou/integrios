@@ -20,7 +20,8 @@ public static class DependencyInjection
         [typeof(ReplayEventDeliveryCommandHandler)] = Admin,
         [typeof(GetEventDeliveryRecoveryQueryHandler)] = Admin,
         [typeof(ListTenantEventsQueryHandler)] = Admin,
-        [typeof(GetTenantEventActivitySummaryQueryHandler)] = Admin
+        [typeof(GetTenantEventActivitySummaryQueryHandler)] = Admin,
+        [typeof(GetTenantEventBacklogQueryHandler)] = Admin
     };
 
     internal static IServiceCollection AddApplicationServices(this IServiceCollection services)

@@ -34,6 +34,15 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
         entity.HasIndex(e => new { e.TenantId, e.TopicId, e.EventType, e.AcceptedAt, e.Id }, "idx_events_topic_type_accepted")
             .IsDescending(false, false, false, true, true);
 
+        // The monitoring backlog counts Events awaiting routing and unrouted however old, with the
+        // oldest acceptance of each. Filtered to those two statuses, so it stays as small as the
+        // backlog itself rather than scanning the Tenant's whole history. Status is only included,
+        // not a key column: SQL Server stores it as nvarchar(max), which cannot be an index key.
+        IndexBuilder<DomainEvent> backlog = entity.HasIndex(e => new { e.TenantId, e.AcceptedAt }, "idx_events_tenant_backlog")
+            .HasFilter("(status IN ('accepted', 'unrouted'))");
+        NpgsqlIndexBuilderExtensions.IncludeProperties(backlog, e => e.Status);
+        SqlServerIndexBuilderExtensions.IncludeProperties(backlog, e => e.Status);
+
         entity.Property(e => e.Id)
             .ValueGeneratedNever()
             .HasColumnName("id");

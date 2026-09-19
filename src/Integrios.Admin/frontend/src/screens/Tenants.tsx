@@ -31,7 +31,8 @@ import { useFilterParam } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
 import { StatusBadge } from "../ui/status";
-import { Timestamp } from "../ui/time";
+import { since, Timestamp } from "../ui/time";
+import { backlogs, useEventBacklog } from "./Events";
 
 type Tenant = components["schemas"]["TenantDto"];
 
@@ -281,10 +282,6 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
   if (!tenant.data) return <p>Loading…</p>;
 
   const current = tenant.data;
-  // The banner offers to take an Operator to work that needs them, so it counts what is
-  // outstanding rather than what failed inside the summary's hour — the tile below still reports
-  // the windowed figure, under the label that says so.
-  const deadLettered = Number(overview.data?.dead_lettered_deliveries ?? 0);
 
   return (
     <Page>
@@ -302,24 +299,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         What is configured for {current.name}, and what currently needs an Operator.
       </PageHeader>
 
-      {/* Absent when there is nothing to act on. A banner that is always there stops being read. */}
-      {deadLettered > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-danger-surface p-4 text-danger-ink">
-          <div>
-            <strong>
-              {deadLettered} dead-lettered {deadLettered === 1 ? "Delivery" : "Deliveries"}
-            </strong>
-            <p className="m-0 text-sm">
-              These have exhausted their retry budget. Replay is offered on each one in the Event inspector.
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link className="no-underline" to={`/tenants/${tenantId}/events?delivery_status=dead_lettered`}>
-              Open Events
-            </Link>
-          </Button>
-        </div>
-      ) : null}
+      <NeedsAttention tenantId={tenantId} />
 
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
 
@@ -391,6 +371,57 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
         </Panel>
       </div>
     </Page>
+  );
+}
+
+/// The same backlog read as the Events screen's Right now, listing only what is waiting. Every
+/// backlog is shown however old, with no threshold and no suppression: a count the Operator cannot
+/// see is work nobody is doing.
+function NeedsAttention({ tenantId }: { tenantId: string }) {
+  const backlog = useEventBacklog(tenantId);
+  const problem = asProblem(backlog.error);
+  if (problem) return <ReadError problem={problem} what="The current backlog" />;
+  if (!backlog.data) return null;
+  const data = backlog.data;
+  const waiting = backlogs.filter((item) => Number(data[item.key].count) > 0);
+
+  return (
+    <section aria-labelledby="needs-attention" className="flex flex-col gap-2.5">
+      <h2 id="needs-attention" className="m-0">
+        Needs attention
+      </h2>
+      {waiting.length === 0 ? (
+        <p className="m-0 text-[13px] text-ink-secondary">Nothing is waiting on an Operator.</p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          {waiting.map((item) => {
+            const { count, oldest_at } = data[item.key];
+            return (
+              <li
+                key={item.key}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-surface px-4 py-3 text-danger-ink"
+              >
+                <div>
+                  <strong className="tabular-nums">
+                    {count} {item.noun}
+                  </strong>
+                  {oldest_at ? <p className="m-0 text-sm">Oldest {since(oldest_at)}</p> : null}
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    className="no-underline"
+                    to={`/tenants/${tenantId}/events?${item.query}`}
+                    aria-label={`Open ${item.noun} in Events`}
+                  >
+                    Open in Events
+                  </Link>
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

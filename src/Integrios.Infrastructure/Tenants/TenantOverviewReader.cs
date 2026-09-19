@@ -32,14 +32,7 @@ internal sealed class TenantOverviewReader(IDbConnectionFactory connectionFactor
                     WHERE t.tenant_id = @TenantId AND s.deleted_at IS NULL AND t.deleted_at IS NULL) AS Subscriptions,
                 (SELECT CAST(COUNT(*) AS INT) FROM tenant_api_keys
                     WHERE tenant_id = @TenantId AND revoked_at IS NULL
-                      AND (expires_at IS NULL OR expires_at > @Now)) AS LiveApiKeys,
-                -- Outstanding rather than recent: a dead-lettered Delivery stays dead-lettered until
-                -- an Operator replays it, so this is not windowed the way the activity summary is.
-                -- Driven from this Tenant's Events and probing the Delivery index per row, which is
-                -- the same shape the activity summary settled on for the same reason.
-                (SELECT CAST(COUNT(*) AS INT) FROM event_deliveries d
-                    JOIN events e ON e.id = d.event_id
-                    WHERE e.tenant_id = @TenantId AND d.status = 'dead_lettered') AS DeadLetteredDeliveries
+                      AND (expires_at IS NULL OR expires_at > @Now)) AS LiveApiKeys
             """;
 
         return await connection.QuerySingleAsync<TenantOverviewCounts>(
