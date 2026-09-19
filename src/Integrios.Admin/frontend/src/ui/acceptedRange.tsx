@@ -63,6 +63,8 @@ export function AcceptedRangePill({
     >
       <PopoverTrigger
         data-applied={String(from !== "" || to !== "")}
+        // The visible reading drops the year; the exact instants stay reachable here.
+        title={from || to ? `${from || "…"} – ${to || "…"}` : undefined}
         className={`${filterPill} cursor-pointer justify-start`}
       >
         <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-ink-secondary" />
@@ -80,7 +82,6 @@ export function AcceptedRangePill({
               size="sm"
               onClick={() => {
                 const now = Date.now();
-                setDirty(false);
                 onChange(new Date(now - minutes * 60_000).toISOString(), new Date(now).toISOString());
                 setOpen(false);
               }}
@@ -121,7 +122,6 @@ export function AcceptedRangePill({
           className="self-start"
           disabled={from === "" && to === ""}
           onClick={() => {
-            setDirty(false);
             onChange("", "");
             setOpen(false);
           }}

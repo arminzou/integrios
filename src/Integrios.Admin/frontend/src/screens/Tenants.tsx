@@ -70,7 +70,7 @@ export function TenantsScreen() {
   // Admin API to answer "which environments"; a URL value outside these stays visible regardless.
   const environments = [
     ...new Set(
-      (tenantOptions.data?.items ?? []).map((item) => item.environment).filter((value) => typeof value === "string"),
+      (tenantOptions.data?.items ?? []).flatMap((item) => (item.environment?.trim() ? [item.environment] : [])),
     ),
   ].sort();
   const list = useInfiniteQuery({
