@@ -232,6 +232,78 @@ describe("Right now", () => {
   });
 });
 
+describe("Ledger Event type and freshness", () => {
+  it("filters the ledger by the Event type typed, and restores it from the URL", async () => {
+    const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
+    fireEvent.change(await screen.findByLabelText("Event type"), { target: { value: "Order.Created" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => expect(eventsCall(calls).at(-1)?.url.searchParams.get("event_type")).toBe("Order.Created"));
+    expect(router.state.location.search).toBe("?event_type=Order.Created");
+  });
+
+  it("counts new Events without moving rows, and Show reloads the first page under the next watermark", async () => {
+    let listReads = 0;
+    const second = {
+      ...routedEventWithDeadLetters,
+      event_id: "12121212-1212-1212-1212-121212121212",
+      accepted_at: "2026-09-01T10:05:00Z",
+    };
+    const calls = stubHttp((call) => {
+      const { url } = call;
+      if (url.pathname.endsWith("/freshness"))
+        return {
+          status: 200,
+          body: { count: url.searchParams.get("watermark") === "wm-1" ? 2 : 0, capped: false },
+        };
+      if (url.pathname.endsWith("/events")) {
+        listReads += 1;
+        return listReads === 1
+          ? { status: 200, body: { ...page([routedEventWithDeadLetters]), watermark: "wm-1" } }
+          : { status: 200, body: { ...page([second, routedEventWithDeadLetters]), watermark: "wm-2" } };
+      }
+      return respondFor(page([]))(call);
+    });
+
+    renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events?status=routed`);
+
+    expect(await screen.findByText("2 new Events since you opened this")).toBeTruthy();
+    // The count is read under the ledger's own filters, and the rows under the reader are untouched.
+    const poll = calls.find((call) => call.url.pathname.endsWith("/freshness"))!;
+    expect(poll.url.searchParams.get("status")).toBe("routed");
+    expect(screen.getAllByRole("rowheader")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+
+    await waitFor(() => expect(screen.getAllByRole("rowheader")).toHaveLength(2));
+    // Only the first page is read again, from the top.
+    expect(eventsCall(calls).at(-1)!.url.searchParams.has("after")).toBe(false);
+    await waitFor(() => expect(screen.queryByText(/new Events? since you opened this/)).toBeNull());
+    expect(
+      calls.some(
+        (call) => call.url.pathname.endsWith("/freshness") && call.url.searchParams.get("watermark") === "wm-2",
+      ),
+    ).toBe(true);
+  });
+
+  it("says so, rather than guessing, when the watermark is refused", async () => {
+    stubHttp((call) =>
+      call.url.pathname.endsWith("/freshness")
+        ? { status: 400, body: { title: "The cursor is invalid or has expired." } }
+        : call.url.pathname.endsWith("/events")
+          ? { status: 200, body: { ...page([routedEventWithDeadLetters]), watermark: "expired" } }
+          : respondFor(page([]))(call),
+    );
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+
+    expect(await screen.findByText("The ledger can no longer tell what is new since it was read.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show" })).toBeTruthy();
+  });
+});
+
 describe("Event activity", () => {
   it("names each interval by its time and every outcome count", async () => {
     stubHttp(respondFor(page([])));

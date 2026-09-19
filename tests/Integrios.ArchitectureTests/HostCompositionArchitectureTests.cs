@@ -133,7 +133,8 @@ public sealed class HostCompositionArchitectureTests
             ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin,
             ["ListTenantEventsQueryHandler"] = Host.Admin,
             ["GetTenantEventActivityQueryHandler"] = Host.Admin,
-            ["GetTenantEventBacklogQueryHandler"] = Host.Admin
+            ["GetTenantEventBacklogQueryHandler"] = Host.Admin,
+            ["CountNewerTenantEventsQueryHandler"] = Host.Admin
         };
 
     [Fact]
