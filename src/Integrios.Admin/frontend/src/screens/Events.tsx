@@ -63,6 +63,7 @@ type Filters = {
   sourceId: string;
   topicId: string;
   sourceEventId: string;
+  eventType: string;
   acceptedFrom: string;
   acceptedTo: string;
 };
@@ -73,6 +74,7 @@ const noFilters: Filters = {
   sourceId: "",
   topicId: "",
   sourceEventId: "",
+  eventType: "",
   acceptedFrom: "",
   acceptedTo: "",
 };
@@ -91,6 +93,7 @@ const filterParams: { field: keyof Filters; name: string; isInstant?: true }[] =
   { field: "sourceId", name: "source_id" },
   { field: "topicId", name: "topic_id" },
   { field: "sourceEventId", name: "source_event_id" },
+  { field: "eventType", name: "event_type" },
   { field: "acceptedFrom", name: "accepted_from", isInstant: true },
   { field: "acceptedTo", name: "accepted_to", isInstant: true },
 ];
@@ -187,31 +190,55 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
   const backlog = useEventBacklog(tenantId);
 
+  // The ledger and its freshness count read under exactly the same filters.
+  const filterQuery = {
+    status: applied.status || undefined,
+    delivery_status: applied.deliveryStatus || undefined,
+    source_id: applied.sourceId || undefined,
+    topic_id: applied.topicId || undefined,
+    source_event_id: applied.sourceEventId || undefined,
+    event_type: applied.eventType || undefined,
+    accepted_from: instant(applied.acceptedFrom),
+    accepted_to: instant(applied.acceptedTo),
+  };
+  const ledgerKey = ["events", tenantId, applied];
   const list = useInfiniteQuery({
-    queryKey: ["events", tenantId, applied],
+    queryKey: ledgerKey,
     queryFn: ({ pageParam }) =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/events", {
-          params: {
-            path: { tenantId },
-            query: {
-              status: applied.status || undefined,
-              delivery_status: applied.deliveryStatus || undefined,
-              source_id: applied.sourceId || undefined,
-              topic_id: applied.topicId || undefined,
-              source_event_id: applied.sourceEventId || undefined,
-              accepted_from: instant(applied.acceptedFrom),
-              accepted_to: instant(applied.acceptedTo),
-              after: pageParam ?? undefined,
-              limit: 20,
-            },
-          },
+          params: { path: { tenantId }, query: { ...filterQuery, after: pageParam ?? undefined, limit: 20 } },
         }),
       ),
     initialPageParam: null as string | null,
     getNextPageParam: nextCursor<EventListItem>,
   });
   const events = list.data?.pages.flatMap((page) => page.items) ?? [];
+
+  // Rows never move while an Operator reads them. The first page's watermark marks what the ledger
+  // has shown; the count of what arrived since is polled while the tab is visible, and the rows only
+  // change when the Operator asks for them.
+  const queryClient = useQueryClient();
+  const watermark = list.data?.pages[0]?.watermark ?? null;
+  const freshness = useQuery({
+    queryKey: ["event-freshness", tenantId, applied, watermark],
+    queryFn: () =>
+      call(() =>
+        api.GET("/admin/tenants/{tenantId}/events/freshness", {
+          params: { path: { tenantId }, query: { ...filterQuery, watermark: watermark ?? "" } },
+        }),
+      ),
+    enabled: watermark !== null,
+    refetchInterval: 15_000,
+  });
+  function showNew() {
+    // Keep only the first page and read it again: later pages would continue from rows that are no
+    // longer where they were, and the fresh first page brings the next watermark with it.
+    queryClient.setQueryData<typeof list.data>(ledgerKey, (data) =>
+      data ? { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) } : data,
+    );
+    void queryClient.invalidateQueries({ queryKey: ledgerKey, exact: true });
+  }
   // Whether there is a ledger to narrow yet. Until the read answers, the filter form is not
   // rendered: a Tenant that has accepted nothing has nothing to filter, and a screen that guessed
   // first would retract the form a moment later.
@@ -291,6 +318,12 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 type="search"
                 hint="The identity the sending system gave the Event. Matched exactly."
               />
+              <FilterTextField
+                control={form.control}
+                name="eventType"
+                label="Event type"
+                hint="Matched exactly, ignoring case, including types no Source declares any more."
+              />
               <FilterSelectField
                 control={form.control}
                 name="status"
@@ -358,7 +391,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                 step="1"
               />
 
-              {/* Apply stays explicit. Seven controls that each re-queried on change would issue six
+              {/* Apply stays explicit. Eight controls that each re-queried on change would issue six
                   requests on the way to the scope the Operator actually wanted. */}
               <Button type="submit">Apply filters</Button>
             </FilterBar>
@@ -380,6 +413,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             noun="Events"
             emptyText="Nothing has been accepted for this Tenant yet. Events arrive through a Source, on the intake endpoint."
           />
+          <FreshnessNotice freshness={freshness} onShow={showNew} />
           {events.length > 0 ? (
             <TableCard
               caption={`Events, newest first${appliedNote(appliedCount)}`}
@@ -526,6 +560,35 @@ function RightNow({
         })}
       </ul>
     </section>
+  );
+}
+
+/// A polite live region that is always present, so a screen reader hears the count change without
+/// focus moving. An expired or foreign watermark stops the count rather than guessing one.
+function FreshnessNotice({
+  freshness,
+  onShow,
+}: {
+  freshness: UseQueryResult<components["schemas"]["EventFreshnessDto"]>;
+  onShow: () => void;
+}) {
+  const count = Number(freshness.data?.count ?? 0);
+  const message = freshness.isError
+    ? "The ledger can no longer tell what is new since it was read."
+    : count > 0
+      ? `${count}${freshness.data?.capped ? "+" : ""} new ${count === 1 ? "Event" : "Events"} since you opened this`
+      : null;
+  return (
+    <div role="status" className="empty:hidden">
+      {message ? (
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-selected-surface px-3.5 py-2 text-[13px] text-selected-ink">
+          <span>{message}</span>
+          <Button type="button" size="sm" variant="outline" onClick={onShow}>
+            Show
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
