@@ -26,7 +26,7 @@ import {
 } from "../ui/controls";
 import { CopyInline } from "../ui/copy";
 import { FilterSearch, Form, TextField } from "../ui/fields";
-import { useFilterParam } from "../ui/filters";
+import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import {
   CloseInspector,
@@ -71,9 +71,12 @@ type EditValues = z.infer<typeof editSchema>;
 
 const optional = (text: string) => text.trim() || null;
 
+const topicFilters = ["name"] as const;
+
 export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; selectedTopicId?: string }) {
-  const [name, setName] = useFilterParam("name");
-  const applied = name ? 1 : 0;
+  const filters = useListFilters(topicFilters);
+  const { name } = filters.values;
+  const applied = filters.applied;
   const list = useInfiniteQuery({
     queryKey: ["topics", tenantId, { name }],
     queryFn: ({ pageParam }) =>
@@ -107,95 +110,99 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
         Event delivered from it; its name is a label you can correct.
       </PageHeader>
 
-      <section className="flex flex-col gap-4">
-        {narrowing ? (
-          <FilterBar applied={applied}>
-            <FilterSearch id="topic-name" label="Find by name" value={name} onChange={setName} />
-          </FilterBar>
-        ) : null}
+      {narrowing ? (
+        <FilterBar applied={applied} onClear={filters.clear}>
+          <FilterSearch
+            id="topic-name"
+            label="Name"
+            placeholder="Name contains…"
+            value={name}
+            onChange={(value) => filters.set("name", value)}
+          />
+        </FilterBar>
+      ) : null}
 
-        <SplitView>
-          <SplitList>
-            <ListStatus
-              busy={list.isFetching}
-              loaded={list.isSuccess}
-              problem={asProblem(list.error)}
-              empty={topics.length === 0}
-              applied={applied}
-              noun="Topics"
-              emptyText="The Tenant-scoped stream Subscriptions match against. Events reach a Destination by the Topic they are accepted into."
-              action={create}
-            />
-            {topics.length > 0 ? (
-              <TableCard
-                caption={`Topics, newest first${appliedNote(applied)}`}
-                footer={
-                  <LoadMore
-                    noun="Topic"
-                    hasMore={list.hasNextPage}
-                    busy={list.isFetching}
-                    loaded={topics.length}
-                    onLoadMore={() => void list.fetchNextPage()}
-                  />
-                }
-              >
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">Key</TableHead>
-                    <TableHead scope="col">Name</TableHead>
-                    <TableHead scope="col">Description</TableHead>
-                    <TableHead scope="col" className="text-right">
-                      Subscriptions
-                    </TableHead>
-                    <TableHead scope="col">
-                      <span className="sr-only">Open</span>
-                    </TableHead>
+      <SplitView>
+        <SplitList>
+          <ListStatus
+            busy={list.isFetching}
+            loaded={list.isSuccess}
+            problem={asProblem(list.error)}
+            empty={topics.length === 0}
+            applied={applied}
+            noun="Topics"
+            emptyText="The Tenant-scoped stream Subscriptions match against. Events reach a Destination by the Topic they are accepted into."
+            action={create}
+          />
+          {topics.length > 0 ? (
+            <TableCard
+              caption={`Topics, newest first${appliedNote(applied)}`}
+              footer={
+                <LoadMore
+                  noun="Topic"
+                  hasMore={list.hasNextPage}
+                  busy={list.isFetching}
+                  loaded={topics.length}
+                  onLoadMore={() => void list.fetchNextPage()}
+                />
+              }
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Key</TableHead>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Description</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Subscriptions
+                  </TableHead>
+                  <TableHead scope="col">
+                    <span className="sr-only">Open</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topics.map((topic) => (
+                  <TableRow
+                    key={topic.id}
+                    className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
+                    onClick={openRow}
+                  >
+                    <RowHeader>
+                      {/* The route is the selection, so `aria-current` follows the URL rather than a
+                      separately tracked flag — the same contract every other ledger has. */}
+                      <NavLink
+                        className="-mx-3 block px-3 py-2 font-mono no-underline"
+                        to={`/tenants/${tenantId}/topics/${topic.id}`}
+                        end
+                      >
+                        {topic.key}
+                      </NavLink>
+                    </RowHeader>
+                    <TableCell>{topic.name}</TableCell>
+                    <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
+                    {/* A Topic nothing subscribes to accepts Events and routes none of them, so
+                        the count is what the list is scanned for rather than a detail. */}
+                    <TableCell className="text-right">{topic.subscription_count}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end">
+                        <RowChevron />
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topics.map((topic) => (
-                    <TableRow
-                      key={topic.id}
-                      className="group cursor-pointer has-[a[aria-current=page]]:bg-selected-surface"
-                      onClick={openRow}
-                    >
-                      <RowHeader>
-                        {/* The route is the selection, so `aria-current` follows the URL rather than a
-                        separately tracked flag — the same contract every other ledger has. */}
-                        <NavLink
-                          className="-mx-3 block px-3 py-2 font-mono no-underline"
-                          to={`/tenants/${tenantId}/topics/${topic.id}`}
-                          end
-                        >
-                          {topic.key}
-                        </NavLink>
-                      </RowHeader>
-                      <TableCell>{topic.name}</TableCell>
-                      <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
-                      {/* A Topic nothing subscribes to accepts Events and routes none of them, so
-                          the count is what the list is scanned for rather than a detail. */}
-                      <TableCell className="text-right">{topic.subscription_count}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end">
-                          <RowChevron />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </TableCard>
-            ) : null}
-          </SplitList>
-
-          {selectedTopicId ? (
-            <TopicInspector key={selectedTopicId} tenantId={tenantId} topicId={selectedTopicId} />
-          ) : topics.length > 0 ? (
-            <InspectorPlaceholder label="Topic detail">
-              Select a Topic to read its Subscriptions and what they match.
-            </InspectorPlaceholder>
+                ))}
+              </TableBody>
+            </TableCard>
           ) : null}
-        </SplitView>
-      </section>
+        </SplitList>
+
+        {selectedTopicId ? (
+          <TopicInspector key={selectedTopicId} tenantId={tenantId} topicId={selectedTopicId} />
+        ) : topics.length > 0 ? (
+          <InspectorPlaceholder label="Topic detail">
+            Select a Topic to read its Subscriptions and what they match.
+          </InspectorPlaceholder>
+        ) : null}
+      </SplitView>
 
       <CreateSheet
         label="New Topic"

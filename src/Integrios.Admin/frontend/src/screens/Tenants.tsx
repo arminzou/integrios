@@ -27,9 +27,10 @@ import {
   WriteStatus,
 } from "../ui/controls";
 import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
-import { useFilterParam } from "../ui/filters";
+import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { useTenantOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { since, Timestamp } from "../ui/time";
 import { activityOutcomes, outcomeTotals, useEventActivity } from "./EventActivity";
@@ -57,11 +58,21 @@ type CreateValues = z.infer<typeof createSchema>;
 
 const optional = (text: string) => text.trim() || null;
 
+const tenantFilters = ["name", "environment", "status"] as const;
+
 export function TenantsScreen() {
-  const [status, setStatus] = useFilterParam("status");
-  const [name, setName] = useFilterParam("name");
-  const [environment, setEnvironment] = useFilterParam("environment");
-  const applied = [status, name, environment].filter(Boolean).length;
+  const filters = useListFilters(tenantFilters);
+  const { status, name, environment } = filters.values;
+  const applied = filters.applied;
+  const tenantOptions = useTenantOptions();
+  // Environment is free text on a Tenant, so there is no vocabulary to enumerate: the options are
+  // the values in use among the first hundred Tenants. ponytail: a deployment past that needs the
+  // Admin API to answer "which environments"; a URL value outside these stays visible regardless.
+  const environments = [
+    ...new Set(
+      (tenantOptions.data?.items ?? []).map((item) => item.environment).filter((value) => typeof value === "string"),
+    ),
+  ].sort();
   const list = useInfiniteQuery({
     queryKey: ["tenants", { status, name, environment }],
     queryFn: ({ pageParam }) =>
@@ -95,76 +106,86 @@ export function TenantsScreen() {
         Every Tenant in this deployment. A Tenant is an ownership and isolation boundary, not a user.
       </PageHeader>
 
-      <section className="flex flex-col gap-4">
-        {narrowing ? (
-          <FilterBar applied={applied}>
-            <FilterSearch id="tenant-name" label="Name or slug" value={name} onChange={setName} />
-            <FilterSearch
-              id="tenant-environment"
-              label="Environment"
-              value={environment}
-              onChange={setEnvironment}
-              fullWidth={false}
-            />
-            <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </Filter>
-          </FilterBar>
-        ) : null}
-
-        <ListStatus
-          busy={list.isFetching}
-          loaded={list.isSuccess}
-          problem={asProblem(list.error)}
-          empty={tenants.length === 0}
-          applied={applied}
-          noun="Tenants"
-          emptyText="An ownership and isolation boundary, not a user. Everything else in this deployment is authored inside one."
-          action={create}
-        />
-        {tenants.length > 0 ? (
-          <TableCard
-            caption={`Tenants, newest first${appliedNote(applied)}`}
-            footer={
-              <LoadMore
-                noun="Tenant"
-                hasMore={list.hasNextPage}
-                busy={list.isFetching}
-                loaded={tenants.length}
-                onLoadMore={() => void list.fetchNextPage()}
-              />
-            }
+      {narrowing ? (
+        <FilterBar applied={applied} onClear={filters.clear}>
+          <FilterSearch
+            id="tenant-name"
+            label="Name or slug"
+            placeholder="Name or slug contains…"
+            value={name}
+            onChange={(value) => filters.set("name", value)}
+          />
+          <Filter
+            id="tenant-environment"
+            label="Environment"
+            value={environment}
+            onChange={(value) => filters.set("environment", value)}
+            hint={tenantOptions.data?.next_cursor ? "Showing environments from the first 100 Tenants." : undefined}
           >
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">Name</TableHead>
-                <TableHead scope="col">Slug</TableHead>
-                <TableHead scope="col">Environment</TableHead>
-                <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col">Description</TableHead>
+            {environments.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </Filter>
+          <Filter id="tenant-status" label="Status" value={status} onChange={(value) => filters.set("status", value)}>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </Filter>
+        </FilterBar>
+      ) : null}
+
+      <ListStatus
+        busy={list.isFetching}
+        loaded={list.isSuccess}
+        problem={asProblem(list.error)}
+        empty={tenants.length === 0}
+        applied={applied}
+        noun="Tenants"
+        emptyText="An ownership and isolation boundary, not a user. Everything else in this deployment is authored inside one."
+        action={create}
+      />
+      {tenants.length > 0 ? (
+        <TableCard
+          caption={`Tenants, newest first${appliedNote(applied)}`}
+          footer={
+            <LoadMore
+              noun="Tenant"
+              hasMore={list.hasNextPage}
+              busy={list.isFetching}
+              loaded={tenants.length}
+              onLoadMore={() => void list.fetchNextPage()}
+            />
+          }
+        >
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">Name</TableHead>
+              <TableHead scope="col">Slug</TableHead>
+              <TableHead scope="col">Environment</TableHead>
+              <TableHead scope="col">Status</TableHead>
+              <TableHead scope="col">Description</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tenants.map((tenant) => (
+              <TableRow key={tenant.id}>
+                <RowHeader>
+                  <Link className="no-underline" to={`/tenants/${tenant.id}`}>
+                    {tenant.name}
+                  </Link>
+                </RowHeader>
+                <TableCell className="font-mono whitespace-nowrap">{tenant.slug}</TableCell>
+                <TableCell>{tenant.environment ?? "—"}</TableCell>
+                <TableCell>
+                  <StatusBadge status={tenant.status} />
+                </TableCell>
+                <TableCell className="text-ink-secondary">{tenant.description ?? "—"}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tenants.map((tenant) => (
-                <TableRow key={tenant.id}>
-                  <RowHeader>
-                    <Link className="no-underline" to={`/tenants/${tenant.id}`}>
-                      {tenant.name}
-                    </Link>
-                  </RowHeader>
-                  <TableCell className="font-mono whitespace-nowrap">{tenant.slug}</TableCell>
-                  <TableCell>{tenant.environment ?? "—"}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={tenant.status} />
-                  </TableCell>
-                  <TableCell className="text-ink-secondary">{tenant.description ?? "—"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </TableCard>
-        ) : null}
-      </section>
+            ))}
+          </TableBody>
+        </TableCard>
+      ) : null}
 
       <CreateSheet
         label="New Tenant"

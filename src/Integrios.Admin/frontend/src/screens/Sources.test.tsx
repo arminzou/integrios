@@ -61,7 +61,7 @@ it("hides Source input requirements and restarts paging when the Topic filter ch
   });
   expect(screen.queryByRole("link", { name: "Invoices intake" })).toBeNull();
   expect(screen.getByLabelText("Topic").textContent).toContain("orders");
-  expect(screen.getByRole("link", { name: "Clear filters" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Clear filters" })).toBeTruthy();
 });
 
 /// `broker` is the wire value for the type an Operator authors as "Message broker". The filter and

@@ -22,7 +22,9 @@ function tenant(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const listCalls = (calls: Call[]) => calls.filter((call) => call.method === "GET");
+// The Environment filter reads its own options (limit 100) beside the list (limit 20).
+const listCalls = (calls: Call[]) =>
+  calls.filter((call) => call.method === "GET" && call.url.searchParams.get("limit") === "20");
 
 describe("Tenants list", () => {
   it("places the name search before the compact filters", async () => {
@@ -33,34 +35,40 @@ describe("Tenants list", () => {
 
     const filters = screen.getByRole("region", { name: "Filters" });
     const name = within(filters).getByRole("searchbox", { name: "Name or slug" });
-    expect(within(filters).getByRole("searchbox", { name: "Environment" })).toBeTruthy();
+    expect(within(filters).getByRole("combobox", { name: "Environment" })).toBeTruthy();
     // The name search leads the row; how it is drawn is measured in the browser, where there is
     // layout and colour to measure, rather than pinned here as a list of class names.
     expect(filters.querySelector("input, button")).toBe(name);
-    expect(name.getAttribute("placeholder")).toBe("Name or slug");
+    expect(name.getAttribute("placeholder")).toBe("Name or slug contains…");
   });
 
-  it.each(["Name or slug", "Environment"])(
-    "applies %s and restarts paging, then restores the URL value",
-    async (label) => {
-      const parameter = label === "Environment" ? "environment" : "name";
-      const calls = stubHttp(({ url }) => ({
-        status: 200,
-        body: page([tenant({ name: url.searchParams.has("after") ? "Second" : "Acme" })], "cursor-1"),
-      }));
-      const { router } = renderScreen(<TenantsScreen />, "/tenants");
-      await screen.findByRole("link", { name: "Acme" });
-      fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-      await screen.findByRole("link", { name: "Second" });
-      fireEvent.change(screen.getByLabelText(label), { target: { value: "  production  " } });
-      fireEvent.submit(screen.getByLabelText(label).closest("form")!);
-      await waitFor(() => expect(listCalls(calls).at(-1)!.url.searchParams.get(parameter)).toBe("production"));
-      expect(listCalls(calls).at(-1)!.url.searchParams.has("after")).toBe(false);
-      expect(router.state.location.search).toContain(`${parameter}=production`);
-      await act(() => router.navigate(`/tenants?${parameter}=restored`));
-      await waitFor(() => expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe("restored"));
-    },
-  );
+  it("offers the environments in use, and keeps a URL environment they do not name visible", async () => {
+    stubHttp(() => ({ status: 200, body: page([tenant({ environment: "production" })]) }));
+
+    renderScreen(<TenantsScreen />, "/tenants?environment=staging");
+    await screen.findByRole("link", { name: "Acme" });
+
+    expect(screen.getByRole("combobox", { name: "Environment" }).textContent).toContain("staging");
+  });
+
+  it.each(["Name or slug"])("applies %s and restarts paging, then restores the URL value", async (label) => {
+    const parameter = "name";
+    const calls = stubHttp(({ url }) => ({
+      status: 200,
+      body: page([tenant({ name: url.searchParams.has("after") ? "Second" : "Acme" })], "cursor-1"),
+    }));
+    const { router } = renderScreen(<TenantsScreen />, "/tenants");
+    await screen.findByRole("link", { name: "Acme" });
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await screen.findByRole("link", { name: "Second" });
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "  production  " } });
+    fireEvent.submit(screen.getByLabelText(label).closest("form")!);
+    await waitFor(() => expect(listCalls(calls).at(-1)!.url.searchParams.get(parameter)).toBe("production"));
+    expect(listCalls(calls).at(-1)!.url.searchParams.has("after")).toBe(false);
+    expect(router.state.location.search).toContain(`${parameter}=production`);
+    await act(() => router.navigate(`/tenants?${parameter}=restored`));
+    await waitFor(() => expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe("restored"));
+  });
 
   it("offers the first Tenant from the empty list itself, and withholds filters until there is something to narrow", async () => {
     stubHttp(() => ({ status: 200, body: page([]) }));
@@ -462,7 +470,7 @@ describe("Filtering the Tenants list", () => {
     expect((await screen.findByLabelText("Status")).textContent).toContain("Inactive");
 
     // An empty list that is empty because of the filter says how to stop filtering.
-    fireEvent.click(await screen.findByRole("link", { name: "Clear filters" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Clear filters" }));
     await waitFor(() => expect(router.state.location.search).toBe(""));
   });
 });
