@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
+import { Children, type ComponentProps, isValidElement, type ReactNode, useState } from "react";
 import type { Control, FieldValues, Path } from "react-hook-form";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -214,6 +214,13 @@ export function Filter({
   children: ReactNode;
 }) {
   const hintId = hint ? `${id}-hint` : undefined;
+  // A value the options cannot name — past the capped read, or deleted — is still in force, so it
+  // is shown as the selection rather than as a tinted pill with no value.
+  const unnamed =
+    value !== "" &&
+    !Children.toArray(children).some(
+      (child) => isValidElement<{ value?: string }>(child) && child.props.value === value,
+    );
 
   return (
     <Select value={toControl(value)} onValueChange={(next) => onChange(fromControl(next))}>
@@ -231,6 +238,7 @@ export function Filter({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={EMPTY}>{anyLabel}</SelectItem>
+        {unnamed ? <SelectItem value={value}>{value}</SelectItem> : null}
         {children}
         {hint ? (
           <p aria-hidden="true" className="border-t px-2 py-1.5 text-xs text-ink-secondary">
@@ -254,21 +262,30 @@ export function Filter({
 export function FilterSearch({
   id,
   label,
+  placeholder,
   value,
   onChange,
   fullWidth = true,
 }: {
   id: string;
+  /// The field the box matches; it is the box's accessible name.
   label: string;
+  /// How it matches, e.g. `Name contains…`.
+  placeholder?: string;
   value: string;
   onChange: (value: string) => void;
   fullWidth?: boolean;
 }) {
   const [typed, setTyped] = useState(value);
+  const [seen, setSeen] = useState(value);
 
   // The URL can change without this control having produced it — Clear filters, the back button, a
   // pasted link — and the box follows it rather than keeping a value the list is not reading under.
-  useEffect(() => setTyped(value), [value]);
+  // Adjusted while rendering, not in an effect, so there is no frame showing the stale text.
+  if (value !== seen) {
+    setSeen(value);
+    setTyped(value);
+  }
 
   const commit = () => {
     if (typed.trim() !== value) onChange(typed.trim());
@@ -290,7 +307,7 @@ export function FilterSearch({
         id={id}
         type="search"
         value={typed}
-        placeholder={fullWidth ? label : "Any"}
+        placeholder={placeholder ?? (fullWidth ? label : "Any")}
         onChange={(event) => setTyped(event.target.value)}
         onBlur={commit}
         className={cn(

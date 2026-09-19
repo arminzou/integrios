@@ -33,7 +33,7 @@ import {
 import { CopyInline } from "../ui/copy";
 import { parseFieldMappings, payloadPlaceholder } from "../ui/fieldMapping";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
-import { useFilterParam } from "../ui/filters";
+import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { formatJson, parseJson, sameJson } from "../ui/json";
 import {
@@ -240,6 +240,8 @@ function MappingValue({ expression }: { expression: string }) {
   return <CodeBlock value={formatMappingExpression(expression)} className="max-h-40 overflow-auto" />;
 }
 
+const subscriptionFilters = ["name", "topic_id", "destination_id", "status"] as const;
+
 export function SubscriptionsScreen({
   tenantId,
   selectedTopicId,
@@ -249,13 +251,11 @@ export function SubscriptionsScreen({
   selectedTopicId?: string;
   selectedSubscriptionId?: string;
 }) {
-  const [name, setName] = useFilterParam("name");
-  const [topicId, setTopicId] = useFilterParam("topic_id");
-  const [destinationId, setDestinationId] = useFilterParam("destination_id");
-  const [status, setStatus] = useFilterParam("status");
+  const filters = useListFilters(subscriptionFilters);
+  const { name, topic_id: topicId, destination_id: destinationId, status } = filters.values;
   const topics = useTopicOptions(tenantId);
   const destinations = useDestinationOptions(tenantId);
-  const applied = [name, topicId, destinationId, status].filter(Boolean).length;
+  const applied = filters.applied;
   const list = useInfiniteQuery({
     queryKey: ["tenant-subscriptions", tenantId, { name, topicId, destinationId, status }],
     queryFn: ({ pageParam }) =>
@@ -303,13 +303,19 @@ export function SubscriptionsScreen({
       </PageHeader>
 
       {narrowing ? (
-        <FilterBar applied={applied}>
-          <FilterSearch id="subscription-name" label="Find by name" value={name} onChange={setName} />
+        <FilterBar applied={applied} onClear={filters.clear}>
+          <FilterSearch
+            id="subscription-name"
+            label="Name"
+            placeholder="Name contains…"
+            value={name}
+            onChange={(value) => filters.set("name", value)}
+          />
           <Filter
             id="subscription-topic"
             label="Topic"
             value={topicId}
-            onChange={setTopicId}
+            onChange={(value) => filters.set("topic_id", value)}
             hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
           >
             {(topics.data?.items ?? []).map((topic) => (
@@ -322,7 +328,7 @@ export function SubscriptionsScreen({
             id="subscription-destination"
             label="Destination"
             value={destinationId}
-            onChange={setDestinationId}
+            onChange={(value) => filters.set("destination_id", value)}
             hint={destinations.data?.next_cursor ? "Showing the first 100 Destinations." : undefined}
           >
             {(destinations.data?.items ?? []).map((destination) => (
@@ -331,7 +337,12 @@ export function SubscriptionsScreen({
               </SelectItem>
             ))}
           </Filter>
-          <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
+          <Filter
+            id="subscription-status"
+            label="Status"
+            value={status}
+            onChange={(value) => filters.set("status", value)}
+          >
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
           </Filter>
