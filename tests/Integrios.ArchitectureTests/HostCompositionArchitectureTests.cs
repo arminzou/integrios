@@ -1,4 +1,5 @@
 using Integrios.Application;
+using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.OperatorKeys;
@@ -30,7 +31,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
         [typeof(IDestinationAuthenticatorRegistry)] = [Host.Admin, Host.Worker],
         [typeof(IDestinationRepository)] = [Host.Admin],
-        [typeof(IDestinationAuthoringLock)] = [Host.Admin],
+        [typeof(IAuthoringLock)] = [Host.Admin],
         [typeof(IDeadLetterReplay)] = [Host.Admin],
         [typeof(IDeliveryClient)] = [Host.Worker],
         [typeof(IEventAcceptance)] = [Host.Ingestion],
@@ -260,7 +261,7 @@ public sealed class HostCompositionArchitectureTests
         AssertResolves<IConnectorReader>(scope.ServiceProvider);
         AssertResolves<IConnectorManifestStore>(scope.ServiceProvider);
         AssertResolves<IDestinationRepository>(scope.ServiceProvider);
-        AssertResolves<IDestinationAuthoringLock>(scope.ServiceProvider);
+        AssertResolves<IAuthoringLock>(scope.ServiceProvider);
         AssertResolves<ITopicRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionRepository>(scope.ServiceProvider);
         AssertResolves<ISubscriptionQueries>(scope.ServiceProvider);

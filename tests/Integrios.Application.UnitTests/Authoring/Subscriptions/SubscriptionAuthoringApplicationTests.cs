@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Integrios.Application;
+using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.Subscriptions;
@@ -102,7 +103,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             services.AddSingleton<ISubscriptionRepository>(SubscriptionRepository);
             services.AddSingleton<ITopicRepository>(new FakeTopicRepository(Topic()));
             services.AddSingleton<IDestinationRepository>(new FakeDestinationRepository(Destination(connectorId)));
-            services.AddSingleton<IDestinationAuthoringLock>(new NoOpDestinationAuthoringLock());
+            services.AddSingleton<IAuthoringLock>(new NoOpAuthoringLock());
             services.AddSingleton<IConnectorReader>(new FakeConnectorReader(Connector(connectorId, destinationDirection)));
             services.AddSingleton<IDestinationAuthenticatorRegistry>(new EmptyAuthSchemeRegistry());
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator(transformValidationError));
@@ -205,10 +206,11 @@ public sealed class SubscriptionAuthoringApplicationTests
         }
     }
 
-    private sealed class NoOpDestinationAuthoringLock : IDestinationAuthoringLock
+    private sealed class NoOpAuthoringLock : IAuthoringLock
     {
         public Task<IAsyncDisposable> AcquireAsync(
-            IEnumerable<Guid> destinationIds,
+            AuthoringResource resource,
+            IEnumerable<Guid> resourceIds,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IAsyncDisposable>(new NoOpLease());
 

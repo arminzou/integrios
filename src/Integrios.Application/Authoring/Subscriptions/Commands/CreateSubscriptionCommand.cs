@@ -27,7 +27,7 @@ internal sealed class CreateSubscriptionCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     ITopicRepository topicRepository,
     IDestinationRepository destinationRepository,
-    IDestinationAuthoringLock authoringLock,
+    IAuthoringLock authoringLock,
     IConnectorReader connectorReader,
     IDestinationAuthenticatorRegistry authSchemeRegistry,
     ITransformEvaluator transformEvaluator) : IRequestHandler<CreateSubscriptionCommand, SubscriptionDto?>
@@ -44,6 +44,10 @@ internal sealed class CreateSubscriptionCommandHandler(
             command.HttpSuccess,
             transformEvaluator);
 
+        await using IAsyncDisposable topicLease = await authoringLock.AcquireAsync(
+            AuthoringResource.Topic,
+            [command.TopicId],
+            cancellationToken);
         var topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken);
         if (topic is null)
         {
@@ -54,7 +58,8 @@ internal sealed class CreateSubscriptionCommandHandler(
             TopicEventTypes.Union(await topicRepository.ListSourceDeclarationsAsync(
                 command.TenantId, [command.TopicId], cancellationToken)));
 
-        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+        await using IAsyncDisposable destinationLease = await authoringLock.AcquireAsync(
+            AuthoringResource.Destination,
             [command.DestinationId],
             cancellationToken);
         await EnsureDestinationIsAllowed(

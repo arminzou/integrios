@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Delivery;
@@ -19,7 +20,7 @@ public sealed record UpdateDestinationCommand(
 
 internal sealed class UpdateDestinationCommandHandler(
     IDestinationRepository repository,
-    IDestinationAuthoringLock authoringLock,
+    IAuthoringLock authoringLock,
     IConnectorReader connectorReader,
     IDestinationAuthenticatorRegistry authenticationRegistry,
     ISubscriptionRepository subscriptionRepository) : IRequestHandler<UpdateDestinationCommand, DestinationDto?>
@@ -31,7 +32,8 @@ internal sealed class UpdateDestinationCommandHandler(
         if (string.IsNullOrWhiteSpace(command.Name))
             throw new DestinationValidationException("Name is required.", "name");
 
-        await using IAsyncDisposable lease = await authoringLock.AcquireAsync([command.Id], cancellationToken);
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            AuthoringResource.Destination, [command.Id], cancellationToken);
         Destination? existing = await repository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
         if (existing is null)
             return null;

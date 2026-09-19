@@ -1,3 +1,4 @@
+using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Ingestion;
@@ -73,7 +74,7 @@ public sealed class DatabaseProviderRegistrationTests
         context.Database.ProviderName.ShouldBe("Microsoft.EntityFrameworkCore.SqlServer");
         context.Model.FindEntityType(typeof(Event))!
             .FindProperty(nameof(Event.Payload))!.GetColumnType().ShouldBe("nvarchar(max)");
-        provider.GetRequiredService<IDestinationAuthoringLock>().ShouldBeOfType<SqlServerDestinationAuthoringLock>();
+        provider.GetRequiredService<IAuthoringLock>().ShouldBeOfType<SqlServerAuthoringLock>();
         provider.GetRequiredService<IEventAcceptance>().ShouldBeOfType<SqlServerEventAcceptance>();
         scope.ServiceProvider.GetRequiredService<IConnectorManifestStore>().ShouldBeOfType<SqlServerConnectorManifestStore>();
     }

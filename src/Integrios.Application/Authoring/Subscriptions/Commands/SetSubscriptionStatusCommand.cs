@@ -14,7 +14,7 @@ public sealed record SetSubscriptionStatusCommand(Guid TenantId, Guid TopicId, G
 internal sealed class SetSubscriptionStatusCommandHandler(
     ISubscriptionRepository subscriptionRepository,
     IDestinationRepository destinationRepository,
-    IDestinationAuthoringLock authoringLock)
+    IAuthoringLock authoringLock)
     : IRequestHandler<SetSubscriptionStatusCommand, SubscriptionDto?>
 {
     public async Task<SubscriptionDto?> Handle(SetSubscriptionStatusCommand command, CancellationToken cancellationToken)
@@ -25,6 +25,7 @@ internal sealed class SetSubscriptionStatusCommandHandler(
             return null;
 
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            AuthoringResource.Destination,
             [existing.DestinationId], cancellationToken);
         if (command.Status == EnablementStatus.Enabled)
         {

@@ -3,24 +3,24 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using Dapper;
-using Integrios.Application.Authoring.Destinations;
-using Integrios.Infrastructure.Data;
+using Integrios.Application.Authoring;
 using Microsoft.EntityFrameworkCore;
 
-namespace Integrios.Infrastructure.Destinations;
+namespace Integrios.Infrastructure.Data;
 
-internal sealed class PostgresDestinationAuthoringLock(IDbContextFactory<IntegriosDbContext> contextFactory)
-    : IDestinationAuthoringLock
+internal sealed class PostgresAuthoringLock(IDbContextFactory<IntegriosDbContext> contextFactory)
+    : IAuthoringLock
 {
     private static readonly TimeSpan AcquisitionBudget = TimeSpan.FromSeconds(2);
 
     public async Task<IAsyncDisposable> AcquireAsync(
-        IEnumerable<Guid> destinationIds,
+        AuthoringResource resource,
+        IEnumerable<Guid> resourceIds,
         CancellationToken cancellationToken)
     {
-        long[] keys = destinationIds
+        long[] keys = resourceIds
             .Distinct()
-            .Select(ToAdvisoryLockKey)
+            .Select(id => ToAdvisoryLockKey(resource, id))
             .Order()
             .ToArray();
         IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -60,13 +60,13 @@ internal sealed class PostgresDestinationAuthoringLock(IDbContextFactory<Integri
                 }
 
                 if (acquiredAll)
-                    return new DestinationAuthoringLease(context, connection, acquiredKeys);
+                    return new Lease(context, connection, acquiredKeys);
 
                 await UnlockAsync(connection, acquiredKeys);
                 acquiredKeys.Clear();
                 TimeSpan remaining = AcquisitionBudget - elapsed.Elapsed;
                 if (remaining <= TimeSpan.Zero)
-                    throw new DestinationAuthoringConflictException();
+                    throw new AuthoringLockConflictException();
 
                 TimeSpan delay = TimeSpan.FromMilliseconds(Random.Shared.Next(20, 76));
                 if (delay > remaining)
@@ -81,10 +81,13 @@ internal sealed class PostgresDestinationAuthoringLock(IDbContextFactory<Integri
         }
     }
 
-    private static long ToAdvisoryLockKey(Guid id)
+    private static long ToAdvisoryLockKey(AuthoringResource resource, Guid id)
     {
+        Span<byte> input = stackalloc byte[17];
+        input[0] = (byte)resource;
+        id.TryWriteBytes(input[1..]);
         Span<byte> hash = stackalloc byte[32];
-        SHA256.HashData(id.ToByteArray(), hash);
+        SHA256.HashData(input, hash);
         return BinaryPrimitives.ReadInt64BigEndian(hash);
     }
 
@@ -123,7 +126,7 @@ internal sealed class PostgresDestinationAuthoringLock(IDbContextFactory<Integri
         }
     }
 
-    private sealed class DestinationAuthoringLease(
+    private sealed class Lease(
         IntegriosDbContext context,
         DbConnection connection,
         IReadOnlyList<long> keys) : IAsyncDisposable

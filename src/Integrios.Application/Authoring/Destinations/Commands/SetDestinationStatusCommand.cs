@@ -12,12 +12,13 @@ public sealed record SetDestinationStatusCommand(Guid TenantId, Guid Id, Enablem
 
 internal sealed class SetDestinationStatusCommandHandler(
     IDestinationRepository repository,
-    IDestinationAuthoringLock authoringLock)
+    IAuthoringLock authoringLock)
     : IRequestHandler<SetDestinationStatusCommand, DestinationDto?>
 {
     public async Task<DestinationDto?> Handle(SetDestinationStatusCommand command, CancellationToken cancellationToken)
     {
-        await using IAsyncDisposable lease = await authoringLock.AcquireAsync([command.Id], cancellationToken);
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            AuthoringResource.Destination, [command.Id], cancellationToken);
         if (command.Status == EnablementStatus.Disabled
             && await repository.HasActiveSubscriptionsAsync(command.TenantId, command.Id, cancellationToken))
         {

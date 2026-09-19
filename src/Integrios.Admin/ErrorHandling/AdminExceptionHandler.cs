@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
-using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Common.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +20,7 @@ public sealed class AdminExceptionHandler(IProblemDetailsService problemDetailsS
             AuthoringValidationException validation => ValidationProblem(validation),
             DuplicateResourceException => Problem(StatusCodes.Status409Conflict, exception.Message),
             AuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
-            DestinationAuthoringConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
+            AuthoringLockConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             ConnectorVersionConflictException => Problem(StatusCodes.Status409Conflict, exception.Message),
             InvalidCursorException or InvalidListFilterException => Problem(StatusCodes.Status400BadRequest, exception.Message),
             // An authoring update replaces the whole resource, so the serializer refusing an absent

@@ -8,11 +8,19 @@ public sealed record DeleteSourceCommand(Guid TenantId, Guid Id) : IRequest<bool
 
 internal sealed class DeleteSourceCommandHandler(
     ISourceRepository sourceRepository,
-    ITopicRepository topicRepository) : IRequestHandler<DeleteSourceCommand, bool>
+    ITopicRepository topicRepository,
+    IAuthoringLock authoringLock) : IRequestHandler<DeleteSourceCommand, bool>
 {
     public async Task<bool> Handle(DeleteSourceCommand command, CancellationToken cancellationToken)
     {
         Source? source = await sourceRepository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
+        if (source is null)
+            return false;
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            AuthoringResource.Topic,
+            [source.TopicId],
+            cancellationToken);
+        source = await sourceRepository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
         if (source is null)
             return false;
 

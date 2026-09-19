@@ -1,4 +1,5 @@
 using Integrios.Application;
+using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.OperatorKeys;
@@ -81,9 +82,9 @@ public static class DependencyInjection
             services.AddScoped<IConnectorManifestStore, PostgresConnectorManifestStore>();
         services.AddScoped<IDestinationRepository, DestinationRepository>();
         if (databaseProvider == DatabaseProvider.SqlServer)
-            services.AddSingleton<IDestinationAuthoringLock, SqlServerDestinationAuthoringLock>();
+            services.AddSingleton<IAuthoringLock, SqlServerAuthoringLock>();
         else
-            services.AddSingleton<IDestinationAuthoringLock, PostgresDestinationAuthoringLock>();
+            services.AddSingleton<IAuthoringLock, PostgresAuthoringLock>();
         services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<ISourceRepository, SourceRepository>();
         services.AddScoped<ISourceQueries, SourceQueries>();

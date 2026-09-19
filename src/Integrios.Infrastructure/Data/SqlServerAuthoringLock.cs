@@ -1,24 +1,30 @@
 using System.Data.Common;
 using Dapper;
-using Integrios.Application.Authoring.Destinations;
-using Integrios.Infrastructure.Data;
+using Integrios.Application.Authoring;
 using Microsoft.EntityFrameworkCore;
 
-namespace Integrios.Infrastructure.Destinations;
+namespace Integrios.Infrastructure.Data;
 
-internal sealed class SqlServerDestinationAuthoringLock(IDbContextFactory<IntegriosDbContext> contextFactory)
-    : IDestinationAuthoringLock
+internal sealed class SqlServerAuthoringLock(IDbContextFactory<IntegriosDbContext> contextFactory)
+    : IAuthoringLock
 {
     private const int LockTimeoutMilliseconds = 2_000;
 
     public async Task<IAsyncDisposable> AcquireAsync(
-        IEnumerable<Guid> destinationIds,
+        AuthoringResource resource,
+        IEnumerable<Guid> resourceIds,
         CancellationToken cancellationToken)
     {
-        string[] resources = destinationIds
+        string prefix = resource switch
+        {
+            AuthoringResource.Destination => "destination",
+            AuthoringResource.Topic => "topic",
+            _ => throw new ArgumentOutOfRangeException(nameof(resource)),
+        };
+        string[] resources = resourceIds
             .Distinct()
+            .Select(id => $"{prefix}:{id:N}")
             .Order()
-            .Select(id => $"destination:{id:N}")
             .ToArray();
         IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
         try
@@ -28,12 +34,12 @@ internal sealed class SqlServerDestinationAuthoringLock(IDbContextFactory<Integr
             var acquired = new List<string>(resources.Length);
             try
             {
-                foreach (string resource in resources)
+                foreach (string lockResource in resources)
                 {
-                    int result = await ExecuteLockAsync(connection, resource, acquire: true, cancellationToken);
+                    int result = await ExecuteLockAsync(connection, lockResource, acquire: true, cancellationToken);
                     if (result < 0)
-                        throw new DestinationAuthoringConflictException();
-                    acquired.Add(resource);
+                        throw new AuthoringLockConflictException();
+                    acquired.Add(lockResource);
                 }
                 return new Lease(context, connection, acquired);
             }

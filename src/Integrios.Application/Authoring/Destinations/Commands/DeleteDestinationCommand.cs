@@ -7,11 +7,12 @@ public sealed record DeleteDestinationCommand(Guid TenantId, Guid Id) : IRequest
 
 internal sealed class DeleteDestinationCommandHandler(
     IDestinationRepository repository,
-    IDestinationAuthoringLock authoringLock) : IRequestHandler<DeleteDestinationCommand, bool>
+    IAuthoringLock authoringLock) : IRequestHandler<DeleteDestinationCommand, bool>
 {
     public async Task<bool> Handle(DeleteDestinationCommand command, CancellationToken cancellationToken)
     {
-        await using IAsyncDisposable lease = await authoringLock.AcquireAsync([command.Id], cancellationToken);
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            AuthoringResource.Destination, [command.Id], cancellationToken);
         if (await repository.GetByIdAsync(command.TenantId, command.Id, cancellationToken) is null)
             return false;
         if (await repository.HasSubscriptionsAsync(command.TenantId, command.Id, cancellationToken))

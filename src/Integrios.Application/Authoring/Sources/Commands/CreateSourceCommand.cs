@@ -26,6 +26,7 @@ internal sealed class CreateSourceCommandHandler(
     ISourceRepository sourceRepository,
     IConnectorReader connectorReader,
     ITopicRepository topicRepository,
+    IAuthoringLock authoringLock,
     ITransformEvaluator evaluator)
     : IRequestHandler<CreateSourceCommand, SourceDto>
 {
@@ -34,6 +35,10 @@ internal sealed class CreateSourceCommandHandler(
         if (string.IsNullOrWhiteSpace(command.Name))
             throw new SourceValidationException("Name is required.", "name");
 
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            AuthoringResource.Topic,
+            [command.TopicId],
+            cancellationToken);
         Topic topic = await topicRepository.GetByIdAsync(command.TenantId, command.TopicId, cancellationToken)
             ?? throw new SourceValidationException("Source Topic must exist in the same Tenant.");
         Connector connector = await connectorReader.GetByIdAsync(command.ConnectorId, cancellationToken)

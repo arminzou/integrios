@@ -23,6 +23,7 @@ internal sealed class UpdateSourceCommandHandler(
     ISourceRepository sourceRepository,
     IConnectorReader connectorReader,
     ITopicRepository topicRepository,
+    IAuthoringLock authoringLock,
     ITransformEvaluator evaluator)
     : IRequestHandler<UpdateSourceCommand, SourceDto?>
 {
@@ -32,6 +33,13 @@ internal sealed class UpdateSourceCommandHandler(
             throw new SourceValidationException("Name is required.", "name");
 
         Source? source = await sourceRepository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
+        if (source is null)
+            return null;
+        await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
+            AuthoringResource.Topic,
+            [source.TopicId],
+            cancellationToken);
+        source = await sourceRepository.GetByIdAsync(command.TenantId, command.Id, cancellationToken);
         if (source is null)
             return null;
         Connector connector = await connectorReader.GetByIdAsync(source.ConnectorId, cancellationToken)
