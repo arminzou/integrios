@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { activityOf, type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { EventsScreen } from "./Events";
@@ -145,8 +145,8 @@ describe("Event history", () => {
     const read = eventsCall(calls)[0].url.searchParams;
     expect(read.get("status")).toBe("unrouted");
     expect(read.get("source_event_id")).toBe("order-42");
-    // The window survives the round trip through the local-time control the form holds it in.
-    expect(read.get("accepted_from")).toBe("2026-09-01T09:00:17.000Z");
+    // The window is read as the link's own instant, not re-derived from the local-time control.
+    expect(read.get("accepted_from")).toBe("2026-09-01T09:00:17Z");
 
     // The form opens showing the scope in force, not the empty defaults.
     expect((screen.getByLabelText("Source Event id") as HTMLInputElement).value).toBe("order-42");
@@ -422,6 +422,56 @@ describe("Event activity", () => {
       calls.some((call) => call.url.pathname.endsWith("/activity") && call.url.searchParams.get("range") === "7d"),
     ).toBe(true);
     expect(screen.getByRole("button", { name: "7 d" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  describe("across the repeated hour when clocks fall back", () => {
+    // 2026-11-01 in New York repeats 01:00-02:00 local: 05:00-06:00Z is EDT, 06:00-07:00Z is EST.
+    // A wall clock in that hour names two instants, so the range must never pass through one.
+    const zone = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = "America/New_York";
+    });
+    afterEach(() => {
+      process.env.TZ = zone;
+    });
+    const secondHour = activityOf({}, { start: "2026-11-01T06:00:00Z" });
+    const respond = (call: Call) =>
+      call.url.pathname.endsWith("/activity") ? { status: 200, body: secondHour } : respondFor(page([]))(call);
+
+    it("scopes the ledger to a selected interval's own instants and shows it selected", async () => {
+      const calls = stubHttp(respond);
+
+      renderScreen(<EventsScreen tenantId={tenantId} />);
+      const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+      const tenth = within(intervals).getAllByRole("button")[9];
+      fireEvent.click(tenth);
+
+      await waitFor(() =>
+        expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-11-01T06:45:00.000Z"),
+      );
+      expect(eventsCall(calls).at(-1)!.url.searchParams.get("accepted_to")).toBe("2026-11-01T06:50:00.000Z");
+      expect(tenth.getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("keeps a link's instants through a load and an unrelated Apply", async () => {
+      const calls = stubHttp(respond);
+
+      const { router } = renderScreen(
+        <EventsScreen tenantId={tenantId} />,
+        `/tenants/${tenantId}/events?accepted_from=2026-11-01T06%3A45%3A00Z&accepted_to=2026-11-01T06%3A50%3A00Z`,
+      );
+      await waitFor(() =>
+        expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-11-01T06:45:00Z"),
+      );
+
+      fireEvent.change(await screen.findByLabelText("Event type"), { target: { value: "order.created" } });
+      fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+      await waitFor(() => expect(router.state.location.search).toContain("event_type=order.created"));
+      const applied = new URLSearchParams(router.state.location.search);
+      expect(applied.get("accepted_from")).toBe("2026-11-01T06:45:00Z");
+      expect(applied.get("accepted_to")).toBe("2026-11-01T06:50:00Z");
+    });
   });
 });
 

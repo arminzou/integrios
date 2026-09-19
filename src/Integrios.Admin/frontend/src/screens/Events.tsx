@@ -82,40 +82,53 @@ const noFilters: Filters = {
 /// How the URL spells each filter. Snake case matches the Admin API's own query parameters, so a
 /// link an Operator copies out of the dashboard reads like the request it produces.
 ///
-/// The two accepted-window fields are marked as instants because they are the one place the form's
-/// value and the URL's value must differ. A `datetime-local` control holds a local wall clock with
-/// no offset, and a link carrying that raw would resolve to a different moment for a colleague in
-/// another zone. The URL therefore carries the unambiguous instant and the form converts at the
-/// boundary, exactly as the request already does.
-const filterParams: { field: keyof Filters; name: string; isInstant?: true }[] = [
+/// The accepted range is carried, applied and requested as the URL's instants. Only the form holds
+/// it as a `datetime-local` wall clock (see `formValues`): a wall clock has no offset, and in the
+/// repeated fall-back hour one names two instants, so the applied range never passes through one.
+const filterParams: { field: keyof Filters; name: string }[] = [
   { field: "status", name: "status" },
   { field: "deliveryStatus", name: "delivery_status" },
   { field: "sourceId", name: "source_id" },
   { field: "topicId", name: "topic_id" },
   { field: "sourceEventId", name: "source_event_id" },
   { field: "eventType", name: "event_type" },
-  { field: "acceptedFrom", name: "accepted_from", isInstant: true },
-  { field: "acceptedTo", name: "accepted_to", isInstant: true },
+  { field: "acceptedFrom", name: "accepted_from" },
+  { field: "acceptedTo", name: "accepted_to" },
 ];
 
 function readFilters(params: URLSearchParams): Filters {
   const filters = { ...noFilters };
-  for (const { field, name, isInstant } of filterParams) {
+  for (const { field, name } of filterParams) {
     const value = params.get(name);
-    if (value) filters[field] = isInstant ? localInputValue(value) : value;
+    if (value) filters[field] = value;
   }
   return filters;
 }
 
 function writeFilters(values: Filters): URLSearchParams {
   const params = new URLSearchParams();
-  for (const { field, name, isInstant } of filterParams) {
-    const value = values[field];
-    if (!value) continue;
-    const written = isInstant ? instant(value) : value;
-    if (written) params.set(name, written);
+  for (const { field, name } of filterParams) {
+    if (values[field]) params.set(name, values[field]);
   }
   return params;
+}
+
+/// The applied filters as the form edits them, with the accepted range as the local wall clock a
+/// `datetime-local` input holds.
+function formValues(applied: Filters): Filters {
+  return {
+    ...applied,
+    acceptedFrom: localInputValue(applied.acceptedFrom),
+    acceptedTo: localInputValue(applied.acceptedTo),
+  };
+}
+
+/// The inverse of `formValues`. A range field the Operator left as it was keeps its applied instant
+/// rather than being re-read from a wall clock that, in a repeated hour, resolves to the earlier one.
+function appliedValues(values: Filters, applied: Filters): Filters {
+  const range = (field: "acceptedFrom" | "acceptedTo") =>
+    values[field] === localInputValue(applied[field]) ? applied[field] : (instant(values[field]) ?? "");
+  return { ...values, acceptedFrom: range("acceptedFrom"), acceptedTo: range("acceptedTo") };
 }
 
 /// A local datetime-local value carries no offset, so it is sent as an instant the server can read
@@ -130,6 +143,7 @@ function instant(value: string): string | undefined {
 /// value round-trips back to (sub-second precision aside) the same instant rather than rounding
 /// down to the minute and silently excluding Events the link's scope included.
 function localInputValue(iso: string): string {
+  if (!iso) return "";
   const date = new Date(iso);
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
@@ -172,13 +186,13 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   // What is actually narrowing the ledger right now, counted from the URL rather than from the form,
   // so a value typed but not yet applied is not claimed as scope.
   const appliedCount = Object.values(applied).filter(Boolean).length;
-  const form = useForm<Filters>({ defaultValues: applied });
+  const form = useForm<Filters>({ defaultValues: formValues(applied) });
 
   // The URL can change without the form having produced it — the empty state's Clear filters, the
   // back button, a pasted link. The form follows it rather than keeping values the ledger is no
   // longer reading under.
   useEffect(() => {
-    form.reset(applied);
+    form.reset(formValues(applied));
   }, [applied, form]);
 
   const sources = useQuery({
@@ -200,8 +214,8 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
     topic_id: applied.topicId || undefined,
     source_event_id: applied.sourceEventId || undefined,
     event_type: applied.eventType || undefined,
-    accepted_from: instant(applied.acceptedFrom),
-    accepted_to: instant(applied.acceptedTo),
+    accepted_from: applied.acceptedFrom || undefined,
+    accepted_to: applied.acceptedTo || undefined,
   };
   const ledgerKey = ["events", tenantId, applied];
   const list = useInfiniteQuery({
@@ -266,13 +280,10 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
       <EventActivity
         tenantId={tenantId}
-        selectedFrom={instant(applied.acceptedFrom)}
-        selectedTo={instant(applied.acceptedTo)}
+        selectedFrom={applied.acceptedFrom || undefined}
+        selectedTo={applied.acceptedTo || undefined}
         onSelect={(from, to, replace) =>
-          setSearchParams(
-            writeFilters({ ...applied, acceptedFrom: localInputValue(from), acceptedTo: localInputValue(to) }),
-            { replace },
-          )
+          setSearchParams(writeFilters({ ...applied, acceptedFrom: from, acceptedTo: to }), { replace })
         }
       />
 
@@ -284,12 +295,12 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             Ledger scoped to Events accepted{" "}
             {applied.acceptedFrom ? (
               <>
-                from <Timestamp value={instant(applied.acceptedFrom) ?? ""} />{" "}
+                from <Timestamp value={applied.acceptedFrom} />{" "}
               </>
             ) : null}
             {applied.acceptedTo ? (
               <>
-                to <Timestamp value={instant(applied.acceptedTo) ?? ""} />
+                to <Timestamp value={applied.acceptedTo} />
               </>
             ) : null}
           </span>
@@ -309,7 +320,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
           <form
             className="flex flex-col gap-4"
             onSubmit={form.handleSubmit((values) => {
-              setSearchParams(writeFilters(values));
+              setSearchParams(writeFilters(appliedValues(values, applied)));
             })}
           >
             <FormError message={formError(asProblem(sources.error ?? topics.error))} />
