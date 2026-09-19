@@ -4,6 +4,7 @@ using System.Text.Json;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,13 +13,14 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Integrios.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(IntegriosDbContext))]
-    partial class IntegriosDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919155258_AddEventsTenantBacklogIndex")]
+    partial class AddEventsTenantBacklogIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("Npgsql:CollationDefinition:case_insensitive", "und-u-ks-level2,und-u-ks-level2,icu,False")
                 .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -261,8 +263,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.Property<string>("EventType")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("event_type")
-                        .UseCollation("case_insensitive");
+                        .HasColumnName("event_type");
 
                     b.Property<DateTimeOffset?>("FailedAt")
                         .HasColumnType("timestamp with time zone")
@@ -318,10 +319,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasFilter("(source_event_id IS NOT NULL)");
 
                     b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
-                        .IsDescending(false, true, true)
-                        .HasAnnotation("SqlServer:Include", new[] { "Status" });
-
-                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted"), new[] { "Status" });
+                        .IsDescending(false, true, true);
 
                     b.HasIndex(new[] { "TenantId", "AcceptedAt" }, "idx_events_tenant_backlog")
                         .HasFilter("(status IN ('accepted', 'unrouted'))")
@@ -431,9 +429,6 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                     b.HasIndex(new[] { "Status", "LeaseExpiresAt", "DeliverAfter", "CreatedAt" }, "idx_event_deliveries_claimable")
                         .HasFilter("(status = ANY (ARRAY['pending'::text, 'in_flight'::text]))");
-
-                    b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_dead_lettered")
-                        .HasFilter("(status = 'dead_lettered')");
 
                     b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_event_id");
 

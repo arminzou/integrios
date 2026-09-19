@@ -66,10 +66,21 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         if (DatabaseProviders.FromContext(Database) == DatabaseProvider.SqlServer)
             ApplySqlServerOverrides(modelBuilder);
         else
+        {
             modelBuilder.Entity<PasswordCredential>()
                 .Property(e => e.NormalizedEmail)
                 .UseCollation("C");
+            // Event types are accepted and matched ignoring case. SQL Server's default collation
+            // already compares that way; this gives PostgreSQL the same equality while keeping the
+            // Topic/type index seekable, where lower() on both sides would walk a Topic's history.
+            modelBuilder.HasCollation(CaseInsensitiveCollation, locale: "und-u-ks-level2", provider: "icu", deterministic: false);
+            modelBuilder.Entity<DomainEvent>()
+                .Property(e => e.EventType)
+                .UseCollation(CaseInsensitiveCollation);
+        }
     }
+
+    private const string CaseInsensitiveCollation = "case_insensitive";
 
     private static void ApplySqlServerOverrides(ModelBuilder modelBuilder)
     {
@@ -136,6 +147,9 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             // than on each query is what lets idx_events_source_event_id actually serve the
             // duplicate lookup; a query-level COLLATE would leave it unusable.
             entity.Property(e => e.SourceEventId).UseCollation("Latin1_General_100_BIN2");
+            // Event types are matched ignoring case. Pinned rather than inherited, so a database
+            // created with a case-sensitive default still agrees with PostgreSQL's collation.
+            entity.Property(e => e.EventType).UseCollation("Latin1_General_100_CI_AS");
         });
 
         modelBuilder.Entity<Connector>(entity =>

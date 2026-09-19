@@ -264,7 +264,8 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.Property<string>("EventType")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")
-                        .HasColumnName("event_type");
+                        .HasColumnName("event_type")
+                        .UseCollation("Latin1_General_100_CI_AS");
 
                     b.Property<DateTimeOffset?>("FailedAt")
                         .HasColumnType("datetimeoffset")
@@ -322,7 +323,16 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasFilter("(source_event_id IS NOT NULL)");
 
                     b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
-                        .IsDescending(false, true, true);
+                        .IsDescending(false, true, true)
+                        .HasAnnotation("Npgsql:IndexInclude", new[] { "Status" });
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted"), new[] { "Status" });
+
+                    b.HasIndex(new[] { "TenantId", "AcceptedAt" }, "idx_events_tenant_backlog")
+                        .HasFilter("(status IN ('accepted', 'unrouted'))")
+                        .HasAnnotation("Npgsql:IndexInclude", new[] { "Status" });
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "TenantId", "AcceptedAt" }, "idx_events_tenant_backlog"), new[] { "Status" });
 
                     b.HasIndex(new[] { "TenantId", "TopicId", "EventType", "AcceptedAt", "Id" }, "idx_events_topic_type_accepted")
                         .IsDescending(false, false, false, true, true);
@@ -436,6 +446,9 @@ namespace Integrios.Migrations.SqlServer.Migrations
 
                     b.HasIndex(new[] { "Status", "LeaseExpiresAt", "DeliverAfter", "CreatedAt" }, "idx_event_deliveries_claimable")
                         .HasFilter("(status IN (N'pending', N'in_flight'))");
+
+                    b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_dead_lettered")
+                        .HasFilter("(status = 'dead_lettered')");
 
                     b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_event_id");
 

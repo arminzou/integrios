@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { type Call, page, stubHttp } from "../test/http";
+import { activityOf, type Call, page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { EventsScreen } from "./Events";
 
@@ -25,26 +25,29 @@ const routedEventWithDeadLetters = {
   deliveries: { pending: 0, in_flight: 0, succeeded: 1, dead_lettered: 2 },
 };
 
-// Deliberately not minute-aligned: a rolling 60-minute window's end is normally "now", which lands
-// mid-second. The round trip through the datetime-local inputs must preserve this to the second
-// rather than rounding down and silently excluding Events the summary's own count included.
-const activitySummary = {
-  events_accepted: 5,
-  awaiting_routing: 1,
-  unrouted: 1,
-  dead_lettered_deliveries: 2,
-  window_start: "2026-09-01T09:00:17Z",
-  window_end: "2026-09-01T10:00:47Z",
+/// Current backlogs as the Admin API reports them: however old, with the oldest item's instant. The
+/// unrouted backlog is a quiet zero on purpose, since a zero must stay on screen.
+const backlog = {
+  awaiting_routing: { count: 3, oldest_at: "2026-08-29T10:00:00Z" },
+  unrouted: { count: 0, oldest_at: null },
+  dead_lettered_deliveries: { count: 2, oldest_at: "2026-08-31T10:00:00Z" },
 };
+
+/// The last hour in twelve 5-minute buckets from 09:00, and a week in 6-hour buckets for the 7 d range.
+const activityFor = (range: string | null) =>
+  range === "7d"
+    ? activityOf({}, { range: "7d", start: "2026-08-25T10:00:00Z", bucketMinutes: 360, bucketCount: 28 })
+    : activityOf({ 9: { routed: 3, delivery_dead_lettered: 1 }, 10: { awaiting_routing: 2 } });
 
 const eventsCall = (calls: Call[]) => calls.filter((call) => call.url.pathname.endsWith("/events"));
 
-/// Distinguishes the ledger list, the activity summary, and an Event's own detail read, all of which
+/// Distinguishes the ledger list, the backlog, and an Event's own detail read, all of which
 /// share the `.../events` path prefix, and falls the Source/Topic option reads back to an empty page.
 function respondFor(eventsBody: unknown, detailBody: unknown = page([])) {
   return ({ url, method }: Call) => {
     if (method === "POST") return { status: 202 };
-    if (url.pathname.endsWith("/activity-summary")) return { status: 200, body: activitySummary };
+    if (url.pathname.endsWith("/backlog")) return { status: 200, body: backlog };
+    if (url.pathname.endsWith("/activity")) return { status: 200, body: activityFor(url.searchParams.get("range")) };
     if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detailBody };
     if (url.pathname.endsWith("/events")) return { status: 200, body: eventsBody };
     return { status: 200, body: page([]) };
@@ -56,7 +59,7 @@ function respondFor(eventsBody: unknown, detailBody: unknown = page([])) {
 /// handle; the route is, and it is what the row's selection contract is actually about.
 async function ledgerRow(id: string): Promise<HTMLTableRowElement> {
   return await waitFor(() => {
-    const row = document.querySelector(`a[href="/tenants/${tenantId}/events/${id}"]`)?.closest("tr");
+    const row = document.querySelector(`a[href^="/tenants/${tenantId}/events/${id}"]`)?.closest("tr");
     if (!row) throw new Error(`No ledger row for Event ${id}.`);
     return row as HTMLTableRowElement;
   });
@@ -187,66 +190,238 @@ describe("Opening an Event from its row", () => {
   });
 });
 
-describe("Event activity summary", () => {
-  it("names the window and reports the four counts as pressable, unselected buttons", async () => {
+describe("Right now", () => {
+  it("reports every backlog with its oldest age, keeping a zero on screen", async () => {
     stubHttp(respondFor(page([])));
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
 
-    // The window is stated as a real time range. Whatever the Operator's locale formats the visible
-    // value into, the instants the API sent survive on the machine-readable attribute.
-    const window = await screen.findByRole("region", { name: "Event activity summary" });
-    expect(Array.from(window.querySelectorAll("time")).map((stamp) => stamp.getAttribute("datetime"))).toEqual([
-      "2026-09-01T09:00:17Z",
-      "2026-09-01T10:00:47Z",
-    ]);
-    for (const [label, value] of [
-      ["Events accepted", "5"],
-      ["Awaiting routing", "1"],
-      ["Unrouted", "1"],
-      ["Dead-lettered Deliveries", "2"],
-    ]) {
-      const button = screen.getByRole("button", { name: new RegExp(`${value}\\s*${label}`) });
+    const strip = await screen.findByRole("region", { name: "Right now" });
+    const awaiting = within(strip).getByRole("button", { name: /Awaiting routing/ });
+    expect(awaiting.textContent).toContain("3");
+    expect(awaiting.textContent).toMatch(/Oldest .*ago/);
+    const unrouted = within(strip).getByRole("button", { name: /Unrouted/ });
+    expect(unrouted.textContent).toContain("0");
+    expect(unrouted.textContent).toContain("Nothing waiting");
+    for (const button of within(strip).getAllByRole("button"))
       expect(button.getAttribute("aria-pressed")).toBe("false");
-    }
   });
 
-  it("applies the documented filters and time range, marks itself pressed, and restarts paging", async () => {
+  it("filters the ledger by the backlog's status alone, with no time range, and restarts paging", async () => {
+    const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const { router } = renderScreen(
+      <EventsScreen tenantId={tenantId} />,
+      `/tenants/${tenantId}/events?status=routed&accepted_from=2026-09-01T09%3A00%3A17Z&source_event_id=order-42`,
+    );
+    const dead = await screen.findByRole("button", { name: /Dead-lettered Deliveries/ });
+    fireEvent.click(dead);
+
+    await waitFor(() => expect(router.state.location.search).toBe("?delivery_status=dead_lettered"));
+    expect(dead.getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("delivery_status")).toBe("dead_lettered"),
+    );
+    const applied = eventsCall(calls).at(-1)!.url.searchParams;
+    for (const name of ["status", "accepted_from", "accepted_to", "source_event_id", "after"])
+      expect(applied.has(name)).toBe(false);
+
+    // Any other scope is no longer this backlog alone, so it stops reading as pressed.
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    await waitFor(() => expect(dead.getAttribute("aria-pressed")).toBe("false"));
+  });
+});
+
+describe("Ledger Event type and freshness", () => {
+  it("filters the ledger by the Event type typed, and restores it from the URL", async () => {
+    const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
+    fireEvent.change(await screen.findByLabelText("Event type"), { target: { value: "Order.Created" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => expect(eventsCall(calls).at(-1)?.url.searchParams.get("event_type")).toBe("Order.Created"));
+    expect(router.state.location.search).toBe("?event_type=Order.Created");
+  });
+
+  it("counts new Events without moving rows, and Show reloads the first page under the next watermark", async () => {
+    let listReads = 0;
+    const second = {
+      ...routedEventWithDeadLetters,
+      event_id: "12121212-1212-1212-1212-121212121212",
+      accepted_at: "2026-09-01T10:05:00Z",
+    };
+    const calls = stubHttp((call) => {
+      const { url } = call;
+      if (url.pathname.endsWith("/freshness"))
+        return {
+          status: 200,
+          body: { count: url.searchParams.get("watermark") === "wm-1" ? 2 : 0, capped: false },
+        };
+      if (url.pathname.endsWith("/events")) {
+        listReads += 1;
+        return listReads === 1
+          ? { status: 200, body: { ...page([routedEventWithDeadLetters]), watermark: "wm-1" } }
+          : { status: 200, body: { ...page([second, routedEventWithDeadLetters]), watermark: "wm-2" } };
+      }
+      return respondFor(page([]))(call);
+    });
+
+    renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events?status=routed`);
+
+    expect(await screen.findByText("2 new Events since you opened this")).toBeTruthy();
+    // The count is read under the ledger's own filters, and the rows under the reader are untouched.
+    const poll = calls.find((call) => call.url.pathname.endsWith("/freshness"))!;
+    expect(poll.url.searchParams.get("status")).toBe("routed");
+    expect(screen.getAllByRole("rowheader")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+
+    await waitFor(() => expect(screen.getAllByRole("rowheader")).toHaveLength(2));
+    // Only the first page is read again, from the top.
+    expect(eventsCall(calls).at(-1)!.url.searchParams.has("after")).toBe(false);
+    await waitFor(() => expect(screen.queryByText(/new Events? since you opened this/)).toBeNull());
+    expect(
+      calls.some(
+        (call) => call.url.pathname.endsWith("/freshness") && call.url.searchParams.get("watermark") === "wm-2",
+      ),
+    ).toBe(true);
+  });
+
+  it("says so, rather than guessing, when the watermark is refused", async () => {
+    stubHttp((call) =>
+      call.url.pathname.endsWith("/freshness")
+        ? { status: 400, body: { title: "The cursor is invalid or has expired." } }
+        : call.url.pathname.endsWith("/events")
+          ? { status: 200, body: { ...page([routedEventWithDeadLetters]), watermark: "expired" } }
+          : respondFor(page([]))(call),
+    );
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+
+    expect(await screen.findByText("The ledger can no longer tell what is new since it was read.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show" })).toBeTruthy();
+  });
+});
+
+describe("Event activity", () => {
+  it("names each interval by its time and every outcome count", async () => {
+    stubHttp(respondFor(page([])));
+
+    renderScreen(<EventsScreen tenantId={tenantId} />);
+
+    const chart = await screen.findByRole("region", { name: "Activity" });
+    await within(chart).findByText("6 Events accepted, by current outcome.");
+    const intervals = within(chart).getByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    expect(buttons).toHaveLength(12);
+    expect(buttons[9].getAttribute("aria-label")).toMatch(
+      /: 3 routed, 0 awaiting routing, 0 unrouted, 1 delivery dead-lettered$/,
+    );
+    // One tab stop for the whole chart, on the most recent interval.
+    expect(buttons.filter((button) => button.tabIndex === 0)).toEqual([buttons[11]]);
+  });
+
+  it("scopes the ledger to a selected interval through a visible, removable filter", async () => {
+    const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events?status=routed`);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const tenth = within(intervals).getAllByRole("button")[9];
+    fireEvent.click(tenth);
+
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:45:00.000Z"),
+    );
+    const read = eventsCall(calls).at(-1)!.url.searchParams;
+    expect(read.get("accepted_to")).toBe("2026-09-01T09:50:00.000Z");
+    // The rest of the scope is kept; only the accepted range comes from the chart.
+    expect(read.get("status")).toBe("routed");
+    expect(tenth.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove time range" }));
+    await waitFor(() => expect(router.state.location.search).toBe("?status=routed"));
+    expect(tenth.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("extends a selection with Shift and an arrow key, and moves focus with the arrow alone", async () => {
     const calls = stubHttp(respondFor(page([])));
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
-    const unrouted = await screen.findByRole("button", { name: /Unrouted/ });
-    fireEvent.click(unrouted);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    buttons[11].focus();
+    fireEvent.keyDown(buttons[11], { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(buttons[10]);
+    expect(buttons[10].tabIndex).toBe(0);
 
-    expect(unrouted.getAttribute("aria-pressed")).toBe("true");
-    await waitFor(() => expect(eventsCall(calls).length).toBeGreaterThan(1));
-    const applied = eventsCall(calls).at(-1)!;
-    expect(applied.url.searchParams.get("status")).toBe("unrouted");
-    expect(applied.url.searchParams.has("delivery_status")).toBe(false);
-    // The visible 60-minute window is applied to the ledger's own accepted-range filter, preserved
-    // to the second rather than rounded down to the minute.
-    expect(applied.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:00:17.000Z");
-    expect(applied.url.searchParams.get("accepted_to")).toBe("2026-09-01T10:00:47.000Z");
-    expect(applied.url.searchParams.has("after")).toBe(false);
+    fireEvent.click(buttons[10]);
+    fireEvent.keyDown(buttons[10], { key: "ArrowLeft", shiftKey: true });
+    fireEvent.keyDown(buttons[9], { key: "ArrowLeft", shiftKey: true });
 
-    // Editing a filter by hand deselects the summary item, so its pressed state never lies.
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(unrouted.getAttribute("aria-pressed")).toBe("false");
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:40:00.000Z"),
+    );
+    expect(eventsCall(calls).at(-1)!.url.searchParams.get("accepted_to")).toBe("2026-09-01T09:55:00.000Z");
+    expect(document.activeElement).toBe(buttons[8]);
+    // Contracting back towards the anchor narrows the range again.
+    fireEvent.keyDown(buttons[8], { key: "ArrowRight", shiftKey: true });
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:45:00.000Z"),
+    );
   });
 
-  it("keeps the list's row count independent of the summary's own bounded counts", async () => {
-    stubHttp(respondFor(page([routedEventWithDeadLetters])));
+  it("applies a drag once, on release, rather than once per interval crossed", async () => {
+    const calls = stubHttp(respondFor(page([])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    await waitFor(() => expect(eventsCall(calls).length).toBe(1));
+
+    fireEvent.pointerDown(buttons[6]);
+    fireEvent.pointerEnter(buttons[7]);
+    fireEvent.pointerEnter(buttons[8]);
+    // Previewed while dragging, before anything is read.
+    expect(buttons[7].getAttribute("aria-pressed")).toBe("true");
+    expect(router.state.location.search).toBe("");
+    fireEvent.pointerUp(window);
+    fireEvent.click(buttons[8]);
+
+    await waitFor(() => expect(router.state.location.search).toContain("accepted_from="));
+    await waitFor(() => expect(eventsCall(calls).length).toBe(2));
+    expect(eventsCall(calls)[1].url.searchParams.get("accepted_from")).toBe("2026-09-01T09:30:00.000Z");
+    expect(eventsCall(calls)[1].url.searchParams.get("accepted_to")).toBe("2026-09-01T09:45:00.000Z");
+  });
+
+  it("leaves one history entry for a keyboard extension, however many steps it takes", async () => {
+    stubHttp(respondFor(page([])));
+
+    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    const buttons = within(intervals).getAllByRole("button");
+    fireEvent.click(buttons[10]);
+    await waitFor(() => expect(router.state.historyAction).toBe("PUSH"));
+    fireEvent.keyDown(buttons[10], { key: "ArrowLeft", shiftKey: true });
+    await waitFor(() => expect(router.state.historyAction).toBe("PUSH"));
+    fireEvent.keyDown(buttons[9], { key: "ArrowLeft", shiftKey: true });
+
+    await waitFor(() => expect(router.state.historyAction).toBe("REPLACE"));
+    expect(new URLSearchParams(router.state.location.search).get("accepted_from")).toBe("2026-09-01T09:40:00.000Z");
+  });
+
+  it("reads the week in 6-hour intervals when the 7 d range is chosen", async () => {
+    const calls = stubHttp(respondFor(page([])));
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
-    await ledgerRow(eventId);
+    fireEvent.click(await screen.findByRole("button", { name: "7 d" }));
 
-    // The activity summary's "Events accepted" is the 60-minute window count (5), which the list's
-    // own single visible row must never be mistaken for.
-    const acceptedButton = screen.getByRole("button", { name: /Events accepted/ });
-    expect(within(acceptedButton).getByText("5")).toBeTruthy();
-    // Counted by Events rather than by rows: the ledger also carries a column header and a day
-    // separator, and neither is a row the summary could ever be confused with.
-    expect(screen.getAllByRole("rowheader")).toHaveLength(1);
+    const intervals = await screen.findByRole("group", { name: /Event activity intervals/ });
+    await waitFor(() => expect(within(intervals).getAllByRole("button")).toHaveLength(28));
+    expect(
+      calls.some((call) => call.url.pathname.endsWith("/activity") && call.url.searchParams.get("range") === "7d"),
+    ).toBe(true);
+    expect(screen.getByRole("button", { name: "7 d" }).getAttribute("aria-pressed")).toBe("true");
   });
 });
 
@@ -270,6 +445,57 @@ const detail = (deliveryStatus: string) => ({
     },
   ],
   delivery_attempts: [],
+});
+
+describe("Event inspector actions", () => {
+  const unrouted = (overrides: Record<string, unknown>) => ({
+    ...detail("succeeded"),
+    status: "unrouted",
+    topic_id: "99999999-0000-0000-0000-000000000000",
+    event_type: "order.refunded",
+    event_deliveries: [],
+    ...overrides,
+  });
+
+  it("offers Create Subscription only while current configuration can still route the Event", async () => {
+    stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: true })));
+    const actionable = renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    expect(await screen.findByRole("link", { name: "Create Subscription" })).toBeTruthy();
+    actionable.unmount();
+
+    stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: false })));
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    expect(await screen.findByText(/any more, so current configuration can no longer route it\./)).toBeTruthy();
+    expect(screen.getByText("order.refunded").tagName).toBe("CODE");
+    expect(screen.queryByRole("link", { name: "Create Subscription" })).toBeNull();
+  });
+
+  it("names a deleted Topic as the reason a historical-only Event cannot be routed", async () => {
+    stubHttp(respondFor(page([]), unrouted({ unrouted_actionable: false, topic_deleted: true })));
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+
+    expect(
+      await screen.findByText("This Event's Topic has been deleted, so current configuration can no longer route it."),
+    ).toBeTruthy();
+  });
+
+  it("opens the trace in a new tab without opener access, only when the deployment offers a link", async () => {
+    const traceUrl = "https://tracing.example.test/trace/0af7651916cd43dd8448eb211c80319c";
+    stubHttp(respondFor(page([]), { ...detail("succeeded"), trace_url: traceUrl }));
+    const linked = renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+
+    const open = await screen.findByRole("link", { name: "Open trace" });
+    expect(open.getAttribute("href")).toBe(traceUrl);
+    expect(open.getAttribute("target")).toBe("_blank");
+    expect(open.getAttribute("rel")).toContain("noopener");
+    linked.unmount();
+
+    stubHttp(respondFor(page([]), { ...detail("succeeded"), trace_url: null }));
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    expect(await screen.findByRole("button", { name: "Copy trace id" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Open trace" })).toBeNull();
+  });
 });
 
 describe("Event inspector", () => {
@@ -341,6 +567,19 @@ describe("Event inspector", () => {
     );
   });
 
+  it("reads the backlog again after a replay, so Right now and the rail stop counting it", async () => {
+    const calls = stubHttp(respondFor(page([]), detail("dead_lettered")));
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Replay" }));
+    const before = calls.filter((call) => call.url.pathname.endsWith("/backlog")).length;
+    fireEvent.click(screen.getByRole("button", { name: "Replay this delivery" }));
+
+    await waitFor(() =>
+      expect(calls.filter((call) => call.url.pathname.endsWith("/backlog")).length).toBeGreaterThan(before),
+    );
+  });
+
   it("keeps the replay confirmation after the Delivery leaves the state that offered it", async () => {
     // A replayed Delivery stops being dead-lettered, which is the only state the replay control
     // renders under. The confirmation must not live inside that control: it would unmount at the
@@ -351,7 +590,8 @@ describe("Event inspector", () => {
         deliveryStatus = "pending";
         return { status: 202 };
       }
-      if (url.pathname.endsWith("/activity-summary")) return { status: 200, body: activitySummary };
+      if (url.pathname.endsWith("/backlog")) return { status: 200, body: backlog };
+      if (url.pathname.endsWith("/activity")) return { status: 200, body: activityFor("1h") };
       if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detail(deliveryStatus) };
       return { status: 200, body: page([]) };
     });

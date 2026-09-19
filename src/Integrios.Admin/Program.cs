@@ -30,6 +30,7 @@ int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
 builder.Services.AddSingleton(PublicIngestionBaseUri.Parse(
     builder.Configuration[PublicIngestionBaseUri.ConfigurationKey],
     builder.Environment.IsDevelopment()));
+builder.Services.AddSingleton(TraceUrlTemplate.Parse(builder.Configuration[TraceUrlTemplate.ConfigurationKey]));
 
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);

@@ -102,6 +102,16 @@ OTLP exports traces only. Metrics remain Prometheus-scraped and logs remain on s
 
 With no endpoint, traces are not exported. An invalid endpoint prevents host startup rather than silently using a fallback. There is no Integrios-specific OTLP endpoint setting.
 
+### Open trace links in the dashboard
+
+The Event inspector always offers the trace ID to copy. To also offer **Open trace**, give the Admin host a URL template for your tracing product in `Integrios:Admin:TraceUrlTemplate` (environment variable `Integrios__Admin__TraceUrlTemplate`):
+
+    Integrios__Admin__TraceUrlTemplate=https://tracing.example.com/trace/{trace_id}
+
+The template must contain `{trace_id}` exactly once, spelled in lower case. With a 32-character hexadecimal trace ID in that place it must form an absolute HTTP or HTTPS URL with no user name or password; query strings and fragments are allowed, since many tracing products carry the ID there. An invalid template prevents Admin startup. Without a template the inspector shows the copy action only.
+
+The Admin API returns the resolved link as nullable `trace_url` on Event detail and never returns the template. The dashboard opens it in a new tab. Integrios does not sign in to the tracing product; Operators need their own access to it.
+
 ## Logs
 
 Packaged Admin, Ingestion, and Worker hosts write JSON logs to stdout. Development uses readable console output instead. Log scopes include operational identifiers such as event_id, delivery_id, and subscription_id; active traces also add TraceId and SpanId.

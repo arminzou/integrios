@@ -25,14 +25,27 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<DomainEvent>
         entity.HasIndex(e => new { e.SourceId, e.SourceEventId }, "idx_events_source_event_id")
             .HasFilter("(source_event_id IS NOT NULL)");
 
-        // Newest-first Tenant Event history keyset: (accepted_at, id) is the cursor tuple.
-        entity.HasIndex(e => new { e.TenantId, e.AcceptedAt, e.Id }, "idx_events_tenant_accepted")
+        // Newest-first Tenant Event history keyset: (accepted_at, id) is the cursor tuple. Status is
+        // included because Event activity classifies every Event in a window by it; without it SQL
+        // Server scans the clustered index rather than look each windowed Event up.
+        IndexBuilder<DomainEvent> history = entity.HasIndex(e => new { e.TenantId, e.AcceptedAt, e.Id }, "idx_events_tenant_accepted")
             .IsDescending(false, true, true);
+        NpgsqlIndexBuilderExtensions.IncludeProperties(history, e => e.Status);
+        SqlServerIndexBuilderExtensions.IncludeProperties(history, e => e.Status);
 
         // A Subscription previews its mapping against the newest Events of its own type on its
         // Topic. A rare type among busy ones would otherwise walk the whole Tenant history above.
         entity.HasIndex(e => new { e.TenantId, e.TopicId, e.EventType, e.AcceptedAt, e.Id }, "idx_events_topic_type_accepted")
             .IsDescending(false, false, false, true, true);
+
+        // The monitoring backlog counts Events awaiting routing and unrouted however old, with the
+        // oldest acceptance of each. Filtered to those two statuses, so it stays as small as the
+        // backlog itself rather than scanning the Tenant's whole history. Status is only included,
+        // not a key column: SQL Server stores it as nvarchar(max), which cannot be an index key.
+        IndexBuilder<DomainEvent> backlog = entity.HasIndex(e => new { e.TenantId, e.AcceptedAt }, "idx_events_tenant_backlog")
+            .HasFilter("(status IN ('accepted', 'unrouted'))");
+        NpgsqlIndexBuilderExtensions.IncludeProperties(backlog, e => e.Status);
+        SqlServerIndexBuilderExtensions.IncludeProperties(backlog, e => e.Status);
 
         entity.Property(e => e.Id)
             .ValueGeneratedNever()

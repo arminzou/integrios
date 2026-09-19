@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { activityOf } from "../../src/test/http";
 
 /// What jsdom cannot decide. It implements no sequential focus navigation, so tab order and the
 /// focus ring are unprovable there, and it has no layout, so the accessibility rules that measure
@@ -71,13 +72,10 @@ const destination = {
   ...stamps,
 };
 
-const summary = {
-  window_start: "2026-09-01T12:00:00Z",
-  window_end: "2026-09-01T13:00:00Z",
-  events_accepted: 128,
-  awaiting_routing: 3,
-  unrouted: 2,
-  dead_lettered_deliveries: 5,
+const backlog = {
+  awaiting_routing: { count: 3, oldest_at: "2026-09-01T12:40:00Z" },
+  unrouted: { count: 0, oldest_at: null },
+  dead_lettered_deliveries: { count: 5, oldest_at: "2026-08-30T09:00:00Z" },
 };
 
 const event = {
@@ -124,7 +122,8 @@ async function openDashboard(path = "/tenants", options: Parameters<Browser["new
   await page.route("**/auth/session", (route) => route.fulfill({ json: session }));
   await page.route("**/admin/**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    if (pathname.endsWith("/activity-summary")) return route.fulfill({ json: summary });
+    if (pathname.endsWith("/activity")) return route.fulfill({ json: activityOf({ 8: { routed: 12, unrouted: 2 } }) });
+    if (pathname.endsWith("/backlog")) return route.fulfill({ json: backlog });
     if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
     if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
     if (pathname.endsWith("/admin/tenants")) return route.fulfill({ json: tenants });
@@ -296,7 +295,7 @@ describe("The dashboard in a real browser", () => {
       "New Destination",
     ],
     // The Event ledger's filters are on screen from the start, so there is nothing to open here.
-    ["the Event ledger and its activity summary", `/tenants/${tenants.items[0].id}/events`, undefined],
+    ["the Event ledger and its Right now backlog", `/tenants/${tenants.items[0].id}/events`, undefined],
   ])(
     "passes the accessibility rules that need real layout on %s",
     async (_name, path, disclosure) => {
@@ -664,6 +663,8 @@ describe("The dashboard in a real browser", () => {
       const pathname = new URL(route.request().url()).pathname;
       if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
       if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
+      if (pathname.endsWith("/backlog")) return route.fulfill({ json: backlog });
+      if (pathname.endsWith("/activity")) return route.fulfill({ json: activityOf() });
       if (pathname.endsWith("/destinations")) {
         await held;
         return route.fulfill({ json: { items: [destination], next_cursor: null } });

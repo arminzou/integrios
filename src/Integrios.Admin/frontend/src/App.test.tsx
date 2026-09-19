@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OperatorAuthenticationOptions } from "./api/client";
 import { expectNoAccessibilityViolations } from "./test/axe";
-import { page, stubHttp } from "./test/http";
+import { activityOf, page, quietBacklog, stubHttp } from "./test/http";
 import { renderApp } from "./test/router";
 
 afterEach(() => {
@@ -163,6 +163,8 @@ describe("The signed-in rail", () => {
     stubHttp(({ url }) => {
       if (url.pathname === "/auth/session") return { status: 200, body: session };
       if (/^\/admin\/tenants\/[^/]+$/.test(url.pathname) && tenant) return { status: 200, body: tenant };
+      if (url.pathname.endsWith("/events/backlog")) return { status: 200, body: quietBacklog };
+      if (url.pathname.endsWith("/events/activity")) return { status: 200, body: activityOf() };
       return { status: 200, body: page([]) };
     });
   }

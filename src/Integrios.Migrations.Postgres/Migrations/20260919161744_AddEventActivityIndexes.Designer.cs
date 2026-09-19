@@ -4,6 +4,7 @@ using System.Text.Json;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,13 +13,14 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Integrios.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(IntegriosDbContext))]
-    partial class IntegriosDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919161744_AddEventActivityIndexes")]
+    partial class AddEventActivityIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("Npgsql:CollationDefinition:case_insensitive", "und-u-ks-level2,und-u-ks-level2,icu,False")
                 .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -261,8 +263,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.Property<string>("EventType")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("event_type")
-                        .UseCollation("case_insensitive");
+                        .HasColumnName("event_type");
 
                     b.Property<DateTimeOffset?>("FailedAt")
                         .HasColumnType("timestamp with time zone")
