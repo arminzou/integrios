@@ -5,7 +5,9 @@
 # Everything is created through the public Admin and Ingestion APIs -- no direct inserts -- so the
 # resulting rows are exactly what the platform itself would have written. Only the wipe touches SQL.
 #
-# Requires the Compose stack (`make up`), .NET SDK, curl, jq, and docker compose.
+# Requires the Compose stack (`make up`), curl, jq, and docker compose. The Service Bus queue demo
+# is opt-in: set INTEGRIOS_SEED_QUEUE_DEMO=1 to start the emulator and seed the queue path, which
+# additionally needs the .NET SDK. The PowerShell twin, Seed-DevData.ps1, is kept in sync.
 set -euo pipefail
 
 ADMIN=${ADMIN:-http://localhost:5150}
@@ -21,6 +23,10 @@ SERVICEBUS_HOST_CONNECTION="Endpoint=sb://localhost:$SERVICEBUS_PORT;SharedAcces
 AUTH="Authorization: OperatorKey ${INTEGRIOS_OPERATOR_KEY:-global_operator_key:operator_bootstrap_secret}"
 JSON='Content-Type: application/json'
 
+# The Service Bus queue demo is opt-in. Without INTEGRIOS_SEED_QUEUE_DEMO the seed skips the
+# optional broker emulator and its queue-backed Source, producing a broker-free dataset.
+queue_demo_enabled() { [ -n "${INTEGRIOS_SEED_QUEUE_DEMO:-}" ] && [ "${INTEGRIOS_SEED_QUEUE_DEMO}" != "0" ]; }
+
 admin() { # admin METHOD PATH [BODY]
   local method=$1 path=$2 body=${3:-}
   if [ -n "$body" ]; then
@@ -34,15 +40,17 @@ say() { printf '\n=== %s\n' "$1"; }
 
 psql_q() { docker compose exec -T postgres psql -qtAX -U integrios -d integrios -c "$1"; }
 
-# The queue demo is opt-in Compose infrastructure, but seeding needs it every time. Start it before
-# the destructive wipe so a broker startup failure leaves the existing dev dataset untouched.
-say "starting the Service Bus queue demo"
-docker compose --profile queue-demo up -d servicebus-emulator
-for _ in $(seq 1 30); do
-  curl -fsS "$SERVICEBUS_HTTP/health" > /dev/null 2>&1 && break
-  sleep 2
-done
-curl -fsS "$SERVICEBUS_HTTP/health" > /dev/null
+# Start the optional Service Bus emulator before the destructive wipe so a broker startup failure
+# leaves the existing dev dataset untouched.
+if queue_demo_enabled; then
+  say "starting the Service Bus queue demo"
+  docker compose --profile queue-demo up -d servicebus-emulator
+  for _ in $(seq 1 30); do
+    curl -fsS "$SERVICEBUS_HTTP/health" > /dev/null 2>&1 && break
+    sleep 2
+  done
+  curl -fsS "$SERVICEBUS_HTTP/health" > /dev/null
+fi
 
 # --- 1. Wipe tenant-scoped data --------------------------------------------------------------
 # Connectors and OperatorKeys are deployment-level and survive: they are what bootstrap and the
@@ -74,22 +82,22 @@ new_topic() { # tenant key name description  (the demo keys double as their disp
 }
 
 new_source() { # tenant connector topic name event_types_csv [type] [configuration_json]
-  # Sources are authored Disabled; the demo enables each so traffic flows.
+  # Sources are authored Inactive; the demo activates each so traffic flows.
   local type=${6:-event_api} configuration=${7:-'{"source_contract":"event_json"}'} id
   id=$(admin POST "/admin/tenants/$1/sources" "$(jq -n --arg c "$2" --arg t "$3" --arg n "$4" --arg et "$5" \
     --arg type "$type" --argjson cfg "$configuration" \
     '{connector_id:$c,topic_id:$t,name:$n,type:$type,event_types:($et|split(",")),configuration:$cfg,verification:null,input_requirements:null,mapping:null,event_identity_rule:null}')" | jq -r .id)
-  admin POST "/admin/tenants/$1/sources/$id/enable" > /dev/null
+  admin POST "/admin/tenants/$1/sources/$id/activate" > /dev/null
   printf '%s\n' "$id"
 }
 
 new_subscription() { # tenant topic name event_type destination order description [mapping_json]
-  # Subscriptions are authored Disabled; the demo enables each so fanout routes to it.
+  # Subscriptions are authored Inactive; the demo activates each so fanout routes to it.
   local id
   id=$(admin POST "/admin/tenants/$1/topics/$2/subscriptions" "$(jq -n --arg n "$3" --arg et "$4" \
     --arg dst "$5" --argjson o "$6" --arg d "$7" --argjson m "${8:-null}" \
     '{name:$n,event_types:[$et],destination_id:$dst,mapping:$m,http_delivery:null,http_success:null,order_index:$o,description:$d}')" | jq -r .id)
-  admin POST "/admin/tenants/$1/topics/$2/subscriptions/$id/enable" > /dev/null
+  admin POST "/admin/tenants/$1/topics/$2/subscriptions/$id/activate" > /dev/null
   printf '%s\n' "$id"
 }
 
@@ -121,25 +129,29 @@ NW_WMS=$(new_destination "$NW" northwind-wms http://mocksink:8080/sink/northwind
 NW_LAKE=$(new_destination "$NW" analytics-lake http://mocksink:8080/sink/northwind-lake production "Flattened order feed for the analytics lake.")
 NW_BILLING=$(new_destination "$NW" legacy-billing http://mocksink:8080/sink/northwind-billing production "Decommissioned billing host. Kept until finance signs off on the cutover.")
 NW_SANDBOX=$(new_destination "$NW" erp-sandbox http://mocksink:8080/sink/northwind-sandbox staging "Vendor sandbox used during the last ERP upgrade.")
-admin POST "/admin/tenants/$NW/destinations/$NW_SANDBOX/disable" > /dev/null
+admin POST "/admin/tenants/$NW/destinations/$NW_SANDBOX/deactivate" > /dev/null
 
 NW_ORDERS=$(new_topic "$NW" orders orders "Order lifecycle from the storefront.")
 NW_PAY=$(new_topic "$NW" payments payments "Payment authorisation and capture.")
 NW_STOCK=$(new_topic "$NW" inventory inventory "Stock level movements per warehouse.")
 NW_WEBHOOKS=$(new_topic "$NW" storefront-webhooks storefront-webhooks "Provider callbacks received from the storefront platform.")
-NW_QUEUE=$(new_topic "$NW" warehouse-receipts warehouse-receipts "Warehouse receipts consumed from the operations queue.")
 NW_OLD=$(new_topic "$NW" pos-terminals pos-terminals "Retired in-store terminal stream.")
+if queue_demo_enabled; then
+  NW_QUEUE=$(new_topic "$NW" warehouse-receipts warehouse-receipts "Warehouse receipts consumed from the operations queue.")
+fi
 
 NW_ORDERS_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_ORDERS" "Northwind orders" order.placed,order.shipped,order.cancelled)
 NW_PAY_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_PAY" "Northwind payments" payment.captured)
 NW_STOCK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_STOCK" "Northwind inventory" stock.adjusted)
 NW_WEBHOOK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_WEBHOOKS" "Northwind storefront webhooks" storefront.webhook.received webhook)
 NW_WEBHOOK_CALLBACK=$(admin GET "/admin/tenants/$NW/sources/$NW_WEBHOOK_SRC" | jq -r .configuration.callback_id)
-mkdir -p secrets/source/northwind-retail
-printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/source/northwind-retail/$SERVICEBUS_SECRET"
-NW_QUEUE_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_QUEUE" "Northwind warehouse receipts" warehouse.receipt.recorded broker "$(jq -nc \
-  --arg secret "$SERVICEBUS_SECRET" --arg queue "$SERVICEBUS_QUEUE" \
-  '{source_contract:"event_json",transport:"azure_service_bus",authentication:{scheme:"connection_string",secret_ref:$secret},transport_config:{namespace:"servicebus-emulator",queue_name:$queue}}')")
+if queue_demo_enabled; then
+  mkdir -p secrets/source/northwind-retail
+  printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/source/northwind-retail/$SERVICEBUS_SECRET"
+  NW_QUEUE_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_QUEUE" "Northwind warehouse receipts" warehouse.receipt.recorded broker "$(jq -nc \
+    --arg secret "$SERVICEBUS_SECRET" --arg queue "$SERVICEBUS_QUEUE" \
+    '{source_contract:"event_json",transport:"azure_service_bus",authentication:{scheme:"connection_string",secret_ref:$secret},transport_config:{namespace:"servicebus-emulator",queue_name:$queue}}')")
+fi
 
 new_subscription "$NW" "$NW_ORDERS" erp-orders order.placed "$NW_ERP" 0 "Every placed order into the ERP." > /dev/null
 new_subscription "$NW" "$NW_ORDERS" wms-fulfilment order.shipped "$NW_WMS" 1 "Shipment confirmations back to the warehouse." > /dev/null
@@ -149,9 +161,11 @@ new_subscription "$NW" "$NW_PAY" erp-payments payment.captured "$NW_ERP" 0 "Capt
 new_subscription "$NW" "$NW_PAY" legacy-billing-feed payment.captured "$NW_BILLING" 1 "Mirror of captured payments into the decommissioned billing host." > /dev/null
 new_subscription "$NW" "$NW_STOCK" wms-stock stock.adjusted "$NW_WMS" 0 "Stock adjustments back to the warehouse." > /dev/null
 new_subscription "$NW" "$NW_WEBHOOKS" webhook-audit storefront.webhook.received "$NW_LAKE" 0 "Storefront callbacks retained in the analytics lake." > /dev/null
-new_subscription "$NW" "$NW_QUEUE" warehouse-receipts warehouse.receipt.recorded "$NW_WMS" 0 "Warehouse receipts delivered to the warehouse system." > /dev/null
+if queue_demo_enabled; then
+  new_subscription "$NW" "$NW_QUEUE" warehouse-receipts warehouse.receipt.recorded "$NW_WMS" 0 "Warehouse receipts delivered to the warehouse system." > /dev/null
+fi
 NW_PAUSED=$(new_subscription "$NW" "$NW_STOCK" lake-stock stock.adjusted "$NW_LAKE" 1 "Paused while the lake schema migration runs.")
-admin POST "/admin/tenants/$NW/topics/$NW_STOCK/subscriptions/$NW_PAUSED/disable" > /dev/null
+admin POST "/admin/tenants/$NW/topics/$NW_STOCK/subscriptions/$NW_PAUSED/deactivate" > /dev/null
 
 # --- 4. Helios Energy: smaller, staging -------------------------------------------------------
 say "Helios Energy"
@@ -201,8 +215,10 @@ send "$NW_STOCK_SRC" "$NW_TOKEN" stock.adjusted nw-stock-1 \
   "$(jq -n '{sku:"SKU-771",warehouse:"LEE-01",delta:-1,reason:"pick"}')" > /dev/null
 send_webhook "$NW_WEBHOOK_CALLBACK" storefront.webhook.received nw-webhook-1 \
   "$(jq -n '{deliveryId:"hook-1",provider:"storefront",result:"accepted"}')" > /dev/null
-jq -nc '{event_type:"warehouse.receipt.recorded",source_event_id:"nw-queue-1",payload:{receiptId:"RCPT-901",warehouse:"LEE-01",status:"received"}}' \
-  | dotnet run scripts/send-service-bus.cs -- "$SERVICEBUS_HOST_CONNECTION" "$SERVICEBUS_QUEUE"
+if queue_demo_enabled; then
+  jq -nc '{event_type:"warehouse.receipt.recorded",source_event_id:"nw-queue-1",payload:{receiptId:"RCPT-901",warehouse:"LEE-01",status:"received"}}' \
+    | dotnet run scripts/send-service-bus.cs -- "$SERVICEBUS_HOST_CONNECTION" "$SERVICEBUS_QUEUE"
+fi
 # No Subscription matches these: they land as unrouted, the signal for a missing Subscription.
 send "$NW_ORDERS_SRC" "$NW_TOKEN" order.cancelled nw-cancel-1 \
   "$(jq -n '{orderId:"SO-411",reason:"customer_request"}')" > /dev/null
@@ -217,16 +233,18 @@ send "$AT_SRC" "$AT_TOKEN" consignment.scanned at-scan-1 \
 send "$AT_SRC" "$AT_TOKEN" consignment.handover at-hand-1 \
   "$(jq -n '{consignment:"CN-55121",partner:"Meridian Freight",manifest:"MF-2209"}')" > /dev/null
 
-# Broker publishing and broker acceptance are separate boundaries; prove the receiver consumed the
-# one demo message before using the delivery state as the final completion signal.
-say "waiting for the broker Event"
-broker_events=0
-for _ in $(seq 1 30); do
-  broker_events=$(psql_q "select count(*) from events where source_event_id = 'nw-queue-1';")
-  [ "$broker_events" -ge 1 ] && break
-  sleep 2
-done
-[ "$broker_events" -ge 1 ] || { printf 'Broker Event was not accepted within one minute.\n' >&2; exit 1; }
+if queue_demo_enabled; then
+  # Broker publishing and broker acceptance are separate boundaries; prove the receiver consumed the
+  # one demo message before using the delivery state as the final completion signal.
+  say "waiting for the broker Event"
+  broker_events=0
+  for _ in $(seq 1 30); do
+    broker_events=$(psql_q "select count(*) from events where source_event_id = 'nw-queue-1';")
+    [ "$broker_events" -ge 1 ] && break
+    sleep 2
+  done
+  [ "$broker_events" -ge 1 ] || { printf 'Broker Event was not accepted within one minute.\n' >&2; exit 1; }
+fi
 
 # --- 9. Wait for the failing Delivery to exhaust its retries ------------------------------------
 # Three attempts on a 30s exponential base, so dead-lettering lands ~90s after the first attempt.
