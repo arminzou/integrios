@@ -78,7 +78,7 @@ public sealed class TenantEventBacklogTests(AdminApiFixture fixture) : AdminApiT
         unrouted.GetProperty("oldest_at").GetDateTimeOffset().ShouldBe(now.AddDays(-2));
 
         // Historical-only Events are still Event history, only not backlog.
-        JsonElement history = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?status=unrouted");
+        JsonElement history = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?status=unrouted");
         history.GetProperty("items").GetArrayLength().ShouldBe(5);
     }
 
@@ -122,7 +122,7 @@ public sealed class TenantEventBacklogTests(AdminApiFixture fixture) : AdminApiT
     private static DateTimeOffset WholeSeconds(DateTimeOffset value) =>
         new(value.Ticks - value.Ticks % TimeSpan.TicksPerSecond, TimeSpan.Zero);
 
-    private Task<JsonElement> GetBacklogAsync(Guid tenantId) => GetAsync($"/admin/tenants/{tenantId}/events/backlog");
+    private Task<JsonElement> GetBacklogAsync(Guid tenantId) => GetJsonAsync(client, $"/admin/tenants/{tenantId}/events/backlog");
 
     private async Task<(Guid SourceId, Guid TopicId)> CreateSourceAsync(Guid tenantId, params string[] eventTypes)
     {
@@ -155,16 +155,6 @@ public sealed class TenantEventBacklogTests(AdminApiFixture fixture) : AdminApiT
             VALUES (@Id, @TenantId, @SourceId, @TopicId, @EventType, {{fixture.Json("@Payload")}}, @Status, @AcceptedAt);
             """,
             new { Id = Guid.NewGuid(), TenantId = tenantId, SourceId = sourceId, TopicId = topicId, EventType = eventType, Payload = "{}", Status = status, AcceptedAt = acceptedAt });
-
-    private async Task<JsonElement> GetAsync(string url)
-    {
-        using HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Get, url));
-        string body = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"{url} -> {(int)response.StatusCode}: {body}");
-        using JsonDocument document = JsonDocument.Parse(body);
-        return document.RootElement.Clone();
-    }
 
     private async Task ExecuteAsync(string sql, object parameters)
     {

@@ -42,7 +42,7 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
             """,
             new { NewerId = deadLetteredEventId, SecondDeliveryId = secondDeliveryId, OtherEventId = olderEventId });
 
-        JsonElement all = await GetAsync($"/admin/tenants/{fixture.TenantId}/events");
+        JsonElement all = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events");
         (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/events")).ShouldBe([deadLetteredEventId, olderEventId]);
 
         JsonElement newest = all.GetProperty("items")[0];
@@ -73,10 +73,10 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
             .ShouldBe([deadLetteredEventId]);
 
         // First page, then its cursor, walks the newest-first order without repeating an Event.
-        JsonElement firstPage = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1");
+        JsonElement firstPage = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?limit=1");
         firstPage.GetProperty("items")[0].GetProperty("event_id").GetGuid().ShouldBe(deadLetteredEventId);
         string cursor = firstPage.GetProperty("next_cursor").GetString()!;
-        JsonElement secondPage = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&after={Uri.EscapeDataString(cursor)}");
+        JsonElement secondPage = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?limit=1&after={Uri.EscapeDataString(cursor)}");
         secondPage.GetProperty("items")[0].GetProperty("event_id").GetGuid().ShouldBe(olderEventId);
         secondPage.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
 
@@ -94,7 +94,7 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         // Three Events sharing one acceptance instant: only the id tie-breaker can order these, so
         // dropping it from either the ORDER BY or the keyset predicate repeats or skips a row here.
         var (seededEventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
-        JsonElement seeded = (await GetAsync($"/admin/tenants/{fixture.TenantId}/events")).GetProperty("items")[0];
+        JsonElement seeded = (await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events")).GetProperty("items")[0];
         seeded.GetProperty("event_id").GetGuid().ShouldBe(seededEventId);
         Guid sourceId = seeded.GetProperty("source_id").GetGuid();
         Guid topicId = seeded.GetProperty("topic_id").GetGuid();
@@ -123,7 +123,7 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         {
             string url = $"/admin/tenants/{fixture.TenantId}/events?limit=1&accepted_to={Uri.EscapeDataString(acceptedAt.ToString("O"))}"
                 + (cursor is null ? string.Empty : $"&after={Uri.EscapeDataString(cursor)}");
-            JsonElement result = await GetAsync(url);
+            JsonElement result = await GetJsonAsync(client, url);
             walked.Add(result.GetProperty("items")[0].GetProperty("event_id").GetGuid());
             cursor = result.GetProperty("next_cursor").GetString();
         }
@@ -145,7 +145,7 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
             .ShouldBeEmpty();
 
         // A cursor is bound to its tenant and to every active filter, so none of these may be reused.
-        JsonElement firstPage = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1");
+        JsonElement firstPage = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?limit=1");
         string unfiltered = firstPage.GetProperty("next_cursor").GetString()!;
         string carried = Uri.EscapeDataString(unfiltered);
         await AssertBadRequestAsync($"/admin/tenants/{fixture.OtherTenantId}/events?limit=1&after={carried}");
@@ -177,9 +177,9 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         // A cursor issued for the unfiltered list and one issued for source_event_id=all must not
         // validate against each other, even though both filter sets once colon-joined to the same
         // "all" scope token.
-        string unfilteredCursor = (await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1"))
+        string unfilteredCursor = (await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?limit=1"))
             .GetProperty("next_cursor").GetString()!;
-        string literalAllCursor = (await GetAsync($"/admin/tenants/{fixture.TenantId}/events?source_event_id=all&limit=1"))
+        string literalAllCursor = (await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?source_event_id=all&limit=1"))
             .GetProperty("next_cursor").GetString()!;
 
         await AssertBadRequestAsync(
@@ -188,7 +188,7 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
             $"/admin/tenants/{fixture.TenantId}/events?limit=1&after={Uri.EscapeDataString(literalAllCursor)}");
 
         // Its own cursor still walks the source_event_id=all list correctly.
-        JsonElement literalAllSecondPage = await GetAsync(
+        JsonElement literalAllSecondPage = await GetJsonAsync(client,
             $"/admin/tenants/{fixture.TenantId}/events?source_event_id=all&limit=1&after={Uri.EscapeDataString(literalAllCursor)}");
         literalAllSecondPage.GetProperty("items").GetArrayLength().ShouldBe(1);
 
@@ -202,10 +202,10 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
                 "UPDATE events SET source_event_id = @SourceEventId WHERE id = @Id",
                 new { Id = id, SourceEventId = delimited });
 
-        JsonElement delimitedFirstPage = await GetAsync(
+        JsonElement delimitedFirstPage = await GetJsonAsync(client,
             $"/admin/tenants/{fixture.TenantId}/events?source_event_id={Uri.EscapeDataString(delimited)}&limit=1");
         string delimitedCursor = delimitedFirstPage.GetProperty("next_cursor").GetString()!;
-        JsonElement delimitedSecondPage = await GetAsync(
+        JsonElement delimitedSecondPage = await GetJsonAsync(client,
             $"/admin/tenants/{fixture.TenantId}/events?source_event_id={Uri.EscapeDataString(delimited)}&limit=1&after={Uri.EscapeDataString(delimitedCursor)}");
         delimitedSecondPage.GetProperty("items").GetArrayLength().ShouldBe(1);
         delimitedSecondPage.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -216,10 +216,10 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         const string acceptedToUtc = "2027-01-01T00:00:00Z";
         const string acceptedFromOffset = "2025-12-31T19:00:00-05:00";
         const string acceptedToOffset = "2026-12-31T19:00:00-05:00";
-        JsonElement utcFirstPage = await GetAsync(
+        JsonElement utcFirstPage = await GetJsonAsync(client,
             $"/admin/tenants/{fixture.TenantId}/events?accepted_from={acceptedFromUtc}&accepted_to={acceptedToUtc}&limit=1");
         string utcCursor = utcFirstPage.GetProperty("next_cursor").GetString()!;
-        JsonElement offsetSecondPage = await GetAsync(
+        JsonElement offsetSecondPage = await GetJsonAsync(client,
             $"/admin/tenants/{fixture.TenantId}/events?accepted_from={Uri.EscapeDataString(acceptedFromOffset)}&accepted_to={Uri.EscapeDataString(acceptedToOffset)}&limit=1&after={Uri.EscapeDataString(utcCursor)}");
         offsetSecondPage.GetProperty("items").GetArrayLength().ShouldBeGreaterThan(0);
     }
@@ -228,15 +228,7 @@ public sealed class TenantEventHistoryTests(AdminApiFixture fixture) : AdminApiT
         (await client.SendAsync(AdminRequest(HttpMethod.Get, url))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
     private async Task<IReadOnlyList<Guid>> ListIdsAsync(string url) =>
-        (await GetAsync(url)).GetProperty("items").EnumerateArray().Select(item => item.GetProperty("event_id").GetGuid()).ToList();
-
-    private async Task<JsonElement> GetAsync(string url)
-    {
-        using HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Get, url));
-        response.EnsureSuccessStatusCode();
-        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return document.RootElement.Clone();
-    }
+        (await GetJsonAsync(client, url)).GetProperty("items").EnumerateArray().Select(item => item.GetProperty("event_id").GetGuid()).ToList();
 
     private async Task ExecuteAsync(string sql, object parameters)
     {

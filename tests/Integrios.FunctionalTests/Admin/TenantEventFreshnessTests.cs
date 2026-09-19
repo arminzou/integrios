@@ -45,17 +45,17 @@ public sealed class TenantEventFreshnessTests(AdminApiFixture fixture) : AdminAp
     [Fact]
     public async Task FirstPage_CarriesAWatermark_AndLaterPagesDoNot()
     {
-        JsonElement empty = await GetAsync($"/admin/tenants/{fixture.TenantId}/events");
+        JsonElement empty = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events");
         empty.GetProperty("watermark").GetString().ShouldNotBeNullOrEmpty();
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
         await InsertEventAsync("order.created", "routed", now.AddMinutes(-2));
         await InsertEventAsync("order.created", "routed", now.AddMinutes(-1));
-        JsonElement first = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1");
+        JsonElement first = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?limit=1");
         first.GetProperty("watermark").GetString().ShouldNotBeNullOrEmpty();
         string next = first.GetProperty("next_cursor").GetString()!;
 
-        JsonElement second = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?limit=1&after={Uri.EscapeDataString(next)}");
+        JsonElement second = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?limit=1&after={Uri.EscapeDataString(next)}");
         second.GetProperty("watermark").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
@@ -116,7 +116,7 @@ public sealed class TenantEventFreshnessTests(AdminApiFixture fixture) : AdminAp
     {
         await InsertEventAsync("order.created", "routed", DateTimeOffset.UtcNow.AddMinutes(-1));
         await InsertEventAsync("order.created", "routed", DateTimeOffset.UtcNow.AddMinutes(-2));
-        JsonElement page = await GetAsync($"/admin/tenants/{fixture.TenantId}/events?status=routed&limit=1");
+        JsonElement page = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?status=routed&limit=1");
         string watermark = page.GetProperty("watermark").GetString()!;
         string pageCursor = page.GetProperty("next_cursor").GetString()!;
 
@@ -133,10 +133,10 @@ public sealed class TenantEventFreshnessTests(AdminApiFixture fixture) : AdminAp
     }
 
     private async Task<string> WatermarkAsync(string filter) =>
-        (await GetAsync($"/admin/tenants/{fixture.TenantId}/events?{filter}")).GetProperty("watermark").GetString()!;
+        (await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events?{filter}")).GetProperty("watermark").GetString()!;
 
     private Task<JsonElement> FreshnessAsync(string filter, string watermark) =>
-        GetAsync($"/admin/tenants/{fixture.TenantId}/events/freshness?{filter}&watermark={Uri.EscapeDataString(watermark)}");
+        GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events/freshness?{filter}&watermark={Uri.EscapeDataString(watermark)}");
 
     private async Task<(Guid SourceId, Guid TopicId)> CreateOriginAsync(Guid tenantId)
     {
@@ -170,17 +170,7 @@ public sealed class TenantEventFreshnessTests(AdminApiFixture fixture) : AdminAp
     }
 
     private async Task<IReadOnlyList<Guid>> ListIdsAsync(string url) =>
-        (await GetAsync(url)).GetProperty("items").EnumerateArray().Select(item => item.GetProperty("event_id").GetGuid()).ToList();
-
-    private async Task<JsonElement> GetAsync(string url)
-    {
-        using HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Get, url));
-        string body = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"{url} -> {(int)response.StatusCode}: {body}");
-        using JsonDocument document = JsonDocument.Parse(body);
-        return document.RootElement.Clone();
-    }
+        (await GetJsonAsync(client, url)).GetProperty("items").EnumerateArray().Select(item => item.GetProperty("event_id").GetGuid()).ToList();
 
     private async Task ExecuteAsync(string sql, object parameters)
     {
