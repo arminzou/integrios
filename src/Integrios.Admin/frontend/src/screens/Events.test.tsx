@@ -288,6 +288,26 @@ describe("Ledger Event type and freshness", () => {
     ).toBe(true);
   });
 
+  it("counts new Events under a closed accepted range, both ends included", async () => {
+    const calls = stubHttp((call) =>
+      call.url.pathname.endsWith("/freshness")
+        ? { status: 200, body: { count: 3, capped: false } }
+        : call.url.pathname.endsWith("/events")
+          ? { status: 200, body: { ...page([routedEventWithDeadLetters]), watermark: "wm-1" } }
+          : respondFor(page([]))(call),
+    );
+
+    renderScreen(
+      <EventsScreen tenantId={tenantId} />,
+      `/tenants/${tenantId}/events?accepted_from=2026-09-01T09%3A00%3A00Z&accepted_to=2026-09-01T11%3A00%3A00Z`,
+    );
+
+    expect(await screen.findByText("3 new Events since you opened this")).toBeTruthy();
+    const poll = calls.find((call) => call.url.pathname.endsWith("/freshness"))!;
+    expect(poll.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:00:00Z");
+    expect(poll.url.searchParams.get("accepted_to")).toBe("2026-09-01T11:00:00Z");
+  });
+
   it("says so, rather than guessing, when the watermark is refused", async () => {
     stubHttp((call) =>
       call.url.pathname.endsWith("/freshness")
@@ -301,6 +321,26 @@ describe("Ledger Event type and freshness", () => {
 
     expect(await screen.findByText("The ledger can no longer tell what is new since it was read.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Show" })).toBeTruthy();
+  });
+});
+
+describe("Accepted range pill", () => {
+  // The popover it opens is positioned by measuring, so what choosing in it writes is decided in
+  // the browser suite; here only what is visible without opening it.
+  it("says Any when no range is in force, and states a range that is", async () => {
+    stubHttp(respondFor(page([routedEventWithDeadLetters])));
+    const { unmount } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
+
+    expect((await screen.findByRole("button", { name: "Accepted Any" })).getAttribute("data-applied")).toBe("false");
+    unmount();
+
+    stubHttp(respondFor(page([routedEventWithDeadLetters])));
+    renderScreen(
+      <EventsScreen tenantId={tenantId} />,
+      `/tenants/${tenantId}/events?accepted_from=2026-09-01T09%3A00%3A00Z`,
+    );
+    const applied = await screen.findByRole("button", { name: /^Accepted from / });
+    expect(applied.getAttribute("data-applied")).toBe("true");
   });
 });
 
@@ -322,7 +362,7 @@ describe("Event activity", () => {
     expect(buttons.filter((button) => button.tabIndex === 0)).toEqual([buttons[11]]);
   });
 
-  it("scopes the ledger to a selected interval through a visible, removable filter", async () => {
+  it("scopes the ledger to a selected interval and states it in the Accepted pill", async () => {
     const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
     const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events?status=routed`);
@@ -339,9 +379,9 @@ describe("Event activity", () => {
     expect(read.get("status")).toBe("routed");
     expect(tenth.getAttribute("aria-pressed")).toBe("true");
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove time range" }));
-    await waitFor(() => expect(router.state.location.search).toBe("?status=routed"));
-    expect(tenth.getAttribute("aria-pressed")).toBe("false");
+    // The selection lands in the one Accepted control; clearing it is decided in the browser suite.
+    expect(screen.getByRole("button", { name: /^Accepted/ }).getAttribute("data-applied")).toBe("true");
+    expect(router.state.location.search).toContain("accepted_from=");
   });
 
   it("extends a selection with Shift and an arrow key, and moves focus with the arrow alone", async () => {

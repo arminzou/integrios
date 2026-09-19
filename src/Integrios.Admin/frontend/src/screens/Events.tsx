@@ -10,6 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { AcceptedRangePill } from "../ui/acceptedRange";
 import {
   appliedNote,
   ConfirmAction,
@@ -82,9 +83,8 @@ const noFilters: Filters = {
 /// How the URL spells each filter. Snake case matches the Admin API's own query parameters, so a
 /// link an Operator copies out of the dashboard reads like the request it produces.
 ///
-/// The accepted range is carried, applied and requested as the URL's instants. Only the form holds
-/// it as a `datetime-local` wall clock (see `formValues`): a wall clock has no offset, and in the
-/// repeated fall-back hour one names two instants, so the applied range never passes through one.
+/// The accepted range is carried, applied and requested as the URL's instants; only the Accepted
+/// pill's Custom inputs ever hold it as a wall clock, and it never passes through one otherwise.
 const filterParams: { field: keyof Filters; name: string }[] = [
   { field: "status", name: "status" },
   { field: "deliveryStatus", name: "delivery_status" },
@@ -111,42 +111,6 @@ function writeFilters(values: Filters): URLSearchParams {
     if (values[field]) params.set(name, values[field]);
   }
   return params;
-}
-
-/// The applied filters as the form edits them, with the accepted range as the local wall clock a
-/// `datetime-local` input holds.
-function formValues(applied: Filters): Filters {
-  return {
-    ...applied,
-    acceptedFrom: localInputValue(applied.acceptedFrom),
-    acceptedTo: localInputValue(applied.acceptedTo),
-  };
-}
-
-/// The inverse of `formValues`. A range field the Operator left as it was keeps its applied instant
-/// rather than being re-read from a wall clock that, in a repeated hour, resolves to the earlier one.
-function appliedValues(values: Filters, applied: Filters): Filters {
-  const range = (field: "acceptedFrom" | "acceptedTo") =>
-    values[field] === localInputValue(applied[field]) ? applied[field] : (instant(values[field]) ?? "");
-  return { ...values, acceptedFrom: range("acceptedFrom"), acceptedTo: range("acceptedTo") };
-}
-
-/// A local datetime-local value carries no offset, so it is sent as an instant the server can read
-/// unambiguously rather than as the browser's own wall clock.
-function instant(value: string): string | undefined {
-  return value ? new Date(value).toISOString() : undefined;
-}
-
-/// The inverse of `instant`: renders a server instant into the local wall-clock value a
-/// `datetime-local` input holds, so an instant from a link populates the same fields an Operator
-/// would otherwise type into by hand. Kept to whole seconds, matching the inputs' `step`, so the
-/// value round-trips back to (sub-second precision aside) the same instant rather than rounding
-/// down to the minute and silently excluding Events the link's scope included.
-function localInputValue(iso: string): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 /// The three backlogs, in the order both monitoring surfaces list them. Each opens the ledger under
@@ -186,13 +150,13 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   // What is actually narrowing the ledger right now, counted from the URL rather than from the form,
   // so a value typed but not yet applied is not claimed as scope.
   const appliedCount = Object.values(applied).filter(Boolean).length;
-  const form = useForm<Filters>({ defaultValues: formValues(applied) });
+  const form = useForm<Filters>({ defaultValues: applied });
 
   // The URL can change without the form having produced it — the empty state's Clear filters, the
   // back button, a pasted link. The form follows it rather than keeping values the ledger is no
   // longer reading under.
   useEffect(() => {
-    form.reset(formValues(applied));
+    form.reset(applied);
   }, [applied, form]);
 
   const sources = useQuery({
@@ -287,40 +251,14 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         }
       />
 
-      {/* The accepted range is the one filter a chart can set, so it is stated where the chart is and
-          removable on its own without clearing the rest of the scope. */}
-      {applied.acceptedFrom || applied.acceptedTo ? (
-        <p className="m-0 flex flex-wrap items-center gap-2 text-[13px]">
-          <span>
-            Ledger scoped to Events accepted{" "}
-            {applied.acceptedFrom ? (
-              <>
-                from <Timestamp value={applied.acceptedFrom} />{" "}
-              </>
-            ) : null}
-            {applied.acceptedTo ? (
-              <>
-                to <Timestamp value={applied.acceptedTo} />
-              </>
-            ) : null}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setSearchParams(writeFilters({ ...applied, acceptedFrom: "", acceptedTo: "" }))}
-          >
-            Remove time range
-          </Button>
-        </p>
-      ) : null}
-
       {narrowing ? (
         <Form {...form}>
           <form
             className="flex flex-col gap-4"
             onSubmit={form.handleSubmit((values) => {
-              setSearchParams(writeFilters(appliedValues(values, applied)));
+              setSearchParams(
+                writeFilters({ ...values, acceptedFrom: applied.acceptedFrom, acceptedTo: applied.acceptedTo }),
+              );
             })}
           >
             <FormError message={formError(asProblem(sources.error ?? topics.error))} />
@@ -391,19 +329,12 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                   </SelectItem>
                 ))}
               </FilterSelectField>
-              <FilterTextField
-                control={form.control}
-                name="acceptedFrom"
-                label="Accepted from"
-                type="datetime-local"
-                step="1"
-              />
-              <FilterTextField
-                control={form.control}
-                name="acceptedTo"
-                label="Accepted to"
-                type="datetime-local"
-                step="1"
+              <AcceptedRangePill
+                from={applied.acceptedFrom}
+                to={applied.acceptedTo}
+                onChange={(acceptedFrom, acceptedTo) =>
+                  setSearchParams(writeFilters({ ...applied, acceptedFrom, acceptedTo }))
+                }
               />
 
               {/* Apply stays explicit. Eight controls that each re-queried on change would issue six
