@@ -71,16 +71,16 @@ internal sealed class TenantEventHistory(IDbConnectionFactory connectionFactory,
         }
 
         // Ordered newest first, so a first page's newest Event is its first row. A page that matched
-        // nothing marks the moment it was read: an Event accepted before then was not missed by it.
-        DateTimeOffset readAt = DateTimeOffset.UtcNow;
+        // nothing has shown the reader nothing, so every Event that later matches is new to it,
+        // including one stamped before this read that committed after it.
         string? watermark = hasCursor
             ? null
             : PageCursor.Encode(
                 dataProtectionProvider,
                 WatermarkScope + cursorScope,
-                rows.Count > 0 ? rows[0].AcceptedAt : readAt,
+                rows.Count > 0 ? rows[0].AcceptedAt : DateTimeOffset.UnixEpoch,
                 rows.Count > 0 ? rows[0].EventId : Guid.Empty,
-                readAt);
+                DateTimeOffset.UtcNow);
 
         return (rows.Select(row => new EventListItemDto
         {

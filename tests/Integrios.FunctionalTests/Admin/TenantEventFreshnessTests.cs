@@ -63,7 +63,8 @@ public sealed class TenantEventFreshnessTests(AdminApiFixture fixture) : AdminAp
     public async Task Freshness_CountsOnlyLaterEventsMatchingEveryAppliedFilter_AndShowAdvancesTheWatermark()
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        await InsertEventAsync("order.created", "routed", now.AddMinutes(-5));
+        // The first page shows this Event, so it is the watermark.
+        await InsertEventAsync("order.created", "unrouted", now.AddMinutes(-5));
         const string filter = "status=unrouted&event_type=order.created";
         string watermark = await WatermarkAsync(filter);
 
@@ -72,7 +73,7 @@ public sealed class TenantEventFreshnessTests(AdminApiFixture fixture) : AdminAp
         await InsertEventAsync("ORDER.CREATED", "unrouted", later);  // matches, ignoring case
         await InsertEventAsync("order.created", "routed", later);    // other status
         await InsertEventAsync("invoice.sent", "unrouted", later);   // other type
-        await InsertEventAsync("order.created", "unrouted", now.AddMinutes(-30)); // accepted before the watermark
+        await InsertEventAsync("order.created", "unrouted", now.AddMinutes(-30)); // accepted before the watermark Event
 
         JsonElement fresh = await FreshnessAsync(filter, watermark);
         fresh.GetProperty("count").GetInt32().ShouldBe(2);
@@ -81,6 +82,17 @@ public sealed class TenantEventFreshnessTests(AdminApiFixture fixture) : AdminAp
         // Show: the first page is read again and its watermark adopted, so nothing is newer than it.
         string advanced = await WatermarkAsync(filter);
         (await FreshnessAsync(filter, advanced)).GetProperty("count").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Freshness_AfterAnEmptyFirstPage_CountsEveryLaterMatch_EvenOneStampedBeforeTheRead()
+    {
+        string watermark = await WatermarkAsync("status=unrouted");
+
+        // Stamped before the page was read, committed after it: the reader has still never seen it.
+        await InsertEventAsync("order.created", "unrouted", DateTimeOffset.UtcNow.AddMinutes(-10));
+
+        (await FreshnessAsync("status=unrouted", watermark)).GetProperty("count").GetInt32().ShouldBe(1);
     }
 
     [Fact]
