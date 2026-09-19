@@ -30,6 +30,20 @@ public sealed record EventDiagnosticsDto
     public string? TopicKey { get; init; }
     public string? TopicName { get; init; }
     public bool TopicDeleted { get; init; }
+
+    /// <summary>
+    /// Whether this unrouted Event could still be routed by authoring a Subscription: its Topic is
+    /// live and a non-deleted Source on it declares the Event's type. The same test decides whether
+    /// it counts toward Needs attention. Always false for an Event that is not unrouted.
+    /// </summary>
+    public bool UnroutedActionable { get; init; }
+
+    /// <summary>
+    /// A link to this Event's trace in the deployment's tracing product, when the Admin host is
+    /// configured with a trace URL template. The template itself is never exposed.
+    /// </summary>
+    public string? TraceUrl { get; init; }
+
     public JsonElement? Payload { get; init; }
     public JsonElement? Metadata { get; init; }
     public IReadOnlyList<EventDeliveryDiagnosticsDto> EventDeliveries { get; init; } = [];

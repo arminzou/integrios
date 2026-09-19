@@ -1,5 +1,6 @@
 using Integrios.Application.Delivery;
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Integrios.Admin.Endpoints;
 
@@ -17,12 +18,16 @@ public sealed class DeliveryRecoveryEndpoints : IEndpointGroup
         Guid tenantId,
         Guid eventId,
         IMediator mediator,
+        [FromServices] TraceUrlTemplate traces,
         CancellationToken cancellationToken)
     {
         EventDiagnosticsDto? response = await mediator.Send(
             new GetEventDeliveryRecoveryQuery(tenantId, eventId),
             cancellationToken);
-        return response is null ? Results.NotFound() : Results.Ok(response);
+        // The trace link is deployment configuration the use case cannot know, so the host adds it.
+        return response is null
+            ? Results.NotFound()
+            : Results.Ok(response with { TraceUrl = traces.Resolve(response.TraceId) });
     }
 
     private static async Task<IResult> ReplayDelivery(
