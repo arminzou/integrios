@@ -507,7 +507,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new { key = topicName });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "delivery.blocked" }, configuration = new { } });
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "delivery.blocked", "fanout.independent" }, configuration = new { } });
         await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",

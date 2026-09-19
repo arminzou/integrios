@@ -122,6 +122,22 @@ async function readAdmin(path: string): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>;
 }
 
+/// The status the deployment reports for a resource, polled until the action the page sent lands.
+async function expectStatus(path: string, status: string) {
+  await expect.poll(async () => (await readAdmin(path)).status, { timeout: 15_000 }).toBe(status);
+}
+
+/// Activate is a plain button; Deactivate and Delete ask first, and the confirmation names the
+/// resource, so pressing it proves the question was about the right one.
+async function act(page: Page, action: "Activate" | "Deactivate" | "Delete", name: string) {
+  await page.getByRole("button", { name: action, exact: true }).click();
+  if (action !== "Activate")
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: `${action} ${name}`, exact: true })
+      .click();
+}
+
 describe.skipIf(!configured)("A golden authoring journey against a real deployment", () => {
   it("authors a Tenant, Destination, Topic, Subscription and Source through their own screens", async () => {
     const connectors = (await readAdmin("/admin/connectors?limit=100")).items as {
@@ -160,7 +176,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await destinationForm.getByLabel("Name", { exact: true }).fill(`${run}-sink`);
     await destinationForm.getByLabel("Base URI", { exact: true }).fill("http://mocksink:8080");
     await view.click("text=Create Destination");
-    await created(view, /\/destinations\/[0-9a-f-]{36}$/, "Destination");
+    const destinationId = await created(view, /\/destinations\/[0-9a-f-]{36}$/, "Destination");
     await closeView(view);
 
     // Topic.
@@ -183,7 +199,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await sourceForm.getByRole("button", { name: "Add Event type" }).click();
     await sourceForm.getByLabel("Event type 2", { exact: true }).fill(`${run}.shipped`);
     await view.click("text=Create Source");
-    await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
+    const sourceId = await created(view, /\/sources\/[0-9a-f-]{36}$/, "Source");
     await view.getByRole("dialog", { name: "Publish through this Source" }).waitFor();
     await closeView(view);
 
@@ -201,7 +217,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     await selection.getByRole("checkbox", { name: `${run}.shipped` }).check();
     expect(await selection.getByRole("textbox").count()).toBe(0);
     await view.click("text=Create Subscription");
-    await created(view, /\/subscriptions\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, "Subscription");
+    const subscriptionId = await created(view, /\/subscriptions\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/, "Subscription");
     await closeView(view);
 
     // Everything the journey authored is readable from the deployment, not merely echoed by a form.
@@ -217,5 +233,59 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     expect((sources.items as unknown[]).length).toBe(1);
     expect((subscriptions.items as { name: string }[])[0].name).toBe(`${run}-to-sink`);
     expect((topics.items as { event_types: string[] }[])[0].event_types).toEqual([`${run}.created`, `${run}.shipped`]);
-  }, 180_000);
+
+    // Lifecycle. A new Source and Subscription start Inactive, so nothing flows until the Operator
+    // activates each one; both then deactivate and return to Inactive without being deleted.
+    const sourcePath = `/admin/tenants/${tenantId}/sources/${sourceId}`;
+    const subscriptionPath = `/admin/tenants/${tenantId}/topics/${topicId}/subscriptions/${subscriptionId}`;
+    const destinationPath = `/admin/tenants/${tenantId}/destinations/${destinationId}`;
+    await expectStatus(sourcePath, "inactive");
+    await expectStatus(subscriptionPath, "inactive");
+
+    view = await openDashboard(`/tenants/${tenantId}/sources/${sourceId}`);
+    await act(view, "Activate", `${run}-intake`);
+    await expectStatus(sourcePath, "active");
+    await closeView(view);
+
+    view = await openDashboard(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+    await act(view, "Activate", `${run}-to-sink`);
+    await expectStatus(subscriptionPath, "active");
+    await act(view, "Deactivate", `${run}-to-sink`);
+    await expectStatus(subscriptionPath, "inactive");
+    await closeView(view);
+
+    view = await openDashboard(`/tenants/${tenantId}/destinations/${destinationId}`);
+    await act(view, "Deactivate", `${run}-sink`);
+    await expectStatus(destinationPath, "inactive");
+    await act(view, "Activate", `${run}-sink`);
+    await expectStatus(destinationPath, "active");
+    await closeView(view);
+
+    view = await openDashboard(`/tenants/${tenantId}`);
+    await act(view, "Deactivate", `Journey ${run}`);
+    await expectStatus(`/admin/tenants/${tenantId}`, "inactive");
+    await act(view, "Activate", `Journey ${run}`);
+    await expectStatus(`/admin/tenants/${tenantId}`, "active");
+    await closeView(view);
+
+    // Delete, in the order dependencies allow: the Subscription frees the Source's declarations and
+    // the Destination, and the Source frees the Topic. Each is gone from reads once deleted.
+    const gone = async (path: string) =>
+      expect
+        .poll(async () => (await fetch(`${adminOrigin}${path}`, { headers: { authorization: operatorKey! } })).status, {
+          timeout: 15_000,
+        })
+        .toBe(404);
+    for (const [screen, name, path] of [
+      [`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`, `${run}-to-sink`, subscriptionPath],
+      [`/tenants/${tenantId}/sources/${sourceId}`, `${run}-intake`, sourcePath],
+      [`/tenants/${tenantId}/destinations/${destinationId}`, `${run}-sink`, destinationPath],
+      [`/tenants/${tenantId}/topics/${topicId}`, `${run}-orders`, `/admin/tenants/${tenantId}/topics/${topicId}`],
+    ]) {
+      view = await openDashboard(screen);
+      await act(view, "Delete", name);
+      await gone(path);
+      await closeView(view);
+    }
+  }, 240_000);
 });

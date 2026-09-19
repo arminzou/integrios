@@ -625,8 +625,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     // Subscription selects only from that, so each test Source declares the whole vocabulary.
     private static readonly string[] JourneyEventTypes =
     [
-        "payment.created", "rejected.test", "independent.test", "snapshot.test", "runtime.transform",
-        "redirect.test", "slow.test", "drain.test", "rotation.test",
+        "payment.created", "read.test", "no.subscription", "rejected.test", "independent.test",
+        "snapshot.test", "runtime.transform", "redirect.test", "slow.test", "drain.test", "rotation.test",
     ];
 
     private async Task<Guid> CreateEventApiSourceAsync(

@@ -17,7 +17,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         secondMigrate.ExitCode.ShouldBe(0);
         (await ColumnShapeAsync(database, "event_deliveries", "connector_key")).ShouldBe("text|NO");
         (await ColumnShapeAsync(database, "event_deliveries", "http_execution_snapshot")).ShouldBe("jsonb|NO");
-        (await ColumnShapeAsync(database, "subscriptions", "http_delivery")).ShouldBe("jsonb|NO");
+        (await ColumnShapeAsync(database, "subscriptions", "http_delivery")).ShouldBe("jsonb|YES");
         (await CountColumnsAsync(database, "event_deliveries", "destination_url", "destination_auth")).ShouldBe(0L);
         (await ColumnShapeAsync(database, "event_deliveries", "active_attempt_id")).ShouldBe("uuid|YES");
         (await ColumnShapeAsync(database, "event_deliveries", "lease_expires_at")).ShouldBe("timestamp with time zone|YES");
