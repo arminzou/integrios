@@ -427,3 +427,77 @@ describe("Editing a Subscription", () => {
     );
   });
 });
+
+describe("Subscription filters", () => {
+  const listUrl = `/tenants/${tenantId}/subscriptions`;
+  const orders = { id: topicId, key: "orders", name: "Orders", status: "active" };
+  const listed = {
+    ...subscription,
+    topic_name: "Orders",
+    destination_name: "Primary CRM",
+  };
+
+  function stubLists(topicPage: { items: unknown[]; next?: string | null } = { items: [orders] }) {
+    return stubHttp(({ url }) => {
+      if (url.pathname.endsWith("/topics")) return { status: 200, body: page(topicPage.items, topicPage.next ?? null) };
+      if (url.pathname.endsWith("/destinations")) return { status: 200, body: page([]) };
+      return { status: 200, body: page([listed]) };
+    });
+  }
+
+  const subscriptionReads = (calls: ReturnType<typeof stubHttp>) =>
+    calls.filter(({ url }) => url.pathname.endsWith("/subscriptions"));
+
+  it("makes no read while a name is typed, and commits on Enter and on blur", async () => {
+    const calls = stubLists();
+    const { router } = renderScreen(<SubscriptionsScreen tenantId={tenantId} />, listUrl);
+    await screen.findByRole("link", { name: "Send priority orders" });
+    const before = subscriptionReads(calls).length;
+    const search = screen.getByRole("searchbox", { name: "Name" });
+    expect(search.getAttribute("placeholder")).toBe("Name contains…");
+
+    fireEvent.change(search, { target: { value: "prio" } });
+    fireEvent.change(search, { target: { value: "priority" } });
+    expect(subscriptionReads(calls).length).toBe(before);
+    expect(router.state.location.search).toBe("");
+    expect(search.closest("form")!.getAttribute("data-applied")).toBe("false");
+
+    fireEvent.submit(search.closest("form")!);
+    await waitFor(() => expect(router.state.location.search).toBe("?name=priority"));
+
+    fireEvent.change(search, { target: { value: "orders" } });
+    fireEvent.blur(search);
+    await waitFor(() => expect(router.state.location.search).toBe("?name=orders"));
+  });
+
+  it("shows a Topic id the options cannot name as the pill's value", async () => {
+    const missing = "99999999-9999-9999-9999-999999999999";
+    stubLists();
+    renderScreen(<SubscriptionsScreen tenantId={tenantId} />, `${listUrl}?topic_id=${missing}`);
+
+    const topic = await screen.findByRole("combobox", { name: "Topic" });
+    expect(topic.textContent).toContain(missing);
+  });
+
+  it("clears only the filters, keeping a parameter that is not one", async () => {
+    const { router } = renderScreen(
+      <SubscriptionsScreen tenantId={tenantId} />,
+      `${listUrl}?status=active&name=priority&tab=summary`,
+    );
+    stubLists();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Clear filters" }));
+
+    await waitFor(() => expect(router.state.location.search).toBe("?tab=summary"));
+  });
+
+  it("describes the capped Topic options to assistive technology", async () => {
+    stubLists({ items: [orders], next: "more" });
+    renderScreen(<SubscriptionsScreen tenantId={tenantId} />, listUrl);
+
+    const topic = await screen.findByRole("combobox", { name: "Topic" });
+    await waitFor(() => expect(topic.getAttribute("aria-describedby")).toBe("subscription-topic-hint"));
+    // The visible copy in the open menu needs a real listbox; the browser suite proves it.
+    expect(document.getElementById("subscription-topic-hint")!.textContent).toBe("Showing the first 100 Topics.");
+  });
+});

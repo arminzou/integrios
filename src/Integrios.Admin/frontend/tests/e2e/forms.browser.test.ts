@@ -269,6 +269,33 @@ it("applies the list filters through their controls and keeps them usable at 320
   }
 }, 60_000);
 
+it("applies a Subscription filter live, as one history entry, and Back restores the scope", async () => {
+  const { page: view } = await open(`/tenants/${tenantId}/subscriptions`);
+  try {
+    await view.getByRole("link", { name: "to-sink" }).waitFor();
+    const reads: string[] = [];
+    view.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.endsWith("/subscriptions") && url.searchParams.get("status") === "inactive")
+        reads.push(url.search);
+    });
+
+    await view.getByLabel("Status", { exact: true }).click();
+    await view.getByRole("option", { name: "Inactive" }).click();
+    await view.waitForURL("**/subscriptions?status=inactive");
+    await view.getByRole("button", { name: "Clear filters" }).waitFor();
+    // Let the read the change caused land before counting it.
+    await view.waitForLoadState("networkidle");
+    expect(reads).toHaveLength(1);
+
+    await view.goBack();
+    await view.waitForURL(`**/tenants/${tenantId}/subscriptions`);
+    await view.getByRole("button", { name: "Clear filters" }).waitFor({ state: "detached" });
+  } finally {
+    await view.close();
+  }
+}, 60_000);
+
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 
 /// An authoring sheet is fixed-position, so a form wider than the screen never widens the document

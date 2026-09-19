@@ -23,3 +23,32 @@ export function useFilterParam(name: string): [string, (value: string) => void] 
 
   return [params.get(name) ?? "", set];
 }
+
+/// The filters of one list, read from the URL. A screen declares its parameters spelled as its Admin
+/// API spells them, so the URL, the query key and the request share one name and an inbound link
+/// keeps working.
+///
+/// `set` writes one history entry, so Back undoes the last change. `values` is what a query key
+/// carries: a changed filter is a different query with its own pages. `clear` removes only the
+/// declared parameters, so a parameter that is not a filter survives it.
+export function useListFilters<const TName extends string>(names: readonly TName[]) {
+  const [params, setParams] = useSearchParams();
+  const values = Object.fromEntries(names.map((name) => [name, params.get(name) ?? ""])) as Record<TName, string>;
+
+  const write = (change: (next: URLSearchParams) => void) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      change(next);
+      return next;
+    });
+
+  return {
+    values,
+    applied: names.filter((name) => values[name] !== "").length,
+    set: (name: TName, value: string) => write((next) => (value ? next.set(name, value) : next.delete(name))),
+    clear: () =>
+      write((next) => {
+        for (const name of names) next.delete(name);
+      }),
+  };
+}
