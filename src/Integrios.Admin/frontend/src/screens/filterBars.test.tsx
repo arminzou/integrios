@@ -113,6 +113,6 @@ it.each(bars)(
     });
     const inBar = [...filters.querySelectorAll("input, button")];
     // Clear filters follows the controls, so the order is checked over the controls alone.
-    expect(inBar.slice(0, expected.length)).toEqual(expected);
+    for (const [index, control] of expected.entries()) expect(inBar[index]).toBe(control);
   },
 );

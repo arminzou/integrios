@@ -95,11 +95,14 @@ export function useEventBacklog(tenantId: string) {
   });
 }
 
+/// Every filter unset, so a scope replaces the current one without touching parameters that are not filters.
+const noFilters = Object.fromEntries(eventFilters.map((name) => [name, ""]));
+
 export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; selectedEventId?: string }) {
   // The URL is the scope the ledger reads under, so a filtered ledger is a link and Back restores
   // the previous scope. Every filter applies as it changes; a value typed in a free-text box is not
   // scope until it is committed.
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const query = searchParams.toString();
   // Selecting and closing an Event keeps the ledger's scope, so the list beside the inspector is
   // still the one the Operator selected from.
@@ -189,7 +192,11 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         Everything accepted for this Tenant, newest first.
       </PageHeader>
 
-      <RightNow backlog={backlog} activeQuery={query} onSelect={(next) => setSearchParams(new URLSearchParams(next))} />
+      <RightNow
+        backlog={backlog}
+        activeQuery={query}
+        onSelect={(next) => filters.patch({ ...noFilters, ...Object.fromEntries(new URLSearchParams(next)) })}
+      />
 
       <EventActivity
         tenantId={tenantId}

@@ -409,7 +409,7 @@ export function DestinationsScreen({
   // that needs the Admin API to answer "which environments" rather than the dashboard inferring it.
   const environments: string[] = [
     ...new Set(
-      (destinationOptions.data?.items ?? []).map((item) => item.environment).filter((value) => value !== null),
+      (destinationOptions.data?.items ?? []).flatMap((item) => (item.environment?.trim() ? [item.environment] : [])),
     ),
   ].sort();
   const list = useInfiniteQuery({
