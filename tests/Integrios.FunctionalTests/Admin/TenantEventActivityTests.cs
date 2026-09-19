@@ -56,7 +56,7 @@ public sealed class TenantEventActivityTests(AdminApiFixture fixture) : AdminApi
         // Outside the hour: never counted.
         await InsertEventAsync(fixture.TenantId, sourceId, topicId, "unrouted", now.AddHours(-2));
 
-        JsonElement activity = await GetAsync($"/admin/tenants/{fixture.TenantId}/events/activity?range=1h");
+        JsonElement activity = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events/activity?range=1h");
         int Sum(string outcome) => activity.GetProperty("buckets").EnumerateArray().Sum(bucket => bucket.GetProperty(outcome).GetInt32());
 
         Sum("awaiting_routing").ShouldBe(1);
@@ -72,7 +72,7 @@ public sealed class TenantEventActivityTests(AdminApiFixture fixture) : AdminApi
     [InlineData("7d", 28, 6 * 60 * 60)]
     public async Task Activity_ReturnsOrderedZeroFilledBucketsForEachFixedRange(string range, int count, int bucketSeconds)
     {
-        JsonElement activity = await GetAsync($"/admin/tenants/{fixture.TenantId}/events/activity?range={range}");
+        JsonElement activity = await GetJsonAsync(client, $"/admin/tenants/{fixture.TenantId}/events/activity?range={range}");
 
         activity.GetProperty("range").GetString().ShouldBe(range);
         DateTimeOffset windowStart = activity.GetProperty("window_start").GetDateTimeOffset();
@@ -150,16 +150,6 @@ public sealed class TenantEventActivityTests(AdminApiFixture fixture) : AdminApi
             VALUES (@Id, @TenantId, @SourceId, @TopicId, 'activity.test', {{fixture.Json("@Payload")}}, @Status, @AcceptedAt);
             """,
             new { Id = Guid.NewGuid(), TenantId = tenantId, SourceId = sourceId, TopicId = topicId, Payload = "{}", Status = status, AcceptedAt = acceptedAt });
-
-    private async Task<JsonElement> GetAsync(string url)
-    {
-        using HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Get, url));
-        string body = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"{url} -> {(int)response.StatusCode}: {body}");
-        using JsonDocument document = JsonDocument.Parse(body);
-        return document.RootElement.Clone();
-    }
 
     private async Task ExecuteAsync(string sql, object parameters)
     {
