@@ -86,6 +86,10 @@ function eventDetail(eventId: string) {
 /// and the route is what the row's selection contract is actually about.
 const ledgerLink = (scope: Page, id: string) => scope.locator(`a[href^="/tenants/${tenantId}/events/${id}"]`);
 
+/// The Accepted pill's open panel; scoping to it keeps "Clear" and "To" from matching the bar's own
+/// "Clear filters" and every label that merely contains those words.
+const panel = (scope: Page) => scope.getByRole("dialog", { name: "Accepted range" });
+
 let server: ViteDevServer;
 let browser: Browser;
 let origin: string;
@@ -119,8 +123,9 @@ async function openEvents(
   path: string,
   viewport: { width: number; height: number },
   deliveries: unknown[] = [],
+  timezoneId?: string,
 ): Promise<Page> {
-  const browserPage = await browser.newPage({ viewport });
+  const browserPage = await browser.newPage({ viewport, timezoneId });
   await browserPage.route("**/auth/session", (route) => route.fulfill({ json: session }));
   await browserPage.route(`**/admin/tenants/${tenantId}/events/backlog`, (route) => route.fulfill({ json: backlog }));
   await browserPage.route(`**/admin/tenants/${tenantId}/events/activity*`, (route) =>
@@ -347,9 +352,72 @@ describe("The Event ledger and inspector in a real browser", () => {
     await intervals.nth(2).focus();
     await page.keyboard.press("Enter");
     await expect.poll(() => new URL(page.url()).searchParams.get("accepted_from")).toBe("2026-09-01T09:10:00.000Z");
-    await page.getByRole("button", { name: "Remove time range" }).waitFor();
+    await page.getByRole("button", { name: /^Accepted/ }).click();
+    await panel(page).getByRole("button", { name: "Clear" }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.has("accepted_from")).toBe(false);
     await page.close();
   }, 60_000);
+
+  describe("Accepted range pill", () => {
+    const accepted = (page: Page) => {
+      const url = new URL(page.url());
+      return [url.searchParams.get("accepted_from"), url.searchParams.get("accepted_to")];
+    };
+
+    it("writes each preset as fixed instants and keeps the rest of the scope", async () => {
+      const page = await openEvents(`/tenants/${tenantId}/events?status=routed`, { width: 1280, height: 900 });
+      for (const [label, minutes] of [
+        ["Last hour", 60],
+        ["Last 24 h", 24 * 60],
+        ["Last 7 d", 7 * 24 * 60],
+      ] as const) {
+        await page.getByRole("button", { name: /^Accepted/ }).click();
+        await panel(page).getByRole("button", { name: label }).click();
+        await expect.poll(() => accepted(page)[1]).not.toBeNull();
+        const [from, to] = accepted(page);
+        expect(new Date(to!).getTime() - new Date(from!).getTime()).toBe(minutes * 60_000);
+        expect(new URL(page.url()).searchParams.get("status")).toBe("routed");
+        await page.getByRole("button", { name: /^Accepted/ }).click();
+        await panel(page).getByRole("button", { name: "Clear" }).click();
+        await expect.poll(() => accepted(page)).toEqual([null, null]);
+      }
+      await page.close();
+    }, 60_000);
+
+    it("commits a Custom range's two ends together on Enter, and on closing", async () => {
+      const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 }, [], "UTC");
+      await page.getByRole("button", { name: /^Accepted/ }).click();
+      await panel(page).getByLabel("From").fill("2026-09-01T09:00");
+      await panel(page).getByLabel("To", { exact: true }).fill("2026-09-01T10:00");
+      // Nothing is read until the Operator finishes, so a half-open range is never in the URL.
+      expect(accepted(page)).toEqual([null, null]);
+      await panel(page).getByLabel("To", { exact: true }).press("Enter");
+      await expect.poll(() => accepted(page)).toEqual(["2026-09-01T09:00:00.000Z", "2026-09-01T10:00:00.000Z"]);
+
+      await page.getByRole("button", { name: /^Accepted/ }).click();
+      await panel(page).getByLabel("To", { exact: true }).fill("2026-09-01T11:00");
+      await page.keyboard.press("Escape");
+      await expect.poll(() => accepted(page)).toEqual(["2026-09-01T09:00:00.000Z", "2026-09-01T11:00:00.000Z"]);
+      await page.close();
+    }, 60_000);
+
+    it("keeps an unedited bound's instant inside the repeated fall-back hour", async () => {
+      const page = await openEvents(
+        `/tenants/${tenantId}/events?accepted_from=2026-11-01T06%3A45%3A00Z&accepted_to=2026-11-01T06%3A50%3A00Z`,
+        { width: 1280, height: 900 },
+        [],
+        "America/New_York",
+      );
+      await page.getByRole("button", { name: /^Accepted/ }).click();
+      await panel(page).getByLabel("To", { exact: true }).fill("2026-11-01T03:00");
+      await panel(page).getByLabel("To", { exact: true }).press("Enter");
+
+      // 06:45Z is 01:45 EST, whose wall clock also names 05:45Z; the untouched bound keeps its instant.
+      await expect.poll(() => accepted(page)[1]).toBe("2026-11-01T08:00:00.000Z");
+      expect(accepted(page)[0]).toBe("2026-11-01T06:45:00Z");
+      await page.close();
+    }, 60_000);
+  });
 
   it("keeps the week of Activity inside its card at 320 CSS pixels, with usable intervals", async () => {
     const page = await openEvents(`/tenants/${tenantId}/events`, { width: 320, height: 900 });

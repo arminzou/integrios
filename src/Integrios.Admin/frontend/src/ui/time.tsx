@@ -40,6 +40,31 @@ export function since(value: string, now = Date.now()): string {
   return relative.format(0, "second");
 }
 
+/// The instant as plain text in the reading `Timestamp` gives it, for a control that already carries
+/// the exact value elsewhere and only needs to say it.
+export function instantText(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : absolute.format(date);
+}
+
+/// A local datetime-local value carries no offset, so it is sent as an instant the server can read
+/// unambiguously rather than as the browser's own wall clock.
+export function instant(value: string): string | undefined {
+  return value ? new Date(value).toISOString() : undefined;
+}
+
+/// The inverse of `instant`: renders a server instant into the local wall-clock value a
+/// `datetime-local` input holds, so an instant from a link populates the same fields an Operator
+/// would otherwise type into by hand. Kept to whole seconds, matching the inputs' `step`, so the
+/// value round-trips back to (sub-second precision aside) the same instant rather than rounding
+/// down to the minute and silently excluding Events the link's scope included.
+export function localInputValue(iso: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 /// Formats one instant, or renders the value as sent when it cannot be parsed — an Operator quoting
 /// a malformed value in a bug report needs to see what the API actually returned, not "Invalid Date".
 export function Timestamp({ value }: { value: string }) {
