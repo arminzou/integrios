@@ -128,7 +128,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 JOIN destinations d ON d.id = s.destination_id
                 JOIN connectors i ON i.id = d.connector_id
                 WHERE s.topic_id = @TopicId
-                  AND s.status = 'enabled'
+                  AND s.status = 'active'
                   AND s.deleted_at IS NULL
                   AND d.deleted_at IS NULL
                 """,

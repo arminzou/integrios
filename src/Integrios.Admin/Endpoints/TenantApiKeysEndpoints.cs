@@ -37,7 +37,7 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         TenantApiKeyListDto response = await mediator.Send(
-            new ListTenantApiKeysByTenantQuery(tenantId, ListFilter.ParseEnum<TenantApiKeyListState>(state, "Tenant API key state must be active, expired, or revoked."), after, limit), cancellationToken);
+            new ListTenantApiKeysByTenantQuery(tenantId, ListFilter.ParseEnum<TenantApiKeyListState>(state, "Tenant API key state must be active or expired."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 

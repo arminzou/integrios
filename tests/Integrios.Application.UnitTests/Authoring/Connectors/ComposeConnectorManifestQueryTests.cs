@@ -88,7 +88,6 @@ public sealed class ComposeConnectorManifestQueryTests
             ManifestSchemaVersion = manifest.ManifestSchemaVersion,
             Name = manifest.Presentation.Name,
             Direction = ConnectorDirection.Both,
-            Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Manifest = manifest,

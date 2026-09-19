@@ -4,9 +4,9 @@ using MediatR;
 
 namespace Integrios.Application.Authoring.Sources;
 
-// Enabling opens intake for the Source's declared Event types; disabling fences new acceptance.
+// Activating opens intake for the Source's declared Event types; deactivating fences new acceptance.
 // Either way the Source keeps its identity, callback, and declarations, so the change is reversible.
-public sealed record SetSourceStatusCommand(Guid TenantId, Guid Id, EnablementStatus Status) : IRequest<SourceDto?>;
+public sealed record SetSourceStatusCommand(Guid TenantId, Guid Id, OperationalStatus Status) : IRequest<SourceDto?>;
 
 internal sealed class SetSourceStatusCommandHandler(ISourceRepository sourceRepository)
     : IRequestHandler<SetSourceStatusCommand, SourceDto?>

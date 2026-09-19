@@ -37,7 +37,7 @@ public interface ISubscriptionRepository
         CancellationToken cancellationToken);
 
     Task<bool> SetStatusAsync(
-        Guid tenantId, Guid topicId, Guid id, EnablementStatus status, CancellationToken cancellationToken);
+        Guid tenantId, Guid topicId, Guid id, OperationalStatus status, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken);
 

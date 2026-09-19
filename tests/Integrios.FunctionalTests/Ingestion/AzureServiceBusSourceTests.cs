@@ -250,7 +250,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, mapping, revision, status)
             VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'sb-intake', 'broker',
                 '["order.created"]',
-                {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'enabled');
+                {{{database.Json("@SourceConfiguration")}}}, {{{database.Json("@SourceMapping")}}}, 'fixture-revision', 'active');
             """,
             new
             {

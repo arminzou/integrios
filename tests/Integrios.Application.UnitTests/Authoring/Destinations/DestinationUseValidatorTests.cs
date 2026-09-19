@@ -77,7 +77,6 @@ public sealed class DestinationUseValidatorTests
             ManifestSchemaVersion = 1,
             Name = "Provider",
             Direction = Enum.Parse<ConnectorDirection>(direction, true),
-            Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Manifest = manifest,
@@ -92,7 +91,7 @@ public sealed class DestinationUseValidatorTests
         Name = "destination",
         Configuration = configuration,
         Authentication = authentication,
-        Status = EnablementStatus.Enabled,
+        Status = OperationalStatus.Active,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };

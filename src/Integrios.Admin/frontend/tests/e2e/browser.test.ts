@@ -65,7 +65,7 @@ const destination = {
   tenant_id: tenants.items[0].id,
   connector_id: connector.id,
   name: "orders-sink",
-  status: "enabled",
+  status: "active",
   environment: "production",
   description: "Delivers orders to the ERP",
   ...stamps,

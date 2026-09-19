@@ -74,12 +74,12 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     }
 
     [Fact]
-    public async Task RevokedSource_RejectsAcceptance()
+    public async Task InactiveSource_RejectsAcceptance()
     {
         await using DbConnection connection = await fixture.OpenAsync();
         ProviderContractSeed seed = await fixture.SeedAsync(connection);
         await connection.ExecuteAsync(
-            $"UPDATE sources SET status = 'disabled' " +
+            $"UPDATE sources SET status = 'inactive' " +
             "WHERE tenant_id=@TenantId AND id=@SourceId",
             new { seed.TenantId, seed.SourceId });
 
@@ -179,14 +179,14 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
         Database.Provider == "postgres"
             ? """
               INSERT INTO connectors (id, key, contract_version, manifest_schema_version, name, direction,
-                  status, created_at, updated_at, manifest)
-              VALUES (gen_random_uuid(), 'bad_json', 1, 1, 'Bad JSON', 'source', 'active',
+                  created_at, updated_at, manifest)
+              VALUES (gen_random_uuid(), 'bad_json', 1, 1, 'Bad JSON', 'source',
                   now(), now(), '[]'::jsonb)
               """
             : """
               INSERT INTO connectors (id, [key], contract_version, manifest_schema_version, name, direction,
-                  status, created_at, updated_at, manifest)
-              VALUES (NEWID(), N'bad_json', 1, 1, N'Bad JSON', N'source', N'active',
+                  created_at, updated_at, manifest)
+              VALUES (NEWID(), N'bad_json', 1, 1, N'Bad JSON', N'source',
                   SYSUTCDATETIME(), SYSUTCDATETIME(), N'[]')
               """);
 
@@ -215,9 +215,9 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
             new { seed.TenantId });
         await connection.ExecuteAsync($$$"""
             INSERT INTO connectors (id, {{{Database.KeyColumn}}}, contract_version, manifest_schema_version, name, direction,
-                status, created_at, updated_at, manifest)
+                created_at, updated_at, manifest)
             VALUES (@ConnectorId, 'test_http', 1, 1, 'Provider Contract Source', 'both',
-                'active', {{{now}}}, {{{now}}}, {{{Database.Json("@ManifestJson")}}})
+                {{{now}}}, {{{now}}}, {{{Database.Json("@ManifestJson")}}})
             """, new
         {
             seed.ConnectorId,
@@ -226,7 +226,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
         await connection.ExecuteAsync($$$"""
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status, created_at, updated_at)
             VALUES (@DestinationId, @TenantId, @ConnectorId, 'provider-contract-destination',
-                {{{Database.Json("@Config")}}}, 'enabled', {{{now}}}, {{{now}}})
+                {{{Database.Json("@Config")}}}, 'active', {{{now}}}, {{{now}}})
             """, new
         {
             seed.DestinationId,
@@ -244,14 +244,14 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
         }
         await connection.ExecuteAsync($$$"""
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status)
-            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'contract-intake', 'event_api', '["payment.created"]', {{{Database.Json("@SourceConfig")}}}, 'fixture-revision', 'enabled')
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'contract-intake', 'event_api', '["payment.created"]', {{{Database.Json("@SourceConfig")}}}, 'fixture-revision', 'active')
             """, new { seed.SourceId, seed.TenantId, seed.ConnectorId, seed.TopicId, SourceConfig = "{}" });
 
         await connection.ExecuteAsync($$$"""
             INSERT INTO subscriptions (id, topic_id, tenant_id, name, event_types, destination_id,
                 http_delivery, status, order_index, created_at, updated_at)
             VALUES (@SubscriptionId, @TopicId, @TenantId, 'payments-http', {{{Database.Json("@EventTypes")}}},
-                @DestinationId, {{{Database.Json("@HttpDelivery")}}}, 'enabled', 0, {{{now}}}, {{{now}}})
+                @DestinationId, {{{Database.Json("@HttpDelivery")}}}, 'active', 0, {{{now}}}, {{{now}}})
             """, new
         {
             seed.SubscriptionId,

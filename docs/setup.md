@@ -88,9 +88,9 @@ SOURCE=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources -H "$AUTH" -H 'Con
 SUB=$(curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"name\":\"acme-erp-sub\",\"event_types\":[\"payment.created\"],\"destination_id\":\"$DST\",\"mapping\":null,\"http_delivery\":null,\"http_success\":null,\"order_index\":0}" | jq -r .id)
 
-# Sources and Subscriptions are created Disabled, so nothing flows until each is enabled.
-curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources/$SOURCE/enable -H "$AUTH" > /dev/null
-curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions/$SUB/enable -H "$AUTH" > /dev/null
+# Sources and Subscriptions are created Inactive, so nothing flows until each is activated.
+curl -s -X POST $ADMIN/admin/tenants/$TENANT/sources/$SOURCE/activate -H "$AUTH" > /dev/null
+curl -s -X POST $ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions/$SUB/activate -H "$AUTH" > /dev/null
 
 # 8. Send an event to the data plane. source_id (query parameter) names the Source; the body is the
 # fixed Event API contract -- event_type and payload are required,

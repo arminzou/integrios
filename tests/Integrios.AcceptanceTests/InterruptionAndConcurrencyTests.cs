@@ -417,7 +417,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
 
     // Sources and Subscriptions are authored Disabled; a journey enables each before its traffic.
     private async Task EnableAsync(string path) =>
-        (await PostAdminForPropertyAsync($"{path}/enable", new { }, "status")).ShouldBe("enabled");
+        (await PostAdminForPropertyAsync($"{path}/activate", new { }, "status")).ShouldBe("active");
 
     private async Task<string> PostAdminForPropertyAsync(string path, object body, string property)
     {

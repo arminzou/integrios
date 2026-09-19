@@ -31,8 +31,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         configurationBuilder.Conventions.Remove<ForeignKeyIndexConvention>();
         configurationBuilder.Properties<OperationalStatus>()
             .HaveConversion<SnakeCaseEnumConverter<OperationalStatus>>();
-        configurationBuilder.Properties<EnablementStatus>()
-            .HaveConversion<SnakeCaseEnumConverter<EnablementStatus>>();
         configurationBuilder.Properties<SourceType>()
             .HaveConversion<SnakeCaseEnumConverter<SourceType>>();
         configurationBuilder.Properties<DeliveryFailurePhase>()
@@ -91,7 +89,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         modelBuilder.Entity<TenantApiKey>(entity =>
         {
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
-            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
         });
 
         modelBuilder.Entity<Destination>(entity =>
@@ -155,7 +152,6 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             });
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.Manifest).HasColumnType(jsonType);
-            entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("active"));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });
 

@@ -452,8 +452,8 @@ export function DestinationsScreen({
         <FilterBar applied={applied}>
           <FilterSearch id="destination-name" label="Find by name" value={name} onChange={setName} />
           <Filter id="destination-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="enabled">Enabled</SelectItem>
-            <SelectItem value="disabled">Disabled</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
           </Filter>
           {/* The environments a Tenant actually uses, read off the rows it already has rather than
             from a fixed list: environment is free text on a Destination, so there is no vocabulary
@@ -580,8 +580,7 @@ function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreate
   const queryClient = useQueryClient();
   const connectors = useConnectorOptions();
   const connectorOptions = (connectors.data?.items ?? []).filter(
-    (connector) =>
-      connector.status === "active" && (connector.direction === "destination" || connector.direction === "both"),
+    (connector) => connector.direction === "destination" || connector.direction === "both",
   );
   const connectorOptionsUnavailable = connectors.isPending || connectors.isError;
   // Connectors are deployment-wide: a Tenant cannot author its way out of this one, so the sentence
@@ -863,19 +862,19 @@ function EditDestination({
   });
 
   const setStatus = useMutation({
-    mutationFn: (action: "enable" | "disable") =>
+    mutationFn: (action: "activate" | "deactivate") =>
       call(() =>
-        action === "enable"
-          ? api.POST("/admin/tenants/{tenantId}/destinations/{id}/enable", {
+        action === "activate"
+          ? api.POST("/admin/tenants/{tenantId}/destinations/{id}/activate", {
               params: { path: { tenantId, id: destination.id } },
             })
-          : api.POST("/admin/tenants/{tenantId}/destinations/{id}/disable", {
+          : api.POST("/admin/tenants/{tenantId}/destinations/{id}/deactivate", {
               params: { path: { tenantId, id: destination.id } },
             }),
       ),
     onSuccess: (_, action) => {
       reread();
-      onDone(action === "enable" ? "Destination enabled." : "Destination disabled.");
+      onDone(action === "activate" ? "Destination activated." : "Destination deactivated.");
     },
   });
   const remove = useMutation({
@@ -912,19 +911,19 @@ function EditDestination({
             )
           }
         </EditSheet>
-        {destination.status === "enabled" ? (
+        {destination.status === "active" ? (
           <ConfirmAction
-            label="Disable"
+            label="Deactivate"
             variant="outline"
-            consequence={`Disabling ${destination.name} is refused while Enabled Subscriptions deliver to it; disable or move those first. Deliveries already queued are not cancelled.`}
-            question={`Disable the Destination "${destination.name}"?`}
-            confirmLabel={`Disable ${destination.name}`}
+            consequence={`Deactivating ${destination.name} is refused while Active Subscriptions deliver to it; deactivate or move those first. Deliveries already queued are not cancelled.`}
+            question={`Deactivate the Destination "${destination.name}"?`}
+            confirmLabel={`Deactivate ${destination.name}`}
             busy={setStatus.isPending}
-            onConfirm={() => setStatus.mutate("disable")}
+            onConfirm={() => setStatus.mutate("deactivate")}
           />
         ) : (
-          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("enable")}>
-            Enable
+          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("activate")}>
+            Activate
           </Button>
         )}
         <ConfirmAction

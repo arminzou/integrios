@@ -48,8 +48,8 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             MappingConfig = NormalizeNullableJson(transformConfig),
             HttpDelivery = httpDelivery,
             HttpSuccess = httpSuccess,
-            // Authorable before it routes anything: fanout ignores it until an Operator enables it.
-            Status = EnablementStatus.Disabled,
+            // Authorable before it routes anything: fanout ignores it until an Operator activates it.
+            Status = OperationalStatus.Inactive,
             OrderIndex = orderIndex,
             Description = description,
             CreatedAt = now,
@@ -120,7 +120,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         Guid tenantId,
         Guid topicId,
         Guid id,
-        EnablementStatus status,
+        OperationalStatus status,
         CancellationToken cancellationToken) =>
         await context.Subscriptions
             .Where(subscription =>
@@ -147,7 +147,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
                 .SetProperty(subscription => subscription.MappingConfig, (JsonElement?)null)
                 .SetProperty(subscription => subscription.HttpDelivery, (HttpDeliveryConfiguration?)null)
                 .SetProperty(subscription => subscription.HttpSuccess, (HttpSuccessRule?)null)
-                .SetProperty(subscription => subscription.Status, EnablementStatus.Disabled)
+                .SetProperty(subscription => subscription.Status, OperationalStatus.Inactive)
                 .SetProperty(subscription => subscription.OrderIndex, 0)
                 .SetProperty(subscription => subscription.DeletedAt, now)
                 .SetProperty(subscription => subscription.UpdatedAt, now), cancellationToken) > 0;
@@ -161,7 +161,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             .Where(subscription =>
                 subscription.TenantId == tenantId
                 && subscription.DestinationId == destinationId
-                && subscription.Status == EnablementStatus.Enabled)
+                && subscription.Status == OperationalStatus.Active)
             .Select(subscription => subscription.HttpDelivery!)
             .ToListAsync(cancellationToken);
 

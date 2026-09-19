@@ -8,7 +8,6 @@ public sealed record ConnectorListItemDto(
     int ContractVersion,
     string Name,
     string Direction,
-    string Status,
     string? Description,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
@@ -19,7 +18,6 @@ public sealed record ConnectorListItemDto(
         connector.ContractVersion,
         connector.Name,
         connector.Direction.ToString().ToLowerInvariant(),
-        connector.Status.ToString().ToLowerInvariant(),
         connector.Description,
         connector.CreatedAt,
         connector.UpdatedAt);

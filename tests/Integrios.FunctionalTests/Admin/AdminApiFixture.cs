@@ -78,14 +78,14 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await connection.ExecuteAsync($$$"""
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status)
             VALUES (@DestinationId, @TenantId, @ConnectorId, @DestinationName,
-                {{{database.Json("@DestinationConfig")}}}, 'enabled');
+                {{{database.Json("@DestinationConfig")}}}, 'active');
             INSERT INTO topics (id, tenant_id, {{{database.KeyColumn}}}, name)
             VALUES (@TopicId, @TenantId, @TopicName, @TopicName);
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status)
-            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'fixture-intake', 'event_api', '["recovery.test"]', {{{database.Json("@SourceConfig")}}}, 'fixture-revision', 'enabled');
+            VALUES (@SourceId, @TenantId, @ConnectorId, @TopicId, 'fixture-intake', 'event_api', '["recovery.test"]', {{{database.Json("@SourceConfig")}}}, 'fixture-revision', 'active');
             INSERT INTO subscriptions (id, tenant_id, topic_id, name, event_types, destination_id, order_index, status)
             VALUES (@SubscriptionId, @TenantId, @TopicId, @SubscriptionName,
-                {{{database.Json("@EventTypes")}}}, @DestinationId, 0, 'enabled');
+                {{{database.Json("@EventTypes")}}}, @DestinationId, 0, 'active');
             INSERT INTO events (id, tenant_id, topic_id, source_id, event_type, payload, status)
             VALUES (@EventId, @TenantId, @TopicId, @SourceId, 'recovery.test',
                 {{{database.Json("@Payload")}}}, 'routed');
@@ -133,7 +133,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await connection.OpenAsync();
         await connection.ExecuteAsync($$$"""
             INSERT INTO sources (id, tenant_id, connector_id, topic_id, name, type, event_types, configuration, revision, status)
-            VALUES (@Id, @TenantId, @ConnectorId, @TopicId, @Name, 'event_api', {{{database.Json("@EventTypes")}}}, {{{database.Json("@Config")}}}, 'fixture-revision', 'enabled');
+            VALUES (@Id, @TenantId, @ConnectorId, @TopicId, @Name, 'event_api', {{{database.Json("@EventTypes")}}}, {{{database.Json("@Config")}}}, 'fixture-revision', 'active');
             """, new
         {
             Id = Guid.NewGuid(),
@@ -206,7 +206,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         await connection.ExecuteAsync($$$"""
             INSERT INTO destinations (id, tenant_id, connector_id, name, configuration, status)
             VALUES (@DestinationId, @TenantId, @ConnectorId, 'seeded-destination',
-                {{{database.Json("@Configuration")}}}, 'enabled');
+                {{{database.Json("@Configuration")}}}, 'active');
             """, new
         {
             DestinationId,

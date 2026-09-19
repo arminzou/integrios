@@ -18,8 +18,8 @@ public sealed class SourcesEndpoints : IEndpointGroup
         group.MapGet(ListSources).Produces<SourceListDto>();
         group.MapGet(GetSourceById, "/{id:guid}").Produces<SourceDto>();
         group.MapPut(UpdateSource, "/{id:guid}").Produces<SourceDto>();
-        group.MapPost(EnableSource, "/{id:guid}/enable").Produces<SourceDto>();
-        group.MapPost(DisableSource, "/{id:guid}/disable").Produces<SourceDto>();
+        group.MapPost(ActivateSource, "/{id:guid}/activate").Produces<SourceDto>();
+        group.MapPost(DeactivateSource, "/{id:guid}/deactivate").Produces<SourceDto>();
         group.MapDelete(DeleteSource, "/{id:guid}");
     }
 
@@ -59,7 +59,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
             "broker" => SourceType.Broker,
             _ => throw new InvalidListFilterException("Source type must be event_api, webhook, or broker."),
         };
-        SourceListDto sources = await mediator.Send(new ListSourcesQuery(tenantId, ListFilter.ParseEnum<EnablementStatus>(status, "Source status must be enabled or disabled."), sourceType, topic_id, after, Math.Clamp(limit == 0 ? 20 : limit, 1, 100)), cancellationToken);
+        SourceListDto sources = await mediator.Send(new ListSourcesQuery(tenantId, ListFilter.ParseEnum<OperationalStatus>(status, "Source status must be active or inactive."), sourceType, topic_id, after, Math.Clamp(limit == 0 ? 20 : limit, 1, 100)), cancellationToken);
         return Results.Ok(sources);
     }
 
@@ -79,14 +79,14 @@ public sealed class SourcesEndpoints : IEndpointGroup
         return source is null ? Results.NotFound() : Results.Ok(source);
     }
 
-    private static Task<IResult> EnableSource(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
-        SetStatus(tenantId, id, EnablementStatus.Enabled, mediator, cancellationToken);
+    private static Task<IResult> ActivateSource(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        SetStatus(tenantId, id, OperationalStatus.Active, mediator, cancellationToken);
 
-    private static Task<IResult> DisableSource(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
-        SetStatus(tenantId, id, EnablementStatus.Disabled, mediator, cancellationToken);
+    private static Task<IResult> DeactivateSource(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        SetStatus(tenantId, id, OperationalStatus.Inactive, mediator, cancellationToken);
 
     private static async Task<IResult> SetStatus(
-        Guid tenantId, Guid id, EnablementStatus status, IMediator mediator, CancellationToken cancellationToken)
+        Guid tenantId, Guid id, OperationalStatus status, IMediator mediator, CancellationToken cancellationToken)
     {
         SourceDto? source = await mediator.Send(new SetSourceStatusCommand(tenantId, id, status), cancellationToken);
         return source is null ? Results.NotFound() : Results.Ok(source);

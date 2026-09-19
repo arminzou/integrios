@@ -163,7 +163,7 @@ describe("Tenants list", () => {
       "fetch",
       vi.fn(async (input: Request | string) => {
         const url = new URL(typeof input === "string" ? input : input.url, "http://localhost");
-        const filtered = url.searchParams.get("status") === "disabled";
+        const filtered = url.searchParams.get("status") === "inactive";
         // The read the Operator has moved on from answers last, which is the ordering that used to
         // be able to overwrite the newer one.
         if (!filtered) await held;
@@ -184,7 +184,7 @@ describe("Tenants list", () => {
     // The unfiltered read is still held, so the screen has no filters yet; the page's own title is
     // what says it is mounted and the first read is in flight.
     await screen.findByRole("heading", { level: 1, name: "Tenants" });
-    await act(() => router.navigate("/tenants?status=disabled"));
+    await act(() => router.navigate("/tenants?status=inactive"));
     await screen.findByRole("link", { name: "Beta" });
 
     await act(async () => {
@@ -197,7 +197,7 @@ describe("Tenants list", () => {
 
   it("restarts from the first cursor when a filter changes instead of reusing the old one", async () => {
     const calls = stubHttp(({ url }) =>
-      url.searchParams.get("status") === "disabled"
+      url.searchParams.get("status") === "inactive"
         ? { status: 200, body: page([]) }
         : { status: 200, body: page([tenant()], "cursor-1") },
     );
@@ -205,7 +205,7 @@ describe("Tenants list", () => {
     const { router } = renderScreen(<TenantsScreen />, "/tenants");
     await screen.findByRole("link", { name: "Acme" });
 
-    await act(() => router.navigate("/tenants?status=disabled"));
+    await act(() => router.navigate("/tenants?status=inactive"));
 
     // The rows read under the previous filter are discarded immediately, not left on screen while
     // the new first page is still in flight.
@@ -214,7 +214,7 @@ describe("Tenants list", () => {
 
     await screen.findByText("No Tenants match this filter.");
     const refetch = listCalls(calls).at(-1)!;
-    expect(refetch.url.searchParams.get("status")).toBe("disabled");
+    expect(refetch.url.searchParams.get("status")).toBe("inactive");
     expect(refetch.url.searchParams.has("after")).toBe(false);
     // The rows read under the previous filter are discarded rather than left mixed in.
     expect(screen.queryByRole("link", { name: "Acme" })).toBeNull();
@@ -381,7 +381,7 @@ describe("Deactivating a Tenant", () => {
     let status = "active";
     stubHttp(({ url, method }) => {
       if (method === "POST" && url.pathname.endsWith("/deactivate")) {
-        status = "disabled";
+        status = "inactive";
         return { status: 202 };
       }
       return { status: 200, body: tenant({ status, updated_at: `2026-09-01T00:00:0${status.length}Z` }) };
@@ -400,10 +400,10 @@ describe("Filtering the Tenants list", () => {
   it("reads its filter from the URL and offers a way out of an empty filtered list", async () => {
     const calls = stubHttp(() => ({ status: 200, body: { items: [], next_cursor: null } }));
 
-    const { router } = renderScreen(<TenantsScreen />, "/tenants?status=disabled");
+    const { router } = renderScreen(<TenantsScreen />, "/tenants?status=inactive");
 
-    await waitFor(() => expect(calls.some((call) => call.url.searchParams.get("status") === "disabled")).toBe(true));
-    expect((await screen.findByLabelText("Status")).textContent).toContain("Disabled");
+    await waitFor(() => expect(calls.some((call) => call.url.searchParams.get("status") === "inactive")).toBe(true));
+    expect((await screen.findByLabelText("Status")).textContent).toContain("Inactive");
 
     // An empty list that is empty because of the filter says how to stop filtering.
     fireEvent.click(await screen.findByRole("link", { name: "Clear filters" }));

@@ -4,5 +4,4 @@ public enum TenantApiKeyListState
 {
     Active,
     Expired,
-    Revoked,
 }

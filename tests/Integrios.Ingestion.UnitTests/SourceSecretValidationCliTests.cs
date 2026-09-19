@@ -35,11 +35,11 @@ public sealed class SourceSecretValidationCliTests
     public async Task RunAsync_CoversBrokerAndWebhookShapesAndDisabledSourcesButSkipsInactiveTenants()
     {
         Tenant tenant = MakeTenant("tenant-a");
-        Tenant disabled = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Disabled };
+        Tenant disabled = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Inactive };
         Source webhook = WebhookSource(tenant.Id, "hook_secret");
         Source broker = BrokerSource(tenant.Id, "bus_connection");
-        // Disabled is reversible, so its secrets have to resolve before it is enabled, not after.
-        Source paused = WebhookSource(tenant.Id, "paused_secret") with { Status = EnablementStatus.Disabled };
+        // Inactive is reversible, so its secrets have to resolve before it is activated, not after.
+        Source paused = WebhookSource(tenant.Id, "paused_secret") with { Status = OperationalStatus.Inactive };
         Source otherTenant = WebhookSource(disabled.Id, "ignored_secret");
         using ServiceProvider services = BuildServices(
             [tenant, disabled],
@@ -147,7 +147,7 @@ public sealed class SourceSecretValidationCliTests
             SecretRefs = JsonSerializer.SerializeToElement(new { secret = reference }),
         },
         Revision = Guid.NewGuid().ToString("N"),
-        Status = EnablementStatus.Enabled,
+        Status = OperationalStatus.Active,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };
@@ -168,7 +168,7 @@ public sealed class SourceSecretValidationCliTests
             transport_config = new { @namespace = "acme.servicebus.windows.net", queue_name = "events" },
         }),
         Revision = Guid.NewGuid().ToString("N"),
-        Status = EnablementStatus.Enabled,
+        Status = OperationalStatus.Active,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };

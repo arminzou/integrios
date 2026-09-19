@@ -21,8 +21,8 @@ internal sealed class EventApiSourceResolver(IDbConnectionFactory connectionFact
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
                 WHERE s.tenant_id = @TenantId AND s.id = @SourceId
-                  AND s.type = N'event_api' AND s.status = N'enabled' AND s.deleted_at IS NULL
-                  AND i.status = N'active' AND i.direction IN (N'source', N'both')
+                  AND s.type = N'event_api' AND s.status = N'active' AND s.deleted_at IS NULL
+                  AND i.direction IN (N'source', N'both')
                 """
             : """
                 SELECT
@@ -30,8 +30,8 @@ internal sealed class EventApiSourceResolver(IDbConnectionFactory connectionFact
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
                 WHERE s.tenant_id = @TenantId AND s.id = @SourceId
-                  AND s.type = 'event_api' AND s.status = 'enabled' AND s.deleted_at IS NULL
-                  AND i.status = 'active' AND i.direction IN ('source', 'both')
+                  AND s.type = 'event_api' AND s.status = 'active' AND s.deleted_at IS NULL
+                  AND i.direction IN ('source', 'both')
                 LIMIT 1
                 """;
 

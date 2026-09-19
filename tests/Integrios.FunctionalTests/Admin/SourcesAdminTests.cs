@@ -26,7 +26,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     [Fact]
-    public async Task SourceLifecycle_CreatesDisabledAndIsEditableEnabledOrDisabled()
+    public async Task SourceLifecycle_CreatesInactiveAndIsEditableActiveOrInactive()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -37,8 +37,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         create.StatusCode.ShouldBe(HttpStatusCode.Created);
         SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
         source.Configuration.TryGetProperty("callback_id", out _).ShouldBeTrue();
-        // Declared and authorable, but closed to intake until an Operator enables it.
-        source.Status.ShouldBe("disabled");
+        // Declared and authorable, but closed to intake until an Operator activates it.
+        source.Status.ShouldBe("inactive");
         source.EventTypes.ShouldBe(["Order.Created", "order.shipped"]);
 
         SourceListDto listed = (await (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/sources", null))).Content.ReadFromJsonAsync<SourceListDto>(HostJson.Options))!;
@@ -48,12 +48,12 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         SourceDto updated = (await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
         updated.Configuration.GetProperty("callback_id").GetString().ShouldBe(source.Configuration.GetProperty("callback_id").GetString());
 
-        foreach ((string action, string expected) in new[] { ("enable", "enabled"), ("disable", "disabled") })
+        foreach ((string action, string expected) in new[] { ("activate", "active"), ("deactivate", "inactive") })
         {
             HttpResponseMessage changed = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}/{action}", null));
             changed.StatusCode.ShouldBe(HttpStatusCode.OK);
             (await changed.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!.Status.ShouldBe(expected);
-            // Re-enabling resumes the same identity and webhook callback.
+            // Reactivating resumes the same identity and webhook callback.
             HttpResponseMessage edited = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", FullSourceUpdate(configuration)));
             edited.StatusCode.ShouldBe(HttpStatusCode.OK);
             SourceDto read = (await edited.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
@@ -63,7 +63,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
     }
 
     [Fact]
-    public async Task Delete_AcceptsADisabledSource()
+    public async Task Delete_AcceptsAnInactiveSource()
     {
         Guid connectorId = await CreateSourceConnectorAsync();
         Guid topicId = await CreateTopicAsync();
@@ -74,13 +74,13 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             {
                 connector_id = connectorId,
                 topic_id = topicId,
-                name = "disabled-delete",
+                name = "inactive-delete",
                 type = "event_api",
                 configuration = new { },
                 event_types = new[] { "probe.created" },
             }));
         SourceDto source = (await created.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
-        source.Status.ShouldBe("disabled");
+        source.Status.ShouldBe("inactive");
 
         (await client.SendAsync(AdminRequest(
                 HttpMethod.Delete, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}")))

@@ -37,7 +37,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
     routeState?.openSourceGuide === source.id ? routeState.sourceGuideContext : undefined,
   );
   const trigger = useRef<HTMLButtonElement>(null);
-  const enabled = source.status === "enabled";
+  const active = source.status === "active";
   useEffect(() => {
     if (routeState?.openSourceGuide !== source.id) return;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
@@ -72,8 +72,8 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
           ? "The Publisher sends to the configured broker entity; Integrios consumes and publishes accepted Events to this Source's Topic."
           : "The Publisher sends to this Source; Integrios validates the input and publishes accepted Events to its Topic."}
       </p>
-      {!enabled ? (
-        <p className="m-0 text-sm text-warning-ink">Disabled: this Source refuses new Events until it is enabled.</p>
+      {!active ? (
+        <p className="m-0 text-sm text-warning-ink">Inactive: this Source refuses new Events until it is activated.</p>
       ) : null}
       <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
         <DialogPrimitive.Trigger asChild>
@@ -105,12 +105,12 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
               </DialogPrimitive.Close>
             </header>
 
-            {/* Staged setup is the point of a Disabled Source: the publisher is configured from this
-                guide first, and the Source enabled once it is. So everything here stays copyable. */}
-            {!enabled ? (
+            {/* Staged setup is the point of an Inactive Source: the publisher is configured from this
+                guide first, and the Source activated once it is. So everything here stays copyable. */}
+            {!active ? (
               <div className="rounded-lg bg-warning-surface p-3 text-sm text-warning-ink">
-                <strong>This Source is Disabled.</strong> It refuses Events until it is enabled. Configure the publisher
-                from this guide, then enable the Source.
+                <strong>This Source is Inactive.</strong> It refuses Events until it is activated. Configure the
+                publisher from this guide, then activate the Source.
               </div>
             ) : null}
 
@@ -145,7 +145,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
               <div className="rounded-lg border p-4">
                 <h3 className="mt-0 text-base">Expected result</h3>
                 <p className="mb-2 text-sm">
-                  Once the Source is enabled, Integrios accepts the Event durably before asynchronous routing and
+                  Once the Source is activated, Integrios accepts the Event durably before asynchronous routing and
                   delivery. The accepted Event appears in the Tenant ledger with this Source and Topic.
                 </p>
                 <Button asChild variant="outline" size="sm">
@@ -156,7 +156,7 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
                 <h3 className="mt-0 text-base">If nothing arrives downstream</h3>
                 <p className="m-0 text-sm">
                   A rejected input never becomes an Event. An accepted Event whose <code>event_type</code> matches no
-                  Enabled Subscription remains unrouted; inspect the Event ledger before changing the Source.
+                  Active Subscription remains unrouted; inspect the Event ledger before changing the Source.
                 </p>
               </div>
             </section>

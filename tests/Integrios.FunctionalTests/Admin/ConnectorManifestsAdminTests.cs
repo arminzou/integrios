@@ -69,15 +69,13 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         renamed.Id.ShouldBe(created.Id);
         renamed.Name.ShouldBe("Improved API");
 
-        await ExecuteAsync("UPDATE connectors SET status = 'disabled' WHERE id = @Id", created.Id);
-        JsonElement disabledRenamedManifest = Manifest(contractVersion: 1, name: "Disabled API");
-        HttpResponseMessage disabledRenameResponse = await ApplyAsync(1, disabledRenamedManifest);
-        ApplyConnectorManifestResult disabledRenameApplied = (await disabledRenameResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
-        ConnectorDto disabledRename = disabledRenameApplied.Connector;
-        disabledRename.Name.ShouldBe("Disabled API");
-        disabledRename.Status.ShouldBe("disabled");
+        JsonElement renamedAgainManifest = Manifest(contractVersion: 1, name: "Reconciled API");
+        HttpResponseMessage renamedAgainResponse = await ApplyAsync(1, renamedAgainManifest);
+        ApplyConnectorManifestResult renamedAgainApplied = (await renamedAgainResponse.Content.ReadFromJsonAsync<ApplyConnectorManifestResult>(HostJson.Options))!;
+        ConnectorDto renamedAgain = renamedAgainApplied.Connector;
+        renamedAgain.Name.ShouldBe("Reconciled API");
 
-        JsonElement functionalChange = Json(disabledRenamedManifest.GetRawText().Replace(
+        JsonElement functionalChange = Json(renamedAgainManifest.GetRawText().Replace(
             "\"additionalProperties\":false",
             "\"additionalProperties\":true",
             StringComparison.Ordinal));
@@ -86,7 +84,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
 
         ConnectorDto retained = (await GetVersionAsync(1))!;
         retained.Manifest.GetProperty("presentation").GetProperty("name").GetString().ShouldBe(
-            "Disabled API");
+            "Reconciled API");
         retained.Manifest
             .GetProperty("destination_configuration_schema")
             .GetProperty("additionalProperties")
@@ -109,7 +107,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         list.Items.ShouldContain(item =>
             item.Id == created.Id &&
             item.ContractVersion == 1 &&
-            item.Name == "Disabled API");
+            item.Name == "Reconciled API");
         list.Items.ShouldContain(item =>
             item.Id == createdV2.Id &&
             item.ContractVersion == 2 &&

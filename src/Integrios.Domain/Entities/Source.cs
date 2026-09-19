@@ -23,7 +23,7 @@ public sealed record Source
     public SourceMapping? Mapping { get; init; }
     public SourceEventIdentityRule? EventIdentityRule { get; init; }
     public required string Revision { get; init; }
-    public required EnablementStatus Status { get; init; }
+    public required OperationalStatus Status { get; init; }
     public DateTimeOffset? DeletedAt { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }

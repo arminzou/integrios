@@ -18,6 +18,7 @@ public sealed class TenantsEndpoints : IEndpointGroup
         group.MapGet(ListTenants).Produces<TenantListDto>();
         group.MapGet(GetTenantById, "/{id:guid}").Produces<TenantDto>();
         group.MapPut(UpdateTenant, "/{id:guid}").Produces<TenantDto>();
+        group.MapPost(ActivateTenant, "/{id:guid}/activate");
         group.MapPost(DeactivateTenant, "/{id:guid}/deactivate");
         group.MapGet(GetTenantOverview, "/{id:guid}/overview").Produces<TenantOverviewDto>();
     }
@@ -43,7 +44,7 @@ public sealed class TenantsEndpoints : IEndpointGroup
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var response = await mediator.Send(new ListTenantsQuery(ListFilter.ParseEnum<OperationalStatus>(status, "Tenant status must be active or disabled."), ListFilter.Trimmed(environment), ListFilter.Trimmed(name), after, limit), cancellationToken);
+        var response = await mediator.Send(new ListTenantsQuery(ListFilter.ParseEnum<OperationalStatus>(status, "Tenant status must be active or inactive."), ListFilter.Trimmed(environment), ListFilter.Trimmed(name), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 
@@ -81,6 +82,15 @@ public sealed class TenantsEndpoints : IEndpointGroup
             new GetTenantOverviewQuery(id, ingestion.Value.ToString()),
             cancellationToken);
         return response is null ? Results.NotFound() : Results.Ok(response);
+    }
+
+    private static async Task<IResult> ActivateTenant(
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        bool activated = await mediator.Send(new ActivateTenantCommand(id), cancellationToken);
+        return activated ? Results.Ok() : Results.NotFound();
     }
 
     private static async Task<IResult> DeactivateTenant(

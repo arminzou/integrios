@@ -193,17 +193,6 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task PostEvents_WithInactiveConnector_Returns404()
-    {
-        var connectorId = await fixture.SeedSourceConnectorAsync(
-            fixture.TenantAId, "inactive-source", status: "disabled");
-        var sourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectorId, defaultTopicId);
-
-        var response = await PostEventAsync(sourceId, BuildBody(sourceEventId: "evt-inactive-connector"));
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
     public async Task PostEvents_WithDestinationOnlyConnector_Returns404()
     {
         var connectorId = await fixture.SeedSourceConnectorAsync(
@@ -294,8 +283,8 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     // the Source authoritatively, so a committed disable or declaration change binds a submission
     // made from an older resolution.
     [Theory]
-    [InlineData("disabled", "[\"payment.created\"]", "not enabled")]
-    [InlineData("enabled", "[\"payment.updated\"]", "does not declare")]
+    [InlineData("inactive", "[\"payment.created\"]", "not active")]
+    [InlineData("active", "[\"payment.updated\"]", "does not declare")]
     public async Task Acceptance_RefusesASubmissionResolvedBeforeACommittedChange(
         string status, string eventTypes, string refusal)
     {
@@ -334,7 +323,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         EventAcceptanceException exception = await Should.ThrowAsync<EventAcceptanceException>(
             () => acceptance.AcceptAsync(submission, traceparent: null, CancellationToken.None));
 
-        exception.Message.ShouldContain("not enabled");
+        exception.Message.ShouldContain("not active");
         (await fixture.GetEventCountAsync()).ShouldBe(0);
     }
 

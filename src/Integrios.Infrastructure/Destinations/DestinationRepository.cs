@@ -41,7 +41,7 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
         context.Subscriptions.AsNoTracking().AnyAsync(
             subscription => subscription.TenantId == tenantId
                 && subscription.DestinationId == id
-                && subscription.Status == EnablementStatus.Enabled,
+                && subscription.Status == OperationalStatus.Active,
             cancellationToken);
 
     public Task<bool> HasSubscriptionsAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
@@ -140,7 +140,7 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
         return changed == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);
     }
 
-    public async Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken) =>
+    public async Task<bool> SetStatusAsync(Guid tenantId, Guid id, OperationalStatus status, CancellationToken cancellationToken) =>
         await context.Destinations.Where(destination => destination.TenantId == tenantId && destination.Id == id)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(destination => destination.Status, status)
@@ -155,7 +155,7 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(destination => destination.Configuration, empty)
                 .SetProperty(destination => destination.Authentication, (DestinationAuthentication?)null)
-                .SetProperty(destination => destination.Status, EnablementStatus.Disabled)
+                .SetProperty(destination => destination.Status, OperationalStatus.Inactive)
                 .SetProperty(destination => destination.Environment, (string?)null)
                 .SetProperty(destination => destination.DeletedAt, now)
                 .SetProperty(destination => destination.UpdatedAt, now), cancellationToken) > 0;

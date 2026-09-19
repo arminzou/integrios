@@ -38,11 +38,11 @@ public sealed class SecretValidationCliTests
     {
         Tenant tenantA = MakeTenant("tenant-a");
         Tenant tenantB = MakeTenant("tenant-b");
-        Tenant disabledTenant = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Disabled };
+        Tenant disabledTenant = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Inactive };
         Destination activeA = MakeDestination(tenantA.Id, "shared");
         Destination activeB = MakeDestination(tenantB.Id, "shared");
-        // Disabled is reversible, and its snapshotted deliveries still resolve its secrets.
-        Destination paused = MakeDestination(tenantA.Id, "paused") with { Status = EnablementStatus.Disabled };
+        // Inactive is reversible, and its snapshotted deliveries still resolve its secrets.
+        Destination paused = MakeDestination(tenantA.Id, "paused") with { Status = OperationalStatus.Inactive };
         Destination disabledTenantDestination = MakeDestination(disabledTenant.Id, "missing");
         using ServiceProvider services = BuildServices(
             [tenantA, tenantB, disabledTenant],
@@ -67,7 +67,7 @@ public sealed class SecretValidationCliTests
     [Fact]
     public async Task RunAsync_DisabledTenantSelectionReturnsUsageExitCode()
     {
-        Tenant tenant = MakeTenant("tenant-a") with { Status = OperationalStatus.Disabled };
+        Tenant tenant = MakeTenant("tenant-a") with { Status = OperationalStatus.Inactive };
         using ServiceProvider services = BuildServices([tenant], [], new Dictionary<string, string>());
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -179,7 +179,7 @@ public sealed class SecretValidationCliTests
             Config = JsonSerializer.Deserialize<JsonElement>("{}"),
             SecretRefs = JsonSerializer.Deserialize<JsonElement>($"{{\"token\":\"{reference}\"}}")
         },
-        Status = EnablementStatus.Enabled,
+        Status = OperationalStatus.Active,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow
     };

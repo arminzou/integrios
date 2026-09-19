@@ -41,18 +41,18 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         body.Name.ShouldBe("erp-sink");
         body.DestinationId.ShouldBe(Fixture.DestinationId);
         body.OrderIndex.ShouldBe(10);
-        // Authorable before it routes anything: fanout ignores it until it is enabled.
-        body.Status.ShouldBe("disabled");
+        // Authorable before it routes anything: fanout ignores it until it is activated.
+        body.Status.ShouldBe("inactive");
         body.EventTypes.ShouldBe(["payment.created"]);
     }
 
     [Fact]
-    public async Task Delete_AcceptsADisabledSubscription()
+    public async Task Delete_AcceptsAnInactiveSubscription()
     {
-        var topic = await CreateTopicAsync("disabled-delete");
+        var topic = await CreateTopicAsync("inactive-delete");
         SubscriptionDto subscription = await CreateSubscriptionAsync(
-            topic.Id, "disabled-delete", "payment.created");
-        subscription.Status.ShouldBe("disabled");
+            topic.Id, "inactive-delete", "payment.created");
+        subscription.Status.ShouldBe("inactive");
 
         (await client.SendAsync(AdminRequest(
                 HttpMethod.Delete,
@@ -61,25 +61,25 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     }
 
     [Fact]
-    public async Task CreateSubscription_OnADisabledDestination_IsAuthoredDisabled()
+    public async Task CreateSubscription_OnAnInactiveDestination_IsAuthoredInactive()
     {
         var topic = await CreateTopicAsync("deactivated-destination");
-        await SetDestinationStatusAsync(Fixture.DestinationId, "disabled");
+        await SetDestinationStatusAsync(Fixture.DestinationId, "inactive");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions",
             new
             {
-                name = "disabled-destination",
+                name = "inactive-destination",
                 event_types = new[] { "payment.created" },
                 destination_id = Fixture.DestinationId,
                 order_index = 0
             }));
 
-        // A Disabled Subscription may point at a Disabled Destination; neither creates work.
+        // An Inactive Subscription may point at an Inactive Destination; neither creates work.
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!.Status.ShouldBe("disabled");
+        (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!.Status.ShouldBe("inactive");
     }
 
     [Fact]
@@ -238,46 +238,46 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     }
 
     [Fact]
-    public async Task EnableAndDisable_AreExplicitReversibleActions()
+    public async Task ActivateAndDeactivate_AreExplicitReversibleActions()
     {
         var topic = await CreateTopicAsync("payments");
         var created = await CreateSubscriptionAsync(topic.Id, "erp-sink", "payment.created");
         string path = $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}";
 
-        foreach ((string action, string expected) in new[] { ("enable", "enabled"), ("enable", "enabled"), ("disable", "disabled"), ("enable", "enabled") })
+        foreach ((string action, string expected) in new[] { ("activate", "active"), ("activate", "active"), ("deactivate", "inactive"), ("activate", "active") })
         {
             var response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"{path}/{action}"));
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
             (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!.Status.ShouldBe(expected);
         }
 
-        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{Guid.NewGuid()}/enable")))
+        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{Guid.NewGuid()}/activate")))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task Enable_OnADisabledDestination_ReturnsConflict()
+    public async Task Activate_OnAnInactiveDestination_ReturnsConflict()
     {
-        var topic = await CreateTopicAsync("disabled-destination-enable");
-        var created = await CreateSubscriptionAsync(topic.Id, "cannot-enable", "payment.created");
-        await SetDestinationStatusAsync(Fixture.DestinationId, "disabled");
+        var topic = await CreateTopicAsync("inactive-destination-activate");
+        var created = await CreateSubscriptionAsync(topic.Id, "cannot-activate", "payment.created");
+        await SetDestinationStatusAsync(Fixture.DestinationId, "inactive");
 
         var response = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
-            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/enable"));
+            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/activate"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         HttpResponseMessage read = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}"));
         (await read.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!
-            .Status.ShouldBe("disabled");
+            .Status.ShouldBe("inactive");
     }
 
     [Fact]
-    public async Task Update_EnabledSubscriptionOntoDisabledDestination_ReturnsConflict()
+    public async Task Update_ActiveSubscriptionOntoInactiveDestination_ReturnsConflict()
     {
-        var topic = await CreateTopicAsync("disabled-destination-move");
+        var topic = await CreateTopicAsync("inactive-destination-move");
         var created = await CreateSubscriptionAsync(topic.Id, "cannot-move", "payment.created");
         HttpResponseMessage destinationResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
@@ -285,16 +285,16 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             new
             {
                 connector_id = Fixture.HttpConnectorId,
-                name = "disabled-target",
-                configuration = new { base_uri = "http://localhost:5054/disabled-target" },
+                name = "inactive-target",
+                configuration = new { base_uri = "http://localhost:5054/inactive-target" },
             }));
         destinationResponse.EnsureSuccessStatusCode();
-        Guid disabledDestinationId = (await destinationResponse.Content.ReadFromJsonAsync<JsonElement>())
+        Guid inactiveDestinationId = (await destinationResponse.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id").GetGuid();
-        await SetDestinationStatusAsync(disabledDestinationId, "disabled");
+        await SetDestinationStatusAsync(inactiveDestinationId, "inactive");
         (await client.SendAsync(AdminRequest(
             HttpMethod.Post,
-            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/enable")))
+            $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{created.Id}/activate")))
             .EnsureSuccessStatusCode();
 
         var response = await client.SendAsync(AdminRequest(
@@ -304,7 +304,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
             {
                 name = "cannot-move",
                 event_types = new[] { "payment.created" },
-                destination_id = disabledDestinationId,
+                destination_id = inactiveDestinationId,
                 order_index = 10,
                 mapping = (object?)null,
                 http_delivery = (object?)null,
@@ -315,11 +315,11 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 
-    // Disabling pauses routing; it does not freeze the configuration, so the Operator can fix what
-    // made them pause it before enabling it again.
+    // Deactivating pauses routing; it does not freeze the configuration, so the Operator can fix what
+    // made them pause it before activating it again.
     [Theory]
-    [InlineData("enable")]
-    [InlineData("disable")]
+    [InlineData("activate")]
+    [InlineData("deactivate")]
     public async Task UpdateSubscription_EditsEitherStatus(string action)
     {
         var topic = await CreateTopicAsync("payments");
@@ -346,7 +346,7 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = (await response.Content.ReadFromJsonAsync<SubscriptionDto>(HostJson.Options))!;
         body.Name.ShouldBe("erp-sink-renamed");
-        body.Status.ShouldBe(action == "enable" ? "enabled" : "disabled");
+        body.Status.ShouldBe(action == "activate" ? "active" : "inactive");
     }
 
     [Fact]

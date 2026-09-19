@@ -72,7 +72,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
             command.TenantId,
             command.DestinationId,
             command.HttpDelivery,
-            existing.Status == EnablementStatus.Enabled,
+            existing.Status == OperationalStatus.Active,
             cancellationToken);
 
         var subscription = await subscriptionRepository.UpdateAsync(
@@ -96,7 +96,7 @@ internal sealed class UpdateSubscriptionCommandHandler(
         Guid tenantId,
         Guid destinationId,
         HttpDeliveryConfiguration httpDelivery,
-        bool mustBeEnabled,
+        bool mustBeActive,
         CancellationToken cancellationToken)
     {
         var destination = await destinationRepository.GetByIdAsync(tenantId, destinationId, cancellationToken);
@@ -106,10 +106,10 @@ internal sealed class UpdateSubscriptionCommandHandler(
                 "The specified Destination does not exist for this tenant.");
         }
 
-        if (mustBeEnabled && destination.Status != EnablementStatus.Enabled)
+        if (mustBeActive && destination.Status != OperationalStatus.Active)
         {
             throw new AuthoringConflictException(
-                "An Enabled Subscription cannot reference a Disabled Destination.");
+                "An Active Subscription cannot reference an Inactive Destination.");
         }
 
         Connector? connector = await connectorReader.GetByIdAsync(destination.ConnectorId, cancellationToken);

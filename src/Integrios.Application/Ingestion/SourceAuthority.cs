@@ -6,11 +6,11 @@ namespace Integrios.Application.Ingestion;
 // cannot accept past a change that has committed.
 public static class SourceAuthority
 {
-    // `declared` is null when no Enabled Source matches the Tenant, Source, and Topic.
+    // `declared` is null when no Active Source matches the Tenant, Source, and Topic.
     public static void Ensure(IReadOnlyList<string>? declared, string eventType)
     {
         if (declared is null)
-            throw new EventAcceptanceException("The Source is not enabled for the requested Topic.");
+            throw new EventAcceptanceException("The Source is not active for the requested Topic.");
         if (!declared.Contains(eventType, StringComparer.OrdinalIgnoreCase))
             throw new EventAcceptanceException($"The Source does not declare the Event type '{eventType}'.");
     }

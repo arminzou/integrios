@@ -25,7 +25,6 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
                 c.name         AS TenantApiKeyName,
                 c.key_prefix   AS TenantApiKeyKeyPrefix,
                 c.key_hash     AS TenantApiKeyKeyHash,
-                c.status       AS TenantApiKeyStatus,
                 c.created_at   AS TenantApiKeyCreatedAt,
                 c.expires_at   AS TenantApiKeyExpiresAt,
                 c.last_used_at AS TenantApiKeyLastUsedAt,
@@ -42,7 +41,7 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
             FROM tenant_api_keys c
             JOIN tenants t ON t.id = c.tenant_id
             WHERE c.key_hash = @KeyHash
-              AND c.status = 'active'
+              AND c.revoked_at IS NULL
               AND t.status = 'active'
               AND (c.expires_at IS NULL OR c.expires_at > {currentTimestamp})
             """;
@@ -60,7 +59,6 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
         public string TenantApiKeyName { get; init; } = "";
         public string TenantApiKeyKeyPrefix { get; init; } = "";
         public string TenantApiKeyKeyHash { get; init; } = "";
-        public string TenantApiKeyStatus { get; init; } = "";
         public DateTimeOffset TenantApiKeyCreatedAt { get; init; }
         public DateTimeOffset? TenantApiKeyExpiresAt { get; init; }
         public DateTimeOffset? TenantApiKeyLastUsedAt { get; init; }
@@ -82,7 +80,6 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
             Name = TenantApiKeyName,
             KeyPrefix = TenantApiKeyKeyPrefix,
             KeyHash = TenantApiKeyKeyHash,
-            Status = Enum.Parse<OperationalStatus>(TenantApiKeyStatus, ignoreCase: true),
             CreatedAt = TenantApiKeyCreatedAt,
             ExpiresAt = TenantApiKeyExpiresAt,
             LastUsedAt = TenantApiKeyLastUsedAt,

@@ -112,12 +112,29 @@ internal sealed class TenantRepository(IntegriosDbContext context, IDataProtecti
         return affected == 0 ? null : await GetByIdAsync(id, cancellationToken);
     }
 
-    public async Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken) =>
-        await context.Tenants
+    public async Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        int affected = await context.Tenants
             .Where(tenant => tenant.Id == id && tenant.Status == OperationalStatus.Active)
             .ExecuteUpdateAsync(
                 setters => setters
-                    .SetProperty(tenant => tenant.Status, OperationalStatus.Disabled)
+                    .SetProperty(tenant => tenant.Status, OperationalStatus.Inactive)
                     .SetProperty(tenant => tenant.UpdatedAt, DateTimeOffset.UtcNow),
-                cancellationToken) > 0;
+                cancellationToken);
+        // An existing Tenant already in the requested state is not a missing resource.
+        return affected > 0 || await context.Tenants.AnyAsync(tenant => tenant.Id == id, cancellationToken);
+    }
+
+    public async Task<bool> ActivateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        int affected = await context.Tenants
+            .Where(tenant => tenant.Id == id && tenant.Status == OperationalStatus.Inactive)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(tenant => tenant.Status, OperationalStatus.Active)
+                    .SetProperty(tenant => tenant.UpdatedAt, DateTimeOffset.UtcNow),
+                cancellationToken);
+        // An existing Tenant already in the requested state is not a missing resource.
+        return affected > 0 || await context.Tenants.AnyAsync(tenant => tenant.Id == id, cancellationToken);
+    }
 }

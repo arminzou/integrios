@@ -158,8 +158,8 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
     // Sources and Subscriptions are authored Disabled; the journey enables each before its traffic.
     private async Task EnableAsync(string path)
     {
-        using HttpResponseMessage response = await PostAdminAsync($"{path}/enable", new { });
-        (await AssertJsonAsync(response, HttpStatusCode.OK)).GetProperty("status").GetString().ShouldBe("enabled");
+        using HttpResponseMessage response = await PostAdminAsync($"{path}/activate", new { });
+        (await AssertJsonAsync(response, HttpStatusCode.OK)).GetProperty("status").GetString().ShouldBe("active");
     }
 
     private async Task<Guid> SendSignedPushAsync(string callbackPath, string secret)

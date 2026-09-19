@@ -84,7 +84,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
         CancellationToken cancellationToken)
     {
         var subscriptions = await context.Subscriptions.AsNoTracking()
-            .Where(subscription => subscription.TopicId == topicId && subscription.Status == EnablementStatus.Enabled)
+            .Where(subscription => subscription.TopicId == topicId && subscription.Status == OperationalStatus.Active)
             .ToListAsync(cancellationToken);
         Guid[] destinationIds = subscriptions.Select(subscription => subscription.DestinationId).Distinct().ToArray();
         var destinations = await context.Destinations.AsNoTracking()

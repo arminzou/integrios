@@ -5,9 +5,9 @@ using MediatR;
 
 namespace Integrios.Application.Authoring.Destinations;
 
-// A Disabled Destination takes no new delivery snapshots. Deliveries already created keep the request
-// they were snapshotted with, so disabling never reaches work already routed.
-public sealed record SetDestinationStatusCommand(Guid TenantId, Guid Id, EnablementStatus Status)
+// An Inactive Destination takes no new delivery snapshots. Deliveries already created keep the request
+// they were snapshotted with, so deactivating never reaches work already routed.
+public sealed record SetDestinationStatusCommand(Guid TenantId, Guid Id, OperationalStatus Status)
     : IRequest<DestinationDto?>;
 
 internal sealed class SetDestinationStatusCommandHandler(
@@ -19,11 +19,11 @@ internal sealed class SetDestinationStatusCommandHandler(
     {
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
             AuthoringResource.Destination, [command.Id], cancellationToken);
-        if (command.Status == EnablementStatus.Disabled
+        if (command.Status == OperationalStatus.Inactive
             && await repository.HasActiveSubscriptionsAsync(command.TenantId, command.Id, cancellationToken))
         {
             throw new AuthoringConflictException(
-                "The Destination cannot be disabled while Enabled Subscriptions reference it.");
+                "The Destination cannot be deactivated while Active Subscriptions reference it.");
         }
 
         if (!await repository.SetStatusAsync(command.TenantId, command.Id, command.Status, cancellationToken))

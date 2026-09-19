@@ -176,7 +176,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
     // Revoke
 
     [Fact]
-    public async Task RevokeTenantApiKey_Returns200_AndKeyReadsAsRevoked()
+    public async Task RevokeTenantApiKey_Returns200_AndKeyVanishesFromAuthoringReads()
     {
         var created = await CreateTenantApiKeyAsync("revoke-key");
 
@@ -188,14 +188,16 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         var getResponse = await client.SendAsync(AdminRequest(
             HttpMethod.Get,
             $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}"));
-        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Revocation is terminal and recorded solely by RevokedAt; a revoked key is excluded from
+        // every authoring read and list, so it no longer resolves.
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        var body = await getResponse.Content.ReadFromJsonAsync<TenantApiKeyDto>(HostJson.Options);
-        body.ShouldNotBeNull();
-        // "disabled" is what the raw status column holds; a revoked key is what the Operator revoked.
-        // This read used to report the column while the list reported the derived state, so the same
-        // key described itself two ways and the dashboard could not tell revoked from disabled.
-        body.State.ShouldBe("revoked");
+        var listResponse = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/tenant-api-keys?state=active&limit=100"));
+        var list = await listResponse.Content.ReadFromJsonAsync<TenantApiKeyListDto>(HostJson.Options);
+        list.ShouldNotBeNull();
+        list.Items.ShouldNotContain(item => item.Id == created.TenantApiKey.Id);
     }
 
     [Fact]

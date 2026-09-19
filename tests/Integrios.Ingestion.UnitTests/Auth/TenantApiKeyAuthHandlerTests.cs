@@ -224,7 +224,6 @@ public sealed class TenantApiKeyAuthHandlerTests(IngestionApiFixture fixture)
                 Name = "test-key",
                 KeyPrefix = token[..12],
                 KeyHash = hash,
-                Status = OperationalStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow,
             },
             new Tenant

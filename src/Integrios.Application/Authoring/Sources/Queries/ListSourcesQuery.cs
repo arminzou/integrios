@@ -3,7 +3,7 @@ using MediatR;
 
 namespace Integrios.Application.Authoring.Sources;
 
-public sealed record ListSourcesQuery(Guid TenantId, EnablementStatus? Status, SourceType? Type, Guid? TopicId, string? AfterCursor, int Limit) : IRequest<SourceListDto>;
+public sealed record ListSourcesQuery(Guid TenantId, OperationalStatus? Status, SourceType? Type, Guid? TopicId, string? AfterCursor, int Limit) : IRequest<SourceListDto>;
 
 internal sealed class ListSourcesQueryHandler(ISourceQueries queries) : IRequestHandler<ListSourcesQuery, SourceListDto>
 {

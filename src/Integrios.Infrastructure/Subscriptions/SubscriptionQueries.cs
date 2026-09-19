@@ -16,7 +16,7 @@ internal sealed class SubscriptionQueries(
     public async Task<SubscriptionListDto> ListByTopicAsync(
         Guid tenantId,
         Guid topicId,
-        EnablementStatus? status,
+        OperationalStatus? status,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)

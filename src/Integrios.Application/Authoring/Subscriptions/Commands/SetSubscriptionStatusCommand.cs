@@ -6,9 +6,9 @@ using MediatR;
 
 namespace Integrios.Application.Authoring.Subscriptions;
 
-// A Disabled Subscription is absent from fanout and accrues no backlog; enabling it affects only
+// An Inactive Subscription is absent from fanout and accrues no backlog; activating it affects only
 // Events routed afterwards.
-public sealed record SetSubscriptionStatusCommand(Guid TenantId, Guid TopicId, Guid Id, EnablementStatus Status)
+public sealed record SetSubscriptionStatusCommand(Guid TenantId, Guid TopicId, Guid Id, OperationalStatus Status)
     : IRequest<SubscriptionDto?>;
 
 internal sealed class SetSubscriptionStatusCommandHandler(
@@ -27,14 +27,14 @@ internal sealed class SetSubscriptionStatusCommandHandler(
         await using IAsyncDisposable lease = await authoringLock.AcquireAsync(
             AuthoringResource.Destination,
             [existing.DestinationId], cancellationToken);
-        if (command.Status == EnablementStatus.Enabled)
+        if (command.Status == OperationalStatus.Active)
         {
             Destination? destination = await destinationRepository.GetByIdAsync(
                 command.TenantId, existing.DestinationId, cancellationToken);
-            if (destination?.Status != EnablementStatus.Enabled)
+            if (destination?.Status != OperationalStatus.Active)
             {
                 throw new AuthoringConflictException(
-                    "The Subscription cannot be enabled while its Destination is Disabled.");
+                    "The Subscription cannot be activated while its Destination is Inactive.");
             }
         }
 

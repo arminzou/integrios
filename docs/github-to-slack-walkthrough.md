@@ -181,12 +181,12 @@ SUBSCRIPTION=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subsc
        \"http_success\":{\"evaluator\":\"json_boolean\",\"field\":\"ok\",\"expected\":true}}" | jq -r .id)
 ```
 
-A Source and a Subscription are both created Disabled, so they can be reviewed before anything
-flows. Enable both once the GitHub webhook is configured:
+A Source and a Subscription are both created Inactive, so they can be reviewed before anything
+flows. Activate both once the GitHub webhook is configured:
 
 ```bash
-curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources/$SOURCE/enable" -H "$AUTH" | jq .status
-curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions/$SUBSCRIPTION/enable" -H "$AUTH" | jq .status
+curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources/$SOURCE/activate" -H "$AUTH" | jq .status
+curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics/$TOPIC/subscriptions/$SUBSCRIPTION/activate" -H "$AUTH" | jq .status
 ```
 
 Adjust the transform's hardcoded `#deploys` channel, or extend it to read a channel per repository,

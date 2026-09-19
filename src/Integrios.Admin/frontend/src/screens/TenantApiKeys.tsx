@@ -67,6 +67,7 @@ export function TenantApiKeysScreen({
 }) {
   const [notice, setNotice] = useState("");
   const [state, setState] = useFilterParam("state");
+  const navigate = useNavigate();
   const list = useInfiniteQuery({
     queryKey: ["tenant-api-keys", tenantId, { state }],
     queryFn: ({ pageParam }) =>
@@ -102,7 +103,6 @@ export function TenantApiKeysScreen({
             <Filter id="tenant-api-key-state" label="State" value={state} onChange={setState}>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
-              <SelectItem value="revoked">Revoked</SelectItem>
             </Filter>
           </FilterBar>
         ) : null}
@@ -180,7 +180,12 @@ export function TenantApiKeysScreen({
               key={selectedTenantApiKeyId}
               tenantId={tenantId}
               tenantApiKeyId={selectedTenantApiKeyId}
-              onRevoked={(name) => setNotice(`${name} revoked.`)}
+              onRevoked={(name) => {
+                // A revoked key vanishes from authoring reads, so its detail closes rather than
+                // re-reading into a not-found panel.
+                setNotice(`${name} revoked.`);
+                navigate(`/tenants/${tenantId}/tenant-api-keys`);
+              }}
             />
           ) : keys.length > 0 ? (
             <InspectorPlaceholder label="Tenant API key detail">
@@ -272,7 +277,6 @@ function TenantApiKeyInspector({
           id: current.id,
           name: current.name,
           keyPrefix: current.key_prefix,
-          revoked: current.state === "revoked",
         }}
         onDone={() => onRevoked(current.name)}
       />
@@ -286,9 +290,8 @@ function RevokeTenantApiKey({
   onDone,
 }: {
   tenantId: string;
-  // The two reads spell the same field differently — the list says `state`, the detail says
-  // `status` — so the control takes what it actually needs rather than either DTO.
-  apiKey: { id: string; name: string; keyPrefix: string; revoked: boolean };
+  // A revoked key is excluded from every authoring read, so a key shown here is always revocable.
+  apiKey: { id: string; name: string; keyPrefix: string };
   onDone: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -301,16 +304,12 @@ function RevokeTenantApiKey({
       ),
     onSuccess: () => {
       onDone();
+      // A revoked key vanishes from authoring reads; drop its cached detail so no later visit shows
+      // it as active.
+      void queryClient.invalidateQueries({ queryKey: ["tenant-api-key", tenantId, apiKey.id] });
       return queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
     },
   });
-
-  if (apiKey.revoked)
-    return (
-      <p className="m-0 text-ink-secondary">
-        Revoked keys are kept so a request that still carries one can be recognised in the logs.
-      </p>
-    );
 
   return (
     <div className="flex flex-col items-start gap-2">

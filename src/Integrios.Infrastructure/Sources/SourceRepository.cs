@@ -46,7 +46,7 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
         return affected == 0 ? null : await GetByIdAsync(tenantId, id, cancellationToken);
     }
 
-    public async Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken) =>
+    public async Task<bool> SetStatusAsync(Guid tenantId, Guid id, OperationalStatus status, CancellationToken cancellationToken) =>
         await context.Sources.Where(source => source.TenantId == tenantId && source.Id == id)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(source => source.Status, status)
@@ -66,7 +66,7 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
                 .SetProperty(source => source.Mapping, (SourceMapping?)null)
                 .SetProperty(source => source.EventIdentityRule, (SourceEventIdentityRule?)null)
                 .SetProperty(source => source.Revision, string.Empty)
-                .SetProperty(source => source.Status, EnablementStatus.Disabled)
+                .SetProperty(source => source.Status, OperationalStatus.Inactive)
                 .SetProperty(source => source.DeletedAt, now)
                 .SetProperty(source => source.UpdatedAt, now), cancellationToken) > 0;
     }

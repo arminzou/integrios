@@ -67,13 +67,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'active'::text");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -681,7 +674,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         {
                             t.HasCheckConstraint("ck_sources_event_types_array", "jsonb_typeof(event_types) = 'array'");
 
-                            t.HasCheckConstraint("ck_sources_status", "status IN ('enabled', 'disabled')");
+                            t.HasCheckConstraint("ck_sources_status", "status IN ('active', 'inactive')");
 
                             t.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'broker')");
                         });
@@ -868,13 +861,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'active'::text");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")

@@ -21,7 +21,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         await fixture.WireMockSink.AssertHealthyAsync();
 
         (await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM connectors WHERE id = '{fixture.HttpConnectorId}' AND key = 'http' AND status = 'active'")).ShouldBe(1L);
+            $"SELECT COUNT(*) FROM connectors WHERE id = '{fixture.HttpConnectorId}' AND key = 'http'")).ShouldBe(1L);
         (await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL")).ShouldBe(1L);
 
@@ -566,7 +566,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
 
     // Sources and Subscriptions are authored Disabled; a journey enables each before its traffic.
     private async Task EnableAsync(string path) =>
-        (await PostAdminForPropertyAsync($"{path}/enable", new { }, "status")).ShouldBe("enabled");
+        (await PostAdminForPropertyAsync($"{path}/activate", new { }, "status")).ShouldBe("active");
 
     private async Task<string> PostAdminForPropertyAsync(string path, object body, string property)
     {

@@ -33,9 +33,6 @@ internal sealed class TenantApiKeyConfiguration : IEntityTypeConfiguration<Tenan
         entity.Property(e => e.LastUsedAt).HasColumnName("last_used_at");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.RevokedAt).HasColumnName("revoked_at");
-        entity.Property(e => e.Status)
-            .HasDefaultValueSql("'active'::text")
-            .HasColumnName("status");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");
 
         entity.HasOne<Tenant>().WithMany()

@@ -112,7 +112,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
         Guid inactiveSource = await CreateEventApiSourceAsync(primary, HttpConnectorId, topic);
         using HttpResponseMessage disable = await PostAdminAsync(
-            $"/admin/tenants/{primary.Id}/sources/{inactiveSource}/disable", new { });
+            $"/admin/tenants/{primary.Id}/sources/{inactiveSource}/deactivate", new { });
         disable.StatusCode.ShouldBe(HttpStatusCode.OK);
         await AssertAcceptanceRejectedAsync(primary, inactiveSource, "payments");
 
@@ -387,9 +387,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
 
         foreach (string path in new[]
         {
-            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{subscription}/disable",
-            $"/admin/tenants/{tenant.Id}/destinations/{destination}/disable",
-            $"/admin/tenants/{tenant.Id}/sources/{source}/disable"
+            $"/admin/tenants/{tenant.Id}/topics/{topic}/subscriptions/{subscription}/deactivate",
+            $"/admin/tenants/{tenant.Id}/destinations/{destination}/deactivate",
+            $"/admin/tenants/{tenant.Id}/sources/{source}/deactivate"
         })
         {
             using HttpResponseMessage disabled = await PostAdminAsync(path, new { });
@@ -664,11 +664,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         return subscription;
     }
 
-    // Sources and Subscriptions are authored Disabled; a journey enables each before its traffic.
+    // Sources and Subscriptions are authored Inactive; a journey activates each before its traffic.
     private async Task EnableAsync(string path)
     {
-        using HttpResponseMessage response = await PostAdminAsync($"{path}/enable", new { });
-        (await AssertJsonAsync(response, HttpStatusCode.OK)).GetProperty("status").GetString().ShouldBe("enabled");
+        using HttpResponseMessage response = await PostAdminAsync($"{path}/activate", new { });
+        (await AssertJsonAsync(response, HttpStatusCode.OK)).GetProperty("status").GetString().ShouldBe("active");
     }
 
     private async Task<(Guid Source, Guid Topic)> CreateSourceTopicAsync(TenantContext tenant, string topicName)

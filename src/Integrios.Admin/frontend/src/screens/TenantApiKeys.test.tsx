@@ -79,17 +79,25 @@ describe("Tenant API keys", () => {
 
   it("names the key it is about to revoke and does not revoke until confirmed", async () => {
     // The panel reads the key by its own id, so the stub answers the detail path with a key rather
-    // than with the list every other GET returns.
+    // than with the list every other GET returns. Revoking makes the key vanish from authoring
+    // reads, so the detail answers its absence once the write has happened.
+    let revoked = false;
     const calls = stubHttp(({ method, url }) => {
-      if (method === "POST") return { status: 200 };
+      if (method === "POST") {
+        revoked = true;
+        return { status: 200 };
+      }
       if (url.pathname.endsWith(`/tenant-api-keys/${keyId}`))
-        return { status: 200, body: { ...listItem, status: listItem.state } };
+        return revoked ? { status: 404, body: {} } : { status: 200, body: { ...listItem, status: listItem.state } };
       return { status: 200, body: page([listItem]) };
     });
 
     // Revoke lives in the panel that names the key rather than on the row, so the key has to be
     // the selected one for the control to exist at all.
-    renderScreen(<TenantApiKeysScreen tenantId={tenantId} selectedTenantApiKeyId={keyId} />);
+    const { router } = renderScreen(
+      <TenantApiKeysScreen tenantId={tenantId} selectedTenantApiKeyId={keyId} />,
+      `/tenants/${tenantId}/tenant-api-keys/${keyId}`,
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
 
     expect(screen.getByText(/Revoke the Tenant API key "Ingest" \(itk_live_ab\)\?/)).toBeTruthy();
@@ -101,5 +109,9 @@ describe("Tenant API keys", () => {
     expect(calls.find((call) => call.method === "POST")!.url.pathname).toBe(
       `/admin/tenants/${tenantId}/tenant-api-keys/${keyId}/revoke`,
     );
+
+    // The revoked key's detail closes rather than re-reading into a not-found panel.
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/tenant-api-keys`));
+    expect(await screen.findByText("Ingest revoked.")).toBeTruthy();
   });
 });

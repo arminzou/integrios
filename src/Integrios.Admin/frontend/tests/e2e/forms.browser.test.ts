@@ -54,7 +54,7 @@ const destination = {
   tenant_id: tenantId,
   connector_id: connectorId,
   name: "sink",
-  status: "enabled",
+  status: "active",
   environment: null,
   description: null,
   ...stamps,
@@ -65,7 +65,6 @@ const connector = {
   contract_version: 1,
   name: "HTTP",
   direction: "both",
-  status: "active",
   description: null,
   ...stamps,
 };
@@ -126,7 +125,7 @@ const subscriptionDetail = {
     expression: '{ "order": orderId, "total": total, "placed_at": placedAt }',
   },
   http_delivery: { version: 1, method: "POST", path: null, headers: {}, body: "json" },
-  status: "enabled",
+  status: "active",
   order_index: 1,
   description: null,
   ...stamps,
@@ -140,7 +139,7 @@ const sourceDetail = {
   type: "event_api",
   event_types: ["order.created"],
   configuration: {},
-  status: "enabled",
+  status: "active",
   revoked_at: null,
   ...stamps,
 };
@@ -488,7 +487,7 @@ describe("Create forms, filled through a real browser", () => {
       name: "Source only",
       direction: "source",
     };
-    const disabled = { ...connector, id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", name: "Disabled", status: "disabled" };
+    const disabled = { ...connector, id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", name: "Removed", direction: "source" };
     await view.route("**/admin/connectors?*", (route) =>
       route.fulfill({ json: page([connector, sourceOnly, disabled]) }),
     );
@@ -1747,39 +1746,39 @@ describe("Update and deactivate, driven through a real browser", () => {
     const { page: view } = await open(`/tenants/${tenantId}/topics/${topicId}`);
     await view.getByRole("button", { name: "Edit", exact: true }).waitFor();
 
-    for (const action of ["Deactivate", "Disable", "Enable"])
+    for (const action of ["Activate", "Deactivate"])
       expect(await view.getByRole("button", { name: action, exact: true }).count()).toBe(0);
     await view.close();
   }, 60_000);
 
-  it("disables a Source only after the confirmation naming it", async () => {
+  it("deactivates a Source only after the confirmation naming it", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
 
-    await view.getByRole("button", { name: "Disable", exact: true }).click();
-    expect(writes, "Disabling ran before it was confirmed.").toHaveLength(0);
-    await view.click("text=Disable orders-intake");
+    await view.getByRole("button", { name: "Deactivate", exact: true }).click();
+    expect(writes, "Deactivating ran before it was confirmed.").toHaveLength(0);
+    await view.click("text=Deactivate orders-intake");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
-    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}/disable`);
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}/deactivate`);
     await view.close();
   }, 60_000);
 
-  /// Disabled is reversible configuration: the Source stays editable and is enabled again directly.
-  it("keeps a Disabled Source editable and enables it again", async () => {
+  /// Inactive is reversible configuration: the Source stays editable and is activated again directly.
+  it("keeps an Inactive Source editable and activates it again", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/sources/${sourceId}`);
     await view.route(`**/admin/tenants/${tenantId}/sources/${sourceId}`, (route) =>
-      route.fulfill({ status: 200, json: { ...sourceDetail, status: "disabled" } }),
+      route.fulfill({ status: 200, json: { ...sourceDetail, status: "inactive" } }),
     );
     await view.reload();
 
     await view.getByRole("button", { name: "Edit", exact: true }).waitFor();
-    expect(await view.getByRole("button", { name: "Disable", exact: true }).count()).toBe(0);
-    await view.getByRole("button", { name: "Enable", exact: true }).click();
+    expect(await view.getByRole("button", { name: "Deactivate", exact: true }).count()).toBe(0);
+    await view.getByRole("button", { name: "Activate", exact: true }).click();
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
-    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}/enable`);
+    expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/sources/${sourceId}/activate`);
     await view.close();
   }, 60_000);
 });

@@ -1,5 +1,4 @@
 using Integrios.Domain.Entities;
-using Integrios.Domain.Enums;
 
 namespace Integrios.Application.Authoring.TenantApiKeys;
 
@@ -7,17 +6,12 @@ namespace Integrios.Application.Authoring.TenantApiKeys;
 /// The state a TenantApiKey is in as an Operator reads it, derived rather than stored.
 /// </summary>
 /// <remarks>
-/// Revocation and expiry are recorded as their own instants rather than as status values, so
-/// neither is answerable from <see cref="TenantApiKey.Status"/> alone. Shared by the list and the
-/// single-key read: they described the same key differently while each derived its own answer —
-/// the list said "revoked" where the detail said "disabled" — and the dashboard could not tell a
-/// revoked key from a merely disabled one, so it offered to revoke one that already was.
+/// Revocation is recorded as its own instant and a revoked key is excluded from every authoring read
+/// and list, so it never reaches this derivation. Expiry has no status of its own, so it is derived
+/// from <see cref="TenantApiKey.ExpiresAt"/>.
 /// </remarks>
 public static class TenantApiKeyState
 {
-    public static string From(TenantApiKey key, DateTimeOffset now) => key.RevokedAt is not null
-        ? "revoked"
-        : key.Status == OperationalStatus.Active && key.ExpiresAt is not null && key.ExpiresAt <= now
-            ? "expired"
-            : key.Status.ToString().ToLowerInvariant();
+    public static string From(TenantApiKey key, DateTimeOffset now) =>
+        key.ExpiresAt is not null && key.ExpiresAt <= now ? "expired" : "active";
 }

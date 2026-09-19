@@ -14,7 +14,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         {
             table.HasCheckConstraint("ck_sources_type", "type IN ('event_api', 'webhook', 'broker')");
             table.HasCheckConstraint("ck_sources_event_types_array", "jsonb_typeof(event_types) = 'array'");
-            table.HasCheckConstraint("ck_sources_status", "status IN ('enabled', 'disabled')");
+            table.HasCheckConstraint("ck_sources_status", "status IN ('active', 'inactive')");
         });
 
         entity.HasAlternateKey(source => new { source.TenantId, source.Id }).HasName("uq_sources_tenant_id_id");
@@ -34,7 +34,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         entity.Property(source => source.Mapping).HasColumnType("jsonb").HasColumnName("mapping");
         entity.Property(source => source.EventIdentityRule).HasColumnType("jsonb").HasColumnName("event_identity_rule");
         entity.Property(source => source.Revision).HasColumnName("revision");
-        // No database default: Enabled is the enum's zero value, which EF reads as "unset" and would
+        // No database default: Active is the enum's zero value, which EF reads as "unset" and would
         // replace with the column default. The application always states the status it means.
         entity.Property(source => source.Status).HasColumnName("status");
         entity.Property(source => source.DeletedAt).HasColumnName("deleted_at");

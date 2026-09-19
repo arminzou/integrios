@@ -18,7 +18,6 @@ internal static class DestinationUseValidator
             throw new DestinationValidationException(
                 $"The Connector '{connector.Key}' does not permit Destination authoring.");
 
-        EnsureConnectorActive(connector);
         ValidateConfiguration(destination.Configuration, connector.Manifest.DestinationConfigurationSchema);
         ValidateDestinationBaseUri(destination.Configuration);
 
@@ -96,14 +95,8 @@ internal static class DestinationUseValidator
         }
     }
 
-    // The Destination's own status is not checked here: a Disabled Destination stays editable, and
-    // whether an Enabled Subscription may use it is the Subscription's rule.
-    private static void EnsureConnectorActive(Connector connector)
-    {
-        if (connector.Status != OperationalStatus.Active)
-            throw new DestinationValidationException("The Destination's Connector must be active before it can be used.");
-    }
-
+    // The Destination's own status is not checked here: an Inactive Destination stays editable, and
+    // whether an Active Subscription may use it is the Subscription's rule.
     private static void ValidateDestinationBaseUri(JsonElement config)
     {
         if (config.ValueKind != JsonValueKind.Object

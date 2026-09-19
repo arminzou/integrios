@@ -33,8 +33,8 @@ public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixtu
             await connection.OpenAsync();
             await connection.ExecuteAsync(
                 """
-                UPDATE tenants SET status = 'disabled' WHERE id = @DisabledTenantId;
-                UPDATE destinations SET status = 'disabled' WHERE id = @DisabledDestinationId;
+                UPDATE tenants SET status = 'inactive' WHERE id = @DisabledTenantId;
+                UPDATE destinations SET status = 'inactive' WHERE id = @DisabledDestinationId;
                 """,
                 new { DisabledTenantId = fixture.TenantBId, DisabledDestinationId = disabledDestinationId });
         }
@@ -44,15 +44,15 @@ public sealed class SecretValidationReaderTests : IClassFixture<PostgresApiFixtu
 
         var selectedTenant = await reader.FindTenantBySlugAsync("test-tenant-b", CancellationToken.None);
         selectedTenant.ShouldNotBeNull();
-        selectedTenant.Status.ShouldBe(OperationalStatus.Disabled);
+        selectedTenant.Status.ShouldBe(OperationalStatus.Inactive);
         (await reader.ListActiveTenantsAsync(CancellationToken.None)).ShouldNotContain(tenant => tenant.Id == fixture.TenantBId);
 
         var selectedDestination = await reader.FindDestinationAsync(fixture.TenantAId, disabledDestinationId, CancellationToken.None);
         selectedDestination.ShouldNotBeNull();
-        selectedDestination.Status.ShouldBe(EnablementStatus.Disabled);
+        selectedDestination.Status.ShouldBe(OperationalStatus.Inactive);
 
-        // A Disabled Destination can be enabled again, and its snapshotted deliveries still resolve its
-        // secrets, so it is validated with the rest.
+        // An Inactive Destination can be activated again, and its snapshotted deliveries still resolve
+        // its secrets, so it is validated with the rest.
         var destinations = await reader.ListDestinationsAsync(fixture.TenantAId, CancellationToken.None);
         destinations.ShouldContain(destination => destination.Id == activeDestinationId);
         destinations.ShouldContain(destination => destination.Id == disabledDestinationId);

@@ -10,12 +10,12 @@ namespace Integrios.FunctionalTests.Admin;
 public sealed class DestinationsAdminTests(AdminApiFixture fixture) : SubscriptionAdminTestBase(fixture)
 {
     [Fact]
-    public async Task Delete_AcceptsADisabledDestination()
+    public async Task Delete_AcceptsAnInactiveDestination()
     {
-        HttpResponseMessage created = await CreateDestinationAsync("disabled-delete");
+        HttpResponseMessage created = await CreateDestinationAsync("inactive-delete");
         DestinationDto destination = (await created.Content.ReadFromJsonAsync<DestinationDto>(HostJson.Options))!;
         (await client.SendAsync(AdminRequest(
-                HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{destination.Id}/disable")))
+                HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{destination.Id}/deactivate")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await client.SendAsync(AdminRequest(
@@ -24,34 +24,34 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
     }
 
     // Fanout joins destinations without filtering on status, which is only safe because a
-    // Destination an Enabled Subscription still points at cannot reach that status in the first
+    // Destination an Active Subscription still points at cannot reach that status in the first
     // place. This is the test for that premise.
     [Fact]
-    public async Task Disable_IsRefusedWhileAnEnabledSubscriptionReferencesTheDestination()
+    public async Task Deactivate_IsRefusedWhileAnActiveSubscriptionReferencesTheDestination()
     {
         AdminTopicResponse topic = await CreateTopicAsync("deactivation-topic");
         SubscriptionDto subscription = await CreateSubscriptionAsync(topic.Id, "holds-the-destination", "payment.created");
         string subscriptionPath = $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{subscription.Id}";
-        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"{subscriptionPath}/enable"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"{subscriptionPath}/activate"))).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         HttpResponseMessage refused = await client.SendAsync(AdminRequest(
-            HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/disable"));
+            HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/deactivate"));
 
         refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("enabled");
+        (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("active");
 
         // Releasing the reference has to let it through, or the assertion above would hold for a
-        // Destination that simply never disables.
-        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"{subscriptionPath}/disable"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Destination that simply never deactivates.
+        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"{subscriptionPath}/deactivate"))).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await client.SendAsync(AdminRequest(
-            HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/disable")))
+            HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/deactivate")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("disabled");
+        (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("inactive");
         (await client.SendAsync(AdminRequest(
-            HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/enable")))
+            HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{Fixture.DestinationId}/activate")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("enabled");
+        (await StatusOfAsync(Fixture.DestinationId)).ShouldBe("active");
     }
 
     // Uniqueness belongs to keys, and a Destination has none: its name is a label an Operator can

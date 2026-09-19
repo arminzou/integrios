@@ -44,9 +44,6 @@ internal sealed class ConnectorConfiguration : IEntityTypeConfiguration<Connecto
             .HasColumnName("manifest");
         entity.Property(e => e.ManifestSchemaVersion).HasColumnName("manifest_schema_version");
         entity.Property(e => e.Name).HasColumnName("name");
-        entity.Property(e => e.Status)
-            .HasDefaultValueSql("'active'::text")
-            .HasColumnName("status");
         entity.Property(e => e.UpdatedAt)
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");

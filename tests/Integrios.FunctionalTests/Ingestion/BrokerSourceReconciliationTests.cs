@@ -157,7 +157,7 @@ public sealed class BrokerSourceReconciliationFixture : IAsyncLifetime
         AzureServiceBusSourceTests.InsertBrokerSourceAsync(Database, Seeded, sourceId);
 
     internal Task RevokeSourceAsync(Guid sourceId) => ExecuteAsync(
-        $"UPDATE sources SET status = 'disabled' WHERE id = @Id",
+        $"UPDATE sources SET status = 'inactive' WHERE id = @Id",
         new { Id = sourceId });
 
     internal Task SetQueueNameAsync(Guid sourceId, string queueName)

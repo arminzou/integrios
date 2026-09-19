@@ -211,7 +211,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     }
 
     public Task DisableSourceAsync() =>
-        ExecuteAsync("UPDATE sources SET status='disabled' WHERE id=@SourceId", new { SourceId });
+        ExecuteAsync("UPDATE sources SET status='inactive' WHERE id=@SourceId", new { SourceId });
 
     public Task SetLedgerSubscriptionStatusAsync(string status) =>
         ExecuteAsync("UPDATE subscriptions SET status=@Status WHERE name='to-ledger'", new { Status = status });
@@ -346,20 +346,20 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             INSERT INTO tenants (id,slug,name,status,created_at,updated_at) VALUES
                 (@TenantId,'test-routing-tenant','Test Routing Tenant','active',{{{database.Now}}},{{{database.Now}}}),
                 (@OrphanTenantId,'test-orphan-tenant','Test Orphan Tenant','active',{{{database.Now}}},{{{database.Now}}});
-            INSERT INTO tenant_api_keys (id,tenant_id,name,key_prefix,key_hash,status,created_at)
-            VALUES (@TenantApiKeyId,@TenantId,'test-key',@KeyPrefix,@KeyHash,'active',{{{database.Now}}});
+            INSERT INTO tenant_api_keys (id,tenant_id,name,key_prefix,key_hash,created_at)
+            VALUES (@TenantApiKeyId,@TenantId,'test-key',@KeyPrefix,@KeyHash,{{{database.Now}}});
             INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status) VALUES
-                (@LedgerDestinationId,@TenantId,@ConnectorId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'enabled'),
-                (@RiskDestinationId,@TenantId,@ConnectorId,'risk-sink',{{{database.Json("@RiskConfig")}}},'enabled');
+                (@LedgerDestinationId,@TenantId,@ConnectorId,'ledger-sink',{{{database.Json("@LedgerConfig")}}},'active'),
+                (@RiskDestinationId,@TenantId,@ConnectorId,'risk-sink',{{{database.Json("@RiskConfig")}}},'active');
             INSERT INTO topics (id,tenant_id,{{{database.KeyColumn}}},name) VALUES
                 (@TopicId,@TenantId,'test-topic','test-topic'),
                 (@OrphanTopicId,@OrphanTenantId,'orphan-topic','orphan-topic');
             INSERT INTO sources (id,tenant_id,connector_id,topic_id,name,type,event_types,configuration,revision,status) VALUES
-                (@SourceId,@TenantId,@ConnectorId,@TopicId,'routing-intake','event_api','["payment.created","payment.authorized","payment.settled","payment.multi"]', {{{database.Json("@EmptyConfig")}}},@SourceRevision,'enabled'),
-                (@OrphanSourceId,@OrphanTenantId,@ConnectorId,@OrphanTopicId,'orphan-intake','event_api','["payment.created","payment.authorized","payment.settled","payment.multi"]', {{{database.Json("@EmptyConfig")}}},@OrphanSourceRevision,'enabled');
+                (@SourceId,@TenantId,@ConnectorId,@TopicId,'routing-intake','event_api','["payment.created","payment.authorized","payment.settled","payment.multi"]', {{{database.Json("@EmptyConfig")}}},@SourceRevision,'active'),
+                (@OrphanSourceId,@OrphanTenantId,@ConnectorId,@OrphanTopicId,'orphan-intake','event_api','["payment.created","payment.authorized","payment.settled","payment.multi"]', {{{database.Json("@EmptyConfig")}}},@OrphanSourceRevision,'active');
             INSERT INTO subscriptions (id,tenant_id,topic_id,name,event_types,destination_id,order_index,status) VALUES
-                (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerDestinationId,0,'enabled'),
-                (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskDestinationId,1,'enabled');
+                (@LedgerSubscriptionId,@TenantId,@TopicId,'to-ledger',{{{database.Json("@LedgerRules")}}},@LedgerDestinationId,0,'active'),
+                (@RiskSubscriptionId,@TenantId,@TopicId,'to-risk',{{{database.Json("@RiskRules")}}},@RiskDestinationId,1,'active');
             """, new
         {
             ConnectorId = HttpConnectorId,

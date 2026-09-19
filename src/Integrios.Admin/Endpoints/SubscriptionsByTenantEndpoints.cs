@@ -27,7 +27,7 @@ public sealed class SubscriptionsByTenantEndpoints : IEndpointGroup
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         var filter = new SubscriptionListFilter(
-            ListFilter.ParseEnum<EnablementStatus>(status, "Subscription status must be enabled or disabled."),
+            ListFilter.ParseEnum<OperationalStatus>(status, "Subscription status must be active or inactive."),
             topicId,
             destinationId,
             ListFilter.Trimmed(name));

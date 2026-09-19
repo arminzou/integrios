@@ -20,8 +20,6 @@ internal static class SourceAuthoringValidator
     {
         if (connector.Direction == ConnectorDirection.Destination)
             throw new SourceValidationException($"The Connector '{connector.Key}' does not permit Source authoring.");
-        if (connector.Status != OperationalStatus.Active)
-            throw new SourceValidationException("The Source's Connector must be active before it can be used.");
         if (connector.Manifest.SourceConfigurationSchema is not JsonElement schema)
             throw new SourceValidationException("The Connector does not declare a Source configuration schema.");
 

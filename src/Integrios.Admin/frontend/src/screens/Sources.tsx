@@ -57,7 +57,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { activeOnly, nameIn, useConnectorOptions, useTopicOptions } from "../ui/options";
+import { nameIn, useConnectorOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { EventBuilder, type EventIdentityRule } from "./EventBuilder";
 import { SourceGuide } from "./SourceGuide";
@@ -631,8 +631,8 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
             ))}
           </Filter>
           <Filter id="source-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="enabled">Enabled</SelectItem>
-            <SelectItem value="disabled">Disabled</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
           </Filter>
           <Filter id="source-type" label="Type" value={type} onChange={setType}>
             {sourceTypes.map((option) => (
@@ -763,7 +763,7 @@ function CreateSource({
   const noTopics = topics.isSuccess && (topics.data?.items ?? []).length === 0;
   // Connectors are deployment-wide, so an Operator whose deployment has none cannot author here at
   // all — the way out leaves the Tenant rather than staying inside it.
-  const noConnectors = connectors.isSuccess && activeOnly(connectors.data?.items).length === 0;
+  const noConnectors = connectors.isSuccess && (connectors.data?.items ?? []).length === 0;
   // A form that cannot be completed does not look completable: no Topic blocks the write exactly as
   // an option read that has not answered does.
   const cannotAuthor = optionsPending || noTopics || noConnectors;
@@ -882,7 +882,7 @@ function CreateSource({
           disabled={connectors.isPending || connectors.isError || noConnectors}
           required
         >
-          {activeOnly(connectors.data?.items).map((connector) => (
+          {(connectors.data?.items ?? []).map((connector) => (
             <SelectItem key={connector.id} value={connector.id}>
               {connector.name}
             </SelectItem>
@@ -1162,11 +1162,11 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
 /// the Event type to that list projection if Topics come to carry many Subscriptions.
 function useTopicRouting(tenantId: string, topicId: string, enabled: boolean) {
   const list = useQuery({
-    queryKey: ["topic-subscriptions", tenantId, topicId, "enabled"],
+    queryKey: ["topic-subscriptions", tenantId, topicId, "active"],
     queryFn: () =>
       call(() =>
         api.GET("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions", {
-          params: { path: { tenantId, topicId }, query: { status: "enabled", limit: 100 } },
+          params: { path: { tenantId, topicId }, query: { status: "active", limit: 100 } },
         }),
       ),
     enabled,
@@ -1201,12 +1201,12 @@ function useTopicRouting(tenantId: string, topicId: string, enabled: boolean) {
 function retypeConsequence(routing: ReturnType<typeof useTopicRouting>): string {
   const kept = "Events already accepted keep their Event type.";
   if (!routing.settled) return `${kept} Reading the Subscriptions on this Topic…`;
-  if (routing.routes.length === 0) return `${kept} No Enabled Subscription on this Topic depends on it yet.`;
-  return `${kept} Subscriptions match the Event type exactly, so these Enabled Subscriptions on this Topic may stop receiving new Events: ${routing.routes.join(", ")}${routing.partial ? ", and possibly others not shown" : ""}.`;
+  if (routing.routes.length === 0) return `${kept} No Active Subscription on this Topic depends on it yet.`;
+  return `${kept} Subscriptions match the Event type exactly, so these Active Subscriptions on this Topic may stop receiving new Events: ${routing.routes.join(", ")}${routing.partial ? ", and possibly others not shown" : ""}.`;
 }
 
-/// The Admin API owns the mutable Source contract. Type, Connector, and Topic remain fixed. Enabled and
-/// Disabled are both editable, and switching between them keeps the same identity and callback.
+/// The Admin API owns the mutable Source contract. Type, Connector, and Topic remain fixed. Active and
+/// Inactive are both editable, and switching between them keeps the same identity and callback.
 function EditSource({
   tenantId,
   source,
@@ -1222,19 +1222,21 @@ function EditSource({
     void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
     void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
   };
-  const enabled = source.status === "enabled";
+  const active = source.status === "active";
   const setStatus = useMutation({
-    mutationFn: (action: "enable" | "disable") =>
+    mutationFn: (action: "activate" | "deactivate") =>
       call(() =>
-        action === "enable"
-          ? api.POST("/admin/tenants/{tenantId}/sources/{id}/enable", { params: { path: { tenantId, id: source.id } } })
-          : api.POST("/admin/tenants/{tenantId}/sources/{id}/disable", {
+        action === "activate"
+          ? api.POST("/admin/tenants/{tenantId}/sources/{id}/activate", {
+              params: { path: { tenantId, id: source.id } },
+            })
+          : api.POST("/admin/tenants/{tenantId}/sources/{id}/deactivate", {
               params: { path: { tenantId, id: source.id } },
             }),
       ),
     onSuccess: (_, action) => {
       reread();
-      onDone(action === "enable" ? "Source enabled." : "Source disabled.");
+      onDone(action === "activate" ? "Source activated." : "Source deactivated.");
     },
   });
   const remove = useMutation({
@@ -1249,9 +1251,9 @@ function EditSource({
       navigate(`/tenants/${tenantId}/sources`);
     },
   });
-  // Enabling is never blocked on coverage: an Event nothing routes is still accepted, as Unrouted.
+  // Activating is never blocked on coverage: an Event nothing routes is still accepted, as Unrouted.
   // The Operator is told which declarations that applies to before, not after, traffic arrives.
-  const routing = useTopicRouting(tenantId, source.topic_id, !enabled);
+  const routing = useTopicRouting(tenantId, source.topic_id, !active);
   const uncovered = source.event_types.filter(
     (eventType) => !routing.routed.some((routed) => routed.toLowerCase() === eventType.toLowerCase()),
   );
@@ -1262,19 +1264,19 @@ function EditSource({
         <EditSheet label="Edit" description="An update replaces the configuration outright">
           {(close) => <EditSourceForm tenantId={tenantId} source={source} onSaved={reread} onClose={close} />}
         </EditSheet>
-        {enabled ? (
+        {active ? (
           <ConfirmAction
-            label="Disable"
+            label="Deactivate"
             variant="outline"
-            consequence="New Events are refused until it is enabled again. Events already accepted are still routed and delivered."
-            question={`Disable the ${typeLabel(source.type)} Source ${source.name}?`}
-            confirmLabel={`Disable ${source.name}`}
+            consequence="New Events are refused until it is activated again. Events already accepted are still routed and delivered."
+            question={`Deactivate the ${typeLabel(source.type)} Source ${source.name}?`}
+            confirmLabel={`Deactivate ${source.name}`}
             busy={setStatus.isPending}
-            onConfirm={() => setStatus.mutate("disable")}
+            onConfirm={() => setStatus.mutate("deactivate")}
           />
         ) : (
-          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("enable")}>
-            Enable
+          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("activate")}>
+            Activate
           </Button>
         )}
         <ConfirmAction
@@ -1286,9 +1288,9 @@ function EditSource({
           onConfirm={() => remove.mutate()}
         />
       </div>
-      {!enabled && routing.settled && uncovered.length > 0 ? (
+      {!active && routing.settled && uncovered.length > 0 ? (
         <p className="m-0 text-xs text-warning-ink">
-          No Enabled Subscription on this Topic routes {uncovered.join(", ")}. Once enabled, Events of{" "}
+          No Active Subscription on this Topic routes {uncovered.join(", ")}. Once activated, Events of{" "}
           {uncovered.length === 1 ? "that type are" : "those types are"} accepted and left Unrouted.
         </p>
       ) : null}

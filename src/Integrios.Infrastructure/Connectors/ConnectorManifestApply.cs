@@ -23,7 +23,6 @@ internal static class ConnectorManifestApply
             ManifestSchemaVersion = manifest.ManifestSchemaVersion,
             Name = manifest.Presentation.Name,
             Direction = Enum.Parse<ConnectorDirection>(manifest.Direction, ignoreCase: true),
-            Status = OperationalStatus.Active,
             Description = manifest.Presentation.Description,
             Manifest = manifest,
             CreatedAt = now,

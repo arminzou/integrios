@@ -106,7 +106,7 @@ export function TenantsScreen() {
             />
             <Filter id="tenant-status" label="Status" value={status} onChange={setStatus}>
               <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="disabled">Disabled</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
             </Filter>
           </FilterBar>
         ) : null}
@@ -295,7 +295,7 @@ export function TenantScreen({ tenantId }: { tenantId: string }) {
             <EditSheet label="Edit">
               {(close) => <EditTenant key={current.updated_at} tenant={current} onSaved={close} />}
             </EditSheet>
-            <DeactivateTenant tenant={current} onDone={() => setNotice("Tenant deactivated.")} />
+            <TenantLifecycle tenant={current} onDone={(notice) => setNotice(notice)} />
           </div>
         }
       >
@@ -454,31 +454,41 @@ function EditTenant({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
   );
 }
 
-/// Deactivation is offered only where the API actually owns it; there is no invented reactivation to
-/// make the pair look symmetrical. It sits on the screen rather than inside the edit sheet, because
-/// it is not part of editing and a form is not a thing to scroll past to reach it.
-function DeactivateTenant({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
+/// Tenant activation is reversible and non-cascading: deactivating a Tenant fences all of its intake
+/// without changing its Sources, Destinations, or Subscriptions, and activating resumes exactly what
+/// was there. It sits on the screen rather than inside the edit sheet, because it is not part of
+/// editing and a form is not a thing to scroll past to reach it.
+function TenantLifecycle({ tenant, onDone }: { tenant: Tenant; onDone: (notice: string) => void }) {
   const queryClient = useQueryClient();
-  const deactivate = useMutation({
-    mutationFn: () => call(() => api.POST("/admin/tenants/{id}/deactivate", { params: { path: { id: tenant.id } } })),
-    onSuccess: () => {
-      onDone();
+  const setStatus = useMutation({
+    mutationFn: (action: "activate" | "deactivate") =>
+      call(() =>
+        action === "activate"
+          ? api.POST("/admin/tenants/{id}/activate", { params: { path: { id: tenant.id } } })
+          : api.POST("/admin/tenants/{id}/deactivate", { params: { path: { id: tenant.id } } }),
+      ),
+    onSuccess: (_, action) => {
+      onDone(action === "activate" ? "Tenant activated." : "Tenant deactivated.");
       return queryClient.invalidateQueries({ queryKey: ["tenant", tenant.id] });
     },
   });
 
-  if (tenant.status !== "active") return null;
-
   return (
     <div className="flex flex-col items-start gap-2">
-      <ConfirmAction
-        label="Deactivate"
-        question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
-        confirmLabel={`Deactivate ${tenant.name}`}
-        busy={deactivate.isPending}
-        onConfirm={() => deactivate.mutate()}
-      />
-      <FormError message={formError(asProblem(deactivate.error))} />
+      {tenant.status === "active" ? (
+        <ConfirmAction
+          label="Deactivate"
+          question={`Deactivate the Tenant "${tenant.name}" (${tenant.slug})? Its Sources stop accepting Events.`}
+          confirmLabel={`Deactivate ${tenant.name}`}
+          busy={setStatus.isPending}
+          onConfirm={() => setStatus.mutate("deactivate")}
+        />
+      ) : (
+        <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("activate")}>
+          Activate
+        </Button>
+      )}
+      <FormError message={formError(asProblem(setStatus.error))} />
     </div>
   );
 }

@@ -148,7 +148,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             ConnectorId = connectorId,
             Name = "destination",
             Configuration = Json("""{"base_uri":"https://erp.example.test"}"""),
-            Status = EnablementStatus.Enabled,
+            Status = OperationalStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -161,7 +161,6 @@ public sealed class SubscriptionAuthoringApplicationTests
             ManifestSchemaVersion = 1,
             Name = "Test Connector",
             Direction = direction,
-            Status = OperationalStatus.Active,
             Manifest = new ConnectorManifest
             {
                 ManifestSchemaVersion = 1,
@@ -276,7 +275,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Destination?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement configuration, DestinationAuthentication? authentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Destination?>(destination);
 
-        public Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken = default) =>
+        public Task<bool> SetStatusAsync(Guid tenantId, Guid id, OperationalStatus status, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 
         public Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
@@ -321,7 +320,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, IReadOnlyList<string> eventTypes, Guid destinationId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, HttpSuccessRule? httpSuccess, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
-        public Task<bool> SetStatusAsync(Guid tenantId, Guid topicId, Guid id, EnablementStatus status, CancellationToken cancellationToken = default) =>
+        public Task<bool> SetStatusAsync(Guid tenantId, Guid topicId, Guid id, OperationalStatus status, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
 
         public Task<bool> DeleteAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>

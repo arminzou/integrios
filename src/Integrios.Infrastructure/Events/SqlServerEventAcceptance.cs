@@ -79,7 +79,7 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
             // declaration change waits for acceptances already past this point and every later one
             // sees it.
             string? declared = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
-                "SELECT event_types FROM sources WITH (HOLDLOCK, ROWLOCK) WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status=N'enabled' AND deleted_at IS NULL",
+                "SELECT event_types FROM sources WITH (HOLDLOCK, ROWLOCK) WHERE tenant_id=@TenantId AND id=@SourceId AND topic_id=@TopicId AND status=N'active' AND deleted_at IS NULL",
                 new { submission.TenantId, submission.SourceId, submission.TopicId }, dbTransaction, cancellationToken: cancellationToken));
             SourceAuthority.Ensure(
                 declared is null ? null : JsonSerializer.Deserialize<string[]>(declared), submission.EventType);

@@ -73,7 +73,7 @@ internal sealed class CreateSourceCommandHandler(
             EventIdentityRule = command.EventIdentityRule,
             Revision = Guid.NewGuid().ToString("N"),
             // Declared and authorable first; intake opens only when an Operator enables it.
-            Status = EnablementStatus.Disabled,
+            Status = OperationalStatus.Inactive,
             CreatedAt = now,
             UpdatedAt = now,
         };

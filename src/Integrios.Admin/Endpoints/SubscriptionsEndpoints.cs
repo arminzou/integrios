@@ -18,8 +18,8 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         group.MapGet(ListSubscriptions).Produces<SubscriptionListDto>();
         group.MapGet(GetSubscriptionById, "/{id:guid}").Produces<SubscriptionDto>();
         group.MapPut(UpdateSubscription, "/{id:guid}").Produces<SubscriptionDto>();
-        group.MapPost(EnableSubscription, "/{id:guid}/enable").Produces<SubscriptionDto>();
-        group.MapPost(DisableSubscription, "/{id:guid}/disable").Produces<SubscriptionDto>();
+        group.MapPost(ActivateSubscription, "/{id:guid}/activate").Produces<SubscriptionDto>();
+        group.MapPost(DeactivateSubscription, "/{id:guid}/deactivate").Produces<SubscriptionDto>();
         group.MapDelete(DeleteSubscription, "/{id:guid}");
     }
 
@@ -59,7 +59,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         int limit = 0)
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
-        var response = await mediator.Send(new ListSubscriptionsByTopicQuery(tenantId, topicId, ListFilter.ParseEnum<EnablementStatus>(status, "Subscription status must be enabled or disabled."), after, limit), cancellationToken);
+        var response = await mediator.Send(new ListSubscriptionsByTopicQuery(tenantId, topicId, ListFilter.ParseEnum<OperationalStatus>(status, "Subscription status must be active or inactive."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 
@@ -100,16 +100,16 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
-    private static Task<IResult> EnableSubscription(
+    private static Task<IResult> ActivateSubscription(
         Guid tenantId, Guid topicId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
-        SetStatus(tenantId, topicId, id, EnablementStatus.Enabled, mediator, cancellationToken);
+        SetStatus(tenantId, topicId, id, OperationalStatus.Active, mediator, cancellationToken);
 
-    private static Task<IResult> DisableSubscription(
+    private static Task<IResult> DeactivateSubscription(
         Guid tenantId, Guid topicId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
-        SetStatus(tenantId, topicId, id, EnablementStatus.Disabled, mediator, cancellationToken);
+        SetStatus(tenantId, topicId, id, OperationalStatus.Inactive, mediator, cancellationToken);
 
     private static async Task<IResult> SetStatus(
-        Guid tenantId, Guid topicId, Guid id, EnablementStatus status, IMediator mediator, CancellationToken cancellationToken)
+        Guid tenantId, Guid topicId, Guid id, OperationalStatus status, IMediator mediator, CancellationToken cancellationToken)
     {
         SubscriptionDto? subscription = await mediator.Send(
             new SetSubscriptionStatusCommand(tenantId, topicId, id, status), cancellationToken);

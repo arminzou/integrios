@@ -50,7 +50,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { enabledOnly, useDestinationOptions, useTopicOptions } from "../ui/options";
+import { activeOnly, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { MappingPlayground, mappingEnvelope } from "./SubscriptionPlayground";
 
@@ -332,8 +332,8 @@ export function SubscriptionsScreen({
             ))}
           </Filter>
           <Filter id="subscription-status" label="Status" value={status} onChange={setStatus}>
-            <SelectItem value="enabled">Enabled</SelectItem>
-            <SelectItem value="disabled">Disabled</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
           </Filter>
         </FilterBar>
       ) : null}
@@ -542,13 +542,13 @@ function SubscriptionInspector({
       ),
   });
   const setStatus = useMutation({
-    mutationFn: (action: "enable" | "disable") =>
+    mutationFn: (action: "activate" | "deactivate") =>
       call(() =>
-        action === "enable"
-          ? api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/enable", {
+        action === "activate"
+          ? api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/activate", {
               params: { path: { tenantId, topicId, id: subscriptionId } },
             })
-          : api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/disable", {
+          : api.POST("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}/deactivate", {
               params: { path: { tenantId, topicId, id: subscriptionId } },
             }),
       ),
@@ -660,19 +660,19 @@ function SubscriptionInspector({
             />
           )}
         </EditSheet>
-        {current.status === "enabled" ? (
+        {current.status === "active" ? (
           <ConfirmAction
-            label="Disable"
+            label="Deactivate"
             variant="outline"
-            consequence={`${current.name} stops receiving new Events from this Topic, and nothing is held back for it: enabling it again affects only Events routed afterwards. Deliveries already queued are not cancelled.`}
-            question={`Disable the Subscription "${current.name}"?`}
-            confirmLabel={`Disable ${current.name}`}
+            consequence={`${current.name} stops receiving new Events from this Topic, and nothing is held back for it: activating it again affects only Events routed afterwards. Deliveries already queued are not cancelled.`}
+            question={`Deactivate the Subscription "${current.name}"?`}
+            confirmLabel={`Deactivate ${current.name}`}
             busy={setStatus.isPending}
-            onConfirm={() => setStatus.mutate("disable")}
+            onConfirm={() => setStatus.mutate("deactivate")}
           />
         ) : (
-          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("enable")}>
-            Enable
+          <Button type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate("activate")}>
+            Activate
           </Button>
         )}
         <ConfirmAction
@@ -686,7 +686,7 @@ function SubscriptionInspector({
       </div>
 
       <WriteStatus done={setStatus.isSuccess}>
-        {setStatus.variables === "enable" ? "Subscription enabled." : "Subscription disabled."}
+        {setStatus.variables === "activate" ? "Subscription activated." : "Subscription deactivated."}
       </WriteStatus>
       <FormError message={formError(asProblem(setStatus.error ?? remove.error))} />
     </Inspector>
@@ -710,7 +710,7 @@ function SubscriptionSourcePath({
       do {
         const page = await call(() =>
           api.GET("/admin/tenants/{tenantId}/sources", {
-            params: { path: { tenantId }, query: { topic_id: topicId, status: "enabled", after, limit: 100 } },
+            params: { path: { tenantId }, query: { topic_id: topicId, status: "active", after, limit: 100 } },
           }),
         );
         items.push(...page.items);
@@ -738,7 +738,7 @@ function SubscriptionSourcePath({
         How Events reach this Subscription
       </h3>
       <p className="m-0 text-[13px] text-ink-secondary">
-        Publishers address an Enabled Source, not this Subscription. Matching Events then follow this configured path.
+        Publishers address an Active Source, not this Subscription. Matching Events then follow this configured path.
       </p>
       <ol aria-label="Subscription Event path" className="m-0 flex list-none flex-wrap items-center gap-1.5 text-xs">
         <li className="rounded-full border px-2.5 py-1">{items.length === 1 ? "Source" : "Sources"}</li>
@@ -758,11 +758,11 @@ function SubscriptionSourcePath({
           </span>
         ))}
       </p>
-      {sources.isPending ? <p className="m-0 text-sm">Loading Enabled Sources…</p> : null}
-      {sourcesProblem ? <ReadError problem={sourcesProblem} what="Enabled Sources" /> : null}
+      {sources.isPending ? <p className="m-0 text-sm">Loading Active Sources…</p> : null}
+      {sourcesProblem ? <ReadError problem={sourcesProblem} what="Active Sources" /> : null}
       {!sources.isPending && !sources.error && items.length === 0 ? (
         <p className="m-0 text-sm">
-          No Enabled Source publishes to this Topic.{" "}
+          No Active Source publishes to this Topic.{" "}
           <Link to={`/tenants/${tenantId}/sources?topic_id=${topicId}`} state={{ openSourceCreate: true }}>
             Create a Source
           </Link>
@@ -883,7 +883,7 @@ function SubscriptionForm({
   const queryClient = useQueryClient();
   const destinations = useDestinationOptions(tenantId);
   const destinationOptionsUnavailable = destinations.isPending || destinations.isError;
-  const noDestinations = destinations.isSuccess && enabledOnly(destinations.data?.items).length === 0;
+  const noDestinations = destinations.isSuccess && activeOnly(destinations.data?.items).length === 0;
   const [playgroundOpen, setPlaygroundOpen] = useState(initialPlaygroundOpen);
   const [reviewedExpression, setReviewedExpression] = useState<string>();
   const originalExpression = guidedMappingExpression(subscription?.mapping_config);
@@ -998,17 +998,17 @@ function SubscriptionForm({
             hint={
               noDestinations ? (
                 <>
-                  No Enabled Destinations yet, and a Subscription delivers to one.{" "}
+                  No Active Destinations yet, and a Subscription delivers to one.{" "}
                   <Link to={`/tenants/${tenantId}/destinations`}>Create a Destination</Link> first.
                 </>
               ) : destinations.data?.next_cursor ? (
-                "Showing the first 100 Enabled Destinations."
+                "Showing the first 100 Active Destinations."
               ) : undefined
             }
             disabled={destinationOptionsUnavailable || noDestinations}
             required
           >
-            {enabledOnly(destinations.data?.items).map((destination) => (
+            {activeOnly(destinations.data?.items).map((destination) => (
               <SelectItem key={destination.id} value={destination.id}>
                 {destination.name}
               </SelectItem>

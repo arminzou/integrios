@@ -22,7 +22,7 @@ const tones: Record<Tone, string> = {
 /// Attention is a state an Operator may need to act on; failure is one the platform has stopped
 /// retrying. `unrouted` is attention rather than failure: the Event was accepted and matched no
 /// Subscription, which is the established signal for a missing or misconfigured Subscription rather
-/// than a delivery that failed. A `disabled` Tenant or Connector is quiet — deliberate configuration
+/// than a delivery that failed. An `inactive` Tenant or Source is quiet — deliberate configuration
 /// is not a fault.
 ///
 /// An unlisted status is quiet. A status this map has never seen is not evidence of a problem, and
@@ -43,7 +43,6 @@ const toneFor: Record<string, Tone> = {
   succeeded: "success",
   failed: "failure",
   dead_lettered: "failure",
-  revoked: "failure",
   expired: "failure",
 };
 

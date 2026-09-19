@@ -55,8 +55,3 @@ export function nameIn(items: { id: string; name: string }[] | undefined, id: st
 export function activeOnly<T extends { status: string }>(items: T[] | undefined): T[] {
   return (items ?? []).filter((item) => item.status === "active");
 }
-
-/// The same, for the resources whose status is Enabled or Disabled rather than Active.
-export function enabledOnly<T extends { status: string }>(items: T[] | undefined): T[] {
-  return (items ?? []).filter((item) => item.status === "enabled");
-}

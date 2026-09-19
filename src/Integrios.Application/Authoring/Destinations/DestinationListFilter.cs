@@ -10,7 +10,7 @@ namespace Integrios.Application.Authoring.Destinations;
 /// silently page through a different set.
 /// </summary>
 public sealed record DestinationListFilter(
-    EnablementStatus? Status = null,
+    OperationalStatus? Status = null,
     string? Environment = null,
     string? ConnectorKey = null,
     string? NameContains = null);

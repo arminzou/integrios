@@ -34,7 +34,6 @@ internal sealed class CreateTenantApiKeyCommandHandler(ITenantApiKeyRepository r
             Name = command.Name,
             KeyPrefix = keyPrefix,
             KeyHash = keyHash,
-            Status = OperationalStatus.Active,
             Description = command.Description,
             CreatedAt = DateTimeOffset.UtcNow,
             ExpiresAt = command.ExpiresAt,

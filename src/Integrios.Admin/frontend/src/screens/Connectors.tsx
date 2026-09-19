@@ -40,7 +40,6 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { StatusBadge } from "../ui/status";
 import { ConnectorAuthoring } from "./ConnectorAuthoring";
 
 type ConnectorListItem = components["schemas"]["ConnectorListItemDto"];
@@ -126,7 +125,6 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                     <TableHead scope="col">Name</TableHead>
                     <TableHead scope="col">Direction</TableHead>
                     <TableHead scope="col">Contract</TableHead>
-                    <TableHead scope="col">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -147,10 +145,9 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                       </RowHeader>
                       <TableCell>{connector.name}</TableCell>
                       <TableCell>{connector.direction}</TableCell>
-                      <TableCell>v{connector.contract_version}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-between gap-3">
-                          <StatusBadge status={connector.status} />
+                          <span>v{connector.contract_version}</span>
                           <RowChevron />
                         </div>
                       </TableCell>
@@ -353,7 +350,6 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
           </span>
         </h2>
         <div className="flex shrink-0 items-center gap-1.5">
-          <StatusBadge status={current.status} className="mt-0.5" />
           <CloseInspector to="/connectors" label="Close the Connector detail" />
         </div>
       </div>

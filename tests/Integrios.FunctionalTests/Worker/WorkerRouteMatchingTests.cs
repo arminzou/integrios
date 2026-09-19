@@ -34,7 +34,7 @@ public sealed class WorkerRouteMatchingTests : IClassFixture<WorkerRoutingFixtur
     // Disabling a Source is prospective: it fences new acceptance, and everything accepted before it
     // committed is still routed and delivered.
     [Fact]
-    public async Task Worker_EventAcceptedBeforeItsSourceIsDisabled_IsStillRoutedAndDelivered()
+    public async Task Worker_EventAcceptedBeforeItsSourceIsDeactivated_IsStillRoutedAndDelivered()
     {
         var eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
         await fixture.DisableSourceAsync();
@@ -45,16 +45,16 @@ public sealed class WorkerRouteMatchingTests : IClassFixture<WorkerRoutingFixtur
     }
 
     [Fact]
-    public async Task Worker_DisabledSubscriptionCreatesNoBacklogOrCatchUp()
+    public async Task Worker_InactiveSubscriptionCreatesNoBacklogOrCatchUp()
     {
-        await fixture.SetLedgerSubscriptionStatusAsync("disabled");
+        await fixture.SetLedgerSubscriptionStatusAsync("inactive");
         Guid earlierEventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 
         (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
         (await fixture.GetEventDeliveriesAsync(earlierEventId)).ShouldBeEmpty();
         (await fixture.GetEventStatusAsync(earlierEventId)).ShouldBe("unrouted");
 
-        await fixture.SetLedgerSubscriptionStatusAsync("enabled");
+        await fixture.SetLedgerSubscriptionStatusAsync("active");
         (await fixture.RunFanoutBatchAsync()).ShouldBe(0);
         (await fixture.GetEventDeliveriesAsync(earlierEventId)).ShouldBeEmpty();
 
@@ -64,12 +64,12 @@ public sealed class WorkerRouteMatchingTests : IClassFixture<WorkerRoutingFixtur
     }
 
     [Fact]
-    public async Task Worker_ExistingDeliveryContinuesAfterSubscriptionAndDestinationAreDisabled()
+    public async Task Worker_ExistingDeliveryContinuesAfterSubscriptionAndDestinationAreDeactivated()
     {
         Guid eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
         (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
-        await fixture.SetLedgerSubscriptionStatusAsync("disabled");
-        await fixture.SetLedgerDestinationStatusAsync("disabled");
+        await fixture.SetLedgerSubscriptionStatusAsync("inactive");
+        await fixture.SetLedgerDestinationStatusAsync("inactive");
 
         (await fixture.RunDeliveryBatchAsync()).ShouldBe(1);
 

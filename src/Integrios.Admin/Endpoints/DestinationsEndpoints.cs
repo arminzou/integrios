@@ -16,8 +16,8 @@ public sealed class DestinationsEndpoints : IEndpointGroup
         group.MapGet(ListDestinations).Produces<DestinationListDto>();
         group.MapGet(GetDestinationById, "/{id:guid}").Produces<DestinationDto>();
         group.MapPut(UpdateDestination, "/{id:guid}").Produces<DestinationDto>();
-        group.MapPost(EnableDestination, "/{id:guid}/enable").Produces<DestinationDto>();
-        group.MapPost(DisableDestination, "/{id:guid}/disable").Produces<DestinationDto>();
+        group.MapPost(ActivateDestination, "/{id:guid}/activate").Produces<DestinationDto>();
+        group.MapPost(DeactivateDestination, "/{id:guid}/deactivate").Produces<DestinationDto>();
         group.MapDelete(DeleteDestination, "/{id:guid}");
     }
 
@@ -53,7 +53,7 @@ public sealed class DestinationsEndpoints : IEndpointGroup
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         var filter = new DestinationListFilter(
-            ListFilter.ParseEnum<EnablementStatus>(status, "Destination status must be enabled or disabled."),
+            ListFilter.ParseEnum<OperationalStatus>(status, "Destination status must be active or inactive."),
             ListFilter.Trimmed(environment),
             ListFilter.Trimmed(connector),
             ListFilter.Trimmed(name));
@@ -95,14 +95,14 @@ public sealed class DestinationsEndpoints : IEndpointGroup
         return response is null ? Results.NotFound() : Results.Ok(response);
     }
 
-    private static Task<IResult> EnableDestination(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
-        SetStatus(tenantId, id, EnablementStatus.Enabled, mediator, cancellationToken);
+    private static Task<IResult> ActivateDestination(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        SetStatus(tenantId, id, OperationalStatus.Active, mediator, cancellationToken);
 
-    private static Task<IResult> DisableDestination(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
-        SetStatus(tenantId, id, EnablementStatus.Disabled, mediator, cancellationToken);
+    private static Task<IResult> DeactivateDestination(Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        SetStatus(tenantId, id, OperationalStatus.Inactive, mediator, cancellationToken);
 
     private static async Task<IResult> SetStatus(
-        Guid tenantId, Guid id, EnablementStatus status, IMediator mediator, CancellationToken cancellationToken)
+        Guid tenantId, Guid id, OperationalStatus status, IMediator mediator, CancellationToken cancellationToken)
     {
         DestinationDto? destination = await mediator.Send(
             new SetDestinationStatusCommand(tenantId, id, status), cancellationToken);

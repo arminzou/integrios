@@ -11,7 +11,7 @@ namespace Integrios.Infrastructure.Sources;
 
 internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDataProtectionProvider dataProtectionProvider) : ISourceQueries
 {
-    public async Task<SourceListDto> ListAsync(Guid tenantId, EnablementStatus? status, SourceType? type, Guid? topicId, string? afterCursor, int limit, CancellationToken cancellationToken)
+    public async Task<SourceListDto> ListAsync(Guid tenantId, OperationalStatus? status, SourceType? type, Guid? topicId, string? afterCursor, int limit, CancellationToken cancellationToken)
     {
         string scope = "sources:" + JsonSerializer.Serialize(new { tenantId, status, type, topicId });
         DateTimeOffset cursorTime = default;
