@@ -5,6 +5,7 @@ import { page, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { ConnectorsScreen } from "./Connectors";
 import { DestinationsScreen } from "./Destinations";
+import { EventsScreen } from "./Events";
 import { SourcesScreen } from "./Sources";
 import { SubscriptionsScreen } from "./Subscriptions";
 import { TenantApiKeysScreen } from "./TenantApiKeys";
@@ -19,7 +20,7 @@ const tenantId = "11111111-1111-1111-1111-111111111111";
 /// a search box is named for the field it matches and says how it matches, and lifecycle is Status
 /// (State on API keys, which carry none). A list under an applied filter keeps its bar with no
 /// rows, so each screen is rendered empty and asked only what its bar holds, in order.
-type Control = { role: "searchbox" | "combobox"; name: string; placeholder?: string };
+type Control = { role: "searchbox" | "combobox" | "button"; name: string | RegExp; placeholder?: string };
 
 const bars: { screen: string; element: ReactElement; url: string; controls: Control[] }[] = [
   {
@@ -69,6 +70,20 @@ const bars: { screen: string; element: ReactElement; url: string; controls: Cont
       { role: "combobox", name: "Connector" },
       { role: "combobox", name: "Environment" },
       { role: "combobox", name: "Status" },
+    ],
+  },
+  {
+    screen: "Events",
+    element: <EventsScreen tenantId={tenantId} />,
+    url: `/tenants/${tenantId}/events?status=routed`,
+    controls: [
+      { role: "searchbox", name: "Source Event id", placeholder: "Exact id…" },
+      { role: "searchbox", name: "Event type", placeholder: "Exact type, e.g. order.created…" },
+      { role: "combobox", name: "Source" },
+      { role: "combobox", name: "Topic" },
+      { role: "combobox", name: "Event status" },
+      { role: "combobox", name: "Delivery status" },
+      { role: "button", name: /^Accepted/ },
     ],
   },
   {

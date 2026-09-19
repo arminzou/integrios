@@ -204,6 +204,7 @@ export function Filter({
   onChange,
   allLabel = "All",
   hint,
+  disabled,
   children,
 }: {
   id: string;
@@ -212,6 +213,7 @@ export function Filter({
   onChange: (value: string) => void;
   allLabel?: string;
   hint?: string;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   const hintId = hint ? `${id}-hint` : undefined;
@@ -224,7 +226,7 @@ export function Filter({
     );
 
   return (
-    <Select value={toControl(value)} onValueChange={(next) => onChange(fromControl(next))}>
+    <Select value={toControl(value)} onValueChange={(next) => onChange(fromControl(next))} disabled={disabled}>
       <SelectTrigger
         id={id}
         aria-label={label}
@@ -316,89 +318,4 @@ export function FilterSearch({
       />
     </form>
   );
-}
-
-/// The same pill over a form field, for the one list whose filters are applied on submit rather than
-/// on change. The hint a full-height field would print under the control becomes the pill's title
-/// and its accessible description, so the row stays one line tall without losing the sentence.
-export function FilterSelectField<TValues extends FieldValues>({
-  control,
-  name,
-  label,
-  hint,
-  allLabel,
-  children,
-  ...select
-}: Row<TValues> & Omit<ComponentProps<"select">, "name"> & { allLabel?: string }) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <Select
-          value={toControl(field.value ?? "")}
-          onValueChange={(next) => field.onChange(fromControl(next))}
-          disabled={select.disabled}
-        >
-          <SelectTrigger
-            aria-label={label}
-            title={hintText(hint)}
-            data-applied={String(Boolean(field.value))}
-            className={`${filterPill} w-auto justify-start`}
-          >
-            <span className="truncate font-normal text-ink-secondary">{label}</span>
-            {field.value ? (
-              <span className="min-w-0 truncate font-medium">
-                <SelectValue />
-              </span>
-            ) : null}
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={EMPTY}>{allLabel ?? "All"}</SelectItem>
-            {children}
-          </SelectContent>
-        </Select>
-      )}
-    />
-  );
-}
-
-export function FilterTextField<TValues extends FieldValues>({
-  control,
-  name,
-  label,
-  hint,
-  ...input
-}: Row<TValues> & Omit<ComponentProps<"input">, "name">) {
-  const search = input.type === "search";
-
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <label
-          className={search ? searchFilterPill : filterPill}
-          data-applied={String(Boolean(field.value))}
-          title={hintText(hint)}
-        >
-          <span className={cn("truncate text-ink-secondary", search && "sr-only")}>{label}</span>
-          <input
-            {...field}
-            {...input}
-            aria-label={label}
-            placeholder={search ? label : input.placeholder}
-            className={cn(
-              "min-w-0 appearance-none rounded-sm bg-transparent font-medium outline-none",
-              search ? "flex-1" : "w-40 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            )}
-          />
-        </label>
-      )}
-    />
-  );
-}
-
-function hintText(hint: ReactNode): string | undefined {
-  return typeof hint === "string" ? hint : undefined;
 }

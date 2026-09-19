@@ -1,7 +1,6 @@
 import { type UseQueryResult, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
@@ -23,7 +22,8 @@ import {
   WriteStatus,
 } from "../ui/controls";
 import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
-import { FilterSelectField, FilterTextField, Form } from "../ui/fields";
+import { Filter, FilterSearch } from "../ui/fields";
+import { useListFilters } from "../ui/filters";
 import {
   CloseInspector,
   Inspector,
@@ -58,60 +58,19 @@ const attemptWindow = 5;
 /// 400-pixel inspector side by side leave the ledger narrower than its own columns.
 const desktopBreakpoint = "(min-width: 1180px)";
 
-type Filters = {
-  status: string;
-  deliveryStatus: string;
-  sourceId: string;
-  topicId: string;
-  sourceEventId: string;
-  eventType: string;
-  acceptedFrom: string;
-  acceptedTo: string;
-};
-
-const noFilters: Filters = {
-  status: "",
-  deliveryStatus: "",
-  sourceId: "",
-  topicId: "",
-  sourceEventId: "",
-  eventType: "",
-  acceptedFrom: "",
-  acceptedTo: "",
-};
-
-/// How the URL spells each filter. Snake case matches the Admin API's own query parameters, so a
-/// link an Operator copies out of the dashboard reads like the request it produces.
-///
-/// The accepted range is carried, applied and requested as the URL's instants; only the Accepted
-/// pill's Custom inputs ever hold it as a wall clock, and it never passes through one otherwise.
-const filterParams: { field: keyof Filters; name: string }[] = [
-  { field: "status", name: "status" },
-  { field: "deliveryStatus", name: "delivery_status" },
-  { field: "sourceId", name: "source_id" },
-  { field: "topicId", name: "topic_id" },
-  { field: "sourceEventId", name: "source_event_id" },
-  { field: "eventType", name: "event_type" },
-  { field: "acceptedFrom", name: "accepted_from" },
-  { field: "acceptedTo", name: "accepted_to" },
-];
-
-function readFilters(params: URLSearchParams): Filters {
-  const filters = { ...noFilters };
-  for (const { field, name } of filterParams) {
-    const value = params.get(name);
-    if (value) filters[field] = value;
-  }
-  return filters;
-}
-
-function writeFilters(values: Filters): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const { field, name } of filterParams) {
-    if (values[field]) params.set(name, values[field]);
-  }
-  return params;
-}
+/// How the URL spells each filter: the Admin API's own query parameters, so a link an Operator
+/// copies out of the dashboard reads like the request it produces. The accepted range is carried,
+/// applied and requested as instants; only the Accepted pill's Custom inputs ever hold a wall clock.
+const eventFilters = [
+  "source_event_id",
+  "event_type",
+  "source_id",
+  "topic_id",
+  "status",
+  "delivery_status",
+  "accepted_from",
+  "accepted_to",
+] as const;
 
 /// The three backlogs, in the order both monitoring surfaces list them. Each opens the ledger under
 /// its own status filter alone: a backlog is current state however old, so any accepted-time range
@@ -137,27 +96,17 @@ export function useEventBacklog(tenantId: string) {
 }
 
 export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; selectedEventId?: string }) {
-  // The applied filters are separate from what is being typed: a source Event identity is a free
-  // text field, and re-reading the list on every keystroke would restart the cursor each time. The
-  // form holds what is being typed; the URL holds what the ledger is actually reading under, so a
-  // filtered ledger is a link and the back button restores the previous scope.
+  // The URL is the scope the ledger reads under, so a filtered ledger is a link and Back restores
+  // the previous scope. Every filter applies as it changes; a value typed in a free-text box is not
+  // scope until it is committed.
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.toString();
   // Selecting and closing an Event keeps the ledger's scope, so the list beside the inspector is
   // still the one the Operator selected from.
   const search = query ? `?${query}` : "";
-  const applied = useMemo(() => readFilters(new URLSearchParams(query)), [query]);
-  // What is actually narrowing the ledger right now, counted from the URL rather than from the form,
-  // so a value typed but not yet applied is not claimed as scope.
-  const appliedCount = Object.values(applied).filter(Boolean).length;
-  const form = useForm<Filters>({ defaultValues: applied });
-
-  // The URL can change without the form having produced it — the empty state's Clear filters, the
-  // back button, a pasted link. The form follows it rather than keeping values the ledger is no
-  // longer reading under.
-  useEffect(() => {
-    form.reset(applied);
-  }, [applied, form]);
+  const filters = useListFilters(eventFilters);
+  const applied = filters.values;
+  const appliedCount = filters.applied;
 
   const sources = useQuery({
     queryKey: ["source-options", tenantId],
@@ -173,13 +122,13 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   // The ledger and its freshness count read under exactly the same filters.
   const filterQuery = {
     status: applied.status || undefined,
-    delivery_status: applied.deliveryStatus || undefined,
-    source_id: applied.sourceId || undefined,
-    topic_id: applied.topicId || undefined,
-    source_event_id: applied.sourceEventId || undefined,
-    event_type: applied.eventType || undefined,
-    accepted_from: applied.acceptedFrom || undefined,
-    accepted_to: applied.acceptedTo || undefined,
+    delivery_status: applied.delivery_status || undefined,
+    source_id: applied.source_id || undefined,
+    topic_id: applied.topic_id || undefined,
+    source_event_id: applied.source_event_id || undefined,
+    event_type: applied.event_type || undefined,
+    accepted_from: applied.accepted_from || undefined,
+    accepted_to: applied.accepted_to || undefined,
   };
   const ledgerKey = ["events", tenantId, applied];
   const list = useInfiniteQuery({
@@ -244,106 +193,93 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
 
       <EventActivity
         tenantId={tenantId}
-        selectedFrom={applied.acceptedFrom || undefined}
-        selectedTo={applied.acceptedTo || undefined}
-        onSelect={(from, to, replace) =>
-          setSearchParams(writeFilters({ ...applied, acceptedFrom: from, acceptedTo: to }), { replace })
-        }
+        selectedFrom={applied.accepted_from || undefined}
+        selectedTo={applied.accepted_to || undefined}
+        onSelect={(from, to, replace) => filters.patch({ accepted_from: from, accepted_to: to }, { replace })}
       />
 
       {narrowing ? (
-        <Form {...form}>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={form.handleSubmit((values) => {
-              setSearchParams(
-                writeFilters({ ...values, acceptedFrom: applied.acceptedFrom, acceptedTo: applied.acceptedTo }),
-              );
-            })}
-          >
-            <FormError message={formError(asProblem(sources.error ?? topics.error))} />
+        <div className="flex flex-col gap-4">
+          <FormError message={formError(asProblem(sources.error ?? topics.error))} />
 
-            <FilterBar applied={appliedCount} onClear={() => setSearchParams(new URLSearchParams())}>
-              <FilterTextField
-                control={form.control}
-                name="sourceEventId"
-                label="Source Event id"
-                type="search"
-                hint="The identity the sending system gave the Event. Matched exactly."
-              />
-              <FilterTextField
-                control={form.control}
-                name="eventType"
-                label="Event type"
-                type="search"
-                hint="Matched exactly, ignoring case, including types no Source declares any more."
-              />
-              <FilterSelectField
-                control={form.control}
-                name="status"
-                label="Event status"
-                hint="How far the Event itself got."
-              >
-                {eventStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {statusLabel(status)}
-                  </SelectItem>
-                ))}
-              </FilterSelectField>
-              {/* Delivery status is a separate filter over Delivery state. An Event matches when one
-                  of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
-              <FilterSelectField
-                control={form.control}
-                name="deliveryStatus"
-                label="Delivery status"
-                hint="Matches Events with at least one delivery in this state."
-              >
-                {deliveryStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {statusLabel(status)}
-                  </SelectItem>
-                ))}
-              </FilterSelectField>
-              <FilterSelectField
-                control={form.control}
-                name="sourceId"
-                label="Source"
-                hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
-                disabled={sources.isPending || sources.isError}
-              >
-                {(sources.data?.items ?? []).map((source) => (
-                  <SelectItem key={source.id} value={source.id}>
-                    {source.type} · {source.id}
-                  </SelectItem>
-                ))}
-              </FilterSelectField>
-              <FilterSelectField
-                control={form.control}
-                name="topicId"
-                label="Topic"
-                hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
-                disabled={topics.isPending || topics.isError}
-              >
-                {(topics.data?.items ?? []).map((topic) => (
-                  <SelectItem key={topic.id} value={topic.id}>
-                    {topic.name}
-                  </SelectItem>
-                ))}
-              </FilterSelectField>
-              <AcceptedRangePill
-                from={applied.acceptedFrom}
-                to={applied.acceptedTo}
-                onChange={(acceptedFrom, acceptedTo) =>
-                  setSearchParams(writeFilters({ ...applied, acceptedFrom, acceptedTo }))
-                }
-              />
-
-              {/* Apply stays explicit. Eight controls that each re-queried on change would issue six
-                  requests on the way to the scope the Operator actually wanted. */}
-              <Button type="submit">Apply filters</Button>
-            </FilterBar>
-          </form>
-        </Form>
+          <FilterBar applied={appliedCount} onClear={filters.clear}>
+            <FilterSearch
+              id="event-source-event-id"
+              label="Source Event id"
+              placeholder="Exact id…"
+              value={applied.source_event_id}
+              onChange={(value) => filters.set("source_event_id", value)}
+            />
+            <FilterSearch
+              id="event-type"
+              label="Event type"
+              placeholder="Exact type, e.g. order.created…"
+              value={applied.event_type}
+              onChange={(value) => filters.set("event_type", value)}
+            />
+            <Filter
+              id="event-source"
+              label="Source"
+              value={applied.source_id}
+              onChange={(value) => filters.set("source_id", value)}
+              hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
+              disabled={sources.isPending || sources.isError}
+            >
+              {(sources.data?.items ?? []).map((source) => (
+                <SelectItem key={source.id} value={source.id}>
+                  {source.type} · {source.id}
+                </SelectItem>
+              ))}
+            </Filter>
+            <Filter
+              id="event-topic"
+              label="Topic"
+              value={applied.topic_id}
+              onChange={(value) => filters.set("topic_id", value)}
+              hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+              disabled={topics.isPending || topics.isError}
+            >
+              {(topics.data?.items ?? []).map((topic) => (
+                <SelectItem key={topic.id} value={topic.id}>
+                  {topic.name}
+                </SelectItem>
+              ))}
+            </Filter>
+            <Filter
+              id="event-status"
+              label="Event status"
+              value={applied.status}
+              onChange={(value) => filters.set("status", value)}
+              hint="How far the Event itself got."
+            >
+              {eventStatuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {statusLabel(status)}
+                </SelectItem>
+              ))}
+            </Filter>
+            {/* Delivery status is a separate filter over Delivery state. An Event matches when one
+                of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
+            <Filter
+              id="event-delivery-status"
+              label="Delivery status"
+              value={applied.delivery_status}
+              onChange={(value) => filters.set("delivery_status", value)}
+              hint="Matches Events with at least one delivery in this state."
+            >
+              {deliveryStatuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {statusLabel(status)}
+                </SelectItem>
+              ))}
+            </Filter>
+            <AcceptedRangePill
+              from={applied.accepted_from}
+              to={applied.accepted_to}
+              onChange={(accepted_from, accepted_to) => filters.patch({ accepted_from, accepted_to })}
+            />
+          </FilterBar>
+        </div>
       ) : null}
 
       <div

@@ -2,7 +2,7 @@ import { cn } from "cn";
 import { LoaderCircle } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { type ComponentProps, type ReactNode, useId, useState } from "react";
-import { Link, useLocation, useSearchParams } from "react-router";
+import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MessageBubble } from "@/components/ui/form";
@@ -429,7 +429,7 @@ export function FilterBar({
 }: {
   applied: number;
   children: ReactNode;
-  onClear?: () => void;
+  onClear: () => void;
 }) {
   return (
     // A wrapping row of compact controls rather than a grid of labelled fields: each control is one
@@ -439,13 +439,9 @@ export function FilterBar({
     <section aria-label="Filters" className="flex flex-wrap items-center gap-2">
       {children}
       {applied > 0 ? (
-        onClear ? (
-          <Button type="button" variant="ghost" onClick={onClear}>
-            Clear filters
-          </Button>
-        ) : (
-          <ClearFilters />
-        )
+        <Button type="button" variant="ghost" onClick={onClear}>
+          Clear filters
+        </Button>
       ) : null}
     </section>
   );
@@ -473,25 +469,6 @@ export function narrowable(loaded: boolean, count: number, applied: number): boo
 export function appliedNote(applied: number): string {
   if (applied === 0) return "";
   return ` · ${applied} filter${applied === 1 ? "" : "s"} applied`;
-}
-
-/// The bar's way back to an unfiltered list, shown whenever a filter is applied. It reads the URL
-/// rather than any screen's own state, which is what lets every capability offer it without wiring
-/// one per screen — and is only possible because the filters live in the URL at all.
-function ClearFilters() {
-  const [params] = useSearchParams();
-  const { pathname } = useLocation();
-
-  if (params.toString() === "") return null;
-  return (
-    <Button asChild variant="ghost">
-      {/* The base layer hands links their underline back, which a control shaped like a button
-          should not carry. */}
-      <Link to={pathname} className="no-underline">
-        Clear filters
-      </Link>
-    </Button>
-  );
 }
 
 /// What a list shows when it has no rows to show: still loading, failed, or genuinely empty. The

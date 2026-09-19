@@ -306,11 +306,11 @@ describe("The Event ledger and inspector in a real browser", () => {
   it("sends the applied Delivery status as its own parameter and restarts the cursor", async () => {
     const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
 
+    const read = page.waitForRequest((request) => request.url().includes("delivery_status"));
     await page.getByLabel("Delivery status").click();
     await page.getByRole("option", { name: "Dead-lettered" }).click();
 
-    const read = page.waitForRequest((request) => request.url().includes("delivery_status"));
-    await page.getByRole("button", { name: "Apply filters" }).click();
+    // There is no Apply: choosing the option is what reads.
     const applied = new URL((await read).url());
     expect(applied.searchParams.get("delivery_status")).toBe("dead_lettered");
     // Event status is a different filter and stays unset by applying this one.
@@ -325,10 +325,9 @@ describe("The Event ledger and inspector in a real browser", () => {
 
     await page.getByLabel("Delivery status").click();
     await page.getByRole("option", { name: "Dead-lettered" }).click();
-    await page.getByRole("button", { name: "Apply filters" }).click();
 
     await page.waitForFunction(() => window.location.search === "?delivery_status=dead_lettered");
-    // Applying is a navigation, so the previous scope is what Back returns to.
+    // A filter change is a navigation, so the previous scope is what Back returns to.
     expect(new URL(page.url()).pathname).toBe(`/tenants/${tenantId}/events`);
     await page.close();
   }, 60_000);
