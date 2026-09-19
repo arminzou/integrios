@@ -419,7 +419,6 @@ function guideHttp({
           sources: 1,
           subscriptions: 1,
           live_api_keys: 1,
-          dead_lettered_deliveries: 0,
           ingestion_endpoint: "http://localhost:5231/",
         },
       };

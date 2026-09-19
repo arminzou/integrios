@@ -18,6 +18,7 @@ public sealed class EventsEndpoints : IEndpointGroup
         // The dashboard reads this list, so it declares its schema; see DashboardResponseSchemaTests.
         group.MapGet(ListTenantEvents).Produces<EventListDto>();
         group.MapGet(GetActivitySummary, "/activity-summary").Produces<EventActivitySummaryDto>();
+        group.MapGet(GetBacklog, "/backlog").Produces<EventBacklogDto>();
     }
 
     private static async Task<IResult> ListTenantEvents(
@@ -61,6 +62,9 @@ public sealed class EventsEndpoints : IEndpointGroup
             new GetTenantEventActivitySummaryQuery(tenantId, sourceId, topicId), cancellationToken);
         return Results.Ok(response);
     }
+
+    private static async Task<IResult> GetBacklog(Guid tenantId, IMediator mediator, CancellationToken cancellationToken) =>
+        Results.Ok(await mediator.Send(new GetTenantEventBacklogQuery(tenantId), cancellationToken));
 
     private static EventStatus? ParseEventStatus(string? status)
     {

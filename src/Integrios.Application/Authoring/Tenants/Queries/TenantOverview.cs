@@ -6,9 +6,8 @@ namespace Integrios.Application.Authoring.Tenants;
 /// What a Tenant currently has configured, and where its Events are sent.
 /// </summary>
 /// <remarks>
-/// Configuration counts, plus the one piece of runtime state that is not a measure of activity.
-/// Nothing here counts Events: the ledger is a cursor list with no total, and reporting one on this
-/// screen would make the two disagree about what a number means.
+/// Configuration counts only. What needs an Operator is the Event backlog read the Events screen
+/// shares, so the two screens cannot report different numbers for the same work.
 /// </remarks>
 public sealed record TenantOverviewDto
 {
@@ -19,15 +18,6 @@ public sealed record TenantOverviewDto
 
     /// <summary>Keys a caller can still authenticate with — a revoked key is configuration history.</summary>
     public required int LiveApiKeys { get; init; }
-
-    /// <summary>
-    /// EventDeliveries that have exhausted their retry budget and are still waiting for an Operator.
-    /// Deliberately not windowed, and deliberately not the same number as the activity summary's
-    /// dead-lettered count: that one measures what failed inside the last hour, while this is
-    /// outstanding work that does not age out. A Delivery that dead-lettered yesterday is still
-    /// broken today, so anything offering to take an Operator to it has to count it.
-    /// </summary>
-    public required int DeadLetteredDeliveries { get; init; }
 
     /// <summary>
     /// Where this deployment accepts Events. Deployment-wide rather than per Tenant, and carried here
@@ -46,8 +36,7 @@ public sealed record TenantOverviewCounts(
     int Destinations,
     int Sources,
     int Subscriptions,
-    int LiveApiKeys,
-    int DeadLetteredDeliveries);
+    int LiveApiKeys);
 
 /// <remarks>
 /// Answers null when the Tenant does not exist, so the endpoint can 404 rather than report a Tenant
@@ -72,7 +61,6 @@ internal sealed class GetTenantOverviewQueryHandler(ITenantRepository repository
             Sources = counts.Sources,
             Subscriptions = counts.Subscriptions,
             LiveApiKeys = counts.LiveApiKeys,
-            DeadLetteredDeliveries = counts.DeadLetteredDeliveries,
             IngestionEndpoint = query.IngestionEndpoint,
         };
     }

@@ -318,6 +318,12 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
                         .IsDescending(false, true, true);
 
+                    b.HasIndex(new[] { "TenantId", "AcceptedAt" }, "idx_events_tenant_backlog")
+                        .HasFilter("(status IN ('accepted', 'unrouted'))")
+                        .HasAnnotation("SqlServer:Include", new[] { "Status" });
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "TenantId", "AcceptedAt" }, "idx_events_tenant_backlog"), new[] { "Status" });
+
                     b.HasIndex(new[] { "TenantId", "TopicId", "EventType", "AcceptedAt", "Id" }, "idx_events_topic_type_accepted")
                         .IsDescending(false, false, false, true, true);
 

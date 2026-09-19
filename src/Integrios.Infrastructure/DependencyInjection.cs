@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddSingleton<IEventDiagnosticsLookup, EventDiagnosticsLookup>();
         services.AddSingleton<ITenantEventHistory, TenantEventHistory>();
         services.AddSingleton<ITenantEventActivitySummary, TenantEventActivitySummary>();
+        services.AddSingleton<ITenantEventMonitoring, TenantEventMonitoring>();
         services.AddSingleton<ITenantOverview, TenantOverviewReader>();
         services.AddScoped<IOperatorIdentityStore, OperatorIdentityStore>();
         services.AddScoped<PasswordCredentialStore>();

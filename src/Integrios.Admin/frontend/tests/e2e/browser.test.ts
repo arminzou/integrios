@@ -80,6 +80,12 @@ const summary = {
   dead_lettered_deliveries: 5,
 };
 
+const backlog = {
+  awaiting_routing: { count: 3, oldest_at: "2026-09-01T12:40:00Z" },
+  unrouted: { count: 0, oldest_at: null },
+  dead_lettered_deliveries: { count: 5, oldest_at: "2026-08-30T09:00:00Z" },
+};
+
 const event = {
   event_id: "55555555-5555-5555-5555-555555555555",
   event_type: "order.created",
@@ -125,6 +131,7 @@ async function openDashboard(path = "/tenants", options: Parameters<Browser["new
   await page.route("**/admin/**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname.endsWith("/activity-summary")) return route.fulfill({ json: summary });
+    if (pathname.endsWith("/backlog")) return route.fulfill({ json: backlog });
     if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
     if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
     if (pathname.endsWith("/admin/tenants")) return route.fulfill({ json: tenants });
@@ -296,7 +303,7 @@ describe("The dashboard in a real browser", () => {
       "New Destination",
     ],
     // The Event ledger's filters are on screen from the start, so there is nothing to open here.
-    ["the Event ledger and its activity summary", `/tenants/${tenants.items[0].id}/events`, undefined],
+    ["the Event ledger and its Right now backlog", `/tenants/${tenants.items[0].id}/events`, undefined],
   ])(
     "passes the accessibility rules that need real layout on %s",
     async (_name, path, disclosure) => {
@@ -664,6 +671,7 @@ describe("The dashboard in a real browser", () => {
       const pathname = new URL(route.request().url()).pathname;
       if (/\/admin\/tenants\/[^/]+$/.test(pathname)) return route.fulfill({ json: tenants.items[0] });
       if (pathname.endsWith("/connectors")) return route.fulfill({ json: { items: [connector], next_cursor: null } });
+      if (pathname.endsWith("/backlog")) return route.fulfill({ json: backlog });
       if (pathname.endsWith("/destinations")) {
         await held;
         return route.fulfill({ json: { items: [destination], next_cursor: null } });

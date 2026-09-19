@@ -32,6 +32,7 @@ public sealed class DashboardResponseSchemaTests
         "/tenants/{tenantId:guid}/subscriptions",
         "/tenants/{tenantId:guid}/events",
         "/tenants/{tenantId:guid}/events/activity-summary",
+        "/tenants/{tenantId:guid}/events/backlog",
         "/tenants/{tenantId:guid}/events/{eventId:guid}/deliveries",
     ];
 

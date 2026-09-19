@@ -25,26 +25,22 @@ const routedEventWithDeadLetters = {
   deliveries: { pending: 0, in_flight: 0, succeeded: 1, dead_lettered: 2 },
 };
 
-// Deliberately not minute-aligned: a rolling 60-minute window's end is normally "now", which lands
-// mid-second. The round trip through the datetime-local inputs must preserve this to the second
-// rather than rounding down and silently excluding Events the summary's own count included.
-const activitySummary = {
-  events_accepted: 5,
-  awaiting_routing: 1,
-  unrouted: 1,
-  dead_lettered_deliveries: 2,
-  window_start: "2026-09-01T09:00:17Z",
-  window_end: "2026-09-01T10:00:47Z",
+/// Current backlogs as the Admin API reports them: however old, with the oldest item's instant. The
+/// unrouted backlog is a quiet zero on purpose, since a zero must stay on screen.
+const backlog = {
+  awaiting_routing: { count: 3, oldest_at: "2026-08-29T10:00:00Z" },
+  unrouted: { count: 0, oldest_at: null },
+  dead_lettered_deliveries: { count: 2, oldest_at: "2026-08-31T10:00:00Z" },
 };
 
 const eventsCall = (calls: Call[]) => calls.filter((call) => call.url.pathname.endsWith("/events"));
 
-/// Distinguishes the ledger list, the activity summary, and an Event's own detail read, all of which
+/// Distinguishes the ledger list, the backlog, and an Event's own detail read, all of which
 /// share the `.../events` path prefix, and falls the Source/Topic option reads back to an empty page.
 function respondFor(eventsBody: unknown, detailBody: unknown = page([])) {
   return ({ url, method }: Call) => {
     if (method === "POST") return { status: 202 };
-    if (url.pathname.endsWith("/activity-summary")) return { status: 200, body: activitySummary };
+    if (url.pathname.endsWith("/backlog")) return { status: 200, body: backlog };
     if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detailBody };
     if (url.pathname.endsWith("/events")) return { status: 200, body: eventsBody };
     return { status: 200, body: page([]) };
@@ -56,7 +52,7 @@ function respondFor(eventsBody: unknown, detailBody: unknown = page([])) {
 /// handle; the route is, and it is what the row's selection contract is actually about.
 async function ledgerRow(id: string): Promise<HTMLTableRowElement> {
   return await waitFor(() => {
-    const row = document.querySelector(`a[href="/tenants/${tenantId}/events/${id}"]`)?.closest("tr");
+    const row = document.querySelector(`a[href^="/tenants/${tenantId}/events/${id}"]`)?.closest("tr");
     if (!row) throw new Error(`No ledger row for Event ${id}.`);
     return row as HTMLTableRowElement;
   });
@@ -187,66 +183,45 @@ describe("Opening an Event from its row", () => {
   });
 });
 
-describe("Event activity summary", () => {
-  it("names the window and reports the four counts as pressable, unselected buttons", async () => {
+describe("Right now", () => {
+  it("reports every backlog with its oldest age, keeping a zero on screen", async () => {
     stubHttp(respondFor(page([])));
 
     renderScreen(<EventsScreen tenantId={tenantId} />);
 
-    // The window is stated as a real time range. Whatever the Operator's locale formats the visible
-    // value into, the instants the API sent survive on the machine-readable attribute.
-    const window = await screen.findByRole("region", { name: "Event activity summary" });
-    expect(Array.from(window.querySelectorAll("time")).map((stamp) => stamp.getAttribute("datetime"))).toEqual([
-      "2026-09-01T09:00:17Z",
-      "2026-09-01T10:00:47Z",
-    ]);
-    for (const [label, value] of [
-      ["Events accepted", "5"],
-      ["Awaiting routing", "1"],
-      ["Unrouted", "1"],
-      ["Dead-lettered Deliveries", "2"],
-    ]) {
-      const button = screen.getByRole("button", { name: new RegExp(`${value}\\s*${label}`) });
+    const strip = await screen.findByRole("region", { name: "Right now" });
+    const awaiting = within(strip).getByRole("button", { name: /Awaiting routing/ });
+    expect(awaiting.textContent).toContain("3");
+    expect(awaiting.textContent).toMatch(/Oldest .*ago/);
+    const unrouted = within(strip).getByRole("button", { name: /Unrouted/ });
+    expect(unrouted.textContent).toContain("0");
+    expect(unrouted.textContent).toContain("Nothing waiting");
+    for (const button of within(strip).getAllByRole("button"))
       expect(button.getAttribute("aria-pressed")).toBe("false");
-    }
   });
 
-  it("applies the documented filters and time range, marks itself pressed, and restarts paging", async () => {
-    const calls = stubHttp(respondFor(page([])));
+  it("filters the ledger by the backlog's status alone, with no time range, and restarts paging", async () => {
+    const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
-    renderScreen(<EventsScreen tenantId={tenantId} />);
-    const unrouted = await screen.findByRole("button", { name: /Unrouted/ });
-    fireEvent.click(unrouted);
+    const { router } = renderScreen(
+      <EventsScreen tenantId={tenantId} />,
+      `/tenants/${tenantId}/events?status=routed&accepted_from=2026-09-01T09%3A00%3A17Z&source_event_id=order-42`,
+    );
+    const dead = await screen.findByRole("button", { name: /Dead-lettered Deliveries/ });
+    fireEvent.click(dead);
 
-    expect(unrouted.getAttribute("aria-pressed")).toBe("true");
-    await waitFor(() => expect(eventsCall(calls).length).toBeGreaterThan(1));
-    const applied = eventsCall(calls).at(-1)!;
-    expect(applied.url.searchParams.get("status")).toBe("unrouted");
-    expect(applied.url.searchParams.has("delivery_status")).toBe(false);
-    // The visible 60-minute window is applied to the ledger's own accepted-range filter, preserved
-    // to the second rather than rounded down to the minute.
-    expect(applied.url.searchParams.get("accepted_from")).toBe("2026-09-01T09:00:17.000Z");
-    expect(applied.url.searchParams.get("accepted_to")).toBe("2026-09-01T10:00:47.000Z");
-    expect(applied.url.searchParams.has("after")).toBe(false);
+    await waitFor(() => expect(router.state.location.search).toBe("?delivery_status=dead_lettered"));
+    expect(dead.getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() =>
+      expect(eventsCall(calls).at(-1)?.url.searchParams.get("delivery_status")).toBe("dead_lettered"),
+    );
+    const applied = eventsCall(calls).at(-1)!.url.searchParams;
+    for (const name of ["status", "accepted_from", "accepted_to", "source_event_id", "after"])
+      expect(applied.has(name)).toBe(false);
 
-    // Editing a filter by hand deselects the summary item, so its pressed state never lies.
+    // Any other scope is no longer this backlog alone, so it stops reading as pressed.
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(unrouted.getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("keeps the list's row count independent of the summary's own bounded counts", async () => {
-    stubHttp(respondFor(page([routedEventWithDeadLetters])));
-
-    renderScreen(<EventsScreen tenantId={tenantId} />);
-    await ledgerRow(eventId);
-
-    // The activity summary's "Events accepted" is the 60-minute window count (5), which the list's
-    // own single visible row must never be mistaken for.
-    const acceptedButton = screen.getByRole("button", { name: /Events accepted/ });
-    expect(within(acceptedButton).getByText("5")).toBeTruthy();
-    // Counted by Events rather than by rows: the ledger also carries a column header and a day
-    // separator, and neither is a row the summary could ever be confused with.
-    expect(screen.getAllByRole("rowheader")).toHaveLength(1);
+    await waitFor(() => expect(dead.getAttribute("aria-pressed")).toBe("false"));
   });
 });
 
@@ -351,7 +326,7 @@ describe("Event inspector", () => {
         deliveryStatus = "pending";
         return { status: 202 };
       }
-      if (url.pathname.endsWith("/activity-summary")) return { status: 200, body: activitySummary };
+      if (url.pathname.endsWith("/backlog")) return { status: 200, body: backlog };
       if (url.pathname.endsWith("/deliveries")) return { status: 200, body: detail(deliveryStatus) };
       return { status: 200, body: page([]) };
     });

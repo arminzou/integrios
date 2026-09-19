@@ -31,6 +31,7 @@ import {
 } from "./api/client";
 import { asProblem, call } from "./api/query";
 import { isIdentifier } from "./identifiers";
+import { useEventBacklog } from "./screens/Events";
 import { sectionGroups, sectionHrefs, sectionLabels, type TenantSection } from "./sections";
 import { ReadError } from "./ui/controls";
 
@@ -512,17 +513,11 @@ function Rail({
   );
 }
 
-/// Outstanding, not recent. This read was originally the Event activity summary, which is windowed
-/// to the last hour — so a Tenant with nine Deliveries that exhausted their retries this morning
-/// showed no badge at all, which is the one thing a badge for unattended work must never do. The
-/// Tenant overview counts the same Deliveries without a window, and is the read the Overview screen
-/// already makes, so the shell shares it rather than issuing its own.
+/// Outstanding, not recent: a Delivery that exhausted its retries this morning is still unattended
+/// now. The shell shares the backlog read the Overview and the Events screen already make.
 function useDeadLetteredCount(tenantId: string): number {
-  const overview = useQuery({
-    queryKey: ["tenant-overview", tenantId],
-    queryFn: () => call(() => api.GET("/admin/tenants/{id}/overview", { params: { path: { id: tenantId } } })),
-  });
-  return Number(overview.data?.dead_lettered_deliveries ?? 0);
+  const backlog = useEventBacklog(tenantId);
+  return Number(backlog.data?.dead_lettered_deliveries.count ?? 0);
 }
 
 /// Reads the current Tenant once for the whole shell, so navigation and the breadcrumb name it
@@ -547,7 +542,7 @@ function tenantDisplayName(tenant: ReturnType<typeof useTenant>): string {
 function TenantNav({ tenantId, tenant }: { tenantId: string; tenant: ReturnType<typeof useTenant> }) {
   // A count rides the destination it belongs to: work that has stopped retrying is the one thing an
   // Operator has to see from wherever they are standing, not only from the ledger that lists it. It
-  // is the same Tenant-scoped summary the Overview and the Events screen read, so the shell costs no
+  // is the same Tenant-scoped backlog the Overview and the Events screen read, so the shell costs no
   // request they were not already making.
   const deadLettered = useDeadLetteredCount(tenantId);
 

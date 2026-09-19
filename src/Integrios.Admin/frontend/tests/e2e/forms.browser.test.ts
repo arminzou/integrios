@@ -158,8 +158,13 @@ function readFor(pathname: string): unknown {
       sources: 1,
       subscriptions: 1,
       live_api_keys: 1,
-      dead_lettered_deliveries: 0,
       ingestion_endpoint: "http://localhost:5231/",
+    };
+  if (/\/events\/backlog$/.test(pathname))
+    return {
+      awaiting_routing: { count: 0, oldest_at: null },
+      unrouted: { count: 0, oldest_at: null },
+      dead_lettered_deliveries: { count: 0, oldest_at: null },
     };
   if (/^\/admin\/tenants\/[^/]+$/.test(pathname)) return tenant;
   if (/\/destinations\/[^/]+$/.test(pathname)) return destinationDetail;

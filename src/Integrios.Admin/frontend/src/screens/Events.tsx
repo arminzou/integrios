@@ -35,11 +35,11 @@ import {
 } from "../ui/layout";
 import { nameIn, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge, statusLabel, statusMarker } from "../ui/status";
-import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
+import { dayLabel, localDay, since, TimeOfDay, Timestamp } from "../ui/time";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
 type EventDelivery = components["schemas"]["EventDeliveryDiagnosticsDto"];
-type EventActivitySummary = components["schemas"]["EventActivitySummaryDto"];
+type EventBacklog = components["schemas"]["EventBacklogDto"];
 
 const eventStatuses = ["accepted", "processing", "routed", "unrouted", "failed", "dead_lettered"];
 const deliveryStatuses = ["pending", "in_flight", "succeeded", "dead_lettered"];
@@ -121,18 +121,36 @@ function instant(value: string): string | undefined {
 }
 
 /// The inverse of `instant`: renders a server instant into the local wall-clock value a
-/// `datetime-local` input holds, so an activity-summary window can populate the same fields an
-/// Operator would otherwise type into by hand. Kept to whole seconds, matching the inputs' `step`,
-/// so applying a summary window round-trips back to (sub-second precision aside) the same instant
-/// the summary counted rather than rounding down to the minute and silently excluding Events the
-/// button's own count included.
+/// `datetime-local` input holds, so an instant from a link populates the same fields an Operator
+/// would otherwise type into by hand. Kept to whole seconds, matching the inputs' `step`, so the
+/// value round-trips back to (sub-second precision aside) the same instant rather than rounding
+/// down to the minute and silently excluding Events the link's scope included.
 function localInputValue(iso: string): string {
   const date = new Date(iso);
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-type SummaryKey = "accepted" | "awaiting" | "unrouted" | "deadLettered";
+/// The three backlogs, in the order both monitoring surfaces list them. Each opens the ledger under
+/// its own status filter alone: a backlog is current state however old, so any accepted-time range
+/// carried along would hide exactly the oldest items the count includes.
+export const backlogs = [
+  { key: "awaiting_routing", label: "Awaiting routing", noun: "Events awaiting routing", query: "status=accepted" },
+  { key: "unrouted", label: "Unrouted", noun: "unrouted Events", query: "status=unrouted" },
+  {
+    key: "dead_lettered_deliveries",
+    label: "Dead-lettered Deliveries",
+    noun: "dead-lettered Deliveries",
+    query: "delivery_status=dead_lettered",
+  },
+] as const;
+
+export function useEventBacklog(tenantId: string) {
+  return useQuery({
+    queryKey: ["event-backlog", tenantId],
+    queryFn: () => call(() => api.GET("/admin/tenants/{tenantId}/events/backlog", { params: { path: { tenantId } } })),
+  });
+}
 
 export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; selectedEventId?: string }) {
   // The applied filters are separate from what is being typed: a source Event identity is a free
@@ -141,13 +159,13 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   // filtered ledger is a link and the back button restores the previous scope.
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.toString();
+  // Selecting and closing an Event keeps the ledger's scope, so the list beside the inspector is
+  // still the one the Operator selected from.
+  const search = query ? `?${query}` : "";
   const applied = useMemo(() => readFilters(new URLSearchParams(query)), [query]);
   // What is actually narrowing the ledger right now, counted from the URL rather than from the form,
   // so a value typed but not yet applied is not claimed as scope.
   const appliedCount = Object.values(applied).filter(Boolean).length;
-  // Which activity-summary item, if any, produced the current filters. Cleared whenever the
-  // Operator edits filters by hand, so the pressed state never lies about what is actually applied.
-  const [activeSummary, setActiveSummary] = useState<SummaryKey | null>(null);
   const form = useForm<Filters>({ defaultValues: applied });
 
   // The URL can change without the form having produced it — the empty state's Clear filters, the
@@ -166,20 +184,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   });
   const topics = useTopicOptions(tenantId);
 
-  // Source and Topic scope the summary, matching the ledger's own ownership checks; Event-status
-  // and Delivery-status filters do not, so the four summary values stay comparable to each other.
-  const summary = useQuery({
-    queryKey: ["activity-summary", tenantId, { sourceId: applied.sourceId, topicId: applied.topicId }],
-    queryFn: () =>
-      call(() =>
-        api.GET("/admin/tenants/{tenantId}/events/activity-summary", {
-          params: {
-            path: { tenantId },
-            query: { source_id: applied.sourceId || undefined, topic_id: applied.topicId || undefined },
-          },
-        }),
-      ),
-  });
+  const backlog = useEventBacklog(tenantId);
 
   const list = useInfiniteQuery({
     queryKey: ["events", tenantId, applied],
@@ -211,28 +216,8 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   // first would retract the form a moment later.
   const narrowing = narrowable(list.isSuccess, events.length, appliedCount);
 
-  function selectSummaryItem(key: SummaryKey) {
-    if (!summary.data) return;
-    const statePatch: Partial<Filters> =
-      key === "accepted"
-        ? { status: "", deliveryStatus: "" }
-        : key === "awaiting"
-          ? { status: "accepted", deliveryStatus: "" }
-          : key === "unrouted"
-            ? { status: "unrouted", deliveryStatus: "" }
-            : { status: "", deliveryStatus: "dead_lettered" };
-    const next: Filters = {
-      ...applied,
-      ...statePatch,
-      acceptedFrom: localInputValue(summary.data.window_start),
-      acceptedTo: localInputValue(summary.data.window_end),
-    };
-    setSearchParams(writeFilters(next));
-    setActiveSummary(key);
-  }
-
   return (
-    // Title, summary and filters describe the whole screen, so they run its full width; only the
+    // Title, backlog and filters describe the whole screen, so they run its full width; only the
     // ledger and the Event it has open are the two columns.
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -246,7 +231,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         Everything accepted for this Tenant, newest first.
       </PageHeader>
 
-      <ActivitySummary summary={summary} activeKey={activeSummary} onSelect={selectSummaryItem} />
+      <RightNow backlog={backlog} activeQuery={query} onSelect={(next) => setSearchParams(new URLSearchParams(next))} />
 
       {narrowing ? (
         <Form {...form}>
@@ -254,18 +239,11 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
             className="flex flex-col gap-4"
             onSubmit={form.handleSubmit((values) => {
               setSearchParams(writeFilters(values));
-              setActiveSummary(null);
             })}
           >
             <FormError message={formError(asProblem(sources.error ?? topics.error))} />
 
-            <FilterBar
-              applied={appliedCount}
-              onClear={() => {
-                setSearchParams(new URLSearchParams());
-                setActiveSummary(null);
-              }}
-            >
+            <FilterBar applied={appliedCount} onClear={() => setSearchParams(new URLSearchParams())}>
               <FilterTextField
                 control={form.control}
                 name="sourceEventId"
@@ -406,7 +384,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                             `aria-current` follows the URL rather than a separately tracked flag. */}
                         <NavLink
                           className="-mx-3 block px-3 py-2 no-underline"
-                          to={`/tenants/${tenantId}/events/${item.event_id}`}
+                          to={`/tenants/${tenantId}/events/${item.event_id}${search}`}
                           end
                         >
                           <TimeOfDay value={item.accepted_at} />
@@ -443,7 +421,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               be on screen at the instant focus tries to move, and the fresh heading would never
               receive it. */}
         {selectedEventId ? (
-          <EventInspector key={selectedEventId} tenantId={tenantId} eventId={selectedEventId} />
+          <EventInspector key={selectedEventId} tenantId={tenantId} eventId={selectedEventId} search={search} />
         ) : events.length > 0 ? (
           <InspectorPlaceholder label="Event detail">
             Select an Event to read its Deliveries, attempts, and trace identity here.
@@ -454,50 +432,58 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   );
 }
 
-/// A separate bounded operational snapshot, not pagination metadata and never the total number of
-/// rows in the Event list below it.
-function ActivitySummary({
-  summary,
-  activeKey,
+/// Current backlogs, however old: never windowed and never the total of the ledger below. A zero stays
+/// on screen, quietly, so the strip reads the same shape whether or not anything is wrong.
+function RightNow({
+  backlog,
+  activeQuery,
   onSelect,
 }: {
-  summary: UseQueryResult<EventActivitySummary>;
-  activeKey: SummaryKey | null;
-  onSelect: (key: SummaryKey) => void;
+  backlog: UseQueryResult<EventBacklog>;
+  activeQuery: string;
+  onSelect: (query: string) => void;
 }) {
-  const problem = asProblem(summary.error);
-  if (problem) return <ReadError problem={problem} what="The activity summary" />;
-  if (!summary.data) return <p>Loading activity summary…</p>;
-
-  const data = summary.data;
-  const items: { key: SummaryKey; label: string; value: number | string }[] = [
-    { key: "accepted", label: "Events accepted", value: data.events_accepted },
-    { key: "awaiting", label: "Awaiting routing", value: data.awaiting_routing },
-    { key: "unrouted", label: "Unrouted", value: data.unrouted },
-    { key: "deadLettered", label: "Dead-lettered Deliveries", value: data.dead_lettered_deliveries },
-  ];
+  const problem = asProblem(backlog.error);
+  if (problem) return <ReadError problem={problem} what="The current backlog" />;
+  if (!backlog.data) return <p>Loading the current backlog…</p>;
+  const data = backlog.data;
 
   return (
-    <section aria-label="Event activity summary" className="flex flex-col gap-2.5">
-      <p className="m-0 text-[13px] text-ink-secondary">
-        Last 60 minutes, <Timestamp value={data.window_start} /> to <Timestamp value={data.window_end} />.
-      </p>
-      {/* Four equal tracks, halving to two below the split's own breakpoint: the values are read
-          against each other, so a row that reflows by content width stops being comparable. */}
-      <ul className="m-0 grid list-none grid-cols-2 gap-2.5 p-0 min-[1180px]:grid-cols-4">
-        {items.map((item) => (
-          <li key={item.key}>
-            <button
-              type="button"
-              aria-pressed={activeKey === item.key}
-              onClick={() => onSelect(item.key)}
-              className="group flex h-full w-full cursor-pointer flex-col items-start gap-0.5 rounded-lg border bg-surface px-3.5 py-3 text-left hover:bg-surface-quiet aria-pressed:border-accent-border aria-pressed:bg-selected-surface aria-pressed:text-selected-ink focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <span className="font-serif text-[28px] leading-tight tabular-nums">{item.value}</span>
-              <span className="text-[13px] text-ink-secondary group-aria-pressed:text-selected-ink">{item.label}</span>
-            </button>
-          </li>
-        ))}
+    <section aria-labelledby="right-now" className="flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-baseline gap-x-3">
+        <h2 id="right-now" className="m-0">
+          Right now
+        </h2>
+        <p className="m-0 text-[13px] text-ink-secondary">
+          Current state, however old. Select one to filter the ledger by its status.
+        </p>
+      </div>
+      <ul className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 min-[640px]:grid-cols-3">
+        {backlogs.map((item) => {
+          const { count, oldest_at } = data[item.key];
+          const waiting = Number(count) > 0;
+          return (
+            <li key={item.key}>
+              {/* Pressed follows the URL, so it is true only while this status alone scopes the ledger. */}
+              <button
+                type="button"
+                aria-pressed={activeQuery === item.query}
+                onClick={() => onSelect(item.query)}
+                className="group flex h-full w-full cursor-pointer flex-col items-start gap-0.5 rounded-lg border bg-surface px-3.5 py-3 text-left hover:bg-surface-quiet aria-pressed:border-accent-border aria-pressed:bg-selected-surface aria-pressed:text-selected-ink focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <span
+                  className={cn("font-serif text-[28px] leading-tight tabular-nums", !waiting && "text-ink-secondary")}
+                >
+                  {count}
+                </span>
+                <span className="text-[13px]">{item.label}</span>
+                <span className="text-xs text-ink-secondary group-aria-pressed:text-selected-ink">
+                  {waiting && oldest_at ? `Oldest ${since(oldest_at)}` : "Nothing waiting"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
@@ -532,7 +518,7 @@ function DeliveryCounts({ counts }: { counts: components["schemas"]["EventDelive
 /// the ledger list by the route's own Event id, so a direct link resolves the same detail whether
 /// or not that row is in the ledger's currently loaded page, and a replay only re-reads this Event
 /// rather than the whole ledger.
-function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: string }) {
+function EventInspector({ tenantId, eventId, search }: { tenantId: string; eventId: string; search: string }) {
   // A dead-lettered Delivery is read to find out where it was going. The destination has a name the
   // Tenant's own Destination list already carries; the Subscription does not, because the Admin API
   // lists Subscriptions under their Topic and an Event does not say which Topic matched it.
@@ -568,7 +554,7 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
     if (isNarrow) heading.current?.focus();
   }, [eventId, event.data, event.isError]);
 
-  const closed = `/tenants/${tenantId}/events`;
+  const closed = `/tenants/${tenantId}/events${search}`;
 
   const problem = asProblem(event.error);
   if (problem)

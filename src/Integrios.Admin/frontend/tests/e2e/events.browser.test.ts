@@ -33,13 +33,10 @@ const tenant = {
 
 const listPage = (items: unknown[]) => ({ items, next_cursor: null });
 
-const summary = {
-  events_accepted: 1,
-  awaiting_routing: 0,
-  unrouted: 0,
-  dead_lettered_deliveries: 0,
-  window_start: "2026-09-01T09:00:00Z",
-  window_end: "2026-09-01T10:00:00Z",
+const backlog = {
+  awaiting_routing: { count: 1, oldest_at: "2026-09-01T09:30:00Z" },
+  unrouted: { count: 0, oldest_at: null },
+  dead_lettered_deliveries: { count: 0, oldest_at: null },
 };
 
 const secondEventId = "55555555-5555-5555-5555-555555555555";
@@ -78,7 +75,7 @@ function eventDetail(eventId: string) {
 /// A ledger row's primary link, located by the route it points at. The acceptance time it renders
 /// is formatted for the browser's own locale and is therefore not a stable handle; the route is,
 /// and the route is what the row's selection contract is actually about.
-const ledgerLink = (scope: Page, id: string) => scope.locator(`a[href="/tenants/${tenantId}/events/${id}"]`);
+const ledgerLink = (scope: Page, id: string) => scope.locator(`a[href^="/tenants/${tenantId}/events/${id}"]`);
 
 let server: ViteDevServer;
 let browser: Browser;
@@ -116,9 +113,7 @@ async function openEvents(
 ): Promise<Page> {
   const browserPage = await browser.newPage({ viewport });
   await browserPage.route("**/auth/session", (route) => route.fulfill({ json: session }));
-  await browserPage.route(`**/admin/tenants/${tenantId}/events/activity-summary*`, (route) =>
-    route.fulfill({ json: summary }),
-  );
+  await browserPage.route(`**/admin/tenants/${tenantId}/events/backlog`, (route) => route.fulfill({ json: backlog }));
   await browserPage.route(`**/admin/tenants/${tenantId}/events/*/deliveries`, (route) => {
     const eventId = new URL(route.request().url()).pathname.split("/").at(-2)!;
     return route.fulfill({ json: { ...eventDetail(eventId), event_deliveries: deliveries } });
@@ -137,13 +132,15 @@ async function openEvents(
 describe("The Event ledger and inspector in a real browser", () => {
   it("preserves the filtered ledger while selection follows links, back, forward, and refresh", async () => {
     const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
-    await page.getByRole("button", { name: /Events accepted/ }).click();
+    await page.getByRole("button", { name: /Awaiting routing/ }).click();
     const row = ledgerLink(page, loadedEventId);
-    const href = await row.getAttribute("href");
-    expect(href).toBe(`/tenants/${tenantId}/events/${loadedEventId}`);
+    // The row carries the ledger's scope, so selecting an Event does not drop the filter beside it.
+    await expect
+      .poll(() => row.getAttribute("href"))
+      .toBe(`/tenants/${tenantId}/events/${loadedEventId}?status=accepted`);
     await row.click();
     await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
-    expect(await page.getByRole("button", { name: /Events accepted/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(await page.getByRole("button", { name: /Awaiting routing/ }).getAttribute("aria-pressed")).toBe("true");
     expect(await row.getAttribute("aria-current")).toBe("page");
     // `aria-current="page"` names the page being viewed, so exactly one destination carries it.
     // Tenants is the ancestor scope of the open Tenant, not the current page; marking it too left
@@ -165,7 +162,7 @@ describe("The Event ledger and inspector in a real browser", () => {
     await page.goBack();
     await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor({ state: "hidden" });
     expect(await row.getAttribute("aria-current")).toBeNull();
-    expect(await page.getByRole("button", { name: /Events accepted/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(await page.getByRole("button", { name: /Awaiting routing/ }).getAttribute("aria-pressed")).toBe("true");
     await page.goForward();
     await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
     expect(await row.getAttribute("aria-current")).toBe("page");
@@ -183,8 +180,8 @@ describe("The Event ledger and inspector in a real browser", () => {
       const path = new URL(route.request().url()).pathname;
       const body = path.endsWith("/deliveries")
         ? eventDetail(loadedEventId)
-        : path.endsWith("/activity-summary")
-          ? summary
+        : path.endsWith("/backlog")
+          ? backlog
           : path === `/admin/tenants/${tenantId}`
             ? tenant
             : listPage([loadedEvent]);

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type Call, page, stubHttp } from "../test/http";
+import { type Call, page, quietBacklog as quietEventBacklog, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { TenantScreen, TenantsScreen } from "./Tenants";
 
@@ -221,10 +221,17 @@ describe("Tenants list", () => {
   });
 });
 
-/// The overview screen reads two endpoints, and every test here needs a shape from both. The
-/// activity summary is deliberately an empty window: what the attention banner reports is the
-/// outstanding count, and it must not depend on anything the rolling hour happened to catch.
-const stubOverview = (overview: Record<string, number>) =>
+type BacklogItem = { count: number; oldest_at: string | null };
+const quietBacklog: Record<"awaiting_routing" | "unrouted" | "dead_lettered_deliveries", BacklogItem> = {
+  awaiting_routing: { count: 0, oldest_at: null },
+  unrouted: { count: 0, oldest_at: null },
+  dead_lettered_deliveries: { count: 0, oldest_at: null },
+};
+
+/// The overview screen reads its configuration counts, the shared Event backlog, and the activity
+/// summary. The summary is deliberately an empty window: Needs attention reports the backlog however
+/// old, and must not depend on anything the rolling hour happened to catch.
+const stubOverview = (overview: Record<string, number>, backlog: Partial<typeof quietBacklog> = {}) =>
   stubHttp(({ url }) => {
     if (url.pathname.endsWith("/overview"))
       return {
@@ -235,11 +242,11 @@ const stubOverview = (overview: Record<string, number>) =>
           sources: 1,
           subscriptions: 1,
           live_api_keys: 1,
-          dead_lettered_deliveries: 0,
           ingestion_endpoint: "http://localhost:5231/",
           ...overview,
         },
       };
+    if (url.pathname.endsWith("/backlog")) return { status: 200, body: { ...quietBacklog, ...backlog } };
     if (url.pathname.endsWith("/activity-summary"))
       return {
         status: 200,
@@ -255,18 +262,39 @@ const stubOverview = (overview: Record<string, number>) =>
     return { status: 200, body: tenant() };
   });
 
-describe("The Tenant overview's attention banner", () => {
-  it("counts Deliveries that are still dead-lettered, not only ones that failed in the last hour", async () => {
-    // The banner and the rail badge exist to take an Operator to work nobody has attended to. A
-    // dead-lettered Delivery stays dead-lettered until it is replayed, so counting it inside the
-    // activity summary's rolling hour hid every failure older than that — and reported zero, which
-    // is the one answer a control for unattended work must never give while work is outstanding.
-    stubOverview({ dead_lettered_deliveries: 9 });
+describe("The Tenant overview's Needs attention", () => {
+  it("lists only waiting backlogs, each opening the ledger under its status alone", async () => {
+    stubOverview(
+      {},
+      {
+        unrouted: { count: 4, oldest_at: "2026-08-30T08:00:00Z" },
+        dead_lettered_deliveries: { count: 9, oldest_at: "2026-08-01T08:00:00Z" },
+      },
+    );
 
     renderScreen(<TenantScreen tenantId={tenantId} />, `/tenants/${tenantId}`);
 
-    expect(await screen.findByText("9 dead-lettered Deliveries")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open Events" })).toBeTruthy();
+    const attention = await screen.findByRole("region", { name: "Needs attention" });
+    await within(attention).findByText("9 dead-lettered Deliveries");
+    expect(within(attention).getByText("4 unrouted Events")).toBeTruthy();
+    expect(within(attention).queryByText(/awaiting routing/)).toBeNull();
+    expect(within(attention).getAllByText(/Oldest .*ago/)).toHaveLength(2);
+    expect(within(attention).getByRole("link", { name: "Open unrouted Events in Events" }).getAttribute("href")).toBe(
+      `/tenants/${tenantId}/events?status=unrouted`,
+    );
+    expect(
+      within(attention).getByRole("link", { name: "Open dead-lettered Deliveries in Events" }).getAttribute("href"),
+    ).toBe(`/tenants/${tenantId}/events?delivery_status=dead_lettered`);
+  });
+
+  it("says so calmly when nothing is waiting", async () => {
+    stubOverview({});
+
+    renderScreen(<TenantScreen tenantId={tenantId} />, `/tenants/${tenantId}`);
+
+    const attention = await screen.findByRole("region", { name: "Needs attention" });
+    expect(within(attention).getByText("Nothing is waiting on an Operator.")).toBeTruthy();
+    expect(within(attention).queryByRole("link")).toBeNull();
   });
 });
 
@@ -384,6 +412,7 @@ describe("Deactivating a Tenant", () => {
         status = "inactive";
         return { status: 202 };
       }
+      if (url.pathname.endsWith("/backlog")) return { status: 200, body: quietEventBacklog };
       return { status: 200, body: tenant({ status, updated_at: `2026-09-01T00:00:0${status.length}Z` }) };
     });
 
