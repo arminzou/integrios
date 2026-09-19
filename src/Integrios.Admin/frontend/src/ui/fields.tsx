@@ -172,13 +172,11 @@ export function SelectField<TValues extends FieldValues>({
   );
 }
 
-/// A list filter, compact enough to sit in a permanently visible row above the list it scopes. It
-/// carries its own current value, so a filtered list is legible as filtered without opening
-/// anything, and an applied one is tinted as well as worded.
-///
-/// It stays a real `<select>` under a borrowed appearance: the platform element brings the keyboard,
-/// the mobile picker, and the type-ahead, and only its own arrow is replaced so the control reads as
-/// one pill rather than a label beside a box.
+/// The pill treatment the list filters share: compact enough to sit in a permanently visible row
+/// above the list it scopes, carrying the control's current value so a filtered list is legible as
+/// filtered without opening anything, and tinted as well as worded when applied. The control inside
+/// supplies the behaviour — a vendored Radix trigger or a native input — so the pill supplies only
+/// the shape.
 export const filterPill =
   "inline-flex h-9 max-w-full items-center gap-2 rounded-md border border-input bg-surface px-2.5 text-sm whitespace-nowrap hover:bg-hover-surface data-[applied=true]:border-accent-border data-[applied=true]:bg-selected-surface data-[applied=true]:text-selected-ink";
 
@@ -188,7 +186,9 @@ const searchFilterPill = cn(
 );
 
 /// A list filter, which belongs to the list rather than to a form: it re-reads from the first cursor
-/// as soon as it changes, so there is nothing to submit and no schema to validate.
+/// as soon as it changes, so there is nothing to submit and no schema to validate. It renders the
+/// vendored Radix listbox, not a native `<select>`, so the menu is the product's own on every
+/// platform, phones included; only the trigger borrows the pill's shape.
 ///
 /// "Any" is the filter's own empty case rather than an option each screen has to remember to write,
 /// which is also what keeps the sentinel Radix needs out of every call site.

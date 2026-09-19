@@ -5,9 +5,8 @@ import type * as React from "react";
 
 /// A listbox the product draws, replacing the native `<select>` whose open menu is drawn by the
 /// operating system and cannot be styled to match anything around it. What is given up is real and
-/// worth stating: the platform's mobile picker, its type-ahead, and its participation in a form's
-/// own submission. What is gained is one menu that looks the same on every machine an Operator
-/// signs in from.
+/// worth stating: the platform's mobile picker and its participation in a form's own submission.
+/// What is gained is one menu that looks the same on every machine an Operator signs in from.
 ///
 /// Radix reserves the empty string as a value — it means "nothing selected" internally — so a filter
 /// whose empty case is a real choice ("Any") gives that choice a name of its own and translates at

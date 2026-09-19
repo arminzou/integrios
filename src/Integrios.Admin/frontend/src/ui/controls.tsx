@@ -416,10 +416,6 @@ export function WriteStatus({ done, children }: { done: boolean; children: React
   );
 }
 
-/// The next action for a list that is empty because of what was asked of it, rather than because
-/// the Tenant holds nothing. It reads the URL rather than any screen's own state, which is what
-/// lets every capability offer it without wiring one per screen — and is only possible because the
-/// filters live in the URL at all.
 /// A list's current scope, stated rather than hidden behind a disclosure. An Operator triaging a
 /// failed Delivery has to be able to tell a filtered ledger from an unfiltered one without clicking
 /// anything, and the count says it in words rather than by a border colour alone.
@@ -479,13 +475,16 @@ export function appliedNote(applied: number): string {
   return ` · ${applied} filter${applied === 1 ? "" : "s"} applied`;
 }
 
-function ClearFilters({ size }: { size?: "sm" }) {
+/// The bar's way back to an unfiltered list, shown whenever a filter is applied. It reads the URL
+/// rather than any screen's own state, which is what lets every capability offer it without wiring
+/// one per screen — and is only possible because the filters live in the URL at all.
+function ClearFilters() {
   const [params] = useSearchParams();
   const { pathname } = useLocation();
 
   if (params.toString() === "") return null;
   return (
-    <Button asChild variant="ghost" size={size}>
+    <Button asChild variant="ghost">
       {/* The base layer hands links their underline back, which a control shaped like a button
           should not carry. */}
       <Link to={pathname} className="no-underline">
