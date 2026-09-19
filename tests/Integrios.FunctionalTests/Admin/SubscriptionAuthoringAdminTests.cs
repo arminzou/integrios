@@ -47,6 +47,20 @@ public sealed class SubscriptionAuthoringAdminTests : SubscriptionAdminTestBase
     }
 
     [Fact]
+    public async Task Delete_AcceptsADisabledSubscription()
+    {
+        var topic = await CreateTopicAsync("disabled-delete");
+        SubscriptionDto subscription = await CreateSubscriptionAsync(
+            topic.Id, "disabled-delete", "payment.created");
+        subscription.Status.ShouldBe("disabled");
+
+        (await client.SendAsync(AdminRequest(
+                HttpMethod.Delete,
+                $"/admin/tenants/{Fixture.TenantId}/topics/{topic.Id}/subscriptions/{subscription.Id}")))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
     public async Task CreateSubscription_OnADisabledDestination_IsAuthoredDisabled()
     {
         var topic = await CreateTopicAsync("deactivated-destination");

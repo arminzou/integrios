@@ -20,6 +20,7 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
         group.MapPut(UpdateSubscription, "/{id:guid}").Produces<SubscriptionDto>();
         group.MapPost(EnableSubscription, "/{id:guid}/enable").Produces<SubscriptionDto>();
         group.MapPost(DisableSubscription, "/{id:guid}/disable").Produces<SubscriptionDto>();
+        group.MapDelete(DeleteSubscription, "/{id:guid}");
     }
 
     private static async Task<IResult> CreateSubscription(
@@ -114,6 +115,12 @@ public sealed class SubscriptionsEndpoints : IEndpointGroup
             new SetSubscriptionStatusCommand(tenantId, topicId, id, status), cancellationToken);
         return subscription is null ? Results.NotFound() : Results.Ok(subscription);
     }
+
+    private static async Task<IResult> DeleteSubscription(
+        Guid tenantId, Guid topicId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        await mediator.Send(new DeleteSubscriptionCommand(tenantId, topicId, id), cancellationToken)
+            ? Results.NoContent()
+            : Results.NotFound();
 
 }
 

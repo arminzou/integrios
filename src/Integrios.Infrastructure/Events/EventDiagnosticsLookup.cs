@@ -28,24 +28,39 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         string limit = sqlServer ? string.Empty : "LIMIT 1;";
         string payload = sqlServer ? "payload" : "payload::text";
         string metadata = sqlServer ? "metadata" : "metadata::text";
+        string sourceDeleted = sqlServer
+            ? "CAST(CASE WHEN s.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
+            : "(s.deleted_at IS NOT NULL)";
+        string topicDeleted = sqlServer
+            ? "CAST(CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
+            : "(t.deleted_at IS NOT NULL)";
+        string topicKey = sqlServer ? "t.[key]" : "t.key";
 
         var row = await connection.QuerySingleOrDefaultAsync<EventRow>(
             new CommandDefinition(
                 $"""
                 SELECT
-                    {top}id      AS Id,
-                    status       AS Status,
-                    event_type   AS EventType,
-                    topic_id     AS TopicId,
-                    accepted_at  AS AcceptedAt,
-                    processed_at AS ProcessedAt,
-                    failed_at    AS FailedAt,
-                    {payload}    AS PayloadJson,
-                    {metadata}   AS MetadataJson,
+                    {top}events.id         AS Id,
+                    events.status          AS Status,
+                    events.event_type      AS EventType,
+                    events.source_id AS SourceId,
+                    s.name           AS SourceName,
+                    {sourceDeleted}  AS SourceDeleted,
+                    events.topic_id  AS TopicId,
+                    {topicKey}       AS TopicKey,
+                    t.name           AS TopicName,
+                    {topicDeleted}   AS TopicDeleted,
+                    events.accepted_at     AS AcceptedAt,
+                    events.processed_at    AS ProcessedAt,
+                    events.failed_at       AS FailedAt,
+                    events.{payload}       AS PayloadJson,
+                    events.{metadata}      AS MetadataJson,
                     (SELECT traceparent FROM outbox WHERE event_id = events.id) AS Traceparent
                 FROM events
-                WHERE tenant_id = @TenantId
-                  AND id = @EventId
+                LEFT JOIN sources s ON s.tenant_id = events.tenant_id AND s.id = events.source_id
+                LEFT JOIN topics t ON t.tenant_id = events.tenant_id AND t.id = events.topic_id
+                WHERE events.tenant_id = @TenantId
+                  AND events.id = @EventId
                 {limit}
                 """,
                 new { TenantId = tenantId, EventId = eventId },
@@ -54,21 +69,33 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         if (row is null)
             return null;
 
+        string subscriptionDeleted = sqlServer
+            ? "CAST(CASE WHEN s.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
+            : "(s.deleted_at IS NOT NULL)";
+        string destinationDeleted = sqlServer
+            ? "CAST(CASE WHEN d.deleted_at IS NULL THEN 0 ELSE 1 END AS bit)"
+            : "(d.deleted_at IS NOT NULL)";
         var deliveries = await connection.QueryAsync<DeliveryRow>(
             new CommandDefinition(
-                """
+                $"""
                 SELECT
-                    id                        AS EventDeliveryId,
-                    subscription_id           AS SubscriptionId,
-                    destination_id            AS DestinationId,
-                    status                    AS Status,
-                    lifetime_attempt_count    AS LifetimeAttemptCount,
-                    retry_cycle_attempt_count AS RetryCycleAttemptCount,
-                    deliver_after             AS DeliverAfter,
-                    failed_at                 AS FailedAt
-                FROM event_deliveries
-                WHERE event_id = @EventId
-                ORDER BY id;
+                    ed.id                        AS EventDeliveryId,
+                    ed.subscription_id           AS SubscriptionId,
+                    s.name                       AS SubscriptionName,
+                    {subscriptionDeleted}        AS SubscriptionDeleted,
+                    ed.destination_id            AS DestinationId,
+                    d.name                       AS DestinationName,
+                    {destinationDeleted}         AS DestinationDeleted,
+                    ed.status                    AS Status,
+                    ed.lifetime_attempt_count    AS LifetimeAttemptCount,
+                    ed.retry_cycle_attempt_count AS RetryCycleAttemptCount,
+                    ed.deliver_after             AS DeliverAfter,
+                    ed.failed_at                 AS FailedAt
+                FROM event_deliveries ed
+                LEFT JOIN subscriptions s ON s.id = ed.subscription_id
+                LEFT JOIN destinations d ON d.id = ed.destination_id
+                WHERE ed.event_id = @EventId
+                ORDER BY ed.id;
                 """,
                 new { EventId = eventId },
                 cancellationToken: cancellationToken));
@@ -106,7 +133,13 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
             EventId = row.Id,
             Status = EventStatusMap.FromDbValue(row.Status),
             EventType = row.EventType,
+            SourceId = row.SourceId,
+            SourceName = row.SourceName,
+            SourceDeleted = row.SourceDeleted,
             TopicId = row.TopicId,
+            TopicKey = row.TopicKey,
+            TopicName = row.TopicName,
+            TopicDeleted = row.TopicDeleted,
             AcceptedAt = row.AcceptedAt,
             ProcessedAt = row.ProcessedAt,
             FailedAt = row.FailedAt,
@@ -115,11 +148,15 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
             TraceId = ActivitySources.TryParseTraceparent(row.Traceparent, out var context)
                 ? context.TraceId.ToString()
                 : null,
-            EventDeliveries = deliveries.Select(delivery => new EventDeliveryDto
+            EventDeliveries = deliveries.Select(delivery => new EventDeliveryDiagnosticsDto
             {
                 EventDeliveryId = delivery.EventDeliveryId,
                 SubscriptionId = delivery.SubscriptionId,
+                SubscriptionName = delivery.SubscriptionName,
+                SubscriptionDeleted = delivery.SubscriptionDeleted,
                 DestinationId = delivery.DestinationId,
+                DestinationName = delivery.DestinationName,
+                DestinationDeleted = delivery.DestinationDeleted,
                 Status = delivery.Status,
                 LifetimeAttemptCount = delivery.LifetimeAttemptCount,
                 RetryCycleAttemptCount = delivery.RetryCycleAttemptCount,
@@ -169,7 +206,13 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
         public Guid Id { get; init; }
         public string Status { get; init; } = "";
         public string? EventType { get; init; }
+        public Guid? SourceId { get; init; }
+        public string? SourceName { get; init; }
+        public bool SourceDeleted { get; init; }
         public Guid? TopicId { get; init; }
+        public string? TopicKey { get; init; }
+        public string? TopicName { get; init; }
+        public bool TopicDeleted { get; init; }
         public DateTimeOffset AcceptedAt { get; init; }
         public DateTimeOffset? ProcessedAt { get; init; }
         public DateTimeOffset? FailedAt { get; init; }
@@ -182,7 +225,11 @@ internal sealed class EventDiagnosticsLookup(IDbConnectionFactory connectionFact
     {
         public Guid EventDeliveryId { get; init; }
         public Guid SubscriptionId { get; init; }
+        public string? SubscriptionName { get; init; }
+        public bool SubscriptionDeleted { get; init; }
         public Guid DestinationId { get; init; }
+        public string? DestinationName { get; init; }
+        public bool DestinationDeleted { get; init; }
         public string Status { get; init; } = "";
         public int LifetimeAttemptCount { get; init; }
         public int RetryCycleAttemptCount { get; init; }

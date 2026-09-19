@@ -12,6 +12,7 @@ import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
 import {
   appliedNote,
+  ConfirmAction,
   CreateSheet,
   EditSheet,
   FilterBar,
@@ -383,6 +384,7 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
 /// A Topic has no status of its own: it groups its Sources and Subscriptions and exists until deleted,
 /// so the only thing to change on it is its label.
 function EditTopic({ tenantId, topic }: { tenantId: string; topic: Topic }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["topic", tenantId, topic.id] });
@@ -402,6 +404,18 @@ function EditTopic({ tenantId, topic }: { tenantId: string; topic: Topic }) {
         }),
       ),
     onSuccess: reread,
+  });
+  const remove = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.DELETE("/admin/tenants/{tenantId}/topics/{id}", {
+          params: { path: { tenantId, id: topic.id } },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["topics", tenantId] });
+      navigate(`/tenants/${tenantId}/topics`);
+    },
   });
 
   return (
@@ -438,7 +452,16 @@ function EditTopic({ tenantId, topic }: { tenantId: string; topic: Topic }) {
             </Form>
           )}
         </EditSheet>
+        <ConfirmAction
+          label="Delete"
+          consequence="This Topic cannot be restored. Deletion is refused while any Source or Subscription still references it."
+          question={`Delete the Topic "${topic.name}"?`}
+          confirmLabel={`Delete ${topic.name}`}
+          busy={remove.isPending}
+          onConfirm={() => remove.mutate()}
+        />
       </div>
+      <FormError message={formError(asProblem(remove.error))} />
     </div>
   );
 }

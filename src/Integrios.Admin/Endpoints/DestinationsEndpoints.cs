@@ -18,6 +18,7 @@ public sealed class DestinationsEndpoints : IEndpointGroup
         group.MapPut(UpdateDestination, "/{id:guid}").Produces<DestinationDto>();
         group.MapPost(EnableDestination, "/{id:guid}/enable").Produces<DestinationDto>();
         group.MapPost(DisableDestination, "/{id:guid}/disable").Produces<DestinationDto>();
+        group.MapDelete(DeleteDestination, "/{id:guid}");
     }
 
     private static async Task<IResult> CreateDestination(
@@ -107,6 +108,12 @@ public sealed class DestinationsEndpoints : IEndpointGroup
             new SetDestinationStatusCommand(tenantId, id, status), cancellationToken);
         return destination is null ? Results.NotFound() : Results.Ok(destination);
     }
+
+    private static async Task<IResult> DeleteDestination(
+        Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        await mediator.Send(new DeleteDestinationCommand(tenantId, id), cancellationToken)
+            ? Results.NoContent()
+            : Results.NotFound();
 }
 
 internal sealed record CreateDestinationRequest(

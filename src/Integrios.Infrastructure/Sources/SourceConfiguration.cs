@@ -37,6 +37,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         // No database default: Enabled is the enum's zero value, which EF reads as "unset" and would
         // replace with the column default. The application always states the status it means.
         entity.Property(source => source.Status).HasColumnName("status");
+        entity.Property(source => source.DeletedAt).HasColumnName("deleted_at");
         entity.Property(source => source.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         entity.Property(source => source.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
 
@@ -47,5 +48,7 @@ internal sealed class SourceConfiguration : IEntityTypeConfiguration<Source>
         entity.HasOne<Topic>().WithMany().HasPrincipalKey(topic => new { topic.TenantId, topic.Id })
             .HasForeignKey(source => new { source.TenantId, source.TopicId })
             .OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_sources_topic_tenant");
+
+        entity.HasQueryFilter(source => source.DeletedAt == null);
     }
 }

@@ -317,6 +317,27 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         (await fixture.GetEventCountAsync()).ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Acceptance_RefusesASubmissionResolvedBeforeCommittedDeletion()
+    {
+        var acceptance = fixture.WebFactory.Services.GetRequiredService<IEventAcceptance>();
+        var submission = new EventSubmission
+        {
+            TenantId = fixture.TenantAId,
+            TopicId = defaultTopicId,
+            SourceId = defaultSourceId,
+            EventType = "payment.created",
+            Payload = JsonSerializer.SerializeToElement(new { paymentId = "pay_deleted" }),
+        };
+        await fixture.DeleteSourceAsync(defaultSourceId);
+
+        EventAcceptanceException exception = await Should.ThrowAsync<EventAcceptanceException>(
+            () => acceptance.AcceptAsync(submission, traceparent: null, CancellationToken.None));
+
+        exception.Message.ShouldContain("not enabled");
+        (await fixture.GetEventCountAsync()).ShouldBe(0);
+    }
+
     private static object BuildBody(string? sourceEventId, string eventType = "payment.created") => new
     {
         event_type = eventType,

@@ -29,7 +29,7 @@ internal sealed class BrokerSourceReader(
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
                 JOIN tenants t ON t.id = s.tenant_id
-                WHERE s.type = N'broker' AND s.status = N'enabled'
+                WHERE s.type = N'broker' AND s.status = N'enabled' AND s.deleted_at IS NULL
                   AND i.status = N'active' AND i.direction IN (N'source', N'both')
                   AND JSON_VALUE(s.configuration, '$.transport') = N'azure_service_bus'
                 """
@@ -47,7 +47,7 @@ internal sealed class BrokerSourceReader(
                 FROM sources s
                 JOIN connectors i ON i.id = s.connector_id
                 JOIN tenants t ON t.id = s.tenant_id
-                WHERE s.type = 'broker' AND s.status = 'enabled'
+                WHERE s.type = 'broker' AND s.status = 'enabled' AND s.deleted_at IS NULL
                   AND i.status = 'active' AND i.direction IN ('source', 'both')
                   AND s.configuration ->> 'transport' = 'azure_service_bus'
                 """;

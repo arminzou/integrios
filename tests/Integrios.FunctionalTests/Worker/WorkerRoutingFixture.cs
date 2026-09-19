@@ -313,7 +313,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             ?? throw new InvalidOperationException("The ledger Subscription could not be loaded.");
         Subscription? updated = await subscriptionRepository.UpdateAsync(
             TenantId, identity.TopicId, identity.Id, existing.Name, existing.EventTypes,
-            existing.DestinationId, existing.MappingConfig, existing.HttpDelivery, httpSuccess,
+            existing.DestinationId, existing.MappingConfig, existing.HttpDelivery!, httpSuccess,
             existing.OrderIndex, existing.Description, CancellationToken.None);
         _ = updated ?? throw new InvalidOperationException("The ledger Subscription could not be updated.");
     }

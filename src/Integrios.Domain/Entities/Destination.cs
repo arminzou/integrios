@@ -13,6 +13,7 @@ public sealed record Destination
     public required JsonElement Configuration { get; init; }
     public DestinationAuthentication? Authentication { get; init; }
     public required EnablementStatus Status { get; init; }
+    public DateTimeOffset? DeletedAt { get; init; }
     public string? Environment { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }

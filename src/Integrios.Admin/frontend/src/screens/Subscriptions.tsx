@@ -558,6 +558,19 @@ function SubscriptionInspector({
       void queryClient.invalidateQueries({ queryKey: ["tenant-subscriptions", tenantId] });
     },
   });
+  const remove = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.DELETE("/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{id}", {
+          params: { path: { tenantId, topicId, id: subscriptionId } },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions", tenantId, topicId] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant-subscriptions", tenantId] });
+      navigate(`/tenants/${tenantId}/subscriptions`);
+    },
+  });
 
   const problem = asProblem(subscription.error);
   if (problem)
@@ -662,12 +675,20 @@ function SubscriptionInspector({
             Enable
           </Button>
         )}
+        <ConfirmAction
+          label="Delete"
+          consequence="This Subscription stops receiving new Events and cannot be restored. Existing deliveries continue and keep its name in history."
+          question={`Delete the Subscription "${current.name}"?`}
+          confirmLabel={`Delete ${current.name}`}
+          busy={remove.isPending}
+          onConfirm={() => remove.mutate()}
+        />
       </div>
 
       <WriteStatus done={setStatus.isSuccess}>
         {setStatus.variables === "enable" ? "Subscription enabled." : "Subscription disabled."}
       </WriteStatus>
-      <FormError message={formError(asProblem(setStatus.error))} />
+      <FormError message={formError(asProblem(setStatus.error ?? remove.error))} />
     </Inspector>
   );
 }

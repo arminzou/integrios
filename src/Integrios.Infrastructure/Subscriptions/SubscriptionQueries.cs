@@ -33,7 +33,13 @@ internal sealed class SubscriptionQueries(
             throw new InvalidCursorException();
 
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
-        var where = new List<string> { "s.tenant_id = @TenantId", "s.topic_id = @TopicId" };
+        var where = new List<string>
+        {
+            "s.tenant_id = @TenantId",
+            "s.topic_id = @TopicId",
+            "s.deleted_at IS NULL",
+            "d.deleted_at IS NULL",
+        };
         if (status is not null)
             where.Add("s.status = @Status");
         if (afterCursor is not null)
@@ -102,7 +108,13 @@ internal sealed class SubscriptionQueries(
             throw new InvalidCursorException();
 
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
-        var where = new List<string> { "s.tenant_id = @TenantId" };
+        var where = new List<string>
+        {
+            "s.tenant_id = @TenantId",
+            "s.deleted_at IS NULL",
+            "t.deleted_at IS NULL",
+            "d.deleted_at IS NULL",
+        };
         if (filter.Status is not null)
             where.Add("s.status = @Status");
         if (filter.TopicId is not null)

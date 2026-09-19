@@ -106,7 +106,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
             {
                 Version = HttpExecutionSnapshot.CurrentVersion,
                 BaseUri = baseUri,
-                Request = subscription.HttpDelivery,
+                Request = subscription.HttpDelivery!,
                 DestinationAuthentication = destination.Authentication,
                 HttpSuccess = subscription.HttpSuccess,
             };

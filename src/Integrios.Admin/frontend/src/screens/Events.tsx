@@ -38,7 +38,7 @@ import { StatusBadge, statusLabel, statusMarker } from "../ui/status";
 import { dayLabel, localDay, TimeOfDay, Timestamp } from "../ui/time";
 
 type EventListItem = components["schemas"]["EventListItemDto"];
-type EventDelivery = components["schemas"]["EventDeliveryDto"];
+type EventDelivery = components["schemas"]["EventDeliveryDiagnosticsDto"];
 type EventActivitySummary = components["schemas"]["EventActivitySummaryDto"];
 
 const eventStatuses = ["accepted", "processing", "routed", "unrouted", "failed", "dead_lettered"];
@@ -618,6 +618,16 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
         </div>
       </div>
       <dl className="m-0 grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-b pb-3.5 text-[13px] [&>dd]:m-0 [&>dd]:text-right [&>dt]:m-0 [&>dt]:text-ink-secondary">
+        <dt>Source</dt>
+        <dd>
+          {current.source_name ?? current.source_id ?? "—"}
+          {current.source_deleted ? " (deleted)" : ""}
+        </dd>
+        <dt>Topic</dt>
+        <dd>
+          {current.topic_key ?? current.topic_name ?? current.topic_id ?? "—"}
+          {current.topic_deleted ? " (deleted)" : ""}
+        </dd>
         <dt>Accepted</dt>
         <dd>
           <Timestamp value={current.accepted_at} />
@@ -657,9 +667,13 @@ function EventInspector({ tenantId, eventId }: { tenantId: string; eventId: stri
                 className="flex items-center justify-between gap-2 rounded-md bg-surface-quiet px-2.5 py-2"
               >
                 <div className="min-w-0 text-[13px]">
-                  <span className="block truncate font-mono">{delivery.subscription_id}</span>
+                  <span className="block truncate">
+                    {delivery.subscription_name ?? delivery.subscription_id}
+                    {delivery.subscription_deleted ? " (deleted)" : ""}
+                  </span>
                   <span className="block truncate font-mono text-xs text-ink-secondary">
-                    → {nameIn(destinationOptions.data?.items, delivery.destination_id)}
+                    → {delivery.destination_name ?? nameIn(destinationOptions.data?.items, delivery.destination_id)}
+                    {delivery.destination_deleted ? " (deleted)" : ""}
                   </span>
                   <span className="block text-xs text-ink-secondary">
                     <span title="Lifetime attempts / attempts in the current retry cycle">

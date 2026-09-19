@@ -28,7 +28,7 @@ public sealed record SubscriptionDto(
         subscription.EventTypes,
         subscription.DestinationId,
         subscription.MappingConfig,
-        subscription.HttpDelivery,
+        subscription.HttpDelivery!,
         subscription.HttpSuccess,
         subscription.Status.ToString().ToLowerInvariant(),
         subscription.OrderIndex,

@@ -20,7 +20,7 @@ internal sealed class SourceQueries(IDbConnectionFactory connectionFactory, IDat
             throw new InvalidCursorException();
 
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
-        var where = new List<string> { "tenant_id = @TenantId" };
+        var where = new List<string> { "tenant_id = @TenantId", "deleted_at IS NULL" };
         if (status is not null)
             where.Add("status = @Status");
         if (type is not null)

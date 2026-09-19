@@ -62,6 +62,31 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         }
     }
 
+    [Fact]
+    public async Task Delete_AcceptsADisabledSource()
+    {
+        Guid connectorId = await CreateSourceConnectorAsync();
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage created = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{fixture.TenantId}/sources",
+            new
+            {
+                connector_id = connectorId,
+                topic_id = topicId,
+                name = "disabled-delete",
+                type = "event_api",
+                configuration = new { },
+                event_types = new[] { "probe.created" },
+            }));
+        SourceDto source = (await created.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+        source.Status.ShouldBe("disabled");
+
+        (await client.SendAsync(AdminRequest(
+                HttpMethod.Delete, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}")))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
     // Intake resolves one revision per request and an accepted Event is never remapped, so the
     // revision is what separates traffic normalized under the old contract from traffic normalized
     // under the new one. An edit that leaves it behind makes that boundary unobservable.

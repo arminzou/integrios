@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Delivery;
 using Integrios.Application.Ingestion;
@@ -63,6 +64,107 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         attempt.ResponseStatusCode.ShouldBe(503);
         attempt.ResponseBodyTruncated.ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task Delete_RetainsHistoricalNamesAndScrubsRuntimeConfiguration()
+    {
+        var (eventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+        await using var connection = fixture.CreateConnection();
+        await connection.OpenAsync();
+        ProvenanceRow resources = await connection.QuerySingleAsync<ProvenanceRow>(
+            $"""
+            SELECT e.source_id AS SourceId, e.topic_id AS TopicId,
+                ed.subscription_id AS SubscriptionId, ed.destination_id AS DestinationId,
+                s.name AS SourceName, t.name AS TopicName, t.{fixture.KeyColumn} AS TopicKey,
+                sub.name AS SubscriptionName, d.name AS DestinationName
+            FROM events e
+            JOIN event_deliveries ed ON ed.event_id = e.id
+            JOIN sources s ON s.id = e.source_id
+            JOIN topics t ON t.id = e.topic_id
+            JOIN subscriptions sub ON sub.id = ed.subscription_id
+            JOIN destinations d ON d.id = ed.destination_id
+            WHERE e.id = @EventId
+            """,
+            new { EventId = eventId });
+
+        (await Delete($"/admin/tenants/{fixture.TenantId}/topics/{resources.TopicId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await Delete($"/admin/tenants/{fixture.TenantId}/destinations/{resources.DestinationId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await Delete($"/admin/tenants/{fixture.TenantId}/sources/{resources.SourceId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        (await Delete($"/admin/tenants/{fixture.TenantId}/topics/{resources.TopicId}/subscriptions/{resources.SubscriptionId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await Delete($"/admin/tenants/{fixture.TenantId}/sources/{resources.SourceId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await Delete($"/admin/tenants/{fixture.TenantId}/topics/{resources.TopicId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await Delete($"/admin/tenants/{fixture.TenantId}/destinations/{resources.DestinationId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        foreach (string path in new[]
+        {
+            $"/admin/tenants/{fixture.TenantId}/sources/{resources.SourceId}",
+            $"/admin/tenants/{fixture.TenantId}/topics/{resources.TopicId}",
+            $"/admin/tenants/{fixture.TenantId}/topics/{resources.TopicId}/subscriptions/{resources.SubscriptionId}",
+            $"/admin/tenants/{fixture.TenantId}/destinations/{resources.DestinationId}",
+        })
+        {
+            (await client.SendAsync(AdminRequest(HttpMethod.Get, path))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+        (await client.SendAsync(AdminRequest(
+                HttpMethod.Post,
+                $"/admin/tenants/{fixture.TenantId}/topics",
+                new { key = resources.TopicKey })))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        EventDiagnosticsDto history = (await (await client.SendAsync(AdminRequest(
+                HttpMethod.Get,
+                $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries")))
+            .Content.ReadFromJsonAsync<EventDiagnosticsDto>(HostJson.Options))!;
+        history.SourceName.ShouldBe(resources.SourceName);
+        history.SourceDeleted.ShouldBeTrue();
+        history.TopicKey.ShouldBe(resources.TopicKey);
+        history.TopicName.ShouldBe(resources.TopicName);
+        history.TopicDeleted.ShouldBeTrue();
+        EventDeliveryDiagnosticsDto delivery = history.EventDeliveries.ShouldHaveSingleItem();
+        delivery.SubscriptionName.ShouldBe(resources.SubscriptionName);
+        delivery.SubscriptionDeleted.ShouldBeTrue();
+        delivery.DestinationName.ShouldBe(resources.DestinationName);
+        delivery.DestinationDeleted.ShouldBeTrue();
+
+        TombstoneRow tombstones = await connection.QuerySingleAsync<TombstoneRow>($"""
+            SELECT {fixture.JsonText("s.configuration")} AS SourceConfiguration,
+                {fixture.JsonText("s.event_types")} AS SourceEventTypes,
+                s.revision AS SourceRevision,
+                {fixture.JsonText("sub.event_types")} AS SubscriptionEventTypes,
+                {fixture.JsonText("sub.http_delivery")} AS SubscriptionHttpDelivery,
+                {fixture.JsonText("d.configuration")} AS DestinationConfiguration,
+                CASE WHEN s.deleted_at IS NULL THEN 0 ELSE 1 END AS SourceDeleted,
+                CASE WHEN sub.deleted_at IS NULL THEN 0 ELSE 1 END AS SubscriptionDeleted,
+                CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END AS TopicDeleted,
+                CASE WHEN d.deleted_at IS NULL THEN 0 ELSE 1 END AS DestinationDeleted
+            FROM sources s
+            JOIN topics t ON t.id = s.topic_id
+            JOIN subscriptions sub ON sub.topic_id = t.id
+            JOIN destinations d ON d.id = sub.destination_id
+            WHERE s.id = @SourceId
+            """, resources);
+        tombstones.SourceConfiguration.ShouldBe("{}");
+        tombstones.SourceEventTypes.ShouldBe("[]");
+        tombstones.SourceRevision.ShouldBeEmpty();
+        tombstones.SubscriptionEventTypes.ShouldBe("[]");
+        tombstones.SubscriptionHttpDelivery.ShouldBeNull();
+        tombstones.DestinationConfiguration.ShouldBe("{}");
+        tombstones.SourceDeleted.ShouldBe(1);
+        tombstones.SubscriptionDeleted.ShouldBe(1);
+        tombstones.TopicDeleted.ShouldBe(1);
+        tombstones.DestinationDeleted.ShouldBe(1);
+    }
+
+    private Task<HttpResponseMessage> Delete(string path) =>
+        client.SendAsync(AdminRequest(HttpMethod.Delete, path));
 
     // The Overview's tiles. Counted from what the seed actually creates, so a count that starts
     // reporting a neighbouring Tenant's rows fails here rather than on screen.
@@ -132,6 +234,29 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         }
     }
 
+    private sealed record ProvenanceRow(
+        Guid SourceId,
+        Guid TopicId,
+        Guid SubscriptionId,
+        Guid DestinationId,
+        string SourceName,
+        string TopicName,
+        string TopicKey,
+        string SubscriptionName,
+        string DestinationName);
+
+    private sealed record TombstoneRow(
+        string SourceConfiguration,
+        string SourceEventTypes,
+        string SourceRevision,
+        string SubscriptionEventTypes,
+        string? SubscriptionHttpDelivery,
+        string DestinationConfiguration,
+        int SourceDeleted,
+        int SubscriptionDeleted,
+        int TopicDeleted,
+        int DestinationDeleted);
+
     [Fact]
     public async Task OperatorKey_CanInspectAndReplayOneDeadLetteredDelivery()
     {
@@ -142,7 +267,7 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
         historyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         EventDiagnosticsDto? history = await historyResponse.Content.ReadFromJsonAsync<EventDiagnosticsDto>(HostJson.Options);
         history.ShouldNotBeNull();
-        EventDeliveryDto delivery = history.EventDeliveries.ShouldHaveSingleItem();
+        EventDeliveryDiagnosticsDto delivery = history.EventDeliveries.ShouldHaveSingleItem();
         delivery.EventDeliveryId.ShouldBe(deliveryId);
         delivery.Status.ShouldBe("dead_lettered");
         history.DeliveryAttempts.ShouldHaveSingleItem().Status.ShouldBe("failed");

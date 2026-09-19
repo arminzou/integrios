@@ -1216,6 +1216,7 @@ function EditSource({
   source: Source;
   onDone: (notice: string) => void;
 }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const reread = () => {
     void queryClient.invalidateQueries({ queryKey: ["source", tenantId, source.id] });
@@ -1234,6 +1235,18 @@ function EditSource({
     onSuccess: (_, action) => {
       reread();
       onDone(action === "enable" ? "Source enabled." : "Source disabled.");
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.DELETE("/admin/tenants/{tenantId}/sources/{id}", {
+          params: { path: { tenantId, id: source.id } },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sources", tenantId] });
+      navigate(`/tenants/${tenantId}/sources`);
     },
   });
   // Enabling is never blocked on coverage: an Event nothing routes is still accepted, as Unrouted.
@@ -1264,6 +1277,14 @@ function EditSource({
             Enable
           </Button>
         )}
+        <ConfirmAction
+          label="Delete"
+          consequence="This Source stops accepting Events and cannot be restored. Accepted Events keep its name in history. Deletion is refused if it is the last declaration selected by a Subscription."
+          question={`Delete the Source "${source.name}"?`}
+          confirmLabel={`Delete ${source.name}`}
+          busy={remove.isPending}
+          onConfirm={() => remove.mutate()}
+        />
       </div>
       {!enabled && routing.settled && uncovered.length > 0 ? (
         <p className="m-0 text-xs text-warning-ink">
@@ -1271,7 +1292,7 @@ function EditSource({
           {uncovered.length === 1 ? "that type are" : "those types are"} accepted and left Unrouted.
         </p>
       ) : null}
-      <FormError message={formError(asProblem(setStatus.error))} />
+      <FormError message={formError(asProblem(setStatus.error ?? remove.error))} />
     </div>
   );
 }

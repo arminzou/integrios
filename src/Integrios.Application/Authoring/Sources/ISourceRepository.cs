@@ -21,4 +21,5 @@ public interface ISourceRepository
         IReadOnlyList<string> eventTypes,
         CancellationToken cancellationToken);
     Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken);
+    Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
 }

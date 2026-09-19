@@ -44,6 +44,11 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
                 && subscription.Status == EnablementStatus.Enabled,
             cancellationToken);
 
+    public Task<bool> HasSubscriptionsAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
+        context.Subscriptions.AsNoTracking().AnyAsync(
+            subscription => subscription.TenantId == tenantId && subscription.DestinationId == id,
+            cancellationToken);
+
     public async Task<(IReadOnlyList<DestinationListRow> Items, string? NextCursor)> ListByTenantAsync(
         Guid tenantId,
         DestinationListFilter filter,
@@ -140,5 +145,20 @@ internal sealed class DestinationRepository(IntegriosDbContext context, IDataPro
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(destination => destination.Status, status)
                 .SetProperty(destination => destination.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken) > 0;
+
+    public async Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        JsonElement empty = JsonSerializer.Deserialize<JsonElement>("{}");
+        return await context.Destinations
+            .Where(destination => destination.TenantId == tenantId && destination.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(destination => destination.Configuration, empty)
+                .SetProperty(destination => destination.Authentication, (DestinationAuthentication?)null)
+                .SetProperty(destination => destination.Status, EnablementStatus.Disabled)
+                .SetProperty(destination => destination.Environment, (string?)null)
+                .SetProperty(destination => destination.DeletedAt, now)
+                .SetProperty(destination => destination.UpdatedAt, now), cancellationToken) > 0;
+    }
 
 }

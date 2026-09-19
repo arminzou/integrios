@@ -133,6 +133,26 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
                     .SetProperty(subscription => subscription.UpdatedAt, DateTimeOffset.UtcNow),
                 cancellationToken) > 0;
 
+    public async Task<bool> DeleteAsync(
+        Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        return await context.Subscriptions
+            .Where(subscription =>
+                subscription.TenantId == tenantId
+                && subscription.TopicId == topicId
+                && subscription.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(subscription => subscription.EventTypes, Array.Empty<string>())
+                .SetProperty(subscription => subscription.MappingConfig, (JsonElement?)null)
+                .SetProperty(subscription => subscription.HttpDelivery, (HttpDeliveryConfiguration?)null)
+                .SetProperty(subscription => subscription.HttpSuccess, (HttpSuccessRule?)null)
+                .SetProperty(subscription => subscription.Status, EnablementStatus.Disabled)
+                .SetProperty(subscription => subscription.OrderIndex, 0)
+                .SetProperty(subscription => subscription.DeletedAt, now)
+                .SetProperty(subscription => subscription.UpdatedAt, now), cancellationToken) > 0;
+    }
+
     public async Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(
         Guid tenantId,
         Guid destinationId,
@@ -142,7 +162,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
                 subscription.TenantId == tenantId
                 && subscription.DestinationId == destinationId
                 && subscription.Status == EnablementStatus.Enabled)
-            .Select(subscription => subscription.HttpDelivery)
+            .Select(subscription => subscription.HttpDelivery!)
             .ToListAsync(cancellationToken);
 
     private static JsonElement? NormalizeNullableJson(JsonElement? value) =>

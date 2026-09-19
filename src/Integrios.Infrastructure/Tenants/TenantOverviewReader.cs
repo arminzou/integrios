@@ -23,12 +23,12 @@ internal sealed class TenantOverviewReader(IDbConnectionFactory connectionFactor
         // COUNT(*) returns bigint, so every count is cast down to the int the DTO carries.
         const string sql = """
             SELECT
-                (SELECT CAST(COUNT(*) AS INT) FROM topics WHERE tenant_id = @TenantId) AS Topics,
-                (SELECT CAST(COUNT(*) AS INT) FROM destinations WHERE tenant_id = @TenantId) AS Destinations,
-                (SELECT CAST(COUNT(*) AS INT) FROM sources WHERE tenant_id = @TenantId) AS Sources,
+                (SELECT CAST(COUNT(*) AS INT) FROM topics WHERE tenant_id = @TenantId AND deleted_at IS NULL) AS Topics,
+                (SELECT CAST(COUNT(*) AS INT) FROM destinations WHERE tenant_id = @TenantId AND deleted_at IS NULL) AS Destinations,
+                (SELECT CAST(COUNT(*) AS INT) FROM sources WHERE tenant_id = @TenantId AND deleted_at IS NULL) AS Sources,
                 (SELECT CAST(COUNT(*) AS INT) FROM subscriptions s
                     JOIN topics t ON t.id = s.topic_id
-                    WHERE t.tenant_id = @TenantId) AS Subscriptions,
+                    WHERE t.tenant_id = @TenantId AND s.deleted_at IS NULL AND t.deleted_at IS NULL) AS Subscriptions,
                 (SELECT CAST(COUNT(*) AS INT) FROM tenant_api_keys
                     WHERE tenant_id = @TenantId AND status = 'active') AS LiveApiKeys,
                 -- Outstanding rather than recent: a dead-lettered Delivery stays dead-lettered until

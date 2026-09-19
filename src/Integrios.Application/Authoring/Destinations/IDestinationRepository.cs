@@ -11,6 +11,7 @@ public interface IDestinationRepository
     Task<Destination?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
     Task<(IReadOnlyList<DestinationListRow> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, DestinationListFilter filter, string? afterCursor, int limit, CancellationToken cancellationToken);
     Task<bool> HasActiveSubscriptionsAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
+    Task<bool> HasSubscriptionsAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
     Task<Destination?> UpdateAsync(
         Guid tenantId,
         Guid id,
@@ -21,4 +22,5 @@ public interface IDestinationRepository
         string? description,
         CancellationToken cancellationToken);
     Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken);
+    Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
 }

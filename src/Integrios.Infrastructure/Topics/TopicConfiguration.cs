@@ -29,6 +29,7 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
+        entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
         entity.Property(e => e.Key).HasColumnName("key");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.TenantId).HasColumnName("tenant_id");
@@ -40,5 +41,7 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
             .HasForeignKey(d => d.TenantId)
             .OnDelete(DeleteBehavior.ClientSetNull)
             .HasConstraintName("pipelines_tenant_id_fkey");
+
+        entity.HasQueryFilter(topic => topic.DeletedAt == null);
     }
 }

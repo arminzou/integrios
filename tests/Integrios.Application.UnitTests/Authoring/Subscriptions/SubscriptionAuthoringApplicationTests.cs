@@ -229,6 +229,9 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<int> CountSubscriptionsAsync(Guid tenantId, Guid topicId, CancellationToken ct = default) =>
             Task.FromResult(0);
 
+        public Task<int> CountSourcesAsync(Guid tenantId, Guid topicId, CancellationToken ct = default) =>
+            Task.FromResult(0);
+
         public Task<(IReadOnlyList<TopicListRow> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, TopicListFilter filter, string? afterCursor, int limit, CancellationToken ct = default) =>
             Task.FromResult<(IReadOnlyList<TopicListRow>, string?)>(([new TopicListRow(topic, 0)], null));
 
@@ -246,6 +249,9 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<IReadOnlyList<SubscriptionSelection>> ListSubscriptionSelectionsAsync(
             Guid tenantId, Guid topicId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<SubscriptionSelection>>([]);
+
+        public Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
+            Task.FromResult(false);
     }
 
     private sealed class FakeDestinationRepository(Destination destination) : IDestinationRepository
@@ -262,11 +268,17 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<bool> HasActiveSubscriptionsAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
 
+        public Task<bool> HasSubscriptionsAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+
         public Task<Destination?> UpdateAsync(Guid tenantId, Guid id, string name, JsonElement configuration, DestinationAuthentication? authentication, string? environment, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Destination?>(destination);
 
         public Task<bool> SetStatusAsync(Guid tenantId, Guid id, EnablementStatus status, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
+
+        public Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 
     private sealed class FakeConnectorReader(Connector connector) : IConnectorReader
@@ -308,6 +320,9 @@ public sealed class SubscriptionAuthoringApplicationTests
             Task.FromResult<Subscription?>(null);
 
         public Task<bool> SetStatusAsync(Guid tenantId, Guid topicId, Guid id, EnablementStatus status, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+
+        public Task<bool> DeleteAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
 
         public Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(

@@ -8,6 +8,7 @@ public interface ITopicRepository
     Task<Topic> CreateAsync(Guid tenantId, string key, string name, string? description, CancellationToken ct);
     Task<Topic?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct);
     Task<int> CountSubscriptionsAsync(Guid tenantId, Guid topicId, CancellationToken ct);
+    Task<int> CountSourcesAsync(Guid tenantId, Guid topicId, CancellationToken ct);
     Task<(IReadOnlyList<TopicListRow> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, TopicListFilter filter, string? afterCursor, int limit, CancellationToken ct);
     Task<Topic?> UpdateAsync(
         Guid tenantId,
@@ -20,4 +21,5 @@ public interface ITopicRepository
         Guid tenantId, IReadOnlyCollection<Guid> topicIds, CancellationToken ct);
     // Every Subscription on the Topic, whatever its status: a Disabled one can be enabled again.
     Task<IReadOnlyList<SubscriptionSelection>> ListSubscriptionSelectionsAsync(Guid tenantId, Guid topicId, CancellationToken ct);
+    Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken ct);
 }

@@ -14,6 +14,7 @@ public sealed class TopicsEndpoints : IEndpointGroup
         group.MapGet(ListTopics).Produces<AdminTopicListResponse>();
         group.MapGet(GetTopicById, "/{id:guid}").Produces<AdminTopicResponse>();
         group.MapPut(UpdateTopic, "/{id:guid}").Produces<AdminTopicResponse>();
+        group.MapDelete(DeleteTopic, "/{id:guid}");
     }
 
     private static async Task<IResult> CreateTopic(
@@ -65,6 +66,12 @@ public sealed class TopicsEndpoints : IEndpointGroup
             cancellationToken);
         return dto is null ? Results.NotFound() : Results.Ok(AdminTopicResponse.From(dto));
     }
+
+    private static async Task<IResult> DeleteTopic(
+        Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        await mediator.Send(new DeleteTopicCommand(tenantId, id), cancellationToken)
+            ? Results.NoContent()
+            : Results.NotFound();
 }
 
 internal sealed record CreateTopicRequest(

@@ -23,11 +23,33 @@ public sealed record EventDiagnosticsDto
     public DateTimeOffset? FailedAt { get; init; }
     public string? TraceId { get; init; }
     public string? EventType { get; init; }
+    public Guid? SourceId { get; init; }
+    public string? SourceName { get; init; }
+    public bool SourceDeleted { get; init; }
     public Guid? TopicId { get; init; }
+    public string? TopicKey { get; init; }
+    public string? TopicName { get; init; }
+    public bool TopicDeleted { get; init; }
     public JsonElement? Payload { get; init; }
     public JsonElement? Metadata { get; init; }
-    public IReadOnlyList<EventDeliveryDto> EventDeliveries { get; init; } = [];
+    public IReadOnlyList<EventDeliveryDiagnosticsDto> EventDeliveries { get; init; } = [];
     public IReadOnlyList<DeliveryAttemptDiagnosticsDto> DeliveryAttempts { get; init; } = [];
+}
+
+public sealed record EventDeliveryDiagnosticsDto
+{
+    public required Guid EventDeliveryId { get; init; }
+    public required Guid SubscriptionId { get; init; }
+    public string? SubscriptionName { get; init; }
+    public bool SubscriptionDeleted { get; init; }
+    public required Guid DestinationId { get; init; }
+    public string? DestinationName { get; init; }
+    public bool DestinationDeleted { get; init; }
+    public required string Status { get; init; }
+    public required int LifetimeAttemptCount { get; init; }
+    public required int RetryCycleAttemptCount { get; init; }
+    public DateTimeOffset? DeliverAfter { get; init; }
+    public DateTimeOffset? FailedAt { get; init; }
 }
 
 public sealed record DeliveryAttemptDiagnosticsDto

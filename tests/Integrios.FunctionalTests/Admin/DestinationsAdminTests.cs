@@ -9,6 +9,20 @@ namespace Integrios.FunctionalTests.Admin;
 
 public sealed class DestinationsAdminTests(AdminApiFixture fixture) : SubscriptionAdminTestBase(fixture)
 {
+    [Fact]
+    public async Task Delete_AcceptsADisabledDestination()
+    {
+        HttpResponseMessage created = await CreateDestinationAsync("disabled-delete");
+        DestinationDto destination = (await created.Content.ReadFromJsonAsync<DestinationDto>(HostJson.Options))!;
+        (await client.SendAsync(AdminRequest(
+                HttpMethod.Post, $"/admin/tenants/{Fixture.TenantId}/destinations/{destination.Id}/disable")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await client.SendAsync(AdminRequest(
+                HttpMethod.Delete, $"/admin/tenants/{Fixture.TenantId}/destinations/{destination.Id}")))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
     // Fanout joins destinations without filtering on status, which is only safe because a
     // Destination an Enabled Subscription still points at cannot reach that status in the first
     // place. This is the test for that premise.

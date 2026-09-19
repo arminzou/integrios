@@ -849,6 +849,7 @@ function EditDestination({
   destination: Destination;
   onDone: (notice: string) => void;
 }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   /// Both reads that can now be wrong: this Destination, and any list it appears in.
   const reread = () => {
@@ -875,6 +876,18 @@ function EditDestination({
     onSuccess: (_, action) => {
       reread();
       onDone(action === "enable" ? "Destination enabled." : "Destination disabled.");
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.DELETE("/admin/tenants/{tenantId}/destinations/{id}", {
+          params: { path: { tenantId, id: destination.id } },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["destinations", tenantId] });
+      navigate(`/tenants/${tenantId}/destinations`);
     },
   });
 
@@ -914,8 +927,16 @@ function EditDestination({
             Enable
           </Button>
         )}
+        <ConfirmAction
+          label="Delete"
+          consequence="This Destination cannot be restored. Existing deliveries continue from their snapshots and keep its name in history. Deletion is refused while any Subscription references it."
+          question={`Delete the Destination "${destination.name}"?`}
+          confirmLabel={`Delete ${destination.name}`}
+          busy={remove.isPending}
+          onConfirm={() => remove.mutate()}
+        />
       </div>
-      <FormError message={formError(asProblem(setStatus.error))} />
+      <FormError message={formError(asProblem(setStatus.error ?? remove.error))} />
     </div>
   );
 }

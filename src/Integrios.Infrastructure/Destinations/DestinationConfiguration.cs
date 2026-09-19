@@ -37,6 +37,7 @@ internal sealed class DestinationConfiguration : IEntityTypeConfiguration<Destin
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
+        entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
         entity.Property(e => e.Authentication)
             .HasColumnType("jsonb")
             .HasColumnName("authentication");
@@ -59,5 +60,7 @@ internal sealed class DestinationConfiguration : IEntityTypeConfiguration<Destin
             .HasForeignKey(d => d.TenantId)
             .OnDelete(DeleteBehavior.ClientSetNull)
             .HasConstraintName("destinations_tenant_id_fkey");
+
+        entity.HasQueryFilter(destination => destination.DeletedAt == null);
     }
 }

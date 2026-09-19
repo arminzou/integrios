@@ -39,6 +39,8 @@ public interface ISubscriptionRepository
     Task<bool> SetStatusAsync(
         Guid tenantId, Guid topicId, Guid id, EnablementStatus status, CancellationToken cancellationToken);
 
+    Task<bool> DeleteAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken);
+
     // Destination authoring checks every active use before changing authentication, so header
     // ownership is validated from both directions under the same per-Destination lock.
     Task<IReadOnlyList<HttpDeliveryConfiguration>> ListActiveHttpDeliveriesAsync(

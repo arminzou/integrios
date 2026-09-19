@@ -24,10 +24,12 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
+        entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
         entity.Property(e => e.DestinationId).HasColumnName("destination_id");
         entity.Property(e => e.HttpDelivery)
             .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb")
             .HasColumnType("jsonb")
+            .IsRequired(false)
             .HasColumnName("http_delivery");
         entity.Property(e => e.HttpSuccess).HasColumnType("jsonb").HasColumnName("http_success");
         entity.Property(e => e.EventTypes)
@@ -59,5 +61,7 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
             .HasForeignKey(d => new { d.TenantId, d.TopicId })
             .OnDelete(DeleteBehavior.ClientSetNull)
             .HasConstraintName("fk_subscriptions_topic_tenant");
+
+        entity.HasQueryFilter(subscription => subscription.DeletedAt == null);
     }
 }

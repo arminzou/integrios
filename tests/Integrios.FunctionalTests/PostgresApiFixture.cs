@@ -187,6 +187,10 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         $"UPDATE sources SET status=@Status, event_types={database.Json("@EventTypes")} WHERE id=@Id",
         new { Id = sourceId, Status = status, EventTypes = eventTypesJson });
 
+    public Task DeleteSourceAsync(Guid sourceId) => ExecuteAsync(
+        $"UPDATE sources SET deleted_at={database.Now} WHERE id=@Id",
+        new { Id = sourceId });
+
     public Task<Guid?> GetEventSourceIdAsync(Guid eventId) =>
         ScalarAsync<Guid?>("SELECT source_id FROM events WHERE id=@Id", new { Id = eventId });
 

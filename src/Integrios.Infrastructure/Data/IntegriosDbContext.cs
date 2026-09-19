@@ -192,7 +192,9 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.ToTable("subscriptions", table =>
             {
                 table.HasCheckConstraint("ck_subscriptions_event_types_array", "ISJSON(event_types, ARRAY) = 1");
-                table.HasCheckConstraint("ck_subscriptions_http_delivery_json", "ISJSON(http_delivery, VALUE) = 1");
+                table.HasCheckConstraint(
+                    "ck_subscriptions_http_delivery_json",
+                    "http_delivery IS NULL OR ISJSON(http_delivery, VALUE) = 1");
                 table.HasCheckConstraint(
                     "ck_subscriptions_http_success_json",
                     "http_success IS NULL OR ISJSON(http_success, OBJECT) = 1");
@@ -203,7 +205,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.HttpDelivery)
                 .HasDefaultValueSql(JsonDefault("{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}"))
-                .HasColumnType(jsonType);
+                .HasColumnType(jsonType)
+                .IsRequired(false);
             entity.Property(e => e.EventTypes).HasColumnType(jsonType);
             entity.Property(e => e.HttpSuccess).HasColumnType(jsonType);
             entity.Property(e => e.MappingConfig).HasColumnType(jsonType);

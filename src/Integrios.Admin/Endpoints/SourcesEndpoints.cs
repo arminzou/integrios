@@ -20,6 +20,7 @@ public sealed class SourcesEndpoints : IEndpointGroup
         group.MapPut(UpdateSource, "/{id:guid}").Produces<SourceDto>();
         group.MapPost(EnableSource, "/{id:guid}/enable").Produces<SourceDto>();
         group.MapPost(DisableSource, "/{id:guid}/disable").Produces<SourceDto>();
+        group.MapDelete(DeleteSource, "/{id:guid}");
     }
 
     private static async Task<IResult> CreateSource(Guid tenantId, CreateSourceRequest request, IMediator mediator, CancellationToken cancellationToken)
@@ -90,6 +91,12 @@ public sealed class SourcesEndpoints : IEndpointGroup
         SourceDto? source = await mediator.Send(new SetSourceStatusCommand(tenantId, id, status), cancellationToken);
         return source is null ? Results.NotFound() : Results.Ok(source);
     }
+
+    private static async Task<IResult> DeleteSource(
+        Guid tenantId, Guid id, IMediator mediator, CancellationToken cancellationToken) =>
+        await mediator.Send(new DeleteSourceCommand(tenantId, id), cancellationToken)
+            ? Results.NoContent()
+            : Results.NotFound();
 }
 
 internal sealed record CreateSourceRequest(

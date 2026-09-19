@@ -51,4 +51,23 @@ internal sealed class SourceRepository(IntegriosDbContext context) : ISourceRepo
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(source => source.Status, status)
                 .SetProperty(source => source.UpdatedAt, DateTimeOffset.UtcNow), cancellationToken) > 0;
+
+    public async Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        JsonElement empty = JsonSerializer.Deserialize<JsonElement>("{}");
+        return await context.Sources
+            .Where(source => source.TenantId == tenantId && source.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(source => source.EventTypes, Array.Empty<string>())
+                .SetProperty(source => source.Configuration, empty)
+                .SetProperty(source => source.Verification, (SourceVerification?)null)
+                .SetProperty(source => source.InputRequirements, (JsonElement?)null)
+                .SetProperty(source => source.Mapping, (SourceMapping?)null)
+                .SetProperty(source => source.EventIdentityRule, (SourceEventIdentityRule?)null)
+                .SetProperty(source => source.Revision, string.Empty)
+                .SetProperty(source => source.Status, EnablementStatus.Disabled)
+                .SetProperty(source => source.DeletedAt, now)
+                .SetProperty(source => source.UpdatedAt, now), cancellationToken) > 0;
+    }
 }

@@ -63,6 +63,10 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             .Where(subscription => subscription.TenantId == tenantId && subscription.TopicId == topicId)
             .CountAsync(ct);
 
+    public Task<int> CountSourcesAsync(Guid tenantId, Guid topicId, CancellationToken ct) =>
+        context.Sources.AsNoTracking()
+            .CountAsync(source => source.TenantId == tenantId && source.TopicId == topicId, ct);
+
     public async Task<(IReadOnlyList<TopicListRow> Items, string? NextCursor)> ListByTenantAsync(
         Guid tenantId,
         TopicListFilter filter,
@@ -170,4 +174,14 @@ internal sealed class TopicRepository(IntegriosDbContext context, IDataProtectio
             .Where(subscription => subscription.TenantId == tenantId && subscription.TopicId == topicId)
             .Select(subscription => new SubscriptionSelection(subscription.Id, subscription.Name, subscription.EventTypes))
             .ToListAsync(ct);
+
+    public async Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken ct)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        return await context.Topics
+            .Where(topic => topic.TenantId == tenantId && topic.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(topic => topic.DeletedAt, now)
+                .SetProperty(topic => topic.UpdatedAt, now), ct) > 0;
+    }
 }
