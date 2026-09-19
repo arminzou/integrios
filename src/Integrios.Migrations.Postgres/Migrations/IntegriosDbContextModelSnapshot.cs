@@ -316,7 +316,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasFilter("(source_event_id IS NOT NULL)");
 
                     b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted")
-                        .IsDescending(false, true, true);
+                        .IsDescending(false, true, true)
+                        .HasAnnotation("SqlServer:Include", new[] { "Status" });
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "TenantId", "AcceptedAt", "Id" }, "idx_events_tenant_accepted"), new[] { "Status" });
 
                     b.HasIndex(new[] { "TenantId", "AcceptedAt" }, "idx_events_tenant_backlog")
                         .HasFilter("(status IN ('accepted', 'unrouted'))")
@@ -426,6 +429,9 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                     b.HasIndex(new[] { "Status", "LeaseExpiresAt", "DeliverAfter", "CreatedAt" }, "idx_event_deliveries_claimable")
                         .HasFilter("(status = ANY (ARRAY['pending'::text, 'in_flight'::text]))");
+
+                    b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_dead_lettered")
+                        .HasFilter("(status = 'dead_lettered')");
 
                     b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_event_id");
 

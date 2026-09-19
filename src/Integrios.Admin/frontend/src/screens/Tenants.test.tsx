@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type Call, page, quietBacklog as quietEventBacklog, stubHttp } from "../test/http";
+import { activityOf, type Call, page, quietBacklog as quietEventBacklog, stubHttp } from "../test/http";
 import { renderScreen } from "../test/router";
 import { TenantScreen, TenantsScreen } from "./Tenants";
 
@@ -228,10 +228,14 @@ const quietBacklog: Record<"awaiting_routing" | "unrouted" | "dead_lettered_deli
   dead_lettered_deliveries: { count: 0, oldest_at: null },
 };
 
-/// The overview screen reads its configuration counts, the shared Event backlog, and the activity
-/// summary. The summary is deliberately an empty window: Needs attention reports the backlog however
+/// The overview screen reads its configuration counts, the shared Event backlog, and the last hour
+/// of Event activity. Activity defaults to an empty hour: Needs attention reports the backlog however
 /// old, and must not depend on anything the rolling hour happened to catch.
-const stubOverview = (overview: Record<string, number>, backlog: Partial<typeof quietBacklog> = {}) =>
+const stubOverview = (
+  overview: Record<string, number>,
+  backlog: Partial<typeof quietBacklog> = {},
+  activity: ReturnType<typeof activityOf> = activityOf(),
+) =>
   stubHttp(({ url }) => {
     if (url.pathname.endsWith("/overview"))
       return {
@@ -247,18 +251,7 @@ const stubOverview = (overview: Record<string, number>, backlog: Partial<typeof 
         },
       };
     if (url.pathname.endsWith("/backlog")) return { status: 200, body: { ...quietBacklog, ...backlog } };
-    if (url.pathname.endsWith("/activity-summary"))
-      return {
-        status: 200,
-        body: {
-          events_accepted: 0,
-          awaiting_routing: 0,
-          unrouted: 0,
-          dead_lettered_deliveries: 0,
-          window_start: "2026-09-06T16:00:00Z",
-          window_end: "2026-09-06T17:00:00Z",
-        },
-      };
+    if (url.pathname.endsWith("/activity")) return { status: 200, body: activity };
     return { status: 200, body: tenant() };
   });
 
@@ -295,6 +288,31 @@ describe("The Tenant overview's Needs attention", () => {
     const attention = await screen.findByRole("region", { name: "Needs attention" });
     expect(within(attention).getByText("Nothing is waiting on an Operator.")).toBeTruthy();
     expect(within(attention).queryByRole("link")).toBeNull();
+  });
+});
+
+describe("The Tenant overview's Last 60 minutes", () => {
+  it("reports accepted Events and the same four outcomes the Events chart uses", async () => {
+    stubOverview(
+      {},
+      {},
+      activityOf({ 2: { routed: 5, unrouted: 1 }, 7: { routed: 2, delivery_dead_lettered: 1, awaiting_routing: 3 } }),
+    );
+
+    renderScreen(<TenantScreen tenantId={tenantId} />, `/tenants/${tenantId}`);
+
+    const panel = (await screen.findByRole("heading", { name: "Last 60 minutes" })).parentElement!;
+    await within(panel).findByText("12");
+    const values = Object.fromEntries(
+      Array.from(panel.querySelectorAll("dt")).map((term) => [term.textContent, term.nextElementSibling?.textContent]),
+    );
+    expect(values).toEqual({
+      "Events accepted": "12",
+      Routed: "7",
+      "Awaiting routing": "3",
+      Unrouted: "1",
+      "Delivery dead-lettered": "1",
+    });
   });
 });
 
@@ -386,7 +404,15 @@ describe("Tenant authoring", () => {
   });
 
   it("names the Tenant before deactivating it and calls nothing until it is confirmed", async () => {
-    const calls = stubHttp(({ method }) => (method === "POST" ? { status: 200 } : { status: 200, body: tenant() }));
+    const calls = stubHttp(({ method, url }) =>
+      method === "POST"
+        ? { status: 200 }
+        : url.pathname.endsWith("/backlog")
+          ? { status: 200, body: quietEventBacklog }
+          : url.pathname.endsWith("/activity")
+            ? { status: 200, body: activityOf() }
+            : { status: 200, body: tenant() },
+    );
 
     renderScreen(<TenantScreen tenantId={tenantId} />);
     fireEvent.click(await screen.findByRole("button", { name: "Deactivate" }));
@@ -413,6 +439,7 @@ describe("Deactivating a Tenant", () => {
         return { status: 202 };
       }
       if (url.pathname.endsWith("/backlog")) return { status: 200, body: quietEventBacklog };
+      if (url.pathname.endsWith("/activity")) return { status: 200, body: activityOf() };
       return { status: 200, body: tenant({ status, updated_at: `2026-09-01T00:00:0${status.length}Z` }) };
     });
 
