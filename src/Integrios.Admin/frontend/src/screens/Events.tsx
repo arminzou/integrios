@@ -22,7 +22,7 @@ import {
   WriteStatus,
 } from "../ui/controls";
 import { BodyPanel, CopyInline, CopyValue } from "../ui/copy";
-import { Filter, FilterSearch } from "../ui/fields";
+import { Filter, FilterSearch, SearchFieldChooser } from "../ui/fields";
 import { useListFilters } from "../ui/filters";
 import {
   CloseInspector,
@@ -95,6 +95,25 @@ export function useEventBacklog(tenantId: string) {
   });
 }
 
+/// The two identities an Event carries, and the one free-text filter that matches either. They are
+/// exact matches on different columns and the Admin API ANDs them, so two boxes could be set to
+/// identities belonging to different Events — an empty ledger with nothing saying why. One box whose
+/// field is chosen inside it cannot express that.
+type IdentityField = "source_event_id" | "event_type";
+
+const identities: Record<IdentityField, { label: string; placeholder: string; hint: string }> = {
+  source_event_id: {
+    label: "Source Event id",
+    placeholder: "Exact id…",
+    hint: "The sending system's id for this Event. Matched exactly, including case.",
+  },
+  event_type: {
+    label: "Event type",
+    placeholder: "Exact type…",
+    hint: "The routing name Subscriptions match on. Matched exactly, ignoring case.",
+  },
+};
+
 /// Every filter unset, so a scope replaces the current one without touching parameters that are not filters.
 const noFilters = Object.fromEntries(eventFilters.map((name) => [name, ""]));
 
@@ -110,6 +129,23 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   const filters = useListFilters(eventFilters);
   const applied = filters.values;
   const appliedCount = filters.applied;
+  // Which identity the one find box is matching. It follows the URL, so a link carrying either
+  // parameter opens the box on that field; an unfiltered ledger opens on the id, the identity an
+  // Operator arrives with most often.
+  const [chosenField, setChosenField] = useState<IdentityField>("source_event_id");
+  const findField: IdentityField = applied.event_type
+    ? "event_type"
+    : applied.source_event_id
+      ? "source_event_id"
+      : chosenField;
+  // Changing the field carries what is typed across rather than making it be typed again, and clears
+  // the parameter it leaves in the same write, so only one identity filter is ever applied.
+  const chooseField = (next: IdentityField) => {
+    setChosenField(next);
+    if (applied[findField]) filters.patch({ [findField]: "", [next]: applied[findField] });
+  };
+  // Shown beside the box while it is hovered or focused, and always the box's own description.
+  const findHint = identities[findField].hint;
 
   const sources = useQuery({
     queryKey: ["source-options", tenantId],
@@ -200,83 +236,93 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         <div className="flex flex-col gap-4">
           <FormError message={formError(asProblem(sources.error ?? topics.error))} />
 
-          <FilterBar applied={appliedCount} onClear={filters.clear}>
-            <FilterSearch
-              id="event-source-event-id"
-              label="Source Event id"
-              placeholder="Exact id…"
-              value={applied.source_event_id}
-              onChange={(value) => filters.set("source_event_id", value)}
-            />
-            <FilterSearch
-              id="event-type"
-              label="Event type"
-              placeholder="Exact type, e.g. order.created…"
-              value={applied.event_type}
-              onChange={(value) => filters.set("event_type", value)}
-            />
-            <Filter
-              id="event-source"
-              label="Source"
-              value={applied.source_id}
-              onChange={(value) => filters.set("source_id", value)}
-              hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
-              disabled={sources.isPending || sources.isError}
-            >
-              {(sources.data?.items ?? []).map((source) => (
-                <SelectItem key={source.id} value={source.id}>
-                  {source.type} · {source.id}
-                </SelectItem>
-              ))}
-            </Filter>
-            <Filter
-              id="event-topic"
-              label="Topic"
-              value={applied.topic_id}
-              onChange={(value) => filters.set("topic_id", value)}
-              hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
-              disabled={topics.isPending || topics.isError}
-            >
-              {(topics.data?.items ?? []).map((topic) => (
-                <SelectItem key={topic.id} value={topic.id}>
-                  {topic.name}
-                </SelectItem>
-              ))}
-            </Filter>
-            <Filter
-              id="event-status"
-              label="Event status"
-              value={applied.status}
-              onChange={(value) => filters.set("status", value)}
-              hint="How far the Event itself got."
-            >
-              {eventStatuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {statusLabel(status)}
-                </SelectItem>
-              ))}
-            </Filter>
-            {/* Delivery status is a separate filter over Delivery state. An Event matches when one
+          <div className="flex flex-col gap-1.5">
+            <FilterBar applied={appliedCount} onClear={filters.clear}>
+              <FilterSearch
+                id="event-find"
+                key={findField}
+                label={identities[findField].label}
+                placeholder={identities[findField].placeholder}
+                hint={findHint}
+                value={applied[findField]}
+                onChange={(value) => filters.set(findField, value)}
+                leading={
+                  <SearchFieldChooser
+                    label="Find an Event by"
+                    value={findField}
+                    onChange={(next) => chooseField(next as IdentityField)}
+                  >
+                    {Object.entries(identities).map(([name, identity]) => (
+                      <SelectItem key={name} value={name}>
+                        {identity.label}
+                      </SelectItem>
+                    ))}
+                  </SearchFieldChooser>
+                }
+              />
+              <Filter
+                id="event-source"
+                label="Source"
+                value={applied.source_id}
+                onChange={(value) => filters.set("source_id", value)}
+                hint={sources.data?.next_cursor ? "Showing the first 100 Sources." : undefined}
+                disabled={sources.isPending || sources.isError}
+              >
+                {/* The name is what an Operator authored the Source under and what the ledger's own
+                    rows show; its type and identifier answer questions this filter is not asking. */}
+                {(sources.data?.items ?? []).map((source) => (
+                  <SelectItem key={source.id} value={source.id}>
+                    {source.name}
+                  </SelectItem>
+                ))}
+              </Filter>
+              <Filter
+                id="event-topic"
+                label="Topic"
+                value={applied.topic_id}
+                onChange={(value) => filters.set("topic_id", value)}
+                hint={topics.data?.next_cursor ? "Showing the first 100 Topics." : undefined}
+                disabled={topics.isPending || topics.isError}
+              >
+                {(topics.data?.items ?? []).map((topic) => (
+                  <SelectItem key={topic.id} value={topic.id}>
+                    {topic.name}
+                  </SelectItem>
+                ))}
+              </Filter>
+              <Filter
+                id="event-status"
+                label="Event status"
+                value={applied.status}
+                onChange={(value) => filters.set("status", value)}
+              >
+                {eventStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {statusLabel(status)}
+                  </SelectItem>
+                ))}
+              </Filter>
+              {/* Delivery status is a separate filter over Delivery state. An Event matches when one
                 of its EventDeliveries is in that state; the Event's own status is untouched by it. */}
-            <Filter
-              id="event-delivery-status"
-              label="Delivery status"
-              value={applied.delivery_status}
-              onChange={(value) => filters.set("delivery_status", value)}
-              hint="Matches Events with at least one delivery in this state."
-            >
-              {deliveryStatuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {statusLabel(status)}
-                </SelectItem>
-              ))}
-            </Filter>
-            <AcceptedRangePill
-              from={applied.accepted_from}
-              to={applied.accepted_to}
-              onChange={(accepted_from, accepted_to) => filters.patch({ accepted_from, accepted_to })}
-            />
-          </FilterBar>
+              <Filter
+                id="event-delivery-status"
+                label="Delivery status"
+                value={applied.delivery_status}
+                onChange={(value) => filters.set("delivery_status", value)}
+              >
+                {deliveryStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {statusLabel(status)}
+                  </SelectItem>
+                ))}
+              </Filter>
+              <AcceptedRangePill
+                from={applied.accepted_from}
+                to={applied.accepted_to}
+                onChange={(accepted_from, accepted_to) => filters.patch({ accepted_from, accepted_to })}
+              />
+            </FilterBar>
+          </div>
         </div>
       ) : null}
 
@@ -311,8 +357,8 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Accepted</TableHead>
-                  <TableHead scope="col">Type</TableHead>
                   <TableHead scope="col">Source Event id</TableHead>
+                  <TableHead scope="col">Event Type</TableHead>
                   <TableHead scope="col">Event status</TableHead>
                   <TableHead scope="col">Deliveries</TableHead>
                 </TableRow>
@@ -345,13 +391,17 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
                           <TimeOfDay value={item.accepted_at} />
                         </NavLink>
                       </RowHeader>
-                      <TableCell>{item.event_type}</TableCell>
                       <TableCell className="text-[13px]">
                         {item.source_event_id ? (
                           <CopyInline oneLine label="Source Event id" value={item.source_event_id} />
                         ) : (
                           <span className="text-ink-secondary">—</span>
                         )}
+                      </TableCell>
+                      {/* Copyable for the same reason the Source Event id is: the find box matches a
+                          type exactly, so the way to search for one is to take it from a row. */}
+                      <TableCell className="text-[13px]">
+                        <CopyInline oneLine label="Event type" value={item.event_type} />
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={item.status} />

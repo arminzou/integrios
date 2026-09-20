@@ -119,8 +119,13 @@ export function CopyValue({
 /// moves down the list — a ledger that shifts under the cursor is harder to read than one carrying
 /// a little unused width.
 ///
-/// It stays reachable without a pointer: `group-focus-within` shows it once tabbing reaches it, so
-/// it is never a hover-only affordance.
+/// It stays reachable without a pointer: tabbing to the control shows it, so it is never a
+/// hover-only affordance.
+///
+/// The reveal is scoped to the value it copies rather than to the row or panel around it. A row
+/// carrying two copyable identifiers would otherwise sprout both controls at once wherever the
+/// pointer entered it, which reads as the row changing rather than as the value under the pointer
+/// offering something.
 ///
 /// Nothing is ever clipped. An identifier that ends in an ellipsis cannot be read back or compared
 /// against one in a ticket, and the copy control does not help an Operator who cannot see which of
@@ -132,7 +137,7 @@ export function CopyInline({ label, value, oneLine }: { label: string; value: st
   const Icon = state === "copied" ? Check : state === "failed" ? X : Copy;
 
   return (
-    <span className="flex items-center gap-1">
+    <span className="group/copy flex items-center gap-1">
       <span ref={shown} className={cn("font-mono", oneLine ? "whitespace-nowrap" : "block break-all")}>
         {value}
       </span>
@@ -143,7 +148,7 @@ export function CopyInline({ label, value, oneLine }: { label: string; value: st
         aria-label={`Copy ${label.toLowerCase()}`}
         // An outcome stays visible after the pointer leaves, or it would vanish with the button.
         className={cn(
-          "size-6 shrink-0 p-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+          "size-6 shrink-0 p-0 opacity-0 group-hover/copy:opacity-100 focus-visible:opacity-100",
           state === "idle" ? undefined : "opacity-100",
           tone,
         )}

@@ -100,7 +100,11 @@ describe("Event history", () => {
     expect(screen.getByLabelText("Delivery status")).toBeTruthy();
     const filters = screen.getByRole("region", { name: "Filters" });
     const sourceEventId = within(filters).getByRole("searchbox", { name: "Source Event id" });
-    expect(filters.querySelector("input, button")).toBe(sourceEventId);
+    // The find pill leads the bar, and its field chooser leads the pill.
+    expect(filters.querySelector("input, button")).toBe(
+      within(filters).getByRole("combobox", { name: "Find an Event by" }),
+    );
+    expect(sourceEventId.closest("form")!.querySelector("input")).toBe(sourceEventId);
     expect(sourceEventId.getAttribute("placeholder")).toBe("Exact id…");
     expect(screen.queryByRole("button", { name: "Apply filters" })).toBeNull();
     expect(screen.queryByText(/filter.? applied/)).toBeNull();
@@ -204,11 +208,13 @@ describe("Opening an Event from its row", () => {
     stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
     const { router } = renderScreen(<EventsScreen tenantId={tenantId} />, `/tenants/${tenantId}/events`);
-    // The ledger carries an identifier an Operator copies far more often than they open the Event
-    // it belongs to, so the button inside the row must not double as a way into the row.
-    fireEvent.click(await screen.findByRole("button", { name: "Copy source event id" }));
-
-    expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/events`);
+    // The ledger carries identifiers an Operator copies far more often than they open the Event they
+    // belong to — and the find box matches both exactly, so a row is where a search value comes from.
+    // Neither button inside the row may double as a way into the row.
+    for (const name of ["Copy source event id", "Copy event type"]) {
+      fireEvent.click(await screen.findByRole("button", { name }));
+      expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/events`);
+    }
   });
 });
 
@@ -258,15 +264,20 @@ describe("Ledger Event type and freshness", () => {
   it("filters the ledger by the Event type typed, and restores it from the URL", async () => {
     const calls = stubHttp(respondFor(page([routedEventWithDeadLetters])));
 
-    const { router } = renderScreen(<EventsScreen tenantId={tenantId} />);
+    // A link carrying event_type opens the find box on that field; switching it by hand is a menu
+    // interaction, so it is proven in the browser layer.
+    const { router } = renderScreen(
+      <EventsScreen tenantId={tenantId} />,
+      `/tenants/${tenantId}/events?event_type=seed`,
+    );
     const type = await screen.findByLabelText("Event type");
+    expect((type as HTMLInputElement).value).toBe("seed");
     const reads = eventsCall(calls).length;
     fireEvent.change(type, { target: { value: "Order.Created" } });
 
     // Typed, not committed: no read, no history entry, and the pill is not tinted as scope.
     expect(eventsCall(calls).length).toBe(reads);
-    expect(router.state.location.search).toBe("");
-    expect(type.closest("form")!.getAttribute("data-applied")).toBe("false");
+    expect(router.state.location.search).toBe("?event_type=seed");
 
     fireEvent.submit(type.closest("form")!);
 
@@ -535,11 +546,11 @@ describe("Event activity", () => {
         expect(eventsCall(calls).at(-1)?.url.searchParams.get("accepted_from")).toBe("2026-11-01T06:45:00Z"),
       );
 
-      const type = await screen.findByLabelText("Event type");
-      fireEvent.change(type, { target: { value: "order.created" } });
-      fireEvent.submit(type.closest("form")!);
+      const id = await screen.findByLabelText("Source Event id");
+      fireEvent.change(id, { target: { value: "nw-order-1" } });
+      fireEvent.submit(id.closest("form")!);
 
-      await waitFor(() => expect(router.state.location.search).toContain("event_type=order.created"));
+      await waitFor(() => expect(router.state.location.search).toContain("source_event_id=nw-order-1"));
       const applied = new URLSearchParams(router.state.location.search);
       expect(applied.get("accepted_from")).toBe("2026-11-01T06:45:00Z");
       expect(applied.get("accepted_to")).toBe("2026-11-01T06:50:00Z");

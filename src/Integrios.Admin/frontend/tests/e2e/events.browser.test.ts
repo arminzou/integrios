@@ -332,6 +332,54 @@ describe("The Event ledger and inspector in a real browser", () => {
     await page.close();
   }, 60_000);
 
+  /// The chooser is the one control that must never leave two identity filters applied: both are
+  /// exact matches the Admin API ANDs, so an id and a type from different Events would read as an
+  /// empty ledger with nothing saying why. Switching carries the typed value and clears the field it
+  /// leaves — and the leaving box's blur arrives after that switch, so this is also what proves the
+  /// blur cannot put the old parameter back.
+  it("switches the find field, carrying the value and leaving one identity filter applied", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
+
+    const find = page.getByRole("searchbox", { name: "Source Event id" });
+    await find.fill("order-42");
+    await find.press("Enter");
+    await page.waitForFunction(() => window.location.search === "?source_event_id=order-42");
+
+    // How the field matches is the box's own description, so assistive technology always has it, and
+    // it is drawn beside the box on hover and on focus, which a keyboard reaches too. It is out of
+    // flow, so the ledger does not move when it appears. The measured region is the whole ledger,
+    // which is on screen whether or not the scope matched any rows.
+    const said = page.locator(`#${await find.getAttribute("aria-describedby")}`);
+    expect(await said.textContent()).toMatch(/Matched exactly, including case/);
+    // Not drawn while the pill is neither hovered nor holding focus.
+    await page.getByRole("heading", { level: 1, name: "Events" }).click();
+    expect(await said.isVisible()).toBe(false);
+    const ledgerTop = async () => Math.round((await page.locator('[data-layout="events"]').boundingBox())!.y);
+    const before = await ledgerTop();
+    await find.hover();
+    expect(await said.isVisible()).toBe(true);
+    await find.focus();
+    expect(await said.isVisible()).toBe(true);
+    expect(await ledgerTop()).toBe(before);
+
+    await page.getByRole("combobox", { name: "Find an Event by" }).click();
+    await page.getByRole("option", { name: "Event type" }).click();
+
+    await page.waitForFunction(() => window.location.search === "?event_type=order-42");
+    const applied = new URLSearchParams(new URL(page.url()).search);
+    expect(applied.get("source_event_id")).toBeNull();
+    expect(await page.getByRole("searchbox", { name: "Event type" }).inputValue()).toBe("order-42");
+
+    // Switching with a value typed but not committed: opening the menu blurs the box, which commits
+    // under the field being left, and the switch must still end with one parameter, not two.
+    await page.getByRole("searchbox", { name: "Event type" }).fill("order.placed");
+    await page.getByRole("combobox", { name: "Find an Event by" }).click();
+    await page.getByRole("option", { name: "Source Event id" }).click();
+
+    await page.waitForFunction(() => window.location.search === "?source_event_id=order.placed");
+    await page.close();
+  }, 60_000);
+
   it("drags across Activity intervals to scope the ledger to their accepted range", async () => {
     const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
     const intervals = page.getByRole("group", { name: /Event activity intervals/ }).getByRole("button");
@@ -383,18 +431,25 @@ describe("The Event ledger and inspector in a real browser", () => {
       await page.close();
     }, 60_000);
 
-    it("commits a Custom range's two ends together on Enter, and on closing", async () => {
+    it("commits a Custom range's two ends together on Apply and on Enter, and discards a draft on leaving", async () => {
       const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 }, [], "UTC");
       await page.getByRole("button", { name: /^Accepted/ }).click();
       await panel(page).getByLabel("From").fill("2026-09-01T09:00");
       await panel(page).getByLabel("To", { exact: true }).fill("2026-09-01T10:00");
-      // Nothing is read until the Operator finishes, so a half-open range is never in the URL.
+      // Nothing is read until the Operator applies, so a half-open range is never in the URL.
       expect(accepted(page)).toEqual([null, null]);
-      await panel(page).getByLabel("To", { exact: true }).press("Enter");
+      await panel(page).getByRole("button", { name: "Apply" }).click();
       await expect.poll(() => accepted(page)).toEqual(["2026-09-01T09:00:00.000Z", "2026-09-01T10:00:00.000Z"]);
 
+      // Enter is the same act from the keyboard.
       await page.getByRole("button", { name: /^Accepted/ }).click();
       await panel(page).getByLabel("To", { exact: true }).fill("2026-09-01T11:00");
+      await panel(page).getByLabel("To", { exact: true }).press("Enter");
+      await expect.poll(() => accepted(page)).toEqual(["2026-09-01T09:00:00.000Z", "2026-09-01T11:00:00.000Z"]);
+
+      // Leaving the panel is not applying: the range in force is the one that was applied.
+      await page.getByRole("button", { name: /^Accepted/ }).click();
+      await panel(page).getByLabel("To", { exact: true }).fill("2026-09-01T23:00");
       await page.keyboard.press("Escape");
       await expect.poll(() => accepted(page)).toEqual(["2026-09-01T09:00:00.000Z", "2026-09-01T11:00:00.000Z"]);
       await page.close();

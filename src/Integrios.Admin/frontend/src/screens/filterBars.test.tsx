@@ -77,8 +77,9 @@ const bars: { screen: string; element: ReactElement; url: string; controls: Cont
     element: <EventsScreen tenantId={tenantId} />,
     url: `/tenants/${tenantId}/events?status=routed`,
     controls: [
+      // The chooser sits inside the find pill, in front of its box.
+      { role: "combobox", name: "Find an Event by" },
       { role: "searchbox", name: "Source Event id", placeholder: "Exact id…" },
-      { role: "searchbox", name: "Event type", placeholder: "Exact type, e.g. order.created…" },
       { role: "combobox", name: "Source" },
       { role: "combobox", name: "Topic" },
       { role: "combobox", name: "Event status" },

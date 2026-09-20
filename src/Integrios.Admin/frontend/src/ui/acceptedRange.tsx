@@ -38,7 +38,8 @@ export function AcceptedRangePill({
 }) {
   const [open, setOpen] = useState(false);
   // What is typed in the Custom inputs, as the local wall clock they hold. It is read into the
-  // range only when the Operator finishes — Enter, or closing — so a half-open range is never read.
+  // range only when the Operator applies it — Apply, or Enter — so a half-open range is never read
+  // and leaving the panel discards a draft rather than scoping the ledger to it.
   const [draft, setDraft] = useState({ from: "", to: "" });
 
   // A bound the Operator did not edit keeps its instant; an unchanged range writes nothing, so
@@ -48,6 +49,7 @@ export function AcceptedRangePill({
       edited === localInputValue(original) ? original : (instant(edited) ?? "");
     const [nextFrom, nextTo] = [bound(draft.from, from), bound(draft.to, to)];
     if (nextFrom !== from || nextTo !== to) onChange(nextFrom, nextTo);
+    setOpen(false);
   };
 
   return (
@@ -55,7 +57,6 @@ export function AcceptedRangePill({
       open={open}
       onOpenChange={(next) => {
         if (next) setDraft({ from: localInputValue(from), to: localInputValue(to) });
-        else commitCustom();
         setOpen(next);
       }}
     >
@@ -102,27 +103,30 @@ export function AcceptedRangePill({
                   if (event.key !== "Enter") return;
                   event.preventDefault();
                   commitCustom();
-                  setOpen(false);
                 }}
                 className="h-9 rounded-md border border-input bg-transparent px-2 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
               />
             </label>
           ))}
-          <p className="m-0 text-xs text-ink-secondary">Applied together when you press Enter or close this panel.</p>
         </fieldset>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="self-start"
-          disabled={from === "" && to === ""}
-          onClick={() => {
-            onChange("", "");
-            setOpen(false);
-          }}
-        >
-          Clear
-        </Button>
+        {/* Both ends land together, so the range is applied by one control rather than by leaving. */}
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={from === "" && to === ""}
+            onClick={() => {
+              onChange("", "");
+              setOpen(false);
+            }}
+          >
+            Clear
+          </Button>
+          <Button type="button" size="sm" onClick={commitCustom}>
+            Apply
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );
