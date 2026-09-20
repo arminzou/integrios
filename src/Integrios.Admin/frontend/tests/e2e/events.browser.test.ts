@@ -140,6 +140,9 @@ async function openEvents(
   );
   await browserPage.route(`**/admin/tenants/${tenantId}/sources*`, (route) => route.fulfill({ json: listPage([]) }));
   await browserPage.route(`**/admin/tenants/${tenantId}/topics*`, (route) => route.fulfill({ json: listPage([]) }));
+  await browserPage.route(`**/admin/tenants/${tenantId}/destinations*`, (route) =>
+    route.fulfill({ json: listPage([]) }),
+  );
   await browserPage.route(`**/admin/tenants/${tenantId}`, (route) => route.fulfill({ json: tenant }));
   await browserPage.goto(`${origin}${path}`);
   await browserPage.getByRole("heading", { level: 1, name: "Events" }).waitFor();
@@ -296,6 +299,7 @@ describe("The Event ledger and inspector in a real browser", () => {
     const wide = await openEvents(`/tenants/${tenantId}/events/${loadedEventId}`, { width: 1512, height: 950 }, [
       deadLetteredDelivery,
     ]);
+    await wide.getByRole("button", { name: "Replay" }).waitFor();
 
     const reach = await wide.evaluate(() => {
       const inspector = document.querySelector('aside[aria-label="Event detail"]')!;
@@ -409,9 +413,15 @@ describe("The Event ledger and inspector in a real browser", () => {
     expect(await page.getByRole("searchbox", { name: "Event type" }).inputValue()).toBe("order-42");
 
     // Switching with a value typed but not committed: opening the menu blurs the box, which commits
-    // under the field being left, and the switch must still end with one parameter, not two.
+    // under the field being left, and the switch must still end with one parameter, not two. The
+    // switch carries what the screen has applied, so wait for the read the commit issues: React
+    // adopts the committed value a render after the URL, and the menu can be picked before that.
     await page.getByRole("searchbox", { name: "Event type" }).fill("order.placed");
+    const committed = page.waitForRequest(
+      (request) => new URL(request.url()).searchParams.get("event_type") === "order.placed",
+    );
     await page.getByRole("combobox", { name: "Find an Event by" }).click();
+    await committed;
     await page.getByRole("option", { name: "Source Event id" }).click();
 
     await page.waitForFunction(() => window.location.search === "?source_event_id=order.placed");
@@ -478,6 +488,9 @@ describe("The Event ledger and inspector in a real browser", () => {
       expect(accepted(page)).toEqual([null, null]);
       await panel(page).getByRole("button", { name: "Apply" }).click();
       await expect.poll(() => accepted(page)).toEqual(["2026-09-01T09:00:00.000Z", "2026-09-01T10:00:00.000Z"]);
+      await expect
+        .poll(() => page.getByRole("button", { name: /^Accepted/ }).getAttribute("title"))
+        .toBe("2026-09-01T09:00:00.000Z – 2026-09-01T10:00:00.000Z");
 
       // Enter is the same act from the keyboard.
       await page.getByRole("button", { name: /^Accepted/ }).click();
