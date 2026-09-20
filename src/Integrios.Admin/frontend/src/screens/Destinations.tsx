@@ -31,7 +31,7 @@ import { CopyInline } from "../ui/copy";
 import { Filter, FilterSearch, Form, SelectField, TextAreaField, TextField } from "../ui/fields";
 import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
-import { formatJson, object, parseJson, sameJson } from "../ui/json";
+import { formatJson, isObject, object, parseJson, sameJson } from "../ui/json";
 import {
   CloseInspector,
   Details,
@@ -129,9 +129,6 @@ type CreateValues = z.infer<typeof createSchema>;
 
 /// An optional field left untouched is absent, not empty.
 const optional = (text: string) => text.trim() || null;
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const stringList = (value: unknown): string[] | null =>
   Array.isArray(value) && value.every((item) => typeof item === "string") ? value : null;

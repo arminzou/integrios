@@ -305,14 +305,18 @@ export function FilterSearch({
       <Label htmlFor={id} className="sr-only">
         {label}
       </Label>
+      {/* A scope, not a detail about the Operator: the browser has nothing to offer from past forms,
+          and a name, an id or an Event type is not prose to be spell-checked against a dictionary. */}
       <input
         id={id}
         type="search"
         value={typed}
         placeholder={placeholder ?? label}
+        autoComplete="off"
+        spellCheck={false}
         onChange={(event) => setTyped(event.target.value)}
         onBlur={commit}
-        className={cn("min-w-0 appearance-none rounded-sm bg-transparent font-medium outline-none", "flex-1")}
+        className="min-w-0 flex-1 appearance-none rounded-sm bg-transparent font-medium outline-none"
       />
     </form>
   );

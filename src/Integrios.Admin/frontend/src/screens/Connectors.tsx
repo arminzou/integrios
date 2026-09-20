@@ -25,7 +25,7 @@ import {
 } from "../ui/controls";
 import { Filter } from "../ui/fields";
 import { useListFilters } from "../ui/filters";
-import { parseJson } from "../ui/json";
+import { isObject, parseJson } from "../ui/json";
 import {
   CloseInspector,
   Details,
@@ -201,9 +201,6 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
     </Page>
   );
 }
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 function ConnectorManifestImport() {
   const queryClient = useQueryClient();

@@ -33,6 +33,12 @@ export function sameJson(left: unknown, right: unknown): boolean {
 
 export type JsonObject = Record<string, unknown>;
 
+/// Whether a value is a JSON object at all, for a caller that must tell "absent or wrong shape"
+/// from "an object with nothing in it" — which `object` deliberately cannot.
+export function isObject(value: unknown): value is JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 /// Reading one of those documents back. A value that is not an object reads as an empty one rather
 /// than throwing, because the document's shape belongs to the Connector contract and a screen
 /// showing a fact it cannot find must still render.
