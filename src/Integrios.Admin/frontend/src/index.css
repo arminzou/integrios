@@ -276,6 +276,23 @@
 /* The quiet label over a group inside a panel — `EventDeliveries`, `Configuration`, `Manifest`. It
    is a heading, not a title: the panel above it already said what is being read, so this only names
    the part. Sans-serif and uppercase rather than the serif the titles carry. */
+/* A scroll area whose thumb is drawn only while the area is under the pointer, or while something
+   inside it holds focus — the keyboard's equivalent of hovering, so tabbing into the panel is not a
+   worse way to find out it scrolls. The track keeps its width either way, so the thumb appearing
+   never reflows what is beside it, and the wheel, the keys and the touch gesture never depended on
+   the thumb being painted. Owner's choice: a calm surface over an always-visible cue. */
+@layer components {
+  .scroll-quiet {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .scroll-quiet:hover,
+  .scroll-quiet:focus-within {
+    scrollbar-color: color-mix(in srgb, var(--ink) 25%, transparent) transparent;
+  }
+}
+
 @layer components {
   .eyebrow {
     margin: 0;
