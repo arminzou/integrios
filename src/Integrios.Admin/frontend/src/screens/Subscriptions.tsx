@@ -399,15 +399,10 @@ export function SubscriptionsScreen({
                       </NavLink>
                     </RowHeader>
                     <TableCell>
-                      <Link className="no-underline" to={`/tenants/${tenantId}/topics/${subscription.topic_id}`}>
-                        {subscription.topic_name}
-                      </Link>
+                      <Link to={`/tenants/${tenantId}/topics/${subscription.topic_id}`}>{subscription.topic_name}</Link>
                     </TableCell>
                     <TableCell>
-                      <Link
-                        className="no-underline"
-                        to={`/tenants/${tenantId}/destinations/${subscription.destination_id}`}
-                      >
+                      <Link to={`/tenants/${tenantId}/destinations/${subscription.destination_id}`}>
                         {subscription.destination_name}
                       </Link>
                     </TableCell>
