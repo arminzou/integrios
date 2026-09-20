@@ -122,14 +122,28 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   // The URL is the scope the ledger reads under, so a filtered ledger is a link and Back restores
   // the previous scope. Every filter applies as it changes; a value typed in a free-text box is not
   // scope until it is committed.
-  const [searchParams] = useSearchParams();
-  const query = searchParams.toString();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const identityConflict = Boolean(searchParams.get("event_type") && searchParams.get("source_event_id"));
+  const linkedParams = new URLSearchParams(searchParams);
+  if (identityConflict) linkedParams.delete("source_event_id");
+  const query = linkedParams.toString();
   // Selecting and closing an Event keeps the ledger's scope, so the list beside the inspector is
   // still the one the Operator selected from.
   const search = query ? `?${query}` : "";
   const filters = useListFilters(eventFilters);
-  const applied = filters.values;
-  const appliedCount = filters.applied;
+  const applied = identityConflict ? { ...filters.values, source_event_id: "" } : filters.values;
+  const appliedCount = filters.applied - Number(identityConflict);
+  useEffect(() => {
+    if (!identityConflict) return;
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("source_event_id");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [identityConflict, setSearchParams]);
   // Which identity the one find box is matching. It follows the URL, so a link carrying either
   // parameter opens the box on that field; an unfiltered ledger opens on the id, the identity an
   // Operator arrives with most often.
