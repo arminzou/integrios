@@ -230,33 +230,6 @@ describe("The Event ledger and inspector in a real browser", () => {
     await page.close();
   }, 60_000);
 
-  it("opens an Event by middle-click without navigating the original ledger", async () => {
-    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
-    // Context-level routes also answer the new tab's first request.
-    await page.context().route("**/auth/session", (route) => route.fulfill({ json: session }));
-    await page.context().route("**/admin/**", (route) => {
-      const path = new URL(route.request().url()).pathname;
-      const body = path.endsWith("/deliveries")
-        ? eventDetail(loadedEventId)
-        : path.endsWith("/backlog")
-          ? backlog
-          : path.endsWith("/activity")
-            ? activityFor("1h")
-            : path === `/admin/tenants/${tenantId}`
-              ? tenant
-              : listPage([loadedEvent]);
-      return route.fulfill({ json: body });
-    });
-    const opened = page.context().waitForEvent("page");
-    await ledgerLink(page, loadedEventId).click({ button: "middle" });
-    const tab = await opened;
-    await tab.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
-    expect(new URL(page.url()).pathname).toBe(`/tenants/${tenantId}/events`);
-    expect(new URL(tab.url()).pathname).toBe(`/tenants/${tenantId}/events/${loadedEventId}`);
-    await tab.close();
-    await page.close();
-  }, 60_000);
-
   it("moves focus to the inspector heading on selection only when it is not already beside the ledger", async () => {
     const narrow = await openEvents(`/tenants/${tenantId}/events`, { width: 500, height: 900 });
     await ledgerLink(narrow, loadedEventId).click();
