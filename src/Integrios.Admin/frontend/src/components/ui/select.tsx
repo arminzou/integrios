@@ -19,13 +19,22 @@ function SelectValue({ ...props }: React.ComponentProps<typeof SelectPrimitive.V
   return <SelectPrimitive.Value data-slot="select-value" {...props} />;
 }
 
-function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
+function SelectTrigger({
+  className,
+  children,
+  /// Drops the box of its own, for a trigger that sits inside another control — the field chooser
+  /// in a search pill. `cn` joins classes without resolving Tailwind conflicts, so a caller cannot
+  /// reliably undo the default box from the outside.
+  unstyled,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Trigger> & { unstyled?: boolean }) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1 text-sm whitespace-nowrap outline-none disabled:cursor-not-allowed disabled:opacity-50",
-        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+        unstyled
+          ? "flex min-w-0 items-center gap-1.5 rounded-sm bg-transparent text-sm whitespace-nowrap outline-none disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          : "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1 text-sm whitespace-nowrap outline-none disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20",
         "[&>span]:min-w-0 [&>span]:truncate",
         className,
       )}

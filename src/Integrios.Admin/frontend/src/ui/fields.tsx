@@ -180,10 +180,13 @@ export function SelectField<TValues extends FieldValues>({
 export const filterPill =
   "inline-flex h-9 max-w-full items-center gap-2 rounded-md border border-input bg-surface px-2.5 text-sm whitespace-nowrap hover:bg-hover-surface data-[applied=true]:border-accent-border data-[applied=true]:bg-selected-surface data-[applied=true]:text-selected-ink";
 
-const searchFilterPill = cn(
-  filterPill,
-  "w-full max-w-64 focus-within:border-accent-border focus-within:bg-selected-surface focus-within:text-selected-ink",
-);
+const searchFilterPill = (wide?: boolean) =>
+  cn(
+    filterPill,
+    "group relative w-full focus-within:border-accent-border focus-within:bg-selected-surface focus-within:text-selected-ink",
+    // A pill with a leading control gives that control the padding, so it can reach the pill's edge.
+    wide ? "max-w-[26rem] pl-0" : "max-w-64",
+  );
 
 /// A list filter, which belongs to the list rather than to a form: it re-reads from the first cursor
 /// as soon as it changes, so there is nothing to submit and no schema to validate. It renders the
@@ -263,12 +266,52 @@ export function Filter({
 /// blur rather than on every keystroke: each committed value is a different query with its own
 /// pages, so typing a nine-character name straight into the URL would restart the cursor nine
 /// times and issue eight reads nobody asked for.
+/// Which field a search pill is matching, chosen inside the pill itself. A list whose one free-text
+/// filter could mean either of two fields offers this rather than a box per field: two boxes are
+/// ANDed, so they can be set to identities belonging to different rows, and the list then comes back
+/// empty with nothing saying why. One box and this chooser cannot express that.
+///
+/// It is muted and reads as part of the box, not as a filter of its own: the field is not scope, the
+/// value in the box is.
+export function SearchFieldChooser({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      {/* The trigger fills the zone it sits in rather than floating inside the pill, so the menu
+          Radix anchors to it opens where every other filter's menu opens: at the pill's leading
+          edge, below the pill. Anchoring to a button tucked inside the pill is what put this menu a
+          few pixels high and inset, and no offset can fix that for every width. */}
+      <SelectTrigger unstyled aria-label={label} className="h-full px-2.5 font-medium text-ink-secondary">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
+  );
+}
+
+/// `leading` puts a control inside the pill, in front of the box: the Event ledger chooses there
+/// which identity it is searching. It stays a separate control with its own name — the pill's own
+/// label belongs to the input and is bound to it by id, so no label names two controls at once.
+///
+/// `hint` says how the box matches. It is the box's accessible description, and the screen renders
+/// the same sentence where it has room; see `FilterHint`.
 export function FilterSearch({
   id,
   label,
   placeholder,
   value,
   onChange,
+  hint,
+  leading,
 }: {
   id: string;
   /// The field the box matches; it is the box's accessible name.
@@ -277,6 +320,8 @@ export function FilterSearch({
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
+  hint?: string;
+  leading?: ReactNode;
 }) {
   const [typed, setTyped] = useState(value);
   const [seen, setSeen] = useState(value);
@@ -295,7 +340,7 @@ export function FilterSearch({
 
   return (
     <form
-      className={searchFilterPill}
+      className={searchFilterPill(Boolean(leading))}
       data-applied={String(Boolean(value))}
       onSubmit={(event) => {
         event.preventDefault();
@@ -305,6 +350,13 @@ export function FilterSearch({
       <Label htmlFor={id} className="sr-only">
         {label}
       </Label>
+      {/* The chooser is muted and divided from the box, so the pill reads as one filter whose field
+          happens to be selectable rather than as two controls sharing a border. */}
+      {leading ? (
+        <span className="-my-px -ml-px flex h-[calc(100%+2px)] items-center border-r text-ink-secondary">
+          {leading}
+        </span>
+      ) : null}
       {/* A scope, not a detail about the Operator: the browser has nothing to offer from past forms,
           and a name, an id or an Event type is not prose to be spell-checked against a dictionary. */}
       <input
@@ -312,12 +364,24 @@ export function FilterSearch({
         type="search"
         value={typed}
         placeholder={placeholder ?? label}
+        aria-describedby={hint ? `${id}-hint` : undefined}
         autoComplete="off"
         spellCheck={false}
         onChange={(event) => setTyped(event.target.value)}
         onBlur={commit}
         className="min-w-0 flex-1 appearance-none rounded-sm bg-transparent font-medium outline-none"
       />
+      {/* How the box matches, shown beside it while the pill is hovered or holds focus — a keyboard
+          and a touch screen reach it too — and always present as the box's own description, so it is
+          announced whether or not it is being drawn. Out of flow, so the list below never moves. */}
+      {hint ? (
+        <span
+          id={`${id}-hint`}
+          className="pointer-events-none absolute top-full left-0 z-50 mt-1.5 hidden max-w-[29rem] rounded-md bg-ink px-2 py-1.5 text-xs font-normal text-surface whitespace-normal group-hover:block group-focus-within:block"
+        >
+          {hint}
+        </span>
+      ) : null}
     </form>
   );
 }
