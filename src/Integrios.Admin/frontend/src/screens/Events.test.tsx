@@ -157,6 +157,21 @@ describe("Event history", () => {
     expect((screen.getByLabelText("Source Event id") as HTMLInputElement).value).toBe("order-42");
   });
 
+  it("lets Event type win when a copied link carries both identity filters", async () => {
+    const calls = stubHttp(respondFor(page([])));
+    const { router } = renderScreen(
+      <EventsScreen tenantId={tenantId} />,
+      `/tenants/${tenantId}/events?source_event_id=order-42&event_type=order.created`,
+    );
+
+    await waitFor(() => expect(eventsCall(calls).length).toBeGreaterThan(0));
+    const read = eventsCall(calls)[0].url.searchParams;
+    expect(read.get("event_type")).toBe("order.created");
+    expect(read.has("source_event_id")).toBe(false);
+    await waitFor(() => expect(router.state.location.search).toBe("?event_type=order.created"));
+    expect((screen.getByLabelText("Event type") as HTMLInputElement).value).toBe("order.created");
+  });
+
   it("reports unavailable filter options instead of presenting an empty picker", async () => {
     // A ledger with a row in it, because the filter form is only offered over a ledger there is
     // something to narrow.
