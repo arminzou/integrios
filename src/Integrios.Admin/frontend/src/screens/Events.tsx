@@ -27,6 +27,7 @@ import { useListFilters } from "../ui/filters";
 import {
   CloseInspector,
   Inspector,
+  InspectorLoading,
   InspectorPlaceholder,
   openRow,
   PageHeader,
@@ -593,7 +594,7 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
   const problem = asProblem(event.error);
   if (problem)
     return (
-      <Inspector label="Event detail">
+      <Inspector label="Event detail" fill>
         {/* The close is offered on a failed read too: an Event that cannot be read is exactly when
             an Operator wants the ledger back, and without this the only way out is the browser. */}
         <div className="flex items-start justify-between gap-3">
@@ -605,12 +606,7 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
         <ReadError problem={problem} what="This Event" back={{ to: closed, label: "Back to Events" }} />
       </Inspector>
     );
-  if (!event.data)
-    return (
-      <Inspector label="Event detail">
-        <p>Loading…</p>
-      </Inspector>
-    );
+  if (!event.data) return <InspectorLoading label="Event detail" />;
 
   const current = event.data;
   const attempts = current.delivery_attempts ?? [];
@@ -619,7 +615,7 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
   const shownAttempts = allAttempts ? attempts : attempts.slice(-attemptWindow);
 
   return (
-    <Inspector label="Event detail">
+    <Inspector label="Event detail" fill>
       <div className="flex items-start justify-between gap-3">
         {/* The identifier under a panel heading is the same shape on every detail screen: mono, one
             step down, in secondary ink, and wrapped rather than clipped so it reads whole. This one

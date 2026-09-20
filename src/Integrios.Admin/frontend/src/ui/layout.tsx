@@ -146,12 +146,34 @@ export function SplitList({ children }: { children: ReactNode }) {
 
 /// Sticky at desktop so the detail stays put while the list beside it is scanned. It carries its
 /// own accessible name because it is a complementary region, not a second page.
-export function Inspector({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+///
+/// `fill` gives it one height at desktop — the viewport, less its own offset — whatever it holds,
+/// and its own scrollbar for the rest. A panel that sizes to its content decides how far the whole
+/// page scrolls whenever it is the taller column: an Event with a long attempt history pushes the
+/// list's footer out of reach, and every change of selection resizes the page under the Operator,
+/// because the panel is briefly a line of text while its read is in flight. The browser clamps the
+/// scroll position to the shorter page and returns it when the content lands, which reads as the
+/// list jumping and snapping back. One height means the selection cannot move the page at all. A
+/// screen whose detail is short and always loaded needs none of this. Below the breakpoint the panel
+/// is stacked rather than sticky, and a capped panel would be a scroll area inside a scrolling page.
+export function Inspector({
+  label,
+  className,
+  fill,
+  children,
+}: {
+  label: string;
+  className?: string;
+  fill?: boolean;
+  children: ReactNode;
+}) {
   return (
     <aside
       aria-label={label}
       className={cn(
-        "flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4 min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none",
+        "flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4",
+        "min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none",
+        fill && "scroll-quiet min-[1180px]:h-[calc(100vh-2rem)] min-[1180px]:overflow-y-auto",
         className,
       )}
     >
@@ -178,6 +200,21 @@ export function InspectorPlaceholder({ label, children }: { label: string; child
   return (
     <Inspector label={label} className="hidden border-0 bg-transparent p-0 min-[1180px]:flex min-[1180px]:pt-0.5">
       <p className="m-0 text-[13px] text-ink-secondary">{children}</p>
+    </Inspector>
+  );
+}
+
+/// What a detail panel shows while its read is in flight. It holds the panel's box rather than
+/// collapsing to a line of text: the panel is one of the two columns, so a panel that shrinks takes
+/// the page's height with it, the browser clamps the scroll position to the shorter page, and the
+/// Operator is thrown up the list and back as the content lands. Reserving the height costs a little
+/// empty panel; not reserving it costs the reading position.
+export function InspectorLoading({ label }: { label: string }) {
+  return (
+    <Inspector label={label} fill className="min-h-96">
+      <p className="m-0 text-[13px] text-ink-secondary" role="status">
+        Loading…
+      </p>
     </Inspector>
   );
 }

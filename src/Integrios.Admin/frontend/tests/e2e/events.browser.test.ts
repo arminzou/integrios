@@ -189,6 +189,44 @@ describe("The Event ledger and inspector in a real browser", () => {
     await page.close();
   }, 60_000);
 
+  /// The panel is one of the two columns, so a panel that sizes to its content decides how far the
+  /// page scrolls. Swapping the selection makes it a line of text until the read answers, and the
+  /// browser clamps the scroll position to the shorter page and returns it when the content lands —
+  /// the Operator is thrown up the list and back. Measured here rather than described, because
+  /// nothing else on screen changes and no other test would notice.
+  it("keeps the page's height and the reading position while the selection's detail loads", async () => {
+    const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 620 });
+    await ledgerLink(page, loadedEventId).click();
+    await page.getByRole("heading", { level: 2, name: `Event ${loadedEventId}` }).waitFor();
+
+    // Hold the detail read open, so the swap's loading state is what the measurements catch.
+    let answer = () => {};
+    await page.route(`**/admin/tenants/${tenantId}/events/*/deliveries`, async (route) => {
+      await new Promise<void>((done) => {
+        answer = done;
+      });
+      return route.fulfill({ json: eventDetail(secondEventId) });
+    });
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const reading = await page.evaluate(() => ({
+      y: Math.round(window.scrollY),
+      height: document.documentElement.scrollHeight,
+    }));
+    expect(reading.y).toBeGreaterThan(0);
+
+    await ledgerLink(page, secondEventId).click();
+    await page.getByText("Loading…").waitFor();
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(reading.height);
+    expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(reading.y);
+
+    answer();
+    await page.getByRole("heading", { level: 2, name: `Event ${secondEventId}` }).waitFor();
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(reading.height);
+    expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(reading.y);
+    await page.close();
+  }, 60_000);
+
   it("opens an Event by middle-click without navigating the original ledger", async () => {
     const page = await openEvents(`/tenants/${tenantId}/events`, { width: 1280, height: 900 });
     // Context-level routes also answer the new tab's first request.
