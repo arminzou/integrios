@@ -524,17 +524,6 @@ function sourceConfiguration(values: BrokerValues): Record<string, unknown> {
   };
 }
 
-const normalizedJson = (value: unknown): unknown =>
-  Array.isArray(value)
-    ? value.map(normalizedJson)
-    : value !== null && typeof value === "object"
-      ? Object.fromEntries(
-          Object.entries(value)
-            .sort(([left], [right]) => left.localeCompare(right))
-            .map(([key, item]) => [key, normalizedJson(item)]),
-        )
-      : value;
-
 function brokerFields(configuration: unknown): BrokerValues | null {
   const document = object(configuration);
   const authentication = object(document.authentication);
@@ -561,9 +550,7 @@ function brokerFields(configuration: unknown): BrokerValues | null {
     broker_authentication: brokerAuthentication,
     broker_secret_ref: brokerAuthentication === "connection_string" ? String(authentication.secret_ref) : "",
   };
-  return JSON.stringify(normalizedJson(configuration)) === JSON.stringify(normalizedJson(sourceConfiguration(fields)))
-    ? fields
-    : null;
+  return sameJson(configuration, sourceConfiguration(fields)) ? fields : null;
 }
 
 const sourceFilters = ["type", "topic_id", "status"] as const;

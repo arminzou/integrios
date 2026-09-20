@@ -109,6 +109,12 @@ it.each(bars)(
     const expected = controls.map(({ role, name, placeholder }) => {
       const control = within(filters).getByRole(role, { name });
       if (placeholder !== undefined) expect(control.getAttribute("placeholder")).toBe(placeholder);
+      // A scope is neither a remembered form entry nor prose: no autofill menu over the bar, and no
+      // spell-check underline under a name, an id or an Event type.
+      if (role === "searchbox") {
+        expect(control.getAttribute("autocomplete")).toBe("off");
+        expect(control.getAttribute("spellcheck")).toBe("false");
+      }
       return control;
     });
     const inBar = [...filters.querySelectorAll("input, button")];
