@@ -30,7 +30,7 @@ import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
 import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
-import { useTenantOptions } from "../ui/options";
+import { environmentsIn, useTenantOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { since, Timestamp } from "../ui/time";
 import { activityOutcomes, outcomeTotals, useEventActivity } from "./EventActivity";
@@ -65,14 +65,8 @@ export function TenantsScreen() {
   const { status, name, environment } = filters.values;
   const applied = filters.applied;
   const tenantOptions = useTenantOptions();
-  // Environment is free text on a Tenant, so there is no vocabulary to enumerate: the options are
-  // the values in use among the first hundred Tenants. ponytail: a deployment past that needs the
-  // Admin API to answer "which environments"; a URL value outside these stays visible regardless.
-  const environments = [
-    ...new Set(
-      (tenantOptions.data?.items ?? []).flatMap((item) => (item.environment?.trim() ? [item.environment] : [])),
-    ),
-  ].sort();
+  // A URL value outside these stays visible regardless.
+  const environments = environmentsIn(tenantOptions.data?.items);
   const list = useInfiniteQuery({
     queryKey: ["tenants", { status, name, environment }],
     queryFn: ({ pageParam }) =>

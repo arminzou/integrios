@@ -123,16 +123,7 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
   const backlog = useEventBacklog(tenantId);
 
   // The ledger and its freshness count read under exactly the same filters.
-  const filterQuery = {
-    status: applied.status || undefined,
-    delivery_status: applied.delivery_status || undefined,
-    source_id: applied.source_id || undefined,
-    topic_id: applied.topic_id || undefined,
-    source_event_id: applied.source_event_id || undefined,
-    event_type: applied.event_type || undefined,
-    accepted_from: applied.accepted_from || undefined,
-    accepted_to: applied.accepted_to || undefined,
-  };
+  const filterQuery = Object.fromEntries(eventFilters.map((name) => [name, applied[name] || undefined]));
   const ledgerKey = ["events", tenantId, applied];
   const list = useInfiniteQuery({
     queryKey: ledgerKey,

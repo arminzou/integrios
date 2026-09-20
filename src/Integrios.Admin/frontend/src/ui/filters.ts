@@ -28,11 +28,6 @@ export function useListFilters<const TName extends string>(names: readonly TName
     /// current entry instead, for a selection that is still being extended.
     patch,
     set: (name: TName, value: string) => patch({ [name]: value } as Partial<Record<TName, string>>),
-    clear: () =>
-      setParams((current) => {
-        const next = new URLSearchParams(current);
-        for (const name of names) next.delete(name);
-        return next;
-      }),
+    clear: () => patch(Object.fromEntries(names.map((name) => [name, ""])) as Partial<Record<TName, string>>),
   };
 }

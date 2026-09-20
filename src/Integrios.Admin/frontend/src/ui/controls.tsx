@@ -204,44 +204,6 @@ export function EditSheet(props: Omit<ComponentProps<typeof FormSheet>, "variant
   return <FormSheet {...props} variant="outline" />;
 }
 
-/// Attributes that tie a control to its own label and error message. Screens spread these onto the
-/// control itself so a failed field announces its message rather than only turning a colour.
-export function fieldProps(id: string, error?: string, hasHint = false) {
-  const describedBy = [hasHint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(" ");
-  return {
-    id,
-    "aria-invalid": error ? (true as const) : undefined,
-    "aria-describedby": describedBy || undefined,
-  };
-}
-
-export function Field({
-  id,
-  label,
-  error,
-  hint,
-  children,
-}: {
-  id: string;
-  label: string;
-  error?: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <p>
-      <label htmlFor={id}>{label}</label>
-      {children}
-      {hint ? <span id={`${id}-hint`}>{hint}</span> : null}
-      {error ? (
-        <strong id={`${id}-error`} role="alert">
-          {error}
-        </strong>
-      ) : null}
-    </p>
-  );
-}
-
 /// A message about something that has no control of its own — a group of choices, or a value
 /// authored on another surface — in the same floating shape a rejected field's message has. Its
 /// parent must be positioned, and should leave room below it: the message hangs under that box.

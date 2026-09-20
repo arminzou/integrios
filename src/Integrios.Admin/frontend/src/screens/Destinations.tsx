@@ -46,7 +46,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { useConnectorOptions, useDestinationOptions } from "../ui/options";
+import { environmentsIn, useConnectorOptions, useDestinationOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { Day } from "../ui/time";
 
@@ -403,15 +403,8 @@ export function DestinationsScreen({
   const connectors = useConnectorOptions();
   const destinationOptions = useDestinationOptions(tenantId);
   const applied = filters.applied;
-  // Environment is free text on a Destination, so there is no vocabulary to enumerate — the options
-  // are the values this Tenant actually uses, read off the Destination list the screen already holds
-  // for naming. ponytail: first hundred Destinations, which is what that read carries; a Tenant past
-  // that needs the Admin API to answer "which environments" rather than the dashboard inferring it.
-  const environments: string[] = [
-    ...new Set(
-      (destinationOptions.data?.items ?? []).flatMap((item) => (item.environment?.trim() ? [item.environment] : [])),
-    ),
-  ].sort();
+  // Read off the Destination list the screen already holds for naming.
+  const environments = environmentsIn(destinationOptions.data?.items);
   const list = useInfiniteQuery({
     queryKey: ["destinations", tenantId, { status, environment, connector, name }],
     queryFn: ({ pageParam }) =>

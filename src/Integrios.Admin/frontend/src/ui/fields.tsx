@@ -202,7 +202,6 @@ export function Filter({
   label,
   value,
   onChange,
-  allLabel = "All",
   hint,
   disabled,
   children,
@@ -211,7 +210,6 @@ export function Filter({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  allLabel?: string;
   hint?: string;
   disabled?: boolean;
   children: ReactNode;
@@ -243,7 +241,7 @@ export function Filter({
         ) : null}
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={EMPTY}>{allLabel}</SelectItem>
+        <SelectItem value={EMPTY}>All</SelectItem>
         {unnamed ? <SelectItem value={value}>{value}</SelectItem> : null}
         {children}
         {hint ? (
