@@ -18,29 +18,30 @@ const listItem = {
   state: "active",
   description: null,
   created_at: "2026-09-01T00:00:00Z",
-  expires_at: null,
   last_used_at: null,
+  revoked_at: null,
 };
 
+const revokedItem = { ...listItem, state: "revoked", revoked_at: "2026-09-10T00:00:00Z" };
+
 describe("Tenant API keys", () => {
-  it("omits expiration from the list and inspector", async () => {
-    const expiringKey = { ...listItem, expires_at: "2027-09-01T00:00:00Z" };
+  it("shows a revoked key as revoked and offers nothing to do to it", async () => {
     stubHttp(({ url }) =>
       url.pathname.endsWith(`/tenant-api-keys/${keyId}`)
-        ? { status: 200, body: { ...expiringKey, status: expiringKey.state } }
-        : { status: 200, body: page([expiringKey]) },
+        ? { status: 200, body: { ...revokedItem, status: revokedItem.state } }
+        : { status: 200, body: page([revokedItem]) },
     );
 
     renderScreen(<TenantApiKeysScreen tenantId={tenantId} selectedTenantApiKeyId={keyId} />);
     const table = await screen.findByRole("table");
     const inspector = await screen.findByRole("complementary", { name: "Tenant API key detail" });
-    await within(inspector).findByText("Never used");
+    await within(inspector).findByText("Revoked", { selector: "dt" });
 
-    expect(within(table).queryByRole("columnheader", { name: "Expires" })).toBeNull();
-    expect(within(inspector).queryByText("Expires")).toBeNull();
+    expect(within(table).getByText("Revoked")).toBeTruthy();
+    expect(within(inspector).queryByRole("button", { name: "Revoke" })).toBeNull();
   });
 
-  it("creates a key without asking for an expiration", async () => {
+  it("creates a key from a name and description alone", async () => {
     const calls = stubHttp(({ method }) =>
       method === "POST"
         ? { status: 201, body: { tenant_api_key: { ...listItem, status: "active" }, token } }
@@ -50,10 +51,9 @@ describe("Tenant API keys", () => {
     renderScreen(<TenantApiKeysScreen tenantId={tenantId} />);
     fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
-    expect(screen.queryByLabelText(/Expires|Lifetime/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
     await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
-    expect((calls.find((call) => call.method === "POST")!.body as { expires_at: null }).expires_at).toBeNull();
+    expect(calls.find((call) => call.method === "POST")!.body).toEqual({ name: "Ingest", description: null });
   });
 
   it("shows a new key once and stops showing it once it is dismissed", async () => {
@@ -79,17 +79,18 @@ describe("Tenant API keys", () => {
 
   it("names the key it is about to revoke and does not revoke until confirmed", async () => {
     // The panel reads the key by its own id, so the stub answers the detail path with a key rather
-    // than with the list every other GET returns. Revoking makes the key vanish from authoring
-    // reads, so the detail answers its absence once the write has happened.
+    // than with the list every other GET returns. Once the write has happened, both reads answer
+    // with the key as revoked.
     let revoked = false;
     const calls = stubHttp(({ method, url }) => {
       if (method === "POST") {
         revoked = true;
         return { status: 200 };
       }
+      const current = revoked ? revokedItem : listItem;
       if (url.pathname.endsWith(`/tenant-api-keys/${keyId}`))
-        return revoked ? { status: 404, body: {} } : { status: 200, body: { ...listItem, status: listItem.state } };
-      return { status: 200, body: page([listItem]) };
+        return { status: 200, body: { ...current, status: current.state } };
+      return { status: 200, body: page([current]) };
     });
 
     // Revoke lives in the panel that names the key rather than on the row, so the key has to be
@@ -110,8 +111,9 @@ describe("Tenant API keys", () => {
       `/admin/tenants/${tenantId}/tenant-api-keys/${keyId}/revoke`,
     );
 
-    // The revoked key's detail closes rather than re-reading into a not-found panel.
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/tenant-api-keys`));
+    // The detail stays open and re-reads the key as revoked, with nothing left to revoke.
     expect(await screen.findByText("Ingest revoked.")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull());
+    expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/tenant-api-keys/${keyId}`);
   });
 });

@@ -15,10 +15,7 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        string currentTimestamp = connectionFactory.Provider == DatabaseProvider.SqlServer
-            ? "SYSUTCDATETIME()"
-            : "now()";
-        string sql = $"""
+        const string sql = """
             SELECT
                 c.id           AS TenantApiKeyId,
                 c.tenant_id    AS TenantApiKeyTenantId,
@@ -26,7 +23,6 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
                 c.key_prefix   AS TenantApiKeyKeyPrefix,
                 c.key_hash     AS TenantApiKeyKeyHash,
                 c.created_at   AS TenantApiKeyCreatedAt,
-                c.expires_at   AS TenantApiKeyExpiresAt,
                 c.last_used_at AS TenantApiKeyLastUsedAt,
                 c.revoked_at   AS TenantApiKeyRevokedAt,
                 c.description  AS TenantApiKeyDescription,
@@ -43,7 +39,6 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
             WHERE c.key_hash = @KeyHash
               AND c.revoked_at IS NULL
               AND t.status = 'active'
-              AND (c.expires_at IS NULL OR c.expires_at > {currentTimestamp})
             """;
 
         TenantApiKeyTenantRow? row = await connection.QuerySingleOrDefaultAsync<TenantApiKeyTenantRow>(
@@ -60,7 +55,6 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
         public string TenantApiKeyKeyPrefix { get; init; } = "";
         public string TenantApiKeyKeyHash { get; init; } = "";
         public DateTimeOffset TenantApiKeyCreatedAt { get; init; }
-        public DateTimeOffset? TenantApiKeyExpiresAt { get; init; }
         public DateTimeOffset? TenantApiKeyLastUsedAt { get; init; }
         public DateTimeOffset? TenantApiKeyRevokedAt { get; init; }
         public string? TenantApiKeyDescription { get; init; }
@@ -81,7 +75,6 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
             KeyPrefix = TenantApiKeyKeyPrefix,
             KeyHash = TenantApiKeyKeyHash,
             CreatedAt = TenantApiKeyCreatedAt,
-            ExpiresAt = TenantApiKeyExpiresAt,
             LastUsedAt = TenantApiKeyLastUsedAt,
             RevokedAt = TenantApiKeyRevokedAt,
             Description = TenantApiKeyDescription,

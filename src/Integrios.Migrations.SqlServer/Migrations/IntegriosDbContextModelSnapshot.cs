@@ -879,10 +879,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("description");
 
-                    b.Property<DateTimeOffset?>("ExpiresAt")
-                        .HasColumnType("datetimeoffset")
-                        .HasColumnName("expires_at");
-
                     b.Property<string>("KeyHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)")

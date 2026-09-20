@@ -10,8 +10,7 @@ namespace Integrios.Application.Authoring.TenantApiKeys;
 public sealed record CreateTenantApiKeyCommand(
     Guid TenantId,
     string? Name,
-    string? Description,
-    DateTimeOffset? ExpiresAt
+    string? Description
 ) : IRequest<CreateTenantApiKeyResult>;
 
 internal sealed class CreateTenantApiKeyCommandHandler(ITenantApiKeyRepository repository)
@@ -36,13 +35,12 @@ internal sealed class CreateTenantApiKeyCommandHandler(ITenantApiKeyRepository r
             KeyHash = keyHash,
             Description = command.Description,
             CreatedAt = DateTimeOffset.UtcNow,
-            ExpiresAt = command.ExpiresAt,
         };
 
         TenantApiKey created = await repository.CreateAsync(tenantApiKey, cancellationToken);
         return new CreateTenantApiKeyResult
         {
-            TenantApiKey = TenantApiKeyDto.From(created, DateTimeOffset.UtcNow),
+            TenantApiKey = TenantApiKeyDto.From(created),
             Token = rawKey,
         };
     }

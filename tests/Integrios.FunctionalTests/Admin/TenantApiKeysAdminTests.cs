@@ -176,28 +176,24 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
     // Revoke
 
     [Fact]
-    public async Task RevokeTenantApiKey_Returns200_AndKeyVanishesFromAuthoringReads()
+    public async Task RevokeTenantApiKey_Returns200_AndKeyStaysReadableAsRevoked()
     {
         var created = await CreateTenantApiKeyAsync("revoke-key");
+        string keyPath = $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}";
 
-        var revokeResponse = await client.SendAsync(AdminRequest(
-            HttpMethod.Post,
-            $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}/revoke"));
+        var revokeResponse = await client.SendAsync(AdminRequest(HttpMethod.Post, $"{keyPath}/revoke"));
         revokeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var getResponse = await client.SendAsync(AdminRequest(
-            HttpMethod.Get,
-            $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}"));
-        // Revocation is terminal and recorded solely by RevokedAt; a revoked key is excluded from
-        // every authoring read and list, so it no longer resolves.
-        getResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var getResponse = await client.SendAsync(AdminRequest(HttpMethod.Get, keyPath));
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var detail = await getResponse.Content.ReadFromJsonAsync<TenantApiKeyDto>(HostJson.Options);
+        detail.ShouldNotBeNull();
+        detail.State.ShouldBe("revoked");
+        detail.RevokedAt.ShouldNotBeNull();
 
-        var listResponse = await client.SendAsync(AdminRequest(
-            HttpMethod.Get,
-            $"/admin/tenants/{fixture.TenantId}/tenant-api-keys?state=active&limit=100"));
-        var list = await listResponse.Content.ReadFromJsonAsync<TenantApiKeyListDto>(HostJson.Options);
-        list.ShouldNotBeNull();
-        list.Items.ShouldNotContain(item => item.Id == created.TenantApiKey.Id);
+        (await ListIdsAsync("state=active")).ShouldNotContain(created.TenantApiKey.Id);
+        (await ListIdsAsync("state=revoked")).ShouldContain(created.TenantApiKey.Id);
+        (await ListIdsAsync("")).ShouldContain(created.TenantApiKey.Id);
     }
 
     [Fact]
@@ -228,6 +224,17 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
     }
 
     // Helpers
+
+    private async Task<List<Guid>> ListIdsAsync(string query)
+    {
+        var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Get,
+            $"/admin/tenants/{fixture.TenantId}/tenant-api-keys?limit=100&{query}"));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var list = await response.Content.ReadFromJsonAsync<TenantApiKeyListDto>(HostJson.Options);
+        list.ShouldNotBeNull();
+        return list.Items.Select(item => item.Id).ToList();
+    }
 
     private Task<HttpResponseMessage> PostTenantApiKeyAsync(string name) =>
         client.SendAsync(AdminRequest(

@@ -70,7 +70,6 @@ export function TenantApiKeysScreen({
   const [notice, setNotice] = useState("");
   const filters = useListFilters(apiKeyFilters);
   const { state } = filters.values;
-  const navigate = useNavigate();
   const list = useInfiniteQuery({
     queryKey: ["tenant-api-keys", tenantId, { state }],
     queryFn: ({ pageParam }) =>
@@ -109,7 +108,7 @@ export function TenantApiKeysScreen({
             onChange={(value) => filters.set("state", value)}
           >
             <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="expired">Expired</SelectItem>
+            <SelectItem value="revoked">Revoked</SelectItem>
           </Filter>
         </FilterBar>
       ) : null}
@@ -187,16 +186,11 @@ export function TenantApiKeysScreen({
             key={selectedTenantApiKeyId}
             tenantId={tenantId}
             tenantApiKeyId={selectedTenantApiKeyId}
-            onRevoked={(name) => {
-              // A revoked key vanishes from authoring reads, so its detail closes rather than
-              // re-reading into a not-found panel.
-              setNotice(`${name} revoked.`);
-              navigate(`/tenants/${tenantId}/tenant-api-keys`);
-            }}
+            onRevoked={(name) => setNotice(`${name} revoked.`)}
           />
         ) : keys.length > 0 ? (
           <InspectorPlaceholder label="Tenant API key detail">
-            Select a key to read when it was last used and to revoke it.
+            Select a key to read when it was last used, or to revoke it.
           </InspectorPlaceholder>
         ) : null}
       </SplitView>
@@ -273,19 +267,30 @@ function TenantApiKeyInspector({
         </dd>
         <dt>Last used</dt>
         <dd>{current.last_used_at ? <Timestamp value={current.last_used_at} /> : "Never used"}</dd>
+        {current.revoked_at ? (
+          <>
+            <dt>Revoked</dt>
+            <dd>
+              <Timestamp value={current.revoked_at} />
+            </dd>
+          </>
+        ) : null}
       </Details>
 
       {current.description ? <p className="m-0 text-ink-secondary">{current.description}</p> : null}
 
-      <RevokeTenantApiKey
-        tenantId={tenantId}
-        apiKey={{
-          id: current.id,
-          name: current.name,
-          keyPrefix: current.key_prefix,
-        }}
-        onDone={() => onRevoked(current.name)}
-      />
+      {/* Revocation is terminal, so a revoked key has nothing left to offer. */}
+      {current.revoked_at ? null : (
+        <RevokeTenantApiKey
+          tenantId={tenantId}
+          apiKey={{
+            id: current.id,
+            name: current.name,
+            keyPrefix: current.key_prefix,
+          }}
+          onDone={() => onRevoked(current.name)}
+        />
+      )}
     </Inspector>
   );
 }
@@ -296,7 +301,6 @@ function RevokeTenantApiKey({
   onDone,
 }: {
   tenantId: string;
-  // A revoked key is excluded from every authoring read, so a key shown here is always revocable.
   apiKey: { id: string; name: string; keyPrefix: string };
   onDone: () => void;
 }) {
@@ -310,8 +314,7 @@ function RevokeTenantApiKey({
       ),
     onSuccess: () => {
       onDone();
-      // A revoked key vanishes from authoring reads; drop its cached detail so no later visit shows
-      // it as active.
+      // Re-read the key so its detail and the list show it as revoked rather than active.
       void queryClient.invalidateQueries({ queryKey: ["tenant-api-key", tenantId, apiKey.id] });
       return queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
     },
@@ -353,7 +356,6 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
           body: {
             name: values.name,
             description: values.description.trim() || null,
-            expires_at: null,
           },
         }),
       ),

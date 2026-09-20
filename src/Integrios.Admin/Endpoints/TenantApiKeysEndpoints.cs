@@ -22,7 +22,7 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
         CancellationToken cancellationToken)
     {
         CreateTenantApiKeyResult response = await mediator.Send(
-            new CreateTenantApiKeyCommand(tenantId, request.Name, request.Description, request.ExpiresAt),
+            new CreateTenantApiKeyCommand(tenantId, request.Name, request.Description),
             cancellationToken);
         return Results.Created($"/admin/tenants/{tenantId}/tenant-api-keys/{response.TenantApiKey.Id}", response);
     }
@@ -37,7 +37,7 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
     {
         limit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
         TenantApiKeyListDto response = await mediator.Send(
-            new ListTenantApiKeysByTenantQuery(tenantId, ListFilter.ParseEnum<TenantApiKeyListState>(state, "Tenant API key state must be active or expired."), after, limit), cancellationToken);
+            new ListTenantApiKeysByTenantQuery(tenantId, ListFilter.ParseEnum<TenantApiKeyListState>(state, "Tenant API key state must be active or revoked."), after, limit), cancellationToken);
         return Results.Ok(response);
     }
 
@@ -62,4 +62,4 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
     }
 }
 
-internal sealed record CreateTenantApiKeyRequest(string? Name, string? Description, DateTimeOffset? ExpiresAt);
+internal sealed record CreateTenantApiKeyRequest(string? Name, string? Description);

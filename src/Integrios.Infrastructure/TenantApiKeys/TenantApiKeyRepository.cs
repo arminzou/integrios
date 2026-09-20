@@ -20,13 +20,12 @@ internal sealed class TenantApiKeyRepository(IntegriosDbContext context, IDataPr
 
     public Task<TenantApiKey?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>
         context.TenantApiKeys.AsNoTracking().SingleOrDefaultAsync(
-            tenantApiKey => tenantApiKey.TenantId == tenantId && tenantApiKey.Id == id && tenantApiKey.RevokedAt == null,
+            tenantApiKey => tenantApiKey.TenantId == tenantId && tenantApiKey.Id == id,
             cancellationToken);
 
     public async Task<(IReadOnlyList<TenantApiKey> Items, string? NextCursor)> ListByTenantAsync(
         Guid tenantId,
         TenantApiKeyListState? state,
-        DateTimeOffset now,
         string? afterCursor,
         int limit,
         CancellationToken cancellationToken)
@@ -39,11 +38,11 @@ internal sealed class TenantApiKeyRepository(IntegriosDbContext context, IDataPr
             throw new InvalidCursorException();
 
         IQueryable<TenantApiKey> query = context.TenantApiKeys.AsNoTracking()
-            .Where(tenantApiKey => tenantApiKey.TenantId == tenantId && tenantApiKey.RevokedAt == null);
+            .Where(tenantApiKey => tenantApiKey.TenantId == tenantId);
         query = state switch
         {
-            TenantApiKeyListState.Active => query.Where(tenantApiKey => tenantApiKey.ExpiresAt == null || tenantApiKey.ExpiresAt > now),
-            TenantApiKeyListState.Expired => query.Where(tenantApiKey => tenantApiKey.ExpiresAt != null && tenantApiKey.ExpiresAt <= now),
+            TenantApiKeyListState.Active => query.Where(tenantApiKey => tenantApiKey.RevokedAt == null),
+            TenantApiKeyListState.Revoked => query.Where(tenantApiKey => tenantApiKey.RevokedAt != null),
             _ => query,
         };
         if (hasCursor)

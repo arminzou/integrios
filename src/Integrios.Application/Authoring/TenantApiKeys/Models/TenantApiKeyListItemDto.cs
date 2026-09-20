@@ -10,17 +10,17 @@ public sealed record TenantApiKeyListItemDto(
     string State,
     string? Description,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? ExpiresAt,
-    DateTimeOffset? LastUsedAt)
+    DateTimeOffset? LastUsedAt,
+    DateTimeOffset? RevokedAt)
 {
-    public static TenantApiKeyListItemDto From(TenantApiKey key, DateTimeOffset now) => new(
+    public static TenantApiKeyListItemDto From(TenantApiKey key) => new(
         key.Id,
         key.TenantId,
         key.Name,
         key.KeyPrefix,
-        TenantApiKeyState.From(key, now),
+        TenantApiKeyState.From(key),
         key.Description,
         key.CreatedAt,
-        key.ExpiresAt,
-        key.LastUsedAt);
+        key.LastUsedAt,
+        key.RevokedAt);
 }

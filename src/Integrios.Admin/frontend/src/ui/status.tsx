@@ -43,7 +43,6 @@ const toneFor: Record<string, Tone> = {
   succeeded: "success",
   failed: "failure",
   dead_lettered: "failure",
-  expired: "failure",
 };
 
 function statusTone(status: string): Tone {

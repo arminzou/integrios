@@ -17,9 +17,8 @@ internal sealed class TenantOverviewReader(IDbConnectionFactory connectionFactor
         // live; counting subscriptions.tenant_id directly would agree today and drift the moment
         // ownership moves.
         //
-        // "Live" API keys are the ones a caller could still authenticate with: not revoked, and not
-        // expired. A revoked key stays in the table as configuration history and is deliberately not
-        // counted here.
+        // "Live" API keys are the ones a caller could still authenticate with: not revoked. A revoked
+        // key stays in the table as configuration history and is deliberately not counted here.
         //
         // COUNT(*) returns bigint, so every count is cast down to the int the DTO carries.
         const string sql = """
@@ -31,14 +30,13 @@ internal sealed class TenantOverviewReader(IDbConnectionFactory connectionFactor
                     JOIN topics t ON t.id = s.topic_id
                     WHERE t.tenant_id = @TenantId AND s.deleted_at IS NULL AND t.deleted_at IS NULL) AS Subscriptions,
                 (SELECT CAST(COUNT(*) AS INT) FROM tenant_api_keys
-                    WHERE tenant_id = @TenantId AND revoked_at IS NULL
-                      AND (expires_at IS NULL OR expires_at > @Now)) AS LiveApiKeys
+                    WHERE tenant_id = @TenantId AND revoked_at IS NULL) AS LiveApiKeys
             """;
 
         return await connection.QuerySingleAsync<TenantOverviewCounts>(
             new CommandDefinition(
                 sql,
-                new { TenantId = tenantId, Now = DateTimeOffset.UtcNow },
+                new { TenantId = tenantId },
                 cancellationToken: cancellationToken));
     }
 }

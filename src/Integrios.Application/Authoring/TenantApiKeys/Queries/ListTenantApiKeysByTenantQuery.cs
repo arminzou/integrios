@@ -11,13 +11,12 @@ internal sealed class ListTenantApiKeysByTenantQueryHandler(ITenantApiKeyReposit
 {
     public async Task<TenantApiKeyListDto> Handle(ListTenantApiKeysByTenantQuery query, CancellationToken cancellationToken)
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
         (IReadOnlyList<TenantApiKey> items, string? nextCursor) = await repository.ListByTenantAsync(
-            query.TenantId, query.State, now, query.AfterCursor, query.Limit, cancellationToken);
+            query.TenantId, query.State, query.AfterCursor, query.Limit, cancellationToken);
 
         return new TenantApiKeyListDto
         {
-            Items = items.Select(item => TenantApiKeyListItemDto.From(item, now)).ToList(),
+            Items = items.Select(TenantApiKeyListItemDto.From).ToList(),
             NextCursor = nextCursor,
         };
     }

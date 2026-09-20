@@ -10,7 +10,6 @@ public sealed record TenantApiKey
     public required string KeyPrefix { get; init; }
     public required string KeyHash { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
-    public DateTimeOffset? ExpiresAt { get; init; }
     public DateTimeOffset? LastUsedAt { get; init; }
     public DateTimeOffset? RevokedAt { get; init; }
     public string? Description { get; init; }

@@ -27,7 +27,6 @@ internal sealed class TenantApiKeyConfiguration : IEntityTypeConfiguration<Tenan
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
-        entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
         entity.Property(e => e.KeyHash).HasColumnName("key_hash");
         entity.Property(e => e.KeyPrefix).HasColumnName("key_prefix");
         entity.Property(e => e.LastUsedAt).HasColumnName("last_used_at");
