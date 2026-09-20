@@ -59,6 +59,14 @@ export function nameIn(items: { id: string; name: string }[] | undefined, id: st
   return items?.find((item) => item.id === id)?.name ?? id;
 }
 
+/// The environments a Tenant or a deployment actually uses, read off the rows a screen already holds
+/// rather than from a fixed list: environment is free text, so there is no vocabulary to enumerate.
+/// ponytail: the first hundred rows, which is what those reads carry; past that the Admin API would
+/// have to answer "which environments" rather than the dashboard inferring it.
+export function environmentsIn(items: { environment?: string | null }[] | undefined): string[] {
+  return [...new Set((items ?? []).flatMap((item) => (item.environment?.trim() ? [item.environment] : [])))].sort();
+}
+
 /// A picker offers what can still be chosen. Naming a row is a different question from choosing one,
 /// which is why the reads above answer both rather than one at the other's expense.
 export function activeOnly<T extends { status: string }>(items: T[] | undefined): T[] {

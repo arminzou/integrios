@@ -46,15 +46,8 @@ const links: Link[] = [
     pill: "Source",
   },
   {
-    from: "Events → Subscriptions",
-    path: `/tenants/${tenantId}/subscriptions?topic_id=${topicId}`,
-    screen: <SubscriptionsScreen tenantId={tenantId} />,
-    suffix: "/subscriptions",
-    expected: { topic_id: topicId },
-    pill: "Topic",
-  },
-  {
-    from: "Topics → Subscriptions",
+    // The Event inspector and a Topic both link here with the same parameter, so one case covers both.
+    from: "Events and Topics → Subscriptions",
     path: `/tenants/${tenantId}/subscriptions?topic_id=${topicId}`,
     screen: <SubscriptionsScreen tenantId={tenantId} />,
     suffix: "/subscriptions",

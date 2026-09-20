@@ -40,24 +40,22 @@ export function AcceptedRangePill({
   // What is typed in the Custom inputs, as the local wall clock they hold. It is read into the
   // range only when the Operator finishes — Enter, or closing — so a half-open range is never read.
   const [draft, setDraft] = useState({ from: "", to: "" });
-  const [dirty, setDirty] = useState(false);
 
+  // A bound the Operator did not edit keeps its instant; an unchanged range writes nothing, so
+  // opening and closing the panel is not a history entry.
   const commitCustom = () => {
-    if (!dirty) return;
     const bound = (edited: string, original: string) =>
       edited === localInputValue(original) ? original : (instant(edited) ?? "");
-    onChange(bound(draft.from, from), bound(draft.to, to));
-    setDirty(false);
+    const [nextFrom, nextTo] = [bound(draft.from, from), bound(draft.to, to)];
+    if (nextFrom !== from || nextTo !== to) onChange(nextFrom, nextTo);
   };
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) {
-          setDraft({ from: localInputValue(from), to: localInputValue(to) });
-          setDirty(false);
-        } else commitCustom();
+        if (next) setDraft({ from: localInputValue(from), to: localInputValue(to) });
+        else commitCustom();
         setOpen(next);
       }}
     >
@@ -99,10 +97,7 @@ export function AcceptedRangePill({
                 type="datetime-local"
                 step="1"
                 value={draft[end]}
-                onChange={(event) => {
-                  setDraft((current) => ({ ...current, [end]: event.target.value }));
-                  setDirty(true);
-                }}
+                onChange={(event) => setDraft((current) => ({ ...current, [end]: event.target.value }))}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
                   event.preventDefault();

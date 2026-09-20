@@ -51,8 +51,8 @@ describe("Tenants list", () => {
     expect(screen.getByRole("combobox", { name: "Environment" }).textContent).toContain("staging");
   });
 
-  it.each(["Name or slug"])("applies %s and restarts paging, then restores the URL value", async (label) => {
-    const parameter = "name";
+  it("applies the name search and restarts paging, then restores the URL value", async () => {
+    const label = "Name or slug";
     const calls = stubHttp(({ url }) => ({
       status: 200,
       body: page([tenant({ name: url.searchParams.has("after") ? "Second" : "Acme" })], "cursor-1"),
@@ -63,10 +63,10 @@ describe("Tenants list", () => {
     await screen.findByRole("link", { name: "Second" });
     fireEvent.change(screen.getByLabelText(label), { target: { value: "  production  " } });
     fireEvent.submit(screen.getByLabelText(label).closest("form")!);
-    await waitFor(() => expect(listCalls(calls).at(-1)!.url.searchParams.get(parameter)).toBe("production"));
+    await waitFor(() => expect(listCalls(calls).at(-1)!.url.searchParams.get("name")).toBe("production"));
     expect(listCalls(calls).at(-1)!.url.searchParams.has("after")).toBe(false);
-    expect(router.state.location.search).toContain(`${parameter}=production`);
-    await act(() => router.navigate(`/tenants?${parameter}=restored`));
+    expect(router.state.location.search).toContain("name=production");
+    await act(() => router.navigate("/tenants?name=restored"));
     await waitFor(() => expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe("restored"));
   });
 
