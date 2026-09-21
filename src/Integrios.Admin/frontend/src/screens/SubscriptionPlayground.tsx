@@ -569,7 +569,7 @@ export function MappingPlayground({
               formError(asProblem(event.error))
             }
           />
-          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-accent-border pt-4">
             <DialogPrimitive.Close asChild>
               <Button type="button" variant="outline">
                 Back to Subscription

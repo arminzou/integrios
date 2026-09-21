@@ -548,7 +548,11 @@ export function DestinationsScreen({
                         {destination.name}
                       </NavLink>
                     </RowHeader>
-                    <TableCell className="font-mono">{destination.connector_key}</TableCell>
+                    <TableCell>
+                      <Link to={`/connectors/${destination.connector_id}`}>
+                        {connectorName(connectors.data?.items, destination.connector_id, destination.connector_key)}
+                      </Link>
+                    </TableCell>
                     <TableCell>{destination.environment ?? "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={destination.status} />
@@ -770,14 +774,20 @@ function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreate
   );
 }
 
-/// The Connector a Destination was built from, as an Operator names it: the manifest key and the
-/// contract version it is pinned to. Falls back to the identifier when the list has not resolved it.
+/// The Connector a Destination was built from, as an Operator names it: its name and the contract
+/// version it is pinned to. Falls back to the identifier when the list has not resolved it.
 function connectorLabel(
-  connectors: { id: string; key: string; contract_version: number | string }[] | undefined,
+  connectors: { id: string; name: string; contract_version: number | string }[] | undefined,
   id: string,
 ): string {
   const connector = connectors?.find((item) => item.id === id);
-  return connector ? `${connector.key} v${connector.contract_version}` : id;
+  return connector ? `${connector.name} v${connector.contract_version}` : id;
+}
+
+/// A list row already carries its Connector's key, so that stands in for the name until the list
+/// that resolves it has answered, rather than the row showing an identifier or nothing.
+function connectorName(connectors: { id: string; name: string }[] | undefined, id: string, fallback: string): string {
+  return connectors?.find((item) => item.id === id)?.name ?? fallback;
 }
 
 function DestinationInspector({ tenantId, destinationId }: { tenantId: string; destinationId: string }) {
@@ -814,17 +824,21 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
     <Inspector label="Destination detail">
       {/* The identity on the left, the state that qualifies it on the right: the two things an
           Operator checks before reading anything else in the panel. */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="group min-w-0">
-          <h2 className="break-all">{current.name}</h2>
-          <span className="block text-xs text-ink-secondary">
-            <CopyInline label="Destination id" value={current.id} />
-          </span>
+      <div className="flex flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 break-all">{current.name}</h2>
+          {/* One title line tall, so the badge and the 32px close button centre on the title rather
+              than hanging below it. */}
+          <div className="flex h-5 shrink-0 items-center gap-1.5">
+            <StatusBadge status={current.status} />
+            <CloseInspector to={`/tenants/${tenantId}/destinations`} label="Close the Destination detail" />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <StatusBadge status={current.status} className="mt-0.5" />
-          <CloseInspector to={`/tenants/${tenantId}/destinations`} label="Close the Destination detail" />
-        </div>
+        {/* Its own row, so the id has the panel's full width instead of what the badge and close
+            button leave beside the title. */}
+        <span className="block text-xs text-ink-secondary">
+          <CopyInline label="Destination id" value={current.id} />
+        </span>
       </div>
 
       <Details className="border-b pb-3.5">
@@ -840,7 +854,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
         <dd>{current.authentication ? current.authentication.scheme : "Not configured"}</dd>
       </Details>
 
-      <section className="flex min-w-0 flex-col gap-2">
+      <section className="flex min-w-0 flex-col gap-2 border-b pb-3.5">
         <h3 className="eyebrow">Configuration</h3>
         <CodeBlock value={current.configuration} />
         <p className="m-0 text-xs text-ink-secondary">

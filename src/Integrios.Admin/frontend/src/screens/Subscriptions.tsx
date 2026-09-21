@@ -50,7 +50,8 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
-import { activeOnly, useDestinationOptions, useTopicOptions } from "../ui/options";
+import { monoInput } from "../ui/mono";
+import { activeOnly, nameIn, useDestinationOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { MappingPlayground, mappingEnvelope } from "./SubscriptionPlayground";
 
@@ -538,6 +539,10 @@ function SubscriptionInspector({
     if (!openPlayground) return;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
   }, [location.pathname, location.search, navigate, openPlayground]);
+  // Read to name the Topic and Destination this Subscription joins; the list beside it already holds
+  // them, so this is no extra request.
+  const topicOptions = useTopicOptions(tenantId);
+  const destinationOptions = useDestinationOptions(tenantId);
   const subscription = useQuery({
     queryKey: ["subscription", tenantId, topicId, subscriptionId],
     queryFn: () =>
@@ -584,7 +589,9 @@ function SubscriptionInspector({
       <Inspector label="Subscription detail">
         <div className="flex items-start justify-between gap-3">
           <h2>Subscription</h2>
-          <CloseInspector to={`/tenants/${tenantId}/subscriptions`} label="Close the Subscription detail" />
+          <div className="flex h-5 items-center">
+            <CloseInspector to={`/tenants/${tenantId}/subscriptions`} label="Close the Subscription detail" />
+          </div>
         </div>
         <ReadError
           problem={problem}
@@ -599,27 +606,31 @@ function SubscriptionInspector({
   const mapping = mappingExpression(current.mapping_config);
   return (
     <Inspector label="Subscription detail">
-      <div className="flex items-start justify-between gap-3">
-        <div className="group min-w-0">
-          <h2>{current.name}</h2>
-          <span className="block text-xs text-ink-secondary">
-            <CopyInline label="Subscription id" value={current.id} />
-          </span>
+      <div className="flex flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0">{current.name}</h2>
+          {/* One title line tall, so the badge and the 32px close button centre on the title rather
+              than hanging below it. */}
+          <div className="flex h-5 shrink-0 items-center gap-1.5">
+            <StatusBadge status={current.status} />
+            <CloseInspector to={`/tenants/${tenantId}/subscriptions`} label="Close the Subscription detail" />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <StatusBadge status={current.status} className="mt-0.5" />
-          <CloseInspector to={`/tenants/${tenantId}/subscriptions`} label="Close the Subscription detail" />
-        </div>
+        <span className="block text-xs text-ink-secondary">
+          <CopyInline label="Subscription id" value={current.id} />
+        </span>
       </div>
 
       <Details>
         <dt>Topic</dt>
         <dd>
-          <Link to={`/tenants/${tenantId}/topics/${topicId}`}>Open Topic</Link>
+          <Link to={`/tenants/${tenantId}/topics/${topicId}`}>{nameIn(topicOptions.data?.items, topicId)}</Link>
         </dd>
         <dt>Destination</dt>
         <dd>
-          <Link to={`/tenants/${tenantId}/destinations/${current.destination_id}`}>Open Destination</Link>
+          <Link to={`/tenants/${tenantId}/destinations/${current.destination_id}`}>
+            {nameIn(destinationOptions.data?.items, current.destination_id)}
+          </Link>
         </dd>
         <dt>Description</dt>
         <dd>{current.description ?? "—"}</dd>
@@ -628,7 +639,7 @@ function SubscriptionInspector({
       <SubscriptionSourcePath tenantId={tenantId} topicId={topicId} subscription={current} />
 
       {mapping ? (
-        <section className="flex min-w-0 flex-col gap-2">
+        <section className="flex min-w-0 flex-col gap-2 border-b pb-3.5">
           <h3 className="eyebrow">Mapping</h3>
           <MappingValue expression={mapping} />
           <p className="m-0 text-xs text-ink-secondary">
@@ -746,16 +757,20 @@ function SubscriptionSourcePath({
       <p className="m-0 text-[13px] text-ink-secondary">
         Publishers address an Active Source, not this Subscription. Matching Events then follow this configured path.
       </p>
-      <ol aria-label="Subscription Event path" className="m-0 flex list-none flex-wrap items-center gap-1.5 text-xs">
+      <ol
+        aria-label="Subscription Event path"
+        className="m-0 flex list-none flex-wrap items-center gap-1.5 p-0 text-xs"
+      >
         <li className="rounded-full border px-2.5 py-1">{items.length === 1 ? "Source" : "Sources"}</li>
-        <li aria-hidden="true">→</li>
-        <li className="rounded-full border px-2.5 py-1">Topic</li>
-        <li aria-hidden="true">→</li>
-        <li className="rounded-full border px-2.5 py-1">Subscription</li>
-        <li aria-hidden="true">→</li>
-        <li className="rounded-full border px-2.5 py-1">Destination</li>
+        {/* The arrow belongs to the step it leads into, so a wrap never leaves one at a line end. */}
+        {["Topic", "Subscription", "Destination"].map((step) => (
+          <li key={step} className="flex items-center gap-1.5">
+            <span aria-hidden="true">→</span>
+            <span className="rounded-full border px-2.5 py-1">{step}</span>
+          </li>
+        ))}
       </ol>
-      <p className="m-0 text-sm">
+      <p className="m-0 text-[13px]">
         {eventTypes.length === 1 ? "Event type" : "Event types"}:{" "}
         {eventTypes.map((eventType, index) => (
           <span key={eventType}>
@@ -764,10 +779,10 @@ function SubscriptionSourcePath({
           </span>
         ))}
       </p>
-      {sources.isPending ? <p className="m-0 text-sm">Loading Active Sources…</p> : null}
+      {sources.isPending ? <p className="m-0 text-[13px]">Loading Active Sources…</p> : null}
       {sourcesProblem ? <ReadError problem={sourcesProblem} what="Active Sources" /> : null}
       {!sources.isPending && !sources.error && items.length === 0 ? (
-        <p className="m-0 text-sm">
+        <p className="m-0 text-[13px]">
           No Active Source publishes to this Topic.{" "}
           <Link to={`/tenants/${tenantId}/sources?topic_id=${topicId}`} state={{ openSourceCreate: true }}>
             Create a Source
@@ -1050,7 +1065,7 @@ function SubscriptionForm({
                   control={form.control}
                   name={`headers.${index}.name`}
                   label={`Header ${index + 1} name`}
-                  className="font-mono text-sm"
+                  className={monoInput}
                   required
                 />
                 <TextField control={form.control} name={`headers.${index}.value`} label={`Header ${index + 1} value`} />

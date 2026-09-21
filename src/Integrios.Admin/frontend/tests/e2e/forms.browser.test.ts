@@ -585,19 +585,22 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends a Topic, leaving an untouched optional field null rather than empty", async () => {
+  it("sends a Topic with its key read off the name, leaving an untouched description null", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/topics`);
 
     await view.click("text=New Topic");
-    // A Topic authors its key; the label and description are the optional fields left untouched.
-    await formNamed(view, "Create a Topic").getByLabel("Key", { exact: true }).fill("orders");
+    // A Topic authors its name; the key follows it, and the description is the optional field left
+    // untouched.
+    const form = formNamed(view, "Create a Topic");
+    await form.getByLabel(/^Name/).fill("Order Events");
+    await expect.poll(() => form.getByLabel(/^Key/).inputValue()).toBe("order-events");
     await view.click("text=Create Topic");
 
     const sent = await submitted(writes);
     expect(sent.method).toBe("POST");
     expect(sent.pathname).toBe(`/admin/tenants/${tenantId}/topics`);
-    expect(sent.body.key).toBe("orders");
-    expect(sent.body.name).toBeNull();
+    expect(sent.body.key).toBe("order-events");
+    expect(sent.body.name).toBe("Order Events");
     expect(sent.body.description).toBeNull();
     await view.close();
   }, 60_000);

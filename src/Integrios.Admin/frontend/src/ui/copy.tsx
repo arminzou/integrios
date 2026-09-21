@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CodeBlock, type CodeLanguage } from "./codeHighlight";
+import { monoInput } from "./mono";
 
 type CopyState = "idle" | "copied" | "failed";
 
@@ -95,7 +96,7 @@ export function CopyValue({
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} className="font-mono text-sm" ref={field} readOnly value={value} />
+      <Input id={id} className={monoInput} ref={field} readOnly value={value} />
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
@@ -221,7 +222,7 @@ export function BodyPanel({
         </div>
       </div>
       <div ref={shown} className="min-w-0">
-        <CodeBlock value={value} language={language} className={unbounded ? undefined : "max-h-64 overflow-auto"} />
+        <CodeBlock value={value} language={language} className={unbounded ? undefined : "max-h-65 overflow-auto"} />
       </div>
       {truncated ? (
         <p className="m-0 text-xs text-ink-secondary">

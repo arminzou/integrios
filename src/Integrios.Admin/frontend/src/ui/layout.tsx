@@ -171,7 +171,9 @@ export function Inspector({
     <aside
       aria-label={label}
       className={cn(
-        "flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4",
+        "flex min-w-0 flex-col gap-3.5 rounded-lg border bg-card p-4 text-[13px] [--mono-size:12px]",
+        // The rules that divide a panel into sections are quieter than the panel's own edge.
+        "[&_.border-b]:border-accent-border [&_.border-y]:border-accent-border",
         "min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none",
         fill && "scroll-quiet min-[1180px]:h-[calc(100vh-2rem)] min-[1180px]:overflow-y-auto",
         className,

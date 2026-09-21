@@ -89,7 +89,7 @@ export function CodeBlock({
   return (
     <pre
       className={cn(
-        "m-0 min-w-0 rounded-md border bg-surface-quiet p-3 font-mono text-sm break-words whitespace-pre-wrap",
+        "m-0 min-w-0 rounded-md border bg-surface-quiet p-3 font-mono leading-normal break-words whitespace-pre-wrap",
         className,
       )}
     >
@@ -127,7 +127,7 @@ export function CodeTextarea({
       <div className="relative min-h-full w-full">
         <pre
           aria-hidden="true"
-          className="m-0 overflow-hidden px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap"
+          className="m-0 overflow-hidden px-3 py-2 font-mono leading-normal break-words whitespace-pre-wrap"
         >
           {/* A document ending in a newline has no line box for that last line unless something
               follows it, so the painted copy runs one line longer than the text it mirrors. */}
@@ -139,7 +139,7 @@ export function CodeTextarea({
           autoComplete="off"
           {...textarea}
           value={value}
-          className="absolute inset-0 size-full resize-none overflow-hidden bg-transparent px-3 py-2 font-mono text-sm break-words whitespace-pre-wrap text-transparent caret-ink outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+          className="absolute inset-0 size-full resize-none overflow-hidden bg-transparent px-3 py-2 font-mono leading-normal break-words whitespace-pre-wrap text-transparent caret-ink outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
         />
       </div>
     </div>

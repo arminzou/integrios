@@ -12,6 +12,7 @@ import { CodeTextarea } from "../ui/codeHighlight";
 import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { JsonEditor } from "../ui/jsonEditor";
+import { monoInput } from "../ui/mono";
 import { type CurlRequest, parseCurl } from "./curlImport";
 import {
   type EventTypeRule,
@@ -92,7 +93,7 @@ function useSettled<T>(value: T, delay: number): T {
 function Pane({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="flex min-w-0 flex-col rounded-lg border bg-surface">
-      <header className="flex min-h-11 items-center justify-between gap-2 border-b px-3 py-2">
+      <header className="flex min-h-11 items-center justify-between gap-2 border-b border-accent-border px-3 py-2">
         <h3 className="m-0 text-sm font-semibold">{title}</h3>
         {action}
       </header>
@@ -504,7 +505,7 @@ export function EventBuilder({
                         <Input
                           aria-label={`Header ${index + 1} name`}
                           placeholder="x-header-name"
-                          className={`${leadField} font-mono text-sm`}
+                          className={`${leadField} ${monoInput}`}
                           value={row.name}
                           onChange={(event) =>
                             setHeaders(
@@ -673,7 +674,7 @@ function Callout({
 /// A value Integrios resolved from the sample, set apart from the sentence around it. An identity is
 /// often a long opaque id, so it may break anywhere rather than widen the dialog.
 function Resolved({ children }: { children: ReactNode }) {
-  return <code className="rounded bg-surface px-1 py-px font-mono text-xs break-all text-ink">{children}</code>;
+  return <code className="rounded bg-surface px-1 py-px font-mono break-all text-ink">{children}</code>;
 }
 
 const iconClass = "size-4";
@@ -863,9 +864,9 @@ function IdentityFields({
 
 function Target({ title, requirement, children }: { title: string; requirement: string; children: ReactNode }) {
   return (
-    <section className="flex min-w-0 flex-col gap-2 border-t pt-3 first:border-t-0 first:pt-0">
+    <section className="flex min-w-0 flex-col gap-2 border-t border-accent-border pt-3 first:border-t-0 first:pt-0">
       <div className="flex items-baseline justify-between gap-2">
-        <h4 className="m-0 font-mono text-sm font-semibold">{title}</h4>
+        <h4 className="m-0 font-mono font-semibold">{title}</h4>
         <span className="text-xs text-ink-secondary">{requirement}</span>
       </div>
       {children}

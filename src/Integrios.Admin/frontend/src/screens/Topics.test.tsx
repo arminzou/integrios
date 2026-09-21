@@ -30,31 +30,59 @@ function stubTopics(detail = topic) {
   });
 }
 
-it("names each Topic by its key, with the label beside it", async () => {
+it("names each Topic by its name, with the key beside it", async () => {
   stubTopics();
 
   renderScreen(<TopicsScreen tenantId={tenantId} />, `/tenants/${tenantId}/topics`);
 
-  // The key is what anything outside the dashboard refers to, so it heads the row.
-  const row = await screen.findByRole("link", { name: "order-events" });
+  // The name leads the row and opens it; the key that anything outside the dashboard refers to
+  // follows.
+  const row = await screen.findByRole("link", { name: "Order events" });
   expect(row.getAttribute("href")).toBe(`/tenants/${tenantId}/topics/${topicId}`);
-  expect(screen.getByRole("columnheader", { name: "Key" })).toBeTruthy();
-  expect(screen.getByRole("cell", { name: "Order events" })).toBeTruthy();
+  const headers = screen.getAllByRole("columnheader").map((header) => header.textContent);
+  expect(headers.slice(0, 2)).toEqual(["Name", "Key"]);
+  expect(screen.getByRole("cell", { name: "order-events" })).toBeTruthy();
 });
 
-it("authors a key and leaves the label to the server when it is untouched", async () => {
+it("reads the key off the name until the key is written by hand", async () => {
   const calls = stubTopics();
   renderScreen(<TopicsScreen tenantId={tenantId} />, `/tenants/${tenantId}/topics`);
 
   fireEvent.click(await screen.findByRole("button", { name: "New Topic" }));
   const form = await screen.findByRole("form", { name: "Create a Topic" });
-  fireEvent.change(within(form).getByLabelText("Key"), { target: { value: "order-events" } });
+  const name = within(form).getByLabelText(/^Name/) as HTMLInputElement;
+  const key = within(form).getByLabelText(/^Key/) as HTMLInputElement;
+
+  fireEvent.change(name, { target: { value: "Order Events" } });
+  await waitFor(() => expect(key.value).toBe("order-events"));
+
+  // Once the Operator writes a key, the name no longer moves it.
+  fireEvent.change(key, { target: { value: "orders" } });
+  fireEvent.change(name, { target: { value: "Order Events v2" } });
+  expect(key.value).toBe("orders");
+
+  fireEvent.submit(form);
+  await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+  expect(calls.find((call) => call.method === "POST")!.body).toEqual({
+    key: "orders",
+    name: "Order Events v2",
+    description: null,
+  });
+});
+
+it("sends the key that was read off the name when it is left alone", async () => {
+  const calls = stubTopics();
+  renderScreen(<TopicsScreen tenantId={tenantId} />, `/tenants/${tenantId}/topics`);
+
+  fireEvent.click(await screen.findByRole("button", { name: "New Topic" }));
+  const form = await screen.findByRole("form", { name: "Create a Topic" });
+  fireEvent.change(within(form).getByLabelText(/^Name/), { target: { value: "Order Events" } });
   fireEvent.submit(form);
 
   await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
   expect(calls.find((call) => call.method === "POST")!.body).toEqual({
     key: "order-events",
-    name: null,
+    name: "Order Events",
     description: null,
   });
 });
@@ -65,10 +93,11 @@ it("refuses a key that is not a lowercase label before sending it", async () => 
 
   fireEvent.click(await screen.findByRole("button", { name: "New Topic" }));
   const form = await screen.findByRole("form", { name: "Create a Topic" });
-  fireEvent.change(within(form).getByLabelText("Key"), { target: { value: "Order Events" } });
+  fireEvent.change(within(form).getByLabelText(/^Name/), { target: { value: "Order Events" } });
+  fireEvent.change(within(form).getByLabelText(/^Key/), { target: { value: "Order Events" } });
   fireEvent.submit(form);
 
-  const key = within(form).getByLabelText("Key");
+  const key = within(form).getByLabelText(/^Key/);
   await waitFor(() => expect(key.getAttribute("aria-invalid")).toBe("true"));
   expect(calls.some((call) => call.method === "POST")).toBe(false);
 });

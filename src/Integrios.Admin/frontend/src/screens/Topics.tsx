@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { Link, NavLink, useNavigate } from "react-router";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { api } from "../api/client";
 import { formError } from "../api/problem";
 import { asProblem, call, nextCursor } from "../api/query";
 import type { components } from "../api/schema";
+import { dnsLabel } from "../identifiers";
 import {
   appliedNote,
   ConfirmAction,
@@ -42,6 +43,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
+import { monoInput } from "../ui/mono";
 import { StatusBadge } from "../ui/status";
 
 type Topic = components["schemas"]["AdminTopicResponse"];
@@ -57,7 +59,7 @@ const createSchema = z.object({
     .trim()
     .min(1, "Enter a key.")
     .regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, "Use lowercase letters, digits, and hyphens."),
-  name: z.string(),
+  name: z.string().trim().min(1, "Enter a name."),
   description: z.string(),
 });
 
@@ -149,10 +151,10 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
             >
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">Key</TableHead>
                   <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Key</TableHead>
                   <TableHead scope="col">Description</TableHead>
-                  <TableHead scope="col" className="text-right">
+                  <TableHead scope="col" className="text-center">
                     Subscriptions
                   </TableHead>
                   <TableHead scope="col">
@@ -171,18 +173,18 @@ export function TopicsScreen({ tenantId, selectedTopicId }: { tenantId: string; 
                       {/* The route is the selection, so `aria-current` follows the URL rather than a
                       separately tracked flag — the same contract every other ledger has. */}
                       <NavLink
-                        className="-mx-3 block px-3 py-2 font-mono no-underline"
+                        className="-mx-3 block px-3 py-2 no-underline"
                         to={`/tenants/${tenantId}/topics/${topic.id}`}
                         end
                       >
-                        {topic.key}
+                        {topic.name}
                       </NavLink>
                     </RowHeader>
-                    <TableCell>{topic.name}</TableCell>
+                    <TableCell className="font-mono">{topic.key}</TableCell>
                     <TableCell className="text-ink-secondary">{topic.description ?? "—"}</TableCell>
                     {/* A Topic nothing subscribes to accepts Events and routes none of them, so
                         the count is what the list is scanned for rather than a detail. */}
-                    <TableCell className="text-right">{topic.subscription_count}</TableCell>
+                    <TableCell className="text-center">{topic.subscription_count}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end">
                         <RowChevron />
@@ -244,7 +246,9 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
       <Inspector label="Topic detail">
         <div className="flex items-start justify-between gap-3">
           <h2 className="m-0">Topic</h2>
-          <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
+          <div className="flex h-5 items-center">
+            <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
+          </div>
         </div>
         <ReadError
           problem={problem}
@@ -260,20 +264,25 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
 
   return (
     <Inspector label="Topic detail">
-      <div className="flex items-start justify-between gap-3">
-        <div className="group min-w-0">
-          <h2 className="break-all">{current.name}</h2>
-          <span className="block font-mono text-xs break-all text-ink-secondary">{current.key}</span>
-          <span className="block text-xs text-ink-secondary">
-            <CopyInline label="Topic id" value={current.id} />
-          </span>
+      <div className="flex flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 break-all">{current.name}</h2>
+          <div className="flex h-5 shrink-0 items-center">
+            <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <CloseInspector to={`/tenants/${tenantId}/topics`} label="Close the Topic detail" />
-        </div>
+        <span className="block text-xs text-ink-secondary">
+          <CopyInline label="Topic id" value={current.id} />
+        </span>
       </div>
 
       <Details className="border-b pb-3.5">
+        {/* Immutable, and what travels with every Event, so it is stated with the facts rather than
+            standing under the title as a second name. */}
+        <dt>Key</dt>
+        <dd>
+          <code className="font-mono break-all">{current.key}</code>
+        </dd>
         <dt>Description</dt>
         <dd>{current.description ?? "—"}</dd>
         <dt>Subscriptions</dt>
@@ -281,18 +290,18 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
         {/* Read-only: a Topic owns no Event types. These are what its Sources declare, and they are
             edited there. */}
         <dt>Event types</dt>
-        <dd className="flex flex-wrap gap-x-2 gap-y-1">
+        <dd className="flex flex-wrap justify-end gap-x-2 gap-y-1">
           {current.event_types.length === 0
             ? "None declared by a Source yet"
             : current.event_types.map((eventType) => (
-                <code key={eventType} className="font-mono text-xs break-all">
+                <code key={eventType} className="font-mono break-all">
                   {eventType}
                 </code>
               ))}
         </dd>
       </Details>
 
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-2 border-b pb-3.5">
         <h3 className="eyebrow">Subscriptions</h3>
         {subscriptions.isPending ? <p className="m-0 text-ink-secondary">Loading…</p> : null}
         {/* A Topic nothing matches accepts Events and routes none of them, which is the established
@@ -314,9 +323,7 @@ function TopicInspector({ tenantId, topicId }: { tenantId: string; topicId: stri
               >
                 {subscription.name}
               </Link>
-              <span className="block truncate font-mono text-xs text-ink-secondary">
-                → {subscription.destination_name}
-              </span>
+              <span className="block truncate font-mono text-ink-secondary">→ {subscription.destination_name}</span>
             </div>
             <StatusBadge status={subscription.status} className="shrink-0" />
           </div>
@@ -341,6 +348,17 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
     defaultValues: { key: "", name: "", description: "" },
   });
 
+  // The key follows the name until an Operator writes one of their own, so the common case is not a
+  // transliteration done by hand. Authorship is recorded from their own keystroke rather than read
+  // off the form's dirty state, which is recomputed against the defaults whenever a field returns to
+  // one — that would freeze a key this form wrote the moment the name was cleared.
+  const [keyAuthored, setKeyAuthored] = useState(false);
+  const authoredName = useWatch({ control: form.control, name: "name" });
+  useEffect(() => {
+    if (keyAuthored) return;
+    form.setValue("key", dnsLabel(authoredName));
+  }, [keyAuthored, authoredName, form]);
+
   const create = useMutation({
     mutationFn: (values: CreateValues) =>
       call(() =>
@@ -348,7 +366,7 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
           params: { path: { tenantId } },
           body: {
             key: values.key,
-            name: optional(values.name),
+            name: values.name,
             description: optional(values.description),
           },
         }),
@@ -369,15 +387,18 @@ function CreateTopic({ tenantId, onCreated }: { tenantId: string; onCreated: () 
       <form className="flex flex-col gap-4" noValidate onSubmit={submit} aria-label="Create a Topic">
         <FormError message={formError(asProblem(create.error), createFields)} />
 
+        {/* The label first, the key second: an Operator knows what they are calling this Topic before
+            they know what to call it on the wire, and the key is read off the name. */}
+        <TextField control={form.control} name="name" label="Name" required />
         <TextField
           control={form.control}
           name="key"
           label="Key"
           hint="Immutable, and delivered with every Event from this Topic."
-          className="font-mono text-sm"
+          onChange={() => setKeyAuthored(true)}
+          className={monoInput}
           required
         />
-        <TextField control={form.control} name="name" label="Name (optional)" hint="Defaults to the key." />
         <TextField control={form.control} name="description" label="Description (optional)" />
 
         <Button type="submit" className="self-start" disabled={create.isPending}>
@@ -446,7 +467,7 @@ function EditTopic({ tenantId, topic }: { tenantId: string; topic: Topic }) {
 
                 <div>
                   <p className="m-0 text-sm font-medium">Key</p>
-                  <p className="m-0 font-mono text-sm text-ink-secondary">{topic.key}</p>
+                  <p className="m-0 font-mono text-ink-secondary">{topic.key}</p>
                 </div>
                 <TextField control={form.control} name="name" label="Name" required />
                 <TextField control={form.control} name="description" label="Description (optional)" />

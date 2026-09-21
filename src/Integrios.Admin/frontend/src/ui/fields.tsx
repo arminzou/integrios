@@ -248,7 +248,7 @@ export function Filter({
         {unnamed ? <SelectItem value={value}>{value}</SelectItem> : null}
         {children}
         {hint ? (
-          <p aria-hidden="true" className="border-t px-2 py-1.5 text-xs text-ink-secondary">
+          <p aria-hidden="true" className="border-t border-accent-border px-2 py-1.5 text-xs text-ink-secondary">
             {hint}
           </p>
         ) : null}
@@ -353,7 +353,7 @@ export function FilterSearch({
       {/* The chooser is muted and divided from the box, so the pill reads as one filter whose field
           happens to be selectable rather than as two controls sharing a border. */}
       {leading ? (
-        <span className="-my-px -ml-px flex h-[calc(100%+2px)] items-center border-r text-ink-secondary">
+        <span className="-my-px -ml-px flex h-[calc(100%+2px)] items-center border-r border-input text-ink-secondary">
           {leading}
         </span>
       ) : null}

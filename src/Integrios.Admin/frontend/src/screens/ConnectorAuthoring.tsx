@@ -14,6 +14,7 @@ import { Callout, CheckRow, Disclosure, FormError, Section } from "../ui/control
 import { BodyPanel } from "../ui/copy";
 import { Form, TextAreaField, TextField } from "../ui/fields";
 import { applyProblem } from "../ui/formProblem";
+import { monoInput } from "../ui/mono";
 
 type Connector = components["schemas"]["ConnectorDto"];
 
@@ -187,7 +188,7 @@ export function ConnectorAuthoring({
             label="Key"
             hint={from ? undefined : "Names this Connector in manifests and Source or Destination authoring."}
             onChange={() => setKeyAuthored(true)}
-            className="font-mono text-sm"
+            className={monoInput}
             readOnly={from !== undefined}
             required
           />

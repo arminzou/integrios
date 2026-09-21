@@ -69,7 +69,7 @@ export function localInputValue(iso: string): string {
 /// a malformed value in a bug report needs to see what the API actually returned, not "Invalid Date".
 export function Timestamp({ value }: { value: string }) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+  if (Number.isNaN(date.getTime())) return <span className="font-mono">{value}</span>;
 
   return (
     <time dateTime={value} title={`${value}\n${since(value)}`} className="whitespace-nowrap tabular-nums">
@@ -86,7 +86,7 @@ const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" 
 
 export function Day({ value }: { value: string }) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+  if (Number.isNaN(date.getTime())) return <span className="font-mono">{value}</span>;
 
   return (
     <time
@@ -135,7 +135,7 @@ export function dayLabel(value: string, now = new Date()): string {
 /// The same instant as `Timestamp`, with the day left to the group separator above it.
 export function TimeOfDay({ value }: { value: string }) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return <span className="font-mono text-sm">{value}</span>;
+  if (Number.isNaN(date.getTime())) return <span className="font-mono">{value}</span>;
 
   return (
     <time

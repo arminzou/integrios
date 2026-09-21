@@ -71,7 +71,7 @@ export function Section({
   return (
     <section
       aria-labelledby={headingId}
-      className={cn("flex flex-col gap-3 border-t pt-4 first:border-t-0 first:pt-0", className)}
+      className={cn("flex flex-col gap-3 border-t border-accent-border pt-4 first:border-t-0 first:pt-0", className)}
     >
       <div>
         <h3 id={headingId} className="m-0 text-sm font-semibold">

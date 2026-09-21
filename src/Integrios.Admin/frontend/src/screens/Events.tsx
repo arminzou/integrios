@@ -615,7 +615,9 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
           <h2 ref={heading} tabIndex={-1} className="m-0">
             Event
           </h2>
-          <CloseInspector to={closed} label="Close the Event detail" />
+          <div className="flex h-5 items-center">
+            <CloseInspector to={closed} label="Close the Event detail" />
+          </div>
         </div>
         <ReadError problem={problem} what="This Event" back={{ to: closed, label: "Back to Events" }} />
       </Inspector>
@@ -630,11 +632,13 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
 
   return (
     <Inspector label="Event detail" fill>
-      <div className="flex items-start justify-between gap-3">
-        {/* The identifier under a panel heading is the same shape on every detail screen: mono, one
-            step down, in secondary ink, and wrapped rather than clipped so it reads whole. This one
-            adds the copy control the others lack, because pasting it elsewhere is what it is for. */}
-        <h2 ref={heading} tabIndex={-1} className="group min-w-0">
+      {/* The identifier under a panel heading is the same shape on every detail screen: mono, one
+          step down, in secondary ink, and on its own row at the panel's full width so it reads whole.
+          The heading keeps it, so its accessible name is "Event <id>". The badge and close button are
+          taken out of the flow at the title line, beside a title short enough never to reach them,
+          rather than sharing a row that would narrow the id. */}
+      <div className="relative">
+        <h2 ref={heading} tabIndex={-1} className="group">
           {/* The space is explicit: the heading's accessible name is "Event <id>", and JSX drops a
               trailing space before an element on the next line. */}
           Event{" "}
@@ -642,8 +646,8 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
             <CopyInline label="Event id" value={current.event_id} />
           </span>
         </h2>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <StatusBadge status={current.status} className="mt-0.5" />
+        <div className="absolute top-0 right-0 flex h-5 items-center gap-1.5">
+          <StatusBadge status={current.status} />
           <CloseInspector to={closed} label="Close the Event detail" />
         </div>
       </div>
@@ -655,7 +659,7 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
         </dd>
         <dt>Topic</dt>
         <dd>
-          {current.topic_key ?? current.topic_name ?? current.topic_id ?? "—"}
+          {current.topic_name ?? current.topic_key ?? current.topic_id ?? "—"}
           {current.topic_deleted ? " (deleted)" : ""}
         </dd>
         <dt>Accepted</dt>
@@ -669,34 +673,40 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
       </dl>
 
       {current.payload !== undefined && current.payload !== null ? (
-        <BodyPanel label="Accepted payload" value={current.payload} />
+        <div className="border-b pb-3.5">
+          <BodyPanel label="Accepted payload" value={current.payload} />
+        </div>
       ) : null}
       {current.metadata !== undefined && current.metadata !== null ? (
-        <BodyPanel label="Metadata" value={current.metadata} />
+        <div className="border-b pb-3.5">
+          <BodyPanel label="Metadata" value={current.metadata} />
+        </div>
       ) : null}
 
-      {current.trace_id ? (
-        <CopyValue
-          id="event-trace-id"
-          label="Trace id"
-          value={current.trace_id}
-          action={
-            // Only when the deployment configured a tracing product; the link leaves the dashboard,
-            // so it opens a new tab that cannot reach back into this one.
-            current.trace_url ? (
-              <Button asChild variant="outline">
-                <a href={current.trace_url} target="_blank" rel="noopener noreferrer">
-                  Open trace
-                </a>
-              </Button>
-            ) : null
-          }
-        />
-      ) : (
-        <p>This Event carries no trace identity.</p>
-      )}
+      <div className="border-b pb-3.5">
+        {current.trace_id ? (
+          <CopyValue
+            id="event-trace-id"
+            label="Trace id"
+            value={current.trace_id}
+            action={
+              // Only when the deployment configured a tracing product; the link leaves the dashboard,
+              // so it opens a new tab that cannot reach back into this one.
+              current.trace_url ? (
+                <Button asChild variant="outline">
+                  <a href={current.trace_url} target="_blank" rel="noopener noreferrer">
+                    Open trace
+                  </a>
+                </Button>
+              ) : null
+            }
+          />
+        ) : (
+          <p>This Event carries no trace identity.</p>
+        )}
+      </div>
 
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-2 border-b pb-3.5">
         <h3 className="eyebrow">Event deliveries</h3>
         <WriteStatus done={replayed}>Queued for delivery again.</WriteStatus>
         {current.event_deliveries?.length ? (
@@ -705,18 +715,21 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
           // recovery the platform offers — behind a sideways scroll an Operator triaging a dead
           // letter would have to discover. Stacked, the state and the control that answers it sit
           // together on the line, and nothing here scrolls.
-          <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label="One EventDelivery per matched Subscription">
+          <ul
+            className="m-0 grid list-none grid-cols-[minmax(0,1fr)_auto_auto] gap-2 p-0"
+            aria-label="One EventDelivery per matched Subscription"
+          >
             {current.event_deliveries.map((delivery) => (
               <li
                 key={delivery.event_delivery_id}
-                className="flex items-center justify-between gap-2 rounded-md bg-surface-quiet px-2.5 py-2"
+                className="col-span-3 grid grid-cols-subgrid items-center rounded-md bg-surface-quiet px-2.5 py-2"
               >
                 <div className="min-w-0 text-[13px]">
                   <span className="block truncate">
                     {delivery.subscription_name ?? delivery.subscription_id}
                     {delivery.subscription_deleted ? " (deleted)" : ""}
                   </span>
-                  <span className="block truncate font-mono text-xs text-ink-secondary">
+                  <span className="block truncate font-mono text-ink-secondary">
                     → {delivery.destination_name ?? nameIn(destinationOptions.data?.items, delivery.destination_id)}
                     {delivery.destination_deleted ? " (deleted)" : ""}
                   </span>
@@ -738,20 +751,22 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
                     ) : null}
                   </span>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                {/* The badge and the action are cells of the list's own columns, sized by the widest in
+                    any row, so every row's badge ends at one edge whether or not it offers Replay. */}
+                <div className="flex justify-end">
                   <StatusBadge status={delivery.status} />
-                  <ReplayDelivery
-                    tenantId={tenantId}
-                    eventId={eventId}
-                    delivery={delivery}
-                    onReplayed={() => {
-                      setReplayed(true);
-                      void queryClient.invalidateQueries({ queryKey: eventKey });
-                      // A replayed Delivery leaves the dead-lettered backlog the strip and rail count.
-                      void queryClient.invalidateQueries({ queryKey: ["event-backlog", tenantId] });
-                    }}
-                  />
                 </div>
+                <ReplayDelivery
+                  tenantId={tenantId}
+                  eventId={eventId}
+                  delivery={delivery}
+                  onReplayed={() => {
+                    setReplayed(true);
+                    void queryClient.invalidateQueries({ queryKey: eventKey });
+                    // A replayed Delivery leaves the dead-lettered backlog the strip and rail count.
+                    void queryClient.invalidateQueries({ queryKey: ["event-backlog", tenantId] });
+                  }}
+                />
               </li>
             ))}
           </ul>
@@ -893,7 +908,7 @@ function ReplayDelivery({
     onSuccess: onReplayed,
   });
 
-  if (delivery.status !== "dead_lettered") return <span>—</span>;
+  if (delivery.status !== "dead_lettered") return <span className="justify-self-center">—</span>;
 
   return (
     <div className="flex flex-col items-start gap-2">

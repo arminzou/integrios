@@ -73,7 +73,9 @@ export function SourceGuide({ tenantId, source }: { tenantId: string; source: So
           : "The Publisher sends to this Source; Integrios validates the input and publishes accepted Events to its Topic."}
       </p>
       {!active ? (
-        <p className="m-0 text-sm text-warning-ink">Inactive: this Source refuses new Events until it is activated.</p>
+        <p className="m-0 text-[13px] text-warning-ink">
+          Inactive: this Source refuses new Events until it is activated.
+        </p>
       ) : null}
       <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
         <DialogPrimitive.Trigger asChild>

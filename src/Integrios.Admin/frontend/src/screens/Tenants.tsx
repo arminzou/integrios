@@ -30,6 +30,7 @@ import { Filter, FilterSearch, Form, TextField } from "../ui/fields";
 import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
 import { Details, Page, PageHeader, Panel, RowHeader, TableCard } from "../ui/layout";
+import { monoInput } from "../ui/mono";
 import { environmentsIn, useTenantOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { since, Timestamp } from "../ui/time";
@@ -253,7 +254,7 @@ function CreateTenant({ onCreated }: { onCreated: () => void }) {
           label="Slug"
           hint="Chosen once, and never changed. It names this Tenant's secret paths."
           onChange={() => setSlugAuthored(true)}
-          className="font-mono text-sm"
+          className={monoInput}
           required
         />
 

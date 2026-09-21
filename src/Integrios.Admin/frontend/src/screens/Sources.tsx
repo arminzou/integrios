@@ -57,6 +57,7 @@ import {
   SplitView,
   TableCard,
 } from "../ui/layout";
+import { monoInput } from "../ui/mono";
 import { nameIn, useConnectorOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { EventBuilder, type EventIdentityRule } from "./EventBuilder";
@@ -252,14 +253,14 @@ const eventIdentityRule = (values: IdentityValues) =>
 
 /// Written into the configuration: the same for every input.
 function Fixed({ children }: { children: ReactNode }) {
-  return <code className="font-mono text-xs break-all text-ink">{children}</code>;
+  return <code className="font-mono break-all text-ink">{children}</code>;
 }
 
 /// Read from each input rather than written here. Dashed, and led by where it is read from, so a
 /// template like `github.`[header x-github-event] reads as text plus a slot at a glance.
 function FromInput({ from, name }: { from: string; name?: string }) {
   return (
-    <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-1 rounded border border-dashed border-ink-secondary px-1 font-mono text-xs">
+    <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-1 rounded border border-dashed border-ink-secondary px-1 font-mono">
       <span className="text-ink-secondary">{from}</span>
       {name ? <span className="break-all text-ink">{name}</span> : null}
     </span>
@@ -407,7 +408,7 @@ function EventTypeDeclarations<TValues extends FieldValues>({
                 control={control}
                 name={`event_types.${index}.value` as Path<TValues>}
                 label={`Event type ${index + 1}`}
-                className="font-mono text-sm"
+                className={monoInput}
                 required
               />
               <Button
@@ -686,7 +687,11 @@ export function SourcesScreen({ tenantId, selectedSourceId }: { tenantId: string
                         {source.name}
                       </NavLink>
                     </RowHeader>
-                    <TableCell>{nameIn(connectorOptions.data?.items, source.connector_id)}</TableCell>
+                    <TableCell>
+                      <Link to={`/connectors/${source.connector_id}`}>
+                        {nameIn(connectorOptions.data?.items, source.connector_id)}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Link to={`/tenants/${tenantId}/topics/${source.topic_id}`}>
                         {nameIn(topicOptions.data?.items, source.topic_id)}
@@ -1098,24 +1103,28 @@ function SourceInspector({ tenantId, sourceId }: { tenantId: string; sourceId: s
   const current = source.data;
   return (
     <Inspector label="Source detail">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="group min-w-0">
-          Source{" "}
-          <span className="block text-xs font-normal text-ink-secondary">
-            <CopyInline label="Source id" value={current.id} />
-          </span>
-        </h2>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <StatusBadge status={current.status} className="mt-0.5" />
-          <CloseInspector to={`/tenants/${tenantId}/sources`} label="Close the Source detail" />
+      <div className="flex flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0">{current.name}</h2>
+          {/* One title line tall, so the badge and the 32px close button centre on the title rather
+              than hanging below it. */}
+          <div className="flex h-5 shrink-0 items-center gap-1.5">
+            <StatusBadge status={current.status} />
+            <CloseInspector to={`/tenants/${tenantId}/sources`} label="Close the Source detail" />
+          </div>
         </div>
+        {/* Its own row, so the id has the panel's full width instead of what the badge and close
+            button leave beside the title. */}
+        <span className="block text-xs text-ink-secondary">
+          <CopyInline label="Source id" value={current.id} />
+        </span>
       </div>
 
       <Details className="border-b pb-3.5">
         <dt>Type</dt>
         <dd>{current.type}</dd>
         <dt>Event types</dt>
-        <dd className="flex flex-wrap gap-x-2 gap-y-1">
+        <dd className="flex flex-wrap justify-end gap-x-2 gap-y-1">
           {current.event_types.map((eventType) => (
             <Fixed key={eventType}>{eventType}</Fixed>
           ))}

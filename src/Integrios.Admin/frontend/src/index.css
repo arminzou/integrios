@@ -29,6 +29,10 @@
 :root {
   color-scheme: light;
 
+  /* One size for every monospace run: identifiers, keys, JSON, code. An Inspector is narrow and sits
+     beside a ledger, so it sets its own, one step down. */
+  --mono-size: 13px;
+
   --canvas: #fafafa;
   --surface: #ffffff;
   --surface-quiet: #fafafa;
@@ -210,8 +214,9 @@
   code,
   kbd,
   samp,
-  pre {
-    font-size: revert;
+  pre,
+  .font-mono {
+    font-size: var(--mono-size);
   }
 
   /* The system's type scale: a serif carries page titles and section headings, scaled up so a page

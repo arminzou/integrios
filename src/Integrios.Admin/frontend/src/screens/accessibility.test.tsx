@@ -255,7 +255,7 @@ describe("Accessibility of detail and edit states", () => {
     });
 
     const container = renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
-    await screen.findByRole("link", { name: "http v1" });
+    await screen.findByRole("link", { name: "HTTP v1" });
     await expectNoAccessibilityViolations(container);
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));

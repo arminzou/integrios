@@ -251,7 +251,7 @@ describe("A selected Destination", () => {
     renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
 
     const panel = await screen.findByRole("complementary", { name: "Destination detail" });
-    const link = await within(panel).findByRole("link", { name: "http v1" });
+    const link = await within(panel).findByRole("link", { name: "HTTP v1" });
     expect(link.getAttribute("href")).toBe(`/connectors/${connectorId}`);
     expect(within(panel).getByText("bearer_token")).toBeTruthy();
   });

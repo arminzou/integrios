@@ -126,10 +126,10 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
             >
               <TableHeader>
                 <TableRow>
-                  {/* The key is what an Operator writes in a manifest and what a Source or Destination is built
-                  from, so it names the row; the presentation name follows it. */}
-                  <TableHead scope="col">Key</TableHead>
+                  {/* The name leads every ledger; the key an Operator writes in a manifest, and that a Source or
+                  Destination is built from, follows it. */}
                   <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Key</TableHead>
                   <TableHead scope="col">Direction</TableHead>
                   <TableHead scope="col">Contract</TableHead>
                 </TableRow>
@@ -142,15 +142,11 @@ export function ConnectorsScreen({ selectedConnectorId }: { selectedConnectorId?
                     onClick={openRow}
                   >
                     <RowHeader>
-                      <NavLink
-                        className="-mx-3 block px-3 py-2 font-mono no-underline"
-                        to={`/connectors/${connector.id}`}
-                        end
-                      >
-                        {connector.key}
+                      <NavLink className="-mx-3 block px-3 py-2 no-underline" to={`/connectors/${connector.id}`} end>
+                        {connector.name}
                       </NavLink>
                     </RowHeader>
-                    <TableCell>{connector.name}</TableCell>
+                    <TableCell className="font-mono">{connector.key}</TableCell>
                     <TableCell>{connector.direction}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-between gap-3">
@@ -320,7 +316,9 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
       <Inspector label="Connector detail">
         <div className="flex items-start justify-between gap-3">
           <h2 className="m-0">Connector</h2>
-          <CloseInspector to="/connectors" label="Close the Connector detail" />
+          <div className="flex h-5 items-center">
+            <CloseInspector to="/connectors" label="Close the Connector detail" />
+          </div>
         </div>
         <ReadError problem={problem} what="This Connector" back={{ to: "/connectors", label: "Back to Connectors" }} />
       </Inspector>
@@ -348,11 +346,13 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
       <div className="flex items-start justify-between gap-3">
         <h2 className="min-w-0">
           {current.name}
-          <span className="block font-mono text-xs font-normal break-all text-ink-secondary">
+          <span className="block font-mono font-normal break-all text-ink-secondary">
             {current.key} · contract v{current.contract_version}
           </span>
         </h2>
-        <div className="flex shrink-0 items-center gap-1.5">
+        {/* One title line tall, so the 32px close button centres on the title rather than hanging
+            below it. */}
+        <div className="flex h-5 shrink-0 items-center gap-1.5">
           <CloseInspector to="/connectors" label="Close the Connector detail" />
         </div>
       </div>
@@ -398,9 +398,11 @@ function ConnectorInspector({ connectorId }: { connectorId: string }) {
         ) : null}
       </Details>
 
-      {current.description ? <p className="m-0 text-ink-secondary">{current.description}</p> : null}
+      {current.description ? (
+        <p className="m-0 border-b pb-3.5 text-[13px] text-ink-secondary">{current.description}</p>
+      ) : null}
 
-      <section className="flex min-w-0 flex-col gap-2">
+      <section className="flex min-w-0 flex-col gap-2 border-b pb-3.5">
         <h3 className="eyebrow">Manifest</h3>
         {!knownSchema ? (
           <p className="m-0 text-ink-secondary">

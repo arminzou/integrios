@@ -75,9 +75,10 @@ describe("Opening a Connector from its row", () => {
     vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => installed.key } as Selection);
 
     const { router } = renderScreen(<ConnectorsScreen />, "/connectors");
-    const name = await screen.findByText(installed.name);
+    // The key cell is plain text beside the row's link, which is where a copy is finished.
+    const key = await screen.findByText(installed.key);
 
-    fireEvent.click(name);
+    fireEvent.click(key);
 
     expect(router.state.location.pathname).toBe("/connectors");
   });

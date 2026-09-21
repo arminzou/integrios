@@ -235,7 +235,9 @@ function TenantApiKeyInspector({
       <Inspector label="Tenant API key detail">
         <div className="flex items-start justify-between gap-3">
           <h2 className="m-0">Tenant API key</h2>
-          <CloseInspector to={closed} label="Close the Tenant API key detail" />
+          <div className="flex h-5 items-center">
+            <CloseInspector to={closed} label="Close the Tenant API key detail" />
+          </div>
         </div>
         <ReadError problem={problem} what="This key" back={{ to: closed, label: "Back to API keys" }} />
       </Inspector>
@@ -243,6 +245,9 @@ function TenantApiKeyInspector({
   if (!apiKey.data) return <Inspector label="Tenant API key detail">Loading…</Inspector>;
 
   const current = apiKey.data;
+  // The divider closes the details off from what follows; a revoked key with no description has
+  // nothing after it, and a rule under nothing reads as a stray line.
+  const hasMore = Boolean(current.description) || !current.revoked_at;
   return (
     <Inspector label="Tenant API key detail">
       <div className="flex items-start justify-between gap-3">
@@ -250,17 +255,17 @@ function TenantApiKeyInspector({
           {current.name}
           {/* Only the prefix exists to show. The token itself is hashed at rest and was displayed
               once, at creation. */}
-          <span className="block font-mono text-xs font-normal break-all text-ink-secondary">
-            {current.key_prefix}…
-          </span>
+          <span className="block font-mono font-normal break-all text-ink-secondary">{current.key_prefix}…</span>
         </h2>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <StatusBadge status={current.state} className="mt-0.5" />
+        {/* One title line tall, so the badge and the 32px close button centre on the title rather
+            than hanging below it. */}
+        <div className="flex h-5 shrink-0 items-center gap-1.5">
+          <StatusBadge status={current.state} />
           <CloseInspector to={closed} label="Close the Tenant API key detail" />
         </div>
       </div>
 
-      <Details className="border-b pb-3.5">
+      <Details className={hasMore ? "border-b pb-3.5" : undefined}>
         <dt>Created</dt>
         <dd>
           <Timestamp value={current.created_at} />
@@ -277,7 +282,12 @@ function TenantApiKeyInspector({
         ) : null}
       </Details>
 
-      {current.description ? <p className="m-0 text-ink-secondary">{current.description}</p> : null}
+      {current.description ? (
+        // A rule before the Revoke action; a revoked key has none, so nothing follows.
+        <p className={`m-0 text-[13px] text-ink-secondary${current.revoked_at ? "" : " border-b pb-3.5"}`}>
+          {current.description}
+        </p>
+      ) : null}
 
       {/* Revocation is terminal, so a revoked key has nothing left to offer. */}
       {current.revoked_at ? null : (

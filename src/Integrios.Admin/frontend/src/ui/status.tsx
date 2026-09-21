@@ -5,15 +5,19 @@ import type { ReactNode } from "react";
 /// only the second cue. Nothing here is ever communicated by colour alone.
 ///
 /// The palette defines three semantic pairs — success, attention and failure — and everything else
-/// is quiet. Success is the deliberate exception to spending colour only on what needs an Operator:
+/// is quiet. `on` and `off` are two treatments inside that quiet family, not a fourth colour: a
+/// configuration switch reads as a firmer outline when it is enabled and as an outline alone when it
+/// is not, so an enabled Tenant and a revoked API key do not look the same grey. Success is the deliberate exception to spending colour only on what needs an Operator:
 /// a Delivery timeline is read as a column of outcomes, and telling a settled success from a settled
 /// failure at a glance is the whole job of that column. Failure is the brightest of the three so it
 /// still wins a row that also carries green, and every state that is merely normal — an `active`
 /// Tenant, an `accepted` Event — stays quiet rather than joining in.
-type Tone = "quiet" | "success" | "attention" | "failure";
+type Tone = "quiet" | "on" | "off" | "success" | "attention" | "failure";
 
 const tones: Record<Tone, string> = {
   quiet: "bg-surface-quiet text-ink-secondary",
+  on: "bg-surface text-ink ring-1 ring-inset ring-black/15",
+  off: "bg-transparent text-ink-secondary ring-1 ring-inset ring-black/10",
   success: "bg-success-surface text-success-ink",
   attention: "bg-warning-surface text-warning-ink",
   failure: "bg-danger-surface text-danger-ink",
@@ -22,8 +26,8 @@ const tones: Record<Tone, string> = {
 /// Attention is a state an Operator may need to act on; failure is one the platform has stopped
 /// retrying. `unrouted` is attention rather than failure: the Event was accepted and matched no
 /// Subscription, which is the established signal for a missing or misconfigured Subscription rather
-/// than a delivery that failed. An `inactive` Tenant or Source is quiet — deliberate configuration
-/// is not a fault.
+/// than a delivery that failed. An `inactive` Tenant or Source, or a `revoked` API key, is off —
+/// deliberate configuration is not a fault, so it stays quiet, only outlined rather than filled.
 ///
 /// An unlisted status is quiet. A status this map has never seen is not evidence of a problem, and
 /// guessing a colour for it would be inventing meaning the API did not send.
@@ -43,6 +47,9 @@ const toneFor: Record<string, Tone> = {
   succeeded: "success",
   failed: "failure",
   dead_lettered: "failure",
+  active: "on",
+  inactive: "off",
+  revoked: "off",
 };
 
 function statusTone(status: string): Tone {
@@ -65,6 +72,8 @@ export function statusLabel(status: string): string {
 
 const markers: Record<Tone, string> = {
   quiet: "before:bg-selected-ink",
+  on: "before:bg-selected-ink",
+  off: "before:bg-selected-ink",
   success: "before:bg-success-ink",
   attention: "before:bg-surface before:ring-2 before:ring-warning-ink before:ring-inset",
   failure: "before:bg-danger-ink",
@@ -93,7 +102,7 @@ export function StatusBadge({
     <span
       className={cn(
         "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-        tones[toneFor[status] ?? "quiet"],
+        tones[statusTone(status)],
         className,
       )}
     >
