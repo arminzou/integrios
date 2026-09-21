@@ -147,24 +147,23 @@ export function SplitList({ children }: { children: ReactNode }) {
 /// Sticky at desktop so the detail stays put while the list beside it is scanned. It carries its
 /// own accessible name because it is a complementary region, not a second page.
 ///
-/// `fill` gives it one height at desktop — the viewport, less its own offset — whatever it holds,
-/// and its own scrollbar for the rest. A panel that sizes to its content decides how far the whole
-/// page scrolls whenever it is the taller column: an Event with a long attempt history pushes the
-/// list's footer out of reach, and every change of selection resizes the page under the Operator,
-/// because the panel is briefly a line of text while its read is in flight. The browser clamps the
-/// scroll position to the shorter page and returns it when the content lands, which reads as the
-/// list jumping and snapping back. One height means the selection cannot move the page at all. A
-/// screen whose detail is short and always loaded needs none of this. Below the breakpoint the panel
-/// is stacked rather than sticky, and a capped panel would be a scroll area inside a scrolling page.
+/// `capped` sizes it to its content at desktop, up to the viewport less its own offset, with its own
+/// scrollbar past that. Uncapped, a panel decides how far the whole page scrolls whenever it is the
+/// taller column: an Event with a long attempt history pushes the list's footer out of reach. The cap
+/// keeps it no taller than the screen, so the list beside it stays the column that sets the page's
+/// height, while a short Event reads as a short panel rather than a screen of empty card. The read in
+/// flight is held open by `InspectorLoading`, so selection does not collapse the panel to a line.
+/// Below the breakpoint the panel is stacked rather than sticky, and a capped panel would be a scroll
+/// area inside a scrolling page.
 export function Inspector({
   label,
   className,
-  fill,
+  capped,
   children,
 }: {
   label: string;
   className?: string;
-  fill?: boolean;
+  capped?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -175,7 +174,7 @@ export function Inspector({
         // The rules that divide a panel into sections are quieter than the panel's own edge.
         "[&_.border-b]:border-accent-border [&_.border-y]:border-accent-border",
         "min-[1180px]:sticky min-[1180px]:top-4 min-[1180px]:w-100 min-[1180px]:flex-none",
-        fill && "scroll-quiet min-[1180px]:h-[calc(100vh-2rem)] min-[1180px]:overflow-y-auto",
+        capped && "scroll-quiet min-[1180px]:max-h-[calc(100vh-2rem)] min-[1180px]:overflow-y-auto",
         className,
       )}
     >
@@ -213,7 +212,7 @@ export function InspectorPlaceholder({ label, children }: { label: string; child
 /// empty panel; not reserving it costs the reading position.
 export function InspectorLoading({ label }: { label: string }) {
   return (
-    <Inspector label={label} fill className="min-h-96">
+    <Inspector label={label} capped className="min-h-96">
       <p className="m-0 text-[13px] text-ink-secondary" role="status">
         Loading…
       </p>

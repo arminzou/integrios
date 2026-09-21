@@ -105,7 +105,7 @@ it("requires an explicit Source type", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "New Source" }));
 
   expect(screen.getByLabelText("Type").textContent).toContain("Choose a type");
-  expect(screen.queryByRole("heading", { name: "Webhook request" })).toBeNull();
+  expect(screen.queryByText(/callback URL/)).toBeNull();
   expect(screen.queryByRole("heading", { name: "Event Normalization" })).toBeNull();
 });
 
@@ -308,7 +308,7 @@ it("discards an unsaved Source draft when the Edit sheet closes", async () => {
           input_requirements: null,
           mapping: { engine: "jsonata", version: "1", expression: stored },
           event_identity_rule: { kind: "header", value: "x-github-delivery", allow_missing: false },
-          event_types: ["order.created"],
+          event_types: ["github.push"],
           revision: "revision",
           status: "active",
           created_at: "2026-09-09T00:00:00Z",

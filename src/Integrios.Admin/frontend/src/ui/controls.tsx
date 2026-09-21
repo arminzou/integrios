@@ -74,7 +74,8 @@ export function Section({
       className={cn("flex flex-col gap-3 border-t border-accent-border pt-4 first:border-t-0 first:pt-0", className)}
     >
       <div>
-        <h3 id={headingId} className="m-0 text-sm font-semibold">
+        {/* A step above the 13px field labels, so a section and a field inside it never read as peers. */}
+        <h3 id={headingId} className="m-0 text-[15.5px] font-semibold">
           {title}
         </h3>
         <p className="m-0 mt-0.5 text-xs text-ink-secondary">{hint}</p>

@@ -49,7 +49,7 @@ async function openSource(type: "event_api" | "webhook" | "broker" = "webhook") 
 
 it("explains webhook normalization and shows its sample request", async () => {
   const webhook = await openSource();
-  expect(within(webhook).getByRole("heading", { name: "Webhook request" })).toBeTruthy();
+  expect(within(webhook).getByText(/posts JSON to a callback URL/)).toBeTruthy();
   expect(within(webhook).getByRole("heading", { name: "Event Normalization" })).toBeTruthy();
   expect(within(webhook).getByRole("button", { name: "Open Integrios Event Builder" })).toBeTruthy();
   fireEvent.click(within(webhook).getByRole("button", { name: "Open Integrios Event Builder" }));
@@ -58,7 +58,12 @@ it("explains webhook normalization and shows its sample request", async () => {
   expect(within(builder).getByText("Request headers")).toBeTruthy();
   expect(within(builder).getByLabelText("Request body (JSON)")).toBeTruthy();
   expect(within(builder).getByRole("heading", { name: "source_event_id" })).toBeTruthy();
-  expect((within(builder).getByRole("radio", { name: "Fixed value" }) as HTMLInputElement).checked).toBe(true);
+  // Nothing is declared yet, so there is no one type to give every request.
+  const fixed = within(builder).getByRole("radio", {
+    name: "Every request is the same Event type",
+  }) as HTMLInputElement;
+  expect(fixed.checked).toBe(false);
+  expect(fixed.disabled).toBe(true);
   fireEvent.click(within(builder).getByRole("radio", { name: "From input" }));
   expect(within(builder).getByLabelText("Read from")).toBeTruthy();
   expect(within(builder).getByLabelText("Event type header")).toBeTruthy();
@@ -91,11 +96,12 @@ it("shows broker messages without HTTP request context", async () => {
 
 it("returns the ephemeral Builder draft to its owning Source form", async () => {
   const source = await openSource();
+  fireEvent.change(within(source).getByLabelText("Event type 1"), { target: { value: "github.push" } });
   fireEvent.click(within(source).getByRole("button", { name: "Open Integrios Event Builder" }));
   const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
   const useConfiguration = within(builder).getByRole("button", { name: "Use configuration" }) as HTMLButtonElement;
   expect(useConfiguration.disabled).toBe(true);
-  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "github.push" } });
+  fireEvent.click(within(builder).getByRole("radio", { name: "Every request is github.push" }));
   expect(useConfiguration.disabled).toBe(false);
   fireEvent.click(useConfiguration);
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Integrios Event Builder" })).toBeNull());
@@ -108,25 +114,98 @@ it("returns the ephemeral Builder draft to its owning Source form", async () => 
   );
 });
 
-/// A fixed Event type is the one type such a Source publishes, so the form declares it rather than
-/// asking for the same value a second time.
-it("declares a fixed Event type from the Event contract", async () => {
+/// A fixed Event type is the Source's one declaration, typed once: the mapping follows the row, and a
+/// second row is refused because one fixed type cannot be several.
+it("takes a fixed Event type from the one declaration", async () => {
   const source = await openSource();
   fireEvent.change(within(source).getByLabelText("Name"), { target: { value: "github-intake" } });
   await chooseConnectorAndTopic(source);
+  fireEvent.change(within(source).getByLabelText("Event type 1"), { target: { value: "github.push" } });
   fireEvent.click(within(source).getByRole("button", { name: "Open Integrios Event Builder" }));
   const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
-  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "github.push" } });
+  fireEvent.click(within(builder).getByRole("radio", { name: "Every request is github.push" }));
   fireEvent.click(within(builder).getByRole("button", { name: "Use configuration" }));
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Integrios Event Builder" })).toBeNull());
 
-  expect(within(source).queryByLabelText("Event type 1")).toBeNull();
-  expect(within(source).getByText("— the fixed Event type from the Event contract.")).toBeTruthy();
+  fireEvent.change(within(source).getByLabelText("Event type 1"), { target: { value: "github.ping" } });
+  fireEvent.click(within(source).getByRole("button", { name: "Add Event type" }));
+  fireEvent.change(within(source).getByLabelText("Event type 2"), { target: { value: "github.issues" } });
+  fireEvent.click(within(source).getByRole("button", { name: "Create Source" }));
+  expect(await within(source).findByText(/gives every input the same Event type/)).toBeTruthy();
+
+  fireEvent.click(within(source).getByRole("button", { name: "Remove Event type 2" }));
   const calls = stubOptions();
   fireEvent.click(within(source).getByRole("button", { name: "Create Source" }));
   await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
-  const created = calls.find((call) => call.method === "POST")!;
-  expect((created.body as Record<string, unknown>).event_types).toEqual(["github.push"]);
+  const created = calls.find((call) => call.method === "POST")!.body as Record<string, unknown>;
+  expect(created.event_types).toEqual(["github.ping"]);
+  expect((created.mapping as { expression: string }).expression).toBe(
+    guidedExpression({ source: "fixed", value: "github.ping" }),
+  );
+});
+
+/// The Builder has already computed the type a sample was refused for, so it declares it on the form
+/// without the Operator closing the dialog to get there.
+it("declares the type a sample was refused for from the verdict", async () => {
+  stubHttp(({ url, body }) => {
+    if (!url.pathname.endsWith("/source-contracts/preview")) return { status: 200, body: page([]) };
+    const declared = (body as { event_types: string[] }).event_types;
+    return declared.includes("github.issues")
+      ? acceptedAs("github.issues")
+      : {
+          status: 400,
+          body: {
+            status: 400,
+            errors: { event_types: ["Event type 'github.issues' is not declared by this Source."] },
+          },
+        };
+  });
+  const declared: string[] = [];
+  renderScreen(
+    <EventBuilder
+      contractKey="webhook Source"
+      sourceType="webhook"
+      eventTypes={["github.push"]}
+      draft={{
+        expression: guidedExpression({ source: "header", header: "x-github-event", prefix: "github" }),
+        identity: null,
+      }}
+      onUse={() => undefined}
+      onDeclare={(eventType) => declared.push(eventType)}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+  fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "x-github-event" } });
+  fireEvent.change(within(builder).getByLabelText("Header 1 sample value"), { target: { value: "issues" } });
+
+  fireEvent.click(await within(builder).findByRole("button", { name: "Declare github.issues" }, { timeout: 3000 }));
+  expect(declared).toEqual(["github.issues"]);
+});
+
+/// A prefixed rule can never produce a type without its prefix, so such a row is flagged and fixed
+/// where it is typed.
+it("flags a declaration the guided rule can never produce", async () => {
+  const source = await openSource();
+  fireEvent.change(within(source).getByLabelText("Event type 1"), { target: { value: "pull_request" } });
+  fireEvent.click(within(source).getByRole("button", { name: "Open Integrios Event Builder" }));
+  const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
+  fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "x-github-event" } });
+  fireEvent.click(within(builder).getByRole("radio", { name: "From input" }));
+  await waitFor(() =>
+    expect(
+      within(builder).getByLabelText("Event type header").querySelector('option[value="x-github-event"]'),
+    ).toBeTruthy(),
+  );
+  fireEvent.change(within(builder).getByLabelText("Event type header"), { target: { value: "x-github-event" } });
+  fireEvent.change(within(builder).getByLabelText("Prefix (optional)"), { target: { value: "github" } });
+  fireEvent.click(within(builder).getByRole("button", { name: "Use configuration" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Integrios Event Builder" })).toBeNull());
+
+  expect(within(source).getByText(/is never produced/)).toBeTruthy();
+  fireEvent.click(within(source).getByRole("button", { name: "Change to github.pull_request" }));
+  expect((within(source).getByLabelText("Event type 1") as HTMLInputElement).value).toBe("github.pull_request");
+  expect(within(source).queryByText(/is never produced/)).toBeNull();
 });
 
 /// Anything but a fixed type can produce types the dashboard cannot enumerate, so the Operator
@@ -209,7 +288,7 @@ it("says, unasked, whether the sample would be accepted and as what", async () =
     <EventBuilder
       contractKey="broker Source"
       sourceType="broker"
-      eventTypes={[]}
+      eventTypes={["order.placed"]}
       draft={{ expression: "", identity: null }}
       onUse={() => undefined}
     />,
@@ -220,7 +299,7 @@ it("says, unasked, whether the sample would be accepted and as what", async () =
   fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), {
     target: { value: '{"delivery":{"id":"d-7"}}' },
   });
-  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "order.placed" } });
+  fireEvent.click(within(builder).getByRole("radio", { name: "Every message is order.placed" }));
   fireEvent.change(within(builder).getByLabelText("Event identity"), { target: { value: "json_path" } });
   // The sample is analysed after the Operator stops typing, so the field it discovers is offered
   // only once that has run.
@@ -297,14 +376,14 @@ it("hands a stored input-requirements document back untouched", async () => {
     <EventBuilder
       contractKey="webhook Source"
       sourceType="webhook"
-      eventTypes={[]}
+      eventTypes={["storefront.webhook.received"]}
       draft={{ expression: "", schema, identity: null }}
       onUse={onUse}
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
   const builder = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
-  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "storefront.webhook.received" } });
+  fireEvent.click(within(builder).getByRole("radio", { name: "Every request is storefront.webhook.received" }));
   fireEvent.click(within(builder).getByRole("button", { name: "Use configuration" }));
 
   expect(onUse).toHaveBeenCalledOnce();
@@ -388,16 +467,18 @@ it("keeps the last verdict on screen, busy, while a change is checked", async ()
     if (!expression.includes("second")) return answer;
     return new Promise((resolve) => pending.push(() => resolve(answer)));
   });
-  const builder = await openBuilder("broker");
+  const builder = await openBuilder("broker", {
+    expression: guidedExpression({ source: "body", path: "kind", prefix: "" }),
+    identity: null,
+  });
   const verdict = within(builder).getByRole("status");
 
-  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "first" } });
-  fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), { target: { value: '{"id":1}' } });
+  fireEvent.change(within(builder).getByLabelText("Message body (JSON)"), { target: { value: '{"kind":"first"}' } });
 
   await waitFor(() => expect(verdict.textContent).toContain("Accepted as first"), { timeout: 3000 });
   expect(verdict.getAttribute("aria-busy")).toBe("false");
 
-  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "second" } });
+  fireEvent.change(within(builder).getByLabelText("Prefix (optional)"), { target: { value: "second" } });
   // Straight after the edit, and while the request is out, the first answer is still what reads.
   expect(verdict.textContent).toContain("Accepted as first");
   expect(verdict.getAttribute("aria-busy")).toBe("true");
@@ -634,11 +715,12 @@ it("fills the sample request from a pasted curl command", async () => {
 });
 
 it("discards the ephemeral sample and unsaved choices when it closes", async () => {
-  const builder = await openBuilder("webhook", {
-    expression: guidedExpression({ source: "fixed", value: "saved.event" }),
-    identity: null,
-  });
-  fireEvent.change(within(builder).getByLabelText("Event type"), { target: { value: "unsaved.event" } });
+  const builder = await openBuilder(
+    "webhook",
+    { expression: guidedExpression({ source: "fixed", value: "saved.event" }), identity: null },
+    ["saved.event"],
+  );
+  fireEvent.click(within(builder).getByRole("radio", { name: "From input" }));
   fireEvent.change(within(builder).getByLabelText("Header 1 name"), { target: { value: "authorization" } });
   fireEvent.change(within(builder).getByLabelText("Header 1 sample value"), { target: { value: "Bearer secret" } });
   fireEvent.change(within(builder).getByLabelText("Request body (JSON)"), { target: { value: '{"secret":"value"}' } });
@@ -648,7 +730,9 @@ it("discards the ephemeral sample and unsaved choices when it closes", async () 
   fireEvent.click(screen.getByRole("button", { name: "Open Integrios Event Builder" }));
   const reopened = await screen.findByRole("dialog", { name: "Integrios Event Builder" });
 
-  expect((within(reopened).getByLabelText("Event type") as HTMLInputElement).value).toBe("saved.event");
+  expect(
+    (within(reopened).getByRole("radio", { name: "Every request is saved.event" }) as HTMLInputElement).checked,
+  ).toBe(true);
   expect((within(reopened).getByLabelText("Header 1 name") as HTMLInputElement).value).toBe("");
   expect((within(reopened).getByLabelText("Header 1 sample value") as HTMLInputElement).value).toBe("");
   expect((within(reopened).getByLabelText("Request body (JSON)") as HTMLTextAreaElement).value).toBe("{}");

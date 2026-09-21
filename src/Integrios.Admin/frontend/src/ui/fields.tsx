@@ -37,6 +37,10 @@ function FieldFooter({ hint }: { hint?: ReactNode }) {
   );
 }
 
+/// One step below a `Section` heading, so a form's fields read as its content rather than as a row of
+/// headings of their own.
+const fieldLabel = "text-[13px]";
+
 export function TextField<TValues extends FieldValues>({
   control,
   name,
@@ -51,7 +55,7 @@ export function TextField<TValues extends FieldValues>({
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          <FormLabel className={fieldLabel}>{label}</FormLabel>
           <FormControl>
             {/* A screen that wants to hear a keystroke gets it alongside the form's own binding
                 rather than in place of it: replacing `onChange` would silently unbind the field. */}
@@ -89,7 +93,7 @@ export function TextAreaField<TValues extends FieldValues>({
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          <FormLabel className={fieldLabel}>{label}</FormLabel>
           <FormControl>
             {language ? (
               <CodeTextarea {...field} {...textarea} language={language} />
@@ -146,7 +150,7 @@ export function SelectField<TValues extends FieldValues>({
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          <FormLabel className={fieldLabel}>{label}</FormLabel>
           <Select
             value={emptyLabel ? toControl(field.value ?? "") : (field.value ?? "")}
             onValueChange={(value) => {

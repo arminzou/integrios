@@ -196,14 +196,18 @@ export function EventBuilder({
   draft,
   eventTypes,
   onUse,
+  onDeclare,
   contractKey,
   sourceType,
 }: {
   draft: SourceContractDraft;
   /// The Event types the Source form currently declares. Intake refuses any other type, so the
-  /// verdict does too; the Builder only reads them, because they are authored on the form.
+  /// verdict does too. They are authored on the form; a fixed Event type is the one declared there.
   eventTypes: string[];
   onUse: (draft: SourceContractDraft) => void;
+  /// Adds a type to the form's declarations. Offered when the sample produces an undeclared type,
+  /// so the Operator declares it without closing the dialog to reach the form.
+  onDeclare?: (eventType: string) => void;
   contractKey: string;
   sourceType: SourceInputType;
 }) {
@@ -573,6 +577,8 @@ export function EventBuilder({
                 {mode === "guided" ? (
                   <GuidedFields
                     eventType={eventType}
+                    eventTypes={eventTypes}
+                    sampleName={sampleName}
                     headerNames={headerNames}
                     dangling={dangling}
                     paths={paths}
@@ -604,7 +610,7 @@ export function EventBuilder({
             </div>
           </div>
 
-          <Verdict status={status} sampleName={sampleName} webhook={webhook} />
+          <Verdict status={status} sampleName={sampleName} webhook={webhook} onDeclare={onDeclare} />
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <DialogPrimitive.Close asChild>
@@ -682,7 +688,17 @@ const iconClass = "size-4";
 /// Beside the action it is about: why the configuration cannot be used yet, or what Integrios would
 /// do with this sample. Polite, and busy while a check is out, so a screen reader hears the settled
 /// answer once rather than every state it passed through while the Operator typed.
-function Verdict({ status, sampleName, webhook }: { status: VerdictStatus; sampleName: string; webhook: boolean }) {
+function Verdict({
+  status,
+  sampleName,
+  webhook,
+  onDeclare,
+}: {
+  status: VerdictStatus;
+  sampleName: string;
+  webhook: boolean;
+  onDeclare?: (eventType: string) => void;
+}) {
   const checking = status.kind === "answer" && status.checking;
   return (
     <div role="status" aria-live="polite" aria-busy={checking} className="min-w-0">
@@ -703,7 +719,7 @@ function Verdict({ status, sampleName, webhook }: { status: VerdictStatus; sampl
           <p className="m-0">Checking this {sampleName}…</p>
         </Callout>
       ) : status.answer.error ? (
-        <Rejected answer={status.answer} sampleName={sampleName} busy={checking} />
+        <Rejected answer={status.answer} sampleName={sampleName} busy={checking} onDeclare={onDeclare} />
       ) : (
         <Accepted answer={status.answer} webhook={webhook} busy={checking} />
       )}
@@ -711,13 +727,28 @@ function Verdict({ status, sampleName, webhook }: { status: VerdictStatus; sampl
   );
 }
 
-function Rejected({ answer, sampleName, busy }: { answer: Answer; sampleName: string; busy: boolean }) {
+function Rejected({
+  answer,
+  sampleName,
+  busy,
+  onDeclare,
+}: {
+  answer: Answer;
+  sampleName: string;
+  busy: boolean;
+  onDeclare?: (eventType: string) => void;
+}) {
   const details = asProblem(answer.error);
   // The preview keys its refusal by the part of the check that refused, as every Admin validation
   // failure is keyed by the field it is about. The message is the API's own sentence for it, not the
   // generic validation title.
   const [refusedBy, messages] = Object.entries(details?.errors ?? {})[0] ?? ["", []];
   const reason = messages[0] ?? (details ? formError(details) : null);
+  // The type the refused check produced, read from that check rather than from what is on screen by
+  // now. Only a guided rule can be read back this way; an Advanced expression's output is its own.
+  const rule = guidedFrom(answer.check.expression);
+  const undeclared =
+    refusedBy === "event_types" && rule ? producedType(rule, answer.check.headers ?? undefined, answer.check.body) : "";
   return (
     <Callout tone="failure" icon={<CircleX className={iconClass} />} busy={busy}>
       <p className="m-0">
@@ -732,6 +763,16 @@ function Rejected({ answer, sampleName, busy }: { answer: Answer; sampleName: st
         </p>
       ) : refusedBy === "sample_input" ? (
         <p className="m-0 text-xs">With no Event type rule, each {sampleName} must already be an Integrios Event.</p>
+      ) : refusedBy === "event_types" && undeclared !== "" && onDeclare ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start bg-surface"
+          onClick={() => onDeclare(undeclared)}
+        >
+          Declare {undeclared}
+        </Button>
       ) : refusedBy === "event_types" ? (
         <p className="m-0 text-xs">Declare it under this Source's Event types, or change the Event type rule.</p>
       ) : null}
@@ -922,8 +963,23 @@ function Choice({
 /// Where each normalized Event value comes from. Discovered paths and header names populate the
 /// choices; none of them assigns meaning on their own, so every field but the default whole-body
 /// payload is an explicit choice.
+/// The Event type a guided rule gives this input, or "" when the input carries no string to read.
+function producedType(rule: EventTypeRule, headers: Record<string, string> | undefined, body: unknown): string {
+  const value =
+    rule.source === "fixed"
+      ? rule.value.trim()
+      : rule.source === "header"
+        ? headers?.[rule.header]
+        : valueAtPath(body, rule.path);
+  if (typeof value !== "string" || value.trim() === "") return "";
+  const prefix = rule.source === "fixed" ? "" : rule.prefix.trim();
+  return prefix ? `${prefix}.${value}` : value;
+}
+
 function GuidedFields({
   eventType,
+  eventTypes,
+  sampleName,
   headerNames,
   dangling,
   paths,
@@ -935,6 +991,8 @@ function GuidedFields({
   onChange,
 }: {
   eventType: EventTypeRule;
+  eventTypes: string[];
+  sampleName: string;
   headerNames: string[];
   /// Values chosen that this sample does not carry. They stay visible, and named, rather than
   /// reading as though nothing was ever chosen.
@@ -949,18 +1007,11 @@ function GuidedFields({
 }) {
   const derived = eventType.source !== "fixed";
   const eventTypePrefix = eventType.source === "fixed" ? "" : eventType.prefix;
-  const selectedValue =
-    eventType.source === "fixed"
-      ? eventType.value.trim()
-      : eventType.source === "header"
-        ? headers?.[eventType.header]
-        : valueAtPath(body, eventType.path);
-  const preview =
-    typeof selectedValue === "string" && selectedValue.trim() !== ""
-      ? eventTypePrefix.trim()
-        ? `${eventTypePrefix.trim()}.${selectedValue}`
-        : selectedValue
-      : "";
+  const preview = producedType(eventType, headers, body);
+  // A fixed type is the Source's one declaration, never typed here: with any other number declared
+  // there is no single type to give every input.
+  const single = eventTypes.length === 1 ? eventTypes[0] : undefined;
+  const fixedChosen = eventType.source === "fixed" && eventType.value.trim() !== "";
 
   return (
     <>
@@ -976,16 +1027,32 @@ function GuidedFields({
       <Target title="event_type" requirement="Required">
         <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
           <legend className="sr-only">Event type rule</legend>
-          <label className="flex items-start gap-2.5 text-sm">
+          {/* Neither choice is checked until one is made: an untouched rule means no mapping at all. */}
+          <label className={cn("flex items-start gap-2.5 text-sm", !single && !fixedChosen && "text-ink-secondary")}>
             <input
               type="radio"
               name="builder-event-type-source"
               className="mt-0.5 size-4 shrink-0"
-              checked={!derived}
-              onChange={() => onChange({ source: "fixed", value: "" })}
+              checked={fixedChosen}
+              disabled={!single && !fixedChosen}
+              aria-describedby={single ? undefined : "builder-fixed-event-type-hint"}
+              onChange={() => single && onChange({ source: "fixed", value: single })}
             />
-            <span>Fixed value</span>
+            <span>
+              {single || fixedChosen ? (
+                <>
+                  Every {sampleName} is <code>{single ?? (eventType.source === "fixed" ? eventType.value : "")}</code>
+                </>
+              ) : (
+                `Every ${sampleName} is the same Event type`
+              )}
+            </span>
           </label>
+          {single ? null : (
+            <p id="builder-fixed-event-type-hint" className="m-0 ml-6.5 text-xs text-ink-secondary">
+              Available when this Source declares exactly one Event type.
+            </p>
+          )}
           <label className="flex items-start gap-2.5 text-sm">
             <input
               type="radio"
@@ -1001,19 +1068,6 @@ function GuidedFields({
             <span>From input</span>
           </label>
         </fieldset>
-        {eventType.source === "fixed" ? (
-          <div className="flex min-w-0 flex-col gap-1 text-sm">
-            <label htmlFor="builder-fixed-event-type" className="text-ink-secondary">
-              Event type
-            </label>
-            <Input
-              id="builder-fixed-event-type"
-              placeholder="order.placed"
-              value={eventType.value}
-              onChange={(event) => onChange({ source: "fixed", value: event.target.value })}
-            />
-          </div>
-        ) : null}
         {derived && headers ? (
           <label className="flex min-w-0 flex-col gap-1 text-sm">
             <span className="text-ink-secondary">Read from</span>

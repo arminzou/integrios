@@ -1011,8 +1011,9 @@ describe("Create forms, filled through a real browser", () => {
     await choose(form.getByLabel("Topic"), /Orders/);
     await choose(form.getByLabel("Type"), "Message broker");
     await form.getByLabel("Name", { exact: true }).fill("broker-intake");
-    await form.getByRole("heading", { name: "Message broker input" }).waitFor();
+    await form.getByText(/reads JSON messages from the broker/).waitFor();
     await form.getByRole("heading", { name: "Event Normalization" }).waitFor();
+    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await form.getByRole("button", { name: "Open Integrios Event Builder" }).click();
     const builder = view.getByRole("dialog", { name: "Integrios Event Builder" });
     await builder.getByRole("heading", { name: "Sample message" }).waitFor();
@@ -1023,7 +1024,7 @@ describe("Create forms, filled through a real browser", () => {
     await builder.getByRole("radio", { name: "From input" }).click();
     expect(await builder.getByLabel("Read from").count()).toBe(0);
     await builder.getByLabel("Event type field").waitFor();
-    await builder.getByRole("radio", { name: "Fixed value" }).click();
+    await builder.getByRole("radio", { name: "Every message is order.created" }).click();
     await builder.getByLabel("Event identity").selectOption("message_id");
     await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
     await builder.getByRole("button", { name: "Use configuration" }).click();
@@ -1031,7 +1032,6 @@ describe("Create forms, filled through a real browser", () => {
     expect(await form.getByLabel("Broker type").textContent()).toContain("Azure Service Bus");
     await form.getByLabel("Namespace").fill("acme.servicebus.windows.net");
     await form.getByLabel("Queue name").fill("orders");
-    await form.getByLabel("Event type 1", { exact: true }).fill("order.created");
     await view.click("text=Create Source");
 
     const sent = await submitted(writes);
@@ -1507,7 +1507,7 @@ describe("Update and deactivate, driven through a real browser", () => {
       .getByRole("button", { name: "Reset to guided" })
       .click();
     await builder.getByLabel("Request body (JSON)").fill('{"order_id":"A-42"}');
-    await builder.getByLabel("Event type").fill("orders");
+    await builder.getByRole("radio", { name: "Every request is order.created" }).click();
     await expect.poll(() => builder.getByRole("button", { name: "Use configuration" }).isEnabled()).toBe(true);
     await builder.getByRole("button", { name: "Use configuration" }).click();
     await form.getByRole("button", { name: "Save configuration" }).click();
@@ -1521,7 +1521,7 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(sent.body.mapping).toEqual({
       engine: "jsonata",
       version: "1",
-      expression: expect.stringContaining('"orders"'),
+      expression: expect.stringContaining('"order.created"'),
     });
     expect(sent.body.input_requirements).toEqual(inputRequirements);
     await view.close();

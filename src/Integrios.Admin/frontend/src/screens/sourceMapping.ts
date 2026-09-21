@@ -72,6 +72,15 @@ export function fixedEventType(expression: string): string | undefined {
   return rule?.source === "fixed" && rule.value.trim() !== "" ? rule.value.trim() : undefined;
 }
 
+/// A fixed guided mapping types every input as the Source's one declared Event type, so the
+/// declaration is the only place that type is written: the mapping follows it. Any other mapping, or
+/// a fixed one beside several declarations the form will refuse, is returned untouched.
+export function withDeclaredType(expression: string, declared: string[]): string {
+  return fixedEventType(expression) !== undefined && declared.length === 1
+    ? guidedExpression({ source: "fixed", value: declared[0] })
+    : expression;
+}
+
 const jsonString = String.raw`"(?:\\.|[^"\\])*"`;
 const fixedShape = new RegExp(String.raw`^\{ "event_type": (${jsonString}), "payload": \$ \}$`);
 const derivedShape = new RegExp(

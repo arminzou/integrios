@@ -62,7 +62,7 @@ import { nameIn, useConnectorOptions, useTopicOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
 import { EventBuilder, type EventIdentityRule } from "./EventBuilder";
 import { SourceGuide } from "./SourceGuide";
-import { fixedEventType, guidedFrom } from "./sourceMapping";
+import { fixedEventType, guidedFrom, withDeclaredType } from "./sourceMapping";
 
 type SourceListItem = components["schemas"]["SourceListItemDto"];
 type Source = components["schemas"]["SourceDto"];
@@ -75,6 +75,13 @@ const sourceTypes = [
 
 /// A scheme the manifest offers but this dashboard has no word for is shown as the Connector named it.
 const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC SHA-256" : scheme);
+
+/// Where the input comes from, said once under the Type it follows from. A line rather than a card:
+/// the sections below say how that input is verified, declared, and normalized.
+const inputDescription = {
+  webhook: "The provider posts JSON to a callback URL generated once the Source is created.",
+  broker: "Integrios reads JSON messages from the broker configured below.",
+};
 
 /// `broker` is the wire value; no Operator-facing surface prints it, only the "Message broker" label.
 const typeLabel = (value: string) => sourceTypes.find((option) => option.value === value)?.label ?? value;
@@ -150,9 +157,38 @@ const requireEventTypes = (rows: EventTypeRow[], ctx: z.RefinementCtx) => {
   });
 };
 
-/// What the Source declares: the fixed type when its mapping fixes one, otherwise the Operator's rows.
-const declaredEventTypes = (fixed: string | undefined, rows: EventTypeRow[]) =>
-  fixed !== undefined ? [fixed] : rows.map((row) => row.value.trim()).filter((value) => value !== "");
+/// A fixed guided mapping gives every input one type, so beside it the Source declares exactly that
+/// one. The last row is the one that broke it, so that is where the refusal lands.
+const requireSingleFixedType = (expression: string, rows: EventTypeRow[], ctx: z.RefinementCtx) => {
+  if (fixedEventType(expression) === undefined || rows.length <= 1) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["event_types", rows.length - 1, "value"],
+    message:
+      "The Event contract gives every input the same Event type. To declare more, read the type from each input in the Event Builder.",
+  });
+};
+
+/// What the Source declares: the Operator's rows. A fixed mapping follows them rather than the reverse.
+const declaredEventTypes = (rows: EventTypeRow[]) =>
+  rows.map((row) => row.value.trim()).filter((value) => value !== "");
+
+/// A type the Event Builder found undeclared, filled into an empty row when there is one.
+const withDeclaration = (rows: EventTypeRow[], eventType: string): EventTypeRow[] => {
+  const empty = rows.findIndex((row) => row.value.trim() === "");
+  return empty === -1
+    ? [...rows, { value: eventType }]
+    : rows.map((row, index) => (index === empty ? { value: eventType } : row));
+};
+
+/// Keeps a fixed guided mapping on the Source's one declared type as the rows are edited, so the
+/// type is written in one place and the Event contract, the raw editor, and the save all agree.
+function useFixedTypeFollowsDeclaration(expression: string, rows: EventTypeRow[], setMapping: (next: string) => void) {
+  const next = withDeclaredType(expression, declaredEventTypes(rows));
+  useEffect(() => {
+    if (next !== expression) setMapping(next);
+  }, [next, expression, setMapping]);
+}
 
 type IdentityValues = {
   identity_kind: string;
@@ -206,8 +242,8 @@ const createSchema = z
     ...eventTypesFieldSchema,
   })
   .superRefine((values, ctx) => {
-    if (values.type === "event_api" || fixedEventType(values.mapping) === undefined)
-      requireEventTypes(values.event_types, ctx);
+    requireEventTypes(values.event_types, ctx);
+    if (values.type !== "event_api") requireSingleFixedType(values.mapping, values.event_types, ctx);
     if (values.type === "webhook") requireVerificationSecret(values, ctx);
     if (values.type !== "broker") return;
     requireBrokerFields(values, ctx);
@@ -225,8 +261,9 @@ const editSchema = z
     ...eventTypesFieldSchema,
   })
   .superRefine((values, ctx) => {
+    requireEventTypes(values.event_types, ctx);
     // An Event API Source carries no mapping, so the edit form's mapping is empty for one.
-    if (fixedEventType(values.mapping) === undefined) requireEventTypes(values.event_types, ctx);
+    requireSingleFixedType(values.mapping, values.event_types, ctx);
     requireVerificationSecret(values, ctx);
     if (values.broker_transport) requireBrokerFields(values, ctx);
   });
@@ -310,21 +347,12 @@ function IdentityTemplate({ identity }: { identity: EventIdentityRule | null }) 
   );
 }
 
-/// The three values the Event Builder owns, in one card with the control that edits them. The
+/// The three values the Event Builder owns, kept together with the control that edits them. The
 /// Builder is a dialog, so what it settled and the button that reopens it are the only trace it
-/// leaves on the form; sitting loose among the Source's own fields, the three read as three more
-/// fields to fill in rather than one thing the Builder decides.
-///
-/// Captioned with what the three values are together, rather than with the tool that sets them: the
-/// button inside already names the Builder, and the Event contract is the thing this Source keeps
-/// once the dialog has closed. The raw editors below carry the same words.
+/// leaves on the form. The Event Normalization section already names them, so they carry no card or
+/// caption of their own: a box and a title inside the section said the same thing twice more.
 function BuilderContract({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border bg-surface-quiet p-3">
-      <h4 className="m-0 text-sm font-semibold">Event contract</h4>
-      {children}
-    </div>
-  );
+  return <div className="flex flex-col gap-3">{children}</div>;
 }
 
 /// What the Event Builder settled, stated where the Source is authored. The Builder is a dialog that
@@ -378,32 +406,34 @@ function SettledContract({
 }
 
 /// The Event types this Source may publish: what its Topic offers Subscriptions, and the only types
-/// intake accepts from it. A fixed guided mapping already names its one type, so that type is stated
-/// rather than asked for again; every other mapping can produce types only the Operator knows.
+/// intake accepts from it. Asked before the Event contract, because the contract only has to tell
+/// these apart, and the only place a type is typed: a fixed mapping takes the one declared here.
+///
+/// A guided rule that prefixes what it reads can never produce a type without that prefix, so a row
+/// missing it is flagged where it is typed. Advanced JSONata is not read, so nothing is inferred.
 function EventTypeDeclarations<TValues extends FieldValues>({
   control,
-  fixed,
+  prefix,
 }: {
   control: Control<TValues>;
-  fixed: string | undefined;
+  prefix: string;
 }) {
   const rows = useFieldArray({ control, name: "event_types" as ArrayPath<TValues> });
+  const values = (useWatch({ control, name: "event_types" as Path<TValues> }) ?? []) as EventTypeRow[];
+  const unreachable = (value: string) =>
+    prefix !== "" && value.trim() !== "" && !value.trim().toLowerCase().startsWith(`${prefix.toLowerCase()}.`);
   return (
-    <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
-      <legend className="text-sm font-medium">Event types</legend>
-      <p className="m-0 text-xs text-ink-secondary">
-        What types of Event will this Source publish to Integrios? Subscriptions on the Topic choose from these, and
-        intake refuses an Event of any other type.
-      </p>
-      {fixed !== undefined ? (
-        <p className="m-0 text-sm">
-          <Fixed>{fixed}</Fixed>{" "}
-          <span className="text-ink-secondary">— the fixed Event type from the Event contract.</span>
-        </p>
-      ) : (
-        <>
-          {rows.fields.map((row, index) => (
-            <div key={row.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+    // A Section like its neighbours, so it is divided from the transport fields above it rather than
+    // reading as the last of them.
+    <Section
+      title="Event types"
+      hint="What types of Event will this Source publish? Subscriptions on the Topic choose from these, and intake refuses any other type."
+    >
+      {rows.fields.map((row, index) => {
+        const value = values[index]?.value ?? "";
+        return (
+          <div key={row.id} className="flex min-w-0 flex-col gap-1.5">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
               <TextField
                 control={control}
                 name={`event_types.${index}.value` as Path<TValues>}
@@ -424,21 +454,49 @@ function EventTypeDeclarations<TValues extends FieldValues>({
                 <X aria-hidden="true" className="size-4" />
               </Button>
             </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start"
-            onClick={() => rows.append({ value: "" } as FieldArray<TValues, ArrayPath<TValues>>)}
-          >
-            Add Event type
-          </Button>
-        </>
-      )}
-    </fieldset>
+            {unreachable(value) ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-warning-surface px-3 py-2 text-xs text-warning-ink">
+                <p className="m-0">
+                  The Event contract puts <Fixed>{`${prefix}.`}</Fixed> in front of every type, so{" "}
+                  <Fixed>{value.trim()}</Fixed> is never produced.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="bg-surface"
+                  onClick={() =>
+                    rows.update(index, { value: `${prefix}.${value.trim()}` } as FieldArray<
+                      TValues,
+                      ArrayPath<TValues>
+                    >)
+                  }
+                >
+                  Change to {prefix}.{value.trim()}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="self-start"
+        onClick={() => rows.append({ value: "" } as FieldArray<TValues, ArrayPath<TValues>>)}
+      >
+        Add Event type
+      </Button>
+    </Section>
   );
 }
+
+/// The prefix a guided rule puts in front of what it reads, or "" for any other mapping.
+const guidedPrefix = (expression: string) => {
+  const rule = guidedFrom(expression);
+  return rule && rule.source !== "fixed" ? rule.prefix.trim() : "";
+};
 
 function SourceVerificationFields<TValues extends FieldValues>({
   control,
@@ -787,8 +845,9 @@ function CreateSource({
     },
   });
   const sourceType = form.watch("type");
-  // An Event API Source has no mapping, whatever the Builder left in the form before the type changed.
-  const fixedType = sourceType === "event_api" ? undefined : fixedEventType(form.watch("mapping"));
+  useFixedTypeFollowsDeclaration(form.watch("mapping"), form.watch("event_types"), (next) =>
+    form.setValue("mapping", next, { shouldDirty: true }),
+  );
   const connectorId = form.watch("connector_id");
   // What the chosen Connector permits. Read for webhook verification and for whether the Connector
   // demands source configuration this form cannot author; a broker Source composes its own document.
@@ -831,10 +890,7 @@ function CreateSource({
             input_requirements: values.type === "event_api" ? null : optionalJson(values.input_requirements),
             mapping: values.type === "event_api" ? null : mapping(values.mapping),
             event_identity_rule: values.type === "event_api" ? null : eventIdentityRule(values),
-            event_types: declaredEventTypes(
-              values.type === "event_api" ? undefined : fixedEventType(values.mapping),
-              values.event_types,
-            ),
+            event_types: declaredEventTypes(values.event_types),
           },
         }),
       ),
@@ -856,54 +912,58 @@ function CreateSource({
         <FormError message={formError(asProblem(create.error), createFields)} />
 
         <TextField control={form.control} name="name" label="Name" required />
-        <SelectField
-          control={form.control}
-          name="connector_id"
-          label="Connector"
-          hint={
-            noConnectors ? (
-              <>
-                No active Connectors exist yet, and a Source is built from one.{" "}
-                <Link to="/connectors">Create a Connector</Link> first.
-              </>
-            ) : capabilities.requiredConfiguration.length > 0 ? (
-              `This Connector requires Source configuration this form cannot author yet: ${capabilities.requiredConfiguration.join(", ")}. Choose another Connector, or author the Source through the Admin API.`
-            ) : connectors.data?.next_cursor ? (
-              "Showing the first 100 active Connectors."
-            ) : undefined
-          }
-          disabled={connectors.isPending || connectors.isError || noConnectors}
-          required
-        >
-          {(connectors.data?.items ?? []).map((connector) => (
-            <SelectItem key={connector.id} value={connector.id}>
-              {connector.name}
-            </SelectItem>
-          ))}
-        </SelectField>
-        <SelectField
-          control={form.control}
-          name="topic_id"
-          label="Topic"
-          hint={
-            noTopics ? (
-              <>
-                No Topics yet, and a Source needs one. <Link to={`/tenants/${tenantId}/topics`}>Create a Topic</Link>{" "}
-                first.
-              </>
-            ) : topics.data?.next_cursor ? (
-              "Showing the first 100 Topics."
-            ) : undefined
-          }
-          disabled={topics.isPending || topics.isError || noTopics}
-          required
-        >
-          {(topics.data?.items ?? []).map((topic) => (
-            <SelectItem key={topic.id} value={topic.id}>
-              {topic.name}
-            </SelectItem>
-          ))}
-        </SelectField>
+        {/* Side by side: the two things a Source binds together, read as one pair. Stacked on a
+            narrow screen, where half a sheet cannot hold a Connector's name. */}
+        <div className="grid min-w-0 items-start gap-4 sm:grid-cols-2">
+          <SelectField
+            control={form.control}
+            name="connector_id"
+            label="Connector"
+            hint={
+              noConnectors ? (
+                <>
+                  No active Connectors exist yet, and a Source is built from one.{" "}
+                  <Link to="/connectors">Create a Connector</Link> first.
+                </>
+              ) : capabilities.requiredConfiguration.length > 0 ? (
+                `This Connector requires Source configuration this form cannot author yet: ${capabilities.requiredConfiguration.join(", ")}. Choose another Connector, or author the Source through the Admin API.`
+              ) : connectors.data?.next_cursor ? (
+                "Showing the first 100 active Connectors."
+              ) : undefined
+            }
+            disabled={connectors.isPending || connectors.isError || noConnectors}
+            required
+          >
+            {(connectors.data?.items ?? []).map((connector) => (
+              <SelectItem key={connector.id} value={connector.id}>
+                {connector.name}
+              </SelectItem>
+            ))}
+          </SelectField>
+          <SelectField
+            control={form.control}
+            name="topic_id"
+            label="Topic"
+            hint={
+              noTopics ? (
+                <>
+                  No Topics yet, and a Source needs one. <Link to={`/tenants/${tenantId}/topics`}>Create a Topic</Link>{" "}
+                  first.
+                </>
+              ) : topics.data?.next_cursor ? (
+                "Showing the first 100 Topics."
+              ) : undefined
+            }
+            disabled={topics.isPending || topics.isError || noTopics}
+            required
+          >
+            {(topics.data?.items ?? []).map((topic) => (
+              <SelectItem key={topic.id} value={topic.id}>
+                {topic.name}
+              </SelectItem>
+            ))}
+          </SelectField>
+        </div>
         {/* The offered identity kinds differ by Source type — a broker message id has no webhook
             meaning, a request header no broker meaning — so a kind chosen under one type cannot
             survive into another. */}
@@ -912,6 +972,7 @@ function CreateSource({
           name="type"
           label="Type"
           placeholder="Choose a type"
+          hint={sourceType === "webhook" || sourceType === "broker" ? inputDescription[sourceType] : undefined}
           onChange={() => {
             form.setValue("identity_kind", "");
             form.setValue("identity_allow_missing", false);
@@ -927,7 +988,6 @@ function CreateSource({
         {sourceType === "event_api" ? (
           <EventApiRequest tenantId={tenantId} ingestionEndpoint={overview.data?.ingestion_endpoint} />
         ) : null}
-        {sourceType === "webhook" || sourceType === "broker" ? <SourceInputDescription type={sourceType} /> : null}
         {sourceType === "webhook" ? (
           <SourceVerificationFields
             control={form.control}
@@ -937,11 +997,14 @@ function CreateSource({
           />
         ) : null}
         {sourceType === "broker" ? <MessageBrokerFields control={form.control} /> : null}
+        {sourceType !== "" ? (
+          <EventTypeDeclarations
+            control={form.control}
+            prefix={sourceType === "event_api" ? "" : guidedPrefix(form.watch("mapping"))}
+          />
+        ) : null}
         {sourceType === "webhook" || sourceType === "broker" ? (
-          <Section
-            title="Event Normalization"
-            hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
-          >
+          <Section title="Event Normalization" hint="How each input becomes an Integrios Event.">
             <BuilderContract>
               <SettledContract
                 mapping={form.watch("mapping")}
@@ -953,7 +1016,12 @@ function CreateSource({
                 contractKey={`${sourceType} Source`}
                 sourceType={sourceType === "webhook" ? "webhook" : "broker"}
                 draft={sourceContractDraft}
-                eventTypes={declaredEventTypes(undefined, form.watch("event_types"))}
+                eventTypes={declaredEventTypes(form.watch("event_types"))}
+                onDeclare={(eventType) =>
+                  form.setValue("event_types", withDeclaration(form.getValues("event_types"), eventType), {
+                    shouldDirty: true,
+                  })
+                }
                 onUse={(draft) => {
                   form.setValue("mapping", draft.expression, { shouldDirty: true });
                   form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
@@ -967,7 +1035,6 @@ function CreateSource({
             </BuilderContract>
           </Section>
         ) : null}
-        {sourceType !== "" ? <EventTypeDeclarations control={form.control} fixed={fixedType} /> : null}
 
         <Button type="submit" className="self-start" disabled={create.isPending || cannotAuthor}>
           Create Source
@@ -1053,25 +1120,6 @@ function EventApiRequest({ tenantId, ingestionEndpoint }: { tenantId: string; in
         mapping; authenticate with a <Link to={`/tenants/${tenantId}/tenant-api-keys`}>Tenant API key</Link>.
       </p>
       <CodeBlock value={request} language="http" />
-    </section>
-  );
-}
-
-function SourceInputDescription({ type }: { type: "webhook" | "broker" }) {
-  const webhook = type === "webhook";
-  return (
-    <section
-      className="flex flex-col gap-2 rounded-md border bg-surface-quiet p-4"
-      aria-labelledby={`${type}-source-input`}
-    >
-      <h3 id={`${type}-source-input`} className="m-0 text-sm font-medium">
-        {webhook ? "Webhook request" : "Message broker input"}
-      </h3>
-      <p className="m-0 text-sm text-ink-secondary">
-        {webhook
-          ? "The provider sends a JSON HTTP request to the callback URL generated after this Source is created. Integrios verifies it, validates the input, and normalizes it into an Integrios Event."
-          : "Integrios consumes JSON messages from the broker below, validates each message, and normalizes it into an Integrios Event."}
-      </p>
     </section>
   );
 }
@@ -1342,10 +1390,12 @@ function EditSourceForm({
     },
   });
   const verificationScheme = form.watch("verification_scheme");
+  useFixedTypeFollowsDeclaration(form.watch("mapping"), form.watch("event_types"), (next) =>
+    form.setValue("mapping", next, { shouldDirty: true }),
+  );
   const storedExpression = source.mapping?.expression ?? "";
   const mappingChanged = form.watch("mapping").trim() !== storedExpression.trim();
   const routing = useTopicRouting(tenantId, source.topic_id, mappingChanged);
-  const fixedType = fixedEventType(form.watch("mapping"));
   const sourceContractDraft = {
     expression: form.watch("mapping"),
     schema: optionalJson(form.watch("input_requirements")) as Record<string, unknown> | undefined,
@@ -1384,7 +1434,7 @@ function EditSourceForm({
             input_requirements: optionalJson(values.input_requirements),
             mapping: mapping(values.mapping),
             event_identity_rule: source.type === "event_api" ? null : eventIdentityRule(values),
-            event_types: declaredEventTypes(fixedEventType(values.mapping), values.event_types),
+            event_types: declaredEventTypes(values.event_types),
           },
         }),
       ),
@@ -1431,11 +1481,9 @@ function EditSourceForm({
             />
           </Section>
         ) : null}
+        <EventTypeDeclarations control={form.control} prefix={guidedPrefix(form.watch("mapping"))} />
         {source.type !== "event_api" ? (
-          <Section
-            title="Event Normalization"
-            hint="How this Source turns provider input into the Integrios Event accepted by the ingestion pipeline."
-          >
+          <Section title="Event Normalization" hint="How each input becomes an Integrios Event.">
             <BuilderContract>
               <SettledContract
                 mapping={form.watch("mapping")}
@@ -1447,7 +1495,12 @@ function EditSourceForm({
                 contractKey={`${source.type} Source`}
                 sourceType={source.type === "webhook" ? "webhook" : "broker"}
                 draft={sourceContractDraft}
-                eventTypes={declaredEventTypes(undefined, form.watch("event_types"))}
+                eventTypes={declaredEventTypes(form.watch("event_types"))}
+                onDeclare={(eventType) =>
+                  form.setValue("event_types", withDeclaration(form.getValues("event_types"), eventType), {
+                    shouldDirty: true,
+                  })
+                }
                 onUse={(draft) => {
                   form.setValue("mapping", draft.expression, { shouldDirty: true });
                   form.setValue("input_requirements", draft.schema ? formatJson(draft.schema) : "", {
@@ -1463,7 +1516,6 @@ function EditSourceForm({
             </BuilderContract>
           </Section>
         ) : null}
-        <EventTypeDeclarations control={form.control} fixed={fixedType} />
         {source.type === "webhook" ? (
           <SourceVerificationFields
             control={form.control}

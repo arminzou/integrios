@@ -341,9 +341,12 @@ export function EventsScreen({ tenantId, selectedEventId }: { tenantId: string; 
         </div>
       ) : null}
 
+      {/* At least as tall as the capped inspector, so the page's height never follows the panel:
+          it sizes to the selected Event, and a short ledger beside it would otherwise shrink and
+          grow the page with every selection, throwing the reading position. */}
       <div
         data-layout="events"
-        className="flex flex-col gap-5 min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-4"
+        className="flex flex-col gap-5 min-[1180px]:min-h-[calc(100vh-2rem)] min-[1180px]:flex-row min-[1180px]:items-start min-[1180px]:gap-4"
       >
         <div className="min-w-0 min-[1180px]:flex-1">
           <ListStatus
@@ -608,7 +611,7 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
   const problem = asProblem(event.error);
   if (problem)
     return (
-      <Inspector label="Event detail" fill>
+      <Inspector label="Event detail" capped>
         {/* The close is offered on a failed read too: an Event that cannot be read is exactly when
             an Operator wants the ledger back, and without this the only way out is the browser. */}
         <div className="flex items-start justify-between gap-3">
@@ -631,7 +634,7 @@ function EventInspector({ tenantId, eventId, search }: { tenantId: string; event
   const shownAttempts = allAttempts ? attempts : attempts.slice(-attemptWindow);
 
   return (
-    <Inspector label="Event detail" fill>
+    <Inspector label="Event detail" capped>
       {/* The identifier under a panel heading is the same shape on every detail screen: mono, one
           step down, in secondary ink, and on its own row at the panel's full width so it reads whole.
           The heading keeps it, so its accessible name is "Event <id>". The badge and close button are

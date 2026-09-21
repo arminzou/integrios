@@ -518,6 +518,7 @@ describe("The dashboard in a real browser", () => {
     await page.getByRole("button", { name: "New Source" }).click();
     await page.getByRole("combobox", { name: "Type" }).click();
     await page.getByRole("option", { name: "Webhook" }).click();
+    await page.getByLabel("Event type 1", { exact: true }).fill("github.push");
     await page.getByRole("button", { name: "Open Integrios Event Builder" }).click();
     const builder = page.getByRole("dialog", { name: "Integrios Event Builder" });
     const verdict = builder.getByRole("status");
@@ -525,14 +526,14 @@ describe("The dashboard in a real browser", () => {
 
     const blocked = await height();
     await builder.getByLabel("Request body (JSON)").fill('{"ref":"refs/heads/main"}');
-    await builder.getByLabel("Event type").fill("github.push");
+    await builder.getByRole("radio", { name: "Every request is github.push" }).click();
     await verdict.getByText("Accepted").waitFor();
     const accepted = await height();
     answer = {
       status: 400,
       json: { status: 400, errors: { "": ["This request does not contain a valid Event type."] } },
     };
-    await builder.getByLabel("Event type").fill("github.pushed");
+    await builder.getByLabel("Request body (JSON)").fill('{"ref":"refs/heads/next"}');
     await verdict.getByText("Rejected.").waitFor();
     const rejected = await height();
 
