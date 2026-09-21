@@ -9,4 +9,5 @@ public interface ITenantApiKeyRepository
     Task<TenantApiKey?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
     Task<(IReadOnlyList<TenantApiKey> Items, string? NextCursor)> ListByTenantAsync(Guid tenantId, TenantApiKeyListState? state, string? afterCursor, int limit, CancellationToken cancellationToken);
     Task<bool> RevokeAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
+    Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken);
 }

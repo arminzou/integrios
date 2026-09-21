@@ -25,7 +25,7 @@ const listItem = {
 const revokedItem = { ...listItem, state: "revoked", revoked_at: "2026-09-10T00:00:00Z" };
 
 describe("Tenant API keys", () => {
-  it("shows a revoked key as revoked and offers nothing to do to it", async () => {
+  it("shows a revoked key as revoked and offers deletion instead of revocation", async () => {
     stubHttp(({ url }) =>
       url.pathname.endsWith(`/tenant-api-keys/${keyId}`)
         ? { status: 200, body: { ...revokedItem, status: revokedItem.state } }
@@ -39,6 +39,7 @@ describe("Tenant API keys", () => {
 
     expect(within(table).getByText("Revoked")).toBeTruthy();
     expect(within(inspector).queryByRole("button", { name: "Revoke" })).toBeNull();
+    expect(within(inspector).getByRole("button", { name: "Delete" })).toBeTruthy();
   });
 
   it("creates a key from a name and description alone", async () => {
@@ -115,5 +116,37 @@ describe("Tenant API keys", () => {
     expect(await screen.findByText("Ingest revoked.")).toBeTruthy();
     await waitFor(() => expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull());
     expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/tenant-api-keys/${keyId}`);
+  });
+
+  it("deletes a revoked key only after confirmation and closes its detail", async () => {
+    let deleted = false;
+    const calls = stubHttp(({ method, url }) => {
+      if (method === "DELETE") {
+        deleted = true;
+        return { status: 200 };
+      }
+      if (url.pathname.endsWith(`/tenant-api-keys/${keyId}`))
+        return deleted ? { status: 404 } : { status: 200, body: revokedItem };
+      return { status: 200, body: page(deleted ? [] : [revokedItem]) };
+    });
+
+    const { router } = renderScreen(
+      <TenantApiKeysScreen tenantId={tenantId} selectedTenantApiKeyId={keyId} />,
+      `/tenants/${tenantId}/tenant-api-keys/${keyId}`,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+
+    expect(screen.getByText(/Delete the revoked Tenant API key "Ingest" \(itk_live_ab\)\?/)).toBeTruthy();
+    expect(calls.some((call) => call.method === "DELETE")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Ingest" }));
+
+    await waitFor(() => expect(calls.some((call) => call.method === "DELETE")).toBe(true));
+    expect(calls.find((call) => call.method === "DELETE")!.url.pathname).toBe(
+      `/admin/tenants/${tenantId}/tenant-api-keys/${keyId}`,
+    );
+    expect(await screen.findByText("Ingest deleted.")).toBeTruthy();
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/tenants/${tenantId}/tenant-api-keys`));
+    await waitFor(() => expect(screen.queryByText("itk_live_ab")).toBeNull());
   });
 });

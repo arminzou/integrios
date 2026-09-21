@@ -78,4 +78,20 @@ internal sealed class TenantApiKeyRepository(IntegriosDbContext context, IDataPr
                 setters => setters
                     .SetProperty(tenantApiKey => tenantApiKey.RevokedAt, DateTimeOffset.UtcNow),
                 cancellationToken) > 0;
+
+    public async Task<bool> DeleteAsync(Guid tenantId, Guid id, CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        string deletedHash = $"deleted:{id:N}";
+        return await context.TenantApiKeys
+            .Where(tenantApiKey =>
+                tenantApiKey.TenantId == tenantId
+                && tenantApiKey.Id == id
+                && tenantApiKey.RevokedAt != null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(tenantApiKey => tenantApiKey.KeyHash, deletedHash)
+                    .SetProperty(tenantApiKey => tenantApiKey.DeletedAt, now),
+                cancellationToken) > 0;
+    }
 }

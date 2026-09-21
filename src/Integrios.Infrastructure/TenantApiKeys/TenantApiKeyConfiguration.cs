@@ -27,6 +27,7 @@ internal sealed class TenantApiKeyConfiguration : IEntityTypeConfiguration<Tenan
             .HasDefaultValueSql("now()")
             .HasColumnName("created_at");
         entity.Property(e => e.Description).HasColumnName("description");
+        entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
         entity.Property(e => e.KeyHash).HasColumnName("key_hash");
         entity.Property(e => e.KeyPrefix).HasColumnName("key_prefix");
         entity.Property(e => e.LastUsedAt).HasColumnName("last_used_at");
@@ -38,5 +39,7 @@ internal sealed class TenantApiKeyConfiguration : IEntityTypeConfiguration<Tenan
             .HasForeignKey(d => d.TenantId)
             .OnDelete(DeleteBehavior.ClientSetNull)
             .HasConstraintName("tenant_api_keys_tenant_id_fkey");
+
+        entity.HasQueryFilter(tenantApiKey => tenantApiKey.DeletedAt == null);
     }
 }

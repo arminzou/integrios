@@ -1,6 +1,8 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -223,6 +225,38 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task DeleteTenantApiKey_RequiresRevocationThenHidesAndRetainsTheKey()
+    {
+        var created = await CreateTenantApiKeyAsync("delete-key");
+        string keyPath = $"/admin/tenants/{fixture.TenantId}/tenant-api-keys/{created.TenantApiKey.Id}";
+
+        using (HttpResponseMessage activeDelete = await client.SendAsync(AdminRequest(HttpMethod.Delete, keyPath)))
+        {
+            activeDelete.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+            (await activeDelete.Content.ReadAsStringAsync()).ShouldContain("must be revoked before it can be deleted");
+        }
+        (await client.SendAsync(AdminRequest(HttpMethod.Post, $"{keyPath}/revoke"))).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+        (await client.SendAsync(AdminRequest(HttpMethod.Delete, keyPath))).StatusCode
+            .ShouldBe(HttpStatusCode.NoContent);
+
+        (await client.SendAsync(AdminRequest(HttpMethod.Get, keyPath))).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+        (await ListIdsAsync("")).ShouldNotContain(created.TenantApiKey.Id);
+        (await ListIdsAsync("state=revoked")).ShouldNotContain(created.TenantApiKey.Id);
+        (await client.SendAsync(AdminRequest(HttpMethod.Delete, keyPath))).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+
+        await using DbConnection connection = fixture.CreateConnection();
+        await connection.OpenAsync();
+        TenantApiKeyTombstone tombstone = await connection.QuerySingleAsync<TenantApiKeyTombstone>(
+            "SELECT deleted_at AS DeletedAt, key_hash AS KeyHash FROM tenant_api_keys WHERE id = @Id",
+            new { Id = created.TenantApiKey.Id });
+        tombstone.DeletedAt.ShouldNotBeNull();
+        tombstone.KeyHash.ShouldBe($"deleted:{created.TenantApiKey.Id:N}");
+    }
+
     // Helpers
 
     private async Task<List<Guid>> ListIdsAsync(string query)
@@ -257,5 +291,11 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
         if (body is not null)
             msg.Content = JsonContent.Create(body);
         return msg;
+    }
+
+    private sealed record TenantApiKeyTombstone
+    {
+        public DateTimeOffset? DeletedAt { get; init; }
+        public string KeyHash { get; init; } = "";
     }
 }

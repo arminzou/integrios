@@ -38,6 +38,7 @@ internal sealed class ActiveTenantApiKeyLookup(IDbConnectionFactory connectionFa
             JOIN tenants t ON t.id = c.tenant_id
             WHERE c.key_hash = @KeyHash
               AND c.revoked_at IS NULL
+              AND c.deleted_at IS NULL
               AND t.status = 'active'
             """;
 

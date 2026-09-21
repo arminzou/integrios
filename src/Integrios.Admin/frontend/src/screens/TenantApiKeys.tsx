@@ -187,10 +187,11 @@ export function TenantApiKeysScreen({
             tenantId={tenantId}
             tenantApiKeyId={selectedTenantApiKeyId}
             onRevoked={(name) => setNotice(`${name} revoked.`)}
+            onDeleted={(name) => setNotice(`${name} deleted.`)}
           />
         ) : keys.length > 0 ? (
           <InspectorPlaceholder label="Tenant API key detail">
-            Select a key to read when it was last used, or to revoke it.
+            Select a key to read when it was last used, or to manage its lifecycle.
           </InspectorPlaceholder>
         ) : null}
       </SplitView>
@@ -213,11 +214,14 @@ function TenantApiKeyInspector({
   tenantId,
   tenantApiKeyId,
   onRevoked,
+  onDeleted,
 }: {
   tenantId: string;
   tenantApiKeyId: string;
   onRevoked: (name: string) => void;
+  onDeleted: (name: string) => void;
 }) {
+  const navigate = useNavigate();
   const apiKey = useQuery({
     queryKey: ["tenant-api-key", tenantId, tenantApiKeyId],
     queryFn: () =>
@@ -245,9 +249,6 @@ function TenantApiKeyInspector({
   if (!apiKey.data) return <Inspector label="Tenant API key detail">Loading…</Inspector>;
 
   const current = apiKey.data;
-  // The divider closes the details off from what follows; a revoked key with no description has
-  // nothing after it, and a rule under nothing reads as a stray line.
-  const hasMore = Boolean(current.description) || !current.revoked_at;
   return (
     <Inspector label="Tenant API key detail">
       <div className="flex items-start justify-between gap-3">
@@ -265,7 +266,7 @@ function TenantApiKeyInspector({
         </div>
       </div>
 
-      <Details className={hasMore ? "border-b pb-3.5" : undefined}>
+      <Details className="border-b pb-3.5">
         <dt>Created</dt>
         <dd>
           <Timestamp value={current.created_at} />
@@ -283,14 +284,19 @@ function TenantApiKeyInspector({
       </Details>
 
       {current.description ? (
-        // A rule before the Revoke action; a revoked key has none, so nothing follows.
-        <p className={`m-0 text-[13px] text-ink-secondary${current.revoked_at ? "" : " border-b pb-3.5"}`}>
-          {current.description}
-        </p>
+        <p className="m-0 border-b pb-3.5 text-[13px] text-ink-secondary">{current.description}</p>
       ) : null}
 
-      {/* Revocation is terminal, so a revoked key has nothing left to offer. */}
-      {current.revoked_at ? null : (
+      {current.revoked_at ? (
+        <DeleteTenantApiKey
+          tenantId={tenantId}
+          apiKey={{ id: current.id, name: current.name, keyPrefix: current.key_prefix }}
+          onDone={() => {
+            onDeleted(current.name);
+            navigate(closed);
+          }}
+        />
+      ) : (
         <RevokeTenantApiKey
           tenantId={tenantId}
           apiKey={{
@@ -302,6 +308,44 @@ function TenantApiKeyInspector({
         />
       )}
     </Inspector>
+  );
+}
+
+function DeleteTenantApiKey({
+  tenantId,
+  apiKey,
+  onDone,
+}: {
+  tenantId: string;
+  apiKey: { id: string; name: string; keyPrefix: string };
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () =>
+      call(() =>
+        api.DELETE("/admin/tenants/{tenantId}/tenant-api-keys/{id}", {
+          params: { path: { tenantId, id: apiKey.id } },
+        }),
+      ),
+    onSuccess: () => {
+      onDone();
+      return queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
+    },
+  });
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <ConfirmAction
+        label="Delete"
+        consequence={`Deleting ${apiKey.name} removes it from normal views. It cannot be restored.`}
+        question={`Delete the revoked Tenant API key "${apiKey.name}" (${apiKey.keyPrefix})? It will disappear from normal views and cannot be restored.`}
+        confirmLabel={`Delete ${apiKey.name}`}
+        busy={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+      <FormError message={formError(asProblem(remove.error))} />
+    </div>
   );
 }
 

@@ -101,7 +101,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         (await ListIdsAsync("/admin/connectors?direction=source")).ShouldContain(sourceConnectorId);
         (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/destinations?status=inactive")).ShouldContain(fixture.DestinationId);
         (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/tenant-api-keys?state=active")).ShouldNotContain(revokedKeyId);
-        (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/tenant-api-keys?state=revoked"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ListIdsAsync($"/admin/tenants/{fixture.TenantId}/tenant-api-keys?state=revoked")).ShouldContain(revokedKeyId);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/tenant-api-keys?state=3"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, "/admin/tenants?status=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, "/admin/connectors?direction=0"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);

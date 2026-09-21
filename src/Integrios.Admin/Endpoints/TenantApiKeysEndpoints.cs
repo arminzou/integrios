@@ -13,6 +13,7 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
         group.MapGet(ListTenantApiKeys).Produces<TenantApiKeyListDto>();
         group.MapGet(GetTenantApiKeyById, "/{id:guid}").Produces<TenantApiKeyDto>();
         group.MapPost(RevokeTenantApiKey, "/{id:guid}/revoke");
+        group.MapDelete(DeleteTenantApiKey, "/{id:guid}");
     }
 
     private static async Task<IResult> CreateTenantApiKey(
@@ -59,6 +60,16 @@ public sealed class TenantApiKeysEndpoints : IEndpointGroup
     {
         bool revoked = await mediator.Send(new RevokeTenantApiKeyCommand(tenantId, id), cancellationToken);
         return revoked ? Results.Ok() : Results.NotFound();
+    }
+
+    private static async Task<IResult> DeleteTenantApiKey(
+        Guid tenantId,
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        bool deleted = await mediator.Send(new DeleteTenantApiKeyCommand(tenantId, id), cancellationToken);
+        return deleted ? Results.NoContent() : Results.NotFound();
     }
 }
 
