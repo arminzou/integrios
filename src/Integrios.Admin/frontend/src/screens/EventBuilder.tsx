@@ -13,6 +13,7 @@ import { CheckRow, ConfirmAction } from "../ui/controls";
 import { payloadFieldPaths } from "../ui/fieldMapping";
 import { JsonEditor } from "../ui/jsonEditor";
 import { monoInput } from "../ui/mono";
+import { useSettled } from "../ui/settled";
 import { type CurlRequest, parseCurl } from "./curlImport";
 import {
   type EventTypeRule,
@@ -78,17 +79,6 @@ const named = (values: readonly string[]) => values.map((value) => ({ value, lab
 /// exactly — a header like `x-hub-signature-256` — so the split is not even.
 const leadField = "min-w-0 flex-[3]";
 const trailField = "min-w-0 flex-[2]";
-
-/// The value once it has stopped changing. The acceptance check calls the Admin API, and a request
-/// per keystroke in a header name answers a question nobody has finished asking.
-function useSettled<T>(value: T, delay: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return settled;
-}
 
 function Pane({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (

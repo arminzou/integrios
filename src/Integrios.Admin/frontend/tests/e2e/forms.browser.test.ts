@@ -648,7 +648,7 @@ describe("Create forms, filled through a real browser", () => {
     await playground.getByLabel("Output field 1").fill("order");
     await playground.getByLabel("Event field 1").selectOption("orderId");
     expect(await create.isDisabled()).toBe(true);
-    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    // The preview runs once the edit settles; nothing has to be pressed to ask for it.
     await playground.getByText('"order": "SO-4014"').waitFor();
     await playground.getByRole("button", { name: "Confirm mapping change" }).click();
     await form.getByText("Mapping change reviewed and ready to save.").waitFor();
@@ -723,14 +723,34 @@ describe("Create forms, filled through a real browser", () => {
     await playground.getByLabel("Output field 1").fill("email");
     await playground.getByLabel("Event field 1").selectOption("email");
     const previewBody = playground.locator("section", { has: view.getByRole("heading", { name: "Preview body" }) });
-    await playground.getByRole("button", { name: "Preview mapping" }).click();
     await previewBody.getByText('"email": "buyer@example.test"').waitFor();
 
-    // Stepping re-runs the preview the Operator already asked for, against the next sample.
+    // Stepping re-runs the preview against the next sample.
     await playground.getByRole("button", { name: "Older Event" }).click();
     await playground.getByText("2 of 2").waitFor();
     await previewBody.getByText("{}", { exact: true }).waitFor({ timeout: 5_000 });
     expect(await playground.getByRole("button", { name: "Older Event" }).isDisabled()).toBe(true);
+    await view.close();
+  }, 60_000);
+
+  /// The form around the Playground already holds the Topic, so everything the preview needs can be
+  /// known before the dialog opens. Opening must still answer: with no mapping, the sample itself.
+  it("previews a new Subscription's pasted sample as soon as the Playground opens", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
+    await view.click("text=New Subscription");
+    const form = formNamed(view, "Create a Subscription");
+    // A person spends longer on the form than the preview waits to settle; the failure needs that.
+    await view.waitForTimeout(1_000);
+    await form.getByRole("button", { name: "Add mapping in Playground" }).click();
+    const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    const previewBody = playground.locator("section", { has: view.getByRole("heading", { name: "Preview body" }) });
+    await previewBody.getByText("{}", { exact: true }).waitFor({ timeout: 5_000 });
+    // The pasted sample is edited in the input pane and shown once there, not again read-only.
+    const sample = playground.locator("section", { has: view.getByRole("heading", { name: "Pasted sample" }) });
+    expect(await sample.getByLabel("Payload", { exact: true }).count()).toBe(1);
+    expect(await sample.locator("pre:not([aria-hidden])").count()).toBe(0);
+    expect(await sample.getByLabel("Event type", { exact: true }).count()).toBe(1);
+    expect(await playground.getByRole("button", { name: "Paste JSON" }).count()).toBe(0);
     await view.close();
   }, 60_000);
 
@@ -1550,10 +1570,8 @@ describe("Update and deactivate, driven through a real browser", () => {
     await playground.getByRole("button", { name: "Remove mapping 1" }).click();
     await playground.getByText("No fields mapped. The accepted payload will be delivered unchanged.").waitFor();
     expect(await save.isDisabled()).toBe(true);
-    await playground.getByRole("button", { name: "Preview mapping" }).click();
     await playground
-      .getByRole("heading", { name: "Preview body" })
-      .locator("..")
+      .locator("section", { has: view.getByRole("heading", { name: "Preview body" }) })
       .getByText('"orderId": "SO-4014"')
       .waitFor();
     await playground.getByRole("button", { name: "Confirm mapping change" }).click();
@@ -1651,10 +1669,17 @@ describe("Update and deactivate, driven through a real browser", () => {
     expect(await form.getByRole("button", { name: "Save changes" }).isDisabled()).toBe(true);
 
     await form.getByRole("button", { name: "Edit in Playground" }).click();
-    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    // The preview runs itself; the one that matters is the one for the expression as edited.
+    const edited = () =>
+      writes.find(
+        (request) =>
+          new URL(request.url()).pathname === "/admin/transform/preview" &&
+          String(request.postDataJSON().transform?.expression).includes('"type"'),
+      );
+    await expect.poll(() => edited() !== undefined, { timeout: 5_000 }).toBe(true);
     await playground.getByText('"order": "SO-4014"').waitFor();
 
-    const preview = writes.find((request) => new URL(request.url()).pathname === "/admin/transform/preview");
+    const preview = edited();
     expect(preview?.postDataJSON()).toMatchObject({
       transform: {
         engine: "jsonata",
@@ -1670,10 +1695,9 @@ describe("Update and deactivate, driven through a real browser", () => {
       },
     });
 
-    await playground.getByRole("button", { name: "Paste sample JSON" }).click();
+    await playground.getByRole("button", { name: "Paste JSON" }).click();
     expect(await playground.getByRole("button", { name: "Confirm mapping change" }).isDisabled()).toBe(true);
-    await playground.getByLabel("Sample input (JSON)").fill('{"orderId":"manual-1"}');
-    await playground.getByRole("button", { name: "Preview mapping" }).click();
+    await playground.getByLabel("Payload", { exact: true }).fill('{"orderId":"manual-1"}');
     await playground.getByText('"order": "SO-4014"').waitFor();
     await view.setViewportSize({ width: 320, height: 900 });
     expect(await view.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -1748,17 +1772,15 @@ describe("Update and deactivate, driven through a real browser", () => {
     const expression = playground.getByLabel("Playground mapping expression");
     await expression.fill("[");
     expect(await playground.getByRole("button", { name: "Field mapping" }).isDisabled()).toBe(true);
-    await playground.getByRole("button", { name: "Preview mapping" }).click();
     await playground.getByText("Invalid JSONata expression.").waitFor();
     expect(await playground.getByText(/would retry and may dead-letter/).count()).toBe(0);
     expect(await playground.getByRole("button", { name: "Confirm mapping change" }).isDisabled()).toBe(true);
 
     await expression.fill('$error("items required")');
-    await playground.getByRole("button", { name: "Paste sample JSON" }).click();
-    await playground.getByLabel("Sample input (JSON)").fill('{"orderId":"manual-1"}');
+    await playground.getByRole("button", { name: "Paste JSON" }).click();
+    await playground.getByLabel("Payload", { exact: true }).fill('{"orderId":"manual-1"}');
     await playground.getByLabel("Event type").fill("order.manual");
     await playground.getByLabel("Accepted at").fill("2026-09-08T10:30");
-    await playground.getByRole("button", { name: "Preview mapping" }).click();
     await playground.getByText(/would retry and may dead-letter/).waitFor();
     expect(await playground.getByRole("button", { name: "Confirm mapping change" }).isDisabled()).toBe(true);
     expect(previews.at(-1)).toMatchObject({
@@ -1777,6 +1799,34 @@ describe("Update and deactivate, driven through a real browser", () => {
     await view.keyboard.press("Escape");
     const trigger = view.getByRole("button", { name: "Playground", exact: true });
     expect(await trigger.evaluate((button) => document.activeElement === button)).toBe(true);
+    await view.close();
+  }, 60_000);
+
+  /// The preview runs while the Operator types, so a half-written expression fails to parse at every
+  /// pause. That must not blank the output they were reading, nor let the stale output be confirmed.
+  it("keeps the last successful preview while a mid-edit expression does not parse", async () => {
+    const { page: view } = await open(`/tenants/${tenantId}/subscriptions/${topicId}/${subscriptionId}`);
+    await view.route("**/admin/transform/preview", (route) =>
+      (route.request().postDataJSON().transform as { expression: string }).expression === "{"
+        ? route.fulfill({
+            status: 400,
+            contentType: "application/problem+json",
+            json: { title: "One or more validation errors occurred.", errors: { transform: ["Unexpected end."] } },
+          })
+        : route.fallback(),
+    );
+
+    await view.getByRole("button", { name: "Playground", exact: true }).click();
+    const playground = view.getByRole("dialog", { name: "Mapping Playground" });
+    const previewBody = playground.locator("section", { has: view.getByRole("heading", { name: "Preview body" }) });
+    await previewBody.getByText('"order": "SO-4014"').waitFor();
+
+    await playground.getByRole("button", { name: "Advanced JSONata" }).click();
+    await playground.getByLabel("Playground mapping expression").fill("{");
+    await playground.getByText("Unexpected end.").waitFor();
+    await previewBody.getByText("Showing the last successful preview.").waitFor();
+    expect(await previewBody.getByText('"order": "SO-4014"').count()).toBe(1);
+    expect(await playground.getByRole("button", { name: "Confirm mapping change" }).isDisabled()).toBe(true);
     await view.close();
   }, 60_000);
 
