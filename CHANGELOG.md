@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/arminzou/integrios/compare/v0.7.0...v0.8.0) (2026-09-21)
+
+
+### Features
+
+* **admin:** add revoked key deletion ([5d72f15](https://github.com/arminzou/integrios/commit/5d72f152a6f33e83121fdd124cfbc58285cd9175))
+* **admin:** declare Event types first and lighten Source authoring ([3d84f76](https://github.com/arminzou/integrios/commit/3d84f763db5c8b56525c91a34874fed7b6dd8a81))
+* **admin:** keep revoked Tenant API keys visible and drop key expiry ([5a3bc10](https://github.com/arminzou/integrios/commit/5a3bc10d263363d49d8b68f91630186d386a1484))
+* **admin:** let the Mapping Playground input pane own the sample and preview live ([690818b](https://github.com/arminzou/integrios/commit/690818b5f7222ced9422901593d8ddc447e30d6a))
+* **admin:** refine Inspector layout, status tones and Topic authoring ([ec5ba3f](https://github.com/arminzou/integrios/commit/ec5ba3fc286e737ae97363619909bd8be4e06ca4))
+
 ## [0.7.0](https://github.com/arminzou/integrios/compare/v0.6.0...v0.7.0) (2026-09-20)
 
 
