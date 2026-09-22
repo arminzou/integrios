@@ -68,6 +68,8 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Default ring for the command-line verbs, which never issue cookies or cursors. A web host
+        // must also call AddAdminDataProtection, or each process gets its own unshared ring.
         services.AddDataProtection();
         services.AddDatabaseServices(configuration);
         DatabaseProvider databaseProvider = DatabaseProviders.FromConfiguration(configuration);

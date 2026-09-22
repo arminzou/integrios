@@ -362,6 +362,22 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         await WaitUntilReadyAsync(expectCollector: true);
     }
 
+    // Recreate rather than restart: a restarted container keeps its own filesystem, so only a fresh
+    // container proves the key ring lives on the mounted volume.
+    public async Task RestartAdminAsync()
+    {
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromMinutes(2),
+            "up",
+            "--detach",
+            "--force-recreate",
+            "--no-deps",
+            "admin");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Admin restart failed: {result.Output}");
+        await WaitUntilReadyAsync(expectCollector: true);
+    }
+
     public async Task KillWorkerAsync()
     {
         ComposeResult result = await RunComposeAsync(TimeSpan.FromSeconds(30), "kill", "--signal", "SIGKILL", "worker");

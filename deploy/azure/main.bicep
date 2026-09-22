@@ -129,6 +129,7 @@ var jobNames = {
 var registryServer = '${registryName}.azurecr.io'
 var useSqlServer = databaseProvider == 'sqlserver'
 var serviceBusEnabled = !empty(serviceBusNamespaceName) && !empty(serviceBusResourceGroupName)
+var adminDataProtectionPath = '/var/lib/integrios/data-protection'
 var databaseConnection = useSqlServer
   ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;User ID=${databaseAdministratorLogin};Password=${databaseAdministratorPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
   : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${databaseAdministratorLogin};Password=${databaseAdministratorPassword};SSL Mode=Require'
@@ -354,6 +355,52 @@ resource environment 'Microsoft.App/managedEnvironments@2025-07-01' = {
       }
     }
     zoneRedundant: false
+  }
+}
+
+// Container Apps mounts Azure Files over SMB with the account key, and this reference has no VNet,
+// so the account accepts the key from any network. Anyone holding the key can read Admin's key
+// ring and forge Operator sessions; restricting it needs a VNet-integrated environment. Azure
+// Storage encrypts the share at rest by default.
+resource adminDataProtectionStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: 'st${take(toLower(replace(namePrefix, '-', '')), 12)}${take(uniqueString(resourceGroup().id, 'data-protection'), 8)}'
+  location: location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+  properties: {
+    allowBlobPublicAccess: false
+    allowCrossTenantReplication: false
+    allowSharedKeyAccess: true
+    minimumTlsVersion: 'TLS1_2'
+    publicNetworkAccess: 'Enabled'
+    supportsHttpsTrafficOnly: true
+  }
+}
+
+resource adminDataProtectionFileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
+  parent: adminDataProtectionStorage
+  name: 'default'
+}
+
+resource adminDataProtectionShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
+  parent: adminDataProtectionFileService
+  name: 'admin-data-protection'
+  properties: {
+    enabledProtocols: 'SMB'
+    shareQuota: 5
+  }
+}
+
+resource adminDataProtectionEnvironmentStorage 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
+  parent: environment
+  name: 'admin-data-protection'
+  properties: {
+    azureFile: {
+      accountName: adminDataProtectionStorage.name
+      accountKey: adminDataProtectionStorage.listKeys().keys[0].value
+      accessMode: 'ReadWrite'
+      shareName: adminDataProtectionShare.name
+    }
   }
 }
 
@@ -644,13 +691,16 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
         image: adminImage
         env: concat(databaseEnvironment, [
           { name: 'Integrios__PublicIngestionBaseUri', value: 'https://${ingestion.properties.configuration.ingress.fqdn}' }
+          { name: 'Integrios__Admin__DataProtection__KeyRingPath', value: adminDataProtectionPath }
         ], telemetryEnvironment)
+        volumeMounts: [{ volumeName: 'admin-data-protection', mountPath: adminDataProtectionPath }]
         resources: { cpu: json('0.5'), memory: '1Gi' }
         probes: [
           { type: 'Liveness', httpGet: { path: '/health', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 30 }
           { type: 'Readiness', httpGet: { path: '/ready', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 10 }
         ]
       }, collectorContainer]
+      volumes: [{ name: 'admin-data-protection', storageType: 'AzureFile', storageName: adminDataProtectionEnvironmentStorage.name }]
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }

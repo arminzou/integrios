@@ -6,17 +6,18 @@ availability, security, and operational requirements.
 
 The reference deploys separate Admin, Ingestion, and Worker Container Apps; migration, Bootstrap,
 and secret-validation jobs; one selected managed database; Key Vault; Log Analytics;
-Application Insights; Azure Managed Prometheus; and an Operator Workbook. It reuses an existing
-Azure Container Registry and never provisions Service Bus topology.
+Application Insights; Azure Managed Prometheus; an Operator Workbook; and an Azure Files share for
+Admin's Data Protection key ring. It reuses an existing Azure Container Registry and never
+provisions Service Bus topology.
 
 ## Supplied defaults
 
 | Area | Supplied reference |
 |---|---|
 | Runtime | One Admin, Ingestion, and Worker replica; no autoscaling or zone redundancy |
-| Admin | External HTTPS restricted to explicit Operator CIDRs; OperatorKey authentication remains required |
+| Admin | External HTTPS restricted to explicit Operator CIDRs; durable Data Protection keys shared through storage-encrypted Azure Files |
 | Ingestion | External HTTPS by default; may be internal independently of Service Bus access |
-| Network | Public Container Apps environment, Key Vault, telemetry endpoints, and database firewall rules; no VNet or private endpoints |
+| Network | Public Container Apps environment, Key Vault, telemetry endpoints, and database firewall rules; no VNet or private endpoints. The Data Protection share is reachable from public networks with its storage account key, because Container Apps mounts it with that key and only a VNet could restrict it; treat the key as a credential that can forge Operator sessions |
 | Azure SQL | General Purpose serverless, one vCore maximum, 0.5 minimum capacity, 60-minute auto-pause, local backup redundancy |
 | PostgreSQL | PostgreSQL 16 Burstable B1ms, 32 GiB storage, seven-day local backup, no HA or geo-redundant backup |
 | Deployment | Maintenance window: runtime at zero, migrate, Bootstrap, validate secrets, then start one replica |

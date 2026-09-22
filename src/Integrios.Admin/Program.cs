@@ -44,6 +44,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AdminExceptionHandler>();
 builder.Services.AddAdminApplicationServices();
 builder.Services.AddAdminInfrastructureServices(builder.Configuration);
+builder.Services.AddAdminDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
 builder.Services.AddTelemetryServices(builder.Configuration, "integrios-admin");
 
 builder.Services.AddOperatorAuthentication(builder.Configuration);

@@ -9,6 +9,12 @@ but nobody can sign in until you configure a method and restart Admin.
 Serve Admin over HTTPS outside local development. Its browser session cookie is secure-only, so a
 browser will not retain a production session over plain HTTP.
 
+Admin requires `Integrios:Admin:DataProtection:KeyRingPath` to name a writable directory shared by
+every Admin replica. Its session cookies, antiforgery tokens, and pagination cursors remain valid
+only while that key ring is retained. The supplied Compose and Azure references configure durable
+shared storage; custom deployments must mount an equivalent access-restricted, storage-encrypted
+directory.
+
 ## Choose a method
 
 | Situation | Enable |

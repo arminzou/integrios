@@ -39,5 +39,6 @@ node_modules/
 src/Integrios.Admin/wwwroot/
 src/Integrios.Admin/frontend/src/api/schema.d.ts
 artifacts/openapi/
+artifacts/data-protection/
 .playwright-cli/*
 .playwright-mcp/*

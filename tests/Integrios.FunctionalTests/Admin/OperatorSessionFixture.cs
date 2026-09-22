@@ -24,6 +24,12 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
 {
     private readonly FunctionalDatabase database = new();
     private readonly MockOidcProvider provider = new();
+    private readonly string keyRingPath = Path.Combine(
+        Path.GetTempPath(),
+        "integrios-session-keys-" + Guid.NewGuid().ToString("N"));
+    private readonly string otherKeyRingPath = Path.Combine(
+        Path.GetTempPath(),
+        "integrios-session-keys-" + Guid.NewGuid().ToString("N"));
     private Respawner respawner = null!;
 
     internal MockOidcProvider Provider => provider;
@@ -37,6 +43,11 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
     /// second Admin replica behind one address.
     public WebApplicationFactory<Program> AliceReplica { get; private set; } = null!;
 
+    /// A password host whose configured key ring differs from every other host's. Both hosts share
+    /// a process and content root, so without honoring the configured path they would fall back to
+    /// the same default key store and the replica tests could not tell the difference.
+    public WebApplicationFactory<Program> PasswordOtherKeyRing { get; private set; } = null!;
+
     public TimeSpan ConfiguredLifetime => TimeSpan.FromHours(8);
 
     public async Task InitializeAsync()
@@ -45,15 +56,16 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
         await provider.StartAsync();
         respawner = await database.CreateRespawnerAsync();
 
-        string keyRing = Path.Combine(Path.GetTempPath(), "integrios-session-keys-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(keyRing);
+        Directory.CreateDirectory(keyRingPath);
+        Directory.CreateDirectory(otherKeyRingPath);
 
-        AliceHost = BuildHost(MockOidcProvider.AliceIssuerId, keyRing, passwordEnabled: false);
-        AliceReplica = BuildHost(MockOidcProvider.AliceIssuerId, keyRing, passwordEnabled: false);
-        BobHost = BuildHost(MockOidcProvider.BobIssuerId, keyRing, passwordEnabled: false);
-        PasswordHost = BuildHost(issuerId: null, keyRing, passwordEnabled: true);
-        PasswordReplica = BuildHost(issuerId: null, keyRing, passwordEnabled: true);
-        BothHost = BuildHost(MockOidcProvider.AliceIssuerId, keyRing, passwordEnabled: true);
+        AliceHost = BuildHost(MockOidcProvider.AliceIssuerId, passwordEnabled: false);
+        AliceReplica = BuildHost(MockOidcProvider.AliceIssuerId, passwordEnabled: false);
+        BobHost = BuildHost(MockOidcProvider.BobIssuerId, passwordEnabled: false);
+        PasswordHost = BuildHost(issuerId: null, passwordEnabled: true);
+        PasswordReplica = BuildHost(issuerId: null, passwordEnabled: true);
+        BothHost = BuildHost(MockOidcProvider.AliceIssuerId, passwordEnabled: true);
+        PasswordOtherKeyRing = BuildHost(issuerId: null, passwordEnabled: true, otherKeyRingPath);
     }
 
     public async Task DisposeAsync()
@@ -64,8 +76,11 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
         PasswordHost.Dispose();
         PasswordReplica.Dispose();
         BothHost.Dispose();
+        PasswordOtherKeyRing.Dispose();
         await provider.DisposeAsync();
         await database.DisposeAsync();
+        Directory.Delete(keyRingPath, recursive: true);
+        Directory.Delete(otherKeyRingPath, recursive: true);
     }
 
     public async Task ResetAsync()
@@ -117,12 +132,13 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
 
     private WebApplicationFactory<Program> BuildHost(
         string? issuerId,
-        string keyRingPath,
-        bool passwordEnabled) =>
+        bool passwordEnabled,
+        string? keyRing = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Database:Provider", database.Provider);
             builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
+            builder.UseSetting(AdminDataProtection.KeyRingPathKey, keyRing ?? keyRingPath);
             if (issuerId is not null)
             {
                 builder.UseSetting(OperatorOidcOptions.AuthorityKey, provider.Authority(issuerId));
@@ -140,10 +156,6 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
                 services.RemoveAll<PublicIngestionBaseUri>();
                 services.AddSingleton(PublicIngestionBaseUri.Parse(
                     "https://ingestion.example.test/proxy/integrios", allowHttp: false));
-                // A shared, durable key ring is what lets one replica read another's cookie.
-                services.AddDataProtection()
-                    .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath))
-                    .SetApplicationName("Integrios.Admin");
             });
         });
 }

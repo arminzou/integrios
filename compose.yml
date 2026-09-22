@@ -94,6 +94,9 @@ services:
       Integrios__Admin__Oidc__ClientSecret: ${INTEGRIOS_ADMIN_OIDC_CLIENT_SECRET:-}
       Integrios__Admin__Oidc__DisplayName: ${INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME:-OpenID Connect}
       Integrios__Admin__Password__Enabled: ${INTEGRIOS_ADMIN_PASSWORD_ENABLED:-false}
+      Integrios__Admin__DataProtection__KeyRingPath: /var/lib/integrios/data-protection
+    volumes:
+      - admin_data_protection:/var/lib/integrios/data-protection
     ports:
       - "${INTEGRIOS_ADMIN_PORT:-5150}:8080"
       - "${INTEGRIOS_ADMIN_OPERATIONAL_PORT:-5151}:5299"
@@ -181,3 +184,4 @@ services:
 
 volumes:
   postgres_data:
+  admin_data_protection:

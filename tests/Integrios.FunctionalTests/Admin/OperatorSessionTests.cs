@@ -70,6 +70,15 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
             OperatorSessionEndpoints.BootstrapPath,
             session.Cookies);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The replica accepts the cookie because of the configured key ring, not a shared default.
+        using HttpClient otherKeyRing = Client(fixture.PasswordOtherKeyRing);
+        using HttpResponseMessage rejected = await SendAsync(
+            otherKeyRing,
+            HttpMethod.Get,
+            OperatorSessionEndpoints.BootstrapPath,
+            session.Cookies);
+        rejected.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -368,7 +377,8 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
     public async Task UnsafeCookieRequests_RequireAntiforgery_WhileOperatorKeyAndLogoutStillWork()
     {
         OperatorSession session = await SignInAsync(fixture.AliceHost);
-        using HttpClient client = Client(fixture.AliceHost);
+        // The token and session were issued by AliceHost; the second process must accept both.
+        using HttpClient client = Client(fixture.AliceReplica);
 
         // Same session, same body: the only difference is the antiforgery token.
         const string tenants = "/admin/tenants";

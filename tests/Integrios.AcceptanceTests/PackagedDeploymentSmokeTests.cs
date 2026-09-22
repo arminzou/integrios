@@ -42,6 +42,34 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     }
 
     [Fact]
+    public async Task AdminPaginationCursor_SurvivesRestart()
+    {
+        string suffix = Guid.NewGuid().ToString("N")[..10];
+        await PostAdminForIdAsync(
+            "/admin/tenants",
+            new { slug = $"cursor-a-{suffix}", name = "Cursor restart A" });
+        await PostAdminForIdAsync(
+            "/admin/tenants",
+            new { slug = $"cursor-b-{suffix}", name = "Cursor restart B" });
+
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Get, "/admin/tenants?limit=1");
+        firstRequest.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
+        using HttpResponseMessage firstResponse = await fixture.AdminClient.SendAsync(firstRequest);
+        firstResponse.EnsureSuccessStatusCode();
+        using JsonDocument firstPage = JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync());
+        string cursor = firstPage.RootElement.GetProperty("next_cursor").GetString()!;
+
+        await fixture.RestartAdminAsync();
+
+        using var nextRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/admin/tenants?limit=1&after={Uri.EscapeDataString(cursor)}");
+        nextRequest.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
+        using HttpResponseMessage nextResponse = await fixture.AdminClient.SendAsync(nextRequest);
+        nextResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task OperationalEndpoints_ArePrivateAndReadinessTracksOnlyTheDatabase()
     {
         HttpClient[] operationalClients =

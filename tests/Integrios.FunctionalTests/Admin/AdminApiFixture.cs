@@ -25,6 +25,9 @@ public sealed class AdminApiFixture : IAsyncLifetime
     public const string InvalidOperatorSecretAuthHeader = $"OperatorKey {GlobalOperatorPublicKey}:unsupported-secret";
 
     private readonly FunctionalDatabase database = new();
+    private readonly string keyRingPath = Path.Combine(
+        Path.GetTempPath(),
+        "integrios-admin-keys-" + Guid.NewGuid().ToString("N"));
     private Respawner respawner = null!;
 
     public WebApplicationFactory<Program> WebFactory { get; private set; } = null!;
@@ -42,6 +45,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        Directory.CreateDirectory(keyRingPath);
         await database.StartAsync();
         respawner = await database.CreateRespawnerAsync();
         WebFactory = BuildWebFactory();
@@ -51,6 +55,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
     {
         WebFactory.Dispose();
         await database.DisposeAsync();
+        Directory.Delete(keyRingPath, recursive: true);
     }
 
     public async Task ResetAsync()
@@ -222,6 +227,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         {
             builder.UseSetting("Database:Provider", database.Provider);
             builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
+            builder.UseSetting(AdminDataProtection.KeyRingPathKey, keyRingPath);
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddConfiguration(database.Configuration));
             builder.ConfigureServices(services =>

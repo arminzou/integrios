@@ -56,9 +56,10 @@ settings, interactive credential provisioning, and recovery.
 Serve Admin over HTTPS when the dashboard is on. The session cookie is secure-only, so a browser
 will not store it over plain HTTP and sign-in cannot complete.
 
-The session cookie is protected with keys this container generates. A single Admin container is
-therefore the supported shape today: running several replicas behind a load balancer needs shared,
-durable Data Protection key storage, which this reference does not yet configure.
+The session cookie, antiforgery token, and pagination cursors use the Data Protection key ring in
+the `admin_data_protection` named volume. Preserve that volume across Admin replacement and mount
+the same storage into every Admin replica. The key files are sensitive mutable state: restrict
+volume access and use storage-level encryption.
 
 OperatorKey automation is unaffected. It continues to authenticate the same way whether or not the
 dashboard is enabled.
