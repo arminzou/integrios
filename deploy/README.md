@@ -124,6 +124,26 @@ If you previously customized
 `Integrios:Worker:DeliveryLoop:IdlePollInterval`. The old key is no longer read. The new fanout and
 delivery loop defaults are both two seconds, so deployments that used the old default need no change.
 
+### Completed-history retention
+
+Completed-history retention is disabled unless the Worker receives
+`Integrios:Worker:HistoryRetention:Period`. In Compose, set
+`INTEGRIOS_HISTORY_RETENTION_PERIOD` and uncomment the matching Worker environment mapping. The
+value is a .NET `TimeSpan` of at least seven days, such as `30.00:00:00` for 30 days. The Worker
+runs one bounded sweep at startup and then hourly; its cadence and 500-Event batch size are fixed.
+
+Enabling retention is destructive. The first sweep may permanently delete every eligible terminal
+Event aggregate older than the cutoff, including its processed outbox row, EventDeliveries, and
+DeliveryAttempts. That also ends its replay, diagnostics, and deduplication horizon. Size and back
+up the database before opting in. Removing the setting stops future sweeps but cannot restore
+history already deleted.
+
+The enabling release also creates a filtered index over processed outbox rows. PostgreSQL and SQL
+Server build that index with their normal migration operation rather than an online/concurrent
+variant, so a large existing outbox can experience write blocking while migration runs. Schedule
+the upgrade in an appropriate maintenance window and monitor the migration before starting the
+matched runtime images.
+
 Pull the `deploy/` directory for the release you are moving to — its `compose.yml` already
 defaults to that version — or set `INTEGRIOS_VERSION` in `.env` to pin one explicitly. All three
 services resolve from that single value, so they always upgrade as a matched set. Never point it

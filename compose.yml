@@ -114,6 +114,9 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
       DOTNET_ENVIRONMENT: Development
       Integrios__DestinationSecrets__Provider: ${INTEGRIOS_DESTINATION_SECRETS_PROVIDER:-file}
+      # Completed-history retention is destructive and disabled by absence. To opt in, set a
+      # period of at least seven days, then uncomment the mapping below.
+      # Integrios__Worker__HistoryRetention__Period: ${INTEGRIOS_HISTORY_RETENTION_PERIOD}
     volumes:
       - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destination}:/run/secrets/integrios/destination:ro
     ports:

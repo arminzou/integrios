@@ -15,24 +15,6 @@ internal sealed class DeadLetterReplay(IDbConnectionFactory connectionFactory) :
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
 
-        string? status = await connection.QuerySingleOrDefaultAsync<string>(
-            new CommandDefinition(
-                """
-                SELECT sd.status
-                FROM event_deliveries sd
-                JOIN events e ON e.id = sd.event_id
-                WHERE e.tenant_id = @TenantId
-                  AND e.id = @EventId
-                  AND sd.id = @EventDeliveryId;
-                """,
-                new { TenantId = tenantId, EventId = eventId, EventDeliveryId = subscriptionDeliveryId },
-                cancellationToken: cancellationToken));
-
-        if (status is null)
-            return DeadLetterReplayResult.NotFound;
-        if (!string.Equals(status, "dead_lettered", StringComparison.Ordinal))
-            return DeadLetterReplayResult.NotDeadLettered;
-
         int resetCount = await connection.ExecuteAsync(
             new CommandDefinition(
                 sqlServer
@@ -65,6 +47,23 @@ internal sealed class DeadLetterReplay(IDbConnectionFactory connectionFactory) :
                 new { TenantId = tenantId, EventId = eventId, EventDeliveryId = subscriptionDeliveryId },
                 cancellationToken: cancellationToken));
 
-        return resetCount > 0 ? DeadLetterReplayResult.Replayed : DeadLetterReplayResult.NotDeadLettered;
+        if (resetCount > 0)
+            return DeadLetterReplayResult.Replayed;
+
+        int exists = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            """
+            SELECT CASE WHEN EXISTS (
+                SELECT 1
+                FROM event_deliveries sd
+                JOIN events e ON e.id = sd.event_id
+                WHERE e.tenant_id = @TenantId
+                  AND e.id = @EventId
+                  AND sd.id = @EventDeliveryId)
+                THEN 1 ELSE 0 END;
+            """,
+            new { TenantId = tenantId, EventId = eventId, EventDeliveryId = subscriptionDeliveryId },
+            cancellationToken: cancellationToken));
+
+        return exists == 0 ? DeadLetterReplayResult.NotFound : DeadLetterReplayResult.NotDeadLettered;
     }
 }

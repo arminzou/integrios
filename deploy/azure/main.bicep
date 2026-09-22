@@ -678,6 +678,8 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
       containers: [{
         name: 'worker'
         image: workerImage
+        // Completed-history retention is intentionally absent. Add
+        // Integrios__Worker__HistoryRetention__Period only after reviewing the rollout warning.
         env: concat(databaseEnvironment, [
           { name: 'Integrios__DestinationSecrets__Provider', value: 'configuration' }
           { name: 'DestinationSecrets__${mappingTenantSlug}__${destinationReference}', secretRef: 'destination-${mappingRevision}' }

@@ -162,6 +162,16 @@ do not change either probe.
 
 ## Customize your copy
 
+### Completed-history retention
+
+The reference leaves completed-history retention disabled. To opt in, add
+`Integrios__Worker__HistoryRetention__Period` to the Worker's environment in `main.bicep` with a
+.NET `TimeSpan` of at least seven days. Read the destructive first-sweep, backup, and migration
+write-blocking guidance in [the production deployment guide](../README.md#completed-history-retention)
+before enabling it. Removing the setting stops future deletion but does not restore deleted history.
+
+### Other adaptations
+
 Existing-database attachment, strict private access, custom domains, gateways, WAF, autoscaling,
 HA, alternate sizing, and different retention or backup settings are Operator-owned adaptations.
 Edit the copied Bicep directly rather than expecting this reference to model every Azure topology.

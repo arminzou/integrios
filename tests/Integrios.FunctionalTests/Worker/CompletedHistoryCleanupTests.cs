@@ -185,7 +185,8 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
         await fixture.RunFanoutBatchAsync();
         await SetOutboxProcessedAtAsync(eventId, old);
         Guid[] deliveryIds = await DeliveryIdsAsync(eventId);
-        foreach (Guid deliveryId in deliveryIds)
+        await SetDeliveryTerminalAsync(deliveryIds[0], "dead_lettered", old);
+        foreach (Guid deliveryId in deliveryIds.Skip(1))
             await SetDeliveryTerminalAsync(deliveryId, "succeeded", old);
 
         Guid sourceId = await ScalarAsync<Guid>("SELECT source_id FROM events WHERE id=@EventId", new { EventId = eventId });
@@ -204,6 +205,7 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
             RetentionPeriod, 10, CancellationToken.None);
 
         result.DeletedEventCount.ShouldBe(1);
+        (await fixture.ReplayAsync(eventId, deliveryIds[0])).ShouldBe(DeadLetterReplayResult.NotFound);
         (await ScalarAsync<int>("SELECT COUNT(*) FROM sources WHERE id=@Id AND deleted_at IS NOT NULL", new { Id = sourceId })).ShouldBe(1);
         (await ScalarAsync<int>("SELECT COUNT(*) FROM topics WHERE id=@Id AND deleted_at IS NOT NULL", new { Id = topicId })).ShouldBe(1);
         (await ScalarAsync<int>($"SELECT COUNT(*) FROM subscriptions WHERE {Ids("id")} AND deleted_at IS NOT NULL", new { Ids = subscriptionIds })).ShouldBe(subscriptionIds.Length);
