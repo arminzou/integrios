@@ -427,10 +427,12 @@ internal sealed class EventDeliveryQueue(
         _ => throw new ArgumentOutOfRangeException(nameof(phase), phase, null)
     };
 
+    // SqlClient does not override DbException.IsTransient, so it reads false for every SqlException.
+    // A deadlock victim (1205) is the contention fault a finalization transaction can hit.
     private static bool IsTransient(Exception exception) => exception switch
     {
         NpgsqlException postgres => postgres.IsTransient,
-        SqlException sqlServer => sqlServer.IsTransient,
+        SqlException { Number: 1205 } => true,
         _ => false,
     };
 

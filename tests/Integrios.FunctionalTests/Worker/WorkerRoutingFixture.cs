@@ -532,29 +532,46 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 """,
                 "",
                 "",
-                action);
+                async () =>
+                {
+                    await action();
+                    (await ScalarAsync<long>("SELECT last_value FROM test_finalization_retry_sequence"))
+                        .ShouldBe(2, "finalization should fail once and succeed on its retry");
+                });
             return;
         }
 
         await WithSqlServerFinalizationDeadlockAsync(action);
     }
 
+    // SQL Server has no way to raise a deadlock on demand, so this builds a real one: finalization
+    // holds its event_deliveries row and waits on a barrier row the blocker holds, then the blocker
+    // updates that event_deliveries row. The barrier must be an ordinary row lock: a deadlocked
+    // sp_getapplock returns -3 instead of raising error 1205, so finalization would commit untouched.
     private async Task WithSqlServerFinalizationDeadlockAsync(Func<Task> action)
     {
-        const string resource = "transient-finalization";
         await using DbConnection control = database.CreateConnection();
         await control.OpenAsync();
-        await control.ExecuteAsync("CREATE TABLE ##finalization_retry_signal (hit bit NOT NULL)");
-        await control.ExecuteAsync($"""
+        // The sequence is not transactional, so the victim's rollback cannot reset it: it both
+        // limits the deadlock to the first finalization and counts the attempts.
+        await control.ExecuteAsync("""
+            CREATE SEQUENCE test_finalization_retry_sequence AS bigint START WITH 1;
+            CREATE TABLE ##finalization_deadlock_barrier (id int PRIMARY KEY, held bit NOT NULL);
+            INSERT INTO ##finalization_deadlock_barrier VALUES (1, 0);
+            """);
+        await control.ExecuteAsync("""
             CREATE TRIGGER test_fail_first_attempt_finalization ON delivery_attempts AFTER UPDATE AS
             BEGIN
                 IF EXISTS (SELECT 1 FROM inserted WHERE status=N'succeeded')
                 BEGIN
-                    SET DEADLOCK_PRIORITY LOW;
-                    INSERT INTO ##finalization_retry_signal VALUES (1);
-                    DECLARE @result int;
-                    EXEC @result=sp_getapplock @Resource=N'{resource}', @LockMode='Exclusive',
-                        @LockOwner='Transaction', @LockTimeout=10000;
+                    DECLARE @attempt bigint = NEXT VALUE FOR test_finalization_retry_sequence;
+                    IF @attempt = 1
+                    BEGIN
+                        SET DEADLOCK_PRIORITY LOW;
+                        DECLARE @held bit;
+                        SELECT @held = held FROM ##finalization_deadlock_barrier WITH (UPDLOCK, ROWLOCK)
+                        WHERE id = 1;
+                    END
                 END
             END
             """);
@@ -563,21 +580,25 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await blocker.OpenAsync();
         await using SqlTransaction transaction = (SqlTransaction)await blocker.BeginTransactionAsync();
         await blocker.ExecuteAsync(
-            "DECLARE @r int; EXEC @r=sp_getapplock @Resource=@Resource, @LockMode='Exclusive', @LockOwner='Transaction';",
-            new { Resource = resource }, transaction);
+            "UPDATE ##finalization_deadlock_barrier SET held = 1 WHERE id = 1", transaction: transaction);
         Task actionTask = action();
 
         try
         {
             await WaitUntilAsync(
-                async () => await control.ExecuteScalarAsync<int>(
-                    "SELECT COUNT(*) FROM ##finalization_retry_signal WITH (NOLOCK)") > 0,
+                async () => await control.ExecuteScalarAsync<long?>(
+                    "SELECT CAST(last_used_value AS bigint) FROM sys.sequences WHERE name = N'test_finalization_retry_sequence'") is not null,
                 "Finalization did not reach the SQL Server deadlock barrier within five seconds.");
+            // SQL Server's lock monitor searches for deadlocks every five seconds until it finds
+            // some, so a cold server takes up to that long to choose the victim; allow three rounds.
             await blocker.ExecuteAsync(
                 "UPDATE event_deliveries SET updated_at=updated_at WHERE status=N'in_flight'",
-                transaction: transaction).WaitAsync(TimeSpan.FromSeconds(5));
+                transaction: transaction).WaitAsync(TimeSpan.FromSeconds(15));
             await transaction.RollbackAsync();
             await actionTask;
+            (await control.ExecuteScalarAsync<long>(
+                "SELECT CAST(last_used_value AS bigint) FROM sys.sequences WHERE name = N'test_finalization_retry_sequence'"))
+                .ShouldBe(2, "finalization should lose the deadlock once and succeed on its retry");
         }
         finally
         {
@@ -588,8 +609,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 await actionTask;
             }
             catch { }
-            await control.ExecuteAsync(
-                "DROP TRIGGER IF EXISTS test_fail_first_attempt_finalization; DROP TABLE IF EXISTS ##finalization_retry_signal;");
+            await control.ExecuteAsync("""
+                DROP TRIGGER IF EXISTS test_fail_first_attempt_finalization;
+                DROP SEQUENCE IF EXISTS test_finalization_retry_sequence;
+                DROP TABLE IF EXISTS ##finalization_deadlock_barrier;
+                """);
         }
     }
 
