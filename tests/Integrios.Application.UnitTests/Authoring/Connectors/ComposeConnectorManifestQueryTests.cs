@@ -26,7 +26,8 @@ public sealed class ComposeConnectorManifestQueryTests
         var sourceRegistry = new FakeSourceVerifierRegistry(new FakeHmacSha256SourceVerifier());
         var destinationRegistry = new FakeDestinationAuthenticatorRegistry(
             new FakeApiKeyHeaderAuthenticator(),
-            new FakeBearerTokenAuthenticator());
+            new FakeBearerTokenAuthenticator(),
+            new FakeOAuth2ClientCredentialsAuthenticator());
         IConnectorManifestStore store = Substitute.For<IConnectorManifestStore>();
         Connector? latest = carryForward ? Existing(sourceRegistry, destinationRegistry) : null;
         store.GetLatestByKeyAsync("example_api", Arg.Any<CancellationToken>()).Returns(latest);
@@ -52,7 +53,7 @@ public sealed class ComposeConnectorManifestQueryTests
             .ShouldBe(sourceCapable ? ["hmac_sha256"] : []);
         manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)
             .ShouldBe(destinationCapable
-                ? carryForward ? ["bearer_token"] : ["api_key_header", "bearer_token"]
+                ? carryForward ? ["bearer_token"] : ["api_key_header", "bearer_token", "oauth2_client_credentials"]
                 : []);
         manifest.Presentation.EventTypes.ShouldBe(carryForward ? ["example.updated"] : []);
         manifest.Presentation.AuthoringPresets.Count.ShouldBe(carryForward ? 1 : 0);

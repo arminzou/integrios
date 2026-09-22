@@ -74,6 +74,12 @@ public static class TestConnectorManifest
             Scheme = scheme,
             RequiredSecretRefs = ["token"],
         },
+        "oauth2_client_credentials" => new ConnectorSchemeManifest
+        {
+            Scheme = scheme,
+            RequiredConfig = ["token_endpoint", "client_id", "client_auth_method"],
+            RequiredSecretRefs = ["client_secret"],
+        },
         _ => new ConnectorSchemeManifest { Scheme = scheme },
     };
 

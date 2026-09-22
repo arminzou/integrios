@@ -157,6 +157,36 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
     }
 
     [Fact]
+    public async Task Worker_OAuthSnapshotCarriesOnlyTheContractAndSecretReference()
+    {
+        const string secretReference = "oauth_client_secret";
+        const string secretCanary = "must-never-enter-the-snapshot";
+        const string authentication = """
+            {"scheme":"oauth2_client_credentials","config":{"token_endpoint":"https://identity.example/token","client_id":"integrios","client_auth_method":"client_secret_post","scope":"orders.write"},"secret_refs":{"client_secret":"oauth_client_secret"}}
+            """;
+        fixture.SecretResolver.Set(secretReference, secretCanary);
+        await fixture.UpdateLedgerExecutionConfigurationAsync(
+            WorkerRoutingFixture.LedgerSinkUrl,
+            authentication,
+            "webhook");
+        Guid eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
+
+        (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
+
+        EventDeliverySnapshot snapshot = await fixture.GetEventDeliverySnapshotAsync(eventId);
+        snapshot.HttpExecutionSnapshotJson.ShouldContain(secretReference);
+        snapshot.HttpExecutionSnapshotJson.ShouldNotContain(secretCanary);
+        HttpExecutionSnapshot execution = JsonSerializer.Deserialize<HttpExecutionSnapshot>(
+            snapshot.HttpExecutionSnapshotJson,
+            StoredJson.Options)!;
+        using JsonDocument expected = JsonDocument.Parse(authentication);
+        using JsonDocument actual = JsonSerializer.SerializeToDocument(
+            execution.DestinationAuthentication,
+            StoredJson.Options);
+        JsonElement.DeepEquals(expected.RootElement, actual.RootElement).ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Worker_SubscriptionHttpSuccessRule_FansOutWithSnapshotCarryingIt()
     {
         await fixture.UpdateLedgerHttpSuccessAsync(JsonSerializer.Deserialize<HttpSuccessRule>("""

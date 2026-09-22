@@ -39,6 +39,11 @@ const connectorDetail = {
       schemes: [
         { scheme: "api_key_header", required_config: ["header_name"], required_secret_refs: ["api_key"] },
         { scheme: "bearer_token", required_config: [], required_secret_refs: ["token"] },
+        {
+          scheme: "oauth2_client_credentials",
+          required_config: ["token_endpoint", "client_id", "client_auth_method"],
+          required_secret_refs: ["client_secret"],
+        },
       ],
     },
   },
@@ -217,6 +222,37 @@ describe("A selected Destination", () => {
       environment: null,
       description: null,
     });
+  });
+
+  it("round-trips OAuth client credentials through guided controls", async () => {
+    const oauth = {
+      ...authenticated,
+      authentication: {
+        scheme: "oauth2_client_credentials",
+        config: {
+          token_endpoint: "https://identity.example/token",
+          client_id: "integrios",
+          client_auth_method: "client_secret_basic",
+          scope: "orders.write deliveries.read",
+        },
+        secret_refs: { client_secret: "erp-oauth-client-secret" },
+      },
+    };
+    const calls = stubDestination(oauth);
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const form = await screen.findByRole("form", { name: `Edit ${authenticated.name}` });
+
+    expect(within(form).getByLabelText("Token endpoint").getAttribute("type")).toBe("url");
+    expect(within(form).getByLabelText("Client ID")).toBeTruthy();
+    expect(within(form).getByRole("combobox", { name: "Client authentication method" })).toBeTruthy();
+    expect(within(form).getByLabelText("Scope")).toBeTruthy();
+    expect(within(form).getByLabelText("Client secret reference")).toBeTruthy();
+    expect(within(form).queryByLabelText(/Raw authentication/)).toBeNull();
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+    expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({ authentication: oauth.authentication });
   });
 
   it("preserves stored documents the guided fields cannot represent", async () => {

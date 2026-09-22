@@ -225,9 +225,15 @@ function authenticationDocument(
   if (!schemeName) return null;
   const scheme = contract.authenticationSchemes.find((candidate) => candidate.scheme === schemeName);
   if (!scheme) return null;
+  const configNames = authenticationConfigNames(scheme);
   return {
     scheme: scheme.scheme,
-    config: Object.fromEntries(scheme.config.map((name) => [name, configValues[name] ?? ""])),
+    config: Object.fromEntries(
+      configNames.flatMap((name) => {
+        const value = configValues[name] ?? "";
+        return name === "scope" && value === "" ? [] : [[name, value]];
+      }),
+    ),
     secret_refs: Object.fromEntries(scheme.secretRefs.map((name) => [name, secretRefValues[name] ?? ""])),
   };
 }
@@ -242,7 +248,11 @@ function authenticationFields(contract: DestinationContract, authentication: unk
   if (!scheme || !isObject(authentication.config) || !isObject(authentication.secret_refs)) return null;
   const config: Record<string, string> = {};
   const secretRefs: Record<string, string> = {};
-  for (const name of scheme.config) {
+  for (const name of authenticationConfigNames(scheme)) {
+    if (!Object.hasOwn(authentication.config, name) && name === "scope") {
+      config[name] = "";
+      continue;
+    }
     if (typeof authentication.config[name] !== "string") return null;
     config[name] = authentication.config[name];
   }
@@ -268,6 +278,15 @@ const fieldLabel = (value: string) =>
           : word,
     )
     .join(" ");
+
+const authenticationConfigNames = (scheme: AuthenticationScheme) =>
+  scheme.scheme === "oauth2_client_credentials" ? [...scheme.config, "scope"] : scheme.config;
+
+const authenticationSchemeLabel = (scheme: string) =>
+  scheme === "oauth2_client_credentials" ? "OAuth 2.0 client credentials" : fieldLabel(scheme);
+
+const secretReferenceLabel = (name: string) =>
+  `${fieldLabel(name)}${name.endsWith("_secret") ? "" : " secret"} reference`;
 
 function scalarHint(field: ScalarField): string | undefined {
   const hints: string[] = [];
@@ -359,25 +378,48 @@ function AuthenticationFields<TValues extends FieldValues>({
       >
         {contract.authenticationSchemes.map((option) => (
           <SelectItem key={option.scheme} value={option.scheme}>
-            {fieldLabel(option.scheme)}
+            {authenticationSchemeLabel(option.scheme)}
           </SelectItem>
         ))}
       </SelectField>
-      {scheme?.config.map((name) => (
-        <TextField
-          key={name}
-          control={control}
-          name={`authentication_config_fields.${name}` as Path<TValues>}
-          label={fieldLabel(name)}
-          required
-        />
-      ))}
+      {scheme
+        ? authenticationConfigNames(scheme).map((name) =>
+            name === "client_auth_method" ? (
+              <SelectField
+                key={name}
+                control={control}
+                name={`authentication_config_fields.${name}` as Path<TValues>}
+                label="Client authentication method"
+                required
+              >
+                <SelectItem value="client_secret_basic">HTTP Basic</SelectItem>
+                <SelectItem value="client_secret_post">Form body</SelectItem>
+              </SelectField>
+            ) : (
+              <TextField
+                key={name}
+                control={control}
+                name={`authentication_config_fields.${name}` as Path<TValues>}
+                label={fieldLabel(name)}
+                hint={
+                  name === "token_endpoint"
+                    ? "Absolute HTTPS URL. Redirects are not followed."
+                    : name === "scope"
+                      ? "Optional space-delimited OAuth scopes."
+                      : undefined
+                }
+                type={name === "token_endpoint" ? "url" : "text"}
+                required={name !== "scope"}
+              />
+            ),
+          )
+        : null}
       {scheme?.secretRefs.map((name) => (
         <TextField
           key={name}
           control={control}
           name={`authentication_secret_ref_fields.${name}` as Path<TValues>}
-          label={`${fieldLabel(name)} secret reference`}
+          label={secretReferenceLabel(name)}
           hint="Enter the reference name only, never the secret value."
           required
         />
@@ -753,7 +795,7 @@ function CreateDestination({ tenantId, onCreated }: { tenantId: string; onCreate
               onSchemeChange={(scheme) => {
                 form.setValue(
                   "authentication_config_fields",
-                  Object.fromEntries((scheme?.config ?? []).map((name) => [name, ""])),
+                  Object.fromEntries((scheme ? authenticationConfigNames(scheme) : []).map((name) => [name, ""])),
                 );
                 form.setValue(
                   "authentication_secret_ref_fields",
@@ -1096,7 +1138,7 @@ function EditDestinationForm({
             onSchemeChange={(scheme) => {
               form.setValue(
                 "authentication_config_fields",
-                Object.fromEntries((scheme?.config ?? []).map((name) => [name, ""])),
+                Object.fromEntries((scheme ? authenticationConfigNames(scheme) : []).map((name) => [name, ""])),
               );
               form.setValue(
                 "authentication_secret_ref_fields",

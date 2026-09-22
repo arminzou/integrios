@@ -167,6 +167,85 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
             .ShouldBe("round_trip_token");
     }
 
+    [Fact]
+    public async Task OAuthClientCredentials_RoundTripsItsNonSecretContractAndReference()
+    {
+        Guid connectorId = await Fixture.ApplyConnectorManifestAsync(
+            "oauth_round_trip",
+            TestConnectorManifest.Create(
+                "oauth_round_trip",
+                "OAuth round trip",
+                "destination",
+                authenticationSchemes: ["oauth2_client_credentials"]));
+
+        HttpResponseMessage created = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new
+            {
+                connector_id = connectorId,
+                name = "oauth-destination",
+                configuration = new { base_uri = "https://api.example" },
+                authentication = new
+                {
+                    scheme = "oauth2_client_credentials",
+                    config = new
+                    {
+                        token_endpoint = "https://identity.example/token",
+                        client_id = "integrios",
+                        client_auth_method = "client_secret_basic",
+                        scope = "orders.write deliveries.read",
+                    },
+                    secret_refs = new { client_secret = "oauth_client_secret" },
+                },
+            }));
+
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        JsonElement body = await created.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement authentication = body.GetProperty("authentication");
+        authentication.GetProperty("config").GetProperty("scope").GetString()
+            .ShouldBe("orders.write deliveries.read");
+        authentication.GetProperty("secret_refs").GetProperty("client_secret").GetString()
+            .ShouldBe("oauth_client_secret");
+        body.GetRawText().ShouldNotContain("client-secret-value", Case.Sensitive);
+    }
+
+    [Theory]
+    [InlineData("{\"token_endpoint\":\"http://identity.example/token\",\"client_id\":\"id\",\"client_auth_method\":\"client_secret_basic\"}")]
+    [InlineData("{\"token_endpoint\":\"https://identity.example/token#fragment\",\"client_id\":\"id\",\"client_auth_method\":\"client_secret_basic\"}")]
+    [InlineData("{\"token_endpoint\":\"https://identity.example/token\",\"client_id\":\"\",\"client_auth_method\":\"client_secret_basic\"}")]
+    [InlineData("{\"token_endpoint\":\"https://identity.example/token\",\"client_id\":\"id\",\"client_auth_method\":\"automatic\"}")]
+    [InlineData("{\"token_endpoint\":\"https://identity.example/token\",\"client_id\":\"id\",\"client_auth_method\":\"client_secret_post\",\"scope\":\" leading\"}")]
+    [InlineData("{\"token_endpoint\":\"https://identity.example/token\",\"client_id\":\"id\",\"client_auth_method\":\"client_secret_post\",\"audience\":\"api\"}")]
+    public async Task OAuthClientCredentials_RejectsInvalidContract(string configJson)
+    {
+        Guid connectorId = await Fixture.ApplyConnectorManifestAsync(
+            "oauth_invalid",
+            TestConnectorManifest.Create(
+                "oauth_invalid",
+                "OAuth invalid",
+                "destination",
+                authenticationSchemes: ["oauth2_client_credentials"]));
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new
+            {
+                connector_id = connectorId,
+                name = "invalid-oauth-destination",
+                configuration = new { base_uri = "https://api.example" },
+                authentication = new
+                {
+                    scheme = "oauth2_client_credentials",
+                    config = JsonSerializer.Deserialize<JsonElement>(configJson),
+                    secret_refs = new { client_secret = "oauth_client_secret" },
+                },
+            }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
     private Task<HttpResponseMessage> CreateDestinationAsync(string name) => client.SendAsync(AdminRequest(
         HttpMethod.Post,
         $"/admin/tenants/{Fixture.TenantId}/destinations",

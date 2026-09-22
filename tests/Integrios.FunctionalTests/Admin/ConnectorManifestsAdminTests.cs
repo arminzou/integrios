@@ -168,7 +168,11 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             document,
             new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
-            new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
+            new DestinationAuthenticatorRegistry([
+                new ApiKeyHeaderAuthenticator(),
+                new BearerTokenAuthenticator(),
+                new OAuth2ClientCredentialsAuthenticator(null, TimeProvider.System)
+            ]));
 
         manifest.SourceConfigurationSchema.HasValue.ShouldBe(sourceCapable);
         manifest.DestinationConfigurationSchema.HasValue.ShouldBe(destinationCapable);
@@ -177,7 +181,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme)
             .ShouldBe(sourceCapable ? ["hmac_sha256"] : []);
         manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)
-            .ShouldBe(destinationCapable ? ["api_key_header", "bearer_token"] : []);
+            .ShouldBe(destinationCapable ? ["api_key_header", "bearer_token", "oauth2_client_credentials"] : []);
     }
 
     [Fact]
@@ -198,7 +202,11 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             result.GetProperty("manifest"),
             new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
-            new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
+            new DestinationAuthenticatorRegistry([
+                new ApiKeyHeaderAuthenticator(),
+                new BearerTokenAuthenticator(),
+                new OAuth2ClientCredentialsAuthenticator(null, TimeProvider.System)
+            ]));
         manifest.ContractVersion.ShouldBe(3);
         manifest.Presentation.Name.ShouldBe("Next");
         manifest.Presentation.EventTypes.ShouldBe(["latest.event"]);

@@ -62,3 +62,11 @@ public sealed class FakeBearerTokenAuthenticator : IDestinationAuthenticator
         headers.Add("Authorization", $"Bearer {token}");
     }
 }
+
+public sealed class FakeOAuth2ClientCredentialsAuthenticator : IDestinationAuthenticator
+{
+    public string Name => "oauth2_client_credentials";
+    public IReadOnlyList<string> RequiredConfigFields => ["token_endpoint", "client_id", "client_auth_method"];
+    public IReadOnlyList<string> RequiredSecretFields => ["client_secret"];
+    public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config) => ["Authorization"];
+}
