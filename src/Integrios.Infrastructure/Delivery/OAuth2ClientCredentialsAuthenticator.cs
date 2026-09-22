@@ -12,6 +12,8 @@ internal sealed class OAuth2ClientCredentialsAuthenticator(HttpClient? httpClien
     : IDestinationAuthenticator
 {
     internal const int ResponseMaxBytes = 64 * 1024;
+    internal static readonly HttpRequestOptionsKey<bool> SuppressTelemetryKey =
+        new("Integrios.SuppressHttpTelemetry");
     private readonly ConcurrentDictionary<TokenCacheKey, Lazy<Task<CachedToken>>> _tokens = [];
 
     public string Name => "oauth2_client_credentials";
@@ -97,7 +99,11 @@ internal sealed class OAuth2ClientCredentialsAuthenticator(HttpClient? httpClien
         string clientSecret,
         CancellationToken cancellationToken)
     {
+        using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        requestTimeout.CancelAfter(httpClient!.Timeout);
+        CancellationToken requestToken = requestTimeout.Token;
         using var request = new HttpRequestMessage(HttpMethod.Post, key.TokenEndpoint);
+        request.Options.Set(SuppressTelemetryKey, true);
         var fields = new List<KeyValuePair<string, string>>
         {
             new("grant_type", "client_credentials")
@@ -123,15 +129,11 @@ internal sealed class OAuth2ClientCredentialsAuthenticator(HttpClient? httpClien
         HttpResponseMessage response;
         try
         {
-            response = await httpClient!.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestToken);
         }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             throw new DestinationAuthenticationException("OAuth token request timed out.", isTimeout: true);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
         }
         catch (HttpRequestException)
         {
@@ -144,7 +146,11 @@ internal sealed class OAuth2ClientCredentialsAuthenticator(HttpClient? httpClien
             (byte[] body, bool exceededLimit) bodyResult;
             try
             {
-                bodyResult = await ReadBoundedAsync(response, cancellationToken);
+                bodyResult = await ReadBoundedAsync(response, requestToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new DestinationAuthenticationException("OAuth token request timed out.", isTimeout: true);
             }
             catch (HttpRequestException)
             {

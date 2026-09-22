@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Integrios.Application;
 using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
@@ -230,7 +231,12 @@ public static class DependencyInjection
         if (enableOAuthExecution)
         {
             services.AddHttpClient("oauth2-token", client => client.Timeout = deliveryOptions!.HttpTimeout)
-                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    AllowAutoRedirect = false,
+                    MeterFactory = SuppressedHttpMetricsFactory.Instance
+                })
+                .RemoveAllLoggers();
             services.AddSingleton<IDestinationAuthenticator>(provider => new OAuth2ClientCredentialsAuthenticator(
                 provider.GetRequiredService<IHttpClientFactory>().CreateClient("oauth2-token"),
                 TimeProvider.System));
@@ -297,5 +303,17 @@ public static class DependencyInjection
         return TimeSpan.TryParse(configured, out TimeSpan parsed)
             ? parsed
             : throw new InvalidOperationException($"{key} must be a TimeSpan value.");
+    }
+
+    private sealed class SuppressedHttpMetricsFactory : IMeterFactory
+    {
+        public static SuppressedHttpMetricsFactory Instance { get; } = new();
+        private static readonly Meter Meter = new("integrios.suppressed.http");
+
+        public Meter Create(MeterOptions options) => Meter;
+
+        public void Dispose()
+        {
+        }
     }
 }

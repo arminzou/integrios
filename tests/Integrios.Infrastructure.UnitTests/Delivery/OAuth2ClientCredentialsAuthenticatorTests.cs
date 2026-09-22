@@ -1,3 +1,4 @@
+using System.IO.Pipelines;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -143,6 +144,26 @@ public sealed class OAuth2ClientCredentialsAuthenticatorTests
         error.StatusCode.ShouldBe(503);
     }
 
+    [Fact]
+    public async Task StalledResponseBody_TimesOutWithinTheHttpClientTimeout()
+    {
+        var pipe = new Pipe();
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(pipe.Reader.AsStream())
+        };
+        var authenticator = Create(
+            new StubHandler(_ => Task.FromResult(response)),
+            timeout: TimeSpan.FromMilliseconds(50));
+        using var testTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        DestinationAuthenticationException error = await Should.ThrowAsync<DestinationAuthenticationException>(
+            () => ApplyAsync(authenticator, Config("client_secret_post"), cancellationToken: testTimeout.Token));
+
+        error.IsTimeout.ShouldBeTrue();
+        error.IsTerminal.ShouldBeFalse();
+    }
+
     [Theory]
     [InlineData("http://identity.example/token")]
     [InlineData("https://user@identity.example/token")]
@@ -181,13 +202,15 @@ public sealed class OAuth2ClientCredentialsAuthenticatorTests
 
     private static OAuth2ClientCredentialsAuthenticator Create(
         HttpMessageHandler handler,
-        TimeProvider? timeProvider = null) =>
-        new(new HttpClient(handler), timeProvider ?? TimeProvider.System);
+        TimeProvider? timeProvider = null,
+        TimeSpan? timeout = null) =>
+        new(new HttpClient(handler) { Timeout = timeout ?? TimeSpan.FromSeconds(100) }, timeProvider ?? TimeProvider.System);
 
     private static async Task<Dictionary<string, string>> ApplyAsync(
         OAuth2ClientCredentialsAuthenticator authenticator,
         JsonElement config,
-        Guid? tenantId = null)
+        Guid? tenantId = null,
+        CancellationToken cancellationToken = default)
     {
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         await authenticator.ApplyAsync(
@@ -196,7 +219,7 @@ public sealed class OAuth2ClientCredentialsAuthenticatorTests
             new Dictionary<string, string> { ["client_secret"] = "oauth-client-secret" },
             new Dictionary<string, string> { ["client_secret"] = "client-secret" },
             tenantId ?? TenantId,
-            CancellationToken.None);
+            cancellationToken);
         return headers;
     }
 

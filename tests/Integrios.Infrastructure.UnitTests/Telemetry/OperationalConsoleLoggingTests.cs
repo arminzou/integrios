@@ -1,5 +1,10 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using Integrios.Infrastructure;
 using Integrios.Infrastructure.Telemetry;
+using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +14,7 @@ using Microsoft.Extensions.Options;
 using OpenTelemetry;
 using OpenTelemetry.Instrumentation.AspNetCore;
 using OpenTelemetry.Instrumentation.Http;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -88,10 +94,71 @@ public sealed class OperationalConsoleLoggingTests
         using var activity = new Activity("outbound");
         activity.SetTag("url.full", "https://secret.example.test/private");
         activity.SetTag("http.url", "https://secret.example.test/private");
+        activity.SetTag("server.address", "secret.example.test");
+        activity.SetTag("server.port", 443);
         options.EnrichWithHttpRequestMessage(activity, new HttpRequestMessage());
 
         activity.GetTagItem("url.full").ShouldBeNull();
         activity.GetTagItem("http.url").ShouldBeNull();
+        activity.GetTagItem("server.address").ShouldBeNull();
+        activity.GetTagItem("server.port").ShouldBeNull();
+    }
+
+    [Fact]
+    public void TelemetryRegistration_ExcludesOAuthTokenRequestsFromExportedTraces()
+    {
+        var services = new ServiceCollection();
+        services.AddTelemetryServices(new ConfigurationBuilder().Build(), "integrios-worker");
+
+        using ServiceProvider provider = services.BuildServiceProvider();
+        provider.GetRequiredService<TracerProvider>();
+        HttpClientTraceInstrumentationOptions options = provider
+            .GetRequiredService<IOptionsMonitor<HttpClientTraceInstrumentationOptions>>()
+            .Get(Options.DefaultName);
+        using var request = new HttpRequestMessage();
+        request.Options.Set(new HttpRequestOptionsKey<bool>("Integrios.SuppressHttpTelemetry"), true);
+
+        options.FilterHttpRequestMessage.ShouldNotBeNull();
+        options.FilterHttpRequestMessage(request).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task OAuthHttpClient_SuppressesEndpointLogsAndMetricsWithoutDisablingOrdinaryMetrics()
+    {
+        var exporter = new CollectingMetricExporter();
+        var logs = new CapturingLoggerProvider();
+        var services = new ServiceCollection();
+        services.AddLogging(logging => logging
+            .SetMinimumLevel(LogLevel.Trace)
+            .AddProvider(logs));
+        services.AddTelemetryServices(new ConfigurationBuilder().Build(), "integrios-worker");
+        services.AddWorkerInfrastructureServices(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Postgres"] =
+                    "Host=localhost;Database=integrios;Username=integrios;Password=integrios"
+            })
+            .Build());
+        services.AddOpenTelemetry().WithMetrics(metrics =>
+            metrics.AddReader(new BaseExportingMetricReader(exporter)));
+
+        using ServiceProvider provider = services.BuildServiceProvider();
+        MeterProvider meterProvider = provider.GetRequiredService<MeterProvider>();
+        using var ordinaryClient = new HttpClient();
+        using HttpClient oauthClient = provider.GetRequiredService<IHttpClientFactory>().CreateClient("oauth2-token");
+
+        await SendLoopbackRequestAsync(ordinaryClient, "127.0.0.1", "ordinary");
+        await SendLoopbackRequestAsync(oauthClient, "localhost", "oauth-canary");
+        meterProvider.ForceFlush();
+
+        exporter.TagValues.ShouldContain("127.0.0.1");
+        exporter.TagValues.ShouldNotContain(value =>
+            value.Contains("localhost", StringComparison.OrdinalIgnoreCase));
+        logs.Messages
+            .Concat(logs.Entries.SelectMany(entry => entry).Select(scope => scope?.ToString() ?? string.Empty))
+            .ShouldNotContain(value =>
+                value.Contains("localhost", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("oauth-canary", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -176,5 +243,44 @@ public sealed class OperationalConsoleLoggingTests
         return provider.GetRequiredService<TracerProvider>().GetResource();
     }
 
+    private static async Task SendLoopbackRequestAsync(HttpClient client, string host, string path)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        try
+        {
+            Task<TcpClient> accept = listener.AcceptTcpClientAsync();
+            Task<HttpResponseMessage> request = client.GetAsync($"http://{host}:{port}/{path}");
+            using TcpClient accepted = await accept;
+            await accepted.GetStream().WriteAsync(Encoding.ASCII.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
+            using HttpResponseMessage response = await request;
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
     private sealed record ResourceAttributes(string? ServiceName, string? ServiceVersion, string? ServiceInstanceId);
+
+    private sealed class CollectingMetricExporter : BaseExporter<Metric>
+    {
+        public List<string> TagValues { get; } = [];
+
+        public override ExportResult Export(in Batch<Metric> batch)
+        {
+            foreach (Metric metric in batch)
+            {
+                foreach (MetricPoint point in metric.GetMetricPoints())
+                    foreach (KeyValuePair<string, object?> tag in point.Tags)
+                        TagValues.Add(tag.Value?.ToString() ?? string.Empty);
+            }
+
+            return ExportResult.Success;
+        }
+    }
 }

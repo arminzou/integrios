@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Integrios.Infrastructure.Delivery;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -59,6 +60,7 @@ public static class TelemetryExtensions
                     .AddMeter("integrios.application")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
+                    .AddView("dns.lookup.duration", new MetricStreamConfiguration { TagKeys = [] })
                     .AddRuntimeInstrumentation()
                     .AddPrometheusExporter();
             })
@@ -69,11 +71,24 @@ public static class TelemetryExtensions
                     .AddAspNetCoreInstrumentation(options => options.Filter =
                         context => !RequestCompletionLoggingMiddleware.IsOperationalRequest(context.Request.Path))
                     .AddHttpClientInstrumentation(options =>
+                    {
+                        options.FilterHttpRequestMessage = static request =>
+                            !request.Options.TryGetValue(
+                                OAuth2ClientCredentialsAuthenticator.SuppressTelemetryKey,
+                                out bool suppressed)
+                            || !suppressed;
                         options.EnrichWithHttpRequestMessage = static (activity, _) =>
                         {
                             activity.SetTag("url.full", null);
                             activity.SetTag("http.url", null);
-                        })
+                            activity.SetTag("url.scheme", null);
+                            activity.SetTag("server.address", null);
+                            activity.SetTag("server.port", null);
+                            activity.SetTag("net.peer.name", null);
+                            activity.SetTag("net.peer.port", null);
+                            activity.SetTag("http.host", null);
+                        };
+                    })
                     .AddNpgsql()
                     .AddSqlClientInstrumentation();
 

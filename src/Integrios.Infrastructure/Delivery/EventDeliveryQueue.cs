@@ -58,7 +58,7 @@ internal sealed class EventDeliveryQueue(
                     sd.mapping_config_snapshot AS MappingConfigSnapshot, sd.traceparent AS Traceparent,
                     e.tenant_id AS TenantId, tenant.slug AS TenantSlug, e.payload AS PayloadJson,
                     e.event_type AS EventType, e.accepted_at AS AcceptedAt, t.[key] AS TopicName,
-                    SYSUTCDATETIME() AS DatabaseNow
+                    TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00') AS DatabaseNow
                 FROM event_deliveries sd WITH (UPDLOCK, ROWLOCK, READPAST, READCOMMITTEDLOCK)
                 JOIN events e ON e.id=sd.event_id
                 JOIN tenants tenant ON tenant.id=e.tenant_id
@@ -282,7 +282,8 @@ internal sealed class EventDeliveryQueue(
                 sqlServer
                 ? """
                 SELECT id AS Id, status AS Status, active_attempt_id AS ActiveAttemptId,
-                       retry_cycle_attempt_count AS RetryCycleAttemptCount, SYSUTCDATETIME() AS DatabaseNow
+                       retry_cycle_attempt_count AS RetryCycleAttemptCount,
+                       TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00') AS DatabaseNow
                 FROM event_deliveries WITH (UPDLOCK, ROWLOCK)
                 WHERE id = @DeliveryId;
                 """

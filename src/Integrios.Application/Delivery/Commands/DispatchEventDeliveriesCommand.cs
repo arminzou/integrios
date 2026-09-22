@@ -147,7 +147,12 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
                 FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
-        await FinalizeAsync(row, outboundRequest?.JsonBody, result, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken, attemptActivity);
+        CancellationToken finalizationToken = cancellationToken.IsCancellationRequested
+            && result.FailurePhase == DeliveryFailurePhase.Authentication
+            && result.IsTimeout
+            ? CancellationToken.None
+            : cancellationToken;
+        await FinalizeAsync(row, outboundRequest?.JsonBody, result, Stopwatch.GetElapsedTime(startedTimestamp), finalizationToken, attemptActivity);
     }
 
     private async Task FinalizeAsync(

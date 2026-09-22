@@ -428,6 +428,49 @@ public sealed class AuthenticatedDispatchTests
     }
 
     [Fact]
+    public async Task Dispatch_OAuthAttemptDeadline_FinalizesAuthenticationTimeout()
+    {
+        var queue = new FakeEventDeliveryQueue
+        {
+            HonorFinalizationCancellation = true,
+            FinalizationResult = Applied(EventDeliveryDisposition.RetryScheduled),
+            ClaimedItems =
+            [
+                MakeWorkItem(auth: new DestinationAuthentication
+                {
+                    Scheme = "oauth2_client_credentials",
+                    Config = EmptyObject,
+                    SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"client_secret":"oauth_secret"}""")
+                })
+            ]
+        };
+        var deliveryClient = new CapturingDeliveryClient(new DeliveryResult(true, 200));
+
+        IMediator mediator = BuildMediator(services =>
+        {
+            services.AddSingleton(new DeliveryExecutionOptions(
+                TimeSpan.FromMilliseconds(10),
+                TimeSpan.FromMilliseconds(50),
+                TimeSpan.FromMinutes(2),
+                TimeSpan.FromSeconds(1)));
+            services.AddSingleton<IEventDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(deliveryClient);
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(
+                new DestinationAuthenticatorRegistry([new DeadlineOAuthHandler()]));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(
+                CreateSecretResolver(new Dictionary<string, string> { ["oauth_secret"] = "secret" }));
+        });
+
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
+
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.Authentication);
+        queue.Finalizations.ShouldHaveSingleItem().Disposition.ShouldBe(EventDeliveryDisposition.RetryScheduled);
+        deliveryClient.CallCount.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Dispatch_MissingOAuthSecret_IsTerminalSecretResolutionFailure()
     {
         var queue = new FakeEventDeliveryQueue
@@ -519,6 +562,7 @@ public sealed class AuthenticatedDispatchTests
         public DeliveryFinalizationResult FinalizationResult { get; set; } = Applied(EventDeliveryDisposition.Succeeded);
         public List<DeliveryAttemptCompletion> Completions { get; } = [];
         public List<DeliveryFinalizationResult> Finalizations { get; } = [];
+        public bool HonorFinalizationCancellation { get; init; }
         private int claimIndex;
 
         public Task<EventDeliveryClaimResult?> ClaimNextWithRecoveryAsync(CancellationToken cancellationToken = default) =>
@@ -530,6 +574,8 @@ public sealed class AuthenticatedDispatchTests
         public Task<DeliveryFinalizationResult> FinalizeAsync(DeliveryAttemptCompletion completion, CancellationToken cancellationToken = default)
         {
             Completions.Add(completion);
+            if (HonorFinalizationCancellation)
+                cancellationToken.ThrowIfCancellationRequested();
             Finalizations.Add(FinalizationResult);
             return Task.FromResult(FinalizationResult);
         }
@@ -569,6 +615,32 @@ public sealed class AuthenticatedDispatchTests
                 "OAuth token endpoint returned a transient failure.",
                 400,
                 retryAfter: TimeSpan.FromSeconds(20));
+    }
+
+    private sealed class DeadlineOAuthHandler : IDestinationAuthenticator
+    {
+        public string Name => "oauth2_client_credentials";
+        public IReadOnlyList<string> RequiredConfigFields => [];
+        public IReadOnlyList<string> RequiredSecretFields => ["client_secret"];
+        public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config) => ["Authorization"];
+
+        public async Task ApplyAsync(
+            IDictionary<string, string> headers,
+            JsonElement config,
+            IReadOnlyDictionary<string, string> secretRefs,
+            IReadOnlyDictionary<string, string> secrets,
+            Guid tenantId,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw new DestinationAuthenticationException("OAuth token request timed out.", isTimeout: true);
+            }
+        }
     }
 
     private sealed class CapturingDeliveryClient(DeliveryResult result) : IDeliveryClient
