@@ -17,6 +17,53 @@ public sealed class WorkerLoopOptionsTests
         fanout.IdlePollInterval.ShouldBe(TimeSpan.FromSeconds(2));
         delivery.BatchSize.ShouldBe(25);
         delivery.IdlePollInterval.ShouldBe(TimeSpan.FromSeconds(2));
+        HistoryRetentionOptions.FromConfiguration(configuration).ShouldBeNull();
+    }
+
+    [Fact]
+    public void HistoryRetention_UsesOnlyTheOperatorPeriod()
+    {
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [HistoryRetentionOptions.ConfigurationKey] = "7.00:00:00"
+        });
+
+        HistoryRetentionOptions.FromConfiguration(configuration).ShouldBe(
+            new HistoryRetentionOptions(TimeSpan.FromDays(7)));
+        HistoryRetentionOptions.BatchSize.ShouldBe(500);
+        HistoryRetentionOptions.SweepInterval.ShouldBe(TimeSpan.FromHours(1));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("soon")]
+    public void HistoryRetention_RejectsMalformedPeriod(string value)
+    {
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [HistoryRetentionOptions.ConfigurationKey] = value
+        });
+
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
+            HistoryRetentionOptions.FromConfiguration(configuration));
+
+        exception.Message.ShouldContain(HistoryRetentionOptions.ConfigurationKey, Case.Sensitive);
+    }
+
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("6.23:59:59")]
+    public void HistoryRetention_RejectsPeriodBelowSevenDays(string value)
+    {
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [HistoryRetentionOptions.ConfigurationKey] = value
+        });
+
+        InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
+            HistoryRetentionOptions.FromConfiguration(configuration));
+
+        exception.Message.ShouldContain("at least seven days", Case.Sensitive);
     }
 
     [Fact]

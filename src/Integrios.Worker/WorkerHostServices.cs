@@ -24,6 +24,11 @@ internal static class WorkerHostServices
         services.AddSingleton<IWorkerLoopDelay, WorkerLoopDelay>();
         services.AddHostedService<OutboxFanoutWorker>();
         services.AddHostedService<EventDeliveryWorker>();
+        if (HistoryRetentionOptions.FromConfiguration(configuration) is { } retentionOptions)
+        {
+            services.AddSingleton(retentionOptions);
+            services.AddHostedService<CompletedHistoryCleanupWorker>();
+        }
 
         return services;
     }

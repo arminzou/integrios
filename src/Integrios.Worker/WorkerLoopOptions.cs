@@ -56,6 +56,27 @@ internal sealed record DeliveryLoopOptions(int BatchSize, TimeSpan IdlePollInter
     }
 }
 
+internal sealed record HistoryRetentionOptions(TimeSpan Period)
+{
+    internal const string ConfigurationKey = "Integrios:Worker:HistoryRetention:Period";
+    internal const int BatchSize = 500;
+    internal static readonly TimeSpan SweepInterval = TimeSpan.FromHours(1);
+    internal static readonly TimeSpan MinimumPeriod = TimeSpan.FromDays(7);
+
+    internal static HistoryRetentionOptions? FromConfiguration(IConfiguration configuration)
+    {
+        string? configured = configuration[ConfigurationKey];
+        if (configured is null)
+            return null;
+        if (!TimeSpan.TryParse(configured, out TimeSpan period))
+            throw new InvalidOperationException($"{ConfigurationKey} must be a TimeSpan value.");
+        if (period < MinimumPeriod)
+            throw new InvalidOperationException($"{ConfigurationKey} must be at least seven days.");
+
+        return new(period);
+    }
+}
+
 internal static class WorkerLoopOptionsReader
 {
     internal static int ReadPositiveInt(IConfiguration configuration, string key, int fallback)
