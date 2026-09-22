@@ -22,6 +22,11 @@ internal sealed class OutboxEntryConfiguration : IEntityTypeConfiguration<Outbox
         // Event history and Event detail both read the accepted Event's traceparent by event_id.
         entity.HasIndex(e => e.EventId, "idx_outbox_event_id");
 
+        // Retention starts from old processed work so each cleanup batch does not scan active or
+        // recently-routed Events before checking the aggregate's terminal state.
+        entity.HasIndex(e => new { e.ProcessedAt, e.EventId }, "idx_outbox_processed")
+            .HasFilter("(processed_at IS NOT NULL)");
+
         entity.Property(e => e.Id)
             .HasDefaultValueSql("gen_random_uuid()")
             .HasColumnName("id");

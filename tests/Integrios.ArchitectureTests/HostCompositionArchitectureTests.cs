@@ -54,6 +54,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ISourceVerifier)] = [Host.Admin, Host.Ingestion],
         [typeof(ISourceVerifierRegistry)] = [Host.Admin, Host.Ingestion],
         [typeof(IBrokerSourceReader)] = [Host.Ingestion],
+        [typeof(ICompletedHistoryCleanup)] = [Host.Worker],
         [typeof(IOutboxFanout)] = [Host.Worker],
         [typeof(IDestinationAuthenticationSecretResolver)] = [Host.Worker],
         [typeof(ISourceVerificationSecretResolver)] = [Host.Ingestion],
@@ -348,6 +349,7 @@ public sealed class HostCompositionArchitectureTests
         using IServiceScope scope = provider.CreateScope();
 
         AssertResolves<ISecretValidationReader>(scope.ServiceProvider);
+        AssertResolves<ICompletedHistoryCleanup>(provider);
         AssertResolves<IOutboxFanout>(provider);
         AssertResolves<IEventDeliveryQueue>(scope.ServiceProvider);
         AssertResolves<IDeliveryClient>(scope.ServiceProvider);

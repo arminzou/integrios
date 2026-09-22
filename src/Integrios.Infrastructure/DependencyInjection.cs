@@ -162,9 +162,15 @@ public static class DependencyInjection
 
         services.AddScoped<ISecretValidationReader, SecretValidationReader>();
         if (databaseProvider == DatabaseProvider.SqlServer)
+        {
             services.AddSingleton<IOutboxFanout, SqlServerOutboxFanout>();
+            services.AddSingleton<ICompletedHistoryCleanup, SqlServerCompletedHistoryCleanup>();
+        }
         else
+        {
             services.AddSingleton<IOutboxFanout, PostgresOutboxFanout>();
+            services.AddSingleton<ICompletedHistoryCleanup, PostgresCompletedHistoryCleanup>();
+        }
         services.AddSingleton<IEventDeliveryQueue, EventDeliveryQueue>();
         services.AddDestinationAuthenticationServices();
         services.AddTransformEvaluationServices();

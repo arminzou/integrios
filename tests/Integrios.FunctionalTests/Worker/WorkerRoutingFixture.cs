@@ -60,6 +60,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     public FakeDeliveryClient DeliveryClient { get; } = new();
     public MutableSecretResolver SecretResolver { get; } = new();
     private string ConnectionString => database.ConnectionString;
+    internal string DatabaseProvider => database.Provider;
+    internal ICompletedHistoryCleanup CompletedHistoryCleanup { get; private set; } = null!;
     internal EventDeliveryQueue DeliveryQueue { get; private set; } = null!;
     internal BacklogSnapshotReader BacklogSnapshotReader { get; private set; } = null!;
 
@@ -74,6 +76,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         var connectionFactory = infrastructureProvider.GetRequiredService<IDbConnectionFactory>();
         BacklogSnapshotReader = new BacklogSnapshotReader(connectionFactory);
         var outboxFanout = infrastructureProvider.GetRequiredService<IOutboxFanout>();
+        CompletedHistoryCleanup = infrastructureProvider.GetRequiredService<ICompletedHistoryCleanup>();
         DeliveryQueue = (EventDeliveryQueue)infrastructureProvider.GetRequiredService<IEventDeliveryQueue>();
         dbContext = new IntegriosDbContext(database.CreateOptions());
         deadLetterReplay = new DeadLetterReplay(connectionFactory);

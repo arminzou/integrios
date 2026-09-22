@@ -1033,6 +1033,9 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasNullSortOrder(b.HasIndex(new[] { "DeliverAfter", "CreatedAt" }, "idx_outbox_pending"), new[] { NullSortOrder.NullsFirst, NullSortOrder.NullsLast });
 
+                    b.HasIndex(new[] { "ProcessedAt", "EventId" }, "idx_outbox_processed")
+                        .HasFilter("(processed_at IS NOT NULL)");
+
                     b.ToTable("outbox", (string)null);
                 });
 
