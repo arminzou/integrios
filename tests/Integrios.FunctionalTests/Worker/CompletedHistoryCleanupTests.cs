@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Dapper;
 using Integrios.Application.Delivery;
+using Integrios.Application.Ingestion;
 using Integrios.Infrastructure.Delivery;
 
 namespace Integrios.FunctionalTests.Worker;
@@ -76,6 +77,7 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
         (await EventExistsAsync(pending)).ShouldBeTrue();
         (await EventExistsAsync(inFlight)).ShouldBeTrue();
         (await EventExistsAsync(unprocessedOutbox)).ShouldBeTrue();
+        (await CanAcquireRetentionLockAsync()).ShouldBeTrue();
     }
 
     [Fact]
@@ -96,6 +98,7 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
         (await ScalarAsync<int>("SELECT COUNT(*) FROM outbox WHERE event_id=@EventId", new { EventId = eventId })).ShouldBe(1);
         (await ScalarAsync<int>("SELECT COUNT(*) FROM event_deliveries WHERE event_id=@EventId", new { EventId = eventId })).ShouldBe(1);
         (await ScalarAsync<int>("SELECT COUNT(*) FROM delivery_attempts WHERE event_delivery_id=@DeliveryId", new { DeliveryId = deliveryId })).ShouldBe(1);
+        (await CanAcquireRetentionLockAsync()).ShouldBeTrue();
     }
 
     [Fact]
@@ -118,7 +121,65 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
     }
 
     [Fact]
-    public async Task Sweep_EndsDeduplicationWithEventAndPreservesControlPlaneTombstones()
+    public async Task Sweep_ContinuesAfterPostLockRecheckRemovesAFullBatch()
+    {
+        Guid changed = await fixture.InsertEventAndOutboxAsync("payment.multi");
+        Guid later = await fixture.InsertEventAndOutboxAsync("payment.multi");
+        await fixture.RunFanoutBatchAsync();
+        await SetOutboxProcessedAtAsync(changed, old.AddMinutes(-2));
+        await SetOutboxProcessedAtAsync(later, old.AddMinutes(-1));
+        Guid[] changedDeliveries = await DeliveryIdsAsync(changed);
+        Guid[] laterDeliveries = await DeliveryIdsAsync(later);
+        foreach (Guid deliveryId in changedDeliveries.Concat(laterDeliveries))
+            await SetDeliveryTerminalAsync(deliveryId, "succeeded", old);
+
+        await using DbConnection control = fixture.CreateConnection();
+        await control.OpenAsync();
+        await using DbTransaction transaction = await control.BeginTransactionAsync();
+        await LockDeliveryAsync(control, transaction, changedDeliveries[0]);
+
+        Task<CompletedHistoryCleanupResult> sweeping = fixture.CompletedHistoryCleanup.SweepAsync(
+            RetentionPeriod, 1, CancellationToken.None);
+        await WaitUntilEventLockedAsync(changed);
+        await control.ExecuteAsync(
+            "UPDATE event_deliveries SET status='pending', processed_at=NULL, failed_at=NULL WHERE id=@DeliveryId",
+            new { DeliveryId = changedDeliveries[0] },
+            transaction);
+        await transaction.CommitAsync();
+
+        CompletedHistoryCleanupResult result = await sweeping;
+
+        result.DeletedEventCount.ShouldBe(1);
+        result.BatchCount.ShouldBe(2);
+        (await EventExistsAsync(changed)).ShouldBeTrue();
+        (await EventExistsAsync(later)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Sweep_EndsDeduplicationWithEvent()
+    {
+        const string idempotencyKey = "retention-idempotency";
+        EventAcceptance first = await fixture.AcceptEventAsync(idempotencyKey);
+        EventAcceptance duplicate = await fixture.AcceptEventAsync(idempotencyKey);
+        duplicate.AlreadyAccepted.ShouldBeTrue();
+        duplicate.EventId.ShouldBe(first.EventId);
+
+        await fixture.RunFanoutBatchAsync();
+        await SetOutboxProcessedAtAsync(first.EventId, old);
+        foreach (Guid deliveryId in await DeliveryIdsAsync(first.EventId))
+            await SetDeliveryTerminalAsync(deliveryId, "succeeded", old);
+
+        CompletedHistoryCleanupResult result = await fixture.CompletedHistoryCleanup.SweepAsync(
+            RetentionPeriod, 10, CancellationToken.None);
+        EventAcceptance acceptedAgain = await fixture.AcceptEventAsync(idempotencyKey);
+
+        result.DeletedEventCount.ShouldBe(1);
+        acceptedAgain.AlreadyAccepted.ShouldBeFalse();
+        acceptedAgain.EventId.ShouldNotBe(first.EventId);
+    }
+
+    [Fact]
+    public async Task Sweep_PreservesControlPlaneTombstones()
     {
         Guid eventId = await fixture.InsertEventAndOutboxAsync("payment.multi");
         await fixture.RunFanoutBatchAsync();
@@ -127,10 +188,6 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
         foreach (Guid deliveryId in deliveryIds)
             await SetDeliveryTerminalAsync(deliveryId, "succeeded", old);
 
-        const string sourceIdentity = "retention-source-event";
-        await ExecuteAsync(
-            "UPDATE events SET source_event_id=@SourceIdentity WHERE id=@EventId",
-            new { SourceIdentity = sourceIdentity, EventId = eventId });
         Guid sourceId = await ScalarAsync<Guid>("SELECT source_id FROM events WHERE id=@EventId", new { EventId = eventId });
         Guid topicId = await ScalarAsync<Guid>("SELECT topic_id FROM events WHERE id=@EventId", new { EventId = eventId });
         Guid[] subscriptionIds = (await QueryAsync<Guid>(
@@ -143,17 +200,10 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
         await ExecuteAsync($"UPDATE subscriptions SET deleted_at=@Now WHERE {Ids("id")}", new { Now = DateTime.UtcNow, Ids = subscriptionIds });
         await ExecuteAsync($"UPDATE destinations SET deleted_at=@Now WHERE {Ids("id")}", new { Now = DateTime.UtcNow, Ids = destinationIds });
 
-        (await ScalarAsync<int>(
-            "SELECT COUNT(*) FROM events WHERE source_id=@SourceId AND source_event_id=@SourceIdentity",
-            new { SourceId = sourceId, SourceIdentity = sourceIdentity })).ShouldBe(1);
-
         CompletedHistoryCleanupResult result = await fixture.CompletedHistoryCleanup.SweepAsync(
             RetentionPeriod, 10, CancellationToken.None);
 
         result.DeletedEventCount.ShouldBe(1);
-        (await ScalarAsync<int>(
-            "SELECT COUNT(*) FROM events WHERE source_id=@SourceId AND source_event_id=@SourceIdentity",
-            new { SourceId = sourceId, SourceIdentity = sourceIdentity })).ShouldBe(0);
         (await ScalarAsync<int>("SELECT COUNT(*) FROM sources WHERE id=@Id AND deleted_at IS NOT NULL", new { Id = sourceId })).ShouldBe(1);
         (await ScalarAsync<int>("SELECT COUNT(*) FROM topics WHERE id=@Id AND deleted_at IS NOT NULL", new { Id = topicId })).ShouldBe(1);
         (await ScalarAsync<int>($"SELECT COUNT(*) FROM subscriptions WHERE {Ids("id")} AND deleted_at IS NOT NULL", new { Ids = subscriptionIds })).ShouldBe(subscriptionIds.Length);
@@ -257,6 +307,61 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
         : connection.ExecuteAsync(
             "DECLARE @r int; EXEC @r=sp_releaseapplock @Resource=@Resource, @LockOwner='Session';",
             new { Resource = SqlServerCompletedHistoryCleanup.LockResource });
+
+    private async Task<bool> CanAcquireRetentionLockAsync()
+    {
+        await using DbConnection connection = fixture.CreateConnection();
+        await connection.OpenAsync();
+        if (fixture.DatabaseProvider == "postgres")
+        {
+            bool acquired = await connection.ExecuteScalarAsync<bool>(
+                "SELECT pg_try_advisory_lock(@Key)", new { Key = PostgresCompletedHistoryCleanup.LockKey });
+            if (acquired)
+                await ReleaseRetentionLockAsync(connection);
+            return acquired;
+        }
+
+        int result = await connection.ExecuteScalarAsync<int>(
+            "DECLARE @r int; EXEC @r=sp_getapplock @Resource=@Resource, @LockMode='Exclusive', @LockOwner='Session', @LockTimeout=0; SELECT @r;",
+            new { Resource = SqlServerCompletedHistoryCleanup.LockResource });
+        if (result >= 0)
+            await ReleaseRetentionLockAsync(connection);
+        return result >= 0;
+    }
+
+    private Task LockDeliveryAsync(DbConnection connection, DbTransaction transaction, Guid deliveryId) =>
+        connection.ExecuteAsync(
+            fixture.DatabaseProvider == "postgres"
+                ? "SELECT id FROM event_deliveries WHERE id=@DeliveryId FOR UPDATE"
+                : "SELECT id FROM event_deliveries WITH (UPDLOCK, HOLDLOCK, INDEX(0)) WHERE id=@DeliveryId",
+            new { DeliveryId = deliveryId },
+            transaction);
+
+    private async Task WaitUntilEventLockedAsync(Guid eventId)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            await using DbConnection probe = fixture.CreateConnection();
+            await probe.OpenAsync();
+            try
+            {
+                await probe.ExecuteAsync(
+                    fixture.DatabaseProvider == "postgres"
+                        ? "SELECT id FROM events WHERE id=@EventId FOR UPDATE NOWAIT"
+                        : "SET LOCK_TIMEOUT 0; SELECT id FROM events WITH (UPDLOCK, HOLDLOCK) WHERE id=@EventId",
+                    new { EventId = eventId });
+            }
+            catch (DbException)
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        throw new TimeoutException("The retention sweep did not lock the selected Event.");
+    }
 
     private async Task<int> ExecuteAsync(string sql, object? parameters = null)
     {

@@ -20,9 +20,11 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
 
         await using DbConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         int lockResult = await ExecuteLockAsync(connection, acquire: true, cancellationToken);
-        if (lockResult < 0)
+        if (lockResult == -1)
             return new(false, null, 0, 0);
+        ThrowIfLockFailed(lockResult, cancellationToken);
 
+        Exception? sweepFailure = null;
         try
         {
             DateTime databaseNow = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
@@ -35,26 +37,38 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
             int batchCount = 0;
             while (!cancellationToken.IsCancellationRequested)
             {
-                int deleted = await DeleteBatchAsync(connection, cutoff, batchSize, cancellationToken);
-                if (deleted == 0)
+                BatchCleanupResult batch = await DeleteBatchAsync(
+                    connection, cutoff, batchSize, cancellationToken);
+                if (batch.CandidateCount == 0)
                     break;
 
-                deletedEventCount += deleted;
+                deletedEventCount += batch.DeletedCount;
                 batchCount++;
-                if (deleted < batchSize)
+                if (batch.CandidateCount < batchSize)
                     break;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
             return new(true, cutoff, deletedEventCount, batchCount);
         }
+        catch (Exception ex)
+        {
+            sweepFailure = ex;
+            throw;
+        }
         finally
         {
-            await ExecuteLockAsync(connection, acquire: false, CancellationToken.None);
+            await CompletedHistoryLease.ReleaseAsync(async () =>
+            {
+                int releaseResult = await ExecuteLockAsync(connection, acquire: false, CancellationToken.None);
+                if (releaseResult < 0)
+                    throw new InvalidOperationException(
+                        $"The completed-history retention lease release failed with code {releaseResult}.");
+            }, () => ClearPool(connection), sweepFailure);
         }
     }
 
-    private static async Task<int> DeleteBatchAsync(
+    private static async Task<BatchCleanupResult> DeleteBatchAsync(
         DbConnection connection,
         DateTimeOffset cutoff,
         int batchSize,
@@ -69,16 +83,18 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
         if (eventIds.Length == 0)
         {
             await transaction.CommitAsync(cancellationToken);
-            return 0;
+            return new(0, 0);
         }
 
+        int candidateCount = eventIds.Length;
+
         await connection.QueryAsync<Guid>(new CommandDefinition(
-            "SELECT id FROM outbox WITH (UPDLOCK, HOLDLOCK) WHERE event_id IN @EventIds",
+            "SELECT id FROM outbox WITH (UPDLOCK, HOLDLOCK, INDEX(0)) WHERE event_id IN @EventIds",
             new { EventIds = eventIds },
             transaction,
             cancellationToken: cancellationToken));
         await connection.QueryAsync<Guid>(new CommandDefinition(
-            "SELECT id FROM event_deliveries WITH (UPDLOCK, HOLDLOCK) WHERE event_id IN @EventIds",
+            "SELECT id FROM event_deliveries WITH (UPDLOCK, HOLDLOCK, INDEX(0)) WHERE event_id IN @EventIds",
             new { EventIds = eventIds },
             transaction,
             cancellationToken: cancellationToken));
@@ -91,7 +107,7 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
         if (eventIds.Length == 0)
         {
             await transaction.CommitAsync(cancellationToken);
-            return 0;
+            return new(candidateCount, 0);
         }
 
         await connection.ExecuteAsync(new CommandDefinition(
@@ -107,8 +123,34 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
             transaction,
             cancellationToken: cancellationToken));
         await transaction.CommitAsync(cancellationToken);
-        return eventIds.Length;
+        return new(candidateCount, eventIds.Length);
     }
+
+    internal static void ThrowIfLockFailed(int result, CancellationToken cancellationToken)
+    {
+        if (result >= 0 || result == -1)
+            return;
+        if (result == -2 && cancellationToken.IsCancellationRequested)
+            throw new OperationCanceledException(cancellationToken);
+
+        throw new InvalidOperationException(
+            $"The completed-history retention lease acquisition failed with code {result}.");
+    }
+
+    private static void ClearPool(DbConnection connection)
+    {
+        try
+        {
+            Microsoft.Data.SqlClient.SqlConnection.ClearPool(
+                (Microsoft.Data.SqlClient.SqlConnection)connection);
+        }
+        catch
+        {
+            // Preserve the sweep or release failure; disposing the connection is the final fallback.
+        }
+    }
+
+    private sealed record BatchCleanupResult(int CandidateCount, int DeletedCount);
 
     private static Task<int> ExecuteLockAsync(
         DbConnection connection,

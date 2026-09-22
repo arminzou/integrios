@@ -22,6 +22,7 @@ using Integrios.Infrastructure.Transforms;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
@@ -62,6 +63,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private string ConnectionString => database.ConnectionString;
     internal string DatabaseProvider => database.Provider;
     internal ICompletedHistoryCleanup CompletedHistoryCleanup { get; private set; } = null!;
+    internal IEventAcceptance EventAcceptance { get; private set; } = null!;
     internal EventDeliveryQueue DeliveryQueue { get; private set; } = null!;
     internal BacklogSnapshotReader BacklogSnapshotReader { get; private set; } = null!;
 
@@ -77,6 +79,10 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         BacklogSnapshotReader = new BacklogSnapshotReader(connectionFactory);
         var outboxFanout = infrastructureProvider.GetRequiredService<IOutboxFanout>();
         CompletedHistoryCleanup = infrastructureProvider.GetRequiredService<ICompletedHistoryCleanup>();
+        var acceptanceFactory = new PooledDbContextFactory<IntegriosDbContext>(database.CreateOptions());
+        EventAcceptance = database.Provider == "sqlserver"
+            ? new SqlServerEventAcceptance(acceptanceFactory)
+            : new PostgresEventAcceptance(acceptanceFactory);
         DeliveryQueue = (EventDeliveryQueue)infrastructureProvider.GetRequiredService<IEventDeliveryQueue>();
         dbContext = new IntegriosDbContext(database.CreateOptions());
         deadLetterReplay = new DeadLetterReplay(connectionFactory);
@@ -390,6 +396,20 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     }
 
     internal DbConnection CreateConnection() => database.CreateConnection();
+
+    internal Task<EventAcceptance> AcceptEventAsync(string idempotencyKey) =>
+        EventAcceptance.AcceptAsync(
+            new EventSubmission
+            {
+                TenantId = TenantId,
+                TopicId = TopicId,
+                SourceId = SourceId,
+                EventType = "payment.multi",
+                Payload = JsonSerializer.Deserialize<JsonElement>("""{"test":true}"""),
+                IdempotencyKey = idempotencyKey
+            },
+            traceparent: null,
+            CancellationToken.None);
     internal async Task<bool> LockOutboxRowAsync(
         DbConnection connection,
         DbTransaction transaction,
