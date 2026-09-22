@@ -9,9 +9,6 @@ namespace Integrios.Infrastructure.Delivery;
 
 internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClient
 {
-    // "Bounded" per the design: never wait longer than this even if a provider asks for more.
-    private static readonly TimeSpan MaxRetryAfter = TimeSpan.FromMinutes(15);
-
     // The ceiling on what is kept for diagnosis. Applied at capture rather than at read because the
     // value is a foreign server's output: unbounded by contract, and an error page from a
     // misconfigured proxy can be megabytes.
@@ -60,7 +57,9 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
         {
             using var response = await httpClient.SendAsync(request, cancellationToken);
             int statusCode = (int)response.StatusCode;
-            TimeSpan? retryAfter = ParseRetryAfter(response, statusCode);
+            TimeSpan? retryAfter = statusCode is 429 or 503
+                ? RetryAfterParser.Parse(response, DateTimeOffset.UtcNow)
+                : null;
 
             // Read once, capped by whichever bound is larger, and serve both readers from those
             // bytes: the response stream can only be consumed once, and capture must not change
@@ -124,19 +123,6 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
                 DeliveryConfigurationException.SafeMessage(ex, "Outbound HTTP request failed."),
                 FailurePhase: DeliveryFailurePhase.Http);
         }
-    }
-
-    private static TimeSpan? ParseRetryAfter(HttpResponseMessage response, int statusCode)
-    {
-        if (statusCode is not (429 or 503))
-            return null;
-
-        RetryConditionHeaderValue? header = response.Headers.RetryAfter;
-        TimeSpan? delta = header?.Delta ?? (header?.Date is { } date ? date - DateTimeOffset.UtcNow : null);
-        if (delta is null || delta <= TimeSpan.Zero)
-            return null;
-
-        return delta.Value > MaxRetryAfter ? MaxRetryAfter : delta.Value;
     }
 
     // Reads at most `cap` bytes and reports whether the body continued past them, so a destination

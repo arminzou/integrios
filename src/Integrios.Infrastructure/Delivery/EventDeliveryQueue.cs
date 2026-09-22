@@ -420,6 +420,7 @@ internal sealed class EventDeliveryQueue(
         null => null,
         DeliveryFailurePhase.Transform => "transform",
         DeliveryFailurePhase.SecretResolution => "secret_resolution",
+        DeliveryFailurePhase.Authentication => "authentication",
         DeliveryFailurePhase.RequestConstruction => "request_construction",
         DeliveryFailurePhase.Http => "http",
         _ => throw new ArgumentOutOfRangeException(nameof(phase), phase, null)

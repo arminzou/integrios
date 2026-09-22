@@ -4,6 +4,7 @@ public enum DeliveryFailurePhase
 {
     Transform = 0,
     SecretResolution = 1,
-    RequestConstruction = 2,
-    Http = 3
+    Authentication = 2,
+    RequestConstruction = 3,
+    Http = 4
 }

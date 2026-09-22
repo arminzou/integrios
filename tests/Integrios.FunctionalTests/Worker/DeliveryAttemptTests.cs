@@ -1,3 +1,6 @@
+using Integrios.Application.Delivery;
+using Integrios.Domain.Enums;
+
 namespace Integrios.FunctionalTests.Worker;
 
 public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
@@ -97,6 +100,31 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
         attempt.ResponseStatusCode.ShouldBe(500);
         attempt.StartedAt.ShouldNotBe(default);
         attempt.CompletedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task AuthenticationFailurePhase_IsAcceptedByTheProviderConstraint()
+    {
+        Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
+        var claimed = (ClaimedEventDelivery)(await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(
+            CancellationToken.None))!;
+
+        await fixture.DeliveryQueue.FinalizeAsync(
+            new DeliveryAttemptCompletion(
+                deliveryId,
+                claimed.WorkItem.AttemptId,
+                false,
+                DeliveryFailurePhase.Authentication,
+                null,
+                400,
+                null,
+                "OAuth token request was rejected.",
+                IsTerminalFailure: true),
+            CancellationToken.None);
+
+        var attempt = (await fixture.GetDeliveryAttemptsAsync(deliveryId)).ShouldHaveSingleItem();
+        attempt.Status.ShouldBe("failed");
+        attempt.FailurePhase.ShouldBe("authentication");
     }
 
     [Fact]

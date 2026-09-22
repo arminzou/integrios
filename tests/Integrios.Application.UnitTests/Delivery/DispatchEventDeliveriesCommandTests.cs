@@ -395,6 +395,7 @@ public sealed class DispatchEventDeliveriesCommandTests
     [Theory]
     [InlineData(DeliveryFailurePhase.Transform, "transform")]
     [InlineData(DeliveryFailurePhase.SecretResolution, "secret_resolution")]
+    [InlineData(DeliveryFailurePhase.Authentication, "authentication")]
     [InlineData(DeliveryFailurePhase.RequestConstruction, "request_construction")]
     [InlineData(DeliveryFailurePhase.Http, "http")]
     public async Task DispatchEventDeliveries_RecordsEveryPersistedFailurePhaseOnAttemptSpan(

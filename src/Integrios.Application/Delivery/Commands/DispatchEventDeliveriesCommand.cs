@@ -100,7 +100,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         }
         catch (DeliveryPreparationException ex)
         {
-            var snapshotFailure = new DeliveryResult(false, 0, ex.Message, FailurePhase: ex.FailurePhase);
+            var snapshotFailure = ex.ToResult();
             await FinalizeAsync(row, null, snapshotFailure, Stopwatch.GetElapsedTime(startedTimestamp), cancellationToken, attemptActivity);
             return;
         }
@@ -136,7 +136,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         }
         catch (DeliveryPreparationException ex)
         {
-            result = new DeliveryResult(false, 0, ex.Message, FailurePhase: ex.FailurePhase);
+            result = ex.ToResult();
         }
         catch (Exception ex)
         {
@@ -274,6 +274,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         IDestinationAuthenticator? handler = null;
         DestinationAuthentication? destinationAuth = snapshot.DestinationAuthentication;
         Dictionary<string, string> secrets = [];
+        Dictionary<string, string> secretRefs = [];
         string? resolvingReference = null;
 
         if (destinationAuth is not null)
@@ -297,6 +298,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
                     string reference = property.Value.GetString()
                         ?? throw new InvalidOperationException($"Secret reference '{property.Name}' is invalid.");
                     resolvingReference = reference;
+                    secretRefs[property.Name] = reference;
                     secrets[property.Name] = await secretResolver.ResolveAsync(
                         new TenantSecretScope(row.TenantId, row.TenantSlug),
                         reference,
@@ -314,12 +316,35 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
                     : "invalid";
                 throw new DeliveryPreparationException(
                     DeliveryFailurePhase.SecretResolution,
-                    $"Secret reference '{safeReference}' could not be resolved using provider '{secretResolver.ProviderName}'.");
+                    $"Secret reference '{safeReference}' could not be resolved using provider '{secretResolver.ProviderName}'.",
+                    isTerminal: destinationAuth.Scheme.Equals("oauth2_client_credentials", StringComparison.OrdinalIgnoreCase));
             }
         }
 
         if (handler is not null && destinationAuth is not null)
-            handler.Apply(headers, destinationAuth.Config, secrets);
+        {
+            try
+            {
+                await handler.ApplyAsync(
+                    headers,
+                    destinationAuth.Config,
+                    secretRefs,
+                    secrets,
+                    row.TenantId,
+                    cancellationToken);
+            }
+            catch (DestinationAuthenticationException ex)
+            {
+                throw new DeliveryPreparationException(
+                    DeliveryFailurePhase.Authentication,
+                    ex.Message,
+                    ex,
+                    ex.StatusCode,
+                    ex.IsTerminal,
+                    ex.IsTimeout,
+                    ex.RetryAfter);
+            }
+        }
 
         // Assigned rather than added: Integrios delivery identity is authoritative even over a
         // legacy snapshot written before authoring rejected these names.
@@ -353,6 +378,8 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
     {
         if (failurePhase == DeliveryFailurePhase.SecretResolution)
             metrics.RecordDeliverySecretResolutionFailure(connectorKey);
+        else if (failurePhase == DeliveryFailurePhase.Authentication)
+            metrics.RecordDeliveryAuthenticationFailure(connectorKey);
         else if (failurePhase == DeliveryFailurePhase.RequestConstruction)
             metrics.RecordDeliveryRequestConstructionFailure(connectorKey);
     }
@@ -361,6 +388,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
     {
         DeliveryFailurePhase.Transform => "transform",
         DeliveryFailurePhase.SecretResolution => "secret_resolution",
+        DeliveryFailurePhase.Authentication => "authentication",
         DeliveryFailurePhase.RequestConstruction => "request_construction",
         DeliveryFailurePhase.Http => "http",
         _ => "none"
@@ -417,9 +445,21 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
     private sealed class DeliveryPreparationException(
         DeliveryFailurePhase failurePhase,
         string message,
-        Exception? innerException = null)
+        Exception? innerException = null,
+        int statusCode = 0,
+        bool isTerminal = false,
+        bool isTimeout = false,
+        TimeSpan? retryAfter = null)
         : Exception(message, innerException)
     {
         public DeliveryFailurePhase FailurePhase { get; } = failurePhase;
+        public DeliveryResult ToResult() => new(
+            false,
+            statusCode,
+            Message,
+            isTimeout,
+            FailurePhase,
+            retryAfter,
+            isTerminal);
     }
 }

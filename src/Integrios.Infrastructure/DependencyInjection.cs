@@ -107,7 +107,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordAuthenticationStore>(provider =>
             provider.GetRequiredService<PasswordCredentialStore>());
         services.AddSingleton<IDeadLetterReplay, DeadLetterReplay>();
-        services.AddDestinationAuthenticationServices();
+        services.AddDestinationAuthenticationServices(enableOAuthExecution: false);
         services.AddSourceVerificationServices();
         services.AddTransformEvaluationServices();
 
@@ -172,7 +172,7 @@ public static class DependencyInjection
             services.AddSingleton<ICompletedHistoryCleanup, PostgresCompletedHistoryCleanup>();
         }
         services.AddSingleton<IEventDeliveryQueue, EventDeliveryQueue>();
-        services.AddDestinationAuthenticationServices();
+        services.AddDestinationAuthenticationServices(enableOAuthExecution: true, deliveryOptions);
         services.AddTransformEvaluationServices();
         services.TryAddSingleton<IDestinationAuthenticationSecretResolver, UnavailableDestinationAuthenticationSecretResolver>();
         services.AddHttpClient<IDeliveryClient, HttpDeliveryClient>(client =>
@@ -220,10 +220,26 @@ public static class DependencyInjection
         return services;
     }
 
-    private static IServiceCollection AddDestinationAuthenticationServices(this IServiceCollection services)
+    private static IServiceCollection AddDestinationAuthenticationServices(
+        this IServiceCollection services,
+        bool enableOAuthExecution,
+        DeliveryExecutionOptions? deliveryOptions = null)
     {
         services.AddSingleton<IDestinationAuthenticator, ApiKeyHeaderAuthenticator>();
         services.AddSingleton<IDestinationAuthenticator, BearerTokenAuthenticator>();
+        if (enableOAuthExecution)
+        {
+            services.AddHttpClient("oauth2-token", client => client.Timeout = deliveryOptions!.HttpTimeout)
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+            services.AddSingleton<IDestinationAuthenticator>(provider => new OAuth2ClientCredentialsAuthenticator(
+                provider.GetRequiredService<IHttpClientFactory>().CreateClient("oauth2-token"),
+                TimeProvider.System));
+        }
+        else
+        {
+            services.AddSingleton<IDestinationAuthenticator>(
+                new OAuth2ClientCredentialsAuthenticator(null, TimeProvider.System));
+        }
         services.AddSingleton<IDestinationAuthenticatorRegistry, DestinationAuthenticatorRegistry>();
 
         return services;

@@ -20,7 +20,7 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
             table.HasCheckConstraint(
                 "ck_delivery_attempts_failure_phase",
                 "((status = 'failed' AND failure_phase IS NOT NULL "
-                + "AND failure_phase IN ('transform', 'secret_resolution', 'request_construction', 'http')) "
+                + "AND failure_phase IN ('transform', 'secret_resolution', 'authentication', 'request_construction', 'http')) "
                 + "OR (status <> 'failed' AND failure_phase IS NULL))");
             table.HasCheckConstraint(
                 "ck_delivery_attempts_completion",

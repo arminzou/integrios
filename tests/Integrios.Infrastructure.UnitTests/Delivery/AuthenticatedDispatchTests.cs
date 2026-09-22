@@ -378,6 +378,90 @@ public sealed class AuthenticatedDispatchTests
         deliveryClient.CallCount.ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Dispatch_OAuthFailure_FinalizesAuthenticationWithoutSendingDestinationRequest()
+    {
+        const string secret = "oauth-secret-canary";
+        const string connectorKey = "oauth_connector";
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        var loggerProvider = new CapturingLoggerProvider();
+        var queue = new FakeEventDeliveryQueue
+        {
+            FinalizationResult = Applied(EventDeliveryDisposition.RetryScheduled),
+            ClaimedItems =
+            [
+                MakeWorkItem(connectorKey: connectorKey, auth: new DestinationAuthentication
+                {
+                    Scheme = "oauth2_client_credentials",
+                    Config = EmptyObject,
+                    SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"client_secret":"oauth_secret"}""")
+                })
+            ]
+        };
+        var deliveryClient = new CapturingDeliveryClient(new DeliveryResult(true, 200));
+
+        IMediator mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<IEventDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(deliveryClient);
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(
+                new DestinationAuthenticatorRegistry([new FailingOAuthHandler()]));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(
+                CreateSecretResolver(new Dictionary<string, string> { ["oauth_secret"] = secret }));
+            services.AddSingleton<ILoggerProvider>(loggerProvider);
+        });
+
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
+
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.Authentication);
+        completion.ResponseStatusCode.ShouldBe(400);
+        completion.IsTerminalFailure.ShouldBeFalse();
+        completion.RetryAfter.ShouldBe(TimeSpan.FromSeconds(20));
+        completion.ErrorMessage.ShouldBe("OAuth token endpoint returned a transient failure.");
+        deliveryClient.CallCount.ShouldBe(0);
+        loggerProvider.AnyMessageContains(secret).ShouldBeFalse();
+        metrics.ForInstrument("integrios_delivery_authentication_failures")
+            .Where(measurement => Equals(measurement.Tag("connector_key"), connectorKey))
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Dispatch_MissingOAuthSecret_IsTerminalSecretResolutionFailure()
+    {
+        var queue = new FakeEventDeliveryQueue
+        {
+            FinalizationResult = Applied(EventDeliveryDisposition.DeadLettered),
+            ClaimedItems =
+            [
+                MakeWorkItem(auth: new DestinationAuthentication
+                {
+                    Scheme = "oauth2_client_credentials",
+                    Config = EmptyObject,
+                    SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"client_secret":"missing"}""")
+                })
+            ]
+        };
+
+        IMediator mediator = BuildMediator(services =>
+        {
+            services.AddSingleton<IEventDeliveryQueue>(queue);
+            services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
+            services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
+            services.AddSingleton<IDestinationAuthenticatorRegistry>(
+                new DestinationAuthenticatorRegistry([new FailingOAuthHandler()]));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(
+                CreateSecretResolver(new Dictionary<string, string>()));
+        });
+
+        await mediator.Send(new DispatchEventDeliveriesCommand(25));
+
+        DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
+        completion.FailurePhase.ShouldBe(DeliveryFailurePhase.SecretResolution);
+        completion.IsTerminalFailure.ShouldBeTrue();
+    }
+
     private static IMediator BuildMediator(Action<IServiceCollection> registerDoubles)
     {
         var services = new ServiceCollection();
@@ -465,6 +549,26 @@ public sealed class AuthenticatedDispatchTests
 
         public void Apply(IDictionary<string, string> headers, JsonElement config, IReadOnlyDictionary<string, string> secrets) =>
             throw new FormatException($"The format of value '{secrets["token"]}' is invalid.");
+    }
+
+    private sealed class FailingOAuthHandler : IDestinationAuthenticator
+    {
+        public string Name => "oauth2_client_credentials";
+        public IReadOnlyList<string> RequiredConfigFields => [];
+        public IReadOnlyList<string> RequiredSecretFields => ["client_secret"];
+        public IReadOnlyList<string> GetOwnedHeaderNames(JsonElement config) => ["Authorization"];
+
+        public Task ApplyAsync(
+            IDictionary<string, string> headers,
+            JsonElement config,
+            IReadOnlyDictionary<string, string> secretRefs,
+            IReadOnlyDictionary<string, string> secrets,
+            Guid tenantId,
+            CancellationToken cancellationToken) =>
+            throw new DestinationAuthenticationException(
+                "OAuth token endpoint returned a transient failure.",
+                400,
+                retryAfter: TimeSpan.FromSeconds(20));
     }
 
     private sealed class CapturingDeliveryClient(DeliveryResult result) : IDeliveryClient

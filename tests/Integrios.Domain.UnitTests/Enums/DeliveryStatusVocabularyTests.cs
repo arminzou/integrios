@@ -23,6 +23,7 @@ public sealed class DeliveryStatusVocabularyTests
             [
                 DeliveryFailurePhase.Transform,
                 DeliveryFailurePhase.SecretResolution,
+                DeliveryFailurePhase.Authentication,
                 DeliveryFailurePhase.RequestConstruction,
                 DeliveryFailurePhase.Http
             ]);

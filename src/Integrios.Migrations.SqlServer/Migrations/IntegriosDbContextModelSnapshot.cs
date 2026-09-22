@@ -164,7 +164,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         {
                             t.HasCheckConstraint("ck_delivery_attempts_completion", "((status = 'in_progress' AND completed_at IS NULL) OR (status <> 'in_progress' AND completed_at IS NOT NULL))");
 
-                            t.HasCheckConstraint("ck_delivery_attempts_failure_phase", "((status = 'failed' AND failure_phase IS NOT NULL AND failure_phase IN ('transform', 'secret_resolution', 'request_construction', 'http')) OR (status <> 'failed' AND failure_phase IS NULL))");
+                            t.HasCheckConstraint("ck_delivery_attempts_failure_phase", "((status = 'failed' AND failure_phase IS NOT NULL AND failure_phase IN ('transform', 'secret_resolution', 'authentication', 'request_construction', 'http')) OR (status <> 'failed' AND failure_phase IS NULL))");
 
                             t.HasCheckConstraint("ck_delivery_attempts_number_positive", "attempt_number > 0");
 

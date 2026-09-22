@@ -12,6 +12,9 @@ public static class DeliveryFailureClassifier
 {
     public static bool IsTerminal(DeliveryResult result)
     {
+        if (result.IsTerminalFailure)
+            return true;
+
         if (result.Succeeded || result.FailurePhase != DeliveryFailurePhase.Http || result.IsTimeout)
             return false;
 

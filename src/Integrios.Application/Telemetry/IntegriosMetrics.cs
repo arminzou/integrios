@@ -18,6 +18,7 @@ public sealed class IntegriosMetrics
     private readonly Counter<long> _deliveriesDeadLettered;
     private readonly Counter<long> _ingestSecretResolutionFailures;
     private readonly Counter<long> _deliverySecretResolutionFailures;
+    private readonly Counter<long> _deliveryAuthenticationFailures;
     private readonly Counter<long> _deliveryRequestConstructionFailures;
     private readonly Counter<long> _deliveryStaleFinalizations;
     private readonly Histogram<double> _deliveryAttemptDuration;
@@ -35,6 +36,7 @@ public sealed class IntegriosMetrics
         _deliveriesDeadLettered = meter.CreateCounter<long>("integrios_deliveries_dead_lettered");
         _ingestSecretResolutionFailures = meter.CreateCounter<long>("integrios_ingest_secret_resolution_failures");
         _deliverySecretResolutionFailures = meter.CreateCounter<long>("integrios_delivery_secret_resolution_failures");
+        _deliveryAuthenticationFailures = meter.CreateCounter<long>("integrios_delivery_authentication_failures");
         _deliveryRequestConstructionFailures = meter.CreateCounter<long>("integrios_delivery_request_construction_failures");
         _deliveryStaleFinalizations = meter.CreateCounter<long>("integrios_delivery_stale_finalizations");
         _deliveryAttemptDuration = meter.CreateHistogram<double>("integrios_delivery_attempt_duration_seconds");
@@ -72,6 +74,9 @@ public sealed class IntegriosMetrics
 
     public void RecordDeliverySecretResolutionFailure(string connectorKey) =>
         _deliverySecretResolutionFailures.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
+
+    public void RecordDeliveryAuthenticationFailure(string connectorKey) =>
+        _deliveryAuthenticationFailures.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));
 
     public void RecordDeliveryRequestConstructionFailure(string connectorKey) =>
         _deliveryRequestConstructionFailures.Add(1, new KeyValuePair<string, object?>("connector_key", connectorKey));

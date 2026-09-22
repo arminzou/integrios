@@ -12,6 +12,18 @@ public sealed class DeliveryFailureClassifierTests
         DeliveryFailureClassifier.IsTerminal(new DeliveryResult(true, 200)).ShouldBeFalse();
     }
 
+    [Fact]
+    public void IsTerminal_ExplicitTerminalAuthenticationFailure_IsTrue()
+    {
+        var result = new DeliveryResult(
+            false,
+            400,
+            FailurePhase: DeliveryFailurePhase.Authentication,
+            IsTerminalFailure: true);
+
+        DeliveryFailureClassifier.IsTerminal(result).ShouldBeTrue();
+    }
+
     [Theory]
     [InlineData(408)]
     [InlineData(429)]
