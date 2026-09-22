@@ -33,8 +33,10 @@ internal sealed class PostgresCompletedHistoryCleanup(IDbConnectionFactory conne
             DateTime databaseNow = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
                 "SELECT now()",
                 cancellationToken: cancellationToken));
-            DateTimeOffset cutoff = new(DateTime.SpecifyKind(databaseNow, DateTimeKind.Utc));
-            cutoff -= retentionPeriod;
+            DateTimeOffset now = new(DateTime.SpecifyKind(databaseNow, DateTimeKind.Utc));
+            DateTimeOffset cutoff = retentionPeriod.Ticks >= now.UtcTicks
+                ? DateTimeOffset.MinValue
+                : now - retentionPeriod;
 
             int deletedEventCount = 0;
             int batchCount = 0;

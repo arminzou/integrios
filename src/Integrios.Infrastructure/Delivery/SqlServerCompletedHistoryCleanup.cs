@@ -9,6 +9,7 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
     : ICompletedHistoryCleanup
 {
     internal const string LockResource = "integrios:completed-history-retention";
+    private static readonly DateTimeOffset MinimumCutoff = new(1753, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     public async Task<CompletedHistoryCleanupResult> SweepAsync(
         TimeSpan retentionPeriod,
@@ -30,8 +31,10 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
             DateTime databaseNow = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
                 "SELECT SYSUTCDATETIME()",
                 cancellationToken: cancellationToken));
-            DateTimeOffset cutoff = new(DateTime.SpecifyKind(databaseNow, DateTimeKind.Utc));
-            cutoff -= retentionPeriod;
+            DateTimeOffset now = new(DateTime.SpecifyKind(databaseNow, DateTimeKind.Utc));
+            DateTimeOffset cutoff = retentionPeriod.Ticks >= now.UtcTicks
+                ? MinimumCutoff
+                : now - retentionPeriod;
 
             int deletedEventCount = 0;
             int batchCount = 0;
@@ -88,13 +91,13 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
 
         int candidateCount = eventIds.Length;
 
-        await connection.QueryAsync<Guid>(new CommandDefinition(
-            "SELECT id FROM outbox WITH (UPDLOCK, HOLDLOCK, INDEX(0)) WHERE event_id IN @EventIds",
+        await connection.QueryAsync<BaseRowLock>(new CommandDefinition(
+            "SELECT id, attempt_count AS lock_value FROM outbox WITH (UPDLOCK, HOLDLOCK, INDEX(idx_outbox_event_id)) WHERE event_id IN @EventIds",
             new { EventIds = eventIds },
             transaction,
             cancellationToken: cancellationToken));
-        await connection.QueryAsync<Guid>(new CommandDefinition(
-            "SELECT id FROM event_deliveries WITH (UPDLOCK, HOLDLOCK, INDEX(0)) WHERE event_id IN @EventIds",
+        await connection.QueryAsync<BaseRowLock>(new CommandDefinition(
+            "SELECT id, lifetime_attempt_count AS lock_value FROM event_deliveries WITH (UPDLOCK, HOLDLOCK, INDEX(idx_event_deliveries_event_id)) WHERE event_id IN @EventIds",
             new { EventIds = eventIds },
             transaction,
             cancellationToken: cancellationToken));
@@ -152,6 +155,12 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
 
     private sealed record BatchCleanupResult(int CandidateCount, int DeletedCount);
 
+    private sealed record BaseRowLock
+    {
+        public Guid Id { get; init; }
+        public int LockValue { get; init; }
+    }
+
     private static Task<int> ExecuteLockAsync(
         DbConnection connection,
         bool acquire,
@@ -176,7 +185,7 @@ internal sealed class SqlServerCompletedHistoryCleanup(IDbConnectionFactory conn
         """
         SELECT TOP (@BatchSize) e.id
         FROM outbox retention_outbox
-        JOIN events e WITH (UPDLOCK, READPAST, ROWLOCK) ON e.id = retention_outbox.event_id
+        JOIN events e WITH (UPDLOCK, READPAST, READCOMMITTEDLOCK, ROWLOCK) ON e.id = retention_outbox.event_id
         WHERE
             retention_outbox.processed_at IS NOT NULL
             AND retention_outbox.processed_at < @Cutoff

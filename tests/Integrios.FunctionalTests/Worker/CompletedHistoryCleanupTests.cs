@@ -2,7 +2,11 @@ using System.Data.Common;
 using Dapper;
 using Integrios.Application.Delivery;
 using Integrios.Application.Ingestion;
+using Integrios.Infrastructure;
 using Integrios.Infrastructure.Delivery;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.FunctionalTests.Worker;
 
@@ -78,6 +82,68 @@ public sealed class CompletedHistoryCleanupTests(WorkerRoutingFixture fixture)
         (await EventExistsAsync(inFlight)).ShouldBeTrue();
         (await EventExistsAsync(unprocessedOutbox)).ShouldBeTrue();
         (await CanAcquireRetentionLockAsync()).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Sweep_MaximumRetentionPeriod_DoesNotUnderflowTheCutoff()
+    {
+        Guid eventId = await fixture.InsertOrphanEventAndOutboxAsync("payment.created");
+        await fixture.RunFanoutBatchAsync();
+        await SetRoutingCompletedAtAsync(eventId, old);
+
+        CompletedHistoryCleanupResult result = await fixture.CompletedHistoryCleanup.SweepAsync(
+            TimeSpan.MaxValue, 10, CancellationToken.None);
+
+        result.Cutoff.ShouldNotBeNull();
+        result.Cutoff.Value.Year.ShouldBeLessThanOrEqualTo(1753);
+        result.DeletedEventCount.ShouldBe(0);
+        (await EventExistsAsync(eventId)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SqlServerSweep_WorksWithReadCommittedSnapshotEnabled()
+    {
+        if (fixture.DatabaseProvider != "sqlserver")
+            return;
+
+        await using DbConnection configured = fixture.CreateConnection();
+        var builder = new SqlConnectionStringBuilder(configured.ConnectionString);
+        string databaseName = $"integrios_rcsi_{Guid.NewGuid():N}";
+        string quotedDatabase = new SqlCommandBuilder().QuoteIdentifier(databaseName);
+        await using var master = new SqlConnection(builder.ConnectionString);
+        await master.OpenAsync();
+        await master.ExecuteAsync($"CREATE DATABASE {quotedDatabase}");
+
+        try
+        {
+            await master.ExecuteAsync(
+                $"ALTER DATABASE {quotedDatabase} SET READ_COMMITTED_SNAPSHOT ON");
+            builder.InitialCatalog = databaseName;
+            IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Database:Provider"] = "sqlserver",
+                    ["ConnectionStrings:SqlServer"] = builder.ConnectionString
+                }).Build();
+            await using ServiceProvider provider = new ServiceCollection()
+                .AddWorkerInfrastructureServices(configuration)
+                .BuildServiceProvider();
+            await provider.MigrateDatabaseAsync();
+
+            CompletedHistoryCleanupResult result = await provider
+                .GetRequiredService<ICompletedHistoryCleanup>()
+                .SweepAsync(
+                RetentionPeriod, 10, CancellationToken.None);
+
+            result.Acquired.ShouldBeTrue();
+            result.DeletedEventCount.ShouldBe(0);
+        }
+        finally
+        {
+            SqlConnection.ClearAllPools();
+            await master.ExecuteAsync(
+                $"ALTER DATABASE {quotedDatabase} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE {quotedDatabase}");
+        }
     }
 
     [Fact]
