@@ -11,7 +11,7 @@ and reliable HTTP delivery with retries, dead-lettering, replay, and auditable d
 - Durable event intake behind a transactional-outbox acceptance boundary, so no accepted event is lost
 - TenantApiKey-authenticated generic intake with Tenant isolation
 - Topic/subscription routing with optional JSONata payload transforms
-- Authenticated HTTP JSON delivery using open, API-key-header, or bearer-token authentication
+- Authenticated HTTP JSON delivery using open, API-key-header, bearer-token, or OAuth 2.0 client-credentials authentication
 - Reliable async delivery with bounded retries, dead-lettering, and replay
 - Per-event status and delivery-attempt history
 - Pluggable, vendor-neutral observability (OpenTelemetry metrics, logs, traces); bring your own backend

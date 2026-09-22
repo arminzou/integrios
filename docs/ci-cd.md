@@ -59,6 +59,11 @@ digest set, and run migrations before starting them. The deployment reference in
 `deploy/compose.yml` enforces this by resolving all three images from a single
 `INTEGRIOS_VERSION`; keep that property if you adapt it.
 
+This coordinated rollout is required for Destination authentication capabilities such as
+`oauth2_client_credentials`: Admin must not author a scheme that the running Worker cannot execute.
+Before rolling back to a version without that scheme, drain active OAuth EventDeliveries or accept
+that their snapshotted authentication is unexecutable and will follow the normal dead-letter path.
+
 Successful release runs retain a downloadable evidence artifact for 90 days. It contains
 the workflow and commit identity, .NET and dependency versions, exact verification
 commands, test logs and TRX results, resolved external image digests, and the published

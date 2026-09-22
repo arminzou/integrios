@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using Integrios.Application.Delivery;
 using Integrios.Application.Secrets;
 using Integrios.Domain.ValueObjects;
@@ -22,6 +25,52 @@ public sealed class FakeDeliveryClient : IDeliveryClient
 }
 
 public sealed record DeliveryCall(string Method, string Url, string Payload, IReadOnlyDictionary<string, string> Headers);
+
+public sealed class FakeOAuthTokenEndpoint : HttpMessageHandler
+{
+    private readonly Queue<HttpResponseMessage> responses = [];
+
+    public List<TokenRequest> Calls { get; } = [];
+
+    public void EnqueueToken(string accessToken, int expiresIn = 3600) => responses.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+    {
+        Content = new StringContent(JsonSerializer.Serialize(new
+        {
+            access_token = accessToken,
+            token_type = "Bearer",
+            expires_in = expiresIn
+        }))
+    });
+
+    public void EnqueueFailure(HttpStatusCode statusCode, string body, TimeSpan? retryAfter = null)
+    {
+        var response = new HttpResponseMessage(statusCode) { Content = new StringContent(body) };
+        if (retryAfter.HasValue)
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(retryAfter.Value);
+        responses.Enqueue(response);
+    }
+
+    public void Reset()
+    {
+        Calls.Clear();
+        while (responses.TryDequeue(out HttpResponseMessage? response))
+            response.Dispose();
+    }
+
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        Calls.Add(new TokenRequest(
+            request.Headers.Authorization?.ToString(),
+            await request.Content!.ReadAsStringAsync(cancellationToken)));
+        return responses.TryDequeue(out HttpResponseMessage? response)
+            ? response
+            : throw new InvalidOperationException("No OAuth token response was configured for the test.");
+    }
+}
+
+public sealed record TokenRequest(string? Authorization, string Body);
 
 public sealed class MutableSecretResolver : IDestinationAuthenticationSecretResolver
 {

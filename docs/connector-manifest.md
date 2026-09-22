@@ -174,6 +174,12 @@ manifest declares which of the platform's schemes the Connector permits; it cann
 | `source_verification` | `hmac_sha256` | *(empty)* | `secret` |
 | `destination_authentication` | `api_key_header` | `header_name` | `api_key` |
 | `destination_authentication` | `bearer_token` | *(empty)* | `token` |
+| `destination_authentication` | `oauth2_client_credentials` | `token_endpoint`, `client_id`, `client_auth_method` | `client_secret` |
+
+For `oauth2_client_credentials`, `client_auth_method` is `client_secret_basic` or
+`client_secret_post`. A Destination may also store the platform-owned optional `scope` field even
+though the manifest lists only the scheme's required fields. The token endpoint must be an absolute
+HTTPS URL without user information or a fragment.
 
 ## Presentation
 

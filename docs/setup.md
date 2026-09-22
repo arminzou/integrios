@@ -220,6 +220,12 @@ Destinations store logical secret references, never resolved values. The Worker 
 reference immediately before each delivery attempt. This means retries and replay use the current
 value after rotation.
 
+The `oauth2_client_credentials` scheme stores `token_endpoint`, `client_id`, an explicit
+`client_secret_basic` or `client_secret_post` method, optional `scope`, and a `client_secret`
+reference. The Worker obtains and reuses bearer tokens in process memory until their early-refresh
+boundary. It never persists the client secret, access token, or token response; each Worker replica
+maintains its own cache and reacquires after restart.
+
 The default `file` backend reads one exact UTF-8 value from:
 
 ```text

@@ -119,6 +119,10 @@ there are no provider-specific destination execution paths or destination-action
 
 - a Destination owns the absolute base URI, authentication, Tenant-specific non-secret
   configuration, and secret references
+- destination authentication may use a static API key or bearer token, or OAuth 2.0 client
+  credentials with an HTTPS token endpoint, explicit Basic or form-body client authentication,
+  and an optional scope; the Worker resolves the client secret and keeps acquired access tokens
+  only in process memory
 - a Subscription owns a versioned method (`POST`, `PUT`, `PATCH`, or `DELETE`), a literal relative
   path, restricted static headers, and a transformed JSON body or explicit no-body
 - the relative path always appends to the Destination's base path with one normalized boundary
@@ -138,9 +142,9 @@ there are no provider-specific destination execution paths or destination-action
 - successful response bodies do not become persisted workflow state or new Events; a response body
   is only ever read (bounded) when the success rule requires it
 
-Dynamic headers, arbitrary methods, `GET`/`HEAD`/`CONNECT`/`TRACE`, form or multipart data, binary or
-streaming bodies, response-driven workflows, OAuth 2.0 client credentials, and non-HTTP protocols
-remain out of scope. Updating several external entities means creating several independent
+Dynamic headers, arbitrary methods, `GET`/`HEAD`/`CONNECT`/`TRACE`, form or multipart destination
+bodies, binary or streaming bodies, response-driven workflows, interactive OAuth grants, and
+non-HTTP protocols remain out of scope. Updating several external entities means creating several independent
 Subscriptions so each update retains its own retry, DLQ, and replay lifecycle.
 
 ## Core processing flow
