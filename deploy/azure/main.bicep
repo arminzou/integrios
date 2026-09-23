@@ -252,7 +252,7 @@ var workbookData = {
         query: string({
           version: 'PrometheusQueryProvider/1.0'
           customEndpoint: false
-          queryText: 'sum by (__name__) (increase(integrios_events_ingested_total[1h]) or on(__name__) increase(integrios_events_unrouted_total[1h]) or on(__name__) increase(integrios_fanout_rows_created_total[1h]) or on(__name__) increase(integrios_deliveries_succeeded_total[1h]) or on(__name__) increase(integrios_deliveries_failed_total[1h]) or on(__name__) increase(integrios_deliveries_dead_lettered_total[1h]))'
+          queryText: 'sum by (signal) (label_replace(increase(integrios_events_ingested_total[1h]), "signal", "events_ingested", "__name__", ".*") or label_replace(increase(integrios_events_unrouted_total[1h]), "signal", "events_unrouted", "__name__", ".*") or label_replace(increase(integrios_fanout_rows_created_total[1h]), "signal", "fanout_rows_created", "__name__", ".*") or label_replace(increase(integrios_deliveries_succeeded_total[1h]), "signal", "deliveries_succeeded", "__name__", ".*") or label_replace(increase(integrios_deliveries_failed_total[1h]), "signal", "deliveries_failed", "__name__", ".*") or label_replace(increase(integrios_deliveries_dead_lettered_total[1h]), "signal", "deliveries_dead_lettered", "__name__", ".*"))'
           type: 'query_range'
         })
         size: 0
@@ -292,7 +292,7 @@ var workbookData = {
         query: string({
           version: 'PrometheusQueryProvider/1.0'
           customEndpoint: false
-          queryText: 'sum by (__name__, connector_key) (increase(integrios_deliveries_failed_total[1h]) or on(__name__) increase(integrios_deliveries_dead_lettered_total[1h]))'
+          queryText: 'sum by (signal, connector_key) (label_replace(increase(integrios_deliveries_failed_total[1h]), "signal", "failed", "__name__", ".*") or label_replace(increase(integrios_deliveries_dead_lettered_total[1h]), "signal", "dead_lettered", "__name__", ".*"))'
           type: 'query_range'
         })
         size: 0
