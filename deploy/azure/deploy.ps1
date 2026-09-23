@@ -6,7 +6,8 @@ param(
     [securestring] $DatabaseAdministratorPassword,
     [securestring] $OperatorKeySecret,
     [securestring] $SourceSecret,
-    [securestring] $DestinationSecret
+    [securestring] $DestinationSecret,
+    [securestring] $AdminOidcClientSecret
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +39,9 @@ function Invoke-Deployment([int] $RuntimeReplicaCount) {
         $deploymentParameters.parameters.operatorKeySecret = @{ value = ConvertFrom-SecureValue $OperatorKeySecret }
         $deploymentParameters.parameters.sourceSecretValue = @{ value = ConvertFrom-SecureValue $SourceSecret }
         $deploymentParameters.parameters.destinationSecretValue = @{ value = ConvertFrom-SecureValue $DestinationSecret }
+        if ($adminOidcEnabled) {
+            $deploymentParameters.parameters.adminOidcClientSecret = @{ value = ConvertFrom-SecureValue $AdminOidcClientSecret }
+        }
         $deploymentParameters.parameters.runtimeReplicaCount = @{ value = $RuntimeReplicaCount }
         $json = $deploymentParameters | ConvertTo-Json -Depth 8
         $stream = [IO.FileStream]::new($deploymentParameterFile, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
@@ -131,7 +135,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($compiled.parametersJso
 }
 $parameters = ($compiled.parametersJson | ConvertFrom-Json).parameters
 
-foreach ($scriptOwnedName in @('databaseAdministratorPassword', 'operatorKeySecret', 'sourceSecretValue', 'destinationSecretValue', 'runtimeReplicaCount')) {
+foreach ($scriptOwnedName in @('databaseAdministratorPassword', 'operatorKeySecret', 'sourceSecretValue', 'destinationSecretValue', 'adminOidcClientSecret', 'runtimeReplicaCount')) {
     if ($null -ne $parameters.PSObject.Properties[$scriptOwnedName]) {
         throw "Remove '$scriptOwnedName' from the nonsecret Bicep parameter file; deploy.ps1 owns it."
     }
@@ -144,9 +148,10 @@ $allowedParameterNames = @(
     'adminAllowedCidrs', 'ingestionExternal', 'mappingTenantSlug', 'sourceReference',
     'destinationReference', 'mappingRevision'
 )
+$optionalParameterNames = @('adminOidcAuthority', 'adminOidcClientId', 'adminOidcDisplayName')
 $providedParameterNames = @($parameters.PSObject.Properties.Name)
 $missingParameterNames = @($allowedParameterNames | Where-Object { $_ -notin $providedParameterNames })
-$unexpectedParameterNames = @($providedParameterNames | Where-Object { $_ -notin $allowedParameterNames })
+$unexpectedParameterNames = @($providedParameterNames | Where-Object { $_ -notin ($allowedParameterNames + $optionalParameterNames) })
 if ($missingParameterNames.Count -gt 0) { throw "Missing nonsecret parameters: $($missingParameterNames -join ', ')." }
 if ($unexpectedParameterNames.Count -gt 0) { throw "Unexpected or script-owned parameters: $($unexpectedParameterNames -join ', ')." }
 
@@ -163,6 +168,9 @@ $tenantSlug = [string](Get-ParameterValue $parameters 'mappingTenantSlug')
 $sourceReference = [string](Get-ParameterValue $parameters 'sourceReference')
 $destinationReference = [string](Get-ParameterValue $parameters 'destinationReference')
 $mappingRevision = [string](Get-ParameterValue $parameters 'mappingRevision')
+$adminOidcAuthority = [string]$parameters.PSObject.Properties['adminOidcAuthority']?.Value.value
+$adminOidcClientId = [string]$parameters.PSObject.Properties['adminOidcClientId']?.Value.value
+$adminOidcEnabled = -not [string]::IsNullOrWhiteSpace($adminOidcAuthority)
 
 if ($namePrefix -cnotmatch '^[a-z0-9]{3,16}$') { throw 'namePrefix must be 3-16 lowercase letters or digits.' }
 if ($parameterLocation -ne $Location) { throw "Parameter location '$parameterLocation' must match -Location '$Location'." }
@@ -192,6 +200,15 @@ if ($destinationReference -cnotmatch '^[a-z0-9][a-z0-9_]{0,62}$') { throw 'desti
 if ($mappingRevision -cnotmatch '^[a-z0-9-]+$' -or "destination-$mappingRevision".Length -gt 20) {
     throw 'mappingRevision must keep generated Container Apps secret names at 20 characters or fewer.'
 }
+if ($adminOidcEnabled -eq [string]::IsNullOrWhiteSpace($adminOidcClientId)) {
+    throw 'Supply both adminOidcAuthority and adminOidcClientId to enable dashboard sign-in, or leave both empty.'
+}
+if ($adminOidcEnabled) {
+    $authorityUri = $null
+    if (-not [Uri]::TryCreate($adminOidcAuthority, [UriKind]::Absolute, [ref] $authorityUri) -or $authorityUri.Scheme -ne 'https') {
+        throw 'adminOidcAuthority must be an absolute https URI.'
+    }
+}
 foreach ($secretName in @("source-$tenantSlug-$($sourceReference.Replace('_', '-'))", "destination-$tenantSlug-$($destinationReference.Replace('_', '-'))")) {
     if ($secretName.Length -gt 127) { throw "Generated Key Vault secret name '$secretName' exceeds 127 characters." }
 }
@@ -213,6 +230,10 @@ if ($null -eq $DatabaseAdministratorPassword) { $DatabaseAdministratorPassword =
 if ($null -eq $OperatorKeySecret) { $OperatorKeySecret = Read-Host 'Initial OperatorKey secret' -AsSecureString }
 if ($null -eq $SourceSecret) { $SourceSecret = Read-Host 'Source secret value' -AsSecureString }
 if ($null -eq $DestinationSecret) { $DestinationSecret = Read-Host 'Destination secret value' -AsSecureString }
+if ($adminOidcEnabled) {
+    if ($null -eq $AdminOidcClientSecret) { $AdminOidcClientSecret = Read-Host 'Dashboard OpenID Connect client secret' -AsSecureString }
+    if ($AdminOidcClientSecret.Length -eq 0) { throw 'Dashboard sign-in requires the OpenID Connect client secret.' }
+}
 
 Invoke-AzureCli group create --name $ResourceGroup --location $Location --only-show-errors --output none
 
@@ -239,3 +260,5 @@ foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
 
 Write-Host "Ready: https://$($outputs.adminFqdn.value)"
 Write-Host "Ingestion: https://$($outputs.ingestionFqdn.value)"
+Write-Host "OpenID Connect redirect URI: $($outputs.adminOidcRedirectUris.value.callback)"
+Write-Host "OpenID Connect sign-out redirect URI: $($outputs.adminOidcRedirectUris.value.signedOut)"

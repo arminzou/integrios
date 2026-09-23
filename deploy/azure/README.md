@@ -15,7 +15,7 @@ provisions Service Bus topology.
 | Area | Supplied reference |
 |---|---|
 | Runtime | One Admin, Ingestion, and Worker replica; no autoscaling or zone redundancy |
-| Admin | External HTTPS restricted to explicit Operator CIDRs; durable Data Protection keys shared through storage-encrypted Azure Files |
+| Admin | External HTTPS restricted to explicit Operator CIDRs; optional Microsoft Entra ID dashboard sign-in; durable Data Protection keys shared through storage-encrypted Azure Files |
 | Ingestion | External HTTPS by default; may be internal independently of Service Bus access |
 | Network | Public Container Apps environment, Key Vault, telemetry endpoints, and database firewall rules; no VNet or private endpoints. The Data Protection share is reachable from public networks with its storage account key, because Container Apps mounts it with that key and only a VNet could restrict it; treat the key as a credential that can forge Operator sessions |
 | Azure SQL | General Purpose serverless, one vCore maximum, 0.5 minimum capacity, 60-minute auto-pause, local backup redundancy |
@@ -96,9 +96,10 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 ```
 
 Automation may pass `SecureString` values through `-DatabaseAdministratorPassword`,
-`-OperatorKeySecret`, `-SourceSecret`, and `-DestinationSecret`. The command rejects secret values in
-the `.bicepparam` file. For each ARM deployment it creates a randomly named temporary parameter file
-containing the four plaintext values because Azure CLI requires materialized deployment parameters,
+`-OperatorKeySecret`, `-SourceSecret`, `-DestinationSecret`, and, when dashboard sign-in is
+enabled, `-AdminOidcClientSecret`. The command rejects secret values in the `.bicepparam` file. For
+each ARM deployment it creates a randomly named temporary parameter file containing those plaintext
+values because Azure CLI requires materialized deployment parameters,
 opens it without file sharing, and deletes it immediately in `finally`. A forced process or machine
 termination can prevent that cleanup; inspect the current user's temporary directory before retrying
 after an interruption.
@@ -118,6 +119,35 @@ recover by rolling forward or restoring the database rather than starting an old
 Rotate a source or destination value by supplying the replacement secure value and changing
 `mappingRevision`; the Key Vault version reference then creates fresh Container Apps revisions.
 The logical `SourceSecrets` and `DestinationSecrets` references do not change.
+
+## Dashboard sign-in with Microsoft Entra ID
+
+The reference deploys Admin without dashboard sign-in until you configure it; the dashboard loads
+and OperatorKey automation works either way. Admin's address exists only after the first
+deployment, so enabling sign-in takes two runs:
+
+1. Deploy with `adminOidcAuthority` and `adminOidcClientId` empty. The command prints the OpenID
+   Connect redirect and sign-out redirect URIs; the `adminOidcRedirectUris` deployment output holds
+   the same values.
+2. In the Microsoft Entra admin center, register a single-tenant application. Add both printed URIs
+   as **Web** redirect URIs, then create a client secret and note when it expires.
+3. Under **Enterprise applications**, open the application, set **Assignment required** to **Yes**,
+   and assign only the people who should operate Integrios. Admin creates an Operator for every
+   identity the provider lets through, so this assignment is the admission boundary: without it,
+   anyone in the tenant can sign in with full Operator authority.
+4. Set `adminOidcAuthority` to `https://login.microsoftonline.com/<tenant-id>/v2.0` and
+   `adminOidcClientId` to the application (client) ID, then run `deploy.ps1` again. It prompts for
+   the client secret and stores it in Key Vault, where only Admin's identity can read it.
+
+Sign-in is a browser redirect, so the Operator's own address must be inside `adminAllowedCidrs`;
+Entra never calls Admin directly. Container Apps ingress terminates TLS, so the reference sets
+`ASPNETCORE_FORWARDEDHEADERS_ENABLED` on Admin to keep the callback on `https`.
+
+To rotate the client secret, create a new one in Entra and run `deploy.ps1` with it before the old
+one expires; the new Key Vault version starts a fresh Admin revision. Removing an assignment
+blocks the next sign-in, but a session already issued stays valid until sign-out or its fixed
+eight-hour lifetime ends. [The dashboard guide](../../docs/operator-dashboard.md) covers enabling
+password sign-in as a fallback, which this reference does not configure.
 
 ## Author and canary the deployment
 

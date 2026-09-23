@@ -46,6 +46,14 @@ param sourceReference string
 param destinationReference string
 param mappingRevision string
 
+@description('OpenID Connect issuer for Operator dashboard sign-in, for example https://login.microsoftonline.com/<tenant-id>/v2.0. Leave empty to deploy without dashboard sign-in.')
+param adminOidcAuthority string = ''
+param adminOidcClientId string = ''
+param adminOidcDisplayName string = ''
+
+@secure()
+param adminOidcClientSecret string = ''
+
 @allowed([0, 1])
 param runtimeReplicaCount int = 0
 
@@ -130,6 +138,8 @@ var registryServer = '${registryName}.azurecr.io'
 var useSqlServer = databaseProvider == 'sqlserver'
 var serviceBusEnabled = !empty(serviceBusNamespaceName) && !empty(serviceBusResourceGroupName)
 var adminDataProtectionPath = '/var/lib/integrios/data-protection'
+var adminOidcEnabled = !empty(adminOidcAuthority)
+var adminOidcSecretName = 'oidc-client-secret'
 var databaseConnection = useSqlServer
   ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;User ID=${databaseAdministratorLogin};Password=${databaseAdministratorPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
   : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${databaseAdministratorLogin};Password=${databaseAdministratorPassword};SSL Mode=Require'
@@ -517,6 +527,12 @@ resource operatorKeySecretResource 'Microsoft.KeyVault/vaults/secrets@2023-07-01
   properties: { value: operatorKeySecret }
 }
 
+resource adminOidcClientSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (adminOidcEnabled) {
+  parent: vault
+  name: 'admin-oidc-client-secret'
+  properties: { value: adminOidcClientSecret }
+}
+
 resource sourceSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: vault
   name: 'source-${mappingTenantSlug}-${replace(sourceReference, '_', '-')}'
@@ -568,6 +584,11 @@ module acrPull 'acr-pull.bicep' = {
 resource adminDatabaseSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: databaseConnectionSecret
   name: guid(databaseConnectionSecret.id, adminIdentity.id, keyVaultSecretsUserRoleId)
+  properties: { principalId: adminIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
+}
+resource adminOidcSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (adminOidcEnabled) {
+  scope: adminOidcClientSecretResource
+  name: guid(adminOidcClientSecretResource.id, adminIdentity.id, keyVaultSecretsUserRoleId)
   properties: { principalId: adminIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
 }
 resource ingestionDatabaseSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -683,7 +704,11 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
         }]
       }
       registries: [{ server: registryServer, identity: adminIdentity.id }]
-      secrets: [{ name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: adminIdentity.id }]
+      secrets: concat(
+        [{ name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: adminIdentity.id }],
+        adminOidcEnabled
+          ? [{ name: adminOidcSecretName, keyVaultUrl: adminOidcClientSecretResource!.properties.secretUriWithVersion, identity: adminIdentity.id }]
+          : [])
     }
     template: {
       containers: [{
@@ -692,7 +717,15 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
         env: concat(databaseEnvironment, [
           { name: 'Integrios__PublicIngestionBaseUri', value: 'https://${ingestion.properties.configuration.ingress.fqdn}' }
           { name: 'Integrios__Admin__DataProtection__KeyRingPath', value: adminDataProtectionPath }
-        ], telemetryEnvironment)
+          // Ingress terminates TLS, so Admin must read the original https scheme to build its
+          // OpenID Connect callback. Ingress is the only path to the container.
+          { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
+        ], adminOidcEnabled ? [
+          { name: 'Integrios__Admin__Oidc__Authority', value: adminOidcAuthority }
+          { name: 'Integrios__Admin__Oidc__ClientId', value: adminOidcClientId }
+          { name: 'Integrios__Admin__Oidc__DisplayName', value: adminOidcDisplayName }
+          { name: 'Integrios__Admin__Oidc__ClientSecret', secretRef: adminOidcSecretName }
+        ] : [], telemetryEnvironment)
         volumeMounts: [{ volumeName: 'admin-data-protection', mountPath: adminDataProtectionPath }]
         resources: { cpu: json('0.5'), memory: '1Gi' }
         probes: [
@@ -704,7 +737,7 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
-  dependsOn: [acrPull, adminDatabaseSecret]
+  dependsOn: [acrPull, adminDatabaseSecret, adminOidcSecret]
 }
 
 resource worker 'Microsoft.App/containerApps@2025-07-01' = {
@@ -851,6 +884,10 @@ module telemetryPublisher 'telemetry-publisher.bicep' = {
 }
 
 output adminFqdn string = admin.properties.configuration.ingress.fqdn
+output adminOidcRedirectUris object = {
+  callback: 'https://${admin.properties.configuration.ingress.fqdn}/auth/callback'
+  signedOut: 'https://${admin.properties.configuration.ingress.fqdn}/auth/signed-out'
+}
 output ingestionFqdn string = ingestion.properties.configuration.ingress.fqdn
 output appNames object = appNames
 output jobNames object = jobNames

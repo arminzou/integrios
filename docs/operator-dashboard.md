@@ -7,7 +7,9 @@ first. With neither method enabled, Admin is machine-only: the dashboard still l
 but nobody can sign in until you configure a method and restart Admin.
 
 Serve Admin over HTTPS outside local development. Its browser session cookie is secure-only, so a
-browser will not retain a production session over plain HTTP.
+browser will not retain a production session over plain HTTP. When a proxy terminates TLS in front
+of Admin, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` on Admin so it builds `https` OpenID
+Connect callbacks, and make sure that proxy is the only path to Admin.
 
 Admin requires `Integrios:Admin:DataProtection:KeyRingPath` to name a writable directory shared by
 every Admin replica. Its session cookies, antiforgery tokens, and pagination cursors remain valid
