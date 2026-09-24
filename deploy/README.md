@@ -13,7 +13,7 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 cp .env.example .env
 # edit .env: set POSTGRES_PASSWORD, INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET, and INTEGRIOS_PUBLIC_INGESTION_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
-mkdir -p secrets
+mkdir -p secrets/ingestion secrets/worker
 docker compose up -d
 ```
 
@@ -64,47 +64,71 @@ volume access and use storage-level encryption.
 OperatorKey automation is unaffected. It continues to authenticate the same way whether or not the
 dashboard is enabled.
 
-## Directional Connection secrets
+## Tenant secrets
 
-The Worker defaults to the `file` backend. For every destination-authentication secret reference,
-it reads the current value from the host directory configured by
-`INTEGRIOS_DESTINATION_SECRETS_DIR`, mounted read-only at:
+Ingestion and Worker resolve Tenant secrets from standard .NET configuration: Ingestion reads
+`SourceSecrets:<tenant-slug>:<secret-reference>` and Worker reads
+`DestinationSecrets:<tenant-slug>:<secret-reference>`. Admin resolves neither, and neither runtime
+process reads the other's namespace.
 
-```text
-/run/secrets/integrios/destination/<tenant-slug>/<reference>
+This deployment feeds them through key-per-file configuration. Each process mounts its own flat
+directory read-only at `/run/secrets/integrios`, where each file name is a configuration key with
+`__` as the separator:
+
+| Host directory | Variable | Mounted into | File name |
+|---|---|---|---|
+| `./secrets/ingestion` | `INTEGRIOS_INGESTION_SECRETS_DIR` | Ingestion | `SourceSecrets__<tenant-slug>__<secret-reference>` |
+| `./secrets/worker` | `INTEGRIOS_WORKER_SECRETS_DIR` | Worker | `DestinationSecrets__<tenant-slug>__<secret-reference>` |
+
+```bash
+printf %s 'secret-value' > secrets/worker/DestinationSecrets__acme__erp-api-key
+docker compose restart worker
 ```
 
-Create one file per logical reference. File contents are exact UTF-8 and are not trimmed; values
-must be non-empty, contain no NUL, and be at most 64 KiB. The header-based auth schemes reject
-values containing CR or LF, so an accidental trailing newline (for example from `echo` without
-`-n`) fails delivery. Symlinks are supported. Each delivery
-attempt performs a fresh read, so rotate a file or symlink atomically and subsequent retries and
-replays see the new value.
+Values load once at startup: **restart the owning service after adding or rotating a value**.
+Every file in a mounted directory becomes a configuration key (except names starting with
+`ignore.`), so never mount one process's directory into the other. Key-per-file values override
+environment variables and command-line values for the same key. Environment variables such as
+`DestinationSecrets__acme__erp-api-key`, or Azure Key Vault through `Integrios__KeyVault__Uri`,
+supply the same keys without files. See [Tenant secrets](../docs/setup.md#tenant-secrets) for
+reference grammar, value rules, and mappings for Kubernetes Secrets, CSI drivers, and Docker
+secrets.
 
-Set `INTEGRIOS_DESTINATION_SECRETS_PROVIDER=configuration` to use the Worker's .NET configuration
-instead. That backend reads `DestinationSecrets:<tenant-slug>:<reference>`. In your owned Compose file, supply those
-keys through the .NET provider you choose—for example an added configuration package/source or
-environment keys such as `DestinationSecrets__acme__erp_api_key`. The Worker consults exactly one selected
-backend and never falls back between configuration and files.
-
-Check the configured references before traffic or after rotation:
+Check the configured references before traffic depends on them and after every change:
 
 ```bash
 docker compose run --rm worker secrets validate --all
 docker compose run --rm worker secrets validate --tenant acme
-docker compose run --rm worker secrets validate --tenant acme --connection <connection-id>
+docker compose run --rm worker secrets validate --tenant acme --destination <destination-id>
+docker compose run --rm ingestion secrets validate --all
 ```
 
-The command exits `0` when all selected references resolve, `1` when any do not, and `2` for an
+Each command exits `0` when all selected references resolve, `1` when any do not, and `2` for an
 invalid selection or startup configuration. It prints no resolved values.
 
-Ingestion source-verification values use the separate `INTEGRIOS_SOURCE_SECRETS_DIR` mount at
-`/run/secrets/integrios/source`. With the configuration backend, Ingestion reads
-`SourceSecrets:<tenant-slug>:<reference>`. Admin resolves no secret values, Ingestion has
-no access to destination-authentication values, and Worker has no access to source-verification
-values.
-
 ## Upgrading
+
+### Tenant secrets move to standard .NET configuration
+
+This release is a clean break with no compatibility path for the previous secret layout:
+
+- The `file`/`configuration` provider switch is gone, along with
+  `INTEGRIOS_SOURCE_SECRETS_PROVIDER`, `INTEGRIOS_DESTINATION_SECRETS_PROVIDER`, and every
+  `*Secrets:Provider` and `*Secrets:FileRoot` setting.
+- The per-Tenant file layout (`<tenant-slug>/<reference>` below a per-direction root) is no longer
+  read. Move each value to a key-per-file name in the owning process's directory, as in
+  [Tenant secrets](#tenant-secrets). `INTEGRIOS_SOURCE_SECRETS_DIR` and
+  `INTEGRIOS_DESTINATION_SECRETS_DIR` become `INTEGRIOS_INGESTION_SECRETS_DIR` and
+  `INTEGRIOS_WORKER_SECRETS_DIR`.
+- Secret references are now kebab-case: lowercase letters, digits, and single hyphens.
+  Underscored references are rejected when a Source or Destination is created or updated, and an
+  existing one no longer resolves. Change each reference in Admin (for example `erp_api_key` to
+  `erp-api-key`) and rename its value to match.
+- Values load at startup, so a rotated value takes effect when the process restarts, not on the
+  next delivery attempt.
+
+After upgrading, run `secrets validate --all` for both Worker and Ingestion (see above) and fix
+every unresolved reference before sending traffic.
 
 The first EF Core-managed release does not upgrade a database created by the former migration
 system. Export anything you need, then provision an empty database before starting that release.

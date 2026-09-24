@@ -129,8 +129,8 @@ there are no provider-specific destination execution paths or destination-action
   slash; it can never replace the Destination's scheme, host, port, or base path
 - fanout snapshots the HTTP request shape, relevant non-secret Destination configuration, secret
   references, and the Subscription's effective HTTP success rule together, so a later edit
-  cannot change an in-flight delivery's request or success criteria; the Worker resolves current
-  secret values for each attempt
+  cannot change an in-flight delivery's request or success criteria; the Worker resolves secret
+  values for each attempt from the configuration it loaded at startup
 - a Subscription may declare an optional HTTP success rule. Without one, any `2xx` response
   succeeds; a `json_boolean` evaluator additionally asserts that a configured top-level response
   field equals an expected boolean, so a provider that returns `2xx` for an operation it actually
@@ -180,9 +180,11 @@ idempotency key combines the Source id with a hash of `source_event_id`, and rep
 with the same identity resolve to the same accepted Event.
 
 Provider credentials and webhook secrets are not Integrios TenantApiKeys. Sources and Destinations
-store logical secret references; the Operator materializes their values through the deployment's
-secret provider. Ingestion resolves Source references for intake and Worker resolves Destination
-references immediately before an attempt without persisting values.
+store logical secret references; the Operator supplies their values through standard .NET
+configuration sources such as key-per-file, environment variables, or Azure Key Vault, which each
+process loads at startup. Ingestion resolves `SourceSecrets:<tenant-slug>:<secret-reference>` for
+intake and Worker resolves `DestinationSecrets:<tenant-slug>:<secret-reference>` before an attempt,
+without persisting values.
 
 ### Independent, at-least-once delivery
 

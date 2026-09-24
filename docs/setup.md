@@ -209,16 +209,85 @@ a working local value. Create a `.env` at the repo root only to override.
 | `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |
 | `INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME` | `OpenID Connect` | Admin | Provider label shown on the sign-in gate |
 | `INTEGRIOS_ADMIN_PASSWORD_ENABLED` | `false` | Admin | Enables Integrios-managed password sign-in |
-| `INTEGRIOS_DESTINATION_SECRETS_PROVIDER` | `file` | Worker | Selects `file` or `configuration` destination-authentication secret resolution |
-| `INTEGRIOS_DESTINATION_SECRETS_DIR` | `./secrets/destination` | Worker | Host directory mounted read-only for destination-authentication values |
-| `INTEGRIOS_SOURCE_SECRETS_PROVIDER` | `file` | Ingestion | Selects `file` or `configuration` source-verification secret resolution |
-| `INTEGRIOS_SOURCE_SECRETS_DIR` | `./secrets/source` | Ingestion | Host directory mounted read-only for source-verification values |
+| `INTEGRIOS_WORKER_SECRETS_DIR` | `./secrets/worker` | Worker | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
+| `INTEGRIOS_INGESTION_SECRETS_DIR` | `./secrets/ingestion` | Ingestion | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
 
-## Destination-authentication secrets
+## Tenant secrets
 
-Destinations store logical secret references, never resolved values. The Worker resolves each
-reference immediately before each delivery attempt. This means retries and replay use the current
-value after rotation.
+Sources and Destinations store secret references, never values. Each process resolves the values
+it needs from its own .NET configuration, under one key per Tenant and reference:
+
+| Process | Configuration key | Used for |
+|---|---|---|
+| Ingestion | `SourceSecrets:<tenant-slug>:<secret-reference>` | Webhook verification and broker Source credentials |
+| Worker | `DestinationSecrets:<tenant-slug>:<secret-reference>` | Destination authentication |
+
+Ingestion never reads `DestinationSecrets`, Worker never reads `SourceSecrets`, and Admin resolves
+neither. A secret reference is a lowercase DNS label, the same grammar as a Tenant slug: letters,
+digits, and single hyphens, up to 63 characters, starting and ending with a letter or digit (for
+example `erp-api-key`). Consecutive hyphens are rejected because Azure Key Vault reads `--` as a
+key separator. Manifest field names such as `required_secret_refs` and the keys inside
+`secret_refs` stay snake_case; only the reference values follow this grammar.
+
+### Where values come from
+
+Ingestion and Worker read the standard .NET configuration sources, then two more that are added
+after them and therefore win for the same key:
+
+1. appsettings files, User Secrets in Development, environment variables, and command-line
+   arguments, in the framework's usual order. An environment variable uses `__` as the separator:
+   `DestinationSecrets__acme__erp-api-key`.
+2. Key-per-file from `/run/secrets/integrios`, when that directory exists. Each file name is a
+   configuration key with `__` as the separator, and its content is the value. Files whose names
+   start with `ignore.` are skipped.
+3. Azure Key Vault, when `Integrios:KeyVault:Uri` is set. The process authenticates with
+   `DefaultAzureCredential`, and a secret named `DestinationSecrets--acme--erp-api-key` becomes the
+   key `DestinationSecrets:acme:erp-api-key`. An unreachable or unauthorized vault stops the
+   process from starting.
+
+Every source loads once at startup. **Adding or rotating a value takes effect when the process
+restarts**; retries and replays after the restart use the new value.
+
+In the dev stack each process mounts its own directory from `secrets/` read-only at
+`/run/secrets/integrios`:
+
+```bash
+printf %s 'secret-value' > secrets/worker/DestinationSecrets__acme__erp-api-key
+docker compose restart worker
+```
+
+Every file in a mounted directory becomes a configuration key, so mount only that process's own
+directory into it. The key-per-file root is fixed. If Ingestion and Worker run directly on one host
+outside containers, they share that root and would both load every value in it, so supply their
+secrets through per-process environment variables, User Secrets, or a vault instead. For local
+Development without containers, both hosts enable .NET User Secrets:
+
+```bash
+dotnet user-secrets --project src/Integrios.Worker set "DestinationSecrets:acme:erp-api-key" "secret-value"
+dotnet run --project src/Integrios.Worker
+```
+
+### Supplying the files on other platforms
+
+Anything that can place one file per key in `/run/secrets/integrios` works:
+
+- **Kubernetes Secret**: mount a Secret whose keys are the file names, for example
+  `DestinationSecrets__acme__erp-api-key`, as a volume at `/run/secrets/integrios` on the Worker
+  only. Secret keys allow `_` and `-`.
+- **Secrets Store CSI driver**: mount the driver's volume at the same path and set each object's
+  alias (`objectAlias` or the provider's equivalent) to the key-per-file name.
+- **Docker secrets** (Compose or Swarm): set each secret's `target` to
+  `/run/secrets/integrios/<key-per-file name>`.
+
+Kubernetes and the CSI driver update mounted files in place, but Integrios reads them only at
+startup, so roll the Deployment after a change.
+
+### Value rules
+
+Values are UTF-8, non-empty, contain no NUL, and are at most 64 KiB. Key-per-file strips one
+trailing line break, and resolution trims leading and trailing CR and LF, so a file written with
+`echo` resolves to the same value as one written with `printf %s`. Invalid UTF-8 fails resolution.
+The header-based auth schemes reject values that still contain CR or LF.
 
 The `oauth2_client_credentials` scheme stores `token_endpoint`, `client_id`, an explicit
 `client_secret_basic` or `client_secret_post` method, optional `scope`, and a `client_secret`
@@ -226,71 +295,25 @@ reference. The Worker obtains and reuses bearer tokens in process memory until t
 boundary. It never persists the client secret, access token, or token response; each Worker replica
 maintains its own cache and reacquires after restart.
 
-The default `file` backend reads one exact UTF-8 value from:
+### Validate before traffic depends on it
 
-```text
-./secrets/destination/<tenant-slug>/<reference>
-```
-
-For example, reference `erp_api_key` for tenant `acme` is mounted into the Worker as
-`/run/secrets/integrios/destination/acme/erp_api_key`. Values are not trimmed, and the header-based auth
-schemes reject values containing CR or LF, so an accidental trailing newline (for example from
-`echo` without `-n`) fails delivery. Files may be symlinks, which makes atomic provider-driven
-rotation practical. Values must be non-empty, contain no NUL, and be at most 64 KiB.
-
-When the Worker runs directly instead of through Compose, its default file root is
-`/run/secrets/integrios/destination` on Linux and
-`%ProgramData%\Integrios\secrets\destination` on Windows. Set
-`Integrios:DestinationSecrets:FileRoot` to an existing absolute directory to override that native
-default. The directory must exist when Worker starts.
-
-The alternative `configuration` backend is selected with
-`Integrios:DestinationSecrets:Provider=configuration` (or
-`INTEGRIOS_DESTINATION_SECRETS_PROVIDER=configuration` in Compose). It reads
-`DestinationSecrets:<tenant-slug>:<reference>` from the Worker's normal .NET configuration.
-For local Development, the Worker enables .NET User Secrets:
-
-```bash
-dotnet user-secrets --project src/Integrios.Worker set "DestinationSecrets:acme:erp_api_key" "secret-value"
-Integrios__DestinationSecrets__Provider=configuration dotnet run --project src/Integrios.Worker
-```
-
-Any .NET configuration provider can supply the same key (for example appsettings, environment
-variables using `DestinationSecrets__acme__erp_api_key`, or a provider added in your own build). Only the
-selected backend is consulted; there is no file/configuration fallback.
-
-Validate resolution without making deliveries:
+Each process answers for its own references and prints references and resolution status, never
+values:
 
 ```bash
 docker compose run --rm worker secrets validate --all
 docker compose run --rm worker secrets validate --tenant acme
 docker compose run --rm worker secrets validate --tenant acme --destination <destination-id>
-```
 
-Validation prints references and resolution status, never values. Tenant slugs are lowercase DNS
-labels up to 63 characters. References are flat lowercase names up to 63 characters using letters,
-digits, and underscores, and must begin with a letter or digit.
-
-Ingestion has a separate source-verification secret capability for webhook Sources. Its file
-backend uses `/run/secrets/integrios/source/<tenant-slug>/<reference>` and its configuration backend
-reads `SourceSecrets:<tenant-slug>:<reference>`. When Ingestion runs directly, the default Windows
-root is `%ProgramData%\Integrios\secrets\source`; the selected directory must exist at startup.
-Ingestion cannot
-resolve the Worker's destination-authentication namespace, and Admin resolves neither namespace.
-
-Because Admin authors a Source but holds no resolver, only Ingestion can answer whether a Source's
-references resolve. Ask it before traffic depends on them:
-
-```bash
 docker compose run --rm ingestion secrets validate --all
 docker compose run --rm ingestion secrets validate --tenant acme
 docker compose run --rm ingestion secrets validate --tenant acme --source <source-id>
 ```
 
-This covers both shapes a Source carries: a webhook's verification references and a broker Source's
-`secret_ref`. It reports references and resolution status, never values, and consumes nothing from a
-broker while it runs. Exit codes match the Worker command: `0` all resolvable, `1` one or more
-unresolvable, `2` a usage or selection error.
+The Ingestion command covers a webhook's verification references and a broker Source's
+`secret_ref`, and consumes nothing from a broker while it runs. Both commands start a new process,
+so they see values added since the running services started. Exit codes: `0` all resolvable, `1`
+one or more unresolvable, `2` a usage, selection, or startup error such as an unreachable vault.
 
 ## Useful commands
 

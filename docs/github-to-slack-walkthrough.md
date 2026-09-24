@@ -76,18 +76,18 @@ TOPIC=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/topics" -H "$AUTH" \
   -d '{"key":"github-events","name":"GitHub events"}' | jq -r .id)
 ```
 
-Materialize the shared secret value the default file-based secret provider expects — generate one
-and keep it, GitHub needs the same value in step 6:
+Give Ingestion the shared secret as a key-per-file file named
+`SourceSecrets__<tenant-slug>__<secret-reference>`, then restart it, because secrets load at
+startup. Generate the value and keep it; GitHub needs the same value in step 5:
 
 ```bash
 GITHUB_SECRET=$(openssl rand -hex 32)
-mkdir -p ./secrets/source/acme
-printf '%s' "$GITHUB_SECRET" > ./secrets/source/acme/github_webhook_secret
+printf '%s' "$GITHUB_SECRET" > ./secrets/ingestion/SourceSecrets__acme__github-webhook-secret
+docker compose restart ingestion
 ```
 
-(See [setup.md](setup.md#destination-authentication-secrets) for the mirrored destination-side
-convention and the `configuration` provider alternative; source-verification secrets follow the
-exact same shape under `secrets/source/` instead of `secrets/destination/`.)
+(See [setup.md](setup.md#tenant-secrets) for the Worker-side convention and the other ways to
+supply the same key, such as environment variables or Azure Key Vault.)
 
 ## 4. Create the webhook Source and callback URL
 
@@ -106,7 +106,7 @@ GITHUB_MAPPING='{"event_type":"github." & $context.headers."x-github-event","pay
 SOURCE_JSON=$(jq -n --arg connector "$GITHUB_CONNECTOR" --arg topic "$TOPIC" --arg mapping "$GITHUB_MAPPING" \
   '{connector_id:$connector,topic_id:$topic,name:"GitHub webhook",type:"webhook",
     event_types:["github.push","github.ping"],configuration:{},
-    verification:{scheme:"hmac_sha256",config:{},secret_refs:{secret:"github_webhook_secret"}},
+    verification:{scheme:"hmac_sha256",config:{},secret_refs:{secret:"github-webhook-secret"}},
     input_requirements:null,mapping:{engine:"jsonata",version:"1",expression:$mapping},
     event_identity_rule:{kind:"header",value:"X-GitHub-Delivery"}}' \
   | curl -s -X POST "$ADMIN/admin/tenants/$TENANT/sources" -H "$AUTH" \
@@ -148,11 +148,11 @@ SLACK_DESTINATION=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/destinations" 
   -d "{\"connector_id\":\"$SLACK_CONNECTOR\",\"name\":\"acme-slack\",
        \"configuration\":{\"base_uri\":\"https://slack.com/api\"},
        \"authentication\":{\"scheme\":\"bearer_token\",\"config\":{},
-         \"secret_refs\":{\"token\":\"slack_bot_token\"}},
+         \"secret_refs\":{\"token\":\"slack-bot-token\"}},
        \"environment\":\"production\"}" | jq -r .id)
 
-mkdir -p ./secrets/destination/acme
-printf '%s' 'xoxb-REPLACE-WITH-YOUR-BOT-TOKEN' > ./secrets/destination/acme/slack_bot_token
+printf '%s' 'xoxb-REPLACE-WITH-YOUR-BOT-TOKEN' > ./secrets/worker/DestinationSecrets__acme__slack-bot-token
+docker compose restart worker
 ```
 
 A leading or trailing newline in this file (for example from re-saving it in an editor with "insert
@@ -227,9 +227,10 @@ success rule classifies as a terminal delivery failure rather than a false succe
   `X-GitHub-Delivery` means a redelivered request that already succeeded is accepted as a duplicate,
   not processed twice.
 - **Rotating the shared GitHub secret**: source-verification rotation is Operator-coordinated, not
-  zero-downtime. Update the value in `./secrets/source/acme/github_webhook_secret`, then
-  immediately update the same value in GitHub's webhook settings during a quiet period; requests
-  in the gap between the two updates fail verification and need manual redelivery afterward.
-- **Rotating the Slack bot token**: update `./secrets/destination/acme/slack_bot_token`; the Worker
-  resolves the current value on every attempt, so in-flight retries pick up the new value
-  automatically with no coordinated cutover required.
+  zero-downtime. Update `./secrets/ingestion/SourceSecrets__acme__github-webhook-secret`, restart
+  Ingestion, then immediately update the same value in GitHub's webhook settings during a quiet
+  period; requests in the gap between the two updates fail verification and need manual
+  redelivery afterward.
+- **Rotating the Slack bot token**: update `./secrets/worker/DestinationSecrets__acme__slack-bot-token`
+  and restart the Worker. Pending retries and replays after the restart use the new value, with
+  no coordinated cutover required.

@@ -22,5 +22,5 @@ Never place one process's secrets in the other's directory.
 
 Secret files are ignored by Git; the tracked `.gitkeep` files keep Docker from creating the mount
 roots as root-owned directories on first use. See
-[`docs/setup.md`](../docs/setup.md#destination-authentication-secrets) for the value rules and other ways to supply
+[`docs/setup.md`](../docs/setup.md#tenant-secrets) for the value rules and other ways to supply
 the same keys.
