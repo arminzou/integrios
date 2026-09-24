@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)] [string] $Location,
     [Parameter(Mandatory)] [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })] [string] $ParametersFile,
     [securestring] $DatabaseAdministratorPassword,
+    [switch] $RotateDatabasePassword,
     [securestring] $OperatorKeySecret,
     [securestring] $AdminOidcClientSecret
 )
@@ -25,10 +26,117 @@ function ConvertFrom-SecureValue([securestring] $Value) {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
 }
 
+function ConvertTo-SecureValue([string] $Value) {
+    ConvertTo-SecureString -String $Value -AsPlainText -Force
+}
+
 function Get-ParameterValue([object] $Parameters, [string] $Name) {
     $property = $Parameters.PSObject.Properties[$Name]
     if ($null -eq $property) { throw "The parameter file must define '$Name'." }
     $property.Value.value
+}
+
+# Letters and digits only, with at least one of each class: meets the Azure SQL and PostgreSQL
+# complexity rules and needs no escaping inside a connection string.
+function New-DatabasePassword {
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    do {
+        $password = -join (1..32 | ForEach-Object { $alphabet[[Security.Cryptography.RandomNumberGenerator]::GetInt32($alphabet.Length)] })
+    } while ($password -cnotmatch '[A-Z]' -or $password -cnotmatch '[a-z]' -or $password -notmatch '[0-9]')
+    $password
+}
+
+# The same shape Bootstrap generates when it creates a key itself: 32 random bytes as lowercase hex.
+function New-OperatorKeySecret {
+    [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
+}
+
+# The deployment-settings vault name includes a hash of the resource group ID. Read it from the
+# previous deployment, or from the resource group for a deployment made before that output existed.
+function Find-DeploymentSettingsVault {
+    $groupExists = & az group exists --name $ResourceGroup --only-show-errors
+    if ($LASTEXITCODE -ne 0) { throw "Could not check whether resource group $ResourceGroup exists." }
+    if ($groupExists -ne 'true') { return $null }
+
+    $name = & az deployment group show `
+        --resource-group $ResourceGroup `
+        --name main `
+        --query properties.outputs.deploymentSettingsVault.value `
+        --output tsv `
+        --only-show-errors 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($name)) { return $name.Trim() }
+
+    $names = @(& az keyvault list --resource-group $ResourceGroup --query '[].name' --output tsv --only-show-errors)
+    if ($LASTEXITCODE -ne 0) { throw "Could not list the Key Vaults in $ResourceGroup." }
+    $pattern = '^kv-' + [regex]::Escape($namePrefix.Substring(0, [Math]::Min(10, $namePrefix.Length))) + '-[a-z0-9]{8}$'
+    $found = @($names | Where-Object { $_ -cmatch $pattern })
+    if ($found.Count -gt 1) { throw "More than one deployment-settings vault matches in ${ResourceGroup}: $($found -join ', ')." }
+    if ($found.Count -eq 1) { return $found[0] }
+    $null
+}
+
+# Owner or Contributor does not grant data access to an RBAC vault, so give the signed-in identity
+# Key Vault Secrets User on the deployment-settings vault. Idempotent.
+function Grant-DeploymentSettingsReader([string] $VaultName) {
+    $scope = & az keyvault show --name $VaultName --resource-group $ResourceGroup --query id --output tsv --only-show-errors
+    if ($LASTEXITCODE -ne 0) { throw "Could not read vault $VaultName." }
+
+    $account = & az account show --query user --output json --only-show-errors | ConvertFrom-Json
+    if ($account.type -eq 'user') {
+        $objectId = & az ad signed-in-user show --query id --output tsv --only-show-errors
+        $principalType = 'User'
+    }
+    else {
+        $objectId = & az ad sp show --id $account.name --query id --output tsv --only-show-errors
+        $principalType = 'ServicePrincipal'
+    }
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($objectId)) {
+        throw "Could not resolve the signed-in identity. Grant it Key Vault Secrets User on $VaultName, then run the command again."
+    }
+
+    $assigned = & az role assignment list `
+        --assignee $objectId `
+        --role 'Key Vault Secrets User' `
+        --scope $scope `
+        --query 'length(@)' `
+        --output tsv `
+        --only-show-errors
+    if ($LASTEXITCODE -ne 0) { throw "Could not read role assignments on $VaultName." }
+    if ($assigned -ne '0') { return }
+
+    Write-Host "Granting the signed-in identity Key Vault Secrets User on $VaultName..."
+    $null = Invoke-AzureCli role assignment create `
+        --assignee-object-id $objectId `
+        --assignee-principal-type $principalType `
+        --role 'Key Vault Secrets User' `
+        --scope $scope `
+        --only-show-errors `
+        --output none
+}
+
+# Returns the stored value, or $null when the secret does not exist. A denied read grants the
+# signed-in identity access once, then retries while the role assignment propagates.
+function Read-DeploymentSetting([string] $VaultName, [string] $SecretName) {
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        $result = @(& az keyvault secret show `
+                --vault-name $VaultName `
+                --name $SecretName `
+                --query value `
+                --output tsv `
+                --only-show-errors 2>&1)
+        $failed = $LASTEXITCODE -ne 0
+        $errors = ($result | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | Out-String)
+        if (-not $failed) {
+            return (($result | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join '').Trim()
+        }
+        if ($errors -match 'SecretNotFound') { return $null }
+        if ($errors -notmatch 'Forbidden') { throw "Could not read $SecretName from ${VaultName}: $errors" }
+        if ($attempt -eq 1) { $null = Grant-DeploymentSettingsReader $VaultName }
+        if ($attempt -eq 20) { throw "Could not read $SecretName from $VaultName after granting Key Vault Secrets User." }
+
+        Write-Warning "Waiting for Key Vault Secrets User on $VaultName to apply; retrying in 30 seconds ($attempt/20)."
+        Start-Sleep -Seconds 30
+    }
 }
 
 function Invoke-Deployment([int] $RuntimeReplicaCount) {
@@ -199,6 +307,7 @@ foreach ($scriptOwnedName in @('databaseAdministratorPassword', 'operatorKeySecr
 # Template parameter names, required parameters, and Azure naming and length rules are enforced by
 # Bicep and ARM validation before any resource in the deployment changes. The checks below cover
 # only what Azure cannot know.
+$namePrefix = [string](Get-ParameterValue $parameters 'namePrefix')
 $parameterLocation = [string](Get-ParameterValue $parameters 'location')
 $registryName = [string](Get-ParameterValue $parameters 'registryName')
 $databaseProvider = [string](Get-ParameterValue $parameters 'databaseProvider')
@@ -209,6 +318,9 @@ $adminOidcAuthority = [string]$parameters.PSObject.Properties['adminOidcAuthorit
 $adminOidcClientId = [string]$parameters.PSObject.Properties['adminOidcClientId']?.Value.value
 $adminOidcEnabled = -not [string]::IsNullOrWhiteSpace($adminOidcAuthority)
 
+if ($RotateDatabasePassword -and $null -ne $DatabaseAdministratorPassword) {
+    throw 'Use either -RotateDatabasePassword or -DatabaseAdministratorPassword, not both.'
+}
 if ($parameterLocation -ne $Location) { throw "Parameter location '$parameterLocation' must match -Location '$Location'." }
 # Azure accepts an allow-all restriction, and the template silently disables Service Bus access
 # when only one of its two names is set, so neither mistake would fail a deployment.
@@ -264,8 +376,40 @@ if (-not [string]::IsNullOrWhiteSpace($release)) {
     }
 }
 
-if ($null -eq $DatabaseAdministratorPassword) { $DatabaseAdministratorPassword = Read-Host 'Database administrator password' -AsSecureString }
-if ($null -eq $OperatorKeySecret) { $OperatorKeySecret = Read-Host 'Initial OperatorKey secret' -AsSecureString }
+# The database administrator password and the initial OperatorKey are generated on the first
+# deployment, stored by the template in the deployment-settings vault, and passed back unchanged on
+# every later deployment, so an update never resets them. Explicit parameters take precedence.
+$settingsVault = Find-DeploymentSettingsVault
+$generatedOperatorKey = $false
+if ($null -eq $DatabaseAdministratorPassword -and $settingsVault -and -not $RotateDatabasePassword) {
+    $storedPassword = Read-DeploymentSetting $settingsVault 'database-admin-password'
+    if ($storedPassword) {
+        $DatabaseAdministratorPassword = ConvertTo-SecureValue $storedPassword
+    }
+    else {
+        # Deployed before the password was stored: keep the current one, or leave the prompt empty
+        # to generate a new one.
+        $DatabaseAdministratorPassword = Read-Host 'Current database administrator password (leave empty to generate a new one)' -AsSecureString
+        if ($DatabaseAdministratorPassword.Length -eq 0) { $DatabaseAdministratorPassword = $null }
+    }
+    Remove-Variable storedPassword
+}
+if ($null -eq $DatabaseAdministratorPassword) {
+    Write-Host ($RotateDatabasePassword ? 'Rotating the database administrator password...' : 'Generating a new database administrator password...')
+    $DatabaseAdministratorPassword = ConvertTo-SecureValue (New-DatabasePassword)
+}
+if ($null -eq $OperatorKeySecret) {
+    $storedOperatorKey = if ($settingsVault) { Read-DeploymentSetting $settingsVault 'operator-key-bootstrap' }
+    if ($storedOperatorKey) {
+        $OperatorKeySecret = ConvertTo-SecureValue $storedOperatorKey
+    }
+    else {
+        $OperatorKeySecret = ConvertTo-SecureValue (New-OperatorKeySecret)
+        # Only a first deployment is sure to use it; an older one may already have a live key.
+        $generatedOperatorKey = $null -eq $settingsVault
+    }
+    Remove-Variable storedOperatorKey
+}
 if ($adminOidcEnabled) {
     if ($null -eq $AdminOidcClientSecret) { $AdminOidcClientSecret = Read-Host 'Dashboard OpenID Connect client secret' -AsSecureString }
     if ($AdminOidcClientSecret.Length -eq 0) { throw 'Dashboard sign-in requires the OpenID Connect client secret.' }
@@ -294,9 +438,17 @@ foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
     Wait-HealthyRevision -AppName $app
 }
 
+$settingsVault = $outputs.deploymentSettingsVault.value
+try { $null = Grant-DeploymentSettingsReader $settingsVault }
+catch { Write-Warning "Grant yourself Key Vault Secrets User on $settingsVault to read its stored values: $_" }
+
 Write-Host "Ready: https://$($outputs.adminFqdn.value)"
 Write-Host "Ingestion: https://$($outputs.ingestionFqdn.value)"
 Write-Host "Source-secret vault: $($outputs.secretVaults.value.source)"
 Write-Host "Destination-secret vault: $($outputs.secretVaults.value.destination)"
 Write-Host "OpenID Connect redirect URI: $($outputs.adminOidcRedirectUris.value.callback)"
 Write-Host "OpenID Connect sign-out redirect URI: $($outputs.adminOidcRedirectUris.value.signedOut)"
+Write-Host "Deployment-settings vault: $settingsVault (database-admin-password, operator-key-bootstrap)"
+if ($generatedOperatorKey) {
+    Write-Host "Read the initial OperatorKey secret with: az keyvault secret show --vault-name $settingsVault --name operator-key-bootstrap --query value --output tsv"
+}
