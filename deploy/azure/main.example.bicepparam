@@ -6,9 +6,10 @@ param location = 'canadacentral'
 
 param registryName = 'myregistry'
 param registryResourceGroupName = 'rg-container-images'
-param adminImage = 'myregistry.azurecr.io/integrios/admin@sha256:0000000000000000000000000000000000000000000000000000000000000000'
-param ingestionImage = 'myregistry.azurecr.io/integrios/ingestion@sha256:0000000000000000000000000000000000000000000000000000000000000000'
-param workerImage = 'myregistry.azurecr.io/integrios/worker@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+// deploy.ps1 imports this release into the registry when absent and deploys it pinned by digest.
+// To deploy images you built yourself, remove release and set adminImage, ingestionImage, and
+// workerImage to full <registry>.azurecr.io/<repository>@sha256:<digest> references instead.
+param release = '0.9.0' // x-release-please-version
 
 param databaseProvider = 'sqlserver'
 param databaseAdministratorLogin = 'integrios_admin'

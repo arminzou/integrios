@@ -225,6 +225,13 @@ jobs:
             exit 1
           fi
           echo "deployment default ${defaults} matches release ${tag}"
+          azure=$(grep -oP "^param release = '\K[^']+" deploy/azure/main.example.bicepparam)
+          if [[ "$azure" != "$tag" ]]; then
+            echo "deploy/azure/main.example.bicepparam selects release [${azure}] but this release is ${tag}." >&2
+            echo "Update the release in deploy/azure/main.example.bicepparam, commit, and re-tag." >&2
+            exit 1
+          fi
+          echo "Azure reference release ${azure} matches release ${tag}"
 
       - name: Record release inputs
         if: steps.select_run.outputs.run_kind == 'release'

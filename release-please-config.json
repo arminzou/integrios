@@ -6,7 +6,7 @@
   "packages": {
     ".": {
       "version-file": "VERSION",
-      "extra-files": ["deploy/compose.yml"]
+      "extra-files": ["deploy/compose.yml", "deploy/azure/main.example.bicepparam"]
     }
   }
 }
