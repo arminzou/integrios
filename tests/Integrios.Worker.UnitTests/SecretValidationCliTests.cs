@@ -104,7 +104,7 @@ public sealed class SecretValidationCliTests
     }
 
     [Fact]
-    public async Task Process_InvalidKeyVaultUriFailsStartupWithUsageExitCodeWithoutStackTrace()
+    public async Task Process_UnreachableKeyVaultFailsStartupWithUsageExitCodeWithoutStackTrace()
     {
         string workerAssembly = typeof(SecretValidationCli).Assembly.Location;
         var startInfo = new ProcessStartInfo("dotnet")
@@ -118,14 +118,18 @@ public sealed class SecretValidationCliTests
         startInfo.ArgumentList.Add("validate");
         startInfo.ArgumentList.Add("--all");
         startInfo.Environment["ConnectionStrings__Postgres"] = "Host=localhost;Database=integrios;Username=test;Password=test";
-        startInfo.Environment["Integrios__KeyVault__Uri"] = "not a vault uri";
+        startInfo.Environment["Integrios__KeyVault__Uri"] = "https://integrios-unreachable.invalid/";
 
         using Process process = Process.Start(startInfo)!;
-        string standardError = await process.StandardError.ReadToEndAsync();
+        Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+        Task<string> standardError = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
 
+        // The vault loads before the host is built, so its failure precedes any database work;
+        // output from that work would mean the vault source was never added.
         process.ExitCode.ShouldBe(2);
-        standardError.Trim().ShouldBe("Secret validation could not start with the current configuration.");
+        (await standardOutput).ShouldBeEmpty();
+        (await standardError).Trim().ShouldBe("Secret validation could not start with the current configuration.");
     }
 
     [Theory]

@@ -10,50 +10,59 @@ using Integrios.Ingestion.ErrorHandling;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddSecretConfigurationSources();
-bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
-int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
+bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 
-builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
-
-builder.Services.AddOpenApi();
-builder.Services.AddProblemDetails();
-builder.Services.AddExceptionHandler<IngestionExceptionHandler>();
-builder.Services.AddIngestionApplicationServices();
-builder.Services.AddIngestionInfrastructureServices(builder.Configuration, enableBrokerReceiver: !secretCommand);
-builder.Services.AddSourceVerificationSecretResolutionServices(builder.Configuration);
-builder.Services.AddTelemetryServices(builder.Configuration, "integrios-ingestion");
-
-builder.Services.AddAuthentication(TenantApiKeyAuthHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, TenantApiKeyAuthHandler>(TenantApiKeyAuthHandler.SchemeName, _ => { });
-builder.Services.AddAuthorization();
-
-var app = builder.Build();
-
-if (secretCommand)
+try
 {
-    int exitCode = await SourceSecretValidationCli.RunAsync(args, app.Services, Console.Out, Console.Error);
-    await app.DisposeAsync();
-    return exitCode;
+    builder.Configuration.AddSecretConfigurationSources();
+    int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
+
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
+
+    builder.Services.AddOpenApi();
+    builder.Services.AddProblemDetails();
+    builder.Services.AddExceptionHandler<IngestionExceptionHandler>();
+    builder.Services.AddIngestionApplicationServices();
+    builder.Services.AddIngestionInfrastructureServices(builder.Configuration, enableBrokerReceiver: !secretCommand);
+    builder.Services.AddSourceVerificationSecretResolutionServices(builder.Configuration);
+    builder.Services.AddTelemetryServices(builder.Configuration, "integrios-ingestion");
+
+    builder.Services.AddAuthentication(TenantApiKeyAuthHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, TenantApiKeyAuthHandler>(TenantApiKeyAuthHandler.SchemeName, _ => { });
+    builder.Services.AddAuthorization();
+
+    var app = builder.Build();
+
+    if (secretCommand)
+    {
+        int exitCode = await SourceSecretValidationCli.RunAsync(args, app.Services, Console.Out, Console.Error);
+        await app.DisposeAsync();
+        return exitCode;
+    }
+
+    app.UseRouting();
+    app.UseOperationalEndpointIsolation(operationalPort);
+    app.UseRequestCompletionLogging();
+    app.UseExceptionHandler();
+    app.UseStatusCodePages();
+
+    if (app.Environment.IsDevelopment())
+        app.MapOpenApi();
+
+    app.UseHttpsRedirection();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapEndpoints(typeof(Program).Assembly);
+    app.MapOperationalEndpoints();
+
+    app.Run();
+    return 0;
 }
-
-app.UseRouting();
-app.UseOperationalEndpointIsolation(operationalPort);
-app.UseRequestCompletionLogging();
-app.UseExceptionHandler();
-app.UseStatusCodePages();
-
-if (app.Environment.IsDevelopment())
-    app.MapOpenApi();
-
-app.UseHttpsRedirection();
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapEndpoints(typeof(Program).Assembly);
-app.MapOperationalEndpoints();
-
-app.Run();
-return 0;
+catch (Exception) when (secretCommand)
+{
+    Console.Error.WriteLine("Secret validation could not start with the current configuration.");
+    return 2;
+}

@@ -22,6 +22,8 @@ public sealed class SecretReferenceMapTests
     [InlineData("api-key-")]
     [InlineData("api key")]
     [InlineData("")]
+    [InlineData("api-key\n")]
+    [InlineData("api--key")]
     public void RejectsAnythingOutsideTenantSlugGrammar(string reference)
     {
         SecretReferenceMap.Validate(Refs(reference), "secret_refs").ShouldNotBeNull();

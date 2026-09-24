@@ -437,8 +437,8 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         body.RootElement.GetProperty("errors").GetProperty("verification")[0].GetString()
-            .ShouldBe("Secret reference 'secret' must be a lowercase DNS label of 1 to 63 characters. "
-                + "It names a secret; it is never the secret itself.");
+            .ShouldBe("Secret reference 'secret' must be a lowercase DNS label of 1 to 63 characters "
+                + "with no consecutive hyphens. It names a secret; it is never the secret itself.");
     }
 
     [Fact]

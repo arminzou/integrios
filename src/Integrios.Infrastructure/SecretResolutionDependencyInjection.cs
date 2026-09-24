@@ -9,6 +9,9 @@ namespace Integrios.Infrastructure;
 
 public static class SecretResolutionDependencyInjection
 {
+    // Fixed, not configurable: each container mounts its own directory here, so a process sees
+    // only its own direction's secrets. Processes sharing one host outside containers must take
+    // secrets from per-process environment variables or a vault instead.
     private const string KeyPerFileDirectory = "/run/secrets/integrios";
 
     // Both sources load once: a new or rotated secret takes effect when the process restarts.

@@ -11,8 +11,9 @@
 # Setup:
 # - copy the token from Admin.http createTenantApiKey into src/Integrios.Ingestion/.env
 # - copy the id from Admin.http createSource into src/Integrios.Ingestion/.env
-# - for the auth-enabled destination path, provision the default file-backed Worker secret at:
-#   secrets/acme-corp/erp_api_key (exact secret value; no automatic trimming)
+# - for the auth-enabled destination path, give the Worker the secret as configuration key
+#   DestinationSecrets:acme-corp:erp-api-key: an environment variable or file named
+#   DestinationSecrets__acme-corp__erp-api-key, or a Worker User Secret
 @tenantApiKeyToken = {{$dotenv INGESTION_TENANT_API_KEY}}
 @sourceId = {{$dotenv INGESTION_SOURCE_ID}}
 

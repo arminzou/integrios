@@ -26,7 +26,7 @@ public static class SecretReferenceMap
             if (!SecretReferenceName.IsValid(property.Value.GetString()))
             {
                 return $"Secret reference '{property.Name}' must be a lowercase DNS label of 1 to 63 "
-                    + "characters. It names a secret; it is never the secret itself.";
+                    + "characters with no consecutive hyphens. It names a secret; it is never the secret itself.";
             }
         }
 

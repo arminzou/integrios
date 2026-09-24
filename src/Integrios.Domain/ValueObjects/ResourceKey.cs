@@ -6,7 +6,7 @@ namespace Integrios.Domain.ValueObjects;
 /// and SQL Server compare keys identically whatever collation the server was created with.
 public static partial class ResourceKey
 {
-    public const string Pattern = "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$";
+    public const string Pattern = @"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z";
 
     public static bool IsValid(string? value) =>
         value is not null && KeyPattern().IsMatch(value);

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Ingestion;
@@ -106,6 +107,35 @@ public sealed class SourceSecretValidationCliTests
 
         exitCode.ShouldBe(2);
         error.ToString().ShouldContain("Usage: secrets validate", Case.Sensitive);
+    }
+
+    [Fact]
+    public async Task Process_UnreachableKeyVaultFailsStartupWithUsageExitCodeWithoutStackTrace()
+    {
+        string ingestionAssembly = typeof(SourceSecretValidationCli).Assembly.Location;
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add(ingestionAssembly);
+        startInfo.ArgumentList.Add("secrets");
+        startInfo.ArgumentList.Add("validate");
+        startInfo.ArgumentList.Add("--all");
+        startInfo.Environment["ConnectionStrings__Postgres"] = "Host=localhost;Database=integrios;Username=test;Password=test";
+        startInfo.Environment["Integrios__KeyVault__Uri"] = "https://integrios-unreachable.invalid/";
+
+        using Process process = Process.Start(startInfo)!;
+        Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+        Task<string> standardError = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        // The vault loads before the host is built, so its failure precedes any database work;
+        // output from that work would mean the vault source was never added.
+        process.ExitCode.ShouldBe(2);
+        (await standardOutput).ShouldBeEmpty();
+        (await standardError).Trim().ShouldBe("Secret validation could not start with the current configuration.");
     }
 
     private static ServiceProvider BuildServices(

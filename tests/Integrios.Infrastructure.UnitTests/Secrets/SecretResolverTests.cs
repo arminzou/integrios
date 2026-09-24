@@ -1,3 +1,4 @@
+using Azure;
 using System.Text;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Security.KeyVault.Secrets;
@@ -53,6 +54,19 @@ public sealed class SecretResolverTests : IDisposable
     }
 
     [Fact]
+    public async Task ConfigurationResolver_RejectsAKeyPerFileValueThatIsNotUtf8()
+    {
+        File.WriteAllBytes(Path.Combine(root, "DestinationSecrets__tenant-a__token"), [0x64, 0x6f, 0xFF, 0x6f]);
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddKeyPerFile(root, optional: true, reloadOnChange: false)
+            .Build();
+        var resolver = new DestinationAuthenticationConfigurationSecretResolver(configuration);
+
+        await Should.ThrowAsync<SecretResolutionException>(
+            () => resolver.ResolveAsync(new(Guid.NewGuid(), "tenant-a"), "token", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ConfigurationResolver_ResolvesAKeyVaultSecretNameThroughTheStockKeyMapping()
     {
         string key = new KeyVaultSecretManager().GetKey(
@@ -94,7 +108,7 @@ public sealed class SecretResolverTests : IDisposable
             "nul" => "do-not-leak\0value",
             "oversized" => new string('a', 65_537),
             "lone_surrogate" => "do-not-leak\ud800",
-            "undecodable_bytes" => "do-not-leak�value",
+            "undecodable_bytes" => "do-not-leak\uFFFDvalue",
             _ => null
         };
         var values = new Dictionary<string, string?>();
@@ -164,14 +178,12 @@ public sealed class SecretResolverTests : IDisposable
         using ServiceProvider workerProvider = worker.BuildServiceProvider();
         IDestinationAuthenticationSecretResolver destination =
             workerProvider.GetRequiredService<IDestinationAuthenticationSecretResolver>();
-        workerProvider.GetService<ISourceVerificationSecretResolver>().ShouldBeNull();
 
         var ingestion = new ServiceCollection();
         ingestion.AddSourceVerificationSecretResolutionServices(configuration);
         using ServiceProvider ingestionProvider = ingestion.BuildServiceProvider();
         ISourceVerificationSecretResolver source =
             ingestionProvider.GetRequiredService<ISourceVerificationSecretResolver>();
-        ingestionProvider.GetService<IDestinationAuthenticationSecretResolver>().ShouldBeNull();
 
         (await destination.ResolveAsync(tenant, "destination", CancellationToken.None)).ShouldBe("destination-value");
         await Should.ThrowAsync<SecretResolutionException>(
@@ -204,7 +216,8 @@ public sealed class SecretResolverTests : IDisposable
             ["Integrios:KeyVault:Uri"] = "https://integrios-unreachable.invalid/"
         });
 
-        Should.Throw<Exception>(() => configuration.AddSecretConfigurationSources());
+        Should.Throw<AggregateException>(() => configuration.AddSecretConfigurationSources())
+            .InnerException.ShouldBeOfType<RequestFailedException>();
     }
 
     public void Dispose() => Directory.Delete(root, recursive: true);

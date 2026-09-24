@@ -202,7 +202,8 @@ internal static class SourceAuthoringValidator
         if (hasSecretReference && !SecretReferenceName.IsValid(ReadNonEmptyString(authentication, "secret_ref")))
         {
             throw new SourceValidationException(
-                "Broker Source secret_ref must be a lowercase DNS label of 1 to 63 characters. "
+                "Broker Source secret_ref must be a lowercase DNS label of 1 to 63 characters with no "
+                + "consecutive hyphens. "
                 + "It names a secret; it is never the secret itself.",
                 "configuration");
         }
