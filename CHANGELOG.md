@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.9.0](https://github.com/arminzou/integrios/compare/v0.8.0...v0.9.0) (2026-09-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **infra:** Azure deployments must move Tenant secrets to the new vaults and remove the old mapping and secret parameters.
+* The provider switch and per-Tenant file layout are removed. Use kebab-case references and run secrets validate --all after upgrading.
+* **infra:** Mounted secrets now use per-process directories with SourceSecrets__ or DestinationSecrets__ file names. Rotation requires a restart.
+* **admin:** require kebab-case secret references
+* **infra:** resolve Tenant secrets from standard .NET configuration
+
+### Features
+
+* **admin:** guide OAuth2 destination authoring ([d7d097f](https://github.com/arminzou/integrios/commit/d7d097fddb5f704e55f081d9097f0a4904cc4504))
+* **admin:** persist the Data Protection key ring on shared storage ([9f975ee](https://github.com/arminzou/integrios/commit/9f975ee9ae90093a9291b019ae69fe1f6bf6abb7))
+* **admin:** require kebab-case secret references ([bc86857](https://github.com/arminzou/integrios/commit/bc868571942ce3c0b72eea51021cae73235a7367))
+* **infra:** mount tenant secrets per process ([42c44f8](https://github.com/arminzou/integrios/commit/42c44f842fe7540e49395dae22eae766ee853835))
+* **infra:** resolve Tenant secrets from standard .NET configuration ([317b6e2](https://github.com/arminzou/integrios/commit/317b6e280ab48c2b52b69f20e986fec062f519a9))
+* **infra:** use separate Azure vaults for tenant secrets ([f66bf97](https://github.com/arminzou/integrios/commit/f66bf97ccec353a4128d866b1a87194c857d463f))
+* **infra:** use user-assigned identities in Azure apps ([9379946](https://github.com/arminzou/integrios/commit/9379946fdf562c4281e6eb18a43844dbbe84bb86))
+* **infra:** wire dashboard sign-in into the Azure reference ([69cde08](https://github.com/arminzou/integrios/commit/69cde08fabe80943ba2e7716f78103cbaadaab68))
+* **worker:** add database-coordinated completed-history cleanup ([16e894d](https://github.com/arminzou/integrios/commit/16e894dc53b6ab1df029277841d69cb49bb1668d))
+* **worker:** add OAuth2 token acquisition ([a555ded](https://github.com/arminzou/integrios/commit/a555ded0daaa5bf89184e1c0f09d5242655fffea))
+* **worker:** document retention rollout ([df3036b](https://github.com/arminzou/integrios/commit/df3036b10cbef2630cc94fb71ed93e794b412fdd))
+* **worker:** run completed-history retention ([6564e5c](https://github.com/arminzou/integrios/commit/6564e5c2d10d7dd2f7fbd894ddf32377ef946fb7))
+
+
+### Bug Fixes
+
+* **infra:** close configuration secrets review findings ([ce284a6](https://github.com/arminzou/integrios/commit/ce284a636ab073e440733dad13ba349a25c388be))
+* **infra:** preserve Workbook counter series labels ([a0c3c5f](https://github.com/arminzou/integrios/commit/a0c3c5fb13e82b3a069358c286bde01f8589c036))
+* **infra:** remove obsolete image build arguments ([fb125e4](https://github.com/arminzou/integrios/commit/fb125e4d91b77ff925aa89ce52be8272cddff7c8))
+* **infra:** retry Azure secret access propagation ([eef1632](https://github.com/arminzou/integrios/commit/eef1632d7349e5b8582fb2e6cf790f3a30255628))
+* **worker:** close OAuth delivery review findings ([dfe8f9a](https://github.com/arminzou/integrios/commit/dfe8f9a4e55bb008fa93d76181b81b8e8f128ba6))
+* **worker:** harden completed-history cleanup ([6c24afa](https://github.com/arminzou/integrios/commit/6c24afa6c657bfeb6e0dbf0dd5db8d79ce6e67a3))
+* **worker:** harden retention database compatibility ([372d517](https://github.com/arminzou/integrios/commit/372d517858b84741409c3cd1a47edf39d73c5630))
+* **worker:** retry SQL Server finalization deadlocks ([0da3bf1](https://github.com/arminzou/integrios/commit/0da3bf10ba37cb5ce9e450eb53e7d9e29cf40368))
+
+
+### Documentation
+
+* document configuration-backed tenant secrets ([705ab17](https://github.com/arminzou/integrios/commit/705ab17a723790567d9e82d39b79e3ba85801121))
+
 ## [0.8.0](https://github.com/arminzou/integrios/compare/v0.7.0...v0.8.0) (2026-09-21)
 
 
