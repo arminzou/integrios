@@ -13,7 +13,7 @@ from source and bundles a test sink and dashboards; it is not for deployment.
 cp .env.example .env
 # edit .env: set POSTGRES_PASSWORD, INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET, and INTEGRIOS_PUBLIC_INGESTION_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
-mkdir -p secrets/ingestion secrets/worker
+mkdir -p secrets/sources secrets/destinations
 docker compose up -d
 ```
 
@@ -71,17 +71,18 @@ Ingestion and Worker resolve Tenant secrets from standard .NET configuration: In
 `DestinationSecrets:<tenant-slug>:<secret-reference>`. Admin resolves neither, and neither runtime
 process reads the other's namespace.
 
-This deployment feeds them through key-per-file configuration. Each process mounts its own flat
-directory read-only at `/run/secrets/integrios`, where each file name is a configuration key with
-`__` as the separator:
+This deployment feeds them through key-per-file configuration. The `secrets/` directories hold
+Tenant secret values only; deployment credentials such as database connection strings come from
+environment variables. Each process mounts its own flat directory read-only at
+`/run/secrets/integrios`, where each file name is a configuration key with `__` as the separator:
 
 | Host directory | Variable | Mounted into | File name |
 |---|---|---|---|
-| `./secrets/ingestion` | `INTEGRIOS_INGESTION_SECRETS_DIR` | Ingestion | `SourceSecrets__<tenant-slug>__<secret-reference>` |
-| `./secrets/worker` | `INTEGRIOS_WORKER_SECRETS_DIR` | Worker | `DestinationSecrets__<tenant-slug>__<secret-reference>` |
+| `./secrets/sources` | `INTEGRIOS_SOURCE_SECRETS_DIR` | Ingestion | `SourceSecrets__<tenant-slug>__<secret-reference>` |
+| `./secrets/destinations` | `INTEGRIOS_DESTINATION_SECRETS_DIR` | Worker | `DestinationSecrets__<tenant-slug>__<secret-reference>` |
 
 ```bash
-printf %s 'secret-value' > secrets/worker/DestinationSecrets__acme__erp-api-key
+printf %s 'secret-value' > secrets/destinations/DestinationSecrets__acme__erp-api-key
 docker compose restart worker
 ```
 
@@ -116,10 +117,9 @@ This release is a clean break with no compatibility path for the previous secret
   `INTEGRIOS_SOURCE_SECRETS_PROVIDER`, `INTEGRIOS_DESTINATION_SECRETS_PROVIDER`, and every
   `*Secrets:Provider` and `*Secrets:FileRoot` setting.
 - The per-Tenant file layout (`<tenant-slug>/<reference>` below a per-direction root) is no longer
-  read. Move each value to a key-per-file name in the owning process's directory, as in
-  [Tenant secrets](#tenant-secrets). `INTEGRIOS_SOURCE_SECRETS_DIR` and
-  `INTEGRIOS_DESTINATION_SECRETS_DIR` become `INTEGRIOS_INGESTION_SECRETS_DIR` and
-  `INTEGRIOS_WORKER_SECRETS_DIR`.
+  read. Use flat key-per-file names in the owning process's directory, as in
+  [Tenant secrets](#tenant-secrets). The `INTEGRIOS_SOURCE_SECRETS_DIR` and
+  `INTEGRIOS_DESTINATION_SECRETS_DIR` variables override the default host directories.
 - Secret references are now kebab-case: lowercase letters, digits, and single hyphens.
   Underscored references are rejected when a Source or Destination is created or updated, and an
   existing one no longer resolves. Change each reference in Admin (for example `erp_api_key` to

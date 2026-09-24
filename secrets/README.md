@@ -1,18 +1,20 @@
 # Local Tenant secrets
 
-Each child directory is mounted read-only into one process at `/run/secrets/integrios`, where .NET
-key-per-file configuration reads it at startup. Do not commit secret values.
+These directories hold Tenant secret values only. Each is mounted read-only into one process at
+`/run/secrets/integrios`, where .NET key-per-file configuration reads it at startup. Supply
+deployment credentials such as database connection strings through environment variables. Do not
+commit secret values.
 
 | Directory | Mounted into | File name |
 |---|---|---|
-| `ingestion/` | Ingestion | `SourceSecrets__<tenant-slug>__<secret-reference>` |
-| `worker/` | Worker | `DestinationSecrets__<tenant-slug>__<secret-reference>` |
+| `sources/` | Ingestion only | `SourceSecrets__<tenant-slug>__<secret-reference>` |
+| `destinations/` | Worker only | `DestinationSecrets__<tenant-slug>__<secret-reference>` |
 
 The file name is the configuration key, with `__` as the section separator; the file content is
 the value. For example, the `erp-api-key` reference for the `acme` Tenant:
 
 ```bash
-printf %s 'secret-value' > secrets/worker/DestinationSecrets__acme__erp-api-key
+printf %s 'secret-value' > secrets/destinations/DestinationSecrets__acme__erp-api-key
 docker compose restart worker
 ```
 

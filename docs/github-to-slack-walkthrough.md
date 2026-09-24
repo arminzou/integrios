@@ -82,7 +82,7 @@ startup. Generate the value and keep it; GitHub needs the same value in step 5:
 
 ```bash
 GITHUB_SECRET=$(openssl rand -hex 32)
-printf '%s' "$GITHUB_SECRET" > ./secrets/ingestion/SourceSecrets__acme__github-webhook-secret
+printf '%s' "$GITHUB_SECRET" > ./secrets/sources/SourceSecrets__acme__github-webhook-secret
 docker compose restart ingestion
 ```
 
@@ -151,7 +151,7 @@ SLACK_DESTINATION=$(curl -s -X POST "$ADMIN/admin/tenants/$TENANT/destinations" 
          \"secret_refs\":{\"token\":\"slack-bot-token\"}},
        \"environment\":\"production\"}" | jq -r .id)
 
-printf '%s' 'xoxb-REPLACE-WITH-YOUR-BOT-TOKEN' > ./secrets/worker/DestinationSecrets__acme__slack-bot-token
+printf '%s' 'xoxb-REPLACE-WITH-YOUR-BOT-TOKEN' > ./secrets/destinations/DestinationSecrets__acme__slack-bot-token
 docker compose restart worker
 ```
 
@@ -227,10 +227,10 @@ success rule classifies as a terminal delivery failure rather than a false succe
   `X-GitHub-Delivery` means a redelivered request that already succeeded is accepted as a duplicate,
   not processed twice.
 - **Rotating the shared GitHub secret**: source-verification rotation is Operator-coordinated, not
-  zero-downtime. Update `./secrets/ingestion/SourceSecrets__acme__github-webhook-secret`, restart
+  zero-downtime. Update `./secrets/sources/SourceSecrets__acme__github-webhook-secret`, restart
   Ingestion, then immediately update the same value in GitHub's webhook settings during a quiet
   period; requests in the gap between the two updates fail verification and need manual
   redelivery afterward.
-- **Rotating the Slack bot token**: update `./secrets/worker/DestinationSecrets__acme__slack-bot-token`
+- **Rotating the Slack bot token**: update `./secrets/destinations/DestinationSecrets__acme__slack-bot-token`
   and restart the Worker. Pending retries and replays after the restart use the new value, with
   no coordinated cutover required.

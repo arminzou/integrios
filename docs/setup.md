@@ -209,8 +209,8 @@ a working local value. Create a `.env` at the repo root only to override.
 | `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |
 | `INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME` | `OpenID Connect` | Admin | Provider label shown on the sign-in gate |
 | `INTEGRIOS_ADMIN_PASSWORD_ENABLED` | `false` | Admin | Enables Integrios-managed password sign-in |
-| `INTEGRIOS_WORKER_SECRETS_DIR` | `./secrets/worker` | Worker | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
-| `INTEGRIOS_INGESTION_SECRETS_DIR` | `./secrets/ingestion` | Ingestion | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
+| `INTEGRIOS_DESTINATION_SECRETS_DIR` | `./secrets/destinations` | Worker | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
+| `INTEGRIOS_SOURCE_SECRETS_DIR` | `./secrets/sources` | Ingestion | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
 
 ## Tenant secrets
 
@@ -248,11 +248,13 @@ after them and therefore win for the same key:
 Every source loads once at startup. **Adding or rotating a value takes effect when the process
 restarts**; retries and replays after the restart use the new value.
 
-In the dev stack each process mounts its own directory from `secrets/` read-only at
-`/run/secrets/integrios`:
+In the dev stack, `secrets/sources` holds only Tenant Source secrets and is mounted into Ingestion;
+`secrets/destinations` holds only Tenant Destination secrets and is mounted into Worker. Deployment
+credentials such as database connection strings come from environment variables. Each directory
+is mounted read-only at `/run/secrets/integrios`:
 
 ```bash
-printf %s 'secret-value' > secrets/worker/DestinationSecrets__acme__erp-api-key
+printf %s 'secret-value' > secrets/destinations/DestinationSecrets__acme__erp-api-key
 docker compose restart worker
 ```
 

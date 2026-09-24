@@ -18,12 +18,12 @@ Thumbs.db
 secrets/*
 !secrets/.gitkeep
 !secrets/README.md
-!secrets/ingestion/
-secrets/ingestion/*
-!secrets/ingestion/.gitkeep
-!secrets/worker/
-secrets/worker/*
-!secrets/worker/.gitkeep
+!secrets/sources/
+secrets/sources/*
+!secrets/sources/.gitkeep
+!secrets/destinations/
+secrets/destinations/*
+!secrets/destinations/.gitkeep
 *.lscache
 archive
 

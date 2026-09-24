@@ -19,12 +19,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly string projectName = $"integrios-q-{Guid.NewGuid():N}"[..25];
     private readonly string otelArtifactsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-otel-{Guid.NewGuid():N}");
     // One flat key-per-file directory per process, mounted at the image's configuration root.
-    private readonly string ingestionSecretsDirectory = Path.Combine(
+    private readonly string sourceSecretsDirectory = Path.Combine(
         Path.GetTempPath(),
-        $"integrios-ingestion-secrets-{Guid.NewGuid():N}");
-    private readonly string workerSecretsDirectory = Path.Combine(
+        $"integrios-source-secrets-{Guid.NewGuid():N}");
+    private readonly string destinationSecretsDirectory = Path.Combine(
         Path.GetTempPath(),
-        $"integrios-worker-secrets-{Guid.NewGuid():N}");
+        $"integrios-destination-secrets-{Guid.NewGuid():N}");
     private readonly Dictionary<string, string> environment;
     private IReadOnlyList<string> composeFiles;
 
@@ -39,8 +39,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public PackagedDeploymentFixture()
     {
         Directory.CreateDirectory(otelArtifactsDirectory);
-        Directory.CreateDirectory(ingestionSecretsDirectory);
-        Directory.CreateDirectory(workerSecretsDirectory);
+        Directory.CreateDirectory(sourceSecretsDirectory);
+        Directory.CreateDirectory(destinationSecretsDirectory);
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(
@@ -62,8 +62,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "otel-collector.acceptance.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
-            ["INTEGRIOS_INGESTION_SECRETS_DIR"] = ingestionSecretsDirectory,
-            ["INTEGRIOS_WORKER_SECRETS_DIR"] = workerSecretsDirectory,
+            ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceSecretsDirectory,
+            ["INTEGRIOS_DESTINATION_SECRETS_DIR"] = destinationSecretsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "acceptance_postgres",
             ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "acceptance-admin-secret",
@@ -173,8 +173,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             await RemoveImagesBestEffortAsync();
             Directory.Delete(otelArtifactsDirectory, recursive: true);
-            Directory.Delete(ingestionSecretsDirectory, recursive: true);
-            Directory.Delete(workerSecretsDirectory, recursive: true);
+            Directory.Delete(sourceSecretsDirectory, recursive: true);
+            Directory.Delete(destinationSecretsDirectory, recursive: true);
         }
     }
 
@@ -227,12 +227,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     // afterwards reads it immediately.
     public Task WriteDestinationSecretAsync(string tenantSlug, string reference, string value) =>
         File.WriteAllTextAsync(
-            Path.Combine(workerSecretsDirectory, $"DestinationSecrets__{tenantSlug}__{reference}"),
+            Path.Combine(destinationSecretsDirectory, $"DestinationSecrets__{tenantSlug}__{reference}"),
             value);
 
     public Task WriteSourceSecretAsync(string tenantSlug, string reference, string value) =>
         File.WriteAllTextAsync(
-            Path.Combine(ingestionSecretsDirectory, $"SourceSecrets__{tenantSlug}__{reference}"),
+            Path.Combine(sourceSecretsDirectory, $"SourceSecrets__{tenantSlug}__{reference}"),
             value);
 
     public Task RestartWorkerAsync() => RestartServiceAsync("worker");
