@@ -32,20 +32,10 @@ param databaseAdministratorPassword string
 @secure()
 param operatorKeySecret string
 
-@secure()
-param sourceSecretValue string
-
-@secure()
-param destinationSecretValue string
-
 param databaseAdministratorLogin string = 'integrios_admin'
 @minLength(1)
 param adminAllowedCidrs array
 param ingestionExternal bool = true
-param mappingTenantSlug string
-param sourceReference string
-param destinationReference string
-param mappingRevision string
 
 @description('OpenID Connect issuer for Operator dashboard sign-in, for example https://login.microsoftonline.com/<tenant-id>/v2.0. Leave empty to deploy without dashboard sign-in.')
 param adminOidcAuthority string = ''
@@ -149,6 +139,11 @@ var databaseEnvironment = [
   { name: 'DOTNET_ENVIRONMENT', value: 'Production' }
   { name: 'Database__Provider', value: databaseProvider }
   { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', secretRef: databaseSecretName }
+]
+// Worker and the secret-validation job share Worker's identity and its Destination-secret vault.
+var destinationSecretsEnvironment = [
+  { name: 'Integrios__KeyVault__Uri', value: destinationSecretsVault.properties.vaultUri }
+  { name: 'AZURE_CLIENT_ID', value: workerIdentity.properties.clientId }
 ]
 var keyVaultSecretsUserRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
 
@@ -428,6 +423,36 @@ resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
+// Tenant secrets live in one vault per direction, apart from the deployment settings above. Each
+// runtime process loads every secret in its own vault at startup through the Key Vault
+// configuration source, so a vault must hold only that direction's SourceSecrets--* or
+// DestinationSecrets--* values.
+resource sourceSecretsVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
+  name: 'kv-${take(namePrefix, 8)}-src-${take(uniqueString(resourceGroup().id), 6)}'
+  location: location
+  properties: {
+    tenantId: subscription().tenantId
+    enableRbacAuthorization: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 7
+    publicNetworkAccess: 'Enabled'
+    sku: { family: 'A', name: 'standard' }
+  }
+}
+
+resource destinationSecretsVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
+  name: 'kv-${take(namePrefix, 8)}-dst-${take(uniqueString(resourceGroup().id), 6)}'
+  location: location
+  properties: {
+    tenantId: subscription().tenantId
+    enableRbacAuthorization: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 7
+    publicNetworkAccess: 'Enabled'
+    sku: { family: 'A', name: 'standard' }
+  }
+}
+
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = if (!useSqlServer) {
   name: 'pg-${namePrefix}-${uniqueString(resourceGroup().id)}'
   location: location
@@ -534,18 +559,6 @@ resource adminOidcClientSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-0
   properties: { value: adminOidcClientSecret }
 }
 
-resource sourceSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: vault
-  name: 'source-${mappingTenantSlug}-${replace(sourceReference, '_', '-')}'
-  properties: { value: sourceSecretValue }
-}
-
-resource destinationSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: vault
-  name: 'destination-${mappingTenantSlug}-${replace(destinationReference, '_', '-')}'
-  properties: { value: destinationSecretValue }
-}
-
 resource adminIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-${namePrefix}-admin'
   location: location
@@ -618,14 +631,16 @@ resource bootstrapOperatorSecret 'Microsoft.Authorization/roleAssignments@2022-0
   properties: { principalId: bootstrapIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
 }
 
-resource ingestionSourceSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: sourceSecret
-  name: guid(sourceSecret.id, ingestionIdentity.id, keyVaultSecretsUserRoleId)
+// Only Ingestion reads Source secrets; only Worker, and the secret-validation job that runs as
+// Worker's identity, read Destination secrets.
+resource ingestionSourceSecrets 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: sourceSecretsVault
+  name: guid(sourceSecretsVault.id, ingestionIdentity.id, keyVaultSecretsUserRoleId)
   properties: { principalId: ingestionIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
 }
-resource workerDestinationSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: destinationSecret
-  name: guid(destinationSecret.id, workerIdentity.id, keyVaultSecretsUserRoleId)
+resource workerDestinationSecrets 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: destinationSecretsVault
+  name: guid(destinationSecretsVault.id, workerIdentity.id, keyVaultSecretsUserRoleId)
   properties: { principalId: workerIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
 }
 
@@ -649,7 +664,6 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
       registries: [{ server: registryServer, identity: ingestionIdentity.id }]
       secrets: [
         { name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: ingestionIdentity.id }
-        { name: 'source-${mappingRevision}', keyVaultUrl: sourceSecret.properties.secretUriWithVersion, identity: ingestionIdentity.id }
       ]
     }
     template: {
@@ -657,8 +671,8 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
         name: 'ingestion'
         image: ingestionImage
         env: concat(databaseEnvironment, [
-          { name: 'Integrios__SourceSecrets__Provider', value: 'configuration' }
-          { name: 'SourceSecrets__${mappingTenantSlug}__${sourceReference}', secretRef: 'source-${mappingRevision}' }
+          { name: 'Integrios__KeyVault__Uri', value: sourceSecretsVault.properties.vaultUri }
+          { name: 'AZURE_CLIENT_ID', value: ingestionIdentity.properties.clientId }
         ], telemetryEnvironment)
         resources: { cpu: json('0.5'), memory: '1Gi' }
         probes: [
@@ -669,7 +683,7 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
-  dependsOn: [acrPull, ingestionDatabaseSecret, ingestionSourceSecret]
+  dependsOn: [acrPull, ingestionDatabaseSecret, ingestionSourceSecrets]
 }
 
 module serviceBusReceiver 'service-bus-receiver.bicep' = if (serviceBusEnabled) {
@@ -755,7 +769,6 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
       registries: [{ server: registryServer, identity: workerIdentity.id }]
       secrets: [
         { name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: workerIdentity.id }
-        { name: 'destination-${mappingRevision}', keyVaultUrl: destinationSecret.properties.secretUriWithVersion, identity: workerIdentity.id }
       ]
     }
     template: {
@@ -764,10 +777,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
         image: workerImage
         // Completed-history retention is intentionally absent. Add
         // Integrios__Worker__HistoryRetention__Period only after reviewing the rollout warning.
-        env: concat(databaseEnvironment, [
-          { name: 'Integrios__DestinationSecrets__Provider', value: 'configuration' }
-          { name: 'DestinationSecrets__${mappingTenantSlug}__${destinationReference}', secretRef: 'destination-${mappingRevision}' }
-        ], telemetryEnvironment)
+        env: concat(databaseEnvironment, destinationSecretsEnvironment, telemetryEnvironment)
         resources: { cpu: json('0.5'), memory: '1Gi' }
         probes: [
           { type: 'Liveness', httpGet: { path: '/health', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 30 }
@@ -777,7 +787,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
-  dependsOn: [acrPull, workerDatabaseSecret, workerDestinationSecret]
+  dependsOn: [acrPull, workerDatabaseSecret, workerDestinationSecrets]
 }
 
 resource migrateJob 'Microsoft.App/jobs@2025-07-01' = {
@@ -853,7 +863,6 @@ resource validateSecretsJob 'Microsoft.App/jobs@2025-07-01' = {
       registries: [{ server: registryServer, identity: workerIdentity.id }]
       secrets: [
         { name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: workerIdentity.id }
-        { name: 'destination-${mappingRevision}', keyVaultUrl: destinationSecret.properties.secretUriWithVersion, identity: workerIdentity.id }
       ]
     }
     template: {
@@ -861,15 +870,12 @@ resource validateSecretsJob 'Microsoft.App/jobs@2025-07-01' = {
         name: 'validate'
         image: workerImage
         args: ['secrets', 'validate', '--all']
-        env: concat(databaseEnvironment, [
-          { name: 'Integrios__DestinationSecrets__Provider', value: 'configuration' }
-          { name: 'DestinationSecrets__${mappingTenantSlug}__${destinationReference}', secretRef: 'destination-${mappingRevision}' }
-        ])
+        env: concat(databaseEnvironment, destinationSecretsEnvironment)
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
     }
   }
-  dependsOn: [acrPull, workerDatabaseSecret, workerDestinationSecret]
+  dependsOn: [acrPull, workerDatabaseSecret, workerDestinationSecrets]
 }
 
 module telemetryPublisher 'telemetry-publisher.bicep' = {
@@ -890,6 +896,10 @@ output adminOidcRedirectUris object = {
   signedOut: 'https://${admin.properties.configuration.ingress.fqdn}/auth/signed-out'
 }
 output ingestionFqdn string = ingestion.properties.configuration.ingress.fqdn
+output secretVaults object = {
+  source: sourceSecretsVault.name
+  destination: destinationSecretsVault.name
+}
 output appNames object = appNames
 output jobNames object = jobNames
 output monitoring object = {

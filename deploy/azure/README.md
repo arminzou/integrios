@@ -5,7 +5,8 @@ Azure Container Apps. Copy it, review it, and adapt the Bicep to your networking
 availability, security, and operational requirements.
 
 The reference deploys separate Admin, Ingestion, and Worker Container Apps; migration, Bootstrap,
-and secret-validation jobs; one selected managed database; Key Vault; Log Analytics;
+and secret-validation jobs; one selected managed database; a Key Vault for deployment settings and
+one Tenant-secret Key Vault per direction; Log Analytics;
 Application Insights; Azure Managed Prometheus; an Operator Workbook; and an Azure Files share for
 Admin's Data Protection key ring. It reuses an existing Azure Container Registry and never
 provisions Service Bus topology.
@@ -32,7 +33,9 @@ provisions Service Bus topology.
   Service Bus resource groups;
 - an existing ACR containing the matched Admin, Ingestion, and Worker images;
 - a region available to both Container Apps and the selected managed database in your subscription;
-- one explicit Admin caller CIDR—empty and allow-all lists are rejected.
+- one explicit Admin caller CIDR—empty and allow-all lists are rejected;
+- permission to assign yourself `Key Vault Secrets Officer` on the two Tenant-secret vaults after
+  the first deployment (see [Tenant secrets](#tenant-secrets)).
 
 The supplied OpenTelemetry Collector Contrib image is pinned by digest. Treat the sidecar as
 trusted runtime code: Container Apps identities are app-scoped, so it shares each app's identity
@@ -72,7 +75,7 @@ foreach ($service in @('admin', 'ingestion', 'worker')) {
 ```
 
 Copy `main.example.bicepparam`, replace its placeholder registry, resource group, image digests,
-region, names, CIDRs, and secret-reference metadata, and keep the file free of secret values. The
+region, names, and CIDRs, and keep the file free of secret values. The
 example selects Azure SQL. Set `databaseProvider = 'postgres'` to provision PostgreSQL instead.
 
 `ingestionExternal` and Service Bus coordinates are independent. Leave both Service Bus values
@@ -96,8 +99,8 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 ```
 
 Automation may pass `SecureString` values through `-DatabaseAdministratorPassword`,
-`-OperatorKeySecret`, `-SourceSecret`, `-DestinationSecret`, and, when dashboard sign-in is
-enabled, `-AdminOidcClientSecret`. The command rejects secret values in the `.bicepparam` file. For
+`-OperatorKeySecret`, and, when dashboard sign-in is enabled, `-AdminOidcClientSecret`. Tenant
+secrets are never deployment inputs. The command rejects secret values in the `.bicepparam` file. For
 each ARM deployment it creates a randomly named temporary parameter file containing those plaintext
 values because Azure CLI requires materialized deployment parameters,
 opens it without file sharing, and deletes it immediately in `finally`. A forced process or machine
@@ -120,9 +123,66 @@ The command always:
 A failed migration, Bootstrap, or validation job leaves runtime stopped. After a schema migration,
 recover by rolling forward or restoring the database rather than starting an older image set.
 
-Rotate a source or destination value by supplying the replacement secure value and changing
-`mappingRevision`; the Key Vault version reference then creates fresh Container Apps revisions.
-The logical `SourceSecrets` and `DestinationSecrets` references do not change.
+The validation job checks every Destination secret reference in the database against the
+Destination-secret vault. Store a new Destination's secret before the next deployment, or the
+deployment stops at validation with runtime stopped for every Tenant.
+
+## Tenant secrets
+
+Tenant secrets are not template inputs. Ingestion and Worker read them at startup from their own
+vault through the standard .NET Key Vault configuration source, so any number of Tenants' secrets
+can be added without editing or redeploying the template:
+
+| Vault (deployment output `secretVaults`) | Readable by | Secret name |
+|---|---|---|
+| `source` | Ingestion | `SourceSecrets--<tenant-slug>--<secret-reference>` |
+| `destination` | Worker and the secret-validation job | `DestinationSecrets--<tenant-slug>--<secret-reference>` |
+
+Each identity holds `Key Vault Secrets User` on its own vault only, so neither runtime process can
+read the other direction's secrets. The deployment-settings vault is separate and unchanged. Keep
+anything else out of these two vaults: every secret in a vault becomes a configuration key of the
+process that reads it.
+
+The Key Vault configuration source maps `--` to the configuration separator, so
+`DestinationSecrets--acme--erp-api-key` resolves as `DestinationSecrets:acme:erp-api-key`. Key
+Vault secret names are at most 127 characters, which leaves 105 characters for the Tenant slug plus
+the secret reference in the Destination vault and 110 in the Source vault. Integrios does not
+enforce that limit; a longer pair cannot be stored in these vaults.
+
+Once, after the first deployment, grant yourself write access to both vaults:
+
+```powershell
+$resourceGroup = 'rg-integrios-reference'
+$vaults = az deployment group show --resource-group $resourceGroup --name main `
+  --query properties.outputs.secretVaults.value | ConvertFrom-Json
+$me = az ad signed-in-user show --query id --output tsv
+foreach ($vault in @($vaults.source, $vaults.destination)) {
+  az role assignment create --assignee-object-id $me --assignee-principal-type User `
+    --role 'Key Vault Secrets Officer' `
+    --scope (az keyvault show --name $vault --query id --output tsv)
+}
+```
+
+To add or rotate a secret, set it in the owning vault, then restart the owning app so it reloads
+the vault. For a Destination secret:
+
+```powershell
+az keyvault secret set --vault-name $vaults.destination `
+  --name 'DestinationSecrets--acme--erp-api-key' --file ./erp-api-key.txt --encoding utf-8
+$app = az deployment group show --resource-group $resourceGroup --name main `
+  --query properties.outputs.appNames.value.worker --output tsv
+$revision = az containerapp revision list --resource-group $resourceGroup --name $app `
+  --query '[?properties.active].name | [0]' --output tsv
+az containerapp revision restart --resource-group $resourceGroup --name $app --revision $revision
+```
+
+Use `$vaults.source`, `SourceSecrets--<tenant-slug>--<secret-reference>`, and the `ingestion` app
+for a Source secret. Reading the value from a file keeps it out of shell history; leading and
+trailing line breaks are trimmed at resolution. To check Destination references without a
+redeployment, start the job named by the `jobNames.validateSecrets` output with
+`az containerapp job start`. A vault that the
+app's identity cannot reach stops the app from starting, and a newly created role assignment can
+take a few minutes to apply.
 
 ## Dashboard sign-in with Microsoft Entra ID
 
@@ -188,6 +248,9 @@ Observability failures do not participate in liveness or readiness.
   current.
 - Confirm each image digest exists in the configured ACR and each user-assigned identity has
   `AcrPull`.
+- If Ingestion, Worker, or the validation job fails at startup with a Key Vault error, confirm its
+  identity holds `Key Vault Secrets User` on its own Tenant-secret vault; a new assignment can take
+  a few minutes to apply.
 - For broker Sources, confirm both Service Bus coordinates were supplied, Ingestion has receiver
   access, and the Admin-authored Source names the intended existing entity.
 
