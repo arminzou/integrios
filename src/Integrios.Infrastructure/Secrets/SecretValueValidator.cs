@@ -39,6 +39,9 @@ internal static class SecretValueValidator
             string? trimmed = value?.Trim('\r', '\n');
             if (string.IsNullOrEmpty(trimmed)
                 || trimmed.Contains('\0', StringComparison.Ordinal)
+                // Key-per-file decodes leniently, turning undecodable bytes into U+FFFD; reject
+                // that marker so a mis-encoded file fails here instead of as a remote 401.
+                || trimmed.Contains('�', StringComparison.Ordinal)
                 || StrictUtf8.GetByteCount(trimmed) > MaxBytes)
             {
                 throw new SecretResolutionException(secretReference, providerName);

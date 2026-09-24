@@ -12,6 +12,7 @@ bool secretCommand = SecretValidationCli.IsCommand(args);
 
 try
 {
+    builder.Configuration.AddSecretConfigurationSources();
     int operationalPort = builder.AddOperationalEndpoints("WorkerMetricsPort", operationalOnly: true);
 
     builder.Services.AddWorkerApplicationServices();

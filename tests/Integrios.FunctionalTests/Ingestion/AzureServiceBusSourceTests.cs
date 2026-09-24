@@ -349,7 +349,6 @@ public sealed class AzureServiceBusSourceFixture : IAsyncLifetime
 
         factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
             builder.UseSetting("Database:Provider", Database.Provider);
             builder.UseSetting($"ConnectionStrings:{Database.ConnectionName}", Database.ConnectionString);
             builder.ConfigureAppConfiguration((_, config) => config.AddConfiguration(Database.Configuration));

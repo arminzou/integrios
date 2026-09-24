@@ -278,7 +278,6 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     private WebApplicationFactory<IngestionHost::Program> BuildWebFactory() =>
         new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
             builder.UseSetting("Database:Provider", database.Provider);
             builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
             builder.ConfigureAppConfiguration((_, config) =>

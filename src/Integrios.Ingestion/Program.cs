@@ -10,6 +10,7 @@ using Integrios.Ingestion.ErrorHandling;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddSecretConfigurationSources();
 bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 int operationalPort = builder.AddOperationalEndpoints("OperationalPort");

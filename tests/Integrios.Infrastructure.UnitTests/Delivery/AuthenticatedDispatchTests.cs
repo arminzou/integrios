@@ -10,6 +10,7 @@ using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Delivery;
 using Integrios.Tests.Shared;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -223,7 +224,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IDestinationAuthenticatorRegistry>(CreateRegistry());
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string>()));
+            services.AddDestinationAuthenticationSecretResolutionServices(new ConfigurationBuilder().Build());
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -232,6 +233,7 @@ public sealed class AuthenticatedDispatchTests
         DeliveryAttemptCompletion completion = queue.Completions.ShouldHaveSingleItem();
         completion.Succeeded.ShouldBeFalse();
         completion.FailurePhase.ShouldBe(DeliveryFailurePhase.SecretResolution);
+        completion.ErrorMessage.ShouldNotBeNull().ShouldEndWith("could not be resolved using provider 'configuration'.");
         queue.Finalizations.ShouldHaveSingleItem().Disposition.ShouldBe(EventDeliveryDisposition.RetryScheduled);
         loggerProvider.AnyMessageContains("failure_phase=secret_resolution").ShouldBeTrue();
         metrics.ForInstrument("integrios_delivery_secret_resolution_failures")

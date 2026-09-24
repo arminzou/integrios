@@ -128,7 +128,6 @@ public sealed class BrokerSourceReconciliationFixture : IAsyncLifetime
 
         factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
             builder.UseSetting("Integrios:BrokerSources:ReconcileSeconds", "1");
             builder.UseSetting("Database:Provider", Database.Provider);
             builder.UseSetting($"ConnectionStrings:{Database.ConnectionName}", Database.ConnectionString);

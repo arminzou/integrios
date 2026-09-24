@@ -14,7 +14,7 @@ namespace Integrios.Ingestion.UnitTests;
 public sealed class IngestionApiFixture : IDisposable
 {
     // Fixed identity used by WebhookEndpointTests to exercise the real
-    // ISourceVerificationSecretResolver production path (configuration-backed provider) rather
+    // ISourceVerificationSecretResolver production path (in-memory configuration source) rather
     // than a stub, per i7a.5's acceptance criteria.
     public const string WebhookTenantSlug = "acme";
     public const string WebhookSecretReference = "webhook_secret";
@@ -69,7 +69,6 @@ internal sealed class CustomApiFactory(
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("Integrios:SourceSecrets:Provider", "configuration");
         builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {

@@ -104,7 +104,7 @@ public sealed class SecretValidationCliTests
     }
 
     [Fact]
-    public async Task Process_InvalidStartupConfigurationReturnsUsageExitCodeWithoutStackTrace()
+    public async Task Process_InvalidKeyVaultUriFailsStartupWithUsageExitCodeWithoutStackTrace()
     {
         string workerAssembly = typeof(SecretValidationCli).Assembly.Location;
         var startInfo = new ProcessStartInfo("dotnet")
@@ -118,7 +118,7 @@ public sealed class SecretValidationCliTests
         startInfo.ArgumentList.Add("validate");
         startInfo.ArgumentList.Add("--all");
         startInfo.Environment["ConnectionStrings__Postgres"] = "Host=localhost;Database=integrios;Username=test;Password=test";
-        startInfo.Environment["Integrios__DestinationSecrets__Provider"] = "unsupported";
+        startInfo.Environment["Integrios__KeyVault__Uri"] = "not a vault uri";
 
         using Process process = Process.Start(startInfo)!;
         string standardError = await process.StandardError.ReadToEndAsync();
