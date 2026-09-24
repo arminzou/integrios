@@ -28,8 +28,3 @@ param serviceBusResourceGroupName = ''
 param adminOidcAuthority = ''
 param adminOidcClientId = ''
 param adminOidcDisplayName = 'Microsoft Entra ID'
-
-param mappingTenantSlug = 'example'
-param sourceReference = 'webhook_hmac'
-param destinationReference = 'destination_api_key'
-param mappingRevision = 'v1'

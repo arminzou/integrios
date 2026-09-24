@@ -5,8 +5,6 @@ param(
     [Parameter(Mandatory)] [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })] [string] $ParametersFile,
     [securestring] $DatabaseAdministratorPassword,
     [securestring] $OperatorKeySecret,
-    [securestring] $SourceSecret,
-    [securestring] $DestinationSecret,
     [securestring] $AdminOidcClientSecret
 )
 
@@ -37,8 +35,6 @@ function Invoke-Deployment([int] $RuntimeReplicaCount) {
         $deploymentParameters = $compiled.parametersJson | ConvertFrom-Json -AsHashtable
         $deploymentParameters.parameters.databaseAdministratorPassword = @{ value = ConvertFrom-SecureValue $DatabaseAdministratorPassword }
         $deploymentParameters.parameters.operatorKeySecret = @{ value = ConvertFrom-SecureValue $OperatorKeySecret }
-        $deploymentParameters.parameters.sourceSecretValue = @{ value = ConvertFrom-SecureValue $SourceSecret }
-        $deploymentParameters.parameters.destinationSecretValue = @{ value = ConvertFrom-SecureValue $DestinationSecret }
         if ($adminOidcEnabled) {
             $deploymentParameters.parameters.adminOidcClientSecret = @{ value = ConvertFrom-SecureValue $AdminOidcClientSecret }
         }
@@ -135,7 +131,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($compiled.parametersJso
 }
 $parameters = ($compiled.parametersJson | ConvertFrom-Json).parameters
 
-foreach ($scriptOwnedName in @('databaseAdministratorPassword', 'operatorKeySecret', 'sourceSecretValue', 'destinationSecretValue', 'adminOidcClientSecret', 'runtimeReplicaCount')) {
+foreach ($scriptOwnedName in @('databaseAdministratorPassword', 'operatorKeySecret', 'adminOidcClientSecret', 'runtimeReplicaCount')) {
     if ($null -ne $parameters.PSObject.Properties[$scriptOwnedName]) {
         throw "Remove '$scriptOwnedName' from the nonsecret Bicep parameter file; deploy.ps1 owns it."
     }
@@ -186,8 +182,6 @@ Invoke-AzureCli account show --only-show-errors --output none
 
 if ($null -eq $DatabaseAdministratorPassword) { $DatabaseAdministratorPassword = Read-Host 'Database administrator password' -AsSecureString }
 if ($null -eq $OperatorKeySecret) { $OperatorKeySecret = Read-Host 'Initial OperatorKey secret' -AsSecureString }
-if ($null -eq $SourceSecret) { $SourceSecret = Read-Host 'Source secret value' -AsSecureString }
-if ($null -eq $DestinationSecret) { $DestinationSecret = Read-Host 'Destination secret value' -AsSecureString }
 if ($adminOidcEnabled) {
     if ($null -eq $AdminOidcClientSecret) { $AdminOidcClientSecret = Read-Host 'Dashboard OpenID Connect client secret' -AsSecureString }
     if ($AdminOidcClientSecret.Length -eq 0) { throw 'Dashboard sign-in requires the OpenID Connect client secret.' }
@@ -218,5 +212,7 @@ foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
 
 Write-Host "Ready: https://$($outputs.adminFqdn.value)"
 Write-Host "Ingestion: https://$($outputs.ingestionFqdn.value)"
+Write-Host "Source-secret vault: $($outputs.secretVaults.value.source)"
+Write-Host "Destination-secret vault: $($outputs.secretVaults.value.destination)"
 Write-Host "OpenID Connect redirect URI: $($outputs.adminOidcRedirectUris.value.callback)"
 Write-Host "OpenID Connect sign-out redirect URI: $($outputs.adminOidcRedirectUris.value.signedOut)"
