@@ -458,13 +458,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         }
 
         ComposeResult tenantCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?>(),
             "secrets", "validate", "--tenant", fileA.Slug);
         tenantCli.ExitCode.ShouldBe(0);
         tenantCli.Output.ShouldNotContain("file-a-value", Case.Sensitive);
 
         ComposeResult fullDeploymentCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?>(),
             "secrets", "validate", "--all");
         fullDeploymentCli.ExitCode.ShouldBe(1);
         fullDeploymentCli.Output.ShouldNotContain("file-a-value", Case.Sensitive);
