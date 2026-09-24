@@ -269,16 +269,9 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         await WaitForServiceAsync("worker");
     }
 
-    public async Task<ComposeResult> RunWorkerCommandAsync(
-        IReadOnlyDictionary<string, string?> commandEnvironment,
-        params string[] arguments)
+    public async Task<ComposeResult> RunWorkerCommandAsync(params string[] arguments)
     {
         var composeArguments = new List<string> { "run", "--rm", "--no-deps" };
-        foreach ((string key, string? value) in commandEnvironment)
-        {
-            composeArguments.Add("-e");
-            composeArguments.Add($"{key}={value ?? string.Empty}");
-        }
         composeArguments.Add("worker");
         composeArguments.AddRange(arguments);
         return await RunComposeAsync(TimeSpan.FromMinutes(2), composeArguments.ToArray());
