@@ -29,12 +29,16 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
         string tenantSlug = $"golden-{Suffix()}";
         Guid tenant = await CreateTenantAsync(tenantSlug);
 
+        // Secrets load at process start, so both are in place before the owning services restart.
         const string githubSecret = "acceptance-github-secret";
         await fixture.WriteSourceSecretAsync(tenantSlug, GitHubSecretReference, githubSecret);
+        await fixture.WriteDestinationSecretAsync(tenantSlug, SlackSecretReference, "xoxb-acceptance-token");
+        await fixture.RestartIngestionAsync();
+        await fixture.RestartWorkerAsync();
+
         Guid topic = await CreateTopicAsync(tenant, "github-events");
         string callbackPath = await CreateWebhookSourceAsync(tenant, githubConnectorId, topic);
 
-        await fixture.WriteSecretAsync(tenantSlug, SlackSecretReference, "xoxb-acceptance-token");
         Guid slackDestination = await CreateSlackDestinationAsync(tenant, slackConnectorId);
         Guid subscription = await CreateSlackSubscriptionAsync(tenant, topic, slackDestination);
 

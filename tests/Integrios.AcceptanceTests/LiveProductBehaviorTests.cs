@@ -155,8 +155,9 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         TenantContext tenant = await CreateTenantAsync($"fanout-{Suffix()}");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "payments");
 
-        await fixture.WriteSecretAsync(tenant.Slug, "api-key", "api-key-value");
-        await fixture.WriteSecretAsync(tenant.Slug, "bearer-token", "bearer-token-value");
+        await fixture.WriteDestinationSecretAsync(tenant.Slug, "api-key", "api-key-value");
+        await fixture.WriteDestinationSecretAsync(tenant.Slug, "bearer-token", "bearer-token-value");
+        await fixture.RestartWorkerAsync();
 
         Guid transformedDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "transform-destination", "http://mocksink:8080/sink/transform");
@@ -322,7 +323,8 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             DestinationBody(SourceOnlyConnectorId, "source-only-destination", "http://mocksink:8080/sink/source-only"));
         directionRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
-        await fixture.WriteSecretAsync(tenant.Slug, "redirect-secret", "redirect-secret-value");
+        await fixture.WriteDestinationSecretAsync(tenant.Slug, "redirect-secret", "redirect-secret-value");
+        await fixture.RestartWorkerAsync();
         Guid redirectDestination = await CreateDestinationAsync(
             tenant,
             ApiKeyConnectorId,
@@ -401,19 +403,36 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     }
 
     [Fact]
-    public async Task SecretProviders_ResolveRotateAndValidate_WithoutDisclosingValues()
+    public async Task SecretSources_ResolveRotateAndValidate_WithoutDisclosingValues()
     {
         TenantContext fileA = await CreateTenantAsync($"file-a-{Suffix()}");
         TenantContext fileB = await CreateTenantAsync($"file-b-{Suffix()}");
-        await fixture.WriteSecretAsync(fileA.Slug, "shared-secret", "file-a-value");
-        await fixture.WriteSecretAsync(fileB.Slug, "shared-secret", "file-b-value");
-        await fixture.RecreateWorkerAsync("file");
+        TenantContext rotation = await CreateTenantAsync($"rotation-{Suffix()}");
+        // The environment-variable scenario is wired to this exact slug by the acceptance Compose
+        // environment, so it must not be suffixed.
+        TenantContext configuration = await CreateTenantAsync("acceptance-config");
+        await fixture.WriteDestinationSecretAsync(fileA.Slug, "shared-secret", "file-a-value");
+        await fixture.WriteDestinationSecretAsync(fileB.Slug, "shared-secret", "file-b-value");
+        await fixture.WriteDestinationSecretAsync(rotation.Slug, "shared-secret", "rotation-v1");
+        await fixture.WriteDestinationSecretAsync(configuration.Slug, "shared-secret", "file-value");
+        await fixture.WriteDestinationSecretAsync(configuration.Slug, "line-break", "unsafe\r\nvalue");
+        await fixture.RecreateWorkerAsync("configuration-value", "configuration-only-value");
 
+        // Key-per-file files resolve per Tenant; the same reference never crosses Tenants.
         await AssertAuthenticatedTenantDeliveryAsync(fileA, "file-a", "shared-secret", "file-a-value");
         await AssertAuthenticatedTenantDeliveryAsync(fileB, "file-b", "shared-secret", "file-b-value");
 
-        TenantContext rotation = await CreateTenantAsync($"rotation-{Suffix()}");
-        fixture.RotateSecretSymlink(rotation.Slug, "shared-secret", "secret-v1", "rotation-v1");
+        // An environment variable resolves on its own, and a key-per-file file for the same key
+        // takes precedence over it because key-per-file is added after the framework defaults.
+        await AssertAuthenticatedTenantDeliveryAsync(
+            configuration, "configuration-only", "config-only", "configuration-only-value");
+        await AssertAuthenticatedTenantDeliveryAsync(
+            configuration, "configuration-precedence", "shared-secret", "file-value");
+        await AssertMissingSecretFailsAsync(configuration, "configuration-missing", "absent");
+        await AssertMissingSecretFailsAsync(configuration, "line-break", "line-break", "request_construction");
+
+        // Rotation is a file write followed by a restart; a pending retry picks up the new value.
+        // The Worker is stopped across the write so no retry reaches the failing sink meanwhile.
         (Guid rotationSource, Guid rotationTopic) = await CreateSourceTopicAsync(rotation, "rotation");
         Guid rotationDestination = await CreateDestinationAsync(
             rotation, ApiKeyConnectorId, "rotation-destination", "http://mocksink:8080/sink/rotation", ApiKeyAuth("shared-secret"));
@@ -426,8 +445,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await WaitForAttemptCountAsync(rotationEvent.Id, rotationSubscription, 1);
             await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v1");
             await fixture.WireMockSink.ResetReceiptsAsync("rotation");
-            fixture.RotateSecretSymlink(rotation.Slug, "shared-secret", "secret-v2", "rotation-v2");
+            await fixture.StopWorkerAsync();
+            await fixture.WriteDestinationSecretAsync(rotation.Slug, "shared-secret", "rotation-v2");
             await fixture.WireMockSink.ResetControlAsync("rotation");
+            await fixture.StartWorkerAsync();
             await WaitForDeliveryStatusAsync(rotationEvent.Id, rotationSubscription, "succeeded");
             await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v2");
         }
@@ -436,52 +457,20 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await fixture.WireMockSink.ResetControlAsync("rotation");
         }
 
-        // The configuration-provider scenario is wired to this exact slug by the acceptance Compose
-        // environment, so it must not be suffixed.
-        TenantContext configuration = await CreateTenantAsync("acceptance-config");
-        await fixture.WriteSecretAsync(configuration.Slug, "shared-secret", "wrong-file-value");
-        try
-        {
-            await fixture.RecreateWorkerAsync("configuration", "configuration-value", "configuration-only-value");
-            await AssertAuthenticatedTenantDeliveryAsync(
-                configuration, "configuration", "shared-secret", "configuration-value");
-
-            await fixture.WriteSecretAsync(configuration.Slug, "file-only", "file-only-value");
-            await AssertMissingSecretFailsAsync(configuration, "configuration-no-file-fallback", "file-only");
-
-            ComposeResult configCli = await fixture.RunWorkerCommandAsync(
-                new Dictionary<string, string?>
-                {
-                    ["Integrios__DestinationSecrets__Provider"] = "configuration",
-                    ["DestinationSecrets__acceptance-config__shared-secret"] = "configuration-value"
-                },
-                "secrets", "validate", "--tenant", configuration.Slug);
-            configCli.ExitCode.ShouldBe(1);
-            configCli.Output.ShouldNotContain("configuration-value", Case.Sensitive);
-        }
-        finally
-        {
-            await fixture.RecreateWorkerAsync("file", "configuration-value", "configuration-only-value");
-        }
-
-        await AssertMissingSecretFailsAsync(configuration, "file-no-config-fallback", "config-only");
-
-        await fixture.WriteSecretAsync(configuration.Slug, "line-break", "unsafe\r\nvalue");
-        await AssertMissingSecretFailsAsync(configuration, "line-break", "line-break", "request_construction");
-
-        ComposeResult fileCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
+        ComposeResult tenantCli = await fixture.RunWorkerCommandAsync(
+            new Dictionary<string, string?>(),
             "secrets", "validate", "--tenant", fileA.Slug);
-        fileCli.ExitCode.ShouldBe(0);
-        fileCli.Output.ShouldNotContain("file-a-value", Case.Sensitive);
+        tenantCli.ExitCode.ShouldBe(0);
+        tenantCli.Output.ShouldNotContain("file-a-value", Case.Sensitive);
 
         ComposeResult fullDeploymentCli = await fixture.RunWorkerCommandAsync(
-            new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
+            new Dictionary<string, string?>(),
             "secrets", "validate", "--all");
         fullDeploymentCli.ExitCode.ShouldBe(1);
         fullDeploymentCli.Output.ShouldNotContain("file-a-value", Case.Sensitive);
         fullDeploymentCli.Output.ShouldNotContain("file-b-value", Case.Sensitive);
         fullDeploymentCli.Output.ShouldNotContain("rotation-v2", Case.Sensitive);
+        fullDeploymentCli.Output.ShouldNotContain("configuration-only-value", Case.Sensitive);
     }
 
     [Fact]
@@ -519,10 +508,12 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         // authenticates; inbound is a webhook Ingestion verifies. They are separate mounts read by
         // separate processes, so covering only one says nothing about the other.
         TenantContext tenant = await CreateTenantAsync($"secrets-{Suffix()}");
-        await fixture.WriteSecretAsync(tenant.Slug, "probe-secret", "probe-secret-value");
+        await fixture.WriteDestinationSecretAsync(tenant.Slug, "probe-secret", "probe-secret-value");
+        await fixture.RestartWorkerAsync();
         await AssertAuthenticatedTenantDeliveryAsync(tenant, "probe", "probe-secret", "probe-secret-value");
 
         await fixture.WriteSourceSecretAsync(tenant.Slug, "probe-source-secret", "probe-source-secret-value");
+        await fixture.RestartIngestionAsync();
         await AssertVerifiedWebhookIntakeAsync(tenant, "probe-source-secret", "probe-source-secret-value");
 
         (await fixture.ScalarAsync<long>(

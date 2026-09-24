@@ -37,6 +37,7 @@ Set-Location -LiteralPath $script:repoRoot
 $operatorKey = if ($env:INTEGRIOS_OPERATOR_KEY) { $env:INTEGRIOS_OPERATOR_KEY } else { 'global_operator_key:operator_bootstrap_secret' }
 $script:auth = @{ Authorization = "OperatorKey $operatorKey" }
 
+$ingestionOperational = if ($env:INTEGRIOS_INGESTION_OPERATIONAL_PORT) { "http://127.0.0.1:$($env:INTEGRIOS_INGESTION_OPERATIONAL_PORT)" } else { 'http://127.0.0.1:5232' }
 $serviceBusHttp = if ($env:INTEGRIOS_SERVICEBUS_HTTP_PORT) { "http://127.0.0.1:$($env:INTEGRIOS_SERVICEBUS_HTTP_PORT)" } else { 'http://127.0.0.1:5300' }
 $serviceBusPort = if ($env:INTEGRIOS_SERVICEBUS_PORT) { $env:INTEGRIOS_SERVICEBUS_PORT } else { '5672' }
 $serviceBusQueue = 'ui-demo'
@@ -259,9 +260,23 @@ $nwStockSrc = New-Source -Tenant $nw -Connector $script:connector -Topic $nwStoc
 $nwWebhookSrc = New-Source -Tenant $nw -Connector $script:connector -Topic $nwWebhooks -Name 'Northwind storefront webhooks' -EventTypes @('storefront.webhook.received') -Type 'webhook'
 $nwWebhookCallback = (Invoke-Admin -Method Get -Path "/admin/tenants/$nw/sources/$nwWebhookSrc").configuration.callback_id
 if ($includeQueueDemo) {
-    $secretDir = Join-Path $script:repoRoot 'secrets/source/northwind-retail'
+    # Key-per-file values load at startup, so Ingestion restarts to pick up the new secret.
+    $secretDir = Join-Path $script:repoRoot 'secrets/ingestion'
     New-Item -ItemType Directory -Force -Path $secretDir | Out-Null
-    Set-Content -LiteralPath (Join-Path $secretDir $serviceBusSecret) -Value $serviceBusContainerConnection -NoNewline
+    Set-Content -LiteralPath (Join-Path $secretDir "SourceSecrets__northwind-retail__$serviceBusSecret") -Value $serviceBusContainerConnection -NoNewline
+    docker compose restart ingestion
+    $ready = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            Invoke-WebRequest -Uri "$ingestionOperational/ready" | Out-Null
+            $ready = $true
+            break
+        }
+        catch {
+            Start-Sleep -Seconds 2
+        }
+    }
+    if (-not $ready) { throw 'Ingestion did not become ready after restarting for the Service Bus secret.' }
     $nwQueueSrc = New-Source -Tenant $nw -Connector $script:connector -Topic $nwQueue -Name 'Northwind warehouse receipts' `
         -EventTypes @('warehouse.receipt.recorded') -Type 'broker' -Configuration @{
             source_contract  = 'event_json'

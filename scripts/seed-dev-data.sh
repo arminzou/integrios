@@ -12,6 +12,7 @@ set -euo pipefail
 
 ADMIN=${ADMIN:-http://localhost:5150}
 INGESTION=${INGESTION:-http://localhost:5231}
+INGESTION_OPERATIONAL=${INGESTION_OPERATIONAL:-http://localhost:${INTEGRIOS_INGESTION_OPERATIONAL_PORT:-5232}}
 MOCKSINK=${MOCKSINK:-http://localhost:5054}
 SERVICEBUS_HTTP=${SERVICEBUS_HTTP:-http://localhost:${INTEGRIOS_SERVICEBUS_HTTP_PORT:-5300}}
 SERVICEBUS_PORT=${INTEGRIOS_SERVICEBUS_PORT:-5672}
@@ -146,8 +147,15 @@ NW_STOCK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_STOCK" "Northwind inventory" s
 NW_WEBHOOK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_WEBHOOKS" "Northwind storefront webhooks" storefront.webhook.received webhook)
 NW_WEBHOOK_CALLBACK=$(admin GET "/admin/tenants/$NW/sources/$NW_WEBHOOK_SRC" | jq -r .configuration.callback_id)
 if queue_demo_enabled; then
-  mkdir -p secrets/source/northwind-retail
-  printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/source/northwind-retail/$SERVICEBUS_SECRET"
+  # Key-per-file values load at startup, so Ingestion restarts to pick up the new secret.
+  mkdir -p secrets/ingestion
+  printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/ingestion/SourceSecrets__northwind-retail__$SERVICEBUS_SECRET"
+  docker compose restart ingestion
+  for _ in $(seq 1 30); do
+    curl -fsS "$INGESTION_OPERATIONAL/ready" > /dev/null 2>&1 && break
+    sleep 2
+  done
+  curl -fsS "$INGESTION_OPERATIONAL/ready" > /dev/null
   NW_QUEUE_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_QUEUE" "Northwind warehouse receipts" warehouse.receipt.recorded broker "$(jq -nc \
     --arg secret "$SERVICEBUS_SECRET" --arg queue "$SERVICEBUS_QUEUE" \
     '{source_contract:"event_json",transport:"azure_service_bus",authentication:{scheme:"connection_string",secret_ref:$secret},transport_config:{namespace:"servicebus-emulator",queue_name:$queue}}')")

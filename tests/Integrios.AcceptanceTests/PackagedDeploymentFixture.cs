@@ -18,10 +18,13 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly string repoRoot = ResolveRepoRoot();
     private readonly string projectName = $"integrios-q-{Guid.NewGuid():N}"[..25];
     private readonly string otelArtifactsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-otel-{Guid.NewGuid():N}");
-    private readonly string secretsDirectory = Path.Combine(Path.GetTempPath(), $"integrios-secrets-{Guid.NewGuid():N}");
-    private readonly string sourceVerificationSecretsDirectory = Path.Combine(
+    // One flat key-per-file directory per process, mounted at the image's configuration root.
+    private readonly string ingestionSecretsDirectory = Path.Combine(
         Path.GetTempPath(),
-        $"integrios-source-secrets-{Guid.NewGuid():N}");
+        $"integrios-ingestion-secrets-{Guid.NewGuid():N}");
+    private readonly string workerSecretsDirectory = Path.Combine(
+        Path.GetTempPath(),
+        $"integrios-worker-secrets-{Guid.NewGuid():N}");
     private readonly Dictionary<string, string> environment;
     private IReadOnlyList<string> composeFiles;
 
@@ -36,8 +39,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public PackagedDeploymentFixture()
     {
         Directory.CreateDirectory(otelArtifactsDirectory);
-        Directory.CreateDirectory(secretsDirectory);
-        Directory.CreateDirectory(sourceVerificationSecretsDirectory);
+        Directory.CreateDirectory(ingestionSecretsDirectory);
+        Directory.CreateDirectory(workerSecretsDirectory);
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(
@@ -59,8 +62,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "otel-collector.acceptance.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
-            ["INTEGRIOS_DESTINATION_SECRETS_DIR"] = secretsDirectory,
-            ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceVerificationSecretsDirectory,
+            ["INTEGRIOS_INGESTION_SECRETS_DIR"] = ingestionSecretsDirectory,
+            ["INTEGRIOS_WORKER_SECRETS_DIR"] = workerSecretsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "acceptance_postgres",
             ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "acceptance-admin-secret",
@@ -170,8 +173,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         {
             await RemoveImagesBestEffortAsync();
             Directory.Delete(otelArtifactsDirectory, recursive: true);
-            Directory.Delete(secretsDirectory, recursive: true);
-            Directory.Delete(sourceVerificationSecretsDirectory, recursive: true);
+            Directory.Delete(ingestionSecretsDirectory, recursive: true);
+            Directory.Delete(workerSecretsDirectory, recursive: true);
         }
     }
 
@@ -219,71 +222,38 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         return await command.ExecuteNonQueryAsync();
     }
 
-    public async Task WriteSecretAsync(string tenantSlug, string reference, string value)
-    {
-        string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
-        Directory.CreateDirectory(tenantDirectory);
-        await File.WriteAllTextAsync(Path.Combine(tenantDirectory, reference), value);
-    }
+    // Key-per-file values load once at process start. A written value is visible to the running
+    // service only after RestartWorkerAsync or RestartIngestionAsync; a one-off command started
+    // afterwards reads it immediately.
+    public Task WriteDestinationSecretAsync(string tenantSlug, string reference, string value) =>
+        File.WriteAllTextAsync(
+            Path.Combine(workerSecretsDirectory, $"DestinationSecrets__{tenantSlug}__{reference}"),
+            value);
 
-    public async Task WriteSourceSecretAsync(string tenantSlug, string reference, string value)
-    {
-        string tenantDirectory = Path.Combine(sourceVerificationSecretsDirectory, tenantSlug);
-        Directory.CreateDirectory(tenantDirectory);
-        await File.WriteAllTextAsync(Path.Combine(tenantDirectory, reference), value);
-    }
+    public Task WriteSourceSecretAsync(string tenantSlug, string reference, string value) =>
+        File.WriteAllTextAsync(
+            Path.Combine(ingestionSecretsDirectory, $"SourceSecrets__{tenantSlug}__{reference}"),
+            value);
 
-    public async Task CreateBlockingSecretPipeAsync(string tenantSlug, string reference)
-    {
-        string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
-        Directory.CreateDirectory(tenantDirectory);
-        string path = Path.Combine(tenantDirectory, reference);
-        File.Delete(path);
+    public Task RestartWorkerAsync() => RestartServiceAsync("worker");
 
-        string containerPath = $"/var/lib/integrios-acceptance/secrets/{tenantSlug}/{reference}";
-        ComposeResult result = await RunComposeAsync(
-            TimeSpan.FromSeconds(30),
-            "exec",
-            "--no-TTY",
-            "postgres",
-            "mkfifo",
-            containerPath);
+    public Task RestartIngestionAsync() => RestartServiceAsync("ingestion");
+
+    private async Task RestartServiceAsync(string serviceName)
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "restart", serviceName);
         if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Could not create blocking secret pipe: {result.Output}");
+            throw new InvalidOperationException($"Could not restart {serviceName}: {result.Output}");
+        await WaitUntilReadyAsync(expectCollector: true);
     }
 
-    public async Task ReplaceSecretWithFileAsync(string tenantSlug, string reference, string value)
-    {
-        string path = Path.Combine(secretsDirectory, tenantSlug, reference);
-        File.Delete(path);
-        await File.WriteAllTextAsync(path, value);
-    }
-
-    // Rotation must be atomic: staging the new link and renaming it over the reference leaves no
-    // window in which the reference is absent. A delete-then-create would let a Worker poll land in
-    // the gap and record a spurious secret_resolution failure.
-    public void RotateSecretSymlink(string tenantSlug, string reference, string targetName, string value)
-    {
-        string tenantDirectory = Path.Combine(secretsDirectory, tenantSlug);
-        Directory.CreateDirectory(tenantDirectory);
-        File.WriteAllText(Path.Combine(tenantDirectory, targetName), value);
-
-        string staging = Path.Combine(tenantDirectory, $".{reference}.staging");
-        if (File.Exists(staging))
-            File.Delete(staging);
-        File.CreateSymbolicLink(staging, targetName);
-        File.Move(staging, Path.Combine(tenantDirectory, reference), overwrite: true);
-    }
-
-    // Deployment-wide and irreversible for the rest of the fixture lifetime: the Worker keeps the
-    // new provider for every later test in this collection, and its metrics counters restart from
-    // zero. Test classes sharing this fixture must not assume a pre-recreation Worker.
+    // Deployment-wide for the rest of the fixture lifetime: the Worker keeps these environment
+    // values for every later test in this collection, and its metrics counters restart from zero.
+    // Test classes sharing this fixture must not assume a pre-recreation Worker.
     public async Task RecreateWorkerAsync(
-        string provider,
         string? configurationSharedSecret = null,
         string? configurationOnlySecret = null)
     {
-        environment["INTEGRIOS_DESTINATION_SECRETS_PROVIDER"] = provider;
         environment["INTEGRIOS_ACCEPTANCE_CONFIG_SHARED_SECRET"] = configurationSharedSecret ?? string.Empty;
         environment["INTEGRIOS_ACCEPTANCE_CONFIG_ONLY_SECRET"] = configurationOnlySecret ?? string.Empty;
 
@@ -383,6 +353,13 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         ComposeResult result = await RunComposeAsync(TimeSpan.FromSeconds(30), "kill", "--signal", "SIGKILL", "worker");
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"Could not kill Worker: {result.Output}");
+    }
+
+    public async Task StopWorkerAsync()
+    {
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "stop", "worker");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Could not stop Worker: {result.Output}");
     }
 
     public async Task StartWorkerAsync()
