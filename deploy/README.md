@@ -124,6 +124,8 @@ This release is a clean break with no compatibility path for the previous secret
   Underscored references are rejected when a Source or Destination is created or updated, and an
   existing one no longer resolves. Change each reference in Admin (for example `erp_api_key` to
   `erp-api-key`) and rename its value to match.
+- Key-per-file skips files whose names start with `ignore.`. Key-per-file and Key Vault load after
+  environment variables and override them when they supply the same key.
 - Values load at startup, so a rotated value takes effect when the process restarts, not on the
   next delivery attempt.
 
