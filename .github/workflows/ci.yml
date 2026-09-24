@@ -379,8 +379,6 @@ jobs:
           # with the same services in compose.yml.
           - name: ingestion
             project: Integrios.Ingestion
-            build-args: |
-              MOUNT_ROOT=/run/secrets/integrios/source
           - name: admin
             project: Integrios.Admin
             # Only this image builds and carries the Operator dashboard.
@@ -389,7 +387,6 @@ jobs:
           - name: worker
             project: Integrios.Worker
             build-args: |
-              MOUNT_ROOT=/run/secrets/integrios/destination
               HTTP_PORT=5299
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
