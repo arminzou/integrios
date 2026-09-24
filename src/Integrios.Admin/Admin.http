@@ -187,7 +187,7 @@ Content-Type: application/json
 #                -> Audit Destination <- Webhook to Audit Subscription
 #
 # Resource authoring needs only the secret reference name. Sending the webhook also requires the
-# Ingestion Source secret named storefront_webhook_hmac and a signature calculated over the exact
+# Ingestion Source secret named storefront-webhook-hmac and a signature calculated over the exact
 # request body. Keep the value outside this repository.
 ###############################################################################
 
@@ -222,7 +222,7 @@ Content-Type: application/json
     "scheme": "hmac_sha256",
     "config": {},
     "secret_refs": {
-      "secret": "storefront_webhook_hmac"
+      "secret": "storefront-webhook-hmac"
     }
   },
   "input_requirements": {
@@ -295,7 +295,7 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createStorefrontTopic.respo
 ###
 # Journey 2.5 — optional runtime step
 # Set WEBHOOK_SIGNATURE in your private REST Client environment to sha256=<hex HMAC> for the exact
-# compact body below, after mounting storefront_webhook_hmac for Ingestion.
+# compact body below, after mounting storefront-webhook-hmac for Ingestion.
 POST {{ingestionBaseUrl}}/webhooks/{{createStorefrontWebhookSource.response.body.$.configuration.callback_id}}
 X-Hub-Signature-256: {{WEBHOOK_SIGNATURE}}
 X-Storefront-Delivery: storefront-delivery-1001
@@ -320,7 +320,7 @@ Content-Type: application/json
 # HTTP Connector -> Warehouse Topic -> Azure Service Bus Source
 #                -> WMS Destination <- Warehouse Receipts Subscription
 #
-# Start the queue-demo Compose profile and mount the Ingestion Source secret named dev_service_bus
+# Start the queue-demo Compose profile and mount the Ingestion Source secret named dev-service-bus
 # before creating the Source. Admin.http cannot write secret files or publish broker messages.
 ###############################################################################
 
@@ -354,7 +354,7 @@ Content-Type: application/json
     "transport": "azure_service_bus",
     "authentication": {
       "scheme": "connection_string",
-      "secret_ref": "dev_service_bus"
+      "secret_ref": "dev-service-bus"
     },
     "transport_config": {
       "namespace": "servicebus-emulator",

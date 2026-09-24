@@ -21,11 +21,11 @@ public static class SecretReferenceMap
         foreach (JsonProperty property in secretRefs.EnumerateObject())
         {
             if (property.Value.ValueKind != JsonValueKind.String)
-                return $"Secret reference '{property.Name}' must be a lowercase snake_case string.";
+                return $"Secret reference '{property.Name}' must be a lowercase kebab-case string.";
 
             if (!SecretReferenceName.IsValid(property.Value.GetString()))
             {
-                return $"Secret reference '{property.Name}' must be a lowercase logical name of 1 to 63 "
+                return $"Secret reference '{property.Name}' must be a lowercase DNS label of 1 to 63 "
                     + "characters. It names a secret; it is never the secret itself.";
             }
         }

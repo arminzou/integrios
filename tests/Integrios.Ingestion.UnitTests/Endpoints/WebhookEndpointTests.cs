@@ -103,7 +103,7 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
     [Fact]
     public async Task PostWebhook_VerificationSecretDoesNotResolve_FailsWithoutNamingTheReference()
     {
-        const string absentReference = "never_provisioned";
+        const string absentReference = "never-provisioned";
         Guid callbackId = Guid.NewGuid();
         fixture.SourceEndpointResolver.Result = BuildResolvedEndpoint() with
         {

@@ -16,7 +16,7 @@ MOCKSINK=${MOCKSINK:-http://localhost:5054}
 SERVICEBUS_HTTP=${SERVICEBUS_HTTP:-http://localhost:${INTEGRIOS_SERVICEBUS_HTTP_PORT:-5300}}
 SERVICEBUS_PORT=${INTEGRIOS_SERVICEBUS_PORT:-5672}
 SERVICEBUS_QUEUE=ui-demo
-SERVICEBUS_SECRET=dev_service_bus
+SERVICEBUS_SECRET=dev-service-bus
 SERVICEBUS_KEY=SAS_KEY_VALUE
 SERVICEBUS_CONTAINER_CONNECTION="Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=$SERVICEBUS_KEY;UseDevelopmentEmulator=true;"
 SERVICEBUS_HOST_CONNECTION="Endpoint=sb://localhost:$SERVICEBUS_PORT;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=$SERVICEBUS_KEY;UseDevelopmentEmulator=true;"

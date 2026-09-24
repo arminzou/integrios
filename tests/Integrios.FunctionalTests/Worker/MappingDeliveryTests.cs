@@ -70,11 +70,11 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
     {
         var originalTransform = """{"engine":"jsonata","version":"1","expression":"$.test"}""";
         var changedTransform = """{"engine":"jsonata","version":"1","expression":"$not($.test)"}""";
-        var originalAuth = """{"scheme":"api_key_header","config":{"header_name":"X-Original-Key"},"secret_refs":{"api_key":"original_token"}}""";
-        var changedAuth = """{"scheme":"api_key_header","config":{"header_name":"X-Changed-Key"},"secret_refs":{"api_key":"changed_token"}}""";
+        var originalAuth = """{"scheme":"api_key_header","config":{"header_name":"X-Original-Key"},"secret_refs":{"api_key":"original-token"}}""";
+        var changedAuth = """{"scheme":"api_key_header","config":{"header_name":"X-Changed-Key"},"secret_refs":{"api_key":"changed-token"}}""";
 
-        fixture.SecretResolver.Set("original_token", "original-value-1");
-        fixture.SecretResolver.Set("changed_token", "changed-value");
+        fixture.SecretResolver.Set("original-token", "original-value-1");
+        fixture.SecretResolver.Set("changed-token", "changed-value");
         await fixture.UpdateLedgerExecutionConfigurationAsync(
             WorkerRoutingFixture.LedgerSinkUrl,
             originalAuth,
@@ -109,7 +109,7 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
         firstAttempt.Payload.ShouldBe("true");
         firstAttempt.Headers["X-Original-Key"].ShouldBe("original-value-1");
 
-        fixture.SecretResolver.Set("original_token", "original-value-2");
+        fixture.SecretResolver.Set("original-token", "original-value-2");
         fixture.DeliveryClient.ShouldSucceed = true;
         await fixture.ForceDeliveryRetryNowAsync(eventId);
         (await fixture.RunDeliveryBatchAsync()).ShouldBe(1);
@@ -159,10 +159,10 @@ public sealed class MappingDeliveryTests : IClassFixture<WorkerRoutingFixture>, 
     [Fact]
     public async Task Worker_OAuthSnapshotCarriesOnlyTheContractAndSecretReference()
     {
-        const string secretReference = "oauth_client_secret";
+        const string secretReference = "oauth-client-secret";
         const string secretCanary = "must-never-enter-the-snapshot";
         const string authentication = """
-            {"scheme":"oauth2_client_credentials","config":{"token_endpoint":"https://identity.example/token","client_id":"integrios","client_auth_method":"client_secret_post","scope":"orders.write"},"secret_refs":{"client_secret":"oauth_client_secret"}}
+            {"scheme":"oauth2_client_credentials","config":{"token_endpoint":"https://identity.example/token","client_id":"integrios","client_auth_method":"client_secret_post","scope":"orders.write"},"secret_refs":{"client_secret":"oauth-client-secret"}}
             """;
         fixture.SecretResolver.Set(secretReference, secretCanary);
         await fixture.UpdateLedgerExecutionConfigurationAsync(

@@ -17,8 +17,8 @@ public sealed class GitHubToSlackWorkflowTests(PackagedDeploymentFixture fixture
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
-    private const string GitHubSecretReference = "github_webhook_secret";
-    private const string SlackSecretReference = "slack_bot_token";
+    private const string GitHubSecretReference = "github-webhook-secret";
+    private const string SlackSecretReference = "slack-bot-token";
 
     [Fact]
     public async Task PackagedSystem_ProvesGitHubToSlackGoldenPath()

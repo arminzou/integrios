@@ -155,15 +155,15 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         TenantContext tenant = await CreateTenantAsync($"fanout-{Suffix()}");
         (Guid source, Guid topic) = await CreateSourceTopicAsync(tenant, "payments");
 
-        await fixture.WriteSecretAsync(tenant.Slug, "api_key", "api-key-value");
-        await fixture.WriteSecretAsync(tenant.Slug, "bearer_token", "bearer-token-value");
+        await fixture.WriteSecretAsync(tenant.Slug, "api-key", "api-key-value");
+        await fixture.WriteSecretAsync(tenant.Slug, "bearer-token", "bearer-token-value");
 
         Guid transformedDestination = await CreateDestinationAsync(
             tenant, HttpConnectorId, "transform-destination", "http://mocksink:8080/sink/transform");
         Guid apiDestination = await CreateDestinationAsync(
-            tenant, ApiKeyConnectorId, "api-destination", "http://mocksink:8080/sink/api-auth", ApiKeyAuth("api_key"));
+            tenant, ApiKeyConnectorId, "api-destination", "http://mocksink:8080/sink/api-auth", ApiKeyAuth("api-key"));
         Guid bearerDestination = await CreateDestinationAsync(
-            tenant, BearerConnectorId, "bearer-destination", "http://mocksink:8080/sink/bearer-auth", BearerAuth("bearer_token"));
+            tenant, BearerConnectorId, "bearer-destination", "http://mocksink:8080/sink/bearer-auth", BearerAuth("bearer-token"));
 
         object transform = Jsonata("{ \"kind\": $context.event_type, \"amount\": amount, \"topic\": $context.topic_name }");
         using HttpResponseMessage preview = await PostAdminAsync(
@@ -322,13 +322,13 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             DestinationBody(SourceOnlyConnectorId, "source-only-destination", "http://mocksink:8080/sink/source-only"));
         directionRejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
-        await fixture.WriteSecretAsync(tenant.Slug, "redirect_secret", "redirect-secret-value");
+        await fixture.WriteSecretAsync(tenant.Slug, "redirect-secret", "redirect-secret-value");
         Guid redirectDestination = await CreateDestinationAsync(
             tenant,
             ApiKeyConnectorId,
             "redirect-destination",
             "http://mocksink:8080/redirect/redirect-target",
-            ApiKeyAuth("redirect_secret"));
+            ApiKeyAuth("redirect-secret"));
         Guid redirectSubscription = await CreateSubscriptionAsync(
             tenant, topic, "redirect", redirectDestination, "redirect.test");
         EventAcceptance redirected = await IngestAsync(
@@ -405,18 +405,18 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
     {
         TenantContext fileA = await CreateTenantAsync($"file-a-{Suffix()}");
         TenantContext fileB = await CreateTenantAsync($"file-b-{Suffix()}");
-        await fixture.WriteSecretAsync(fileA.Slug, "shared_secret", "file-a-value");
-        await fixture.WriteSecretAsync(fileB.Slug, "shared_secret", "file-b-value");
+        await fixture.WriteSecretAsync(fileA.Slug, "shared-secret", "file-a-value");
+        await fixture.WriteSecretAsync(fileB.Slug, "shared-secret", "file-b-value");
         await fixture.RecreateWorkerAsync("file");
 
-        await AssertAuthenticatedTenantDeliveryAsync(fileA, "file-a", "shared_secret", "file-a-value");
-        await AssertAuthenticatedTenantDeliveryAsync(fileB, "file-b", "shared_secret", "file-b-value");
+        await AssertAuthenticatedTenantDeliveryAsync(fileA, "file-a", "shared-secret", "file-a-value");
+        await AssertAuthenticatedTenantDeliveryAsync(fileB, "file-b", "shared-secret", "file-b-value");
 
         TenantContext rotation = await CreateTenantAsync($"rotation-{Suffix()}");
-        fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v1", "rotation-v1");
+        fixture.RotateSecretSymlink(rotation.Slug, "shared-secret", "secret-v1", "rotation-v1");
         (Guid rotationSource, Guid rotationTopic) = await CreateSourceTopicAsync(rotation, "rotation");
         Guid rotationDestination = await CreateDestinationAsync(
-            rotation, ApiKeyConnectorId, "rotation-destination", "http://mocksink:8080/sink/rotation", ApiKeyAuth("shared_secret"));
+            rotation, ApiKeyConnectorId, "rotation-destination", "http://mocksink:8080/sink/rotation", ApiKeyAuth("shared-secret"));
         Guid rotationSubscription = await CreateSubscriptionAsync(
             rotation, rotationTopic, "rotation", rotationDestination, "rotation.test");
         await fixture.WireMockSink.ConfigureAsync("rotation", "fail");
@@ -426,7 +426,7 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await WaitForAttemptCountAsync(rotationEvent.Id, rotationSubscription, 1);
             await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v1");
             await fixture.WireMockSink.ResetReceiptsAsync("rotation");
-            fixture.RotateSecretSymlink(rotation.Slug, "shared_secret", "secret-v2", "rotation-v2");
+            fixture.RotateSecretSymlink(rotation.Slug, "shared-secret", "secret-v2", "rotation-v2");
             await fixture.WireMockSink.ResetControlAsync("rotation");
             await WaitForDeliveryStatusAsync(rotationEvent.Id, rotationSubscription, "succeeded");
             await AssertReceiptHeaderAsync("rotation", "X-Api-Key", "rotation-v2");
@@ -439,21 +439,21 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         // The configuration-provider scenario is wired to this exact slug by the acceptance Compose
         // environment, so it must not be suffixed.
         TenantContext configuration = await CreateTenantAsync("acceptance-config");
-        await fixture.WriteSecretAsync(configuration.Slug, "shared_secret", "wrong-file-value");
+        await fixture.WriteSecretAsync(configuration.Slug, "shared-secret", "wrong-file-value");
         try
         {
             await fixture.RecreateWorkerAsync("configuration", "configuration-value", "configuration-only-value");
             await AssertAuthenticatedTenantDeliveryAsync(
-                configuration, "configuration", "shared_secret", "configuration-value");
+                configuration, "configuration", "shared-secret", "configuration-value");
 
-            await fixture.WriteSecretAsync(configuration.Slug, "file_only", "file-only-value");
-            await AssertMissingSecretFailsAsync(configuration, "configuration-no-file-fallback", "file_only");
+            await fixture.WriteSecretAsync(configuration.Slug, "file-only", "file-only-value");
+            await AssertMissingSecretFailsAsync(configuration, "configuration-no-file-fallback", "file-only");
 
             ComposeResult configCli = await fixture.RunWorkerCommandAsync(
                 new Dictionary<string, string?>
                 {
                     ["Integrios__DestinationSecrets__Provider"] = "configuration",
-                    ["DestinationSecrets__acceptance-config__shared_secret"] = "configuration-value"
+                    ["DestinationSecrets__acceptance-config__shared-secret"] = "configuration-value"
                 },
                 "secrets", "validate", "--tenant", configuration.Slug);
             configCli.ExitCode.ShouldBe(1);
@@ -464,10 +464,10 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
             await fixture.RecreateWorkerAsync("file", "configuration-value", "configuration-only-value");
         }
 
-        await AssertMissingSecretFailsAsync(configuration, "file-no-config-fallback", "config_only");
+        await AssertMissingSecretFailsAsync(configuration, "file-no-config-fallback", "config-only");
 
-        await fixture.WriteSecretAsync(configuration.Slug, "line_break", "unsafe\r\nvalue");
-        await AssertMissingSecretFailsAsync(configuration, "line-break", "line_break", "request_construction");
+        await fixture.WriteSecretAsync(configuration.Slug, "line-break", "unsafe\r\nvalue");
+        await AssertMissingSecretFailsAsync(configuration, "line-break", "line-break", "request_construction");
 
         ComposeResult fileCli = await fixture.RunWorkerCommandAsync(
             new Dictionary<string, string?> { ["Integrios__DestinationSecrets__Provider"] = "file" },
@@ -519,11 +519,11 @@ public sealed class LiveProductBehaviorTests(PackagedDeploymentFixture fixture)
         // authenticates; inbound is a webhook Ingestion verifies. They are separate mounts read by
         // separate processes, so covering only one says nothing about the other.
         TenantContext tenant = await CreateTenantAsync($"secrets-{Suffix()}");
-        await fixture.WriteSecretAsync(tenant.Slug, "probe_secret", "probe-secret-value");
-        await AssertAuthenticatedTenantDeliveryAsync(tenant, "probe", "probe_secret", "probe-secret-value");
+        await fixture.WriteSecretAsync(tenant.Slug, "probe-secret", "probe-secret-value");
+        await AssertAuthenticatedTenantDeliveryAsync(tenant, "probe", "probe-secret", "probe-secret-value");
 
-        await fixture.WriteSourceSecretAsync(tenant.Slug, "probe_source_secret", "probe-source-secret-value");
-        await AssertVerifiedWebhookIntakeAsync(tenant, "probe_source_secret", "probe-source-secret-value");
+        await fixture.WriteSourceSecretAsync(tenant.Slug, "probe-source-secret", "probe-source-secret-value");
+        await AssertVerifiedWebhookIntakeAsync(tenant, "probe-source-secret", "probe-source-secret-value");
 
         (await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM destinations WHERE configuration::text ~ 'probe-secret-value' OR COALESCE(authentication::text, '') ~ 'probe-secret-value'")).ShouldBe(0L);

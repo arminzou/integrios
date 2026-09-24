@@ -15,7 +15,7 @@ public sealed class SourceSecretValidationCliTests
     public async Task RunAsync_ReportsAWebhookReferenceTheMountCannotResolve()
     {
         Tenant tenant = MakeTenant("tenant-a");
-        Source source = WebhookSource(tenant.Id, "github_secret");
+        Source source = WebhookSource(tenant.Id, "github-secret");
         using ServiceProvider services = BuildServices([tenant], [source], new Dictionary<string, string>());
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -24,7 +24,7 @@ public sealed class SourceSecretValidationCliTests
             ["secrets", "validate", "--tenant", "tenant-a"], services, output, error);
 
         exitCode.ShouldBe(1);
-        output.ToString().ShouldContain($"source {source.Id} / github_secret: unresolvable", Case.Sensitive);
+        output.ToString().ShouldContain($"source {source.Id} / github-secret: unresolvable", Case.Sensitive);
         error.ToString().ShouldBeEmpty();
     }
 
@@ -36,19 +36,19 @@ public sealed class SourceSecretValidationCliTests
     {
         Tenant tenant = MakeTenant("tenant-a");
         Tenant disabled = MakeTenant("tenant-disabled") with { Status = OperationalStatus.Inactive };
-        Source webhook = WebhookSource(tenant.Id, "hook_secret");
-        Source broker = BrokerSource(tenant.Id, "bus_connection");
+        Source webhook = WebhookSource(tenant.Id, "hook-secret");
+        Source broker = BrokerSource(tenant.Id, "bus-connection");
         // Inactive is reversible, so its secrets have to resolve before it is activated, not after.
-        Source paused = WebhookSource(tenant.Id, "paused_secret") with { Status = OperationalStatus.Inactive };
-        Source otherTenant = WebhookSource(disabled.Id, "ignored_secret");
+        Source paused = WebhookSource(tenant.Id, "paused-secret") with { Status = OperationalStatus.Inactive };
+        Source otherTenant = WebhookSource(disabled.Id, "ignored-secret");
         using ServiceProvider services = BuildServices(
             [tenant, disabled],
             [webhook, broker, paused, otherTenant],
             new Dictionary<string, string>
             {
-                ["tenant-a/hook_secret"] = "hook-value",
-                ["tenant-a/bus_connection"] = "bus-value",
-                ["tenant-a/paused_secret"] = "paused-value",
+                ["tenant-a/hook-secret"] = "hook-value",
+                ["tenant-a/bus-connection"] = "bus-value",
+                ["tenant-a/paused-secret"] = "paused-value",
             });
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -58,25 +58,25 @@ public sealed class SourceSecretValidationCliTests
 
         exitCode.ShouldBe(0);
         string report = output.ToString();
-        report.ShouldContain("hook_secret: resolvable", Case.Sensitive);
-        report.ShouldContain("bus_connection: resolvable", Case.Sensitive);
-        report.ShouldContain("paused_secret: resolvable", Case.Sensitive);
-        report.ShouldNotContain("ignored_secret", Case.Sensitive);
+        report.ShouldContain("hook-secret: resolvable", Case.Sensitive);
+        report.ShouldContain("bus-connection: resolvable", Case.Sensitive);
+        report.ShouldContain("paused-secret: resolvable", Case.Sensitive);
+        report.ShouldNotContain("ignored-secret", Case.Sensitive);
     }
 
     [Fact]
     public async Task RunAsync_NarrowsToOneSource()
     {
         Tenant tenant = MakeTenant("tenant-a");
-        Source selected = WebhookSource(tenant.Id, "selected_secret");
-        Source other = WebhookSource(tenant.Id, "other_secret");
+        Source selected = WebhookSource(tenant.Id, "selected-secret");
+        Source other = WebhookSource(tenant.Id, "other-secret");
         using ServiceProvider services = BuildServices(
             [tenant],
             [selected, other],
             new Dictionary<string, string>
             {
-                ["tenant-a/selected_secret"] = "value",
-                ["tenant-a/other_secret"] = "value",
+                ["tenant-a/selected-secret"] = "value",
+                ["tenant-a/other-secret"] = "value",
             });
         using var output = new StringWriter();
         using var error = new StringWriter();

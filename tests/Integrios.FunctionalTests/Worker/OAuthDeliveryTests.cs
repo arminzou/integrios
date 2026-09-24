@@ -14,7 +14,7 @@ public sealed class OAuthDeliveryTests(WorkerRoutingFixture fixture) : IClassFix
     [InlineData("client_secret_post")]
     public async Task Worker_AcquiresAndReusesOAuthToken(string method)
     {
-        const string secretReference = "oauth_client_secret";
+        const string secretReference = "oauth-client-secret";
         const string clientSecret = "client-secret-canary";
         const string accessToken = "access-token-canary";
         string clientId = $"client-{method}";

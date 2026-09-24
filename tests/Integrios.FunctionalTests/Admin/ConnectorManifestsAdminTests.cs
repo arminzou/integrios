@@ -261,7 +261,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
                 {
                     scheme = "hmac_sha256",
                     config = new { },
-                    secret_refs = new { secret = "guided_signing_secret" },
+                    secret_refs = new { secret = "guided-signing-secret" },
                 },
             }));
         sourceResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -272,13 +272,13 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
             {
                 scheme = "api_key_header",
                 config = new { header_name = "X-Api-Key" },
-                secret_refs = new { api_key = "guided_api_key" },
+                secret_refs = new { api_key = "guided-api-key" },
             }),
             ("guided-bearer", new
             {
                 scheme = "bearer_token",
                 config = new { },
-                secret_refs = new { token = "guided_bearer_token" },
+                secret_refs = new { token = "guided-bearer-token" },
             }),
         })
         {

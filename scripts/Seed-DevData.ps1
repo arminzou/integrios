@@ -40,7 +40,7 @@ $script:auth = @{ Authorization = "OperatorKey $operatorKey" }
 $serviceBusHttp = if ($env:INTEGRIOS_SERVICEBUS_HTTP_PORT) { "http://127.0.0.1:$($env:INTEGRIOS_SERVICEBUS_HTTP_PORT)" } else { 'http://127.0.0.1:5300' }
 $serviceBusPort = if ($env:INTEGRIOS_SERVICEBUS_PORT) { $env:INTEGRIOS_SERVICEBUS_PORT } else { '5672' }
 $serviceBusQueue = 'ui-demo'
-$serviceBusSecret = 'dev_service_bus'
+$serviceBusSecret = 'dev-service-bus'
 $serviceBusKey = 'SAS_KEY_VALUE'
 $serviceBusContainerConnection = "Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=$serviceBusKey;UseDevelopmentEmulator=true;"
 $serviceBusHostConnection = "Endpoint=sb://localhost:$serviceBusPort;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=$serviceBusKey;UseDevelopmentEmulator=true;"

@@ -22,7 +22,7 @@ public sealed class DestinationUseValidatorTests
             {
                 Scheme = "bearer_token",
                 Config = Json("{}"),
-                SecretRefs = Json("""{"token":"destination_token"}""")
+                SecretRefs = Json("""{"token":"destination-token"}""")
             });
 
         DestinationUseValidator.ValidateAuthoring(destination, connector, AuthenticationSchemes);

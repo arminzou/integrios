@@ -17,7 +17,7 @@ public sealed class SecretValidationCliTests
     public async Task RunAsync_ValidatesSelectedTenantAndReturnsFailureForMissingReference()
     {
         Tenant tenant = MakeTenant("tenant-a");
-        Destination destination = MakeDestination(tenant.Id, "api_key");
+        Destination destination = MakeDestination(tenant.Id, "api-key");
         using ServiceProvider services = BuildServices(
             [tenant],
             [destination],
@@ -29,7 +29,7 @@ public sealed class SecretValidationCliTests
             ["secrets", "validate", "--tenant", "tenant-a"], services, output, error);
 
         exitCode.ShouldBe(1);
-        output.ToString().ShouldContain($"destination {destination.Id} / api_key: unresolvable", Case.Sensitive);
+        output.ToString().ShouldContain($"destination {destination.Id} / api-key: unresolvable", Case.Sensitive);
         error.ToString().ShouldBeEmpty();
     }
 

@@ -175,11 +175,11 @@ public sealed class DeliveryAttemptTests : IClassFixture<WorkerRoutingFixture>, 
     [Fact]
     public async Task OutboundRequest_UsesStableDeliveryAndDiagnosticAttemptHeaders_OverAuthConfiguration()
     {
-        const string reservedOverrideSecret = "reserved_override";
+        const string reservedOverrideSecret = "reserved-override";
         fixture.SecretResolver.Set(reservedOverrideSecret, "must-not-win");
         await fixture.UpdateLedgerExecutionConfigurationAsync(
             WorkerRoutingFixture.LedgerSinkUrl,
-            """{"scheme":"api_key_header","config":{"header_name":"Integrios-Delivery-Id"},"secret_refs":{"api_key":"reserved_override"}}""",
+            """{"scheme":"api_key_header","config":{"header_name":"Integrios-Delivery-Id"},"secret_refs":{"api_key":"reserved-override"}}""",
             "webhook");
         Guid eventId = await fixture.InsertEventAndOutboxAsync("payment.created");
 

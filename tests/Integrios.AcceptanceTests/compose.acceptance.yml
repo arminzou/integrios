@@ -45,8 +45,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=acceptance
       OTEL_TRACES_SAMPLER: always_on
-      DestinationSecrets__acceptance-config__shared_secret: ${INTEGRIOS_ACCEPTANCE_CONFIG_SHARED_SECRET:-}
-      DestinationSecrets__acceptance-config__config_only: ${INTEGRIOS_ACCEPTANCE_CONFIG_ONLY_SECRET:-}
+      DestinationSecrets__acceptance-config__shared-secret: ${INTEGRIOS_ACCEPTANCE_CONFIG_SHARED_SECRET:-}
+      DestinationSecrets__acceptance-config__config-only: ${INTEGRIOS_ACCEPTANCE_CONFIG_ONLY_SECRET:-}
       # Compressed cadence. The retry, dead-letter, replay, and timeout state machines are
       # identical to production; only the wall-clock between transitions is shortened, so the
       # matrix spends its time asserting rather than sleeping. LeaseDuration keeps its production

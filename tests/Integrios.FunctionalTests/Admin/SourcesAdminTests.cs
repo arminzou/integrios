@@ -204,7 +204,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             configuration = new
             {
                 transport = "azure_service_bus",
-                authentication = new { scheme = "azure_identity", secret_ref = "sb_connection_string" },
+                authentication = new { scheme = "azure_identity", secret_ref = "sb-connection-string" },
                 transport_config = new { @namespace = "example.servicebus.windows.net", queue_name = "events" },
             }
         }));
@@ -343,7 +343,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
             topic_id = topicId,
             type = "webhook",
             configuration = new { },
-            verification = new { scheme = "hmac_sha256", config = new { }, secret_refs = new { secret = "probe_signing_secret" } },
+            verification = new { scheme = "hmac_sha256", config = new { }, secret_refs = new { secret = "probe-signing-secret" } },
         }));
         create.StatusCode.ShouldBe(HttpStatusCode.Created);
         SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
@@ -372,7 +372,7 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         update.StatusCode.ShouldBe(HttpStatusCode.OK);
         SourceDto updated = (await update.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
         updated.Verification.ShouldNotBeNull();
-        updated.Verification.SecretRefs.GetProperty("secret").GetString().ShouldBe("probe_signing_secret");
+        updated.Verification.SecretRefs.GetProperty("secret").GetString().ShouldBe("probe-signing-secret");
     }
 
     // A reference names a secret; it is never the secret. Nothing downstream can tell the two apart
@@ -406,6 +406,39 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await response.Content.ReadAsStringAsync()).ShouldContain("never the secret itself");
         await AssertNothingPersistedAsync("whsec_9f3cAB/xQ2==");
+    }
+
+    // A reference is a configuration key segment, and Key Vault secret names allow no underscore.
+    [Fact]
+    public async Task WebhookVerification_RejectsAnUnderscoredReferenceAsAVerificationFieldError()
+    {
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            "underscored_ref",
+            TestConnectorManifest.Create(
+                "underscored_ref", "Underscored ref", "source", sourceVerificationSchemes: ["hmac_sha256"]));
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+        {
+            event_types = new[] { "probe.created" },
+            connector_id = connectorId,
+            name = "webhook-intake",
+            topic_id = topicId,
+            type = "webhook",
+            configuration = new { },
+            verification = new
+            {
+                scheme = "hmac_sha256",
+                config = new { },
+                secret_refs = new { secret = "github_webhook_secret" },
+            },
+        }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("errors").GetProperty("verification")[0].GetString()
+            .ShouldBe("Secret reference 'secret' must be a lowercase DNS label of 1 to 63 characters. "
+                + "It names a secret; it is never the secret itself.");
     }
 
     [Fact]

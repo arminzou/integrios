@@ -171,7 +171,7 @@ public sealed class AuthenticatedDispatchTests
                     {
                         Scheme = "leaky_scheme",
                         Config = EmptyObject,
-                        SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"token":"erp_token"}""")
+                        SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"token":"erp-token"}""")
                     })
             ]
         };
@@ -182,7 +182,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDeliveryClient>(new CapturingDeliveryClient(new DeliveryResult(true, 200)));
             services.AddSingleton<ITransformEvaluator>(CreateTransformEvaluator());
             services.AddSingleton<IDestinationAuthenticatorRegistry>(new DestinationAuthenticatorRegistry([new LeakyAuthSchemeHandler()]));
-            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp_token"] = resolvedSecret }));
+            services.AddSingleton<IDestinationAuthenticationSecretResolver>(CreateSecretResolver(new Dictionary<string, string> { ["erp-token"] = resolvedSecret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -396,7 +396,7 @@ public sealed class AuthenticatedDispatchTests
                 {
                     Scheme = "oauth2_client_credentials",
                     Config = EmptyObject,
-                    SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"client_secret":"oauth_secret"}""")
+                    SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"client_secret":"oauth-secret"}""")
                 })
             ]
         };
@@ -410,7 +410,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDestinationAuthenticatorRegistry>(
                 new DestinationAuthenticatorRegistry([new FailingOAuthHandler()]));
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(
-                CreateSecretResolver(new Dictionary<string, string> { ["oauth_secret"] = secret }));
+                CreateSecretResolver(new Dictionary<string, string> { ["oauth-secret"] = secret }));
             services.AddSingleton<ILoggerProvider>(loggerProvider);
         });
 
@@ -442,7 +442,7 @@ public sealed class AuthenticatedDispatchTests
                 {
                     Scheme = "oauth2_client_credentials",
                     Config = EmptyObject,
-                    SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"client_secret":"oauth_secret"}""")
+                    SecretRefs = JsonSerializer.Deserialize<JsonElement>("""{"client_secret":"oauth-secret"}""")
                 })
             ]
         };
@@ -461,7 +461,7 @@ public sealed class AuthenticatedDispatchTests
             services.AddSingleton<IDestinationAuthenticatorRegistry>(
                 new DestinationAuthenticatorRegistry([new DeadlineOAuthHandler()]));
             services.AddSingleton<IDestinationAuthenticationSecretResolver>(
-                CreateSecretResolver(new Dictionary<string, string> { ["oauth_secret"] = "secret" }));
+                CreateSecretResolver(new Dictionary<string, string> { ["oauth-secret"] = "secret" }));
         });
 
         await mediator.Send(new DispatchEventDeliveriesCommand(25));

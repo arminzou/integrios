@@ -23,7 +23,7 @@ public sealed class AzureServiceBusSourceTests(AzureServiceBusSourceFixture fixt
     : IClassFixture<AzureServiceBusSourceFixture>
 {
     internal const string TenantSlug = "sb-integration";
-    internal const string SecretReference = "sb_connection_string";
+    internal const string SecretReference = "sb-connection-string";
     internal const string QueueName = "queue.1";
     // subscription.3 is the emulator's only rule-free subscription, so it receives every message
     // published to topic.1; the others carry correlation filters.

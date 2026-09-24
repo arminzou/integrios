@@ -1,14 +1,10 @@
-using System.Text.RegularExpressions;
+using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Secrets;
 
-public static partial class SecretReferenceName
+/// A secret reference shares the Tenant slug grammar, so every configuration source, including
+/// ones whose names allow only letters, digits, and hyphens, can store it under its own name.
+public static class SecretReferenceName
 {
-    public const string Pattern = "^[a-z0-9](?:[a-z0-9_]{0,62})$";
-
-    public static bool IsValid(string? value) =>
-        value is not null && ReferencePattern().IsMatch(value);
-
-    [GeneratedRegex(Pattern, RegexOptions.CultureInvariant)]
-    private static partial Regex ReferencePattern();
+    public static bool IsValid(string? value) => TenantSlug.IsValid(value);
 }

@@ -135,7 +135,7 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
                 connector_id = connectorId,
                 name = "round-trip-destination",
                 configuration = new { base_uri = "http://localhost:5054/sink" },
-                authentication = new { scheme = "bearer_token", config = new { }, secret_refs = new { token = "round_trip_token" } },
+                authentication = new { scheme = "bearer_token", config = new { }, secret_refs = new { token = "round-trip-token" } },
             }));
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         Guid id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
@@ -164,7 +164,7 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         resubmitted.StatusCode.ShouldBe(HttpStatusCode.OK);
         JsonElement after = await resubmitted.Content.ReadFromJsonAsync<JsonElement>();
         after.GetProperty("authentication").GetProperty("secret_refs").GetProperty("token").GetString()
-            .ShouldBe("round_trip_token");
+            .ShouldBe("round-trip-token");
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
                         client_auth_method = "client_secret_basic",
                         scope = "orders.write deliveries.read",
                     },
-                    secret_refs = new { client_secret = "oauth_client_secret" },
+                    secret_refs = new { client_secret = "oauth-client-secret" },
                 },
             }));
 
@@ -206,7 +206,7 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         authentication.GetProperty("config").GetProperty("scope").GetString()
             .ShouldBe("orders.write deliveries.read");
         authentication.GetProperty("secret_refs").GetProperty("client_secret").GetString()
-            .ShouldBe("oauth_client_secret");
+            .ShouldBe("oauth-client-secret");
         body.GetRawText().ShouldNotContain("client-secret-value", Case.Sensitive);
     }
 
@@ -239,7 +239,7 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
                 {
                     scheme = "oauth2_client_credentials",
                     config = JsonSerializer.Deserialize<JsonElement>(configJson),
-                    secret_refs = new { client_secret = "oauth_client_secret" },
+                    secret_refs = new { client_secret = "oauth-client-secret" },
                 },
             }));
 

@@ -17,7 +17,7 @@ public sealed class IngestionApiFixture : IDisposable
     // ISourceVerificationSecretResolver production path (in-memory configuration source) rather
     // than a stub, per i7a.5's acceptance criteria.
     public const string WebhookTenantSlug = "acme";
-    public const string WebhookSecretReference = "webhook_secret";
+    public const string WebhookSecretReference = "webhook-secret";
     public const string WebhookSecretValue = "correct-horse-battery-staple";
 
     public StubActiveTenantApiKeyLookup TenantApiKeyRepository { get; } = new();

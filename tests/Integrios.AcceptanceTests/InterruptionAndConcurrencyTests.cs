@@ -129,7 +129,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             await fixture.RecreateWorkerAsync("file");
 
             string suffix = Suffix();
-            string secretReference = $"blocking_{suffix}";
+            string secretReference = $"blocking-{suffix}";
             Pipeline pipeline = await CreatePipelineAsync($"presend-{suffix}", secretReference);
 
             // A FIFO with no writer blocks the Worker inside secret resolution, which is before
