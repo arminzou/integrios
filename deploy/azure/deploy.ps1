@@ -141,64 +141,25 @@ foreach ($scriptOwnedName in @('databaseAdministratorPassword', 'operatorKeySecr
     }
 }
 
-$allowedParameterNames = @(
-    'namePrefix', 'location', 'registryName', 'registryResourceGroupName',
-    'serviceBusNamespaceName', 'serviceBusResourceGroupName', 'databaseProvider',
-    'adminImage', 'ingestionImage', 'workerImage', 'databaseAdministratorLogin',
-    'adminAllowedCidrs', 'ingestionExternal', 'mappingTenantSlug', 'sourceReference',
-    'destinationReference', 'mappingRevision'
-)
-$optionalParameterNames = @('adminOidcAuthority', 'adminOidcClientId', 'adminOidcDisplayName')
-$providedParameterNames = @($parameters.PSObject.Properties.Name)
-$missingParameterNames = @($allowedParameterNames | Where-Object { $_ -notin $providedParameterNames })
-$unexpectedParameterNames = @($providedParameterNames | Where-Object { $_ -notin ($allowedParameterNames + $optionalParameterNames) })
-if ($missingParameterNames.Count -gt 0) { throw "Missing nonsecret parameters: $($missingParameterNames -join ', ')." }
-if ($unexpectedParameterNames.Count -gt 0) { throw "Unexpected or script-owned parameters: $($unexpectedParameterNames -join ', ')." }
-
-$namePrefix = [string](Get-ParameterValue $parameters 'namePrefix')
+# Template parameter names, required parameters, and Azure naming and length rules are enforced by
+# Bicep and ARM validation before any resource in the deployment changes. The checks below cover
+# only what Azure cannot know.
 $parameterLocation = [string](Get-ParameterValue $parameters 'location')
 $registryName = [string](Get-ParameterValue $parameters 'registryName')
-$registryResourceGroup = [string](Get-ParameterValue $parameters 'registryResourceGroupName')
 $databaseProvider = [string](Get-ParameterValue $parameters 'databaseProvider')
-$databaseAdministratorLogin = [string](Get-ParameterValue $parameters 'databaseAdministratorLogin')
 $adminAllowedCidrs = @(Get-ParameterValue $parameters 'adminAllowedCidrs')
-$serviceBusNamespace = [string](Get-ParameterValue $parameters 'serviceBusNamespaceName')
-$serviceBusResourceGroup = [string](Get-ParameterValue $parameters 'serviceBusResourceGroupName')
-$tenantSlug = [string](Get-ParameterValue $parameters 'mappingTenantSlug')
-$sourceReference = [string](Get-ParameterValue $parameters 'sourceReference')
-$destinationReference = [string](Get-ParameterValue $parameters 'destinationReference')
-$mappingRevision = [string](Get-ParameterValue $parameters 'mappingRevision')
+$serviceBusNamespace = [string]$parameters.PSObject.Properties['serviceBusNamespaceName']?.Value.value
+$serviceBusResourceGroup = [string]$parameters.PSObject.Properties['serviceBusResourceGroupName']?.Value.value
 $adminOidcAuthority = [string]$parameters.PSObject.Properties['adminOidcAuthority']?.Value.value
 $adminOidcClientId = [string]$parameters.PSObject.Properties['adminOidcClientId']?.Value.value
 $adminOidcEnabled = -not [string]::IsNullOrWhiteSpace($adminOidcAuthority)
 
-if ($namePrefix -cnotmatch '^[a-z0-9]{3,16}$') { throw 'namePrefix must be 3-16 lowercase letters or digits.' }
 if ($parameterLocation -ne $Location) { throw "Parameter location '$parameterLocation' must match -Location '$Location'." }
-if ($registryName -cnotmatch '^[a-z0-9]{5,50}$') { throw 'registryName must be 5-50 lowercase letters or digits.' }
-foreach ($name in @($ResourceGroup, $registryResourceGroup)) {
-    if ([string]::IsNullOrWhiteSpace($name) -or $name.Length -gt 90 -or $name -match '[<>%&\\?/]' -or $name.EndsWith('.')) {
-        throw "Resource-group name '$name' is invalid."
-    }
-}
-if ($databaseProvider -notin @('sqlserver', 'postgres')) { throw "databaseProvider must be 'sqlserver' or 'postgres'." }
-if ($databaseAdministratorLogin -cnotmatch '^[A-Za-z][A-Za-z0-9_]{0,62}$') { throw 'databaseAdministratorLogin is invalid.' }
-if ($adminAllowedCidrs.Count -eq 0) { throw 'At least one Admin CIDR is required.' }
+# Azure accepts an allow-all restriction, and the template silently disables Service Bus access
+# when only one of its two names is set, so neither mistake would fail a deployment.
 if ($adminAllowedCidrs -contains '0.0.0.0/0' -or $adminAllowedCidrs -contains '::/0') { throw 'An allow-all Admin CIDR is forbidden.' }
 if ([string]::IsNullOrWhiteSpace($serviceBusNamespace) -ne [string]::IsNullOrWhiteSpace($serviceBusResourceGroup)) {
     throw 'Supply both Service Bus namespace and resource-group names, or leave both empty.'
-}
-if (-not [string]::IsNullOrWhiteSpace($serviceBusNamespace) -and $serviceBusNamespace -cnotmatch '^[a-z][a-z0-9-]{4,48}[a-z0-9]$') {
-    throw 'serviceBusNamespaceName must be a 6-50 character lowercase Azure Service Bus namespace name.'
-}
-if (-not [string]::IsNullOrWhiteSpace($serviceBusResourceGroup) -and
-    ($serviceBusResourceGroup.Length -gt 90 -or $serviceBusResourceGroup -match '[<>%&\\?/]' -or $serviceBusResourceGroup.EndsWith('.'))) {
-    throw "Service Bus resource-group name '$serviceBusResourceGroup' is invalid."
-}
-if ($tenantSlug -cnotmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$') { throw 'mappingTenantSlug is invalid.' }
-if ($sourceReference -cnotmatch '^[a-z0-9][a-z0-9_]{0,62}$') { throw 'sourceReference is invalid.' }
-if ($destinationReference -cnotmatch '^[a-z0-9][a-z0-9_]{0,62}$') { throw 'destinationReference is invalid.' }
-if ($mappingRevision -cnotmatch '^[a-z0-9-]+$' -or "destination-$mappingRevision".Length -gt 20) {
-    throw 'mappingRevision must keep generated Container Apps secret names at 20 characters or fewer.'
 }
 if ($adminOidcEnabled -eq [string]::IsNullOrWhiteSpace($adminOidcClientId)) {
     throw 'Supply both adminOidcAuthority and adminOidcClientId to enable dashboard sign-in, or leave both empty.'
@@ -208,9 +169,6 @@ if ($adminOidcEnabled) {
     if (-not [Uri]::TryCreate($adminOidcAuthority, [UriKind]::Absolute, [ref] $authorityUri) -or $authorityUri.Scheme -ne 'https') {
         throw 'adminOidcAuthority must be an absolute https URI.'
     }
-}
-foreach ($secretName in @("source-$tenantSlug-$($sourceReference.Replace('_', '-'))", "destination-$tenantSlug-$($destinationReference.Replace('_', '-'))")) {
-    if ($secretName.Length -gt 127) { throw "Generated Key Vault secret name '$secretName' exceeds 127 characters." }
 }
 
 $immutableImagePattern = '^.+\.azurecr\.io/.+@sha256:[a-f0-9]{64}$'

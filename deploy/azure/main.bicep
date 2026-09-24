@@ -39,6 +39,7 @@ param sourceSecretValue string
 param destinationSecretValue string
 
 param databaseAdministratorLogin string = 'integrios_admin'
+@minLength(1)
 param adminAllowedCidrs array
 param ingestionExternal bool = true
 param mappingTenantSlug string

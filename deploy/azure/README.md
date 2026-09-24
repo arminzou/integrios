@@ -106,7 +106,11 @@ after an interruption.
 
 The command always:
 
-1. validates nonsecret inputs and immutable images locally;
+1. checks locally only what Azure cannot: no secret values in the parameter file, digest-pinned
+   images from the configured registry, a parameter location matching `-Location`, no allow-all
+   Admin CIDR, and paired Service Bus and dashboard sign-in settings. Template parameter names and
+   Azure naming rules are left to ARM validation, which runs before any resource in the deployment
+   changes;
 2. creates or resolves the resource group;
 3. reconciles infrastructure with all runtime replicas at zero;
 4. runs the selected provider's migrations;
