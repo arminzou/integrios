@@ -26,6 +26,8 @@ param ingestionImage string
 @description('Full immutable ACR image reference ending in @sha256:<digest>.')
 param workerImage string
 
+// deploy.ps1 generates both values on the first deployment and passes back the stored values on
+// every later deployment, so an update never changes them.
 @secure()
 param databaseAdministratorPassword string
 
@@ -559,6 +561,14 @@ resource databaseConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01'
   properties: { value: databaseConnection }
 }
 
+// Only deploy.ps1 and the Operator read this: it lets a later deployment pass the same password back
+// instead of resetting it. The runtime reads the connection string above.
+resource databaseAdministratorPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: vault
+  name: 'database-admin-password'
+  properties: { value: databaseAdministratorPassword }
+}
+
 resource operatorKeySecretResource 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: vault
   name: 'operator-key-bootstrap'
@@ -908,6 +918,7 @@ output adminOidcRedirectUris object = {
   signedOut: 'https://${admin.properties.configuration.ingress.fqdn}/auth/signed-out'
 }
 output ingestionFqdn string = ingestion.properties.configuration.ingress.fqdn
+output deploymentSettingsVault string = vault.name
 output secretVaults object = {
   source: sourceSecretsVault.name
   destination: destinationSecretsVault.name

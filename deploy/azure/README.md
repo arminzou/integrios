@@ -73,8 +73,9 @@ Admin; the namespace role alone does not create or select a broker entity.
 
 ## Deploy or update
 
-Use the supplied command for both initial deployment and updates. It prompts without echoing when
-secure values are omitted:
+Use the supplied command for both initial deployment and updates. It needs no secret input
+unless dashboard sign-in is enabled, when it prompts for the OpenID Connect client secret without
+echoing it:
 
 ```powershell
 Copy-Item ./main.example.bicepparam ./main.bicepparam
@@ -86,12 +87,39 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
   -ParametersFile ./main.bicepparam
 ```
 
-Automation may pass `SecureString` values through `-DatabaseAdministratorPassword`,
-`-OperatorKeySecret`, and, when dashboard sign-in is enabled, `-AdminOidcClientSecret`. Tenant
-secrets are never deployment inputs. The command rejects secret values in the `.bicepparam` file.
-For each ARM deployment it creates a randomly named temporary parameter file containing those plaintext
-values because Azure CLI requires materialized deployment parameters,
-opens it without file sharing, and deletes it immediately in `finally`. A forced process or machine
+### Generated deployment secrets
+
+The first deployment generates the database administrator password (32 letters and digits) and the
+initial OperatorKey secret (64 hexadecimal characters). The template stores them in the
+deployment-settings vault as `database-admin-password` and `operator-key-bootstrap`, and every later
+run reads them back and passes the same values, so an update never resets either one. The command
+grants the signed-in identity `Key Vault Secrets User` on that vault so it can read them; when that
+role is new, the next read waits for it to apply. Read the initial OperatorKey secret with:
+
+```powershell
+az keyvault secret show --vault-name <deployment-settings-vault> --name operator-key-bootstrap `
+  --query value --output tsv
+```
+
+The command prints the vault name at the end of each run; the `deploymentSettingsVault`
+deployment output holds it too. `operator-key-bootstrap` is only the secret Bootstrap used to create
+the first key. After `operator-key rotate`, it no longer authenticates.
+
+To rotate the database administrator password, run the command with `-RotateDatabasePassword`. It
+generates a new password and updates the server, the stored password, and the connection string in
+one deployment. Anything outside Integrios that connects with this login needs the new value.
+
+A deployment created before the password was stored prompts once for the current password and
+stores it. Leave the prompt empty to generate a new password instead, which rotates it.
+
+Automation may still pass `SecureString` values through `-DatabaseAdministratorPassword` and
+`-OperatorKeySecret`; an explicit value replaces the stored one. An explicit OperatorKey secret
+takes effect only while no key exists, because Bootstrap never replaces a live key. Pass
+`-AdminOidcClientSecret` when dashboard sign-in is enabled. Tenant secrets are never deployment
+inputs. The command rejects secret values in the `.bicepparam` file. For each ARM deployment it
+creates a randomly named temporary parameter file containing those plaintext values because Azure
+CLI requires materialized deployment parameters, opens it without file sharing, and deletes it
+immediately in `finally`. A forced process or machine
 termination can prevent that cleanup; inspect the current user's temporary directory before retrying
 after an interruption.
 
@@ -104,11 +132,13 @@ The command always:
    before any resource in the deployment changes;
 2. for a `release`, imports any of its images missing from the registry and resolves each to its
    current digest;
-3. creates or resolves the resource group;
-4. reconciles infrastructure with all runtime replicas at zero;
-5. runs the selected provider's migrations;
-6. runs idempotent Bootstrap and destination-secret validation;
-7. reconciles the same images at one replica and waits for healthy active revisions.
+3. reads the stored database administrator password and initial OperatorKey secret from the
+   deployment-settings vault, or generates them on the first deployment;
+4. creates or resolves the resource group;
+5. reconciles infrastructure with all runtime replicas at zero;
+6. runs the selected provider's migrations;
+7. runs idempotent Bootstrap and destination-secret validation;
+8. reconciles the same images at one replica and waits for healthy active revisions.
 
 A failed migration, Bootstrap, or validation job leaves runtime stopped. After a schema migration,
 recover by rolling forward or restoring the database rather than starting an older image set.
