@@ -41,6 +41,11 @@ The supplied OpenTelemetry Collector Contrib image is pinned by digest. Treat th
 trusted runtime code: Container Apps identities are app-scoped, so it shares each app's identity
 boundary while exporting that replica's traces and Prometheus metrics.
 
+Every app and job runs as exactly one user-assigned identity, and no app has a system-assigned
+identity. Each app's processes, including the Collector sidecar, select that identity through
+`AZURE_CLIENT_ID`. A deployment created before this change keeps role assignments that name the
+removed system-assigned identities; Azure shows them as unknown principals, and you can delete them.
+
 ## Prepare matched images
 
 The deployment command does not build, import, tag, or select images. You may import one published
@@ -100,8 +105,8 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 
 Automation may pass `SecureString` values through `-DatabaseAdministratorPassword`,
 `-OperatorKeySecret`, and, when dashboard sign-in is enabled, `-AdminOidcClientSecret`. Tenant
-secrets are never deployment inputs. The command rejects secret values in the `.bicepparam` file. For
-each ARM deployment it creates a randomly named temporary parameter file containing those plaintext
+secrets are never deployment inputs. The command rejects secret values in the `.bicepparam` file.
+For each ARM deployment it creates a randomly named temporary parameter file containing those plaintext
 values because Azure CLI requires materialized deployment parameters,
 opens it without file sharing, and deletes it immediately in `finally`. A forced process or machine
 termination can prevent that cleanup; inspect the current user's temporary directory before retrying
@@ -233,7 +238,8 @@ repeated request.
 
 Each runtime replica sends OTLP traces to its loopback Collector sidecar. The sidecar scrapes the
 private operational `/metrics` endpoint, adds Container App and replica labels, and exports through
-the Data Collection Rule to Azure Managed Prometheus. JSON stdout flows through native Container
+the Data Collection Rule to Azure Managed Prometheus, authenticating as the app's user-assigned
+identity, which holds `Monitoring Metrics Publisher` on that rule. JSON stdout flows through native Container
 Apps collection to Log Analytics. The `Integrios Operations` Workbook shows outcomes, backlog and
 staleness, bounded Connector-class failures and dead letters, and exact Admin `trace_id` lookup.
 Observability failures do not participate in liveness or readiness.
@@ -251,8 +257,12 @@ Observability failures do not participate in liveness or readiness.
 - If Ingestion, Worker, or the validation job fails at startup with a Key Vault error, confirm its
   identity holds `Key Vault Secrets User` on its own Tenant-secret vault; a new assignment can take
   a few minutes to apply.
-- For broker Sources, confirm both Service Bus coordinates were supplied, Ingestion has receiver
-  access, and the Admin-authored Source names the intended existing entity.
+- If telemetry stops arriving, check the Collector logs for an authentication error and confirm
+  the app's user-assigned identity holds `Monitoring Metrics Publisher` on the Data Collection
+  Rule.
+- For broker Sources, confirm both Service Bus coordinates were supplied, Ingestion's
+  user-assigned identity has receiver access, and the Admin-authored Source names the intended
+  existing entity.
 
 `/health` is dependency-free liveness. `/ready` checks only the selected database. Service Bus,
 individual Sources, destinations, Key Vault after startup, and observability backends deliberately

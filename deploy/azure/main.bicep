@@ -56,7 +56,8 @@ var tracesEndpoint = '${telemetryEndpoint.properties.logsIngestion.endpoint}/dat
 var collectorConfigTemplate = '''
 extensions:
   azure_auth:
-    managed_identity: {}
+    managed_identity:
+      client_id: ${env:AZURE_CLIENT_ID}
     scopes:
       - https://monitor.azure.com/.default
 receivers:
@@ -114,6 +115,17 @@ var collectorContainer = {
   env: [{ name: 'OTEL_CONFIG', value: collectorConfig }]
   resources: { cpu: json('0.25'), memory: '0.5Gi' }
 }
+// The sidecar authenticates to Azure Monitor as its app's user-assigned identity; the apps carry no
+// system-assigned identity.
+var adminCollectorContainer = union(collectorContainer, {
+  env: concat(collectorContainer.env, [{ name: 'AZURE_CLIENT_ID', value: adminIdentity.properties.clientId }])
+})
+var ingestionCollectorContainer = union(collectorContainer, {
+  env: concat(collectorContainer.env, [{ name: 'AZURE_CLIENT_ID', value: ingestionIdentity.properties.clientId }])
+})
+var workerCollectorContainer = union(collectorContainer, {
+  env: concat(collectorContainer.env, [{ name: 'AZURE_CLIENT_ID', value: workerIdentity.properties.clientId }])
+})
 
 var appNames = {
   admin: '${namePrefix}-admin'
@@ -648,7 +660,7 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
   name: appNames.ingestion
   location: location
   identity: {
-    type: 'SystemAssigned,UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: { '${ingestionIdentity.id}': {} }
   }
   properties: {
@@ -679,7 +691,7 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
           { type: 'Liveness', httpGet: { path: '/health', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 30 }
           { type: 'Readiness', httpGet: { path: '/ready', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 10 }
         ]
-      }, collectorContainer]
+      }, ingestionCollectorContainer]
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
@@ -691,7 +703,7 @@ module serviceBusReceiver 'service-bus-receiver.bicep' = if (serviceBusEnabled) 
   scope: resourceGroup(serviceBusResourceGroupName)
   params: {
     namespaceName: serviceBusNamespaceName
-    principalId: ingestion.identity.principalId
+    principalId: ingestionIdentity.properties.principalId
   }
 }
 
@@ -699,7 +711,7 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
   name: appNames.admin
   location: location
   identity: {
-    type: 'SystemAssigned,UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: { '${adminIdentity.id}': {} }
   }
   properties: {
@@ -747,7 +759,7 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
           { type: 'Liveness', httpGet: { path: '/health', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 30 }
           { type: 'Readiness', httpGet: { path: '/ready', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 10 }
         ]
-      }, collectorContainer]
+      }, adminCollectorContainer]
       volumes: [{ name: 'admin-data-protection', storageType: 'AzureFile', storageName: adminDataProtectionEnvironmentStorage.name }]
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
@@ -759,7 +771,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
   name: appNames.worker
   location: location
   identity: {
-    type: 'SystemAssigned,UserAssigned'
+    type: 'UserAssigned'
     userAssignedIdentities: { '${workerIdentity.id}': {} }
   }
   properties: {
@@ -783,7 +795,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
           { type: 'Liveness', httpGet: { path: '/health', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 30 }
           { type: 'Readiness', httpGet: { path: '/ready', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 10 }
         ]
-      }, collectorContainer]
+      }, workerCollectorContainer]
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
@@ -883,9 +895,9 @@ module telemetryPublisher 'telemetry-publisher.bicep' = {
   params: {
     dataCollectionRuleName: telemetryRule.name
     principalIds: [
-      admin.identity.principalId
-      ingestion.identity.principalId
-      worker.identity.principalId
+      adminIdentity.properties.principalId
+      ingestionIdentity.properties.principalId
+      workerIdentity.properties.principalId
     ]
   }
 }
