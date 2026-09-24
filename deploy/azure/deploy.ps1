@@ -50,13 +50,36 @@ function Invoke-Deployment([int] $RuntimeReplicaCount) {
             [IO.File]::SetUnixFileMode($deploymentParameterFile, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite)
         }
 
-        Invoke-AzureCli deployment group create `
-            --name main `
-            --resource-group $ResourceGroup `
-            --template-file $template `
-            --parameters "@$deploymentParameterFile" `
-            --only-show-errors `
-            --output none
+        for ($attempt = 1; $attempt -le 20; $attempt++) {
+            $deploymentOutput = & az deployment group create `
+                --name main `
+                --resource-group $ResourceGroup `
+                --template-file $template `
+                --parameters "@$deploymentParameterFile" `
+                --only-show-errors `
+                --output none 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0) { return }
+
+            $errorJson = & az deployment group show `
+                --name main `
+                --resource-group $ResourceGroup `
+                --query properties.error `
+                --output json `
+                --only-show-errors
+            if ($LASTEXITCODE -ne 0) { throw "Azure deployment failed: $deploymentOutput" }
+
+            $details = @(($errorJson | ConvertFrom-Json).details)
+            $identitySecretErrors = @($details | Where-Object {
+                $_.code -eq 'InvalidParameterValueInContainerTemplate' -and
+                $_.message -match 'Unable to get value using Managed identity'
+            })
+            if ($details.Count -eq 0 -or $identitySecretErrors.Count -ne $details.Count -or $attempt -eq 20) {
+                throw "Azure deployment failed: $deploymentOutput"
+            }
+
+            Write-Warning "Container Apps cannot read its new Key Vault secret role yet; retrying deployment in 30 seconds ($attempt/20)."
+            Start-Sleep -Seconds 30
+        }
     }
     finally {
         Remove-Variable json, deploymentParameters -ErrorAction SilentlyContinue

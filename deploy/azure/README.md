@@ -127,6 +127,10 @@ The command always:
 
 A failed migration, Bootstrap, or validation job leaves runtime stopped. After a schema migration,
 recover by rolling forward or restoring the database rather than starting an older image set.
+On a new deployment, Azure may report that a Container App or Job cannot fetch a Key Vault secret
+immediately after its managed identity receives access. The command retries only that error, with
+up to 20 attempts 30 seconds apart while the role assignment propagates. Other failures stop
+immediately.
 
 The validation job checks every Destination secret reference in the database against the
 Destination-secret vault. Store a new Destination's secret before the next deployment, or the
