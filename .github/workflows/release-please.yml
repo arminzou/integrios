@@ -1,7 +1,8 @@
 name: release-please
 
 # Keeps a release pull request open against `main`, reflecting every conventional commit landed
-# since the last release: the next version in VERSION and deploy/compose.yml, and the notes in
+# since the last release: the next version in VERSION, deploy/compose.yml, and
+# deploy/azure/main.example.bicepparam, and the notes in
 # CHANGELOG.md. Merging that pull request is the release decision, and it now also creates the
 # tag and the GitHub release -- the tag is what starts the release run in ci.yml, and the release
 # is what bounds the next cycle's commit window.

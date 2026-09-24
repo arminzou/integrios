@@ -10,6 +10,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $template = Join-Path $PSScriptRoot 'main.bicep'
+$releaseImageSource = 'ghcr.io/arminzou/integrios'
+$imageParameters = [ordered]@{ adminImage = 'admin'; ingestionImage = 'ingestion'; workerImage = 'worker' }
 $resolvedParametersFile = (Resolve-Path -LiteralPath $ParametersFile).Path
 
 function Invoke-AzureCli {
@@ -39,6 +41,10 @@ function Invoke-Deployment([int] $RuntimeReplicaCount) {
             $deploymentParameters.parameters.adminOidcClientSecret = @{ value = ConvertFrom-SecureValue $AdminOidcClientSecret }
         }
         $deploymentParameters.parameters.runtimeReplicaCount = @{ value = $RuntimeReplicaCount }
+        if ($releaseImages) {
+            $deploymentParameters.parameters.Remove('release')
+            foreach ($name in $releaseImages.Keys) { $deploymentParameters.parameters[$name] = @{ value = $releaseImages[$name] } }
+        }
         $json = $deploymentParameters | ConvertTo-Json -Depth 8
         $stream = [IO.FileStream]::new($deploymentParameterFile, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
         try {
@@ -130,6 +136,36 @@ function Invoke-Job([string] $JobName) {
     throw "Container Apps Job $JobName execution $execution did not finish within 12 minutes."
 }
 
+function Get-ImageDigest([string] $Image) {
+    $digest = & az acr manifest show-metadata `
+        --registry $registryName `
+        --name $Image `
+        --query digest `
+        --output tsv `
+        --only-show-errors 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    $digest
+}
+
+# A release names one matched image set. Import it into the Operator's registry when absent, then
+# pin each image to the digest it resolves to now, so every replica and job runs the same bytes.
+function Resolve-ReleaseImage([string] $Service) {
+    $image = "integrios/${Service}:$release"
+    $digest = Get-ImageDigest $image
+    if ([string]::IsNullOrWhiteSpace($digest)) {
+        Write-Host "Importing $releaseImageSource/${Service}:$release into $registryName..."
+        Invoke-AzureCli acr import `
+            --name $registryName `
+            --source "$releaseImageSource/${Service}:$release" `
+            --image $image `
+            --only-show-errors `
+            --output none
+        $digest = Get-ImageDigest $image
+    }
+    if ($digest -cnotmatch '^sha256:[a-f0-9]{64}$') { throw "Could not resolve $image in $registryName to a digest." }
+    "$registryName.azurecr.io/integrios/$Service@$digest"
+}
+
 function Wait-HealthyRevision([string] $AppName) {
     $deadline = [DateTimeOffset]::UtcNow.AddMinutes(10)
     do {
@@ -190,18 +226,43 @@ if ($adminOidcEnabled) {
     }
 }
 
-$immutableImagePattern = '^.+\.azurecr\.io/.+@sha256:[a-f0-9]{64}$'
-foreach ($parameterName in @('adminImage', 'ingestionImage', 'workerImage')) {
-    $image = [string](Get-ParameterValue $parameters $parameterName)
-    if ($image -cnotmatch $immutableImagePattern -or $image.EndsWith(('0' * 64), [StringComparison]::Ordinal)) {
-        throw "$parameterName must be a real immutable ACR digest reference."
+# Images come from exactly one source: a release version the command resolves, or three explicit
+# digests for an image set the Operator built or imported themselves.
+$release = [string]$parameters.PSObject.Properties['release']?.Value.value
+$explicitImages = @($imageParameters.Keys | Where-Object { $null -ne $parameters.PSObject.Properties[$_] })
+if (-not [string]::IsNullOrWhiteSpace($release)) {
+    if ($explicitImages.Count -gt 0) { throw "Set either release or $($imageParameters.Keys -join ', '), not both." }
+    if ($release -cnotmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+        throw "release '$release' must be a version without the Git tag's v prefix, such as 0.9.0."
     }
-    if (-not $image.StartsWith("$registryName.azurecr.io/", [StringComparison]::OrdinalIgnoreCase)) {
-        throw "$parameterName must come from $registryName.azurecr.io."
+}
+else {
+    if ($explicitImages.Count -ne $imageParameters.Count) {
+        throw "Set release, or all of $($imageParameters.Keys -join ', ')."
+    }
+    $immutableImagePattern = '^.+\.azurecr\.io/.+@sha256:[a-f0-9]{64}$'
+    foreach ($parameterName in $imageParameters.Keys) {
+        $image = [string](Get-ParameterValue $parameters $parameterName)
+        if ($image -cnotmatch $immutableImagePattern -or $image.EndsWith(('0' * 64), [StringComparison]::Ordinal)) {
+            throw "$parameterName must be a real immutable ACR digest reference."
+        }
+        if (-not $image.StartsWith("$registryName.azurecr.io/", [StringComparison]::OrdinalIgnoreCase)) {
+            throw "$parameterName must come from $registryName.azurecr.io."
+        }
     }
 }
 
 Invoke-AzureCli account show --only-show-errors --output none
+
+$releaseImages = $null
+if (-not [string]::IsNullOrWhiteSpace($release)) {
+    Write-Host "Resolving release $release in $registryName..."
+    $releaseImages = [ordered]@{}
+    foreach ($name in $imageParameters.Keys) {
+        $releaseImages[$name] = Resolve-ReleaseImage $imageParameters[$name]
+        Write-Host "  $($releaseImages[$name])"
+    }
+}
 
 if ($null -eq $DatabaseAdministratorPassword) { $DatabaseAdministratorPassword = Read-Host 'Database administrator password' -AsSecureString }
 if ($null -eq $OperatorKeySecret) { $OperatorKeySecret = Read-Host 'Initial OperatorKey secret' -AsSecureString }

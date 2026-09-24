@@ -22,7 +22,7 @@ provisions Service Bus topology.
 | Azure SQL | General Purpose serverless, one vCore maximum, 0.5 minimum capacity, 60-minute auto-pause, local backup redundancy |
 | PostgreSQL | PostgreSQL 16 Burstable B1ms, 32 GiB storage, seven-day local backup, no HA or geo-redundant backup |
 | Deployment | Maintenance window: runtime at zero, migrate, Bootstrap, validate secrets, then start one replica |
-| Images | Existing Operator-owned ACR and immutable Admin, Ingestion, and Worker digests from one release |
+| Images | Existing Operator-owned ACR; one published release imported into it and deployed pinned by digest |
 | Service Bus | Optional receiver role on an existing namespace; no namespace, queue, topic, or subscription creation |
 
 ## Prerequisites
@@ -30,8 +30,9 @@ provisions Service Bus topology.
 - PowerShell 7 and Azure CLI with Bicep;
 - an authenticated Azure subscription with the required resource providers registered;
 - permission to create resources and role assignments in the deployment, ACR, and optional
-  Service Bus resource groups;
-- an existing ACR containing the matched Admin, Ingestion, and Worker images;
+  Service Bus resource groups, including importing images into the ACR;
+- an existing ACR that can reach `ghcr.io`, or one already holding the matched Admin, Ingestion,
+  and Worker images;
 - a region available to both Container Apps and the selected managed database in your subscription;
 - one explicit Admin caller CIDR—empty and allow-all lists are rejected;
 - permission to assign yourself `Key Vault Secrets Officer` on the two Tenant-secret vaults after
@@ -46,41 +47,23 @@ identity. Each app's processes, including the Collector sidecar, select that ide
 `AZURE_CLIENT_ID`. A deployment created before this change keeps role assignments that name the
 removed system-assigned identities; Azure shows them as unknown principals, and you can delete them.
 
-## Prepare matched images
+## Select a release
 
-The deployment command does not build, import, tag, or select images. You may import one published
-release into your ACR with Azure CLI:
+Set `release` in the parameter file to a published version, without the Git tag's `v` prefix: Git
+release `v0.9.0` publishes container tag `0.9.0`. On each run, `deploy.ps1` imports any of that
+release's Admin, Ingestion, and Worker images missing from your registry from
+`ghcr.io/arminzou/integrios`, resolves each to its digest, and deploys those digests. Upgrading is
+a change to `release` followed by the same command.
 
-```powershell
-$registry = '<registry-name>'
-$release = '<release-version-without-v>'
+A tag the registry already holds is used as it is and never re-imported, so the first import of a
+release fixes the digests every later deployment of it resolves to.
 
-foreach ($service in @('admin', 'ingestion', 'worker')) {
-  az acr import `
-    --name $registry `
-    --source "ghcr.io/arminzou/integrios/$service`:$release" `
-    --image "integrios/$service`:$release"
-}
-```
+To deploy images you built or imported yourself, remove `release` and set `adminImage`,
+`ingestionImage`, and `workerImage` to full `<registry>.azurecr.io/<repository>@sha256:<digest>`
+references from one matched build. The command accepts one form or the other, never both.
 
-The Git release tag carries a `v` prefix, while its container tags do not. For example, Git release
-`v0.4.1` publishes container tag `0.4.1`.
-
-Resolve the imported manifests to destination ACR digests:
-
-```powershell
-foreach ($service in @('admin', 'ingestion', 'worker')) {
-  $digest = az acr manifest show-metadata `
-    --registry $registry `
-    --name "integrios/$service`:$release" `
-    --query digest `
-    --output tsv
-  "$registry.azurecr.io/integrios/$service@$digest"
-}
-```
-
-Copy `main.example.bicepparam`, replace its placeholder registry, resource group, image digests,
-region, names, and CIDRs, and keep the file free of secret values. The
+Copy `main.example.bicepparam`, replace its placeholder registry, resource group, region, names,
+and CIDRs, and keep the file free of secret values. The
 example selects Azure SQL. Set `databaseProvider = 'postgres'` to provision PostgreSQL instead.
 
 `ingestionExternal` and Service Bus coordinates are independent. Leave both Service Bus values
@@ -114,16 +97,18 @@ after an interruption.
 
 The command always:
 
-1. checks locally only what Azure cannot: no secret values in the parameter file, digest-pinned
-   images from the configured registry, a parameter location matching `-Location`, no allow-all
-   Admin CIDR, and paired Service Bus and dashboard sign-in settings. Template parameter names and
-   Azure naming rules are left to ARM validation, which runs before any resource in the deployment
-   changes;
-2. creates or resolves the resource group;
-3. reconciles infrastructure with all runtime replicas at zero;
-4. runs the selected provider's migrations;
-5. runs idempotent Bootstrap and destination-secret validation;
-6. reconciles the same images at one replica and waits for healthy active revisions.
+1. checks locally only what Azure cannot: no secret values in the parameter file, either a
+   release version or digest-pinned images from the configured registry, a parameter location
+   matching `-Location`, no allow-all Admin CIDR, and paired Service Bus and dashboard sign-in
+   settings. Template parameter names and Azure naming rules are left to ARM validation, which runs
+   before any resource in the deployment changes;
+2. for a `release`, imports any of its images missing from the registry and resolves each to its
+   current digest;
+3. creates or resolves the resource group;
+4. reconciles infrastructure with all runtime replicas at zero;
+5. runs the selected provider's migrations;
+6. runs idempotent Bootstrap and destination-secret validation;
+7. reconciles the same images at one replica and waits for healthy active revisions.
 
 A failed migration, Bootstrap, or validation job leaves runtime stopped. After a schema migration,
 recover by rolling forward or restoring the database rather than starting an older image set.
@@ -256,8 +241,9 @@ Observability failures do not participate in liveness or readiness.
   does not become healthy.
 - Confirm the selected database accepts Azure-service traffic and the credentials in Key Vault are
   current.
-- Confirm each image digest exists in the configured ACR and each user-assigned identity has
-  `AcrPull`.
+- Confirm each resolved image digest exists in the configured ACR and each user-assigned identity
+  has `AcrPull`. The command prints the digests it resolved, and the `main` deployment records them
+  as the `adminImage`, `ingestionImage`, and `workerImage` parameters.
 - If Ingestion, Worker, or the validation job fails at startup with a Key Vault error, confirm its
   identity holds `Key Vault Secrets User` on its own Tenant-secret vault; a new assignment can take
   a few minutes to apply.
