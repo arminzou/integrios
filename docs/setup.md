@@ -198,7 +198,9 @@ the new public identifier but never generates or outputs the replacement secret.
 ## Environment variables
 
 The dev stack needs no `.env` file: `compose.yml` and the `Makefile` default every variable to
-a working local value. Create a `.env` at the repo root only to override.
+a working local value. Create a `.env` at the repo root only to override. For runtime keys,
+defaults, and valid values across all three hosts, see the
+[configuration reference](configuration.md).
 
 | Variable                            | Default                  | Used by                     | Purpose                         |
 |-------------------------------------|--------------------------|-----------------------------|---------------------------------|
