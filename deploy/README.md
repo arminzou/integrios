@@ -5,7 +5,8 @@ copy this directory into your own infrastructure repo and adapt it to your envir
 Azure Container Apps reference instead, see [deploy/azure](azure/README.md).
 
 The root `compose.yml` at the repository root is the local development stack. It builds images
-from source and bundles a test sink and dashboards; it is not for deployment.
+from source and bundles a test sink and dashboards; it is not for deployment. See the
+[configuration reference](../docs/configuration.md) for runtime keys, defaults, and valid values.
 
 ## Quick start
 

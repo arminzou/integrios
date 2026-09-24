@@ -125,6 +125,15 @@ Style:
 - do not hide architectural decisions in code without updating the right docs
 - do not mistake scaffold/template code for intended final architecture
 
+Configuration:
+
+- prefer `appsettings.json` for new Operator-facing non-secret defaults, with environment-variable
+  overrides; update [the settings reference](docs/configuration.md) when a key or default changes
+- read and validate related fixed settings during host composition, then inject an immutable typed
+  value; use `IOptions<T>` when it simplifies a touched section and preserve CLI validation paths
+- simple host settings may be read directly during composition; Tenant secret references are
+  open-ended keys resolved per Tenant from `IConfiguration`
+
 ## Testing Instructions
 
 - use xUnit for tests
