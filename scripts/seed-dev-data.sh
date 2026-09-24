@@ -148,8 +148,8 @@ NW_WEBHOOK_SRC=$(new_source "$NW" "$CONNECTOR" "$NW_WEBHOOKS" "Northwind storefr
 NW_WEBHOOK_CALLBACK=$(admin GET "/admin/tenants/$NW/sources/$NW_WEBHOOK_SRC" | jq -r .configuration.callback_id)
 if queue_demo_enabled; then
   # Key-per-file values load at startup, so Ingestion restarts to pick up the new secret.
-  mkdir -p secrets/ingestion
-  printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/ingestion/SourceSecrets__northwind-retail__$SERVICEBUS_SECRET"
+  mkdir -p secrets/sources
+  printf '%s' "$SERVICEBUS_CONTAINER_CONNECTION" > "secrets/sources/SourceSecrets__northwind-retail__$SERVICEBUS_SECRET"
   docker compose restart ingestion
   for _ in $(seq 1 30); do
     curl -fsS "$INGESTION_OPERATIONAL/ready" > /dev/null 2>&1 && break

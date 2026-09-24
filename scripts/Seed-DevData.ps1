@@ -261,7 +261,7 @@ $nwWebhookSrc = New-Source -Tenant $nw -Connector $script:connector -Topic $nwWe
 $nwWebhookCallback = (Invoke-Admin -Method Get -Path "/admin/tenants/$nw/sources/$nwWebhookSrc").configuration.callback_id
 if ($includeQueueDemo) {
     # Key-per-file values load at startup, so Ingestion restarts to pick up the new secret.
-    $secretDir = Join-Path $script:repoRoot 'secrets/ingestion'
+    $secretDir = Join-Path $script:repoRoot 'secrets/sources'
     New-Item -ItemType Directory -Force -Path $secretDir | Out-Null
     Set-Content -LiteralPath (Join-Path $secretDir "SourceSecrets__northwind-retail__$serviceBusSecret") -Value $serviceBusContainerConnection -NoNewline
     docker compose restart ingestion

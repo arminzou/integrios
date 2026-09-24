@@ -61,7 +61,7 @@ services:
     # Key-per-file configuration: each file name is a configuration key with "__" as the section
     # separator, e.g. SourceSecrets__<tenant-slug>__<secret-reference>. Read once at startup.
     volumes:
-      - ${INTEGRIOS_INGESTION_SECRETS_DIR:-./secrets/ingestion}:/run/secrets/integrios:ro
+      - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/sources}:/run/secrets/integrios:ro
     ports:
       - "${INTEGRIOS_INGESTION_PORT:-5231}:8080"
       - "127.0.0.1:${INTEGRIOS_INGESTION_OPERATIONAL_PORT:-5232}:5299"
@@ -104,7 +104,7 @@ services:
       # Integrios__Worker__HistoryRetention__Period: ${INTEGRIOS_HISTORY_RETENTION_PERIOD}
     # Key-per-file configuration, e.g. DestinationSecrets__<tenant-slug>__<secret-reference>.
     volumes:
-      - ${INTEGRIOS_WORKER_SECRETS_DIR:-./secrets/worker}:/run/secrets/integrios:ro
+      - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destinations}:/run/secrets/integrios:ro
     ports:
       - "127.0.0.1:${INTEGRIOS_WORKER_METRICS_PORT:-5299}:5299"
 
