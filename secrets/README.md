@@ -18,11 +18,17 @@ printf %s 'secret-value' > secrets/destinations/DestinationSecrets__acme__erp-ap
 docker compose restart worker
 ```
 
+Each directory also has an empty `ignore.` example file. .NET skips these files. For a new
+Tenant, copy the relevant example, remove the `ignore.` prefix, replace `example-tenant` and the
+sample reference with the values authored for that Tenant, then write the actual secret value into
+the new file. Keep the original example empty. Source files belong only in `sources/`; Destination
+files belong only in `destinations/`.
+
 Values load once at startup, so restart the owning service after adding or rotating one. Every
 file in a mounted directory becomes a configuration key, except names starting with `ignore.`.
 Never place one process's secrets in the other's directory.
 
-Secret files are ignored by Git; the tracked `.gitkeep` files keep Docker from creating the mount
+Secret files are ignored by Git; the tracked example files keep Docker from creating the mount
 roots as root-owned directories on first use. See
 [`docs/setup.md`](../docs/setup.md#tenant-secrets) for the value rules and other ways to supply
 the same keys.

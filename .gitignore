@@ -16,14 +16,13 @@ Thumbs.db
 .env
 .env.http
 secrets/*
-!secrets/.gitkeep
 !secrets/README.md
 !secrets/sources/
 secrets/sources/*
-!secrets/sources/.gitkeep
+!secrets/sources/ignore.SourceSecrets__example-tenant__webhook-hmac
 !secrets/destinations/
 secrets/destinations/*
-!secrets/destinations/.gitkeep
+!secrets/destinations/ignore.DestinationSecrets__example-tenant__api-key
 *.lscache
 archive
 
