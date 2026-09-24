@@ -9,10 +9,9 @@ services:
   postgres:
     ports:
       - "${INTEGRIOS_POSTGRES_PORT}:5432"
-    # The acceptance harness uses this Linux container to create a real POSIX FIFO and read
-    # collector output without contending with Windows host file-sharing semantics.
+    # The acceptance harness uses this Linux container to read collector output without
+    # contending with Windows host file-sharing semantics.
     volumes:
-      - "${INTEGRIOS_DESTINATION_SECRETS_DIR}:/var/lib/integrios-acceptance/secrets"
       - "${INTEGRIOS_OTEL_ARTIFACTS_DIR}:/var/lib/integrios-acceptance/otel:ro"
 
   bootstrap:

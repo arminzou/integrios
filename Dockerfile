@@ -65,11 +65,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Directory an operator mounts credential material into, empty when the service resolves none.
-# Admin validates references without resolving them, and the Ingestion and Worker boundaries stay
-# separate, so each image creates only the mount root its own host reads. Named without the word
-# "secret" so the BuildKit SecretsUsedInArgOrEnv check does not flag this path as a credential.
-ARG MOUNT_ROOT=
 # Every host is an ASP.NET application. Admin and Ingestion use HTTP_PORT for product traffic;
 # all three hosts use 5299 for probes and Prometheus scraping.
 ARG HTTP_PORT=8080
@@ -80,7 +75,9 @@ COPY --from=build /app .
 # and so have no shell to serve. Admin's own command-line verbs never read it either -- they branch
 # before the web host is constructed.
 COPY --from=dashboard /dashboard ./wwwroot
-RUN if [ -n "${MOUNT_ROOT}" ]; then mkdir -p "${MOUNT_ROOT}"; fi
+# Empty key-per-file configuration root. Ingestion and Worker read it at startup when an operator
+# mounts one process's own directory over it; Admin never reads it.
+RUN mkdir -p /run/secrets/integrios
 ENV ASPNETCORE_HTTP_PORTS=${HTTP_PORT}
 EXPOSE ${HTTP_PORT} 5299
 ENTRYPOINT ["/app/service"]

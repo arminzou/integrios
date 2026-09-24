@@ -56,7 +56,6 @@ services:
       dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Ingestion
-        MOUNT_ROOT: /run/secrets/integrios/source
     image: ${INTEGRIOS_INGESTION_IMAGE:-integrios-ingestion:dev}
     depends_on:
       bootstrap:
@@ -64,9 +63,10 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
       DOTNET_ENVIRONMENT: Development
-      Integrios__SourceSecrets__Provider: ${INTEGRIOS_SOURCE_SECRETS_PROVIDER:-file}
+    # Key-per-file configuration: each file name is a configuration key with "__" as the section
+    # separator, e.g. SourceSecrets__<tenant-slug>__<secret-reference>. Read once at startup.
     volumes:
-      - ${INTEGRIOS_SOURCE_SECRETS_DIR:-./secrets/source}:/run/secrets/integrios/source:ro
+      - ${INTEGRIOS_INGESTION_SECRETS_DIR:-./secrets/ingestion}:/run/secrets/integrios:ro
     ports:
       - "${INTEGRIOS_INGESTION_PORT:-5231}:8080"
       - "${INTEGRIOS_INGESTION_OPERATIONAL_PORT:-5232}:5299"
@@ -107,7 +107,6 @@ services:
       dockerfile: Dockerfile
       args:
         PROJECT: Integrios.Worker
-        MOUNT_ROOT: /run/secrets/integrios/destination
         HTTP_PORT: "5299"
     image: ${INTEGRIOS_WORKER_IMAGE:-integrios-worker:dev}
     depends_on:
@@ -116,12 +115,12 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
       DOTNET_ENVIRONMENT: Development
-      Integrios__DestinationSecrets__Provider: ${INTEGRIOS_DESTINATION_SECRETS_PROVIDER:-file}
       # Completed-history retention is destructive and disabled by absence. To opt in, set a
       # period of at least seven days, then uncomment the mapping below.
       # Integrios__Worker__HistoryRetention__Period: ${INTEGRIOS_HISTORY_RETENTION_PERIOD}
+    # Key-per-file configuration, e.g. DestinationSecrets__<tenant-slug>__<secret-reference>.
     volumes:
-      - ${INTEGRIOS_DESTINATION_SECRETS_DIR:-./secrets/destination}:/run/secrets/integrios/destination:ro
+      - ${INTEGRIOS_WORKER_SECRETS_DIR:-./secrets/worker}:/run/secrets/integrios:ro
     ports:
       - "${INTEGRIOS_WORKER_METRICS_PORT:-5299}:5299"
 

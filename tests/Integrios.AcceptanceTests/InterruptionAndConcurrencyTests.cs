@@ -14,7 +14,6 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     private static readonly TimeSpan LeaseRecoveryTimeout = TimeSpan.FromSeconds(150);
     private static readonly TimeSpan CleanupLockTimeout = TimeSpan.FromSeconds(10);
     private Guid HttpConnectorId => fixture.HttpConnectorId;
-    private Guid ApiKeyConnectorId => fixture.ApiKeyConnectorId;
 
     // Barrier key for the post-send window. Any constant works; it only has to be unique within
     // this deployment, and both the test session and the trigger must agree on it.
@@ -29,7 +28,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         try
         {
             string suffix = Suffix();
-            Pipeline pipeline = await CreatePipelineAsync($"stress-{suffix}", authReference: null);
+            Pipeline pipeline = await CreatePipelineAsync($"stress-{suffix}");
             const int eventCount = 40;
 
             await fixture.KillWorkerAsync();
@@ -98,7 +97,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     public async Task PostgresRestartDuringRetry_ResumesAndSucceeds()
     {
         string suffix = Suffix();
-        Pipeline pipeline = await CreatePipelineAsync($"restart-{suffix}", authReference: null);
+        Pipeline pipeline = await CreatePipelineAsync($"restart-{suffix}");
         await fixture.WireMockSink.ConfigureAsync(pipeline.SinkName, "fail");
 
         Guid eventId = await IngestAsync(pipeline, new { restart = true });
@@ -120,49 +119,6 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
     }
 
     [Fact]
-    public async Task PreHttpInterruption_RecoversAndDeliversExactlyOnce()
-    {
-        bool workerStopped = false;
-
-        try
-        {
-            await fixture.RecreateWorkerAsync("file");
-
-            string suffix = Suffix();
-            string secretReference = $"blocking-{suffix}";
-            Pipeline pipeline = await CreatePipelineAsync($"presend-{suffix}", secretReference);
-
-            // A FIFO with no writer blocks the Worker inside secret resolution, which is before
-            // any HTTP request is issued and before it holds a database transaction.
-            await fixture.CreateBlockingSecretPipeAsync(pipeline.TenantSlug, secretReference);
-
-            Guid eventId = await IngestAsync(pipeline, new { phase = "before-http" });
-            await WaitForDeliveryStatusAsync(eventId, "in_flight");
-            (await ReceiptCountAsync(pipeline.SinkName)).ShouldBe(0);
-
-            await fixture.KillWorkerAsync();
-            workerStopped = true;
-            await fixture.ReplaceSecretWithFileAsync(pipeline.TenantSlug, secretReference, "recovered-secret");
-            await fixture.ExecuteAsync(
-                $"UPDATE event_deliveries SET lease_expires_at = now() - interval '1 second' WHERE event_id = '{eventId}' AND status = 'in_flight'");
-            await fixture.StartWorkerAsync();
-            workerStopped = false;
-
-            await WaitForDeliveryStatusAsync(eventId, "succeeded");
-            (await AttemptStatusesAsync(eventId)).ShouldBe(["indeterminate", "succeeded"]);
-            (await ReceiptCountAsync(pipeline.SinkName)).ShouldBe(1);
-            await AssertReceiptHeadersAsync(
-                pipeline.SinkName,
-                new Dictionary<string, string> { ["X-Api-Key"] = "recovered-secret" });
-        }
-        finally
-        {
-            if (workerStopped)
-                await fixture.StartWorkerAsync();
-        }
-    }
-
-    [Fact]
     public async Task PostSendInterruption_PreservesAtLeastOnceDelivery()
     {
         bool workerStopped = false;
@@ -172,7 +128,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         try
         {
             string suffix = Suffix();
-            Pipeline pipeline = await CreatePipelineAsync($"postsend-{suffix}", authReference: null);
+            Pipeline pipeline = await CreatePipelineAsync($"postsend-{suffix}");
 
             // The barrier is an advisory lock rather than a sleep so the test can end it on
             // demand. A sleeping backend cannot be released, and because killing the Worker
@@ -334,7 +290,7 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         }
     }
 
-    private async Task<Pipeline> CreatePipelineAsync(string name, string? authReference)
+    private async Task<Pipeline> CreatePipelineAsync(string name)
     {
         string tenantSlug = name;
         Guid tenantId = await PostAdminForIdAsync(
@@ -344,22 +300,13 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             $"/admin/tenants/{tenantId}/tenant-api-keys",
             new { name = "resilience-ingestion" },
             "token");
-        object? auth = authReference is null
-            ? null
-            : new
-            {
-                scheme = "api_key_header",
-                config = new { header_name = "X-Api-Key" },
-                secret_refs = new { api_key = authReference }
-            };
         Guid destinationId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/destinations",
             new
             {
-                connector_id = authReference is null ? HttpConnectorId : ApiKeyConnectorId,
+                connector_id = HttpConnectorId,
                 name = "resilience-destination",
                 configuration = new { base_uri = $"http://mocksink:8080/sink/{name}" },
-                authentication = auth,
                 environment = "production"
             });
         Guid topicId = await PostAdminForIdAsync(
