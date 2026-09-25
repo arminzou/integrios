@@ -5,6 +5,7 @@ using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
 using Integrios.Ingestion;
 using Integrios.Ingestion.Auth;
+using Integrios.Ingestion.Cli;
 using Integrios.Ingestion.Endpoints;
 using Integrios.Ingestion.ErrorHandling;
 using Microsoft.AspNetCore.Authentication;

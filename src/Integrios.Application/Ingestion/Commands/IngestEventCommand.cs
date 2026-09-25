@@ -11,7 +11,7 @@ public sealed record IngestEventCommand(
     Guid TenantId,
     Guid SourceId,
     JsonElement RawInput)
-    : IRequest<IngestEventResult>;
+    : IRequest<IngestEventResult>, IStartsEventTrace;
 
 internal sealed class IngestEventCommandHandler(
     IEventApiSourceResolver sourceResolver,

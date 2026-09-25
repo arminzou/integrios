@@ -6,6 +6,7 @@ using Integrios.Application.Secrets;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
+using Integrios.Ingestion.Cli;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Ingestion.UnitTests;

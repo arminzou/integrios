@@ -3,6 +3,7 @@ using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
 using Integrios.Worker;
+using Integrios.Worker.Cli;
 
 // The Worker is a WebApplication only to serve its operational HTTP surface.
 // The outbox loop is a hosted service.

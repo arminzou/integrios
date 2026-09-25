@@ -1,11 +1,13 @@
-using Integrios.Application.Delivery;
-using Integrios.Application.Secrets;
+using Integrios.Application.Ingestion;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Integrios.Worker;
+namespace Integrios.Ingestion.Cli;
 
-public static class SecretValidationCli
+/// Answers whether a Source's secret references resolve, before traffic depends on them. Ingestion
+/// owns this because it holds the only mount that can resolve one: Admin authors the Source and has
+/// no resolver, and the Worker sees destination secrets only.
+public static class SourceSecretValidationCli
 {
     public static bool IsCommand(string[] args) =>
         args.Length > 0 && args[0].Equals("secrets", StringComparison.OrdinalIgnoreCase);
@@ -17,10 +19,10 @@ public static class SecretValidationCli
         TextWriter error,
         CancellationToken cancellationToken = default)
     {
-        if (!TryParse(args, out ValidateSecretsCommand? command))
+        if (!TryParse(args, out ValidateSourceSecretsCommand? command))
         {
             await error.WriteLineAsync(
-                "Usage: secrets validate (--all | --tenant <slug> [--destination <id>])");
+                "Usage: secrets validate (--all | --tenant <slug> [--source <id>])");
             return 2;
         }
 
@@ -28,12 +30,12 @@ public static class SecretValidationCli
         {
             await using AsyncServiceScope scope = services.CreateAsyncScope();
             IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-            SecretValidationReport report = await mediator.Send(command!, cancellationToken);
+            SourceSecretValidationReport report = await mediator.Send(command!, cancellationToken);
 
-            foreach (SecretValidationResult result in report.Results)
+            foreach (SourceSecretValidationResult result in report.Results)
             {
                 await output.WriteLineAsync(
-                    $"{result.TenantSlug} / destination {result.DestinationId} / {result.SecretReference}: "
+                    $"{result.TenantSlug} / source {result.SourceId} / {result.SecretReference}: "
                     + (result.Resolvable ? "resolvable" : "unresolvable"));
             }
 
@@ -42,7 +44,7 @@ public static class SecretValidationCli
                 + (report.Succeeded ? "resolvable" : "one or more unresolvable"));
             return report.Succeeded ? 0 : 1;
         }
-        catch (SecretValidationSelectionException ex)
+        catch (SourceSecretValidationSelectionException ex)
         {
             await error.WriteLineAsync(ex.Message);
             return 2;
@@ -54,7 +56,7 @@ public static class SecretValidationCli
         }
     }
 
-    private static bool TryParse(string[] args, out ValidateSecretsCommand? command)
+    private static bool TryParse(string[] args, out ValidateSourceSecretsCommand? command)
     {
         command = null;
         if (args.Length < 3
@@ -66,7 +68,7 @@ public static class SecretValidationCli
 
         bool all = false;
         string? tenantSlug = null;
-        Guid? destinationId = null;
+        Guid? sourceId = null;
 
         for (int index = 2; index < args.Length; index++)
         {
@@ -78,20 +80,20 @@ public static class SecretValidationCli
                 case "--tenant" when tenantSlug is null && index + 1 < args.Length:
                     tenantSlug = args[++index];
                     break;
-                case "--destination" when destinationId is null && index + 1 < args.Length:
-                    if (!Guid.TryParse(args[++index], out Guid parsedDestinationId))
+                case "--source" when sourceId is null && index + 1 < args.Length:
+                    if (!Guid.TryParse(args[++index], out Guid parsedSourceId))
                         return false;
-                    destinationId = parsedDestinationId;
+                    sourceId = parsedSourceId;
                     break;
                 default:
                     return false;
             }
         }
 
-        if (all == (tenantSlug is not null) || (destinationId is not null && tenantSlug is null))
+        if (all == (tenantSlug is not null) || (sourceId is not null && tenantSlug is null))
             return false;
 
-        command = new ValidateSecretsCommand(tenantSlug, destinationId, all);
+        command = new ValidateSourceSecretsCommand(tenantSlug, sourceId, all);
         return true;
     }
 }

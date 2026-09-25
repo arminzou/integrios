@@ -20,7 +20,7 @@ public sealed record AcceptBrokerMessageCommand(
     JsonElement RawInput,
     SourceEventIdentityRule? EventIdentityRule,
     string? BrokerMessageId)
-    : IRequest<IngestEventResult>;
+    : IRequest<IngestEventResult>, IStartsEventTrace;
 
 internal sealed class AcceptBrokerMessageCommandHandler(
     ITransformEvaluator evaluator,
