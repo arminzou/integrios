@@ -119,7 +119,6 @@ public sealed class HostCompositionArchitectureTests
     private static readonly IReadOnlyDictionary<string, Host> GroupOwners = new Dictionary<string, Host>
     {
         ["Integrios.Application.Authoring"] = Host.Admin,
-        ["Integrios.Application.Bootstrap"] = Host.Admin,
         ["Integrios.Application.Identity"] = Host.Admin,
         ["Integrios.Application.Ingestion"] = Host.Ingestion,
         ["Integrios.Application.Delivery"] = Host.Worker

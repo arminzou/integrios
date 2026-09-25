@@ -1,9 +1,8 @@
-using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using MediatR;
 
-namespace Integrios.Application.Bootstrap;
+namespace Integrios.Application.Authoring.OperatorKeys;
 
 public sealed record BootstrapOperatorKeyCommand(string PublicKey, string? Secret) : IRequest<BootstrapOperatorKeyResult>;
 
