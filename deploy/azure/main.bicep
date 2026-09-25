@@ -139,43 +139,33 @@ var serviceBusEnabled = !empty(serviceBusNamespaceName) && !empty(serviceBusReso
 var adminDataProtectionPath = '/var/lib/integrios/data-protection'
 var adminOidcEnabled = !empty(adminOidcAuthority)
 var adminOidcSecretName = 'oidc-client-secret'
-var databaseProviderEnvironment = [
-  { name: 'DOTNET_ENVIRONMENT', value: 'Production' }
-  { name: 'Database__Provider', value: databaseProvider }
-]
-var postgresAuthenticationEnvironment = useSqlServer ? [] : [
-  { name: 'Database__Postgres__Authentication', value: 'AzureEntra' }
-]
-var adminDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
-  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
-      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${adminIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${adminIdentity.name};SSL Mode=Require' }
-  { name: 'AZURE_CLIENT_ID', value: adminIdentity.properties.clientId }
-])
-var ingestionDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
-  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
-      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${ingestionIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${ingestionIdentity.name};SSL Mode=Require' }
-  { name: 'AZURE_CLIENT_ID', value: ingestionIdentity.properties.clientId }
-])
-var workerDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
-  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
-      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${workerIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${workerIdentity.name};SSL Mode=Require' }
-  { name: 'AZURE_CLIENT_ID', value: workerIdentity.properties.clientId }
-])
-var migrateDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
-  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
-      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${migrateIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${migrateIdentity.name};SSL Mode=Require' }
-  { name: 'AZURE_CLIENT_ID', value: migrateIdentity.properties.clientId }
-])
-var bootstrapDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
-  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
-      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${bootstrapIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${bootstrapIdentity.name};SSL Mode=Require' }
-  { name: 'AZURE_CLIENT_ID', value: bootstrapIdentity.properties.clientId }
-])
+// Each workload reaches the database as its own managed identity; nothing carries a password.
+func databaseEnvironment(provider string, serverFqdn string, identityName string, identityClientId string) array => concat(
+  [
+    { name: 'DOTNET_ENVIRONMENT', value: 'Production' }
+    { name: 'Database__Provider', value: provider }
+  ],
+  provider == 'sqlserver'
+    ? [
+        {
+          name: 'ConnectionStrings__SqlServer'
+          value: 'Server=tcp:${serverFqdn},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${identityClientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+        }
+      ]
+    : [
+        { name: 'Database__Postgres__Authentication', value: 'AzureEntra' }
+        {
+          name: 'ConnectionStrings__Postgres'
+          value: 'Host=${serverFqdn};Port=5432;Database=integrios;Username=${identityName};SSL Mode=Require'
+        }
+      ],
+  [{ name: 'AZURE_CLIENT_ID', value: identityClientId }])
+var databaseServerFqdn = useSqlServer ? sqlServer!.properties.fullyQualifiedDomainName : postgres!.properties.fullyQualifiedDomainName
+var adminDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, adminIdentity.name, adminIdentity.properties.clientId)
+var ingestionDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, ingestionIdentity.name, ingestionIdentity.properties.clientId)
+var workerDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, workerIdentity.name, workerIdentity.properties.clientId)
+var migrateDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, migrateIdentity.name, migrateIdentity.properties.clientId)
+var bootstrapDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, bootstrapIdentity.name, bootstrapIdentity.properties.clientId)
 // Worker and the secret-validation job share Worker's identity and its Destination-secret vault.
 var destinationSecretsEnvironment = [
   { name: 'Integrios__KeyVault__Uri', value: destinationSecretsVault.properties.vaultUri }

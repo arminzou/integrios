@@ -1,5 +1,4 @@
 using Dapper;
-using System.Data.Common;
 using Microsoft.Data.SqlClient;
 
 namespace Integrios.Infrastructure.Data;
@@ -103,10 +102,11 @@ internal static class SqlServerRuntimePrincipalGrants
                 else if (principal.EntraClientId is not null && !existing[principal.Name])
                     await CreateEntraPrincipalAsync(connection, transaction, principal, cancellationToken);
             }
-            catch (DbException)
+            catch (SqlException exception)
             {
+                // The number alone: the exception is kept off so no password-bearing detail travels.
                 throw new InvalidOperationException(
-                    $"Database:RuntimePrincipals entry '{principal.Name}' could not create or update its SQL Server principal. Create it externally and omit credential keys to use grant-only mode.");
+                    $"Database:RuntimePrincipals entry '{principal.Name}' could not create or update its SQL Server principal (SQL error {exception.Number}). Create it externally and omit credential keys to use grant-only mode.");
             }
 
             await ConvergePermissionsAsync(connection, transaction, principal, cancellationToken);

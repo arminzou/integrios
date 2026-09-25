@@ -1,5 +1,7 @@
 using Dapper;
 using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Data;
@@ -78,37 +80,23 @@ internal static class PostgresRuntimePrincipalGrants
 
         foreach (RuntimePrincipal principal in principals)
         {
-            string role = QuoteIdentifier(principal.Name);
             if (principal.Password is not null)
             {
-                await connection.ExecuteAsync(new CommandDefinition(
-                    "SELECT set_config('integrios.runtime_principal_password', @Password, true);",
-                    new { principal.Password },
-                    transaction,
-                    cancellationToken: cancellationToken));
                 string operation = existing[principal.Name] ? "ALTER ROLE" : "CREATE ROLE";
                 try
                 {
+                    // Only the SCRAM verifier Postgres would store reaches the server, so statement
+                    // and error logging can never capture the password itself.
                     await connection.ExecuteAsync(new CommandDefinition(
-                        $"""
-                        DO $grant$
-                        BEGIN
-                            EXECUTE format(
-                                '{operation} %I WITH LOGIN PASSWORD %L',
-                                '{principal.Name}',
-                                current_setting('integrios.runtime_principal_password'));
-                        END
-                        $grant$;
-                        """,
+                        $"{operation} {QuoteIdentifier(principal.Name)} WITH LOGIN PASSWORD '{ScramVerifier(principal.Password)}';",
                         transaction: transaction,
                         cancellationToken: cancellationToken));
                 }
-                catch (DbException)
+                catch (DbException exception)
                 {
                     throw new InvalidOperationException(
-                        $"Database:RuntimePrincipals entry '{principal.Name}' could not create or update its PostgreSQL principal. Create it externally and omit credential keys to use grant-only mode.");
+                        $"Database:RuntimePrincipals entry '{principal.Name}' could not create or update its PostgreSQL principal ({SqlState(exception)}). Create it externally and omit credential keys to use grant-only mode.");
                 }
-                // The supplied password stays in transaction-local state and out of SQL text.
             }
             else if (principal.EntraObjectId is Guid objectId && !existing[principal.Name])
             {
@@ -120,10 +108,11 @@ internal static class PostgresRuntimePrincipalGrants
                         transaction,
                         cancellationToken: cancellationToken));
                 }
-                catch (DbException)
+                catch (DbException exception)
                 {
                     throw new InvalidOperationException(
-                        $"Database:RuntimePrincipals entry '{principal.Name}' could not create its PostgreSQL Entra principal. Create it externally and omit credential keys to use grant-only mode.");
+                        $"Database:RuntimePrincipals entry '{principal.Name}' could not create its PostgreSQL Entra principal ({SqlState(exception)}). Create it externally and omit credential keys to use grant-only mode.",
+                        exception);
                 }
             }
 
@@ -198,6 +187,21 @@ internal static class PostgresRuntimePrincipalGrants
     }
 
     private static string QuoteIdentifier(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+
+    private static string SqlState(DbException exception) => $"SQLSTATE {exception.SqlState ?? "unknown"}";
+
+    // RFC 7677 verifier in the form Postgres stores. Configuration limits passwords to printable
+    // ASCII, for which SASLprep is the identity.
+    private static string ScramVerifier(string password)
+    {
+        const int iterations = 4096;
+        byte[] salt = RandomNumberGenerator.GetBytes(16);
+        byte[] saltedPassword = Rfc2898DeriveBytes.Pbkdf2(
+            Encoding.UTF8.GetBytes(password), salt, iterations, HashAlgorithmName.SHA256, 32);
+        byte[] storedKey = SHA256.HashData(HMACSHA256.HashData(saltedPassword, "Client Key"u8));
+        byte[] serverKey = HMACSHA256.HashData(saltedPassword, "Server Key"u8);
+        return $"SCRAM-SHA-256${iterations}:{Convert.ToBase64String(salt)}${Convert.ToBase64String(storedKey)}:{Convert.ToBase64String(serverKey)}";
+    }
 
     private sealed record CurrentIdentity(string DatabaseName, string CurrentUser, string SessionUser);
 

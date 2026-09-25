@@ -67,6 +67,23 @@ public sealed class RuntimePrincipalConfigurationTests
             ("Database:RuntimePrincipals:0:Password", password)).Count.ShouldBe(1);
     }
 
+    [Theory]
+    [InlineData("pass;word")]
+    [InlineData("pass'word")]
+    [InlineData("pass\"word")]
+    [InlineData("pass word")]
+    [InlineData("pässword")]
+    public void Read_RejectsPasswordCharactersThatBreakConnectionStrings(string password)
+    {
+        InvalidOperationException rejected = Should.Throw<InvalidOperationException>(() => Read(
+            DatabaseProvider.Postgres,
+            ("Database:RuntimePrincipals:0:Name", "worker"),
+            ("Database:RuntimePrincipals:0:Scope", "data-plane"),
+            ("Database:RuntimePrincipals:0:Password", password)));
+        rejected.Message.ShouldContain("Database:RuntimePrincipals:0:Password");
+        rejected.Message.ShouldNotContain(password);
+    }
+
     [Fact]
     public void Read_RejectsDuplicateNamesAndUnknownScopeWithoutEchoingValues()
     {

@@ -55,6 +55,12 @@ internal static class RuntimePrincipalConfiguration
                 throw new InvalidOperationException($"{key}:Password cannot be combined with EntraClientId or EntraObjectId.");
             // SQL Server caps passwords at 128 characters, and QUOTENAME returns NULL past that,
             // which would turn a password update into a silent no-op.
+            // Runtime services receive the password inside an unquoted connection string, where these
+            // characters split or quote the value. Printable ASCII also needs no SASLprep for SCRAM.
+            if (password is not null && !password.All(character =>
+                    character is > ' ' and <= '~' and not ';' and not '\'' and not '"'))
+                throw new InvalidOperationException(
+                    $"{key}:Password must use printable ASCII without spaces, ';', single quotes, or double quotes.");
             if (provider == DatabaseProvider.SqlServer && password?.Length > 128)
                 throw new InvalidOperationException($"{key}:Password must be at most 128 characters for SQL Server.");
 
