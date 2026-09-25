@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Integrios.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -74,6 +75,7 @@ public sealed class TransientConnectionRetryTests
 
     private sealed class FakeDbConnection : DbConnection
     {
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => string.Empty;
         public override string DataSource => string.Empty;

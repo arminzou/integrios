@@ -59,8 +59,7 @@ internal sealed class MockOidcProvider : IAsyncDisposable
         }
         """;
 
-    private readonly IContainer container = new ContainerBuilder()
-        .WithImage("ghcr.io/navikt/mock-oauth2-server:2.1.10")
+    private readonly IContainer container = new ContainerBuilder("ghcr.io/navikt/mock-oauth2-server:2.1.10")
         .WithPortBinding(ProviderPort, assignRandomHostPort: true)
         .WithEnvironment("JSON_CONFIG", JsonConfig)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request
