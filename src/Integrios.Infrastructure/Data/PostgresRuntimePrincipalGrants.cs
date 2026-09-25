@@ -116,7 +116,7 @@ internal static class PostgresRuntimePrincipalGrants
             if (exists)
             {
                 EntraPrincipal? entraPrincipal = await connection.QuerySingleOrDefaultAsync<EntraPrincipal>(new CommandDefinition(
-                    "SELECT rolename AS Name, objectid AS ObjectId FROM pg_catalog.pgaadauth_list_principals(false) WHERE rolename = @Name;",
+                    "SELECT rolname AS Name, objectid AS ObjectId FROM pg_catalog.pgaadauth_list_principals(false) WHERE rolname = @Name;",
                     new { principal.Name },
                     cancellationToken: cancellationToken));
                 if (entraPrincipal is null
